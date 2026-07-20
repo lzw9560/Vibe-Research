@@ -13,6 +13,8 @@ export type ProviderId =
   | "groq"
   | "together"
   | "mimo"
+  | "stepfun"
+  | "agnes"
   | "openai-compatible"
   | "cli-claude"
   | "cli-qwen"
@@ -42,6 +44,8 @@ export const PROVIDER_BASE: Partial<Record<ProviderId, string>> = {
   groq: "https://api.groq.com/openai/v1",
   together: "https://api.together.xyz/v1",
   mimo: "", // 私有网关，必须自填 baseURL
+  stepfun: "https://api.stepfun.com/v1",
+  agnes: "https://apihub.agnes-ai.com/v1",
   "openai-compatible": "", // 任意兼容端点，自填
 };
 
@@ -65,6 +69,8 @@ export const aiModels: ModelConfig[] = [
   { id: "llama-3.3-70b-versatile", name: "Groq · Llama 3.3 70B", description: "Groq 超快推理", provider: "groq" },
   { id: "meta-llama/Llama-3.3-70B-Instruct-Turbo", name: "Together · Llama 3.3 70B", description: "Together AI", provider: "together" },
   { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", description: "小米 MiMo（需自有网关）", provider: "mimo" },
+  { id: "step-2-16k", name: "StepFun Step 2", description: "阶跃星辰 · 多模态理解", provider: "stepfun" },
+  { id: "agnes-2.0-flash", name: "Agnes 2.0 Flash", description: "Sapiens AI · 快而省", provider: "agnes" },
   { id: "custom", name: "其它 OpenAI 兼容", description: "任意兼容端点，自填 baseURL/model", provider: "openai-compatible" },
 ];
 

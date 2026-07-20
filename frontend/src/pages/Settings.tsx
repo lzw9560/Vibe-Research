@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { KeyRound, Sparkles, ShieldCheck, Check, Trash2, Terminal } from "lucide-react";
+import { useState, useEffect } from "react";
+import { KeyRound, Sparkles, ShieldCheck, Check, Trash2, Terminal, Flame } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { toast } from "sonner";
 import { loadLlm, saveLlm, clearLlm } from "@/lib/llm";
-import { loadAccessKey, saveAccessKey } from "@/lib/api";
+import { loadAccessKey, saveAccessKey, getLimitUpScreenerParams, saveLimitUpScreenerParams, type LimitUpParams } from "@/lib/api";
 import { subscriptionModels, apiModels, PROVIDER_BASE, isCliProvider, aiModels, type ProviderId } from "@/lib/ai-models";
 
 export function Settings() {
@@ -22,6 +22,30 @@ export function Settings() {
   const [apiKey, setApiKey] = useState(existing && !existingIsCli ? existing.apiKey : "");
   // 后端访问密钥（对应部署时的 VR_API_KEY）；本机自用不设鉴权时留空
   const [accessKey, setAccessKey] = useState(loadAccessKey());
+
+  // 打板策略参数
+  const [limitUpParams, setLimitUpParams] = useState<LimitUpParams>({
+    gene_qualify_threshold: 60,
+    gene_high_threshold: 75,
+    lookback_days: 60,
+  });
+  const [paramsLoading, setParamsLoading] = useState(false);
+
+  useEffect(() => {
+    getLimitUpScreenerParams().then(setLimitUpParams).catch(console.error);
+  }, []);
+
+  const handleSaveParams = async () => {
+    setParamsLoading(true);
+    try {
+      await saveLimitUpScreenerParams(limitUpParams);
+      toast.success("打板策略参数已保存");
+    } catch {
+      toast.error("保存失败");
+    } finally {
+      setParamsLoading(false);
+    }
+  };
 
   const providerOf = (id: string): ProviderId => aiModels.find((m) => m.id === id)?.provider ?? "openai-compatible";
 
@@ -199,6 +223,56 @@ export function Settings() {
             保存
           </button>
         </div>
+      </GlassCard>
+
+      {/* 打板策略参数 */}
+      <GlassCard className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Flame className="h-5 w-5 text-primary" />
+          <h3 className="text-sm font-semibold">打板策略参数</h3>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          调整打板策略的筛选阈值，影响选股结果的宽松/严格程度。
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium">基因合格阈值</label>
+            <input
+              type="number"
+              value={limitUpParams.gene_qualify_threshold}
+              onChange={(e) => setLimitUpParams({ ...limitUpParams, gene_qualify_threshold: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">≥ 此分数视为合格（默认60）</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">高基因阈值</label>
+            <input
+              type="number"
+              value={limitUpParams.gene_high_threshold}
+              onChange={(e) => setLimitUpParams({ ...limitUpParams, gene_high_threshold: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">≥ 此分数视为高基因（默认75）</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">回溯天数</label>
+            <input
+              type="number"
+              value={limitUpParams.lookback_days}
+              onChange={(e) => setLimitUpParams({ ...limitUpParams, lookback_days: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">统计最近N个交易日（默认60）</p>
+          </div>
+        </div>
+        <button
+          onClick={handleSaveParams}
+          disabled={paramsLoading}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
+        >
+          {paramsLoading ? "保存中..." : "保存参数"}
+        </button>
       </GlassCard>
     </div>
   );

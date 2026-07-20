@@ -233,6 +233,89 @@ export interface GlobalStock {
   quote: GlobalQuote; metrics: GlobalMetrics | null;
 }
 
+// 打板策略相关类型（客观数据，非行动建议）
+export interface GeneScore {
+  code: string;
+  name: string;
+  total_score: number;        // 0-100
+  factors: Record<string, number>;  // 五维因子
+  wilson_adjusted: number;
+  qualify: boolean;
+  high_gene: boolean;
+  last_zt_dates: string[];
+  zt_count_250d: number;
+}
+
+export interface StrategyLogicMatch {
+  code: string;
+  name: string;
+  matches: Array<{
+    condition: string;    // 条件名称（如"高封单比"）
+    value: string;        // 条件值（如"封单比 0.15"）
+    description: string;  // 策略逻辑说明
+  }>;
+  logic_description: string;
+  disclaimer: string;
+}
+
+export interface RiskRuleKnowledge {
+  rule_name: string;
+  description: string;
+  default_value: string;
+  configurable: boolean;
+  example: string;
+}
+
+export interface LimitUpAnalysis {
+  code: string;
+  name: string;
+  date: string;
+  gene_score: GeneScore;
+  strategy_logic: StrategyLogicMatch;
+  risk_rules: RiskRuleKnowledge[];
+  backtest_points: Array<{ date: string; gene_score: number; actual_next_day: number }>;
+  disclaimer: string;
+}
+
+export interface ScreenerResult {
+  date: string;
+  gene_scores: GeneScore[];
+  qualified: GeneScore[];
+  high_gene: GeneScore[];
+  updated: string;
+  disclaimer: string;
+}
+
+export interface BacktestPoint {
+  date: string;
+  gene_score: number;
+  actual_next_day: number;
+  seal_rate: number;
+  premium_rate: number;
+}
+
+// ---- 打板策略参数配置 ----
+export interface LimitUpParams {
+  gene_qualify_threshold: number;
+  gene_high_threshold: number;
+  lookback_days: number;
+}
+
+export async function getLimitUpScreenerParams(): Promise<LimitUpParams> {
+  const res = await fetch(`/api/limitup/screener/params`, { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get params: ${res.statusText}`, res.status);
+  return res.json();
+}
+
+export async function saveLimitUpScreenerParams(params: LimitUpParams): Promise<void> {
+  const res = await fetch(`/api/limitup/screener/params`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new ApiError(`Failed to save params: ${res.statusText}`, res.status);
+}
+
 export const api = {
   health: () => get<{ ok: boolean }>("/health"),
   indices: () => get<IndexQuote[]>("/indices"),
@@ -272,4 +355,11 @@ export const api = {
   uploadReport: (name: string, contentB64: string) =>
     request<MyReport>("/myreports", "POST", { name, content_b64: contentB64 }),
   deleteReport: (id: string) => request<{ ok: boolean }>(`/myreports/${id}`, "DELETE"),
+  // 打板策略
+  limitupScreener: (date?: string) =>
+    get<ScreenerResult>(`/limitup/screener${date ? `?date=${date}` : ""}`),
+  limitupAnalysis: (code: string, date?: string) =>
+    get<LimitUpAnalysis>(`/limitup/analysis/${code}${date ? `?date=${date}` : ""}`),
+  getLimitUpScreenerParams,
+  saveLimitUpScreenerParams,
 };

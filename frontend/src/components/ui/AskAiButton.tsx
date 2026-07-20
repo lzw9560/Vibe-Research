@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, X, Settings, Send, Loader2, Wrench, AlertCircle } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 import { hasLlm, chatStream, type ChatMsg } from "@/lib/llm";
 import { ApiError } from "@/lib/api";
@@ -106,7 +108,7 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/50" onClick={close} />
-          <aside className="glass relative m-3 flex w-full max-w-md flex-col rounded-2xl">
+          <aside className="glass relative m-3 flex w-full max-w-2xl flex-col rounded-2xl">
             <div className="flex items-center justify-between border-b border-border/60 p-4">
               <span className="flex items-center gap-2 font-semibold text-glow">
                 <Sparkles className="h-4 w-4 text-primary" /> 问 AI · 本页上下文
@@ -159,7 +161,9 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
                             ))}
                           </div>
                         )}
-                        <p className="whitespace-pre-wrap">{m.content}</p>
+                        <div className="prose prose-invert prose-sm prose-headings:font-semibold prose-a:text-primary prose-pre:bg-black/30 prose-pre:border prose-pre:border-border/40 max-w-none break-words">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                        </div>
                         {m.role === "assistant" && m.content && !(loading && i === msgs.length - 1) && (
                           <div className="mt-1.5"><SaveNoteButton kind="问AI" title={`问 AI · ${msgs[i - 1]?.content?.slice(0, 24) || "对话"}`} content={m.content} /></div>
                         )}

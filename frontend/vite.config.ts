@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5899,
+      allowedHosts: ["research.myassi.eu.cc"],
       proxy: {
         "/api": { target: apiTarget, changeOrigin: true },
       },

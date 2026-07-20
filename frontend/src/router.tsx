@@ -10,6 +10,7 @@ import { Watchlist } from "@/pages/Watchlist";
 import { MyReports } from "@/pages/MyReports";
 import { Notes } from "@/pages/Notes";
 import { Settings } from "@/pages/Settings";
+import { LimitUpStrategy } from "@/pages/LimitUpStrategy";
 
 export const router = createBrowserRouter([
   {
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "/my-reports", element: <MyReports /> },
       { path: "/notes", element: <Notes /> },
       { path: "/settings", element: <Settings /> },
+      { path: "/limitup", element: <LimitUpStrategy /> },
     ],
   },
 ]);

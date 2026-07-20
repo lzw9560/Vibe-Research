@@ -15,7 +15,7 @@ import os
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import astock
 import chat as chat_layer
@@ -23,6 +23,8 @@ import cli_runtime
 import gstock
 import newsradar
 import portfolio as pf
+import limitup_screener as ls
+import limitup_strategy as lstrat
 import market
 import myreports as mr
 
@@ -30,6 +32,42 @@ app = FastAPI(title="Vibe-Research API", version="0.1.3")
 
 # 每半小时后台刷新持仓数据
 pf.start_scheduler(1800)
+
+# 打板策略：交易日 15:30 后自动预计算基因得分（避免 API 首次请求冷启动慢）
+import threading as _threading
+import limitup_screener as _ls
+
+
+def _precompute_limitup():
+    """后台线程：预计算最近 3 个交易日的基因得分。"""
+    try:
+        for back in range(3):
+            d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y%m%d")
+            _ls.get_screener_result(d[:4] + "-" + d[4:6] + "-" + d[6:])
+    except Exception as e:  # noqa: BLE001
+        print(f"[limitup] 预计算失败: {e}")
+
+
+def _start_limitup_scheduler():
+    """每天 15:35 触发一次预计算（盘后 5 分钟，数据稳定）。"""
+    import time as _time
+
+    def _loop():
+        while True:
+            _time.sleep(60)  # 每分钟检查一次
+            now = datetime.now(_ls.BEIJING_TZ)
+            # 只在交易时段（15:30-16:00）触发一次
+            if now.hour == 15 and now.minute >= 30 and now.minute <= 35:
+                # 用独立线程，不阻塞主循环
+                _threading.Thread(target=_precompute_limitup, daemon=True).start()
+
+    _threading.Thread(target=_loop, daemon=True).start()
+
+
+# 启动预计算调度器（仅在预计算开启时）
+if os.getenv("LIMITUP_PRECOMPUTE", "false").lower() == "true":
+    from datetime import datetime, timedelta
+    _start_limitup_scheduler()
 
 # CORS：默认放开（本地自托管友好）；公网部署时用 VR_ALLOW_ORIGINS 收紧成白名单。
 #   例：VR_ALLOW_ORIGINS="https://myhost"  （逗号分隔多个）
@@ -599,3 +637,75 @@ def industry(top: int = Query(20, ge=5, le=50)):
         return {"data": data}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"行业排名异常：{e}") from e
+
+
+# ---------------------------------------------------------------------------
+# 打板策略模块（涨停基因选股器 + 策略逻辑分析引擎）
+# 合规：零标的红线 — 不输出排板/扫板/回避等行动建议标签
+# ---------------------------------------------------------------------------
+
+@app.get("/api/limitup/screener")
+def limitup_screener(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")):
+    """获取今日/指定日期的全市场涨停股基因得分（客观数据，非行动建议）。"""
+    try:
+        result = ls.get_screener_result(date)
+        return {"data": result}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"涨停基因选股器异常：{e}") from e
+
+
+@app.get("/api/limitup/analysis/{code}")
+def limitup_analysis(code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")):
+    """获取个股的基因得分 + 策略逻辑匹配 + 风控规则知识（教育性展示，非行动建议）。"""
+    code = _validate(code)
+    try:
+        result = lstrat.get_analysis(code, date)
+        return {"data": result}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"个股策略分析异常：{e}") from e
+
+
+# ---- 阈值配置持久化 ----
+_LIMITUP_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "limitup_params.json")
+
+
+def _load_limitup_params() -> dict:
+    """从 JSON 文件加载用户自定义参数"""
+    if os.path.exists(_LIMITUP_PARAMS_FILE):
+        with open(_LIMITUP_PARAMS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {
+        "gene_qualify_threshold": 60,
+        "gene_high_threshold": 75,
+        "lookback_days": 60,
+    }
+
+
+def _save_limitup_params(params: dict) -> None:
+    """保存用户自定义参数到 JSON 文件"""
+    with open(_LIMITUP_PARAMS_FILE, "w", encoding="utf-8") as f:
+        json.dump(params, f, ensure_ascii=False, indent=2)
+
+
+@app.get("/api/limitup/screener/params")
+async def get_limitup_screener_params():
+    """获取当前打板策略参数"""
+    return _load_limitup_params()
+
+
+class LimitUpParamsBody(BaseModel):
+    gene_qualify_threshold: float = Field(default=60, ge=0, le=100)
+    gene_high_threshold: float = Field(default=75, ge=0, le=100)
+    lookback_days: int = Field(default=60, ge=1, le=365)
+
+
+@app.post("/api/limitup/screener/params")
+async def save_limitup_screener_params(params: LimitUpParamsBody):
+    """保存打板策略参数"""
+    # 更新模块级变量
+    ls.GENE_QUALIFY_THRESHOLD = params.gene_qualify_threshold
+    ls.GENE_HIGH_THRESHOLD = params.gene_high_threshold
+    ls.LOOKBACK_DAYS = params.lookback_days
+    # 持久化到文件
+    _save_limitup_params(params.model_dump())
+    return {"status": "ok"}
