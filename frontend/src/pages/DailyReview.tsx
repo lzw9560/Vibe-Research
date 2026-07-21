@@ -10,7 +10,7 @@ import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, ApiError, type IndexQuote, type Quote, type MarketOverview, type ShortTermEmotion, type TurnoverTop, type GlobalIndex, type STIResult, type DailyReviewReport } from "@/lib/api";
 import { hasLlm, chatStream } from "@/lib/llm";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
-import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
+import { loadWatch, saveWatch, addCodes, apiWatchlist } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 import { STICard } from "@/components/sti/StiCard";
 import { STIDetailView } from "@/components/sti/StiDetailView";
