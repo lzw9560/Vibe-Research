@@ -555,19 +555,13 @@ function SeatEngineSection() {
     setLoading(true);
     api.seatProfiles()
       .then((raw) => {
-        // Handle both old format (Record<string, SeatProfile>) and new format ({profiles: [...], total: N})
-        if (Array.isArray(raw)) {
-          // New format: {profiles: [...]}
-          const arr = (raw as any).profiles || raw;
-          const dict: Record<string, SeatProfile> = {};
-          for (const p of arr) {
-            if (p.name) dict[p.name] = p;
-          }
-          setProfiles(dict);
-        } else {
-          // Old format: Record<string, SeatProfile>
-          setProfiles(raw as Record<string, SeatProfile>);
+        // Backend returns {profiles: [...], total: N}
+        const arr = Array.isArray(raw) ? raw : (raw as any).profiles || [];
+        const dict: Record<string, SeatProfile> = {};
+        for (const p of arr) {
+          if (p.name) dict[p.name] = p;
         }
+        setProfiles(dict);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

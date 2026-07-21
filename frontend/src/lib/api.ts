@@ -533,7 +533,7 @@ export const api = {
   dailyReview: (date?: string) =>
     get<DailyReviewReport>(`/review/daily${date ? `?date=${date}` : ""}`),
   // 席位引擎
-  seatProfiles: () => get<Record<string, SeatProfile>>("/limitup/seats/profiles"),
+  seatProfiles: () => get<{profiles: SeatProfile[]; total: number}>("/limitup/seats/profiles"),
   seatProfile: (name: string) => get<SeatProfile>(`/limitup/seats/profile/${encodeURIComponent(name)}`),
   seatConsensus: (stockCode: string, date?: string) =>
     get<ConsensusSignal>(`/limitup/seats/consensus?stock_code=${stockCode}${date ? `&trade_date=${date}` : ""}`),
