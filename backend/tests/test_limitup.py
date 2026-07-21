@@ -150,7 +150,7 @@ def test_screener_result_model():
 def test_config_defaults():
     assert GENE_QUALIFY_THRESHOLD == 60.0
     assert GENE_HIGH_THRESHOLD == 75.0
-    assert LOOKBACK_DAYS == 60
+    assert LOOKBACK_DAYS == 250
 
 
 # ===========================================================================
@@ -244,3 +244,179 @@ def test_disclaimer_contains_required_text():
     assert "历史统计特征" in DISCLAIMER
     assert "不构成投资建议" in DISCLAIMER
     assert "股市有风险" in DISCLAIMER
+
+
+# ===========================================================================
+# limitup_strategy.py 补充单测
+# ===========================================================================
+
+def test_build_condition_matches_all_factors():
+    """测试所有条件匹配分支都正确生成。"""
+    gene = GeneScore(
+        code="600000",
+        name="浦发银行",
+        total_score=85.0,
+        factors={
+            "次日溢价率": 75,
+            "红盘率": 80,
+            "封板率": 85,
+            "炸板后溢价": 70,
+            "涨停频次": 65,
+        },
+        wilson_adjusted=80.0,
+        qualify=True,
+        high_gene=True,
+        last_zt_dates=["20260715"],
+        zt_count_250d=10,
+        backtest_points=[],
+    )
+    result = _build_condition_matches("600000", "浦发银行", gene, pool_item=None)
+    conditions = {m.condition for m in result.matches}
+    # 应该有：基因高分、高次日溢价、高频涨停
+    assert "基因高分" in conditions
+    assert "高次日溢价" in conditions
+    assert "高频涨停" in conditions
+
+
+def test_build_condition_matches_pool_item():
+    """测试传入 pool_item 时的高封板率条件。"""
+    gene = GeneScore(
+        code="600001",
+        name="测试股份",
+        total_score=80.0,
+        factors={
+            "次日溢价率": 60,
+            "红盘率": 70,
+            "封板率": 75,  # > 60 阈值
+            "炸板后溢价": 50,
+            "涨停频次": 40,
+        },
+        wilson_adjusted=75.0,
+        qualify=True,
+        high_gene=True,
+        last_zt_dates=[],
+        zt_count_250d=5,
+        backtest_points=[],
+    )
+    # pool_item 必须是非空 dict（空 dict 在 Python 中是 falsy，会导致条件1被跳过）
+    result = _build_condition_matches("600001", "测试股份", gene, pool_item={"amount": 1000})
+    conditions = {m.condition for m in result.matches}
+    assert "高封板率" in conditions
+
+
+def test_build_condition_matches_mid_gene():
+    """测试基因合格但未达高分的情况。"""
+    gene = GeneScore(
+        code="600002",
+        name="中小股份",
+        total_score=65.0,
+        factors={
+            "次日溢价率": 50,
+            "红盘率": 55,
+            "封板率": 55,  # < 60 但 > 50
+            "炸板后溢价": 40,
+            "涨停频次": 30,
+        },
+        wilson_adjusted=60.0,
+        qualify=True,
+        high_gene=False,
+        last_zt_dates=[],
+        zt_count_250d=3,
+        backtest_points=[],
+    )
+    result = _build_condition_matches("600002", "中小股份", gene, pool_item=None)
+    conditions = {m.condition for m in result.matches}
+    assert "基因合格" in conditions
+    # 封板率 55 < 60，不应该有高封板率
+    assert "高封板率" not in conditions
+
+
+def test_build_condition_matches_very_low_gene():
+    """测试基因很低的边缘情况。"""
+    gene = GeneScore(
+        code="600003",
+        name="边缘股份",
+        total_score=30.0,
+        factors={
+            "次日溢价率": 10,
+            "红盘率": 15,
+            "封板率": 30,
+            "炸板后溢价": 5,
+            "涨停频次": 5,
+        },
+        wilson_adjusted=25.0,
+        qualify=False,
+        high_gene=False,
+        last_zt_dates=[],
+        zt_count_250d=1,
+        backtest_points=[],
+    )
+    result = _build_condition_matches("600003", "边缘股份", gene, pool_item=None)
+    conditions = {m.condition for m in result.matches}
+    assert "基因偏低" in conditions
+    assert "低封板率" in conditions
+
+
+def test_risk_rules_count_and_structure():
+    """测试风控规则数量和结构完整性。"""
+    assert len(RISK_RULES_KNOWLEDGE) == 6
+    for rule in RISK_RULES_KNOWLEDGE:
+        assert "rule_name" in rule
+        assert "description" in rule
+        assert "example" in rule
+
+
+def test_condition_match_description_contains_neutral_language():
+    """确保条件匹配的 description 使用中性语言（非行动建议）。"""
+    gene = GeneScore(
+        code="600004",
+        name="测试公司",
+        total_score=70.0,
+        factors={"次日溢价率": 65, "红盘率": 70, "封板率": 65, "炸板后溢价": 55, "涨停频次": 45},
+        wilson_adjusted=65.0,
+        qualify=True,
+        high_gene=False,
+        last_zt_dates=[],
+        zt_count_250d=5,
+        backtest_points=[],
+    )
+    result = _build_condition_matches("600004", "测试公司", gene, pool_item=None)
+    for match in result.matches:
+        # 应该包含"策略逻辑上"而非"你应该"
+        assert "策略逻辑上" in match.description
+        assert "应该" not in match.description or "策略逻辑上应" in match.description
+
+
+def test_gene_score_backtest_summary_default():
+    """测试 GeneScore 的 backtest_summary 默认值为空 dict。"""
+    gs = GeneScore(
+        code="600005",
+        name="测试",
+        total_score=50.0,
+        factors={"次日溢价率": 50, "红盘率": 50, "封板率": 50, "炸板后溢价": 50, "涨停频次": 50},
+        wilson_adjusted=45.0,
+        qualify=False,
+        high_gene=False,
+        last_zt_dates=[],
+        zt_count_250d=0,
+    )
+    assert gs.backtest_summary == {}
+    assert gs.backtest_points == []
+
+
+def test_wilson_adjustment_reduces_score():
+    """Wilson 校正应降低小样本得分。"""
+    gene = GeneScore(
+        code="600006",
+        name="测试",
+        total_score=80.0,
+        factors={"次日溢价率": 80, "红盘率": 80, "封板率": 80, "炸板后溢价": 80, "涨停频次": 80},
+        wilson_adjusted=0.0,  # 会被覆盖
+        qualify=True,
+        high_gene=True,
+        last_zt_dates=[],
+        zt_count_250d=1,  # 小样本
+        backtest_points=[],
+    )
+    # 1 次涨停，Wilson 校正应显著降低
+    assert gene.wilson_adjusted < gene.total_score

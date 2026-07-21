@@ -4,6 +4,9 @@ WORKDIR /app
 # 安装系统依赖（mootdx 可能需要编译）
 RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
+# Clear any cached hashes and install deps
+# Clear pip cache to avoid stale hash mismatches, then install
+RUN pip cache purge 2>/dev/null || true && rm -rf /root/.cache/pip/* 2>/dev/null || true
 RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
 COPY news_sources.json ./

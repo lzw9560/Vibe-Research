@@ -424,7 +424,7 @@ def full_valuation(code: str) -> dict:
 # ===========================================================================
 
 _DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
-_EM_MIN_INTERVAL = 1.0          # 两次东财请求最小间隔（秒），内置防封节流
+_EM_MIN_INTERVAL = 0.3          # 两次东财请求最小间隔（秒），内置防封节流
 _em_last_call = [0.0]
 _EM_SESSIONS: dict = {}         # {direct(bool): requests.Session}
 
@@ -497,20 +497,34 @@ def em_get(url: str, params: dict | None = None, headers: dict | None = None, ti
 # ---------------------------------------------------------------------------
 _ZTB_UT = "7eea3edcaed734bea9cbfc24409ed989"
 
+# 涨停池 HTTP 缓存：(endpoint, date, sort) → (timestamp, data)，TTL 24 小时
+_ztb_cache: dict[tuple[str, str, str], tuple[float, list[dict]]] = {}
+_ZTB_CACHE_TTL = 86400  # 24 小时
+
 
 def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[dict]:
     """东财涨停板行情中心原始池（push2ex）。
     endpoint: getTopicZTPool(涨停) / getTopicZBPool(炸板) / getTopicDTPool(跌停) / getYesterdayZTPool(昨涨停)
     date: YYYYMMDD 交易日。非交易日 / 参数错 → []。
-    池内每项字段含 lbc(连板数) / zbc(炸板次数) / hybk(行业) 等。"""
+    池内每项字段含 lbc(连板数) / zbc(炸板次数) / hybk(行业) 等。
+    缓存：同一 (endpoint, date, sort) 结果缓存 24 小时，避免重复 HTTP 请求。"""
+    cache_key = (endpoint, date, sort)
+    now = time.time()
+    cached = _ztb_cache.get(cache_key)
+    if cached and now - cached[0] < _ZTB_CACHE_TTL:
+        return cached[1]
+
     url = f"https://push2ex.eastmoney.com/{endpoint}"
     params = {"ut": _ZTB_UT, "dpt": "wz.ztzt", "Pageindex": 0,
               "pagesize": 10000, "sort": sort, "date": date}
     headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
     try:
         r = em_get(url, params=params, headers=headers, timeout=10)
-        return (r.json().get("data") or {}).get("pool") or []
+        result = (r.json().get("data") or {}).get("pool") or []
+        _ztb_cache[cache_key] = (now, result)
+        return result
     except Exception:
+        _ztb_cache[cache_key] = (now, [])
         return []
 
 

@@ -233,7 +233,37 @@ export interface GlobalStock {
   quote: GlobalQuote; metrics: GlobalMetrics | null;
 }
 
-// 打板策略相关类型（客观数据，非行动建议）
+// STI 情绪温度
+export interface STIDimension {
+  limit_up_count: number;
+  limit_down_count: number;
+  seal_rate: number;
+  advance_decline_ratio: number;
+  promotion_rate: number;
+  prev_zt_performance: number;
+  max_boards: number;
+  market_factor: number;
+}
+
+export interface STIResult {
+  date: string;
+  score: number | null;
+  phase: "高潮" | "启动" | "分歧" | "冰点" | "退潮" | null;
+  dimensions: STIDimension | null;
+  source_ok: boolean;
+  confidence: string;
+  change_from_yesterday: number | null;
+  data_updated: string | null;
+  phase_explanation: string | null;
+  disclaimer: string;
+}
+
+export interface STITimelineItem {
+  date: string;
+  score: number | null;
+  phase: string | null;
+  change_from_yesterday: number | null;
+}
 export interface GeneScore {
   code: string;
   name: string;
@@ -244,6 +274,8 @@ export interface GeneScore {
   high_gene: boolean;
   last_zt_dates: string[];
   zt_count_250d: number;
+  backtest_points: Array<{ date: string; gene_score: number; actual_next_day: number }>;
+  backtest_summary: { samples: number; lianban_rate: number; avg_score_lianban: number | null };
 }
 
 export interface StrategyLogicMatch {
@@ -301,6 +333,104 @@ export interface LimitUpParams {
   lookback_days: number;
 }
 
+// ---- 竞价选股参数配置 ----
+export interface AuctionParams {
+  min_gene_score: number;
+  min_zt_count: number;
+  top_n: number;
+}
+
+// ---- 复盘报告参数配置 ----
+export interface ReviewParams {
+  max_zt_stocks: number;
+  auction_top_n: number;
+}
+
+// ---- 每日复盘报告 ----
+export interface ZTStockSummary {
+  code: string;
+  name: string;
+  lbc: number;
+  fbt: number;
+  seal_rate: number;
+  zbc: number;
+}
+
+export interface SectorHeatItem {
+  sector: string;
+  zt_count: number;
+  total_count: number;
+  zt_rate: number;
+  avg_change: number;
+}
+
+export interface DailyReviewReport {
+  date: string;
+  sti_score: number | null;
+  sti_phase: string | null;
+  sti_change: number | null;
+  zt_total: number;
+  dt_total: number;
+  zb_total: number;
+  advance_count: number;
+  decline_count: number;
+  sector_heat: SectorHeatItem[];
+  zt_stocks: ZTStockSummary[];
+  prev_zt_stats: Record<string, number>;
+  auction_top: Record<string, unknown>[];
+  updated: string;
+  disclaimer: string;
+}
+
+// ---- 竞价选股结果 ----
+export interface AuctionCandidate {
+  code: string;
+  name: string;
+  score: number;
+  gene_score: number;
+  zt_count_30d: number;
+  seal_rate: number;
+  avg_fbt: number;
+  promotion_rate: number;
+  prev_zt_return: number;
+  max_boards: number;
+  strategy_tags: string[];
+  signal_strength: number;
+  confidence: string;
+}
+
+export interface AuctionScreenerResult {
+  date: string;
+  candidates: AuctionCandidate[];
+  sti_score: number | null;
+  sti_phase: string | null;
+  total_analyzed: number;
+  updated: string;
+  disclaimer: string;
+}
+
+// ---- 席位引擎 ----
+export interface SeatProfile {
+  seat_name: string;
+  total_appearances: number;
+  total_buy_amt: number;
+  total_sell_amt: number;
+  net_amt: number;
+  avg_buy_amt: number;
+  avg_sell_amt: number;
+  stock_cooldown: number;
+  last_seen: string;
+  seat_type: string;  // "机构专用" | "量化席位" | "活跃游资" | "跟风席位" | "inactive"
+}
+
+export interface ConsensusSignal {
+  signal: string | null;  // "多资金共识" | "分歧信号" | "机构主导" | "游资主导" | null
+  details: Record<string, unknown>;
+  date: string;
+  stock_code: string;
+  disclaimer: string;
+}
+
 export async function getLimitUpScreenerParams(): Promise<LimitUpParams> {
   const res = await fetch(`/api/limitup/screener/params`, { headers: authHeaders() });
   if (!res.ok) throw new ApiError(`Failed to get params: ${res.statusText}`, res.status);
@@ -314,6 +444,36 @@ export async function saveLimitUpScreenerParams(params: LimitUpParams): Promise<
     body: JSON.stringify(params),
   });
   if (!res.ok) throw new ApiError(`Failed to save params: ${res.statusText}`, res.status);
+}
+
+export async function getAuctionParams(): Promise<AuctionParams> {
+  const res = await fetch(`/api/limitup/auction/params`, { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get auction params: ${res.statusText}`, res.status);
+  return res.json();
+}
+
+export async function saveAuctionParams(params: AuctionParams): Promise<void> {
+  const res = await fetch(`/api/limitup/auction/params`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new ApiError(`Failed to save auction params: ${res.statusText}`, res.status);
+}
+
+export async function getReviewParams(): Promise<ReviewParams> {
+  const res = await fetch(`/api/review/params`, { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get review params: ${res.statusText}`, res.status);
+  return res.json();
+}
+
+export async function saveReviewParams(params: ReviewParams): Promise<void> {
+  const res = await fetch(`/api/review/params`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new ApiError(`Failed to save review params: ${res.statusText}`, res.status);
 }
 
 export const api = {
@@ -362,4 +522,26 @@ export const api = {
     get<LimitUpAnalysis>(`/limitup/analysis/${code}${date ? `?date=${date}` : ""}`),
   getLimitUpScreenerParams,
   saveLimitUpScreenerParams,
+  getAuctionParams,
+  saveAuctionParams,
+  getReviewParams,
+  saveReviewParams,
+  // 竞价选股 TOP N
+  auctionTop: (date?: string, n?: number) =>
+    get<AuctionScreenerResult>(`/limitup/auction/top${date ? `?date=${date}` : ""}${n ? `&n=${n}` : ""}`),
+  // 每日复盘报告
+  dailyReview: (date?: string) =>
+    get<DailyReviewReport>(`/review/daily${date ? `?date=${date}` : ""}`),
+  // 席位引擎
+  seatProfiles: () => get<Record<string, SeatProfile>>("/limitup/seats/profiles"),
+  seatProfile: (name: string) => get<SeatProfile>(`/limitup/seats/profile/${encodeURIComponent(name)}`),
+  seatConsensus: (stockCode: string, date?: string) =>
+    get<ConsensusSignal>(`/limitup/seats/consensus?stock_code=${stockCode}${date ? `&trade_date=${date}` : ""}`),
+  seatBuildProfiles: (lookbackDays?: number) =>
+    request<{ status: string; profiles: number }>("/limitup/seats/build", "POST", lookbackDays ? { lookback_days: lookbackDays } : {}),
+  // STI 情绪温度
+  stiLatest: (date?: string) =>
+    get<STIResult>(`/market/sti/latest${date ? `?date=${date}` : ""}`),
+  stiTimeline: (days = 30) =>
+    get<STITimelineItem[]>(`/market/sti/timeline?days=${days}`),
 };

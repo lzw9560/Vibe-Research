@@ -5,7 +5,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { api, type Quote } from "@/lib/api";
-import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
+import { saveWatch, apiWatchlist, addCodes } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 
 // A 股红涨绿跌（与整个看板一致）。
@@ -14,38 +14,55 @@ const color = (v: number | undefined) =>
 const pct = (v: number | undefined) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
 
 export function Watchlist() {
-  const [codes, setCodes] = useState<string[]>(loadWatch);
+  const [codes, setCodes] = useState<string[]>([]);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+
+  // 初始化：从 API 加载自选股
+  useEffect(() => {
+    apiWatchlist.fetch().then((cs) => {
+      setCodes(cs);
+      setReady(true);
+    });
+  }, []);
 
   const refresh = (cs: string[]) => {
     if (!cs.length) { setQuotes({}); return; }
     setLoading(true);
     api.quote(cs.join(",")).then(setQuotes).catch(() => {}).finally(() => setLoading(false));
   };
-  useEffect(() => { refresh(loadWatch()); }, []);
+  useEffect(() => { if (ready) refresh(codes); }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const add = () => {
+  const add = async () => {
     const { next, added } = addCodes(codes, input);
     if (added === 0) {
       setHint(input.trim() ? "没识别到新的 6 位代码（可能已在自选里）" : null);
       setInput("");
       return;
     }
-    setCodes(next); saveWatch(next); setInput(""); setHint(`已添加 ${added} 只`);
+    const result = await apiWatchlist.add(next);
+    setCodes(next);
+    saveWatch(next); // localStorage fallback 同步
+    setInput("");
+    setHint(`已添加 ${result.added} 只`);
     refresh(next);
   };
-  const remove = (c: string) => {
+
+  const remove = async (c: string) => {
     const next = codes.filter((x) => x !== c);
-    setCodes(next); saveWatch(next); refresh(next);
+    await apiWatchlist.remove(c);
+    saveWatch(next); // localStorage fallback 同步
+    setCodes(next);
+    refresh(next);
   };
 
   const aiContext = useMemo(
     () =>
       codes.length
-        ? "我的自选股（本地）：\n" +
+        ? "我的自选股：\n" +
           codes
             .map((c) => {
               const q = quotes[c];
@@ -62,7 +79,7 @@ export function Watchlist() {
     <div>
       <PageHeader
         title="自选股"
-        subtitle="批量添加、一屏总览你关注的标的。数据只存本地、不上传。"
+        subtitle="批量添加、一屏总览你关注的标的。数据已同步到云端。"
         actions={
           codes.length > 0 && (
             <AskAiButton

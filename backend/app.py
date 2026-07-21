@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
+import threading
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +28,10 @@ import newsradar
 import portfolio as pf
 import limitup_screener as ls
 import limitup_strategy as lstrat
+import limitup_sti as ls_sti
+import auction_screener as asc
+from auction_screener import AUCTION_TOP_N
+import daily_review as dr
 import market
 import myreports as mr
 
@@ -39,17 +46,42 @@ import limitup_screener as _ls
 
 
 def _precompute_limitup():
-    """后台线程：预计算最近 3 个交易日的基因得分。"""
+    """后台线程：预计算最近 3 个交易日的基因得分 + STI + 竞价选股 + 复盘报告。"""
+    from datetime import datetime, timedelta
     try:
         for back in range(3):
             d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y%m%d")
             _ls.get_screener_result(d[:4] + "-" + d[4:6] + "-" + d[6:])
+        # STI 预计算（独立容错：失败不阻塞基因选股器）
+        try:
+            from datetime import datetime as _dt
+            engine = ls_sti.get_sti_engine()
+            for back in range(3):
+                d = (_dt.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
+                engine.precompute_daily(d)
+        except Exception as e:
+            print(f"[limitup_sti] STI 预计算失败（不影响主流程）: {e}")
+        # 竞价选股预计算（独立容错：失败不阻塞主流程）
+        try:
+            for back in range(3):
+                d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
+                asc.get_screener().precompute_daily(d)
+        except Exception as e:
+            print(f"[auction_screener] 竞价选股预计算失败（不影响主流程）: {e}")
+        # 复盘报告预计算（独立容错：失败不阻塞主流程）
+        try:
+            for back in range(3):
+                d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
+                dr.get_reviewer().precompute_daily(d)
+        except Exception as e:
+            print(f"[daily_review] 复盘报告预计算失败（不影响主流程）: {e}")
     except Exception as e:  # noqa: BLE001
         print(f"[limitup] 预计算失败: {e}")
 
 
 def _start_limitup_scheduler():
     """每天 15:35 触发一次预计算（盘后 5 分钟，数据稳定）。"""
+    from datetime import datetime, timedelta
     import time as _time
 
     def _loop():
@@ -66,7 +98,6 @@ def _start_limitup_scheduler():
 
 # 启动预计算调度器（仅在预计算开启时）
 if os.getenv("LIMITUP_PRECOMPUTE", "false").lower() == "true":
-    from datetime import datetime, timedelta
     _start_limitup_scheduler()
 
 # CORS：默认放开（本地自托管友好）；公网部署时用 VR_ALLOW_ORIGINS 收紧成白名单。
@@ -306,6 +337,73 @@ def market_emotion():
         return {"data": market.get_short_term_emotion()}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"短线情绪异常：{e}") from e
+
+
+@app.get("/api/market/sti/latest")
+def get_sti_latest(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最新")):
+    """获取最新 STI 情绪温度（含八维明细）。"""
+    try:
+        engine = ls_sti.get_sti_engine()
+        if date:
+            result = engine.precompute_daily(date)
+        else:
+            # 查数据库最新一条
+            db = engine._get_db()
+            row = db.execute(
+                "SELECT * FROM sti_timeline ORDER BY date DESC LIMIT 1"
+            ).fetchone()
+            if row is None:
+                # 表为空，尝试计算今天的
+                today = datetime.now(ls_sti.BEIJING_TZ).strftime("%Y-%m-%d")
+                result = engine.precompute_daily(today)
+            else:
+                from datetime import datetime as _dt
+                result = ls_sti.STIResult(
+                    date=row["date"],
+                    score=float(row["score"]) if row["score"] is not None else None,
+                    phase=ls_sti.STIPhase(row["phase"]) if row["phase"] else None,
+                    dimensions=ls_sti.STIDimension(
+                        limit_up_count=float(row["dimension_limit_up_count"]) if row["dimension_limit_up_count"] else 0,
+                        limit_down_count=float(row["dimension_limit_down_count"]) if row["dimension_limit_down_count"] else 0,
+                        seal_rate=float(row["dimension_seal_rate"]) if row["dimension_seal_rate"] else 0,
+                        advance_decline_ratio=float(row["dimension_advance_decline_ratio"]) if row["dimension_advance_decline_ratio"] else 0,
+                        promotion_rate=float(row["dimension_promotion_rate"]) if row["dimension_promotion_rate"] else 0,
+                        prev_zt_performance=float(row["dimension_prev_zt_performance"]) if row["dimension_prev_zt_performance"] else 0,
+                        max_boards=float(row["dimension_max_boards"]) if row["dimension_max_boards"] else 0,
+                        market_factor=float(row["market_factor"]) if row["market_factor"] else 1.0,
+                    ),
+                    source_ok=bool(row["source_ok"]) if row["source_ok"] is not None else True,
+                    confidence=row["confidence"] or "high",
+                    change_from_yesterday=float(row["change_from_yesterday"]) if row["change_from_yesterday"] else 0.0,
+                    data_updated=row["data_updated"],
+                )
+        return {"data": result.model_dump()}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"STI 查询异常：{e}") from e
+
+
+@app.get("/api/market/sti/timeline")
+def get_sti_timeline(days: int = Query(30, ge=1, le=365)):
+    """获取 STI 时间线（用于前端趋势图）。"""
+    try:
+        db = ls_sti.get_sti_engine()._get_db()
+        rows = db.execute(
+            "SELECT date, score, phase, change_from_yesterday FROM sti_timeline "
+            "WHERE score IS NOT NULL ORDER BY date DESC LIMIT ?",
+            (days,),
+        ).fetchall()
+        timeline = [
+            {
+                "date": r["date"],
+                "score": round(float(r["score"]), 2) if r["score"] else None,
+                "phase": r["phase"],
+                "change_from_yesterday": round(float(r["change_from_yesterday"]), 2) if r["change_from_yesterday"] else None,
+            }
+            for r in rows[::-1]  # 升序
+        ]
+        return {"data": timeline}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"STI 时间线异常：{e}") from e
 
 
 @app.get("/api/market/turnover-top")
@@ -677,7 +775,7 @@ def _load_limitup_params() -> dict:
     return {
         "gene_qualify_threshold": 60,
         "gene_high_threshold": 75,
-        "lookback_days": 60,
+        "lookback_days": 250,
     }
 
 
@@ -696,7 +794,7 @@ async def get_limitup_screener_params():
 class LimitUpParamsBody(BaseModel):
     gene_qualify_threshold: float = Field(default=60, ge=0, le=100)
     gene_high_threshold: float = Field(default=75, ge=0, le=100)
-    lookback_days: int = Field(default=60, ge=1, le=365)
+    lookback_days: int = Field(default=250, ge=1, le=365)
 
 
 @app.post("/api/limitup/screener/params")
@@ -709,3 +807,330 @@ async def save_limitup_screener_params(params: LimitUpParamsBody):
     # 持久化到文件
     _save_limitup_params(params.model_dump())
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# 竞价选股模块
+# ---------------------------------------------------------------------------
+
+@app.get("/api/limitup/auction/top")
+async def get_auction_top(date: str = Query(None, description="交易日期 YYYY-MM-DD"), n: int = Query(AUCTION_TOP_N, ge=1, le=100, description="返回候选股数量")):
+    """
+    获取指定日期的竞价爆量 TOP N 候选股。
+    
+    盘后批量分析涨停池数据，生成次日竞价预案。
+    非实时扫描，而是历史竞价模式回放 + 次日预案生成。
+    """
+    if date is None:
+        date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
+    
+    try:
+        screener = asc.get_screener()
+        result = screener.analyze(date)
+        # 截取前 N 只
+        result.candidates = result.candidates[:n]
+        return result.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"竞价选股分析失败: {str(e)}")
+
+
+@app.get("/api/limitup/auction/backfill")
+async def backfill_auction(start_date: str = Query(..., description="起始日期 YYYY-MM-DD"), end_date: str = Query(None, description="结束日期 YYYY-MM-DD，默认今天")):
+    """
+    竞价选股历史回填。
+    """
+    if end_date is None:
+        end_date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
+    
+    try:
+        screener = asc.get_screener()
+        results = screener.backfill(start_date, end_date)
+        return {
+            "status": "ok",
+            "count": len(results),
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"竞价选股回填失败: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# 每日复盘报告
+# ---------------------------------------------------------------------------
+
+@app.get("/api/review/daily")
+async def get_daily_review(date: str = Query(None, description="交易日期 YYYY-MM-DD")):
+    """
+    获取指定日期的每日复盘报告。
+    
+    包含：市场情绪总结、板块热度排名、涨停股统计、昨日涨停表现、竞价回顾。
+    """
+    if date is None:
+        date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
+    
+    try:
+        reviewer = dr.get_reviewer()
+        result = reviewer.generate_review(date)
+        return result.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"复盘报告生成失败: {str(e)}")
+
+
+@app.get("/api/review/daily/backfill")
+async def backfill_review(start_date: str = Query(..., description="起始日期 YYYY-MM-DD"), end_date: str = Query(None, description="结束日期 YYYY-MM-DD，默认今天")):
+    """
+    复盘报告历史回填。
+    """
+    if end_date is None:
+        end_date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
+    
+    try:
+        reviewer = dr.get_reviewer()
+        results = reviewer.backfill(start_date, end_date)
+        return {
+            "status": "ok",
+            "count": len(results),
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"复盘报告回填失败: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# 席位引擎
+# ---------------------------------------------------------------------------
+
+@app.get("/api/limitup/seats/profiles")
+async def get_seat_profiles():
+    """获取所有席位画像"""
+    try:
+        import seat_engine as se
+        engine = se.get_engine()
+        raw = engine.get_all_seat_profiles()
+        # Convert {name: profile} dict to {profiles: [...]} list format
+        profiles = [{"name": name, **profile} for name, profile in raw.items()]
+        return {"profiles": profiles, "total": len(profiles)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"席位画像获取失败: {str(e)}")
+
+
+@app.get("/api/limitup/seats/profile/{seat_name:path}")
+async def get_seat_profile(seat_name: str):
+    """获取单个席位画像"""
+    try:
+        import seat_engine as se
+        engine = se.get_engine()
+        profile = engine.get_seat_profile(seat_name)
+        if profile is None:
+            raise HTTPException(status_code=404, detail=f"席位 {seat_name} 不存在")
+        return profile
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"席位画像获取失败: {str(e)}")
+
+
+@app.get("/api/limitup/seats/consensus")
+async def get_consensus_signal(
+    stock_code: str = Query(..., description="股票代码"),
+    trade_date: str = Query(None, description="交易日期 YYYY-MM-DD"),
+):
+    """获取某只股票的席位共识/分歧信号"""
+    try:
+        import seat_engine as se
+        engine = se.get_engine()
+        td = trade_date or datetime.now(se.BEIJING_TZ).strftime("%Y-%m-%d")
+        signal = engine.compute_consensus_signal(td, stock_code)
+        if signal is None:
+            return {"signal": None, "details": {}, "disclaimer": se.SEAT_DISCLAIMER}
+        return signal
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"共识信号计算失败: {str(e)}")
+
+
+@app.post("/api/limitup/seats/build")
+async def trigger_build_profiles(lookback_days: int = Query(180, ge=30, le=365)):
+    """触发席位画像冷启动构建"""
+    try:
+        import seat_engine as se
+        engine = se.get_engine()
+        result = engine.build_seat_profiles(lookback_days)
+        return {"status": "ok", "profiles": len(result)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"席位画像构建失败: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# 竞价选股参数
+# ---------------------------------------------------------------------------
+
+AUCTION_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "auction_params.json")
+
+
+def _load_auction_params() -> dict:
+    try:
+        with open(AUCTION_PARAMS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {
+            "min_gene_score": os.getenv("AUCTION_MIN_GENE_SCORE", "50"),
+            "min_zt_count": os.getenv("AUCTION_MIN_ZT_COUNT", "2"),
+            "top_n": os.getenv("AUCTION_TOP_N", "50"),
+        }
+
+
+def _save_auction_params(params: dict):
+    with open(AUCTION_PARAMS_FILE, "w") as f:
+        json.dump(params, f, indent=2)
+
+
+@app.get("/api/limitup/auction/params")
+async def get_auction_params():
+    """获取竞价选股参数"""
+    return _load_auction_params()
+
+
+class AuctionParamsBody(BaseModel):
+    min_gene_score: float = Field(default=50, ge=0, le=100)
+    min_zt_count: int = Field(default=2, ge=0, le=20)
+    top_n: int = Field(default=50, ge=1, le=100)
+
+
+@app.post("/api/limitup/auction/params")
+async def save_auction_params(params: AuctionParamsBody):
+    """保存竞价选股参数"""
+    _save_auction_params(params.model_dump())
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# 复盘报告参数
+# ---------------------------------------------------------------------------
+
+REVIEW_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "review_params.json")
+
+
+def _load_review_params() -> dict:
+    try:
+        with open(REVIEW_PARAMS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {
+            "max_zt_stocks": os.getenv("REVIEW_MAX_ZT_STOCKS", "100"),
+            "auction_top_n": os.getenv("REVIEW_AUCTION_TOP_N", "20"),
+        }
+
+
+def _save_review_params(params: dict):
+    with open(REVIEW_PARAMS_FILE, "w") as f:
+        json.dump(params, f, indent=2)
+
+
+@app.get("/api/review/params")
+async def get_review_params():
+    """获取复盘报告参数"""
+    return _load_review_params()
+
+
+class ReviewParamsBody(BaseModel):
+    max_zt_stocks: int = Field(default=100, ge=10, le=500)
+    auction_top_n: int = Field(default=20, ge=1, le=100)
+
+
+@app.post("/api/review/params")
+async def save_review_params(params: ReviewParamsBody):
+    """保存复盘报告参数"""
+    _save_review_params(params.model_dump())
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# 自选股持久化（SQLite）
+# ---------------------------------------------------------------------------
+
+_DB_LOCK = threading.Lock()
+_DB_PATH = os.path.join(os.path.dirname(__file__), "vibe_research.db")
+_db: sqlite3.Connection | None = None
+
+
+def _get_db() -> sqlite3.Connection:
+    global _db
+    if _db is None:
+        _db = sqlite3.connect(_DB_PATH, timeout=10)  # 10s 锁等待超时
+        _db.row_factory = sqlite3.Row
+        _db.execute(
+            """CREATE TABLE IF NOT EXISTS watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL CHECK(length(code)=6 AND code GLOB '[0-9][0-9][0-9][0-9][0-9][0-9]'),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(code)
+            )"""
+        )
+        _db.commit()
+    return _db
+
+
+class WatchlistCodesIn(BaseModel):
+    codes: list[str]
+
+
+@app.get("/api/watchlist")
+def watchlist_get():
+    """获取自选股列表"""
+    try:
+        with _DB_LOCK:
+            db = _get_db()
+            rows = db.execute("SELECT code FROM watchlist ORDER BY created_at").fetchall()
+            return {"codes": [r["code"] for r in rows]}
+    except sqlite3.OperationalError as e:
+        if "locked" in str(e).lower():
+            raise HTTPException(503, "数据库忙，请稍后重试") from e
+        raise HTTPException(502, f"自选股查询异常：{e}") from e
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"自选股查询异常：{e}") from e
+
+
+@app.post("/api/watchlist")
+def watchlist_add(body: WatchlistCodesIn):
+    """批量添加自选股（去重插入）"""
+    try:
+        with _DB_LOCK:
+            db = _get_db()
+            codes = list(dict.fromkeys(c.strip() for c in body.codes if c.strip()))  # 去重保序
+            added = 0
+            for code in codes:
+                if not code.isdigit() or len(code) != 6:
+                    continue
+                try:
+                    db.execute("INSERT INTO watchlist (code) VALUES (?)", (code,))
+                    added += 1
+                except sqlite3.IntegrityError:
+                    pass  # 已存在，跳过
+            db.commit()
+            total = db.execute("SELECT COUNT(*) AS cnt FROM watchlist").fetchone()["cnt"]
+            return {"added": added, "total": total}
+    except sqlite3.OperationalError as e:
+        if "locked" in str(e).lower():
+            raise HTTPException(503, "数据库忙，请稍后重试") from e
+        raise HTTPException(502, f"自选股添加异常：{e}") from e
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"自选股添加异常：{e}") from e
+
+
+@app.delete("/api/watchlist/{code}")
+def watchlist_delete(code: str):
+    """删除自选股"""
+    try:
+        with _DB_LOCK:
+            db = _get_db()
+            db.execute("DELETE FROM watchlist WHERE code=?", (code,))
+            db.commit()
+            return {"ok": True}
+    except sqlite3.OperationalError as e:
+        if "locked" in str(e).lower():
+            raise HTTPException(503, "数据库忙，请稍后重试") from e
+        raise HTTPException(502, f"自选股删除异常：{e}") from e
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"自选股删除异常：{e}") from e

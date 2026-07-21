@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { toast } from "sonner";
 import { loadLlm, saveLlm, clearLlm } from "@/lib/llm";
-import { loadAccessKey, saveAccessKey, getLimitUpScreenerParams, saveLimitUpScreenerParams, type LimitUpParams } from "@/lib/api";
+import { loadAccessKey, saveAccessKey, getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams, getReviewParams, saveReviewParams, type LimitUpParams, type AuctionParams, type ReviewParams } from "@/lib/api";
 import { subscriptionModels, apiModels, PROVIDER_BASE, isCliProvider, aiModels, type ProviderId } from "@/lib/ai-models";
 
 export function Settings() {
@@ -31,8 +31,25 @@ export function Settings() {
   });
   const [paramsLoading, setParamsLoading] = useState(false);
 
+  // 竞价选股参数
+  const [auctionParams, setAuctionParams] = useState<AuctionParams>({
+    min_gene_score: 50,
+    min_zt_count: 2,
+    top_n: 50,
+  });
+  const [auctionLoading, setAuctionLoading] = useState(false);
+
+  // 复盘报告参数
+  const [reviewParams, setReviewParams] = useState<ReviewParams>({
+    max_zt_stocks: 100,
+    auction_top_n: 20,
+  });
+  const [reviewLoading, setReviewLoading] = useState(false);
+
   useEffect(() => {
     getLimitUpScreenerParams().then(setLimitUpParams).catch(console.error);
+    getAuctionParams().then(setAuctionParams).catch(console.error);
+    getReviewParams().then(setReviewParams).catch(console.error);
   }, []);
 
   const handleSaveParams = async () => {
@@ -44,6 +61,30 @@ export function Settings() {
       toast.error("保存失败");
     } finally {
       setParamsLoading(false);
+    }
+  };
+
+  const handleSaveAuctionParams = async () => {
+    setAuctionLoading(true);
+    try {
+      await saveAuctionParams(auctionParams);
+      toast.success("竞价选股参数已保存");
+    } catch {
+      toast.error("保存失败");
+    } finally {
+      setAuctionLoading(false);
+    }
+  };
+
+  const handleSaveReviewParams = async () => {
+    setReviewLoading(true);
+    try {
+      await saveReviewParams(reviewParams);
+      toast.success("复盘报告参数已保存");
+    } catch {
+      toast.error("保存失败");
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -272,6 +313,96 @@ export function Settings() {
           className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
         >
           {paramsLoading ? "保存中..." : "保存参数"}
+        </button>
+      </GlassCard>
+
+      {/* 竞价选股参数 */}
+      <GlassCard className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Flame className="h-5 w-5 text-primary" />
+          <h3 className="text-sm font-semibold">竞价选股参数</h3>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          调整竞价选股模块的筛选阈值，影响竞价预案候选股的严格程度。
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium">最小基因得分</label>
+            <input
+              type="number"
+              value={auctionParams.min_gene_score}
+              onChange={(e) => setAuctionParams({ ...auctionParams, min_gene_score: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">候选股最低基因得分（默认50）</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">最小涨停次数</label>
+            <input
+              type="number"
+              value={auctionParams.min_zt_count}
+              onChange={(e) => setAuctionParams({ ...auctionParams, min_zt_count: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">近30日最少涨停次数（默认2）</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">返回候选股数量</label>
+            <input
+              type="number"
+              value={auctionParams.top_n}
+              onChange={(e) => setAuctionParams({ ...auctionParams, top_n: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">竞价预案 TOP N（默认50）</p>
+          </div>
+        </div>
+        <button
+          onClick={handleSaveAuctionParams}
+          disabled={auctionLoading}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
+        >
+          {auctionLoading ? "保存中..." : "保存参数"}
+        </button>
+      </GlassCard>
+
+      {/* 复盘报告参数 */}
+      <GlassCard className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Flame className="h-5 w-5 text-primary" />
+          <h3 className="text-sm font-semibold">复盘报告参数</h3>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          调整复盘报告中展示的涨停股和竞价回顾数量。
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium">涨停股展示上限</label>
+            <input
+              type="number"
+              value={reviewParams.max_zt_stocks}
+              onChange={(e) => setReviewParams({ ...reviewParams, max_zt_stocks: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">涨停股明细展示上限（默认100）</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">竞价回顾数量</label>
+            <input
+              type="number"
+              value={reviewParams.auction_top_n}
+              onChange={(e) => setReviewParams({ ...reviewParams, auction_top_n: Number(e.target.value) })}
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">复盘报告中竞价回顾 TOP N（默认20）</p>
+          </div>
+        </div>
+        <button
+          onClick={handleSaveReviewParams}
+          disabled={reviewLoading}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
+        >
+          {reviewLoading ? "保存中..." : "保存参数"}
         </button>
       </GlassCard>
     </div>

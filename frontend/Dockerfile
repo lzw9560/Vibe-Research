@@ -2,9 +2,9 @@
 FROM node:20-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts --legacy-peer-deps 2>&1 || npm install --legacy-peer-deps 2>&1
 COPY . .
-RUN npm run build
+RUN ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build
 
 # 运行阶段: nginx 托管静态文件 + 反代后端 API
 FROM nginx:alpine

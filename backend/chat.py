@@ -58,6 +58,34 @@ A 股用 query_quote / query_valuation / query_reports / query_news（传 6 位�
 当前页面上下文：
 {{context}}"""
 
+# 对不支持 function calling 的模型使用的精简版 system prompt（不提及工具）。
+SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
+
+硬性规则（务必遵守）：
+- 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
+- 基于用户提供的客观数据回答；不要编造数字。
+- 涉及个股时用提供的真实数据；讲清多空两面与风险，让用户自己判断。
+- 用简洁中文回答。
+
+{ANALYSIS_FRAMEWORK}
+
+当前页面上下文：
+{{context}}"""
+
+# 对不支持 function calling 的模型使用的精简版 system prompt（不提及工具）。
+SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
+
+硬性规则（务必遵守）：
+- 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
+- 基于用户提供的客观数据回答；不要编造数字。
+- 涉及个股时用提供的真实数据；讲清多空两面与风险，让用户自己判断。
+- 用简洁中文回答。
+
+{ANALYSIS_FRAMEWORK}
+
+当前页面上下文：
+{{context}}"""
+
 TOOLS = [
     {
         "type": "function",
@@ -216,9 +244,17 @@ def run_chat(cfg: dict, user_messages: list, context: str = "") -> dict:
     user_messages: [{role, content}, ...]
     返回: {content, trace:[{tool,args}], rounds}
     """
-    messages = [{"role": "system", "content": SYSTEM_PROMPT.format(context=context or "（无）")}]
+    # Agnes 等不支持 function calling 的模型：用精简 prompt，跳过工具调用
+    no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
+    sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
+    messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(user_messages)
     trace: list[dict] = []
+
+    if no_tools_cfg:
+        # 非 function-calling 模式：直接调一次，返回答案
+        data = _call_llm(cfg, messages, use_tools=False)
+        return {"content": data["choices"][0]["message"].get("content") or "", "trace": [], "rounds": 1}
 
     for rnd in range(1, MAX_ROUNDS + 1):
         data = _call_llm(cfg, messages, use_tools=True)
@@ -319,9 +355,21 @@ def _iter_sse_deltas(resp):
 
 def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
     """API 接入流式：function-calling 循环，边流答案边推工具调用事件。"""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT.format(context=context or "（无）")}]
+    no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
+    sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
+    messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(user_messages)
     trace: list[dict] = []
+
+    if no_tools_cfg:
+        # 非 function-calling 模式：非流式调一次，逐字拆成 delta 推送
+        data = _call_llm(cfg, messages, use_tools=False)
+        text = data["choices"][0]["message"].get("content") or ""
+        chunk_size = 4
+        for i in range(0, len(text), chunk_size):
+            yield {"type": "delta", "text": text[i:i+chunk_size]}
+        yield {"type": "done", "trace": [], "rounds": 1}
+        return
 
     for rnd in range(1, MAX_ROUNDS + 1):
         resp = _call_llm_stream(cfg, messages, use_tools=True)

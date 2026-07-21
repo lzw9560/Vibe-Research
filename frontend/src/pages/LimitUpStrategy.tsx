@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { api, type GeneScore, type ScreenerResult, type LimitUpAnalysis } from "@/lib/api";
+import { api, type GeneScore, type ScreenerResult, type LimitUpAnalysis, type AuctionScreenerResult, type SeatProfile } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 // ── 颜色约定 ──────────────────────────────────────────────
 const scoreColor = (s: number) =>
@@ -88,8 +89,13 @@ function BacktestScatterChart({ points }: {
       tooltip: {
         trigger: "item",
         formatter: (p: any) => {
+          // p.data 是 scatter 系列传入的完整数组 [gene_score, actual_next_day, date]
           const d = p.data;
-          return `${d[2]}<br/>基因得分: ${d[0]}<br/>实际表现: ${d[1] >= 1 ? "连板 ✓" : "未连板 ✗"}`;
+          if (!d || !Array.isArray(d)) return "无数据";
+          const geneScore = d[0];
+          const actualNextDay = d[1];
+          const date = d[2] ?? "未知日期";
+          return `${date}<br/>基因得分: ${geneScore}<br/>实际表现: ${actualNextDay >= 1 ? "连板 ✓" : "未连板 ✗"}`;
         },
       },
       grid: { left: 45, right: 15, top: 15, bottom: 35 },
@@ -300,6 +306,7 @@ function ExpandableTable({ data, expandedCode, expandedData, expandedLoading, ex
             <th className="w-20 whitespace-nowrap px-3 py-2.5 text-center font-medium">封板率</th>
             <th className="w-20 whitespace-nowrap px-3 py-2.5 text-center font-medium">炸板后溢价</th>
             <th className="w-16 whitespace-nowrap px-3 py-2.5 text-center font-medium">涨停次</th>
+            <th className="w-20 whitespace-nowrap px-3 py-2.5 text-center font-medium">回测连板率</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/20">
@@ -318,7 +325,7 @@ function ExpandableTable({ data, expandedCode, expandedData, expandedLoading, ex
                 {/* 在当前行下方展开个股详情 */}
                 {expanded && (
                   <tr className="bg-muted/10">
-                    <td colSpan={9} className="p-0">
+                    <td colSpan={10} className="p-0">
                       <div className="border-t border-border/30 px-4 py-3">
                         <GeneScoreDetail
                           analysis={expandedData}
@@ -370,7 +377,307 @@ function RowElement({ row, expanded, onToggle, displayFactors, scoreColor, fmtPc
       <td className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-xs">
         {row.zt_count_250d}
       </td>
+      <td className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-xs">
+        {row.backtest_summary?.samples ? `${row.backtest_summary.samples}只 ${row.backtest_summary.lianban_rate}%` : "—"}
+      </td>
     </tr>
+  );
+}
+
+// ── 竞价选股 TOP N 组件 ────────────────────────────────────────
+function AuctionScreenerSection() {
+  const [result, setResult] = useState<AuctionScreenerResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const loadAuction = useCallback((date: string) => {
+    setLoading(true);
+    setError(null);
+    api.auctionTop(date)
+      .then(setResult)
+      .catch((e) => setError(e instanceof Error ? e.message : "加载失败"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadAuction(selectedDate);
+  }, [loadAuction, selectedDate]);
+
+  const stiColor = (phase: string | null) => {
+    if (!phase) return "text-muted-foreground";
+    if (phase === "高潮" || phase === "启动") return "text-danger";
+    if (phase === "冰点" || phase === "退潮") return "text-success";
+    return "text-muted-foreground";
+  };
+
+  if (loading) {
+    return (
+      <GlassCard className="mb-6">
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="ml-2 text-sm text-muted-foreground">加载竞价选股数据…</span>
+        </div>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="mb-6">
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-muted-foreground">竞价预案 TOP N</h3>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="rounded-lg border border-border bg-black/20 px-2 py-1 text-xs outline-none focus:border-primary/50"
+        />
+        {result?.disclaimer && (
+          <span className="ml-auto text-[11px] text-muted-foreground/50">{result.disclaimer}</span>
+        )}
+        <button
+          onClick={() => loadAuction(selectedDate)}
+          className="text-muted-foreground hover:text-primary"
+          title="刷新"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* STI 摘要栏 */}
+      {result && result.sti_score != null && (
+        <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/20 p-2.5 sm:grid-cols-4">
+          <div>
+            <p className="text-[11px] text-muted-foreground">STI 得分</p>
+            <p className="font-mono text-lg font-bold text-primary">{result.sti_score}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">STI 阶段</p>
+            <p className={cn("font-mono text-lg font-bold", stiColor(result.sti_phase))}>{result.sti_phase ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">分析总数</p>
+            <p className="font-mono text-lg font-bold text-foreground">{result.total_analyzed}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">候选数</p>
+            <p className="font-mono text-lg font-bold text-primary">{result.candidates?.length ?? 0}</p>
+          </div>
+        </div>
+      )}
+
+      {error ? (
+        <div className="flex items-center justify-center py-8 text-sm text-destructive">
+          <Info className="mr-1.5 h-4 w-4" /> {error}
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50 bg-muted/20 text-left text-xs text-muted-foreground">
+                <th className="w-8 px-2 py-2.5">#</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-medium">代码</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-medium">名称</th>
+                <th className="w-16 whitespace-nowrap px-3 py-2.5 text-center font-medium">竞价得分</th>
+                <th className="w-16 whitespace-nowrap px-3 py-2.5 text-center font-medium">基因得分</th>
+                <th className="w-14 whitespace-nowrap px-3 py-2.5 text-center font-medium">连板数</th>
+                <th className="w-16 whitespace-nowrap px-3 py-2.5 text-center font-medium">封板率</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-medium">战法标签</th>
+                <th className="w-16 whitespace-nowrap px-3 py-2.5 text-center font-medium">信号强度</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/20">
+              {result?.candidates?.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-6 text-center text-sm text-muted-foreground/60">
+                    今日无符合条件的竞价选股标的
+                  </td>
+                </tr>
+              ) : (
+                result?.candidates?.map((c, i) => (
+                  <tr key={c.code} className="transition-colors hover:bg-muted/20">
+                    <td className="whitespace-nowrap px-2 py-2.5 font-mono text-xs text-muted-foreground/50">{i + 1}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted-foreground/60">{c.code}</td>
+                    <td className="px-3 py-2.5 font-medium">{c.name}</td>
+                    <td className="px-3 py-2.5 text-center">
+                      <span className={`inline-block rounded-md px-2 py-0.5 font-mono text-sm font-bold ${
+                        c.score >= 75 ? "bg-primary/10 text-primary"
+                        : c.score >= 60 ? "bg-blue-400/10 text-blue-400"
+                        : "bg-gray-400/10 text-gray-400"
+                      }`}>
+                        {c.score}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-xs">
+                      {c.gene_score}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-xs">
+                      {c.zt_count_30d}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-xs">
+                      {c.seal_rate != null ? `${(c.seal_rate * 100).toFixed(1)}%` : "—"}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        {c.strategy_tags?.length > 0
+                          ? c.strategy_tags.map((tag, j) => (
+                              <span key={j} className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{tag}</span>
+                            ))
+                          : "—"}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-xs">
+                      {c.signal_strength != null ? `${(c.signal_strength * 100).toFixed(1)}%` : "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {result?.updated && (
+        <p className="mt-2 text-[11px] text-muted-foreground/50">更新时间: {result.updated}</p>
+      )}
+    </GlassCard>
+  );
+}
+
+// ── 席位引擎 ────────────────────────────────────────────────
+function SeatEngineSection() {
+  const [profiles, setProfiles] = useState<Record<string, SeatProfile>>({});
+  const [loading, setLoading] = useState(true);
+  const [building, setBuilding] = useState(false);
+  const [buildDone, setBuildDone] = useState(false);
+
+  const loadProfiles = useCallback(() => {
+    setLoading(true);
+    api.seatProfiles()
+      .then((raw) => {
+        // Handle both old format (Record<string, SeatProfile>) and new format ({profiles: [...], total: N})
+        if (Array.isArray(raw)) {
+          // New format: {profiles: [...]}
+          const arr = (raw as any).profiles || raw;
+          const dict: Record<string, SeatProfile> = {};
+          for (const p of arr) {
+            if (p.name) dict[p.name] = p;
+          }
+          setProfiles(dict);
+        } else {
+          // Old format: Record<string, SeatProfile>
+          setProfiles(raw as Record<string, SeatProfile>);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadProfiles();
+  }, [loadProfiles]);
+
+  const handleBuild = useCallback(async () => {
+    setBuilding(true);
+    try {
+      await api.seatBuildProfiles(180);
+      setBuildDone(true);
+      loadProfiles();
+    } catch {
+      // ignore
+    } finally {
+      setBuilding(false);
+    }
+  }, [loadProfiles]);
+
+  // 按类型分组
+  const grouped: Record<string, SeatProfile[]> = {};
+  for (const [, p] of Object.entries(profiles)) {
+    if (!grouped[p.seat_type]) grouped[p.seat_type] = [];
+    grouped[p.seat_type].push(p);
+  }
+  // 按数量降序
+  const groups = Object.entries(grouped).sort((a, b) => b[1].length - a[1].length);
+
+  const typeColors: Record<string, string> = {
+    "活跃游资": "text-primary",
+    "量化席位": "text-blue-400",
+    "跟风席位": "text-muted-foreground",
+    "机构专用": "text-purple-400",
+    "inactive": "text-muted-foreground/40",
+  };
+
+  return (
+    <GlassCard className="mb-6">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground">席位引擎</h3>
+          <span className="text-[11px] text-muted-foreground/50">龙虎榜席位统计特征</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleBuild}
+            disabled={building}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary shadow-glow transition-colors hover:bg-primary/25 disabled:opacity-50"
+            title="构建席位画像（需数分钟）"
+          >
+            {building ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {building ? "构建中…" : "构建画像"}
+          </button>
+          <button
+            onClick={loadProfiles}
+            className="text-muted-foreground hover:text-primary"
+            title="刷新"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {loading && !buildDone ? (
+        <p className="py-4 text-center text-sm text-muted-foreground/60">加载中…</p>
+      ) : groups.length === 0 ? (
+        <div className="py-4 text-center">
+          <p className="text-sm text-muted-foreground">暂无席位数据</p>
+          <p className="mt-1 text-xs text-muted-foreground/50">点击「构建画像」拉取历史龙虎榜数据</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {groups.map(([type, seats]) => (
+            <div key={type}>
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className={cn("text-xs font-medium", typeColors[type] || "text-muted-foreground")}>
+                  {type}
+                </span>
+                <span className="text-[11px] text-muted-foreground/50">({seats.length})</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {seats.slice(0, 12).map((s) => (
+                  <div key={s.seat_name} className="rounded-lg bg-muted/20 p-2.5">
+                    <p className="truncate text-xs font-medium">{s.seat_name}</p>
+                    <div className="mt-1 flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">出现 {s.total_appearances} 次</span>
+                      <span className={cn("font-mono", s.net_amt >= 0 ? "text-danger" : "text-success")}>
+                        净{s.net_amt >= 0 ? "+" : ""}{(s.net_amt / 10000).toFixed(0)}万
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground/50">
+                      交易 {s.stock_cooldown} 只 · 最后 {s.last_seen || "未知"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {seats.length > 12 && (
+                <p className="mt-1 text-[11px] text-muted-foreground/50">… 还有 {seats.length - 12} 个席位</p>
+              )}
+            </div>
+          ))}
+          <p className="text-[11px] text-muted-foreground/50">
+            免责声明：席位标签基于龙虎榜历史数据统计特征，不代表对未来行为的预测，不构成投资建议。
+          </p>
+        </div>
+      )}
+    </GlassCard>
   );
 }
 
@@ -507,6 +814,12 @@ export function LimitUpStrategy() {
           />
         )}
       </GlassCard>
+
+      {/* 竞价预案 TOP N */}
+      <AuctionScreenerSection />
+
+      {/* 席位引擎 */}
+      <SeatEngineSection />
 
       {/* 免责声明 */}
       <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-muted/10 p-2.5 text-[11px] leading-relaxed text-muted-foreground/60">

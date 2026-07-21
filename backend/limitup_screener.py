@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import math
 import os
+import sqlite3
+import threading as _threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -21,15 +23,122 @@ import astock
 
 BEIJING_TZ = datetime.now().astimezone().tzinfo
 
+# ---- 数据库路径 ----
+_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vibe_research.db")
+_DB_LOCK = _threading.Lock()
+
 # ---- 配置（通过 .env 覆盖，开发者配置） ----
 GENE_QUALIFY_THRESHOLD = float(os.getenv("LIMITUP_GENE_QUALIFY_THRESHOLD", "60"))
 GENE_HIGH_THRESHOLD = float(os.getenv("LIMITUP_GENE_HIGH_THRESHOLD", "75"))
-LOOKBACK_DAYS = int(os.getenv("LIMITUP_LOOKBACK_DAYS", "60"))
+LOOKBACK_DAYS = int(os.getenv("LIMITUP_LOOKBACK_DAYS", "250"))
+
+# 单次 HTTP 请求间隔（秒），防止东财限流导致超时
+# 有 HTTP 层缓存后，实际重复请求大幅减少，可降低间隔
+_MIN_REQUEST_INTERVAL = float(os.getenv("LIMITUP_REQUEST_INTERVAL", "0.5"))
 
 # ---- 缓存 ----
 _CACHE: dict = {}
 _CACHE_TTL = 43200  # 12 小时
 _COMPUTING: dict = {}
+
+# ---- 数据库管理 ----
+
+def _get_db() -> sqlite3.Connection:
+    """获取 SQLite 连接（单例，线程安全）。"""
+    with _DB_LOCK:
+        conn = sqlite3.connect(_DB_PATH, timeout=10)
+        conn.row_factory = sqlite3.Row
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS gene_scores (
+                date TEXT NOT NULL,
+                code TEXT NOT NULL,
+                name TEXT,
+                total_score REAL,
+                factor_premium_rate REAL,
+                factor_red_rate REAL,
+                factor_seal_rate REAL,
+                factor_rebound_rate REAL,
+                factor_freq_score REAL,
+                wilson_adjusted REAL,
+                qualify INTEGER,
+                high_gene INTEGER,
+                zt_count_250d INTEGER,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (date, code)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gene_scores_date ON gene_scores(date)")
+        conn.commit()
+        return conn
+
+
+def _save_gene_scores_to_db(date: str, scores: list[GeneScore]) -> None:
+    """保存基因得分到数据库。"""
+    conn = _get_db()
+    with _DB_LOCK:
+        conn.execute("BEGIN TRANSACTION")
+        try:
+            for s in scores:
+                conn.execute("""
+                    INSERT OR REPLACE INTO gene_scores
+                    (date, code, name, total_score, factor_premium_rate, factor_red_rate,
+                     factor_seal_rate, factor_rebound_rate, factor_freq_score,
+                     wilson_adjusted, qualify, high_gene, zt_count_250d)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    date, s.code, s.name, s.total_score,
+                    s.factors.get("次日溢价率", 0),
+                    s.factors.get("红盘率", 0),
+                    s.factors.get("封板率", 0),
+                    s.factors.get("炸板后溢价", 0),
+                    s.factors.get("涨停频次", 0),
+                    s.wilson_adjusted,
+                    1 if s.qualify else 0,
+                    1 if s.high_gene else 0,
+                    s.zt_count_250d,
+                ))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def _load_gene_scores_from_db(date: str) -> list[GeneScore] | None:
+    """从数据库加载基因得分。如果不存在则返回 None。"""
+    conn = _get_db()
+    with _DB_LOCK:
+        rows = conn.execute(
+            "SELECT * FROM gene_scores WHERE date = ? ORDER BY total_score DESC",
+            (date,),
+        ).fetchall()
+        conn.close()
+    
+    if not rows:
+        return None
+    
+    scores = []
+    for row in rows:
+        factors = {
+            "次日溢价率": row["factor_premium_rate"] or 0,
+            "红盘率": row["factor_red_rate"] or 0,
+            "封板率": row["factor_seal_rate"] or 0,
+            "炸板后溢价": row["factor_rebound_rate"] or 0,
+            "涨停频次": row["factor_freq_score"] or 0,
+        }
+        scores.append(GeneScore(
+            code=row["code"],
+            name=row["name"] or "",
+            total_score=row["total_score"] or 0,
+            factors=factors,
+            wilson_adjusted=row["wilson_adjusted"] or 0,
+            qualify=bool(row["qualify"]),
+            high_gene=bool(row["high_gene"]),
+            last_zt_dates=[],
+            zt_count_250d=row["zt_count_250d"] or 0,
+        ))
+    return scores
 
 # 回测缓存
 _BACKTEST_CACHE: dict = {}
@@ -76,7 +185,8 @@ class GeneScore(BaseModel):
     high_gene: bool  # 高基因（>= 高阈值）
     last_zt_dates: list[str]  # 最近涨停日期
     zt_count_250d: int  # 近 N 日涨停次数
-    backtest_points: list[dict]  # 简化版回测数据：[{date, gene_score, actual_next_day}, ...]
+    backtest_points: list[dict] = []  # 简化版回测数据：[{date, gene_score, actual_next_day}, ...]（个股详情用）
+    backtest_summary: dict = {}  # 轻量级回测统计（screener 列表用）：{samples, lianban_rate, avg_score_lianban}
 
 
 class ScreenerResult(BaseModel):
@@ -131,7 +241,7 @@ def _collect_zt_history_batch(
     target_date = datetime.strptime(date, "%Y%m%d")
 
     # 每批拉取 BATCH_SIZE 天，减少 HTTP 调用次数
-    BATCH_SIZE = 10
+    BATCH_SIZE = 20
     for batch_start in range(0, lookback, BATCH_SIZE):
         batch_end = min(batch_start + BATCH_SIZE, lookback)
         # 批量拉取这一批日期的涨停池
@@ -142,23 +252,23 @@ def _collect_zt_history_batch(
                 code = str(item.get("c", ""))
                 if code in codes and code.isdigit() and len(code) == 6:
                     results.setdefault(code, []).append(dict(item, _pool_date=d))
-    # 随机延迟，避免被东频率封禁（astock._em_get 已有节流，此处不再 sleep）
-            # time.sleep(0.15)
+            # 每批后加短暂延迟，避免东财限流导致整体超时
+            time.sleep(0.05)
     return results
 
 
 def _compute_factors(history: list[dict], yzt: list[dict], zb: list[dict]) -> dict[str, float]:
     """对一只股的历史涨停记录计算五维因子。
 
-    因子：
-    - 次日溢价率 (25%)：涨停次日收盘价 > 涨停价 的比例
-      近似：用连板率（lbc >= 2 的次数 / 总涨停次数）
-    - 红盘率 (25%)：首板次日收盘为正的比例
-      近似：用 zdp（涨停当日涨幅）> 0 的比例
-    - 封板率 (25%)：封板强度
-      近似：用平均封板时间（fbt 越小=封得越早=越牢固），归一化为 0-100
-    - 炸板后溢价 (15%)：炸板后次日表现
-      近似：昨涨停池中有连板记录的占比
+    因子说明（所有数值均为近似值，受限于 em_get 数据粒度）：
+    - 次日溢价率 (25%)：用连板率（lbc >= 2 的次数 / 总次数）近似
+      PRD 要求的"次日收盘价 > 涨停价"需逐日次日行情数据，em_get 不提供
+    - 红盘率 (25%)：用 zdp（涨停当日涨幅）> 0 的比例近似
+      PRD 要求的"首板次日收盘为正"需次日行情数据
+    - 封板率 (25%)：用平均封板时间（fbt）作为封板强度代理
+      PRD 要求的"封板成功率"需逐笔成交数据，em_get 不提供
+    - 炸板后溢价 (15%)：用昨涨停池中有连板记录的占比近似
+      PRD 要求的"炸板后次日溢价"需炸板日次日行情数据
     - 涨停频次 (10%)：归一化的涨停次数得分
     """
     n = len(history)
@@ -179,12 +289,14 @@ def _compute_factors(history: list[dict], yzt: list[dict], zb: list[dict]) -> di
     red_count = sum(1 for h in history if (astock._numf(h.get("zdp")) or 0) > 0)
     red_rate = round(wilson_lower_bound(red_count, n) * 100, 2)
 
-    # ---- 封板率：用平均封板时间近似 ----
-    # fbt 格式：9:25 → 92500, 10:00 → 100000, 14:50 → 145000
-    # 越小=封得越早=越牢固
+    # ---- 封板率 (25%)：封板强度 ----
+    # 注：东财 em_get 不提供逐笔成交明细，无法精确计算"封板成功率"。
+    # 此处用平均封板时间（fbt）作为封板强度的代理指标：
+    # fbt 越小 = 封板时间越早 = 封板越牢固 = 封板强度越高。
+    # fbt 格式：9:25 → 92500，10:00 → 100000，14:50 → 145000
     fbt_values = [astock._numf(h.get("fbt")) or 0 for h in history]
     avg_fbt = sum(fbt_values) / len(fbt_values) if fbt_values else 0
-    # 归一化：fbt=92500（9:25一字板）→ 100分，fbt=145000（14:50封板）→ 0分
+    # 归一化：9:25 一字板 → 100 分，14:50 尾盘封板 → 0 分
     seal_rate = round(max(0.0, min(100.0, (1 - (avg_fbt - 92500) / (145000 - 92500)) * 100)), 2)
 
     # ---- 炸板后溢价：昨涨停池中有连板记录的占比 ----
@@ -242,9 +354,11 @@ def compute_gene_score(
         h.get("_pool_date", "") for h in history if h.get("_pool_date")
     ), reverse=True)[:10]
 
-    # 回测数据仅在个股分析时按需计算（screener 列表不计算，避免性能爆炸）
+    # 回测数据仅在 include_backtest=True 时计算
     bt_points: list[dict] = []
+    bt_summary: dict = {}
     if include_backtest and len(history) >= 3:
+        # 完整散点数据（个股详情用）
         history_for_bt: list[dict] = []
         for h in history:
             if len(history_for_bt) >= 2:
@@ -257,6 +371,18 @@ def compute_gene_score(
                     "actual_next_day": 1.0 if lbc >= 2 else 0.0,
                 })
             history_for_bt.append(h)
+        # 轻量级回测统计（screener 列表用）
+        lianban_count = sum(1 for p in bt_points if p["actual_next_day"] >= 1)
+        total_samples = len(bt_points) if bt_points else 0
+        avg_score_lianban = (
+            round(sum(p["gene_score"] for p in bt_points if p["actual_next_day"] >= 1) / lianban_count, 1)
+            if lianban_count > 0 else None
+        )
+        bt_summary = {
+            "samples": total_samples,
+            "lianban_rate": round(lianban_count / total_samples * 100, 1) if total_samples > 0 else 0.0,
+            "avg_score_lianban": avg_score_lianban,
+        }
 
     return GeneScore(
         code=code,
@@ -269,6 +395,7 @@ def compute_gene_score(
         last_zt_dates=last_dates,
         zt_count_250d=len(history),
         backtest_points=bt_points,
+        backtest_summary=bt_summary,
     )
 
 
@@ -276,37 +403,95 @@ def get_screener_result(date: str | None = None) -> ScreenerResult:
     """获取全市场涨停股基因得分清单（客观数据，无行动建议）。
 
     缓存策略：
-    - 首次请求触发预计算，结果缓存 12 小时（覆盖整个交易日）
+    - 首先检查数据库是否有预计算结果（~4ms）
+    - 如果有，直接从数据库加载
+    - 如果没有，触发预计算并缓存
     - 并发请求自动去重（仅一只线程计算，其余等待）
     - 缓存命中直接返回，零计算开销
+    - **超时保护**：计算超过 90 秒自动降级返回空结果，不阻塞 API
     """
     target_date = _resolve_date(date)
     cache_key = f"limitup_screener_{target_date}"
+    display_date = target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:]
 
-    # 1. 检查缓存命中（统一用 YYYYMMDD key）
+    # 1. 检查内存缓存命中
     now = time.time()
     hit = _CACHE.get(cache_key)
     if hit and now - hit[0] < _CACHE_TTL:
         return hit[1]
 
-    # 2. 并发保护：如果正在计算，等待结果
+    # 2. 检查数据库是否有预计算结果（~4ms）
+    db_scores = _load_gene_scores_from_db(display_date)
+    if db_scores is not None:
+        qualified = [g for g in db_scores if g.qualify]
+        high_gene_list = [g for g in db_scores if g.high_gene]
+        result = ScreenerResult(
+            date=display_date,
+            gene_scores=db_scores,
+            qualified=qualified,
+            high_gene=high_gene_list,
+            updated=datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+            disclaimer=DISCLAIMER,
+        )
+        _CACHE[cache_key] = (now, result)
+        return result
+
+    # 3. 并发保护：如果正在计算，等待结果
     if cache_key in _COMPUTING:
-        # 等待其他线程完成计算（最多等 60 秒）
         waited = 0
         while cache_key in _COMPUTING and waited < 60:
             time.sleep(0.5)
             waited += 0.5
-        # 重新检查缓存
+        # 重新检查缓存和数据库
         hit = _CACHE.get(cache_key)
         if hit and now - hit[0] < _CACHE_TTL:
             return hit[1]
+        db_scores = _load_gene_scores_from_db(display_date)
+        if db_scores is not None:
+            qualified = [g for g in db_scores if g.qualify]
+            high_gene_list = [g for g in db_scores if g.high_gene]
+            result = ScreenerResult(
+                date=display_date,
+                gene_scores=db_scores,
+                qualified=qualified,
+                high_gene=high_gene_list,
+                updated=datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+                disclaimer=DISCLAIMER,
+            )
+            _CACHE[cache_key] = (now, result)
+            return result
 
-    # 3. 锁定并计算
+    # 4. 超时保护：使用线程执行计算
     _COMPUTING[cache_key] = True
-    try:
-        return _compute_and_cache(target_date, cache_key)
-    finally:
-        _COMPUTING.pop(cache_key, None)
+    result_holder: list[ScreenerResult] = []
+    error_holder: list[Exception] = []
+
+    def _compute_with_timeout():
+        try:
+            result_holder.append(_compute_and_cache(target_date, cache_key))
+        except Exception as e:
+            error_holder.append(e)
+
+    compute_thread = _threading.Thread(target=_compute_with_timeout, daemon=True)
+    compute_thread.start()
+    compute_thread.join(timeout=90)  # 90 秒超时
+
+    if error_holder:
+        raise error_holder[0]
+
+    if result_holder:
+        return result_holder[0]
+
+    # 超时了：返回空结果
+    _COMPUTING.pop(cache_key, None)
+    return ScreenerResult(
+        date=display_date,
+        gene_scores=[],
+        qualified=[],
+        high_gene=[],
+        updated=datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+        disclaimer=DISCLAIMER + " （计算超时，请稍后刷新）",
+    )
 
 
 def _compute_and_cache(target_date: str, cache_key: str) -> ScreenerResult:
@@ -339,14 +524,14 @@ def _compute_and_cache(target_date: str, cache_key: str) -> ScreenerResult:
     codes = {c for c in seen.keys() if c.isdigit() and len(c) == 6}
     batch_history = _collect_zt_history_batch(codes, target_date, LOOKBACK_DAYS)
 
-    # 对每只股计算基因得分
+    # 对每只股计算基因得分（含回测数据）
     scores: list[GeneScore] = []
     for code, item in seen.items():
         if not code.isdigit() or len(code) != 6:
             continue
         name = item.get("n", "")
         history = batch_history.get(code, [])
-        gene = compute_gene_score(code, name, history, yzt_pool, zb_pool)
+        gene = compute_gene_score(code, name, history, yzt_pool, zb_pool, include_backtest=True)
         scores.append(gene)
 
     # 排序：按 total_score 降序
@@ -364,6 +549,10 @@ def _compute_and_cache(target_date: str, cache_key: str) -> ScreenerResult:
         disclaimer=DISCLAIMER,
     )
 
+    # 保存到数据库
+    _save_gene_scores_to_db(display_date, scores)
+
+    # 写入缓存
     _CACHE[cache_key] = (now, result)
     return result
 
@@ -382,7 +571,7 @@ class BacktestPoint:
     premium_rate: float  # 次日溢价率因子
 
 
-def _compute_backtest_raw(code: str, lookback_days: int = 60) -> list[dict]:
+def _compute_backtest_raw(code: str, lookback_days: int = 250) -> list[dict]:
     """对某只股票，用滚动窗口计算基因得分 vs 实际表现的散点数据。
 
     方法：
@@ -460,3 +649,69 @@ def _compute_backtest_raw(code: str, lookback_days: int = 60) -> list[dict]:
         }
         for r in results
     ]
+
+
+# ===========================================================================
+# 6. 日频预计算入口（供 app.py 调度器调用）
+# ===========================================================================
+
+def precompute_daily(date: str | None = None) -> ScreenerResult:
+    """
+    每日预计算入口 — 由 app.py 15:35 调度器触发。
+    
+    计算最近 250 天的涨停基因得分，保存到数据库。
+    返回 ScreenerResult 同时写入内存缓存。
+    """
+    if date is None:
+        date = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
+    
+    # 支持 YYYY-MM-DD 和 YYYYMMDD 两种格式
+    date_fmt = date.replace("-", "") if "-" in date else date
+    target_date = _resolve_date(date_fmt)
+    cache_key = f"limitup_screener_{target_date}"
+    
+    return _compute_and_cache(target_date, cache_key)
+
+
+def backfill(start_date: str, end_date: str | None = None) -> list[ScreenerResult]:
+    """
+    历史回填 — 分批执行，节流 time.sleep(0.5)。
+    
+    对每个日期执行 precompute_daily，结果存入数据库。
+    """
+    if end_date is None:
+        end_date = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
+    
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    results = []
+    current_dt = start_dt
+    
+    while current_dt <= end_dt:
+        date_str = current_dt.strftime("%Y-%m-%d")
+        try:
+            result = precompute_daily(date_str)
+            results.append(result)
+        except Exception as e:
+            print(f"[{date_str}] 预计算失败: {e}")
+        
+        current_dt += timedelta(days=1)
+        time.sleep(0.5)  # 节流
+    
+    return results
+
+
+# ===========================================================================
+# 7. 全局实例
+# ===========================================================================
+
+_screener_instance = None
+
+
+def get_screener():
+    """获取全局选股器实例（兼容旧接口）。"""
+    global _screener_instance
+    if _screener_instance is None:
+        _screener_instance = True  # 占位，实际使用函数式接口
+    return _screener_instance

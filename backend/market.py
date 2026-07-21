@@ -37,8 +37,12 @@ def _num(v) -> int:
         return 0
 
 
-def _sentiment() -> dict:
-    """市场情绪：涨跌家数/涨停跌停/活跃度 + 大盘宽度、题材投机（客观数据机械分档）。"""
+def _sentiment(date: str | None = None) -> dict:
+    """市场情绪：涨跌家数/涨停跌停/活跃度 + 大盘宽度、题材投机（客观数据机械分档）。
+
+    Args:
+        date: 可选日期字符串 YYYY-MM-DD。不传则取当前日期。
+    """
     try:
         # akshare 惰性导入（同 astock 模式）：未装时降级返回空，不挡整个服务启动
         df = astock._akshare().stock_market_activity_legu()
@@ -100,22 +104,42 @@ def get_overview() -> dict:
     return _cached("overview", build, valid=lambda v: bool(v.get("sentiment") or v.get("sectors")))
 
 
-def _emotion() -> dict:
+def _emotion(date: str | None = None) -> dict:
     """短线情绪（聚合口径，**零个股名**）：连板梯队 / 最高连板 / 炸板率 / 封板率 / 晋级率 / 涨跌停家数。
 
     数据源＝东财涨停板四池（push2ex）。只把池子聚合成计数与比率，
     **不输出任何个股 code/name**——守产品「零标的」红线（个股清单是甩名单，不做）。
+
+    Args:
+        date: 可选日期字符串 YYYY-MM-DD。不传则自动定位最近交易日。
     """
-    # 定位最近交易日：从今天往前回溯，第一日有涨停池即取（非交易日/盘前返空则继续回溯）。
-    today = datetime.now(BEIJING).date()
-    resolved, zt = "", []
-    for back in range(8):
-        d = (today - timedelta(days=back)).strftime("%Y%m%d")
-        zt = astock.em_zt_topic_pool("getTopicZTPool", d, "fbt:asc")
-        if zt:
-            resolved = d
-            break
-    if not resolved:
+    if date is not None:
+        # 直接使用指定日期
+        resolved = date.replace("-", "")
+        # 验证格式
+        try:
+            datetime.strptime(resolved, "%Y%m%d")
+        except ValueError:
+            return {}
+    else:
+        # 定位最近交易日：从今天往前回溯，第一日有涨停池即取（非交易日/盘前返空则继续回溯）。
+        today = datetime.now(BEIJING).date()
+        resolved, zt_temp = "", []
+        for back in range(8):
+            d = (today - timedelta(days=back)).strftime("%Y%m%d")
+            zt_temp = astock.em_zt_topic_pool("getTopicZTPool", d, "fbt:asc")
+            if zt_temp:
+                resolved = d
+                break
+        if not resolved:
+            return {}
+
+    zt = astock.em_zt_topic_pool("getTopicZTPool", resolved, "fbt:asc")
+    if not zt and date is None:
+        return {}
+
+    # 如果指定日期但无数据，返回空
+    if not zt:
         return {}
 
     zb = astock.em_zt_topic_pool("getTopicZBPool", resolved, "fbt:asc")    # 炸板池

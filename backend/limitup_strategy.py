@@ -119,8 +119,8 @@ RISK_RULES_KNOWLEDGE: list[dict] = [
 # 3. 条件匹配逻辑
 # ===========================================================================
 
-# 封单比阈值
-_SEAL_RATE_HIGH_THRESHOLD = 60.0
+# 封板率阈值
+SEAL_RATE_HIGH_THRESHOLD = 60.0
 
 
 def _build_condition_matches(
@@ -275,26 +275,9 @@ def get_analysis(code: str, date: str | None = None) -> LimitUpAnalysis:
             last_zt_dates=[],
             zt_count_250d=0,
             backtest_points=[],
+            backtest_summary={},
         )
     else:
-        # 对该股单独重新计算（含回测数据）
-        # 从 screener 结果中找该股的 history（需要从缓存或重新拉取）
-        # 简化：直接从缓存中找该股的 gene 数据
-        target_date = result.date.replace("-", "")
-        cache_key = f"limitup_screener_{target_date}"
-        if cache_key in get_screener_result.__globals__.get('_CACHE', {}):
-            # 从缓存中重建 history
-            cache_entry = get_screener_result.__globals__.get('_CACHE', {}).get(cache_key)
-            if cache_entry:
-                cache_data = cache_entry[1]
-                for g in cache_data.gene_scores:
-                    if g.code == code:
-                        # 需要从原始数据重建 history
-                        # 简化方案：直接调用 compute_gene_score 重新计算
-                        pass
-
-        # 最简方案：从 screener 结果中复制 gene 并补充 backtest_points
-        # 由于 history 不在 GeneScore 中，改为从缓存重建
         gene_obj = _rebuild_gene_with_backtest(code, result.date)
 
     strategy_logic = _build_condition_matches(code, gene_obj.name, gene_obj)
@@ -360,7 +343,7 @@ def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneScore:
             code=code, name="", total_score=0.0,
             factors={"次日溢价率": 0.0, "红盘率": 0.0, "封板率": 0.0, "炸板后溢价": 0.0, "涨停频次": 0.0},
             wilson_adjusted=0.0, qualify=False, high_gene=False,
-            last_zt_dates=[], zt_count_250d=0, backtest_points=[],
+            last_zt_dates=[], zt_count_250d=0, backtest_points=[], backtest_summary={},
         )
 
     name = stock_item.get("n", "")
