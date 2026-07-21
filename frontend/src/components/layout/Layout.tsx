@@ -1,31 +1,58 @@
 import { useEffect, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Activity, Radar, LayoutGrid, Wallet, Settings, Search, NotebookPen,
-  Moon, Sun, ChevronsLeft, ChevronsRight, LineChart, Github, UserRound,
-  Cog, Cpu, Database, Cable, Rocket, FlaskConical, Star, FileText, Flame,
+  Activity, Wallet, Search,
+  ChevronDown, LineChart, Github, UserRound, Flame,
+  Cog, Cpu, Database, Cable, Rocket, FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDarkMode } from "@/hooks/useDarkMode";
+import { useTheme } from "@/hooks/useDarkMode";
+import type { Theme } from "@/hooks/useDarkMode";
 
 const APP_VERSION = "v0.1.3";
 const REPO_URL = "https://github.com/simonlin1212/Vibe-Research";
-const SITE_URL = "https://www.simonlin.net"; // 作者主页
+const SITE_URL = "https://www.simonlin.net";
 
-const NAV = [
-  { to: "/daily-review", icon: Activity, label: "每日复盘" },
-  { to: "/intel", icon: Radar, label: "资讯雷达" },
-  { to: "/sectors", icon: LayoutGrid, label: "板块中心" },
-  { to: "/stock-data", icon: Search, label: "个股数据" },
-  { to: "/watchlist", icon: Star, label: "自选股" },
-  { to: "/portfolio", icon: Wallet, label: "我的持仓" },
-  { to: "/my-reports", icon: FileText, label: "我的研报" },
-  { to: "/notes", icon: NotebookPen, label: "研究记录" },
-  { to: "/limitup", icon: Flame, label: "打板策略" },
-  { to: "/settings", icon: Settings, label: "接入 AI" },
+// ---- 分组定义 ----
+const GROUPS = [
+  {
+    name: "市场概览",
+    icon: Activity,
+    tabs: [
+      { to: "/daily-review", label: "每日复盘" },
+      { to: "/intel", label: "资讯雷达" },
+      { to: "/sectors", label: "板块中心" },
+      { to: "/industry", label: "行业排行" },
+    ],
+  },
+  {
+    name: "个股分析",
+    icon: Search,
+    tabs: [
+      { to: "/stock-data", label: "个股数据" },
+      { to: "/watchlist", label: "自选股" },
+    ],
+  },
+  {
+    name: "投资管理",
+    icon: Wallet,
+    tabs: [
+      { to: "/portfolio", label: "我的持仓" },
+      { to: "/my-reports", label: "我的研报" },
+      { to: "/notes", label: "研究记录" },
+    ],
+  },
+  {
+    name: "打板策略",
+    icon: Flame,
+    tabs: [
+      { to: "/limitup", label: "打板策略" },
+      { to: "/settings", label: "接入 AI" },
+    ],
+  },
 ];
 
-// 常看的板块，作为「板块中心」下的快捷入口（缩进显示）。
+// 板块中心子链接
 const SECTOR_LINKS = [
   { to: "/sectors/humanoid", icon: Cog, label: "人形机器人" },
   { to: "/sectors/ai-computing", icon: Cpu, label: "AI 算力" },
@@ -35,79 +62,152 @@ const SECTOR_LINKS = [
   { to: "/sectors/ai-pharma", icon: FlaskConical, label: "生物医药" },
 ];
 
+// 主题选项
+const THEMES: { key: Theme; emoji: string; label: string }[] = [
+  { key: "dark", emoji: "🌙", label: "暗色" },
+  { key: "light", emoji: "☀️", label: "亮色" },
+  { key: "warm-orange", emoji: "🔥", label: "暖橙" },
+];
+
+// 获取当前页面属于哪个分组和 Tab 索引
+function findActiveTab(pathname: string): { groupIndex: number; tabIndex: number } | null {
+  for (let gi = 0; gi < GROUPS.length; gi++) {
+    const tabIdx = GROUPS[gi].tabs.findIndex((t) => t.to === pathname);
+    if (tabIdx !== -1) return { groupIndex: gi, tabIndex: tabIdx };
+  }
+  return null;
+}
+
 export function Layout() {
   const { pathname } = useLocation();
-  const { dark, toggle } = useDarkMode();
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
+  const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
+
+  // 当前激活的分组和 Tab
+  const active = findActiveTab(pathname);
+  const activeGroupIndex = active?.groupIndex ?? 0;
+
+  // 板块中心的子菜单展开状态
+  const [sectorExpanded, setSectorExpanded] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem("vr-sidebar", collapsed ? "collapsed" : "expanded");
-  }, [collapsed]);
+    localStorage.setItem("vr-sidebar", sidebarCollapsed ? "collapsed" : "expanded");
+  }, [sidebarCollapsed]);
+
+  // 点击 Tab 时自动导航
+  const handleTabClick = (to: string) => {
+    navigate(to);
+  };
 
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
       <aside className={cn(
-        "glass z-10 m-2 flex shrink-0 flex-col rounded-2xl transition-all duration-200",
-        collapsed ? "w-14" : "w-60",
+        "glass z-10 m-2 flex shrink-0 flex-col rounded-2xl transition-all duration-300",
+        sidebarCollapsed ? "w-14" : "w-60",
       )}>
         {/* Brand */}
-        <div className={cn("border-b border-border/50", collapsed ? "flex justify-center p-3" : "p-4")}>
-          <Link to="/daily-review" className={cn("flex items-center", collapsed ? "justify-center" : "gap-2")}>
+        <div className={cn("border-b border-border/50", sidebarCollapsed ? "flex justify-center p-3" : "p-4")}>
+          <Link to="/daily-review" className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "gap-2")}>
             <LineChart className="h-6 w-6 shrink-0 text-primary text-glow" />
-            {!collapsed && (
+            {!sidebarCollapsed && (
               <span className="text-lg font-extrabold tracking-tight">
                 Vibe-<span className="text-primary">Research</span>
               </span>
             )}
           </Link>
-          {!collapsed && <p className="mt-1 text-[11px] text-muted-foreground">个人 AI 投研系统 · A股/美股/港股</p>}
+          {!sidebarCollapsed && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              个人 AI 投研系统 · A股/美股/港股
+            </p>
+          )}
         </div>
 
-        {/* Nav */}
-        <nav className={cn("flex-1 space-y-1 overflow-auto", collapsed ? "p-1.5" : "p-2.5")}>
-          {NAV.map(({ to, icon: Icon, label }) => {
-            const active = pathname === to;
+        {/* Group Nav */}
+        <nav className={cn("flex-1 overflow-auto", sidebarCollapsed ? "p-1.5" : "p-2.5")}>
+          {GROUPS.map((group, gi) => {
+            const isActiveGroup = gi === activeGroupIndex;
+            const Icon = group.icon;
             return (
-              <div key={to}>
-                <Link
-                  to={to}
-                  title={collapsed ? label : undefined}
+              <div key={group.name} className="mb-1">
+                {/* 分组标题 */}
+                <button
+                  onClick={() => {
+                    if (sidebarCollapsed) {
+                      setSidebarCollapsed(false);
+                      return;
+                    }
+                    if (group.name === "sectors") {
+                      setSectorExpanded((p) => !p);
+                      return;
+                    }
+                    // 点击分组标题 = 跳到该分组第一个 Tab
+                    handleTabClick(group.tabs[0].to);
+                  }}
                   className={cn(
-                    "flex items-center rounded-lg text-sm transition-colors",
-                    collapsed ? "justify-center p-2.5" : "gap-2.5 px-3 py-2.5",
-                    active
-                      ? "bg-primary/15 font-medium text-primary shadow-glow"
-                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    "flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                    isActiveGroup
+                      ? "text-primary"
+                      : "text-muted-foreground/60 hover:text-foreground",
                   )}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {!collapsed && label}
-                </Link>
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="flex-1 text-left">{group.name}</span>
+                      {group.name === "sectors" && (
+                        <ChevronDown className={cn("h-3 w-3 transition-transform", sectorExpanded && "rotate-180")} />
+                      )}
+                    </>
+                  )}
+                </button>
 
-                {/* 板块中心下方：常看板块的快捷入口（缩进） */}
-                {to === "/sectors" && (
-                  <div className={cn("mt-1 space-y-0.5", !collapsed && "ml-4 border-l border-border/40 pl-1.5")}>
-                    {SECTOR_LINKS.map(({ to: st, icon: SIcon, label: slabel }) => {
-                      const sactive = pathname === st;
+                {/* 分组 Tab 列表（展开时） */}
+                {!sidebarCollapsed && isActiveGroup && (
+                  <div className="mt-0.5 space-y-0.5 pl-1">
+                    {group.tabs.map((tab) => {
+                      const isActive = pathname === tab.to;
                       return (
                         <Link
-                          key={st}
-                          to={st}
-                          title={collapsed ? slabel : undefined}
+                          key={tab.to}
+                          to={tab.to}
                           className={cn(
-                            "flex items-center rounded-lg transition-colors",
-                            collapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5 text-[13px]",
-                            sactive
-                              ? "bg-primary/10 font-medium text-primary"
-                              : "text-muted-foreground/80 hover:bg-muted/40 hover:text-foreground",
+                            "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
+                            isActive
+                              ? "bg-primary/12 font-medium text-primary"
+                              : "text-muted-foreground/70 hover:bg-muted/40 hover:text-foreground",
                           )}
                         >
-                          <SIcon className="h-3.5 w-3.5 shrink-0" />
-                          {!collapsed && slabel}
+                          <span className={cn("h-1.5 w-1.5 rounded-full", isActive ? "bg-primary" : "bg-muted-foreground/30")} />
+                          {tab.label}
                         </Link>
                       );
                     })}
+
+                    {/* 板块中心子链接 */}
+                    {group.name === "板块中心" && sectorExpanded && (
+                      <div className="ml-3 border-l border-border/40 pl-2 space-y-0.5">
+                        {SECTOR_LINKS.map(({ to: st, icon: SIcon, label: slabel }) => {
+                          const sactive = pathname === st;
+                          return (
+                            <Link
+                              key={st}
+                              to={st}
+                              className={cn(
+                                "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+                                sactive
+                                  ? "bg-primary/10 font-medium text-primary"
+                                  : "text-muted-foreground/60 hover:bg-muted/30 hover:text-foreground",
+                              )}
+                            >
+                              <SIcon className="h-3 w-3 shrink-0" />
+                              {slabel}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -115,40 +215,95 @@ export function Layout() {
           })}
         </nav>
 
-        {/* Footer */}
-        <div className={cn("border-t border-border/50", collapsed ? "flex flex-col items-center gap-2 p-2" : "space-y-2 p-3")}>
-          {collapsed ? (
+        {/* Footer: 主题选择器 + 折叠按钮 */}
+        <div className={cn("border-t border-border/50", sidebarCollapsed ? "flex flex-col items-center gap-1.5 p-2" : "p-3")}>
+          {sidebarCollapsed ? (
             <>
-              <button onClick={toggle} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground" title={dark ? "亮色" : "暗色"}>
-                {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-              <a href={SITE_URL} target="_blank" rel="noreferrer" className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground" title="联系作者">
-                <UserRound className="h-4 w-4" />
-              </a>
-              <button onClick={() => setCollapsed(false)} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground" title="展开">
-                <ChevronsRight className="h-4 w-4" />
+              {/* 折叠态：只显示主题圆点和折叠按钮 */}
+              <div className="flex items-center gap-1">
+                {THEMES.map(({ key, emoji }) => (
+                  <button
+                    key={key}
+                    onClick={() => setTheme(key)}
+                    className={cn(
+                      "flex h-6 w-6 items-center justify-center rounded-full text-xs transition-all",
+                      theme === key
+                        ? "bg-primary/20 ring-2 ring-primary/40 scale-110"
+                        : "hover:bg-muted/40",
+                    )}
+                    title={key === "dark" ? "暗色" : key === "light" ? "亮色" : "暖橙"}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                title="展开"
+              >
+                <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
               </button>
             </>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <button onClick={toggle} className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                  {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                  {dark ? "亮色" : "暗色"}
-                </button>
+              {/* 展开态：主题选择器 */}
+              <div className="mb-2">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">主题</p>
                 <div className="flex items-center gap-2">
-                  <a href={SITE_URL} target="_blank" rel="noreferrer" className="text-muted-foreground transition-colors hover:text-foreground" title="联系作者">
-                    <UserRound className="h-3.5 w-3.5" />
-                  </a>
-                  <a href={REPO_URL} target="_blank" rel="noreferrer" className="text-muted-foreground transition-colors hover:text-foreground" title="GitHub">
-                    <Github className="h-3.5 w-3.5" />
-                  </a>
-                  <button onClick={() => setCollapsed(true)} className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground" title="收起">
-                    <ChevronsLeft className="h-3.5 w-3.5" />
-                  </button>
+                  {THEMES.map(({ key, emoji, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setTheme(key)}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-all",
+                        theme === key
+                          ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                          : "text-muted-foreground/60 hover:bg-muted/30 hover:text-foreground",
+                      )}
+                    >
+                      <span>{emoji}</span>
+                      <span>{label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <a href={SITE_URL} target="_blank" rel="noreferrer" className="block text-[11px] text-primary/80 transition-colors hover:text-primary">
+
+              {/* 链接行 */}
+              <div className="flex items-center justify-between">
+                <a
+                  href={SITE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  title="联系作者"
+                >
+                  <UserRound className="h-3.5 w-3.5" />
+                </a>
+                <a
+                  href={REPO_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  title="GitHub"
+                >
+                  <Github className="h-3.5 w-3.5" />
+                </a>
+                <button
+                  onClick={() => setSidebarCollapsed(true)}
+                  className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                  title="收起"
+                >
+                  <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
+                </button>
+              </div>
+
+              <a
+                href={SITE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="block text-[11px] text-primary/80 transition-colors hover:text-primary"
+              >
                 联系作者 · simonlin.net
               </a>
               <p className="text-[11px] leading-relaxed text-muted-foreground/60">
@@ -159,12 +314,48 @@ export function Layout() {
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-6xl px-6 py-6">
-          <Outlet />
-        </div>
-      </main>
+      {/* Main Content Area */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Tab Navigation Bar */}
+        {active && (
+          <div className="border-b border-border/40 bg-background/60 backdrop-blur-sm">
+            <div className="mx-auto max-w-6xl px-6">
+              <div className="flex items-center gap-1 overflow-x-auto py-2">
+                {GROUPS[active.groupIndex].tabs.map((tab) => {
+                  const isActive = pathname === tab.to;
+                  return (
+                    <button
+                      key={tab.to}
+                      onClick={() => handleTabClick(tab.to)}
+                      className={cn(
+                        "relative whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium transition-all",
+                        isActive
+                          ? "text-primary"
+                          : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/30",
+                      )}
+                    >
+                      {isActive && (
+                        <span
+                          className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-primary"
+                          style={{ boxShadow: "0 0 8px hsl(var(--primary) / 0.5)" }}
+                        />
+                      )}
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-auto">
+          <div className="mx-auto max-w-6xl px-6 py-6">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
