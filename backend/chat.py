@@ -246,7 +246,7 @@ def run_chat(cfg: dict, user_messages: list, context: str = "") -> dict:
     """
     # OmniRoute 托底通道：如果启用且可达，先尝试通过 OmniRoute 路由
     if cfg.get("use_omniroute"):
-        from omniroute_client import call_via_omniroute
+        from omniroute_client import call_via_omniroute, OMNIRoute_MODEL
         no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
         sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
         messages = [{"role": "system", "content": sys_prompt}]
@@ -376,7 +376,7 @@ def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
     """API 接入流式：function-calling 循环，边流答案边推工具调用事件。"""
     # OmniRoute 托底通道（流式）
     if cfg.get("use_omniroute"):
-        from omniroute_client import call_via_omniroute
+        from omniroute_client import call_via_omniroute, OMNIRoute_MODEL
         no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
         sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
         messages = [{"role": "system", "content": sys_prompt}]
