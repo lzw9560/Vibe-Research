@@ -248,6 +248,42 @@ export function Settings() {
         )}
       </GlassCard>
 
+      {/* OmniRoute 托底通道 */}
+      <GlassCard className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Flame className="h-5 w-5 text-accent" />
+          <h3 className="text-sm font-semibold">OmniRoute 托底通道（可选）</h3>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          启用后，AI 对话会先走 OmniRoute 本地网关，自动切换最便宜的可用模型。
+          需要先在本地安装并运行 OmniRoute（<code className="rounded bg-muted/50 px-1">npm i -g omniroute</code>）。
+        </p>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" defaultChecked={false} className="rounded border-border" />
+            启用 OmniRoute 托底
+          </label>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">模型选择</label>
+            <select className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-accent/50">
+              <option value="auto">auto（智能路由）</option>
+              <option value="auto/coding">auto/coding（质量优先）</option>
+              <option value="auto/fast">auto/fast（低延迟）</option>
+              <option value="auto/cheap">auto/cheap（最便宜）</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">OmniRoute 地址</label>
+            <input defaultValue="http://localhost:20128" placeholder="http://localhost:20128"
+              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-accent/50" />
+          </div>
+          <div className="rounded-lg bg-accent/5 border border-accent/20 p-3 text-xs text-muted-foreground">
+            ℹ OmniRoute 聚合 271 个 AI 提供商的免费/低价额度，自动故障转移。
+            你的 API key 只存在本地，不上传。
+          </div>
+        </div>
+      </GlassCard>
+
       {/* 后端访问密钥：仅当后端部署时设置了 VR_API_KEY（公网防蹭用）才需要填 */}
       <GlassCard className="mt-4">
         <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">

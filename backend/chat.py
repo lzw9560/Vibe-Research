@@ -244,6 +244,25 @@ def run_chat(cfg: dict, user_messages: list, context: str = "") -> dict:
     user_messages: [{role, content}, ...]
     返回: {content, trace:[{tool,args}], rounds}
     """
+    # OmniRoute 托底通道：如果启用且可达，先尝试通过 OmniRoute 路由
+    if cfg.get("use_omniroute"):
+        from omniroute_client import call_via_omniroute
+        no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
+        sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
+        messages = [{"role": "system", "content": sys_prompt}]
+        messages.extend(user_messages)
+        result = call_via_omniroute(
+            messages,
+            model=cfg.get("omniroute_model", OMNIRoute_MODEL),
+            use_tools=not no_tools_cfg,
+            tools=TOOLS if not no_tools_cfg else None,
+        )
+        if result is not None:
+            choice = result["choices"][0]["message"]
+            content = choice.get("content") or ""
+            # OmniRoute 不支持 function calling，直接返回答案
+            return {"content": content, "trace": [], "rounds": 1}
+
     # Agnes 等不支持 function calling 的模型：用精简 prompt，跳过工具调用
     no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
     sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
@@ -355,6 +374,29 @@ def _iter_sse_deltas(resp):
 
 def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
     """API 接入流式：function-calling 循环，边流答案边推工具调用事件。"""
+    # OmniRoute 托底通道（流式）
+    if cfg.get("use_omniroute"):
+        from omniroute_client import call_via_omniroute
+        no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
+        sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
+        messages = [{"role": "system", "content": sys_prompt}]
+        messages.extend(user_messages)
+        result = call_via_omniroute(
+            messages,
+            model=cfg.get("omniroute_model", OMNIRoute_MODEL),
+            use_tools=not no_tools_cfg,
+            tools=TOOLS if not no_tools_cfg else None,
+            stream=True,
+        )
+        if result is not None:
+            # 非 function-calling 模式：一次性拿完再吐
+            text = result["choices"][0]["message"].get("content") or ""
+            chunk_size = 4
+            for i in range(0, len(text), chunk_size):
+                yield {"type": "delta", "text": text[i:i+chunk_size]}
+            yield {"type": "done", "trace": [], "rounds": 1}
+            return
+
     no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
     sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
     messages = [{"role": "system", "content": sys_prompt}]
