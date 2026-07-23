@@ -3,15 +3,28 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity, Wallet, Search,
   ChevronDown, LineChart, Github, UserRound, Flame,
-  Cog, Cpu, Database, Cable, Rocket, FlaskConical,
+  Cog, Cpu, Database, Cable, Rocket, FlaskConical, Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useDarkMode";
 import type { Theme } from "@/hooks/useDarkMode";
+import { PageTransition } from "@/components/ui/PageTransition";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/ui/Breadcrumbs";
+import { BreadcrumbContext } from "@/components/ui/BreadcrumbContext";
+
+// 解析 URL 查询参数
+function getQueryParam(url: string, key: string): string | null {
+  try {
+    const params = new URLSearchParams(url.split("?")[1] || "");
+    return params.get(key);
+  } catch {
+    return null;
+  }
+}
 
 const APP_VERSION = "v0.1.3";
 const REPO_URL = "https://github.com/simonlin1212/Vibe-Research";
-const SITE_URL = "https://www.simonlin.net";
+const CONTACT_HANDLE = "lzw9560";
 
 // ---- 分组定义 ----
 const GROUPS = [
@@ -46,7 +59,13 @@ const GROUPS = [
     name: "打板策略",
     icon: Flame,
     tabs: [
-      { to: "/limitup", label: "打板策略" },
+      { to: "/limitup/gene", label: "基因选股" },
+      { to: "/limitup/auction", label: "竞价预案" },
+      { to: "/limitup/seats", label: "席位引擎" },
+      { to: "/recommendation", label: "推荐关注" },
+      { to: "/strategy-signals", label: "战法信号" },
+      { to: "/backtest", label: "简化回测" },
+      { to: "/metrics", label: "性能监控" },
       { to: "/settings", label: "接入 AI" },
     ],
   },
@@ -83,6 +102,8 @@ export function Layout() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
 
   // 当前激活的分组和 Tab
   const active = findActiveTab(pathname);
@@ -95,9 +116,22 @@ export function Layout() {
     localStorage.setItem("vr-sidebar", sidebarCollapsed ? "collapsed" : "expanded");
   }, [sidebarCollapsed]);
 
-  // 点击 Tab 时自动导航
+  // 移动端菜单打开时锁定背景滚动
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
+
+  // 点击 Tab 时自动导航（移动端关闭菜单）
   const handleTabClick = (to: string) => {
     navigate(to);
+    setMobileMenuOpen(false);
   };
 
   return (
@@ -105,8 +139,20 @@ export function Layout() {
       {/* Sidebar */}
       <aside className={cn(
         "glass z-10 m-2 flex shrink-0 flex-col rounded-2xl transition-all duration-300",
-        sidebarCollapsed ? "w-14" : "w-60",
+        // Mobile: fixed drawer
+        "fixed inset-y-0 left-0 z-50 w-60 -translate-x-full md:relative md:inset-auto md:z-10 md:m-2 md:translate-x-0",
+        sidebarCollapsed ? "md:w-14" : "md:w-60",
+        mobileMenuOpen && "translate-x-0",
       )}>
+        {/* Mobile Close Button */}
+        <button
+          onClick={() => setMobileMenuOpen(false)}
+          className="absolute right-2 top-2 rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground md:hidden"
+          title="关闭菜单"
+        >
+          <ChevronDown className="h-4 w-4 rotate-90" />
+        </button>
+
         {/* Brand */}
         <div className={cn("border-b border-border/50", sidebarCollapsed ? "flex justify-center p-3" : "p-4")}>
           <Link to="/daily-review" className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "gap-2")}>
@@ -271,15 +317,12 @@ export function Layout() {
 
               {/* 链接行 */}
               <div className="flex items-center justify-between">
-                <a
-                  href={SITE_URL}
-                  target="_blank"
-                  rel="noreferrer"
+                <span
                   className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
                   title="联系作者"
                 >
                   <UserRound className="h-3.5 w-3.5" />
-                </a>
+                </span>
                 <a
                   href={REPO_URL}
                   target="_blank"
@@ -298,14 +341,9 @@ export function Layout() {
                 </button>
               </div>
 
-              <a
-                href={SITE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="block text-[11px] text-primary/80 transition-colors hover:text-primary"
-              >
-                联系作者 · simonlin.net
-              </a>
+              <span className="block text-[11px] text-primary/80 transition-colors hover:text-primary">
+                {CONTACT_HANDLE}
+              </span>
               <p className="text-[11px] leading-relaxed text-muted-foreground/60">
                 {APP_VERSION} · 不荐股 · 不预测 · 无倾向
               </p>
@@ -316,6 +354,31 @@ export function Layout() {
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Mobile Header with Hamburger */}
+        <div className="flex items-center gap-3 border-b border-border/40 bg-background/60 px-4 py-3 md:hidden">
+          <button
+            onClick={() => setMobileMenuOpen((p) => !p)}
+            className="rounded p-2 text-muted-foreground transition-colors hover:text-foreground"
+            title="菜单"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <Link to="/daily-review" className="flex items-center gap-2">
+            <LineChart className="h-5 w-5 text-primary text-glow" />
+            <span className="text-base font-extrabold tracking-tight">
+              Vibe-<span className="text-primary">Research</span>
+            </span>
+          </Link>
+        </div>
+
+        {/* Mobile Backdrop */}
+        {mobileMenuOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+
         {/* Tab Navigation Bar */}
         {active && (
           <div className="border-b border-border/40 bg-background/60 backdrop-blur-sm">
@@ -349,10 +412,137 @@ export function Layout() {
           </div>
         )}
 
+        {/* Secondary Tab Navigation (for pages with sub-tabs) */}
+        {pathname.startsWith("/stock/") && (
+          <div className="border-b border-border/30 bg-background/40">
+            <div className="mx-auto max-w-6xl px-6">
+              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
+                {[
+                  { key: "overview", label: "概览" },
+                  { key: "gene", label: "基因" },
+                  { key: "capital", label: "资金" },
+                  { key: "ai", label: "AI 分析" },
+                ].map((subTab) => {
+                  const activeTab = getQueryParam(pathname, "tab");
+                  const isActive = activeTab === subTab.key || (!activeTab && subTab.key === "overview");
+                  return (
+                    <button
+                      key={subTab.label}
+                      className={cn(
+                        "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
+                      )}
+                    >
+                      {subTab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pathname === "/intel" && (
+          <div className="border-b border-border/30 bg-background/40">
+            <div className="mx-auto max-w-6xl px-6">
+              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
+                {[
+                  { key: "events", label: "事件概率" },
+                  { key: "announcements", label: "A股公告" },
+                  { key: "news", label: "公开新闻" },
+                  { key: "investment", label: "Investment News" },
+                ].map((subTab) => {
+                  const activeTab = getQueryParam(pathname, "tab");
+                  const isActive = activeTab === subTab.key || (!activeTab && subTab.key === "events");
+                  return (
+                    <button
+                      key={subTab.label}
+                      className={cn(
+                        "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
+                      )}
+                    >
+                      {subTab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pathname === "/daily-review" && (
+          <div className="border-b border-border/30 bg-background/40">
+            <div className="mx-auto max-w-6xl px-6">
+              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
+                {[
+                  { key: "sectors", label: "板块热度" },
+                  { key: "zt-detail", label: "涨停明细" },
+                  { key: "auction-review", label: "竞价回顾" },
+                ].map((subTab) => {
+                  const activeTab = getQueryParam(pathname, "tab");
+                  const isActive = activeTab === subTab.key || (!activeTab && subTab.key === "sectors");
+                  return (
+                    <button
+                      key={subTab.label}
+                      className={cn(
+                        "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
+                      )}
+                    >
+                      {subTab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(pathname === "/limitup" || pathname.startsWith("/limitup/") || pathname === "/recommendation" || pathname === "/strategy-signals") && (
+          <div className="border-b border-border/30 bg-background/40">
+            <div className="mx-auto max-w-6xl px-6">
+              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
+                {[
+                  { to: "/limitup/gene", label: "基因选股" },
+                  { to: "/limitup/auction", label: "竞价预案" },
+                  { to: "/limitup/seats", label: "席位引擎" },
+                  { to: "/recommendation", label: "推荐关注" },
+                  { to: "/strategy-signals", label: "战法信号" },
+                ].map((subTab) => (
+                  <button
+                    key={subTab.label}
+                    onClick={() => handleTabClick(subTab.to)}
+                    className={cn(
+                      "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                      pathname === subTab.to
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
+                    )}
+                  >
+                    {subTab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Page Content */}
         <main className="flex-1 overflow-auto">
           <div className="mx-auto max-w-6xl px-6 py-6">
-            <Outlet />
+            {breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} className="mb-4" />}
+            <BreadcrumbContext.Provider value={{ items: breadcrumbs, setItems: setBreadcrumbs }}>
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
+            </BreadcrumbContext.Provider>
           </div>
         </main>
       </div>

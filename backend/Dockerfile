@@ -8,7 +8,6 @@ COPY requirements.txt .
 # Clear pip cache to avoid stale hash mismatches, then install
 RUN pip cache purge 2>/dev/null || true && rm -rf /root/.cache/pip/* 2>/dev/null || true
 RUN pip install --no-cache-dir -r requirements.txt
-COPY *.py ./
-COPY news_sources.json ./
+COPY . .
 EXPOSE 8900
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8900"]

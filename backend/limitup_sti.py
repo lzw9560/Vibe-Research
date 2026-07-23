@@ -25,11 +25,13 @@ import threading
 import time
 from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import BaseModel
 
 import market
+from migrations import MigrationManager
 
 BEIJING_TZ = datetime.now(market.BEIJING).astimezone().tzinfo
 
@@ -198,6 +200,26 @@ class STIEngine:
     def __init__(self):
         self._db: Optional[sqlite3.Connection] = None
         self._db_lock = threading.Lock()
+        self._run_initial_migrations()
+
+    def _run_initial_migrations(self) -> None:
+        """执行初始 schema 迁移（仅一次）。"""
+        db_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "vibe_research.db"
+        )
+        manager = MigrationManager(db_path=db_path)
+        migration_sql = (
+            Path(__file__).resolve().parent
+            / "migrations" / "sti" / "20250613-001_create_sti_timeline.sql"
+        ).read_text(encoding="utf-8")
+        migrations = [
+            {
+                "version": "20250613-001",
+                "name": "create_sti_timeline",
+                "sql": migration_sql,
+            }
+        ]
+        manager.upgrade(migrations)
 
     # ---- SQLite 持久化 ----
 
@@ -206,89 +228,81 @@ class STIEngine:
             db_path = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), "vibe_research.db"
             )
-            self._db = sqlite3.connect(db_path, timeout=10)
+            self._db = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
             self._db.row_factory = sqlite3.Row
-            self._db.execute(
-                """CREATE TABLE IF NOT EXISTS sti_timeline (
-                    date TEXT NOT NULL UNIQUE,
-                    score REAL,
-                    phase TEXT,
-                    dimension_limit_up_count REAL,
-                    dimension_limit_down_count REAL,
-                    dimension_seal_rate REAL,
-                    dimension_advance_decline_ratio REAL,
-                    dimension_promotion_rate REAL,
-                    dimension_prev_zt_performance REAL,
-                    dimension_max_boards REAL,
-                    market_factor REAL,
-                    confidence TEXT,
-                    source_ok BOOLEAN DEFAULT 1,
-                    change_from_yesterday REAL,
-                    data_updated TEXT,
-                    computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )"""
-            )
-            self._db.commit()
         return self._db
 
     def _migrate_schema(self) -> None:
         """迁移旧 schema：移除 break_rate 列，重命名 momentum → change_from_yesterday，新增 data_updated。"""
-        try:
-            db = self._get_db()
-            cursor = db.execute("PRAGMA table_info(sti_timeline)")
-            columns = {row["name"] for row in cursor.fetchall()}
+        if self._db is None:
+            return
 
-            needs_migration = False
-            if "dimension_break_rate" in columns:
-                needs_migration = True
-            if "momentum" in columns and "change_from_yesterday" not in columns:
-                needs_migration = True
+        # 从现有连接获取数据库路径
+        db_path = self._db.execute("PRAGMA database_list").fetchone()[2]
+        manager = MigrationManager(db_path=db_path)
+        migrations = [
+            {
+                "version": "20250613-002",
+                "name": "migrate_sti_timeline_v2",
+                "sql": self._build_migration_sql(self._db),
+            }
+        ]
+        manager.upgrade(migrations)
 
-            if needs_migration:
-                db.execute("DROP TABLE IF EXISTS sti_timeline_new")
-                db.execute(
-                    """CREATE TABLE sti_timeline_new (
-                        date TEXT NOT NULL UNIQUE,
-                        score REAL, phase TEXT,
-                        dimension_limit_up_count REAL, dimension_limit_down_count REAL,
-                        dimension_seal_rate REAL, dimension_advance_decline_ratio REAL,
-                        dimension_promotion_rate REAL, dimension_prev_zt_performance REAL,
-                        dimension_max_boards REAL,
-                        market_factor REAL, confidence TEXT,
-                        source_ok BOOLEAN DEFAULT 1,
-                        change_from_yesterday REAL, data_updated TEXT,
-                        computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )"""
-                )
-                # INSERT 列名（目标表新列名）
-                insert_cols = "date, score, phase, dimension_limit_up_count, dimension_limit_down_count, dimension_seal_rate, dimension_advance_decline_ratio, dimension_promotion_rate, dimension_prev_zt_performance, dimension_max_boards, market_factor, confidence, source_ok, change_from_yesterday, data_updated, computed_at"
-                # SELECT 列名（源表旧列名），不存在则用 NULL
-                sel_date = "date" if "date" in columns else "NULL"
-                sel_score = "score" if "score" in columns else "NULL"
-                sel_phase = "phase" if "phase" in columns else "NULL"
-                sel_dims = []
-                for c in ("dimension_limit_up_count", "dimension_limit_down_count", "dimension_seal_rate",
-                          "dimension_advance_decline_ratio", "dimension_promotion_rate",
-                          "dimension_prev_zt_performance", "dimension_max_boards"):
-                    sel_dims.append(c if c in columns else "NULL")
-                sel_market = "market_factor" if "market_factor" in columns else "NULL"
-                sel_conf = "confidence" if "confidence" in columns else "NULL"
-                sel_srcok = "source_ok" if "source_ok" in columns else "NULL"
-                sel_chg = "change_from_yesterday" if "change_from_yesterday" in columns else ("momentum" if "momentum" in columns else "NULL")
-                sel_du = "data_updated" if "data_updated" in columns else "NULL"
-                sel_computed = "computed_at" if "computed_at" in columns else "CURRENT_TIMESTAMP"
-                select_cols = f"{sel_date}, {sel_score}, {sel_phase}, {', '.join(sel_dims)}, {sel_market}, {sel_conf}, {sel_srcok}, {sel_chg}, {sel_du}, {sel_computed}"
+    def _build_migration_sql(self, db: sqlite3.Connection) -> str:
+        """构建迁移 SQL（动态检测列存在性）。"""
+        cursor = db.execute("PRAGMA table_info(sti_timeline)")
+        columns = {row["name"] for row in cursor.fetchall()}
 
-                db.execute(f"INSERT INTO sti_timeline_new ({insert_cols}) SELECT {select_cols} FROM sti_timeline")
-                db.execute("DROP TABLE sti_timeline")
-                db.execute("ALTER TABLE sti_timeline_new RENAME TO sti_timeline")
-                db.execute("CREATE INDEX IF NOT EXISTS idx_sti_date ON sti_timeline(date DESC)")
-                db.commit()
-        except Exception:
-            pass
-        except Exception:
-            # 迁移失败不影响主流程
-            pass
+        needs_migration = False
+        if "dimension_break_rate" in columns:
+            needs_migration = True
+        if "momentum" in columns and "change_from_yesterday" not in columns:
+            needs_migration = True
+
+        if not needs_migration:
+            return "SELECT 1;"  # 空操作
+
+        # 构建列映射
+        insert_cols = "date, score, phase, dimension_limit_up_count, dimension_limit_down_count, dimension_seal_rate, dimension_advance_decline_ratio, dimension_promotion_rate, dimension_prev_zt_performance, dimension_max_boards, market_factor, confidence, source_ok, change_from_yesterday, data_updated, computed_at"
+        sel_date = "date" if "date" in columns else "NULL"
+        sel_score = "score" if "score" in columns else "NULL"
+        sel_phase = "phase" if "phase" in columns else "NULL"
+        sel_dims = []
+        for c in ("dimension_limit_up_count", "dimension_limit_down_count", "dimension_seal_rate",
+                  "dimension_advance_decline_ratio", "dimension_promotion_rate",
+                  "dimension_prev_zt_performance", "dimension_max_boards"):
+            sel_dims.append(c if c in columns else "NULL")
+        sel_market = "market_factor" if "market_factor" in columns else "NULL"
+        sel_conf = "confidence" if "confidence" in columns else "NULL"
+        sel_srcok = "source_ok" if "source_ok" in columns else "NULL"
+        sel_chg = "change_from_yesterday" if "change_from_yesterday" in columns else ("momentum" if "momentum" in columns else "NULL")
+        sel_du = "data_updated" if "data_updated" in columns else "NULL"
+        sel_computed = "computed_at" if "computed_at" in columns else "CURRENT_TIMESTAMP"
+        select_cols = f"{sel_date}, {sel_score}, {sel_phase}, {', '.join(sel_dims)}, {sel_market}, {sel_conf}, {sel_srcok}, {sel_chg}, {sel_du}, {sel_computed}"
+
+        return f"""
+BEGIN TRANSACTION;
+DROP TABLE IF EXISTS sti_timeline_new;
+CREATE TABLE sti_timeline_new (
+    date TEXT NOT NULL UNIQUE,
+    score REAL, phase TEXT,
+    dimension_limit_up_count REAL, dimension_limit_down_count REAL,
+    dimension_seal_rate REAL, dimension_advance_decline_ratio REAL,
+    dimension_promotion_rate REAL, dimension_prev_zt_performance REAL,
+    dimension_max_boards REAL,
+    market_factor REAL, confidence TEXT,
+    source_ok BOOLEAN DEFAULT 1,
+    change_from_yesterday REAL, data_updated TEXT,
+    computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO sti_timeline_new ({insert_cols}) SELECT {select_cols} FROM sti_timeline;
+DROP TABLE sti_timeline;
+ALTER TABLE sti_timeline_new RENAME TO sti_timeline;
+CREATE INDEX IF NOT EXISTS idx_sti_date ON sti_timeline(date DESC);
+CREATE INDEX IF NOT EXISTS idx_sti_phase ON sti_timeline(phase);
+COMMIT;
+"""
 
     def _save_result(self, result: STIResult) -> None:
         """持久化 STI 结果到 sti_timeline 表。"""

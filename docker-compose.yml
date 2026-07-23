@@ -25,3 +25,15 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
+  # OmniRoute 托底网关（默认跟随启动）
+  # 如需禁用，可在 backend/.env 中设置 VR_OMNIRoute_ENABLED=false
+  omniroute:
+    image: diegosouzapw/omniroute:latest
+    container_name: vr-omniroute
+    ports:
+      - "20128:20128"
+    environment:
+      - NODE_ENV=production
+      - INITIAL_PASSWORD=${OMNIRoute_PASSWORD:-changeme}
+    restart: unless-stopped

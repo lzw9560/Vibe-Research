@@ -75,6 +75,47 @@
     --chart-grid: 214 20% 88%;
     --chart-text: 215 16% 42%;
     --chart-axis: 214 20% 78%;
+
+    /* 亮色背景光晕 */
+    --bg-glow-1: hsl(15 85% 55% / 0.08);
+    --bg-glow-2: hsl(220 65% 60% / 0.06);
+  }
+
+  .warm-orange {
+    --background: 22 50% 7%;           /* 更暖的深棕黑底 */
+    --foreground: 25 25% 90%;
+
+    --card: 22 40% 10%;                /* 卡底偏暖 */
+    --card-foreground: 25 25% 90%;
+
+    --primary: 18 92% 52%;             /* 更浓郁的朱橙（比暗色版更暖） */
+    --primary-foreground: 22 50% 7%;
+    --accent: 30 96% 55%;              /* 金橙强调 */
+    --accent-foreground: 22 50% 7%;
+
+    --muted: 22 30% 16%;
+    --muted-foreground: 215 15% 60%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 22 25% 22%;
+
+    --success: 145 58% 44%;
+    --danger: 0 70% 55%;
+    --warning: 35 95% 52%;
+    --info: 18 92% 52%;
+
+    --glass-fill-top: rgba(255, 240, 220, 0.06);
+    --glass-fill-bot: rgba(255, 220, 180, 0.015);
+    --glass-stroke: rgba(255, 200, 150, 0.12);
+    --glass-hi: rgba(255, 230, 190, 0.07);
+
+    --chart-grid: 22 20% 15%;
+    --chart-text: 215 12% 55%;
+    --chart-axis: 22 25% 22%;
+
+    /* 暖橙背景光晕 */
+    --bg-glow-1: hsl(18 92% 52% / 0.13);
+    --bg-glow-2: hsl(30 96% 55% / 0.07);
   }
 
   * { @apply border-border; }
@@ -84,15 +125,21 @@
     /* 纵深暖冷双光晕（顶橙 + 右下冷蓝），别留死黑 */
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(1100px 620px at 12% -12%, hsl(15 89% 56% / 0.11), transparent 60%),
-      radial-gradient(980px 720px at 108% 112%, hsl(220 60% 45% / 0.08), transparent 55%);
+      radial-gradient(1100px 620px at 12% -12%, var(--bg-glow-1, hsl(15 89% 56% / 0.11)), transparent 60%),
+      radial-gradient(980px 720px at 108% 112%, var(--bg-glow-2, hsl(220 60% 45% / 0.08)), transparent 55%);
     background-attachment: fixed;
   }
 
   .light body {
     background-image:
-      radial-gradient(1100px 620px at 12% -12%, hsl(15 85% 55% / 0.08), transparent 60%),
-      radial-gradient(980px 720px at 108% 112%, hsl(220 65% 60% / 0.06), transparent 55%);
+      radial-gradient(1100px 620px at 12% -12%, var(--bg-glow-1, hsl(15 85% 55% / 0.08)), transparent 60%),
+      radial-gradient(980px 720px at 108% 112%, var(--bg-glow-2, hsl(220 65% 60% / 0.06)), transparent 55%);
+  }
+
+  .warm-orange body {
+    background-image:
+      radial-gradient(1200px 650px at 10% -10%, hsl(18 92% 52% / 0.13), transparent 60%),
+      radial-gradient(1000px 700px at 110% 110%, hsl(30 96% 55% / 0.08), transparent 55%);
   }
 
   /* prose 表格 */
@@ -130,4 +177,16 @@
 
   /* 暖橙光文字 */
   .text-glow { text-shadow: 0 0 18px hsl(var(--primary) / 0.45); }
+
+  /* 页面转场动画 */
+  @keyframes page-enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes page-exit {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-8px); }
+  }
+  .animate-page-enter { animation-name: page-enter; animation-timing-function: ease-out; }
+  .animate-page-exit { animation-name: page-exit; animation-timing-function: ease-in; }
 }

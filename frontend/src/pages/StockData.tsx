@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search, FileText, Newspaper, Loader2, AlertCircle, LineChart, BarChart3, Megaphone,
   Wallet, Trophy, CalendarClock, Boxes, MessageSquare,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { EarningsSnapshot } from "@/components/ui/EarningsSnapshot";
 import { Disclaimer } from "@/components/ui/Disclaimer";
@@ -78,6 +81,7 @@ function ValBand({ label, m }: { label: string; m: ValMetric }) {
 }
 
 export function StockData() {
+  const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -110,7 +114,7 @@ export function StockData() {
     setMargin([]); setBlockT([]); setHolders([]); setDividend([]); setFundFlow([]); setDt(null); setLockup(null); setBlocks(null); setHotCon([]); setQa([]);
     setGStock(null);
 
-    // 6 位纯数字 = A 股；否则（字母 / 港股短代码）走美股 / 港股（global-stock-data）
+    // 6 位纯数字 = A 股 → 跳转到 StockDeep 页；否则（字母 / 港股短代码）走美股 / 港股（global-stock-data）
     if (!/^\d{6}$/.test(c)) {
       try {
         const g = await api.globalStock(c);
@@ -123,45 +127,9 @@ export function StockData() {
       return;
     }
 
-    // A 股：竞态守卫（快速换代码时只让最新一次回填）+ 资金面/筹码独立回填、不阻塞主数据
-    const ok = <T,>(set: (v: T) => void) => (v: T) => { if (rid === runIdRef.current) set(v); };
-    api.margin(c).then(ok(setMargin)).catch(() => {});
-    api.blockTrade(c).then(ok(setBlockT)).catch(() => {});
-    api.holders(c).then(ok(setHolders)).catch(() => {});
-    api.dividend(c).then(ok(setDividend)).catch(() => {});
-    api.fundFlow(c).then(ok(setFundFlow)).catch(() => {});
-    api.dragonTiger(c).then(ok(setDt)).catch(() => {});
-    api.lockup(c).then(ok(setLockup)).catch(() => {});
-    api.blocks(c).then(ok(setBlocks)).catch(() => {});
-    api.hotConcepts(c).then(ok(setHotCon)).catch(() => {});
-    api.investorQa(c).then(ok(setQa)).catch(() => {});
-    try {
-      // 行情+估值+研报+历史分位+财务+公告（新闻单独降级）
-      const [v, r, p, f, a] = await Promise.all([
-        api.valuation(c),
-        api.reports(c).catch(() => []),
-        api.percentile(c).catch(() => null),
-        api.financials(c).catch(() => null),
-        api.announcements(c).catch(() => []),
-      ]);
-      if (rid !== runIdRef.current) return;
-      setVal(v);
-      setReports(r);
-      setPctl(p);
-      setFin(f);
-      setAnns(a);
-      try {
-        const n = await api.news(c);
-        if (rid === runIdRef.current) setNews(n);
-      } catch (e) {
-        if (rid === runIdRef.current && e instanceof ApiError && e.status === 501) setDepNote(e.message);
-      }
-    } catch (e) {
-      if (rid !== runIdRef.current) return;
-      setErr(e instanceof ApiError ? e.message : "查询失败");
-    } finally {
-      if (rid === runIdRef.current) setLoading(false);
-    }
+    // A 股：直接跳转 StockDeep
+    navigate(`/stock/${c}`);
+    return;
   };
 
   const metrics = val ? [
@@ -210,21 +178,17 @@ export function StockData() {
 
       {/* 查询框 */}
       <div className="mb-5 flex gap-2">
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9.]/g, "").toUpperCase().slice(0, 12))}
-          onKeyDown={(e) => e.key === "Enter" && run()}
-          placeholder="A 股 6 位代码，或美股/港股/韩股（AAPL / 00700 / 005930.KS）"
-          className="w-80 rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
-        />
-        <button
-          onClick={run}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          查询
-        </button>
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9.]/g, "").toUpperCase().slice(0, 12))}
+            onKeyDown={(e) => e.key === "Enter" && run()}
+            placeholder="A 股 6 位代码，或美股/港股/韩股（AAPL / 00700 / 005930.KS）"
+            className="w-80"
+          />
+          <Button onClick={run} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            查询
+          </Button>
       </div>
 
       {err && (

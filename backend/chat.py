@@ -72,20 +72,6 @@ SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
 当前页面上下文：
 {{context}}"""
 
-# 对不支持 function calling 的模型使用的精简版 system prompt（不提及工具）。
-SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
-
-硬性规则（务必遵守）：
-- 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
-- 基于用户提供的客观数据回答；不要编造数字。
-- 涉及个股时用提供的真实数据；讲清多空两面与风险，让用户自己判断。
-- 用简洁中文回答。
-
-{ANALYSIS_FRAMEWORK}
-
-当前页面上下文：
-{{context}}"""
-
 TOOLS = [
     {
         "type": "function",

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 import threading as _threading
@@ -321,7 +322,7 @@ class DailyReviewer:
                 result = self.precompute_daily(date_str)
                 results.append(result)
             except Exception as e:
-                print(f"[{date_str}] 复盘报告生成失败: {e}")
+                logging.getLogger("vibe-research").warning("[%s] 复盘报告生成失败: %s", date_str, e)
             
             current_dt += timedelta(days=1)
             time.sleep(0.5)  # 节流

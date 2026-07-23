@@ -1,14 +1,26 @@
 import { useParams, Link } from "react-router-dom";
+import { useEffect } from "react";
 import { ArrowLeft, Plus, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { useBreadcrumbs } from "@/components/ui/BreadcrumbContext";
 import sectorsData from "@/data/sectors.json";
 
 export function SectorDetail() {
   const { key } = useParams();
+  const { setItems } = useBreadcrumbs();
   const sector = sectorsData.sectors.find((s) => s.key === key);
+
+  useEffect(() => {
+    if (sector) {
+      setItems([
+        { label: "板块中心", to: "/sectors" },
+        { label: sector.label },
+      ]);
+    }
+  }, [sector, setItems]);
 
   if (!sector) {
     return (

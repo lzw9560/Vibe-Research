@@ -20,6 +20,8 @@ import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from circuit_breaker import get_breaker
+
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 
@@ -470,22 +472,34 @@ def em_get(url: str, params: dict | None = None, headers: dict | None = None, ti
     第一次请求探测：先直连（短超时、不重试），成功即固定走直连；失败则降级走系统代理并固定。
     探测结果整个进程复用，避免每次重试。`VR_DATA_PROXY=1` 可跳过探测、强制走代理。
     """
+    # 熔断器检查
+    breaker = get_breaker("eastmoney")
+    if not breaker.allow_request():
+        raise RuntimeError(f"[CircuitBreaker:eastmoney] 东财数据源熔断中，快速失败（{url}）")
+
     wait = _EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
     if wait > 0:
         time.sleep(wait + random.uniform(0.1, 0.5))
     try:
         mode = _em_mode[0]
         if mode != "auto":
-            return _em_session(mode == "direct").get(url, params=params, headers=headers, timeout=timeout)
+            r = _em_session(mode == "direct").get(url, params=params, headers=headers, timeout=timeout)
+            breaker.record_success()
+            return r
         # auto：先直连，成功固定 direct；直连失败再走系统代理、成功固定 proxy。
         try:
             r = _em_session(True).get(url, params=params, headers=headers, timeout=min(timeout, 8))
             _em_mode[0] = "direct"
+            breaker.record_success()
             return r
         except Exception:
             r = _em_session(False).get(url, params=params, headers=headers, timeout=timeout)
             _em_mode[0] = "proxy"
+            breaker.record_success()
             return r
+    except Exception as e:
+        breaker.record_failure()
+        raise
     finally:
         _em_last_call[0] = time.time()
 

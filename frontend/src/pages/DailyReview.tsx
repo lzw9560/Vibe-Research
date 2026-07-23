@@ -5,14 +5,17 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, ApiError, type IndexQuote, type Quote, type MarketOverview, type ShortTermEmotion, type TurnoverTop, type GlobalIndex, type STIResult, type DailyReviewReport } from "@/lib/api";
 import { hasLlm, chatStream } from "@/lib/llm";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
-import { loadWatch, saveWatch, addCodes, apiWatchlist } from "@/lib/watchlist";
+import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 import { STICard } from "@/components/sti/StiCard";
+import { STITimelineChart } from "@/components/sti/STITimelineChart";
 import { STIDetailView } from "@/components/sti/StiDetailView";
 
 // A股红涨绿跌。全球市场（美股/港股指数）**也沿用红涨**——与整个看板及东财等中国平台一致，
@@ -37,6 +40,7 @@ export function DailyReview() {
   const [stiLoading, setStiLoading] = useState(false);
   const [stiError, setStiError] = useState<string | null>(null);
   const [showStiDetail, setShowStiDetail] = useState(false);
+  // STI 时间线（已废弃，数据拉取后未渲染）
   // 关注股票（自选，存本地）
   const [watchCodes, setWatchCodes] = useState<string[]>(loadWatch);
   const [watchQuotes, setWatchQuotes] = useState<Record<string, Quote>>({});
@@ -63,6 +67,7 @@ export function DailyReview() {
     // STI 情绪温度
     setStiLoading(true);
     api.stiLatest().then(setSti).catch((e) => setStiError(e instanceof ApiError ? e.message : "STI 加载失败")).finally(() => setStiLoading(false));
+    // STI 时间线（已废弃，数据拉取后未渲染）
     // 每日复盘报告
     setReviewReportLoading(true);
     api.dailyReview(reviewReportDate).then(setReviewReport).catch((e) => setReviewReportError(e instanceof ApiError ? e.message : "复盘报告加载失败")).finally(() => setReviewReportLoading(false));
@@ -219,6 +224,9 @@ export function DailyReview() {
         onClick={() => setShowStiDetail(true)}
       />
 
+      {/* 1d. STI 情绪温度时间线 */}
+      <STITimelineChart />
+
       {/* 2. 关注股票（自选） */}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">关注股票</h3>
@@ -230,17 +238,16 @@ export function DailyReview() {
       </div>
       <GlassCard className="mb-6">
         <div className="mb-3 flex gap-2">
-          <input
+          <Input
             value={watchInput}
             onChange={(e) => setWatchInput(e.target.value.replace(/[^\d,\s]/g, "").slice(0, 80))}
             onKeyDown={(e) => e.key === "Enter" && addWatch()}
             placeholder="加自选：可批量，如 600519 000858"
-            className="w-60 rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            className="w-60"
           />
-          <button onClick={addWatch}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25">
+          <Button onClick={addWatch}>
             <Plus className="h-4 w-4" /> 增加
-          </button>
+          </Button>
         </div>
         {watchCodes.length === 0 ? (
           <p className="text-sm text-muted-foreground/60">加上你关注的股票，随时看它们的实时价格与涨跌。数据存本地，不上传。</p>
@@ -270,11 +277,10 @@ export function DailyReview() {
       <GlassCard glow className="mb-6">
         <div className="flex items-center justify-between">
           <h3 className="flex items-center gap-1.5 font-semibold"><Sparkles className="h-4 w-4 text-primary" /> AI 当日复盘</h3>
-          <button onClick={runReview} disabled={reviewLoading}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50">
+          <Button onClick={runReview} disabled={reviewLoading}>
             {reviewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {review ? "重新复盘" : "让 AI 复盘今天"}
-          </button>
+          </Button>
         </div>
         {needConfig && (
           <div className="mt-3 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">

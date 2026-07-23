@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { KeyRound, Sparkles, ShieldCheck, Check, Trash2, Terminal, Flame } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { toast } from "sonner";
 import { loadLlm, saveLlm, clearLlm } from "@/lib/llm";
 import { loadAccessKey, saveAccessKey, getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams, getReviewParams, saveReviewParams, type LimitUpParams, type AuctionParams, type ReviewParams } from "@/lib/api";
@@ -196,52 +198,44 @@ export function Settings() {
               })}
             </div>
             <div className="flex items-center gap-2 pt-1">
-              <button onClick={saveSubscription} className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25">
-                保存
-              </button>
+              <Button onClick={saveSubscription}>保存</Button>
               {existing && (
-                <button onClick={forget} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-destructive">
+                <Button variant="ghost" onClick={forget}>
                   <Trash2 className="h-4 w-4" /> 清除
-                </button>
+                </Button>
               )}
             </div>
           </div>
         ) : (
           <div className="space-y-4 text-sm">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">选择模型</label>
-              <select value={apiId} onChange={(e) => pickApiModel(e.target.value)}
-                className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50">
-                {apiModels.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name} —— {m.description}</option>
-                ))}
-              </select>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">选择模型</label>
+                <select value={apiId} onChange={(e) => pickApiModel(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50">
+                  {apiModels.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name} —— {m.description}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Base URL</label>
-              <input value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder="https://api.deepseek.com"
-                className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50" />
+              <Input label="Base URL" value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder="https://api.deepseek.com" />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Model</label>
-              <input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="模型名称（豆包填 ep-… 接入点 ID）"
-                className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50" />
+              <Input label="Model" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="模型名称（豆包填 ep-… 接入点 ID）" />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">API Key</label>
-              <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…"
-                className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50" />
+              <Input label="API Key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" />
             </div>
 
             <div className="flex items-center gap-2">
-              <button onClick={saveApi} className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25">
-                保存（存本地）
-              </button>
+              <Button onClick={saveApi}>保存（存本地）</Button>
               {existing && (
-                <button onClick={forget} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-destructive">
+                <Button variant="ghost" onClick={forget}>
                   <Trash2 className="h-4 w-4" /> 清除
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -294,11 +288,8 @@ export function Settings() {
           本机自用没设鉴权就留空。同样只存本地浏览器。
         </p>
         <div className="flex items-center gap-2">
-          <input type="password" value={accessKey} onChange={(e) => setAccessKey(e.target.value)} placeholder="与后端 VR_API_KEY 保持一致"
-            className="flex-1 rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50" />
-          <button onClick={saveAccess} className="rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/25">
-            保存
-          </button>
+          <Input type="password" value={accessKey} onChange={(e) => setAccessKey(e.target.value)} placeholder="与后端 VR_API_KEY 保持一致" className="flex-1" />
+          <Button onClick={saveAccess}>保存</Button>
         </div>
       </GlassCard>
 
@@ -314,42 +305,35 @@ export function Settings() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="mb-1 block text-xs font-medium">基因合格阈值</label>
-            <input
+            <Input
               type="number"
               value={limitUpParams.gene_qualify_threshold}
               onChange={(e) => setLimitUpParams({ ...limitUpParams, gene_qualify_threshold: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">≥ 此分数视为合格（默认60）</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">高基因阈值</label>
-            <input
+            <Input
               type="number"
               value={limitUpParams.gene_high_threshold}
               onChange={(e) => setLimitUpParams({ ...limitUpParams, gene_high_threshold: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">≥ 此分数视为高基因（默认75）</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">回溯天数</label>
-            <input
+            <Input
               type="number"
               value={limitUpParams.lookback_days}
               onChange={(e) => setLimitUpParams({ ...limitUpParams, lookback_days: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">统计最近N个交易日（默认60）</p>
           </div>
         </div>
-        <button
-          onClick={handleSaveParams}
-          disabled={paramsLoading}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
-        >
+        <Button onClick={handleSaveParams} disabled={paramsLoading}>
           {paramsLoading ? "保存中..." : "保存参数"}
-        </button>
+        </Button>
       </GlassCard>
 
       {/* 竞价选股参数 */}
@@ -363,43 +347,21 @@ export function Settings() {
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="mb-1 block text-xs font-medium">最小基因得分</label>
-            <input
-              type="number"
-              value={auctionParams.min_gene_score}
-              onChange={(e) => setAuctionParams({ ...auctionParams, min_gene_score: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
-            />
+            <Input label="最小基因得分" type="number" value={auctionParams.min_gene_score} onChange={(e) => setAuctionParams({ ...auctionParams, min_gene_score: Number(e.target.value) })} />
             <p className="mt-1 text-[11px] text-muted-foreground">候选股最低基因得分（默认50）</p>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium">最小涨停次数</label>
-            <input
-              type="number"
-              value={auctionParams.min_zt_count}
-              onChange={(e) => setAuctionParams({ ...auctionParams, min_zt_count: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
-            />
+            <Input label="最小涨停次数" type="number" value={auctionParams.min_zt_count} onChange={(e) => setAuctionParams({ ...auctionParams, min_zt_count: Number(e.target.value) })} />
             <p className="mt-1 text-[11px] text-muted-foreground">近30日最少涨停次数（默认2）</p>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium">返回候选股数量</label>
-            <input
-              type="number"
-              value={auctionParams.top_n}
-              onChange={(e) => setAuctionParams({ ...auctionParams, top_n: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
-            />
+            <Input label="返回候选股数量" type="number" value={auctionParams.top_n} onChange={(e) => setAuctionParams({ ...auctionParams, top_n: Number(e.target.value) })} />
             <p className="mt-1 text-[11px] text-muted-foreground">竞价预案 TOP N（默认50）</p>
           </div>
         </div>
-        <button
-          onClick={handleSaveAuctionParams}
-          disabled={auctionLoading}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
-        >
+        <Button onClick={handleSaveAuctionParams} disabled={auctionLoading}>
           {auctionLoading ? "保存中..." : "保存参数"}
-        </button>
+        </Button>
       </GlassCard>
 
       {/* 复盘报告参数 */}
@@ -413,33 +375,17 @@ export function Settings() {
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-xs font-medium">涨停股展示上限</label>
-            <input
-              type="number"
-              value={reviewParams.max_zt_stocks}
-              onChange={(e) => setReviewParams({ ...reviewParams, max_zt_stocks: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
-            />
+            <Input label="涨停股展示上限" type="number" value={reviewParams.max_zt_stocks} onChange={(e) => setReviewParams({ ...reviewParams, max_zt_stocks: Number(e.target.value) })} />
             <p className="mt-1 text-[11px] text-muted-foreground">涨停股明细展示上限（默认100）</p>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium">竞价回顾数量</label>
-            <input
-              type="number"
-              value={reviewParams.auction_top_n}
-              onChange={(e) => setReviewParams({ ...reviewParams, auction_top_n: Number(e.target.value) })}
-              className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
-            />
+            <Input label="竞价回顾数量" type="number" value={reviewParams.auction_top_n} onChange={(e) => setReviewParams({ ...reviewParams, auction_top_n: Number(e.target.value) })} />
             <p className="mt-1 text-[11px] text-muted-foreground">复盘报告中竞价回顾 TOP N（默认20）</p>
           </div>
         </div>
-        <button
-          onClick={handleSaveReviewParams}
-          disabled={reviewLoading}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25 disabled:opacity-50"
-        >
+        <Button onClick={handleSaveReviewParams} disabled={reviewLoading}>
           {reviewLoading ? "保存中..." : "保存参数"}
-        </button>
+        </Button>
       </GlassCard>
     </div>
   );

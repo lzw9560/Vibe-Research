@@ -10,9 +10,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
-import sqlite3
-import threading
+import time
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -35,70 +35,26 @@ import daily_review as dr
 import market
 import myreports as mr
 
+# Scheduler imports
+from scheduler import start_limitup_scheduler, start_portfolio_scheduler
+
+# Router imports
+from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics
+from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market
+
 app = FastAPI(title="Vibe-Research API", version="0.1.3")
 
-# 每半小时后台刷新持仓数据
-pf.start_scheduler(1800)
+# 日志配置
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("vibe-research")
 
-# 打板策略：交易日 15:30 后自动预计算基因得分（避免 API 首次请求冷启动慢）
-import threading as _threading
-import limitup_screener as _ls
-
-
-def _precompute_limitup():
-    """后台线程：预计算最近 3 个交易日的基因得分 + STI + 竞价选股 + 复盘报告。"""
-    from datetime import datetime, timedelta
-    try:
-        for back in range(3):
-            d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y%m%d")
-            _ls.get_screener_result(d[:4] + "-" + d[4:6] + "-" + d[6:])
-        # STI 预计算（独立容错：失败不阻塞基因选股器）
-        try:
-            from datetime import datetime as _dt
-            engine = ls_sti.get_sti_engine()
-            for back in range(3):
-                d = (_dt.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
-                engine.precompute_daily(d)
-        except Exception as e:
-            print(f"[limitup_sti] STI 预计算失败（不影响主流程）: {e}")
-        # 竞价选股预计算（独立容错：失败不阻塞主流程）
-        try:
-            for back in range(3):
-                d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
-                asc.get_screener().precompute_daily(d)
-        except Exception as e:
-            print(f"[auction_screener] 竞价选股预计算失败（不影响主流程）: {e}")
-        # 复盘报告预计算（独立容错：失败不阻塞主流程）
-        try:
-            for back in range(3):
-                d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
-                dr.get_reviewer().precompute_daily(d)
-        except Exception as e:
-            print(f"[daily_review] 复盘报告预计算失败（不影响主流程）: {e}")
-    except Exception as e:  # noqa: BLE001
-        print(f"[limitup] 预计算失败: {e}")
-
-
-def _start_limitup_scheduler():
-    """每天 15:35 触发一次预计算（盘后 5 分钟，数据稳定）。"""
-    from datetime import datetime, timedelta
-    import time as _time
-
-    def _loop():
-        while True:
-            _time.sleep(60)  # 每分钟检查一次
-            now = datetime.now(_ls.BEIJING_TZ)
-            # 只在交易时段（15:30-16:00）触发一次
-            if now.hour == 15 and now.minute >= 30 and now.minute <= 35:
-                # 用独立线程，不阻塞主循环
-                _threading.Thread(target=_precompute_limitup, daemon=True).start()
-
-    _threading.Thread(target=_loop, daemon=True).start()
-
-
-# 启动预计算调度器（仅在预计算开启时）
-if os.getenv("LIMITUP_PRECOMPUTE", "false").lower() == "true":
-    _start_limitup_scheduler()
+# 启动后台调度器
+start_portfolio_scheduler(1800)
+start_limitup_scheduler()
 
 # CORS：默认放开（本地自托管友好）；公网部署时用 VR_ALLOW_ORIGINS 收紧成白名单。
 #   例：VR_ALLOW_ORIGINS="https://myhost"  （逗号分隔多个）
@@ -113,8 +69,6 @@ app.add_middleware(
 # 可选鉴权：设了 VR_API_KEY 就要求所有 /api/* 带 `Authorization: Bearer <key>`
 #   （本地自托管不设=开放；公网部署务必设，否则别人能读你的持仓/调你的后端）。
 _API_KEY = os.environ.get("VR_API_KEY", "").strip()
-
-
 @app.middleware("http")
 async def _require_api_key(request: Request, call_next):
     if (
@@ -127,1010 +81,101 @@ async def _require_api_key(request: Request, call_next):
             return JSONResponse({"detail": "未授权：缺少或错误的 API Key（VR_API_KEY）"}, status_code=401)
     return await call_next(request)
 
+
+@app.middleware("http")
+async def _metrics_middleware(request: Request, call_next):
+    """性能指标采集中间件：记录每次请求耗时。"""
+    from metrics_collector import collector
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+        duration = time.perf_counter() - start
+        # 按路径前缀分层
+        path = request.url.path
+        if path.startswith("/api/limitup") or path.startswith("/api/recommendation") or path.startswith("/api/strategy"):
+            tier = "compute"
+        elif path.startswith("/api/metrics"):
+            tier = "api_response"
+        else:
+            tier = "data_fetch"
+        collector.record(duration, path, tier)
+        return response
+    except Exception:
+        duration = time.perf_counter() - start
+        collector.record(duration, request.url.path, "api_response")
+        raise
+
 _CODE_RE = r"^\d{6}$"
-
-
 def _validate(code: str) -> str:
     code = (code or "").strip()
     if not code.isdigit() or len(code) != 6:
         raise HTTPException(400, "代码必须是 6 位数字")
     return code
-
-
-@app.get("/api/health")
-def health():
-    return {"ok": True, "service": "vibe-research-api", "version": "0.1.3"}
-
-
-class LLMConfig(BaseModel):
-    provider: str = ""       # cli-* = 订阅接入（调本机 CLI）；其余 = API 接入
-    baseURL: str = ""        # 订阅接入时留空
-    apiKey: str = ""         # 订阅接入时留空
-    model: str
-
-
-class ChatReq(BaseModel):
-    messages: list[dict]
-    context: str = ""
-    llm: LLMConfig
-
-
-@app.post("/api/chat")
-def chat(req: ChatReq):
-    """系统 AI 对话，**流式** NDJSON（每行一个事件 {type: tool|delta|done|error}）。
-
-    - API 接入：OpenAI 兼容 function-calling，边流答案边推工具调用事件。
-    - 订阅接入（provider=cli-*）：调本机已登录的 CLI，stdout 边出边流（数据靠 context）。
-    配置错误（缺 key / 未装 CLI）走 HTTP 400；运行时错误走流内 error 事件。用户配置随请求传入，后端不持久化。
-    """
-    if not req.messages:
-        raise HTTPException(400, "messages 不能为空")
-    if not req.llm.model:
-        raise HTTPException(400, "缺少模型配置，请先在「接入 AI」里选择")
-
-    is_cli = req.llm.provider.startswith("cli-")
-    if is_cli:
-        kind = req.llm.provider[4:]
-        if not cli_runtime.detect_cli(kind):
-            raise HTTPException(400, f"未检测到「{kind}」对应的本机命令。请先安装并登录该 CLI，或改用「API 接入」。")
-    elif not req.llm.apiKey or not req.llm.baseURL:
-        raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」里填写")
-
-    cfg = req.llm.model_dump()
-
-    def gen():
-        try:
-            events = (chat_layer.run_chat_cli_stream if is_cli else chat_layer.run_chat_stream)(cfg, req.messages, req.context)
-            for ev in events:
-                yield json.dumps(ev, ensure_ascii=False) + "\n"
-        except Exception as e:  # noqa: BLE001 — 运行时错误以流内事件上报，不中断连接
-            yield json.dumps({"type": "error", "message": f"对话失败：{e}"}, ensure_ascii=False) + "\n"
-
-    return StreamingResponse(gen(), media_type="application/x-ndjson")
-
-
-class HoldingIn(BaseModel):
-    code: str
-    shares: float
-    cost: float
-
-
-@app.get("/api/portfolio")
-def portfolio_get():
-    """持仓 + 实时盈亏（浮动盈亏红涨绿跌）。"""
-    try:
-        return {"data": pf.get_portfolio()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"持仓读取异常：{e}") from e
-
-
-@app.post("/api/portfolio/holding")
-def portfolio_add(h: HoldingIn):
-    """加一笔持仓（同代码按加权平均成本合并）。存本地，不上传。"""
-    code = (h.code or "").strip()
-    if not code.isdigit() or len(code) != 6:
-        raise HTTPException(400, "代码必须是 6 位数字")
-    if h.shares <= 0:
-        raise HTTPException(400, "数量必须大于 0")
-    # 成本价不限正负：融券 / 返息 / 摊薄后为负成本等情形按结果计算，用户想怎么输就怎么输。
-    return {"data": pf.add_holding(code, h.shares, h.cost)}
-
-
-@app.delete("/api/portfolio/holding")
-def portfolio_remove(code: str = Query(...)):
-    return {"data": pf.remove_holding(code.strip())}
-
-
-# ---- 我的研报（用户上传自己的研报，存本地、不上传、不进开源仓库）----
-
-class ReportIn(BaseModel):
-    name: str
-    content_b64: str
-
-
-@app.get("/api/myreports")
-def myreports_list():
-    return {"data": mr.list_reports()}
-
-
-@app.post("/api/myreports")
-def myreports_upload(r: ReportIn):
-    """上传一份研报（base64）→ 存本地 + 按文件名自动打行业标签。"""
-    try:
-        return {"data": mr.save_report(r.name, r.content_b64)}
-    except mr.ReportError as e:
-        raise HTTPException(400, str(e)) from e
-
-
-@app.get("/api/myreports/file/{rid}")
-def myreports_file(rid: str):
-    """下载/预览某份研报原文件。"""
-    hit = mr.report_path(rid)
-    if not hit:
-        raise HTTPException(404, "研报不存在")
-    path, name = hit
-    return FileResponse(str(path), filename=name)
-
-
-@app.delete("/api/myreports/{rid}")
-def myreports_delete(rid: str):
-    return {"data": {"ok": mr.delete_report(rid)}}
-
-
-class CloseIn(BaseModel):
-    code: str
-    date: str
-    price: float
-    shares: float
-    cost: float
-
-
-@app.post("/api/portfolio/close")
-def portfolio_close(c: CloseIn):
-    """记一笔已清仓（已实现盈亏）。存本地。"""
-    code = (c.code or "").strip()
-    if not code.isdigit() or len(code) != 6:
-        raise HTTPException(400, "代码必须是 6 位数字")
-    if c.price <= 0 or c.shares <= 0:
-        raise HTTPException(400, "清仓价与股数必须大于 0")
-    # 买入成本不限正负（同持仓录入）：按 (清仓价 - 成本) × 股数 的结果计算已实现盈亏。
-    date = (c.date or "").strip()
-    if not date:
-        raise HTTPException(400, "请填清仓日期")
-    from datetime import datetime
-    try:
-        datetime.strptime(date, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(400, "清仓日期格式应为 YYYY-MM-DD") from None
-    return {"data": pf.close_position(code, date, c.price, c.shares, c.cost)}
-
-
-@app.delete("/api/portfolio/close")
-def portfolio_close_remove(index: int = Query(...)):
-    return {"data": pf.remove_closed(index)}
-
-
-@app.post("/api/portfolio/refresh")
-def portfolio_refresh():
-    """手动刷新：立即重拉行情算盈亏。"""
-    try:
-        return {"data": pf.get_portfolio()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"刷新失败：{e}") from e
-
-
-@app.get("/api/radar")
-def radar():
-    """资讯雷达：12 赛道公开 RSS 资讯（读缓存，无缓存返回赛道骨架）。"""
-    try:
-        return {"data": newsradar.get_radar(force=False)}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"资讯雷达异常：{e}") from e
-
-
-@app.post("/api/radar/refresh")
-def radar_refresh():
-    """强制重抓全部 RSS 源（耗时约 20-40s），更新缓存。"""
-    try:
-        return {"data": newsradar.fetch_radar()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"资讯雷达刷新失败：{e}") from e
-
-
-@app.get("/api/market/overview")
-def market_overview():
-    """市场情绪 + 板块资金流（板块/大盘级，全站共享缓存 5 分钟）。"""
-    try:
-        return {"data": market.get_overview()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"市场总览异常：{e}") from e
-
-
-@app.get("/api/market/emotion")
-def market_emotion():
-    """短线情绪：连板梯队 / 最高连板 / 炸板率 / 封板率 / 晋级率 / 涨跌停家数。
-
-    含连板梯队个股清单（code/name/连板数等）——2026-07-05 起如实展示客观公开榜单（东财同款），
-    只呈现事实，不附推荐/评分/预测/买卖时机。全站共享缓存 5 分钟。
-    """
-    try:
-        return {"data": market.get_short_term_emotion()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"短线情绪异常：{e}") from e
-
-
-@app.get("/api/market/sti/latest")
-def get_sti_latest(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最新")):
-    """获取最新 STI 情绪温度（含八维明细）。"""
-    try:
-        engine = ls_sti.get_sti_engine()
-        if date:
-            result = engine.precompute_daily(date)
-        else:
-            # 查数据库最新一条
-            db = engine._get_db()
-            row = db.execute(
-                "SELECT * FROM sti_timeline ORDER BY date DESC LIMIT 1"
-            ).fetchone()
-            if row is None:
-                # 表为空，尝试计算今天的
-                today = datetime.now(ls_sti.BEIJING_TZ).strftime("%Y-%m-%d")
-                result = engine.precompute_daily(today)
-            else:
-                from datetime import datetime as _dt
-                result = ls_sti.STIResult(
-                    date=row["date"],
-                    score=float(row["score"]) if row["score"] is not None else None,
-                    phase=ls_sti.STIPhase(row["phase"]) if row["phase"] else None,
-                    dimensions=ls_sti.STIDimension(
-                        limit_up_count=float(row["dimension_limit_up_count"]) if row["dimension_limit_up_count"] else 0,
-                        limit_down_count=float(row["dimension_limit_down_count"]) if row["dimension_limit_down_count"] else 0,
-                        seal_rate=float(row["dimension_seal_rate"]) if row["dimension_seal_rate"] else 0,
-                        advance_decline_ratio=float(row["dimension_advance_decline_ratio"]) if row["dimension_advance_decline_ratio"] else 0,
-                        promotion_rate=float(row["dimension_promotion_rate"]) if row["dimension_promotion_rate"] else 0,
-                        prev_zt_performance=float(row["dimension_prev_zt_performance"]) if row["dimension_prev_zt_performance"] else 0,
-                        max_boards=float(row["dimension_max_boards"]) if row["dimension_max_boards"] else 0,
-                        market_factor=float(row["market_factor"]) if row["market_factor"] else 1.0,
-                    ),
-                    source_ok=bool(row["source_ok"]) if row["source_ok"] is not None else True,
-                    confidence=row["confidence"] or "high",
-                    change_from_yesterday=float(row["change_from_yesterday"]) if row["change_from_yesterday"] else 0.0,
-                    data_updated=row["data_updated"],
-                )
-        return {"data": result.model_dump()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"STI 查询异常：{e}") from e
-
-
-@app.get("/api/market/sti/timeline")
-def get_sti_timeline(days: int = Query(30, ge=1, le=365)):
-    """获取 STI 时间线（用于前端趋势图）。"""
-    try:
-        db = ls_sti.get_sti_engine()._get_db()
-        rows = db.execute(
-            "SELECT date, score, phase, change_from_yesterday FROM sti_timeline "
-            "WHERE score IS NOT NULL ORDER BY date DESC LIMIT ?",
-            (days,),
-        ).fetchall()
-        timeline = [
-            {
-                "date": r["date"],
-                "score": round(float(r["score"]), 2) if r["score"] else None,
-                "phase": r["phase"],
-                "change_from_yesterday": round(float(r["change_from_yesterday"]), 2) if r["change_from_yesterday"] else None,
-            }
-            for r in rows[::-1]  # 升序
-        ]
-        return {"data": timeline}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"STI 时间线异常：{e}") from e
-
-
-@app.get("/api/market/turnover-top")
-def market_turnover_top():
-    """全市场成交额榜 Top20（客观公开榜单数据，非推荐/非预测/不评分）。全站共享缓存 5 分钟。"""
-    try:
-        return {"data": market.get_turnover_top()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"成交额榜异常：{e}") from e
-
-
-@app.get("/api/global/indices")
-def global_indices():
-    """全球指数快照（道指 / 标普500 / 纳斯达克 / 恒生 / 恒生科技）—— A 股看隔夜外围脸色。缓存 5 分钟。"""
-    try:
-        return {"data": market.get_global_indices()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"全球指数异常：{e}") from e
-
-
-@app.get("/api/global/stock")
-def global_stock(symbol: str = Query(..., min_length=1, max_length=16)):
-    """美股 / 港股个股聚合：行情 + 关键财务指标（东财域内源）。symbol 如 AAPL / BABA / 00700。"""
-    try:
-        data = gstock.us_hk_stock(symbol.strip())
-        if not data:
-            raise HTTPException(404, f"未找到美股/港股代码「{symbol}」")
-        return {"data": data}
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"美港股查询异常：{e}") from e
-
-
-@app.get("/api/indices")
-def indices():
-    """A股大盘指数实时行情（上证/深证成指/创业板指/沪深300）。仅标准库。"""
-    try:
-        return {"data": astock.index_quote()}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"指数行情异常：{e}") from e
-
-
-@app.get("/api/quote")
-def quote(codes: str = Query(..., description="逗号分隔的 6 位代码")):
-    """实时行情：现价/涨跌/PE/PB/市值/换手/涨跌停。仅标准库，永远可用。"""
-    lst = [c.strip() for c in codes.split(",") if c.strip()]
-    if not lst or any(not c.isdigit() or len(c) != 6 for c in lst):
-        raise HTTPException(400, "codes 必须是逗号分隔的 6 位数字")
-    try:
-        return {"data": astock.tencent_quote(lst)}
-    except Exception as e:  # noqa: BLE001 — 边界统一兜底
-        raise HTTPException(502, f"行情源异常：{e}") from e
-
-
+# ============ Router Registration ============
+
+app.include_router(health.router)
+app.include_router(chat.router)
+app.include_router(portfolio.router)
+app.include_router(watchlist.router)
+app.include_router(myreports_router.router)
+app.include_router(radar.router)
+app.include_router(market_router.router)
+app.include_router(stock_data.router)
+app.include_router(stock_financial.router)
+app.include_router(limitup.router)
+app.include_router(review.router)
+app.include_router(sti.router)
+app.include_router(metrics.router)
+app.include_router(recommendation.router)
+app.include_router(win_rate.router)
+app.include_router(feishu.router)
+app.include_router(backtest.router)
+app.include_router(bidding.router)
+app.include_router(strategy_router.router)
+app.include_router(sector_divergence.router)
+app.include_router(risk_router.router)
+app.include_router(extreme_market.router)
+# ============ Unified error handling ============
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "服务器内部错误"},
+    )
+# ============ Route-level cache decorator ===========
+
+import functools
 import time as _time
-_PCT_CACHE: dict = {}
-
-
-@app.get("/api/valuation/percentile")
-def valuation_percentile(code: str = Query(...)):
-    """PE-TTM / PB 历史分位（近5年）。全站缓存 30 分钟/代码（历史序列日频、变化慢）。"""
-    code = _validate(code)
-    hit = _PCT_CACHE.get(code)
-    if hit and _time.time() - hit[0] < 1800:
-        return {"data": hit[1]}
-    try:
-        data = astock.valuation_percentile(code)
-        _PCT_CACHE[code] = (_time.time(), data)
-        return {"data": data}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"估值分位异常：{e}") from e
-
-
-_ANN_CACHE: dict = {}
-
-
-@app.get("/api/announcements")
-def announcements(code: str = Query(...)):
-    """个股近期公告（东财，仅 requests）。缓存 15 分钟/代码。"""
-    code = _validate(code)
-    hit = _ANN_CACHE.get(code)
-    if hit and _time.time() - hit[0] < 900:
-        return {"data": hit[1]}
-    try:
-        data = astock.announcements(code)
-        _ANN_CACHE[code] = (_time.time(), data)
-        return {"data": data}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"公告源异常：{e}") from e
-
-
-_FIN_CACHE: dict = {}
-
-
-@app.get("/api/financials")
-def financials(code: str = Query(...)):
-    """财务关键指标（同花顺财务摘要，最新报告期）。缓存 30 分钟/代码。"""
-    code = _validate(code)
-    hit = _FIN_CACHE.get(code)
-    if hit and _time.time() - hit[0] < 1800:
-        return {"data": hit[1]}
-    try:
-        data = astock.financials(code)
-        _FIN_CACHE[code] = (_time.time(), data)
-        return {"data": data}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"财务摘要异常：{e}") from e
-
-
-@app.get("/api/valuation")
-def valuation(code: str = Query(...)):
-    """完整估值：行情 + 一致预期 + 前向PE/PEG/消化年数。"""
-    code = _validate(code)
-    try:
-        return {"data": astock.full_valuation(code)}
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"估值计算异常：{e}") from e
-
-
-@app.get("/api/reports")
-def reports(code: str = Query(...), pages: int = Query(2, ge=1, le=5)):
-    """个股研报列表（东财，含 PDF 链接）。仅需 requests。"""
-    code = _validate(code)
-    try:
-        rows = astock.eastmoney_reports(code, max_pages=pages)
-        for r in rows:
-            r["pdfUrl"] = astock.pdf_url(r.get("infoCode", "")) if r.get("infoCode") else None
-        return {"data": rows}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"研报源异常：{e}") from e
-
-
-@app.get("/api/news")
-def news(code: str = Query(...), limit: int = Query(20, ge=1, le=50)):
-    """个股新闻（东财，需 akshare）。"""
-    code = _validate(code)
-    try:
-        return {"data": astock.stock_news(code, limit=limit)}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"新闻源异常：{e}") from e
-
-
-@app.get("/api/info")
-def info(code: str = Query(...)):
-    """个股基本面：行业/股本/上市时间（需 akshare）。"""
-    code = _validate(code)
-    try:
-        return {"data": astock.individual_info(code)}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"基本面源异常：{e}") from e
-
-
-@app.get("/api/disclosure")
-def disclosure(code: str = Query(...)):
-    """巨潮公告列表（需 akshare）。"""
-    code = _validate(code)
-    try:
-        return {"data": astock.disclosure(code)}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"公告源异常：{e}") from e
-
-
-@app.get("/api/kline")
-def kline(code: str = Query(...), category: int = Query(4), offset: int = Query(60, ge=1, le=800)):
-    """K线（需 mootdx）。category 4=日 5=周 6=月 11=60分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": astock.kline(code, category=category, offset=offset)}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"K线源异常：{e}") from e
-
-
-@app.get("/api/finance")
-def finance(code: str = Query(...)):
-    """季报财务快照（需 mootdx）。"""
-    code = _validate(code)
-    try:
-        return {"data": astock.finance(code)}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"财务源异常：{e}") from e
-
-
-# ---------------------------------------------------------------------------
-# 资金面 / 筹码 / 信号（东财数据中心，v3.3 并入）—— 均为「用户查的那只股」的公开数据。
-# 东财有 1s 限流，这些多为日/季级静态数据，统一走 30 分钟缓存，进一步降低被封风险。
-# ---------------------------------------------------------------------------
-
-_DC_CACHE: dict = {}  # key=(endpoint, code) -> (ts, data)
-
-
-def _cached(endpoint: str, code: str, ttl: int, fetch):
-    key = (endpoint, code)
-    hit = _DC_CACHE.get(key)
-    if hit and _time.time() - hit[0] < ttl:
-        return hit[1]
-    data = fetch()
-    _DC_CACHE[key] = (_time.time(), data)
-    return data
-
-
-@app.get("/api/margin")
-def margin(code: str = Query(...)):
-    """融资融券明细（东财，日级）。缓存 30 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("margin", code, 1800, lambda: astock.margin_trading(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"融资融券异常：{e}") from e
-
-
-@app.get("/api/block-trade")
-def block_trade(code: str = Query(...)):
-    """大宗交易（东财）。缓存 30 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("block", code, 1800, lambda: astock.block_trade(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"大宗交易异常：{e}") from e
-
-
-@app.get("/api/holders")
-def holders(code: str = Query(...)):
-    """股东户数变化（东财，季度级）。缓存 30 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("holders", code, 1800, lambda: astock.holder_num_change(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"股东户数异常：{e}") from e
-
-
-@app.get("/api/dividend")
-def dividend(code: str = Query(...)):
-    """分红送转历史（东财）。缓存 30 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("dividend", code, 1800, lambda: astock.dividend_history(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"分红送转异常：{e}") from e
-
-
-@app.get("/api/fund-flow")
-def fund_flow(code: str = Query(...)):
-    """个股资金流（东财 push2his，120 日主力净流入）。缓存 15 分钟。
-    注：push2his 对部分大陆住宅 IP 有间歇风控，可能返回空（非代码问题）。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("fundflow", code, 900, lambda: astock.stock_fund_flow_120d(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"资金流异常：{e}") from e
-
-
-@app.get("/api/dragon-tiger")
-def dragon_tiger(code: str = Query(...)):
-    """龙虎榜：该股近期上榜记录 + 买卖席位 + 机构净买（东财）。缓存 30 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("dt", code, 1800, lambda: astock.dragon_tiger_board(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"龙虎榜异常：{e}") from e
-
-
-@app.get("/api/lockup")
-def lockup(code: str = Query(...)):
-    """限售解禁日历：历史解禁 + 未来 90 天待解禁（东财）。缓存 30 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("lockup", code, 1800, lambda: astock.lockup_expiry(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"解禁日历异常：{e}") from e
-
-
-@app.get("/api/blocks")
-def blocks(code: str = Query(...)):
-    """个股所属板块/概念归属（东财 slist）。缓存 30 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("blocks", code, 1800, lambda: astock.concept_blocks(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"板块归属异常：{e}") from e
-
-
-@app.get("/api/hot-concepts")
-def hot_concepts(code: str = Query(...)):
-    """个股当下被市场归到哪些概念在炒（东财热门概念命中）。缓存 15 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("hotcon", code, 900, lambda: astock.hot_concepts(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"热门概念异常：{e}") from e
-
-
-@app.get("/api/investor-qa")
-def investor_qa(code: str = Query(...)):
-    """互动易问答（巨潮）：投资者提问 + 公司回复。缓存 15 分钟。"""
-    code = _validate(code)
-    try:
-        return {"data": _cached("irm", code, 900, lambda: astock.investor_qa(code))}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"互动易异常：{e}") from e
-
-
-@app.get("/api/industry")
-def industry(top: int = Query(20, ge=5, le=50)):
-    """全行业涨跌幅排名（东财行业板块，板块级、零个股名单）。缓存 5 分钟。"""
-    key = ("industry", str(top))
-    hit = _DC_CACHE.get(key)
-    if hit and _time.time() - hit[0] < 300:
-        return {"data": hit[1]}
-    try:
-        data = astock.industry_comparison(top_n=top)
-        _DC_CACHE[key] = (_time.time(), data)
-        return {"data": data}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"行业排名异常：{e}") from e
-
-
-# ---------------------------------------------------------------------------
-# 打板策略模块（涨停基因选股器 + 策略逻辑分析引擎）
-# 合规：零标的红线 — 不输出排板/扫板/回避等行动建议标签
-# ---------------------------------------------------------------------------
-
-@app.get("/api/limitup/screener")
-def limitup_screener(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")):
-    """获取今日/指定日期的全市场涨停股基因得分（客观数据，非行动建议）。"""
-    try:
-        result = ls.get_screener_result(date)
-        return {"data": result}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"涨停基因选股器异常：{e}") from e
-
-
-@app.get("/api/limitup/analysis/{code}")
-def limitup_analysis(code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")):
-    """获取个股的基因得分 + 策略逻辑匹配 + 风控规则知识（教育性展示，非行动建议）。"""
-    code = _validate(code)
-    try:
-        result = lstrat.get_analysis(code, date)
-        return {"data": result}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"个股策略分析异常：{e}") from e
-
-
-# ---- 阈值配置持久化 ----
-_LIMITUP_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "limitup_params.json")
-
-
-def _load_limitup_params() -> dict:
-    """从 JSON 文件加载用户自定义参数"""
-    if os.path.exists(_LIMITUP_PARAMS_FILE):
-        with open(_LIMITUP_PARAMS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {
-        "gene_qualify_threshold": 60,
-        "gene_high_threshold": 75,
-        "lookback_days": 250,
-    }
-
-
-def _save_limitup_params(params: dict) -> None:
-    """保存用户自定义参数到 JSON 文件"""
-    with open(_LIMITUP_PARAMS_FILE, "w", encoding="utf-8") as f:
-        json.dump(params, f, ensure_ascii=False, indent=2)
-
-
-@app.get("/api/limitup/screener/params")
-async def get_limitup_screener_params():
-    """获取当前打板策略参数"""
-    return _load_limitup_params()
-
-
-class LimitUpParamsBody(BaseModel):
-    gene_qualify_threshold: float = Field(default=60, ge=0, le=100)
-    gene_high_threshold: float = Field(default=75, ge=0, le=100)
-    lookback_days: int = Field(default=250, ge=1, le=365)
-
-
-@app.post("/api/limitup/screener/params")
-async def save_limitup_screener_params(params: LimitUpParamsBody):
-    """保存打板策略参数"""
-    # 更新模块级变量
-    ls.GENE_QUALIFY_THRESHOLD = params.gene_qualify_threshold
-    ls.GENE_HIGH_THRESHOLD = params.gene_high_threshold
-    ls.LOOKBACK_DAYS = params.lookback_days
-    # 持久化到文件
-    _save_limitup_params(params.model_dump())
-    return {"status": "ok"}
-
-
-# ---------------------------------------------------------------------------
-# 竞价选股模块
-# ---------------------------------------------------------------------------
-
-@app.get("/api/limitup/auction/top")
-async def get_auction_top(date: str = Query(None, description="交易日期 YYYY-MM-DD"), n: int = Query(AUCTION_TOP_N, ge=1, le=100, description="返回候选股数量")):
-    """
-    获取指定日期的竞价爆量 TOP N 候选股。
-    
-    盘后批量分析涨停池数据，生成次日竞价预案。
-    非实时扫描，而是历史竞价模式回放 + 次日预案生成。
-    """
-    if date is None:
-        date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
-    try:
-        screener = asc.get_screener()
-        result = screener.analyze(date)
-        # 截取前 N 只
-        result.candidates = result.candidates[:n]
-        return result.model_dump()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"竞价选股分析失败: {str(e)}")
-
-
-@app.get("/api/limitup/auction/backfill")
-async def backfill_auction(start_date: str = Query(..., description="起始日期 YYYY-MM-DD"), end_date: str = Query(None, description="结束日期 YYYY-MM-DD，默认今天")):
-    """
-    竞价选股历史回填。
-    """
-    if end_date is None:
-        end_date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
-    try:
-        screener = asc.get_screener()
-        results = screener.backfill(start_date, end_date)
-        return {
-            "status": "ok",
-            "count": len(results),
-            "start_date": start_date,
-            "end_date": end_date,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"竞价选股回填失败: {str(e)}")
-
-
-# ---------------------------------------------------------------------------
-# 每日复盘报告
-# ---------------------------------------------------------------------------
-
-@app.get("/api/review/daily")
-async def get_daily_review(date: str = Query(None, description="交易日期 YYYY-MM-DD")):
-    """
-    获取指定日期的每日复盘报告。
-    
-    包含：市场情绪总结、板块热度排名、涨停股统计、昨日涨停表现、竞价回顾。
-    """
-    if date is None:
-        date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
-    try:
-        reviewer = dr.get_reviewer()
-        result = reviewer.generate_review(date)
-        return result.model_dump()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"复盘报告生成失败: {str(e)}")
-
-
-@app.get("/api/review/daily/backfill")
-async def backfill_review(start_date: str = Query(..., description="起始日期 YYYY-MM-DD"), end_date: str = Query(None, description="结束日期 YYYY-MM-DD，默认今天")):
-    """
-    复盘报告历史回填。
-    """
-    if end_date is None:
-        end_date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
-    try:
-        reviewer = dr.get_reviewer()
-        results = reviewer.backfill(start_date, end_date)
-        return {
-            "status": "ok",
-            "count": len(results),
-            "start_date": start_date,
-            "end_date": end_date,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"复盘报告回填失败: {str(e)}")
-
-
-# ---------------------------------------------------------------------------
-# 席位引擎
-# ---------------------------------------------------------------------------
-
-@app.get("/api/limitup/seats/profiles")
-async def get_seat_profiles():
-    """获取所有席位画像"""
-    try:
-        import seat_engine as se
-        engine = se.get_engine()
-        raw = engine.get_all_seat_profiles()
-        # Convert {name: profile} dict to {profiles: [...]} list format
-        profiles = [{"name": name, **profile} for name, profile in raw.items()]
-        return {"profiles": profiles, "total": len(profiles)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"席位画像获取失败: {str(e)}")
-
-
-@app.get("/api/limitup/seats/profile/{seat_name:path}")
-async def get_seat_profile(seat_name: str):
-    """获取单个席位画像"""
-    try:
-        import seat_engine as se
-        engine = se.get_engine()
-        profile = engine.get_seat_profile(seat_name)
-        if profile is None:
-            raise HTTPException(status_code=404, detail=f"席位 {seat_name} 不存在")
-        return profile
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"席位画像获取失败: {str(e)}")
-
-
-@app.get("/api/limitup/seats/consensus")
-async def get_consensus_signal(
-    stock_code: str = Query(..., description="股票代码"),
-    trade_date: str = Query(None, description="交易日期 YYYY-MM-DD"),
-):
-    """获取某只股票的席位共识/分歧信号"""
-    try:
-        import seat_engine as se
-        engine = se.get_engine()
-        td = trade_date or datetime.now(se.BEIJING_TZ).strftime("%Y-%m-%d")
-        signal = engine.compute_consensus_signal(td, stock_code)
-        if signal is None:
-            return {"signal": None, "details": {}, "disclaimer": se.SEAT_DISCLAIMER}
-        return signal
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"共识信号计算失败: {str(e)}")
-
-
-@app.post("/api/limitup/seats/build")
-async def trigger_build_profiles(lookback_days: int = Query(180, ge=30, le=365)):
-    """触发席位画像冷启动构建"""
-    try:
-        import seat_engine as se
-        engine = se.get_engine()
-        result = engine.build_seat_profiles(lookback_days)
-        return {"status": "ok", "profiles": len(result)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"席位画像构建失败: {str(e)}")
-
-
-# ---------------------------------------------------------------------------
-# 竞价选股参数
-# ---------------------------------------------------------------------------
-
-AUCTION_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "auction_params.json")
-
-
-def _load_auction_params() -> dict:
-    try:
-        with open(AUCTION_PARAMS_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {
-            "min_gene_score": os.getenv("AUCTION_MIN_GENE_SCORE", "50"),
-            "min_zt_count": os.getenv("AUCTION_MIN_ZT_COUNT", "2"),
-            "top_n": os.getenv("AUCTION_TOP_N", "50"),
-        }
-
-
-def _save_auction_params(params: dict):
-    with open(AUCTION_PARAMS_FILE, "w") as f:
-        json.dump(params, f, indent=2)
-
-
-@app.get("/api/limitup/auction/params")
-async def get_auction_params():
-    """获取竞价选股参数"""
-    return _load_auction_params()
-
-
-class AuctionParamsBody(BaseModel):
-    min_gene_score: float = Field(default=50, ge=0, le=100)
-    min_zt_count: int = Field(default=2, ge=0, le=20)
-    top_n: int = Field(default=50, ge=1, le=100)
-
-
-@app.post("/api/limitup/auction/params")
-async def save_auction_params(params: AuctionParamsBody):
-    """保存竞价选股参数"""
-    _save_auction_params(params.model_dump())
-    return {"status": "ok"}
-
-
-# ---------------------------------------------------------------------------
-# 复盘报告参数
-# ---------------------------------------------------------------------------
-
-REVIEW_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "review_params.json")
-
-
-def _load_review_params() -> dict:
-    try:
-        with open(REVIEW_PARAMS_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {
-            "max_zt_stocks": os.getenv("REVIEW_MAX_ZT_STOCKS", "100"),
-            "auction_top_n": os.getenv("REVIEW_AUCTION_TOP_N", "20"),
-        }
-
-
-def _save_review_params(params: dict):
-    with open(REVIEW_PARAMS_FILE, "w") as f:
-        json.dump(params, f, indent=2)
-
-
-@app.get("/api/review/params")
-async def get_review_params():
-    """获取复盘报告参数"""
-    return _load_review_params()
-
-
-class ReviewParamsBody(BaseModel):
-    max_zt_stocks: int = Field(default=100, ge=10, le=500)
-    auction_top_n: int = Field(default=20, ge=1, le=100)
-
-
-@app.post("/api/review/params")
-async def save_review_params(params: ReviewParamsBody):
-    """保存复盘报告参数"""
-    _save_review_params(params.model_dump())
-    return {"status": "ok"}
-
-
-# ---------------------------------------------------------------------------
-# 自选股持久化（SQLite）
-# ---------------------------------------------------------------------------
-
-_DB_LOCK = threading.Lock()
-_DB_PATH = os.path.join(os.path.dirname(__file__), "vibe_research.db")
-_db: sqlite3.Connection | None = None
-
-
-def _get_db() -> sqlite3.Connection:
-    global _db
-    if _db is None:
-        _db = sqlite3.connect(_DB_PATH, timeout=10)  # 10s 锁等待超时
-        _db.row_factory = sqlite3.Row
-        _db.execute(
-            """CREATE TABLE IF NOT EXISTS watchlist (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                code TEXT NOT NULL CHECK(length(code)=6 AND code GLOB '[0-9][0-9][0-9][0-9][0-9][0-9]'),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(code)
-            )"""
-        )
-        _db.commit()
-    return _db
-
-
-class WatchlistCodesIn(BaseModel):
-    codes: list[str]
-
-
-@app.get("/api/watchlist")
-def watchlist_get():
-    """获取自选股列表"""
-    try:
-        with _DB_LOCK:
-            db = _get_db()
-            rows = db.execute("SELECT code FROM watchlist ORDER BY created_at").fetchall()
-            return {"codes": [r["code"] for r in rows]}
-    except sqlite3.OperationalError as e:
-        if "locked" in str(e).lower():
-            raise HTTPException(503, "数据库忙，请稍后重试") from e
-        raise HTTPException(502, f"自选股查询异常：{e}") from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"自选股查询异常：{e}") from e
-
-
-@app.post("/api/watchlist")
-def watchlist_add(body: WatchlistCodesIn):
-    """批量添加自选股（去重插入）"""
-    try:
-        with _DB_LOCK:
-            db = _get_db()
-            codes = list(dict.fromkeys(c.strip() for c in body.codes if c.strip()))  # 去重保序
-            added = 0
-            for code in codes:
-                if not code.isdigit() or len(code) != 6:
-                    continue
-                try:
-                    db.execute("INSERT INTO watchlist (code) VALUES (?)", (code,))
-                    added += 1
-                except sqlite3.IntegrityError:
-                    pass  # 已存在，跳过
-            db.commit()
-            total = db.execute("SELECT COUNT(*) AS cnt FROM watchlist").fetchone()["cnt"]
-            return {"added": added, "total": total}
-    except sqlite3.OperationalError as e:
-        if "locked" in str(e).lower():
-            raise HTTPException(503, "数据库忙，请稍后重试") from e
-        raise HTTPException(502, f"自选股添加异常：{e}") from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"自选股添加异常：{e}") from e
-
-
-@app.delete("/api/watchlist/{code}")
-def watchlist_delete(code: str):
-    """删除自选股"""
-    try:
-        with _DB_LOCK:
-            db = _get_db()
-            db.execute("DELETE FROM watchlist WHERE code=?", (code,))
-            db.commit()
-            return {"ok": True}
-    except sqlite3.OperationalError as e:
-        if "locked" in str(e).lower():
-            raise HTTPException(503, "数据库忙，请稍后重试") from e
-        raise HTTPException(502, f"自选股删除异常：{e}") from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"自选股删除异常：{e}") from e
+from typing import Any, Dict, Tuple
+
+_MAX_CACHE_SIZE = 1024
+_RESPONSE_CACHE: Dict[str, Tuple[float, Any]] = {}
+
+
+def cache_response(ttl: int = 300):
+    """Route-level cache decorator for GET endpoints."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            key = f"{func.__name__}:{';'.join(f'{k}={v}' for k, v in sorted(kwargs.items()))}"
+            now = _time.time()
+            hit = _RESPONSE_CACHE.get(key)
+            if hit and now - hit[0] < ttl:
+                return hit[1]
+            result = await func(*args, **kwargs)
+            _RESPONSE_CACHE[key] = (now, result)
+            # 简单大小限制：超出时清空一半
+            if len(_RESPONSE_CACHE) > _MAX_CACHE_SIZE:
+                keys = list(_RESPONSE_CACHE.keys())
+                for k in keys[: len(keys) // 2]:
+                    _RESPONSE_CACHE.pop(k, None)
+            return result
+        return wrapper
+    return decorator

@@ -11,7 +11,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 import shutil
 import sys
@@ -27,7 +29,7 @@ _OLD_PF_FILE = os.path.join(HERE, ".cache", "portfolio.json")  # ≤v0.1.1 旧�
 CACHE_DIR = os.environ.get("VR_DATA_DIR") or os.path.join(os.path.expanduser("~"), ".vibe-research")
 PF_FILE = os.path.join(CACHE_DIR, "portfolio.json")
 BEIJING = timezone(timedelta(hours=8))
-_LOCK = threading.Lock()
+_LOCK = asyncio.Lock()
 
 
 def _migrate_legacy() -> None:
@@ -40,7 +42,9 @@ def _migrate_legacy() -> None:
             os.replace(tmp, PF_FILE)  # 原子落位：复制中断不会留半截 portfolio.json 挡住下次重试
     except OSError as e:
         # 迁移失败不阻塞启动，但要出声——旧数据原样保留在 _OLD_PF_FILE，可手工复制
-        print(f"[vibe-research] 持仓数据迁移失败（旧数据仍在 {_OLD_PF_FILE}）: {e}", file=sys.stderr)
+        logging.getLogger("vibe-research").warning(
+            "持仓数据迁移失败（旧数据仍在 %s）: %s", _OLD_PF_FILE, e
+        )
 
 
 _migrate_legacy()
@@ -67,10 +71,10 @@ def _save(d: dict) -> None:
     os.replace(tmp, PF_FILE)
 
 
-def add_holding(code: str, shares: float, cost: float) -> dict:
+async def add_holding(code: str, shares: float, cost: float) -> dict:
     """加一笔持仓；同代码则按加权平均成本合并（加仓）。"""
-    with _LOCK:
-        d = _load()
+    async with _LOCK:
+        d = await asyncio.to_thread(_load)
         for h in d["holdings"]:
             if h["code"] == code:
                 total = h["shares"] + shares
@@ -80,23 +84,23 @@ def add_holding(code: str, shares: float, cost: float) -> dict:
                 break
         else:
             d["holdings"].append({"code": code, "shares": shares, "cost": cost})
-        _save(d)
-    return get_portfolio()
+        await asyncio.to_thread(_save, d)
+    return await get_portfolio()
 
 
-def remove_holding(code: str) -> dict:
-    with _LOCK:
-        d = _load()
+async def remove_holding(code: str) -> dict:
+    async with _LOCK:
+        d = await asyncio.to_thread(_load)
         d["holdings"] = [h for h in d["holdings"] if h["code"] != code]
-        _save(d)
-    return get_portfolio()
+        await asyncio.to_thread(_save, d)
+    return await get_portfolio()
 
 
-def close_position(code: str, date: str, price: float, shares: float, cost: float) -> dict:
-    """记一笔已清仓：算已实现盈亏，存入 closed 列表。"""
+async def close_position(code: str, date: str, price: float, shares: float, cost: float) -> dict:
+    """记一笔已清仓：算已实现盈亏，存入 closed 列表，并从持仓中移除。"""
     pnl = (price - cost) * shares
-    with _LOCK:
-        d = _load()
+    async with _LOCK:
+        d = await asyncio.to_thread(_load)
         d.setdefault("closed", [])
         try:
             name = astock.tencent_quote([code]).get(code, {}).get("name", code)
@@ -107,24 +111,26 @@ def close_position(code: str, date: str, price: float, shares: float, cost: floa
             "shares": shares, "cost": cost, "pnl": round(pnl, 2),
             "pnl_pct": round((price - cost) / cost * 100, 2) if cost else 0.0,
         })
-        _save(d)
-    return get_portfolio()
+        # 同步从持仓中移除该代码
+        d["holdings"] = [h for h in d.get("holdings", []) if h["code"] != code]
+        await asyncio.to_thread(_save, d)
+    return await get_portfolio()
 
 
-def remove_closed(index: int) -> dict:
-    with _LOCK:
-        d = _load()
+async def remove_closed(index: int) -> dict:
+    async with _LOCK:
+        d = await asyncio.to_thread(_load)
         cl = d.get("closed", [])
         if 0 <= index < len(cl):
             cl.pop(index)
-            _save(d)
-    return get_portfolio()
+            await asyncio.to_thread(_save, d)
+    return await get_portfolio()
 
 
-def get_portfolio() -> dict:
+async def get_portfolio() -> dict:
     """读持仓 + 实时行情，算每笔与汇总的市值/浮动盈亏。"""
-    with _LOCK:
-        d = _load()
+    async with _LOCK:
+        d = await asyncio.to_thread(_load)
     hs = d.get("holdings", [])
     rows, tmv, tcost = [], 0.0, 0.0
     if hs:
@@ -162,21 +168,21 @@ def get_portfolio() -> dict:
     }
 
 
-def _refresh_snapshot() -> None:
+async def _refresh_snapshot() -> None:
     """后台定时任务：刷新时间戳（GET 本就实时算，这里记录后台刷新点）。"""
-    with _LOCK:
-        d = _load()
+    async with _LOCK:
+        d = await asyncio.to_thread(_load)
         d["last_refresh"] = _now()
-        _save(d)
+        await asyncio.to_thread(_save, d)
 
 
 def start_scheduler(interval: int = 1800) -> None:
     """每半小时后台刷新一次持仓数据（daemon 线程）。"""
-    def loop():
+    def loop() -> None:
         while True:
             time.sleep(interval)
             try:
-                _refresh_snapshot()
+                asyncio.run(_refresh_snapshot())
             except Exception:
                 pass
     threading.Thread(target=loop, daemon=True).start()

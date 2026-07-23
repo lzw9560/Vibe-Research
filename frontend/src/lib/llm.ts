@@ -58,14 +58,17 @@ export interface ChatHandlers {
 // signal：调用方可传 AbortController.signal，用户关面板/换问题时中止请求（省订阅/API 额度）。
 export async function chatStream(messages: ChatMsg[], context: string, handlers: ChatHandlers = {}, signal?: AbortSignal): Promise<ChatResult> {
   const llm = loadLlm();
-  if (!llm) throw new ApiError("尚未接入 AI，请先在「接入 AI」里配置", 400);
+  // 没有 LLM 配置时不直接 throw，让后端走 OmniRoute 兜底
+  if (!llm) {
+    // 后端会检测 OmniRoute 可用性；如果也不可用，后端会返回错误
+  }
 
   let resp: Response;
   try {
     resp = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ messages, context, llm }),
+      body: JSON.stringify({ messages, context, llm: llm || {}, use_omniroute: true }),
       signal,
     });
   } catch (e) {

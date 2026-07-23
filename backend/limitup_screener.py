@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import math
 import os
 import sqlite3
@@ -16,15 +18,19 @@ import threading as _threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from pydantic import BaseModel
 
 import astock
+from migrations import MigrationManager
 
 BEIJING_TZ = datetime.now().astimezone().tzinfo
+_logger = logging.getLogger(__name__)
 
 # ---- 数据库路径 ----
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vibe_research.db")
+from config import default_config
+_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), default_config.DB_PATH)
 _DB_LOCK = _threading.Lock()
 
 # ---- 配置（通过 .env 覆盖，开发者配置） ----
@@ -43,33 +49,40 @@ _COMPUTING: dict = {}
 
 # ---- 数据库管理 ----
 
+_migrations_run = False
+
+
+def _run_migrations() -> None:
+    """执行数据库迁移（仅一次）。"""
+    global _migrations_run
+    if _migrations_run:
+        return
+    manager = MigrationManager(db_path=_DB_PATH)
+    migration_sql = (
+        Path(__file__).resolve().parent
+        / "migrations" / "limitup_screener" / "20250613-001_create_gene_scores.sql"
+    ).read_text(encoding="utf-8")
+    migrations = [
+        {
+            "version": "20250613-001",
+            "name": "create_gene_scores",
+            "sql": migration_sql,
+        }
+    ]
+    manager.upgrade(migrations)
+    _migrations_run = True
+
+
 def _get_db() -> sqlite3.Connection:
     """获取 SQLite 连接（单例，线程安全）。"""
     with _DB_LOCK:
         conn = sqlite3.connect(_DB_PATH, timeout=10)
         conn.row_factory = sqlite3.Row
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS gene_scores (
-                date TEXT NOT NULL,
-                code TEXT NOT NULL,
-                name TEXT,
-                total_score REAL,
-                factor_premium_rate REAL,
-                factor_red_rate REAL,
-                factor_seal_rate REAL,
-                factor_rebound_rate REAL,
-                factor_freq_score REAL,
-                wilson_adjusted REAL,
-                qualify INTEGER,
-                high_gene INTEGER,
-                zt_count_250d INTEGER,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (date, code)
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_gene_scores_date ON gene_scores(date)")
-        conn.commit()
         return conn
+
+
+# 模块加载时执行迁移
+_run_migrations()
 
 
 def _save_gene_scores_to_db(date: str, scores: list[GeneScore]) -> None:
@@ -204,56 +217,79 @@ class ScreenerResult(BaseModel):
 # 3. 数据获取
 # ===========================================================================
 
-def _resolve_date(date: str | None) -> str:
-    """解析日期参数，回推到最近交易日。"""
+async def _resolve_date(date: str | None) -> str:
+    """解析日期参数，回推到最近交易日（异步）。"""
     if date:
         return date.replace("-", "")
     today = datetime.now(BEIJING_TZ).strftime("%Y%m%d")
     # 回退最多 5 天找交易日
     for back in range(5):
         d = (datetime.now(BEIJING_TZ) - timedelta(days=back)).strftime("%Y%m%d")
-        pool = astock.em_zt_topic_pool("getTopicZTPool", d)
-        if pool:
-            return d
+        try:
+            pool = await asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", d)
+            if pool:
+                return d
+        except Exception:
+            continue
     return today
 
 
-def _fetch_zt_pool(date: str) -> tuple[list[dict], list[dict], list[dict]]:
-    """获取涨停池、昨涨停池、炸板池。"""
-    zt = astock.em_zt_topic_pool("getTopicZTPool", date, "fbt:asc")
-    yzt = astock.em_zt_topic_pool("getYesterdayZTPool", date, "zs:desc")
-    zb = astock.em_zt_topic_pool("getTopicZBPool", date, "fbt:asc")
-    return zt, yzt, zb
+async def _fetch_zt_pool(date: str) -> tuple[list[dict], list[dict], list[dict]]:
+    """获取涨停池、昨涨停池、炸板池（并发）。"""
+    try:
+        zt, yzt, zb = await asyncio.gather(
+            asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", date, "fbt:asc"),
+            asyncio.to_thread(astock.em_zt_topic_pool, "getYesterdayZTPool", date, "zs:desc"),
+            asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZBPool", date, "fbt:asc"),
+        )
+        return zt, yzt, zb
+    except Exception as e:
+        _logger.exception("获取涨停池失败: date=%s", date)
+        return [], [], []
 
 
-def _collect_zt_history_batch(
+async def _collect_zt_history_batch(
     codes: set[str],
     date: str,
     lookback: int = 250,
 ) -> dict[str, list[dict]]:
-    """批量回溯 lookback 天，收集多只股的涨停记录。
+    """批量回溯 lookback 天，收集多只股的涨停记录（并发优化）。
 
-    一次性拉取 N 天的涨停池，然后在内存中按 code 分组筛选，
-    避免逐日逐股调用 HTTP 接口。
+    使用 asyncio.gather 批量并发请求，减少总耗时。
     返回 {code: [{...pool_item_fields, _pool_date: d}, ...], ...}。
     """
     results: dict[str, list[dict]] = {c: [] for c in codes}
     target_date = datetime.strptime(date, "%Y%m%d")
 
-    # 每批拉取 BATCH_SIZE 天，减少 HTTP 调用次数
-    BATCH_SIZE = 20
-    for batch_start in range(0, lookback, BATCH_SIZE):
-        batch_end = min(batch_start + BATCH_SIZE, lookback)
-        # 批量拉取这一批日期的涨停池
-        for back in range(batch_start, batch_end):
-            d = (target_date - timedelta(days=back)).strftime("%Y%m%d")
-            pool = astock.em_zt_topic_pool("getTopicZTPool", d, "fbt:asc")
+    # 生成所有需要查询的日期
+    all_dates = []
+    for back in range(1, min(lookback, 30)):
+        d = (target_date - timedelta(days=back)).strftime("%Y%m%d")
+        all_dates.append(d)
+
+    # 分批并发请求（每批 10 个日期，避免触发限流）
+    BATCH_SIZE = 10
+    for i in range(0, len(all_dates), BATCH_SIZE):
+        batch = all_dates[i:i + BATCH_SIZE]
+        tasks = [
+            asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", d, "fbt:asc")
+            for d in batch
+        ]
+        pools = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for d, pool in zip(batch, pools):
+            if isinstance(pool, Exception):
+                _logger.warning("获取涨停池失败: date=%s, error=%s", d, pool)
+                continue
             for item in pool:
                 code = str(item.get("c", ""))
                 if code in codes and code.isdigit() and len(code) == 6:
                     results.setdefault(code, []).append(dict(item, _pool_date=d))
-            # 每批后加短暂延迟，避免东财限流导致整体超时
-            time.sleep(0.05)
+
+        # 每批后短暂延迟，避免东财限流
+        if i + BATCH_SIZE < len(all_dates):
+            await asyncio.sleep(0.05)
+
     return results
 
 
@@ -399,7 +435,7 @@ def compute_gene_score(
     )
 
 
-def get_screener_result(date: str | None = None) -> ScreenerResult:
+async def get_screener_result(date: str | None = None) -> ScreenerResult:
     """获取全市场涨停股基因得分清单（客观数据，无行动建议）。
 
     缓存策略：
@@ -410,7 +446,7 @@ def get_screener_result(date: str | None = None) -> ScreenerResult:
     - 缓存命中直接返回，零计算开销
     - **超时保护**：计算超过 90 秒自动降级返回空结果，不阻塞 API
     """
-    target_date = _resolve_date(date)
+    target_date = await _resolve_date(date)
     cache_key = f"limitup_screener_{target_date}"
     display_date = target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:]
 
@@ -440,7 +476,7 @@ def get_screener_result(date: str | None = None) -> ScreenerResult:
     if cache_key in _COMPUTING:
         waited = 0
         while cache_key in _COMPUTING and waited < 60:
-            time.sleep(0.5)
+            await asyncio.sleep(0.5)
             waited += 0.5
         # 重新检查缓存和数据库
         hit = _CACHE.get(cache_key)
@@ -494,12 +530,12 @@ def get_screener_result(date: str | None = None) -> ScreenerResult:
     )
 
 
-def _compute_and_cache(target_date: str, cache_key: str) -> ScreenerResult:
-    """执行基因得分计算并缓存结果（内部函数，不对外暴露）。"""
+async def _compute_and_cache_async(target_date: str, cache_key: str) -> ScreenerResult:
+    """执行基因得分计算并缓存结果（异步版本）。"""
     now = time.time()
 
-    # 获取数据
-    zt_pool, yzt_pool, zb_pool = _fetch_zt_pool(target_date)
+    # 获取数据（并发）
+    zt_pool, yzt_pool, zb_pool = await _fetch_zt_pool(target_date)
     display_date = target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:]
     if not zt_pool:
         result = ScreenerResult(
@@ -520,9 +556,9 @@ def _compute_and_cache(target_date: str, cache_key: str) -> ScreenerResult:
         if code and code not in seen:
             seen[code] = item
 
-    # 批量回溯历史涨停记录（优化：一次拉取多天，内存中分组）
+    # 批量回溯历史涨停记录（并发优化）
     codes = {c for c in seen.keys() if c.isdigit() and len(c) == 6}
-    batch_history = _collect_zt_history_batch(codes, target_date, LOOKBACK_DAYS)
+    batch_history = await _collect_zt_history_batch(codes, target_date, LOOKBACK_DAYS)
 
     # 对每只股计算基因得分（含回测数据）
     scores: list[GeneScore] = []
@@ -549,12 +585,18 @@ def _compute_and_cache(target_date: str, cache_key: str) -> ScreenerResult:
         disclaimer=DISCLAIMER,
     )
 
-    # 保存到数据库
-    _save_gene_scores_to_db(display_date, scores)
+    # 保存到数据库（在线程中运行，避免阻塞事件循环）
+    await asyncio.to_thread(_save_gene_scores_to_db, display_date, scores)
 
     # 写入缓存
     _CACHE[cache_key] = (now, result)
     return result
+
+
+def _compute_and_cache(target_date: str, cache_key: str) -> ScreenerResult:
+    """执行基因得分计算并缓存结果（同步兼容层，内部运行异步实现）。"""
+    # 在线程中运行，没有事件循环，直接使用 asyncio.run
+    return asyncio.run(_compute_and_cache_async(target_date, cache_key))
 
 
 # ===========================================================================
@@ -571,8 +613,8 @@ class BacktestPoint:
     premium_rate: float  # 次日溢价率因子
 
 
-def _compute_backtest_raw(code: str, lookback_days: int = 250) -> list[dict]:
-    """对某只股票，用滚动窗口计算基因得分 vs 实际表现的散点数据。
+async def _compute_backtest_raw(code: str, lookback_days: int = 250) -> list[dict]:
+    """对某只股票，用滚动窗口计算基因得分 vs 实际表现的散点数据（并发优化）。
 
     方法：
     1. 拉取 lookback_days 天的涨停池历史
@@ -584,19 +626,30 @@ def _compute_backtest_raw(code: str, lookback_days: int = 250) -> list[dict]:
     """
     target_date = datetime.now(BEIJING_TZ).strftime("%Y%m%d")
     
-    # 拉取 lookback_days 天的涨停池
+    # 拉取 lookback_days 天的涨停池（并发）
     all_pools: list[tuple[str, dict]] = []  # [(date_str, item), ...]
     target = datetime.strptime(target_date, "%Y%m%d")
     BATCH = 10
     
     for batch_start in range(0, lookback_days, BATCH):
         batch_end = min(batch_start + BATCH, lookback_days)
-        for back in range(batch_start, batch_end):
-            d = (target - timedelta(days=back)).strftime("%Y%m%d")
-            pool = astock.em_zt_topic_pool("getTopicZTPool", d, "fbt:asc")
+        dates = [(target - timedelta(days=back)).strftime("%Y%m%d") for back in range(batch_start, batch_end)]
+        tasks = [
+            asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", d, "fbt:asc")
+            for d in dates
+        ]
+        pools = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for d, pool in zip(dates, pools):
+            if isinstance(pool, Exception):
+                _logger.warning("获取涨停池失败: date=%s, error=%s", d, pool)
+                continue
             for item in pool:
                 if str(item.get("c", "")) == code:
                     all_pools.append((d, item))
+        
+        if batch_end < lookback_days:
+            await asyncio.sleep(0.05)
     
     if len(all_pools) < 3:
         return []  # 数据不足
@@ -610,13 +663,28 @@ def _compute_backtest_raw(code: str, lookback_days: int = 250) -> list[dict]:
     yzt_all: list[dict] = []
     zb_all: list[dict] = []
     
-    # 先拉昨涨停池和炸板池（用于封板率等因子计算）
-    for back in range(1, min(lookback_days, 30)):
-        d = (target - timedelta(days=back)).strftime("%Y%m%d")
-        yzt = astock.em_zt_topic_pool("getYesterdayZTPool", d, "zs:desc")
-        yzt_all.extend(yzt)
-        zb = astock.em_zt_topic_pool("getTopicZBPool", d, "fbt:asc")
-        zb_all.extend(zb)
+    # 先拉昨涨停池和炸板池（用于封板率等因子计算，并发）
+    yzt_dates = [(target - timedelta(days=back)).strftime("%Y%m%d") for back in range(1, min(lookback_days, 30))]
+    zb_dates = yzt_dates.copy()
+    
+    yzt_tasks = [
+        asyncio.to_thread(astock.em_zt_topic_pool, "getYesterdayZTPool", d, "zs:desc")
+        for d in yzt_dates
+    ]
+    zb_tasks = [
+        asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZBPool", d, "fbt:asc")
+        for d in zb_dates
+    ]
+    
+    yzt_results = await asyncio.gather(*yzt_tasks, return_exceptions=True)
+    zb_results = await asyncio.gather(*zb_tasks, return_exceptions=True)
+    
+    for pool in yzt_results:
+        if not isinstance(pool, Exception):
+            yzt_all.extend(pool)
+    for pool in zb_results:
+        if not isinstance(pool, Exception):
+            zb_all.extend(pool)
     
     for pool_date, item in all_pools:
         # 用之前的历史计算基因得分
@@ -655,9 +723,9 @@ def _compute_backtest_raw(code: str, lookback_days: int = 250) -> list[dict]:
 # 6. 日频预计算入口（供 app.py 调度器调用）
 # ===========================================================================
 
-def precompute_daily(date: str | None = None) -> ScreenerResult:
+async def precompute_daily_async(date: str | None = None) -> ScreenerResult:
     """
-    每日预计算入口 — 由 app.py 15:35 调度器触发。
+    每日预计算入口（异步版本）— 由 app.py 15:35 调度器触发。
     
     计算最近 250 天的涨停基因得分，保存到数据库。
     返回 ScreenerResult 同时写入内存缓存。
@@ -667,18 +735,57 @@ def precompute_daily(date: str | None = None) -> ScreenerResult:
     
     # 支持 YYYY-MM-DD 和 YYYYMMDD 两种格式
     date_fmt = date.replace("-", "") if "-" in date else date
-    target_date = _resolve_date(date_fmt)
+    target_date = await _resolve_date(date_fmt)
+    cache_key = f"limitup_screener_{target_date}"
+    
+    return await _compute_and_cache_async(target_date, cache_key)
+
+
+def precompute_daily(date: str | None = None) -> ScreenerResult:
+    """每日预计算入口（同步兼容层）— 由 app.py 15:35 调度器触发。"""
+    if date is None:
+        date = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
+    
+    # 支持 YYYY-MM-DD 和 YYYYMMDD 两种格式
+    date_fmt = date.replace("-", "") if "-" in date else date
+    # 同步调用：使用 asyncio.run 运行异步实现
+    target_date = asyncio.run(_resolve_date(date_fmt))
     cache_key = f"limitup_screener_{target_date}"
     
     return _compute_and_cache(target_date, cache_key)
 
 
-def backfill(start_date: str, end_date: str | None = None) -> list[ScreenerResult]:
+async def backfill_async(start_date: str, end_date: str | None = None) -> list[ScreenerResult]:
     """
-    历史回填 — 分批执行，节流 time.sleep(0.5)。
+    历史回填（异步版本）— 分批执行，节流 asyncio.sleep(0.5)。
+
+    对每个日期执行 precompute_daily_async，结果存入数据库。
+    """
+    if end_date is None:
+        end_date = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
     
-    对每个日期执行 precompute_daily，结果存入数据库。
-    """
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    results = []
+    current_dt = start_dt
+    
+    while current_dt <= end_dt:
+        date_str = current_dt.strftime("%Y-%m-%d")
+        try:
+            result = await precompute_daily_async(date_str)
+            results.append(result)
+        except Exception as e:
+            logging.getLogger("vibe-research").warning("[%s] 预计算失败: %s", date_str, e)
+        
+        current_dt += timedelta(days=1)
+        await asyncio.sleep(0.5)  # 节流
+    
+    return results
+
+
+def backfill(start_date: str, end_date: str | None = None) -> list[ScreenerResult]:
+    """历史回填（同步兼容层）— 分批执行，节流 time.sleep(0.5)。"""
     if end_date is None:
         end_date = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
     
@@ -694,7 +801,7 @@ def backfill(start_date: str, end_date: str | None = None) -> list[ScreenerResul
             result = precompute_daily(date_str)
             results.append(result)
         except Exception as e:
-            print(f"[{date_str}] 预计算失败: {e}")
+            logging.getLogger("vibe-research").warning("[%s] 预计算失败: %s", date_str, e)
         
         current_dt += timedelta(days=1)
         time.sleep(0.5)  # 节流

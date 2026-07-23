@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 import threading as _threading
@@ -43,7 +44,11 @@ AUCTION_DISCLAIMER = (
 # ===========================================================================
 
 class AuctionCandidate(BaseModel):
-    """竞价候选股（客观数据，非行动建议）。"""
+    """竞价候选股（客观数据，非行动建议）。
+
+    .. deprecated::
+        优先使用 ``limitup_strategy.StrategySignal`` 统一信号结构。
+    """
 
     code: str                          # 股票代码
     name: str                          # 股票名称
@@ -66,7 +71,7 @@ class AuctionScreenerResult(BaseModel):
     """竞价选股结果（客观数据展示）。"""
 
     date: str
-    candidates: list[AuctionCandidate]  # TOP N 候选股
+    candidates: list[dict]  # TOP N 候选股，统一为通用字典结构
     sti_score: float | None            # 当日 STI 情绪分数
     sti_phase: str | None              # 当日 STI 阶段
     total_analyzed: int                # 分析的股票总数
@@ -193,24 +198,24 @@ class AuctionScreener:
                 seal_rate=seal_rate,
             )
             
-            candidates.append(AuctionCandidate(
-                code=code,
-                name=name,
-                score=round(auction_score, 2),
-                gene_score=round(gene_score, 2),
-                zt_count_30d=zt_count_30d,
-                seal_rate=round(seal_rate, 2),
-                avg_fbt=round(fbt, 0),
-                promotion_rate=round(promotion_rate, 2),
-                prev_zt_return=round(prev_zt_return, 2),
-                max_boards=int(max_boards),
-                strategy_tags=strategy_tags,
-                signal_strength=signal_strength,
-                confidence=confidence,
-            ))
+            candidates.append({
+                "code": code,
+                "name": name,
+                "score": round(auction_score, 2),
+                "gene_score": round(gene_score, 2),
+                "zt_count_30d": zt_count_30d,
+                "seal_rate": round(seal_rate, 2),
+                "avg_fbt": round(fbt, 0),
+                "promotion_rate": round(promotion_rate, 2),
+                "prev_zt_return": round(prev_zt_return, 2),
+                "max_boards": int(max_boards),
+                "strategy_tags": strategy_tags,
+                "signal_strength": signal_strength,
+                "confidence": confidence,
+            })
         
         # 5. 排序取 TOP N
-        candidates.sort(key=lambda c: c.score, reverse=True)
+        candidates.sort(key=lambda c: c["score"], reverse=True)
         top_candidates = candidates[:AUCTION_TOP_N]
         
         # 6. 返回结果
@@ -363,9 +368,9 @@ class AuctionScreener:
     def _get_gene_scores_cache(self) -> dict[str, dict]:
         """
         获取基因得分缓存。
-        
+
         从 limitup_screener 的缓存中提取近30日数据。
-        如果缓存不存在，则实时拉取。
+        如果缓存不存在，则返回空映射，避免写入无效缓存。
         """
         cache_key = "limitup_screener"
         cached = _CACHE.get(cache_key)
@@ -373,30 +378,16 @@ class AuctionScreener:
         if cached and time.time() - cached[0] < _CACHE_TTL:
             return cached[1]
         
-        # 缓存失效或不存在，实时拉取
-        date_fmt = datetime.now(BEIJING_TZ).strftime("%Y%m%d")
-        zt_pool = astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc")
-        
-        gene_scores_map = {}
-        for item in zt_pool:
-            code = str(item.get("c", ""))
-            if code.isdigit() and len(code) == 6:
-                gene_scores_map[code] = {
-                    "total_score": 0.0,
-                    "zt_count_30d": 0,
-                }
-        
-        _CACHE[cache_key] = (time.time(), gene_scores_map)
-        return gene_scores_map
+        return {}
     
     def _get_sti_result(self, trade_date: str) -> dict[str, Any] | None:
         """
         获取 STI 情绪分数。
-        
+
         从 sti_timeline 表中查询当日数据。
         """
         try:
-            from backend.limitup_sti import STIEngine
+            from limitup_sti import STIEngine
             engine = STIEngine()
             result = engine.get_latest(trade_date)
             if result and result.source_ok:
@@ -440,7 +431,7 @@ class AuctionScreener:
                 result = self.precompute_daily(date_str)
                 results.append(result)
             except Exception as e:
-                print(f"[{date_str}] 预计算失败: {e}")
+                logging.getLogger("vibe-research").warning("[%s] 预计算失败: %s", date_str, e)
             
             current_dt += timedelta(days=1)
             time.sleep(0.5)  # 节流（竞价模块不大量请求 HTTP，降低间隔）

@@ -48,6 +48,21 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
     if (open) setConfigured(hasLlm());
   }, [open]);
 
+  // 尝试对话一次，看看后端 OmniRoute 是否可用
+  const tryOmniRoute = async () => {
+    try {
+      const result = await chatStream([{ role: "user", content: "你好" }], "", {}, undefined);
+      if (result.content) {
+        // OmniRoute 可用，允许后续对话
+        setConfigured(true);
+        return true;
+      }
+    } catch {
+      // OmniRoute 不可用，保持未配置状态
+    }
+    return false;
+  };
+
   useEffect(() => () => abortRef.current?.abort(), []); // 组件卸载兜底
 
   const close = () => {
@@ -119,7 +134,7 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
             </div>
 
             {!configured ? (
-              // 未接入 AI：引导去设置
+              // 未接入 AI：引导去设置，但提供 OmniRoute 试用入口
               <div className="flex-1 space-y-4 overflow-auto p-4 text-sm">
                 <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">
                   分析结论由你自己配置的 AI 给出，本产品只负责把本页数据打包成上下文、并让 AI 能调数据工具，
@@ -131,9 +146,24 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
 {context}
                   </pre>
                 </div>
-                <Link to="/settings" className="flex items-center justify-center gap-2 rounded-lg bg-primary/15 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/25">
-                  <Settings className="h-4 w-4" /> 先接入你的 AI（订阅 / API）
-                </Link>
+                <div className="flex flex-col gap-2">
+                  <Link to="/settings" className="flex items-center justify-center gap-2 rounded-lg bg-primary/15 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/25">
+                    <Settings className="h-4 w-4" /> 接入你自己的 AI（订阅 / API）
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      const ok = await tryOmniRoute();
+                      if (ok) {
+                        // 成功，后续对话正常进行
+                      } else {
+                        // 失败，提示用户
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-border/40 px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  >
+                    <Sparkles className="h-4 w-4" /> 试用内置 AI（OmniRoute 兜底）
+                  </button>
+                </div>
               </div>
             ) : (
               // 已接入：真对话

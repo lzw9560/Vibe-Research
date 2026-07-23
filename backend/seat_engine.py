@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import threading as _threading
@@ -682,7 +683,7 @@ class SeatEngine:
                 result = self.precompute_daily(date_str)
                 results.append(result)
             except Exception as e:
-                print(f"[{date_str}] 席位引擎回填失败: {e}")
+                logging.getLogger("vibe-research").warning("[%s] 席位引擎回填失败: %s", date_str, e)
 
             current_dt += timedelta(days=1)
             time.sleep(0.5)  # 节流，避免请求过快

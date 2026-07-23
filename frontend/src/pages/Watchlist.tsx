@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, X, RefreshCw, Star } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { Button } from "@/components/ui/Button";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { api, type Quote } from "@/lib/api";
@@ -106,12 +107,9 @@ export function Watchlist() {
             placeholder={"如：600519 000858, 002463\n300750 688017"}
             className="flex-1 resize-y rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
           />
-          <button
-            onClick={add}
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 self-start rounded-lg bg-primary/15 px-4 text-sm font-medium text-primary shadow-glow hover:bg-primary/25"
-          >
+          <Button onClick={add} className="self-start">
             <Plus className="h-4 w-4" /> 添加
-          </button>
+          </Button>
         </div>
         {hint && <p className="mt-2 text-xs text-muted-foreground/70">{hint}</p>}
       </GlassCard>

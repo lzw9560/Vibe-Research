@@ -74,3 +74,122 @@ MCP 的 4 个工具是「零配置、开箱即用」的常用项。若 agent 需
 - 数据端点只返回客观行情/研报/财报/新闻，不含任何建议、排名、预测。
 - `/api/chat` 的 system prompt 内置中立红线：不荐股、不预测涨跌、不给买卖时机、不构成投资建议。
 - 分析结论一律由用户配置的模型 / agent 给出，本产品只提供数据与工具。
+
+## LimitUp 投研助手 API（V2.0.2）
+
+### 涨停基因选股
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/limitup/screener` | 全市场涨停股基因得分（客观数据） |
+| `GET /api/limitup/analysis/{code}` | 个股基因得分 + 策略逻辑匹配 + 风控规则知识 |
+| `GET /api/limitup/screener/params` | 获取打板策略参数 |
+| `POST /api/limitup/screener/params` | 保存打板策略参数 |
+
+### 竞价选股
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/limitup/auction/top` | 竞价爆量 TOP N 候选股 |
+| `GET /api/limitup/auction/backfill` | 竞价选股历史回填 |
+| `GET /api/limitup/auction/params` | 获取竞价选股参数 |
+| `POST /api/limitup/auction/params` | 保存竞价选股参数 |
+
+### 席位引擎
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/limitup/seats/profiles` | 所有席位画像 |
+| `GET /api/limitup/seats/profile/{name}` | 单个席位画像 |
+| `GET /api/limitup/seats/consensus` | 席位共识/分歧信号 |
+| `POST /api/limitup/seats/build` | 触发席位画像冷启动构建 |
+
+### 聚合指标
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/limitup/metrics` | 涨停策略聚合指标（基因分布、席位情绪、市场情绪、回测胜率） |
+
+> **免责声明**：所有 LimitUp 端点返回的数据基于历史统计特征，不代表未来行为，不构成投资建议。所有文字使用「策略逻辑上」「历史统计特征」等中性表述。
+
+### 板块情绪分化度
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/sector/divergence` | 板块内部分化度（客观数据） |
+| `GET /api/sector/rotation` | 板块轮动速度（客观数据） |
+
+### 风险仪表盘
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/risk/dashboard` | 个股风险量化分布（客观数据） |
+| `GET /api/risk/stock/{code}` | 个股风险详情（客观数据） |
+
+### 极端行情检测
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/market/extreme` | 涨停潮 / 跌停潮动态阈值检测（客观数据） |
+
+### 系统韧性
+
+| 特性 | 说明 |
+|---|---|
+| 熔断器 | 东财数据源连续失败 5 次后快速失败，避免雪崩 |
+| 多源降级 | 东财故障时自动降级到本地缓存（内存 + 文件，TTL 10 分钟） |
+| 动态阈值 | 极端行情检测基于历史数据动态计算阈值，而非固定值 |
+
+## 部署
+
+### 本地开发
+
+```bash
+cd backend
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8900
+```
+
+### Docker 一键部署
+
+```bash
+# 启动所有服务（后端 + 前端 + OmniRoute）
+docker compose up -d
+
+# 查看日志
+docker compose logs -f backend
+
+# 停止服务
+docker compose down
+```
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+|---|---|---|
+| `VR_API_KEY` | API 鉴权密钥（公网部署必填） | 空（本地开放） |
+| `VR_ALLOW_ORIGINS` | CORS 白名单（逗号分隔） | `*` |
+| `LIMITUP_PRECOMPUTE` | 是否开启盘后预计算 | `false` |
+| `AUCTION_MIN_GENE_SCORE` | 竞价选股最小基因得分 | `50` |
+| `AUCTION_MIN_ZT_COUNT` | 竞价选股最小涨停次数 | `2` |
+| `AUCTION_TOP_N` | 竞价选股返回候选数 | `50` |
+
+## 测试
+
+```bash
+# 单元测试
+pytest tests/test_limitup.py -v
+
+# E2E 集成测试
+pytest tests/test_e2e.py -v
+
+# 性能测试
+pytest tests/test_performance.py -v
+
+# 合规审查
+python tests/test_compliance.py
+
+# 全量测试
+pytest tests/ -v
+```

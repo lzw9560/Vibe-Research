@@ -1,0 +1,129 @@
+import { useState, useEffect } from "react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { api } from "@/lib/api";
+
+interface TierMetrics {
+  tier: string;
+  target: number;
+  components: Record<string, string>;
+  note: string;
+  status: string;
+}
+
+interface BreakdownResponse {
+  tiers: {
+    data_fetch: TierMetrics;
+    compute: TierMetrics;
+    api_response: TierMetrics;
+  };
+  summary: {
+    total_target: number;
+    unit: string;
+  };
+  note: string;
+  status: string;
+}
+
+export function Metrics() {
+  const [breakdown, setBreakdown] = useState<BreakdownResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      api.metricsDataFetch(),
+      api.metricsCompute(),
+      api.metricsApiResponse(),
+      api.metricsBreakdown(),
+    ])
+      .then(([, , , breakdownData]) => {
+        if (cancelled) return;
+        setBreakdown(breakdownData);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "加载失败");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-sm text-muted-foreground">加载性能指标…</div>
+      </div>
+    );
+  }
+
+  if (error || !breakdown) {
+    return (
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        加载失败：{error ?? "未知错误"}
+      </div>
+    );
+  }
+
+  const tiers = [
+    { key: "data_fetch", label: "数据获取层", icon: "📥", color: "text-blue-400" },
+    { key: "compute", label: "计算层", icon: "⚙️", color: "text-primary" },
+    { key: "api_response", label: "API 响应层", icon: "📤", color: "text-green-400" },
+  ] as const;
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="性能监控"
+        subtitle="系统三层性能拆分指标（目标值参考）"
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {tiers.map((tier) => {
+          const data = breakdown.tiers[tier.key];
+          return (
+            <GlassCard key={tier.key} className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xl">{tier.icon}</span>
+                <h3 className={`text-sm font-semibold ${tier.color}`}>{tier.label}</h3>
+              </div>
+              <div className="mb-2 text-2xl font-bold">
+                {data.target}
+                <span className="ml-1 text-xs text-muted-foreground">{breakdown.summary.unit}</span>
+              </div>
+              <div className="space-y-1">
+                {Object.entries(data.components).map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{k}</span>
+                    <span className="text-foreground/80">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 text-[10px] text-muted-foreground/60">{data.note}</div>
+            </GlassCard>
+          );
+        })}
+      </div>
+
+      <GlassCard className="p-4">
+        <h3 className="mb-2 text-sm font-semibold text-muted-foreground">汇总</h3>
+        <div className="flex items-center gap-4 text-xs">
+          <div>
+            总目标耗时：<b>{breakdown.summary.total_target}</b> {breakdown.summary.unit}
+          </div>
+          <div className="text-muted-foreground/60">{breakdown.note}</div>
+        </div>
+      </GlassCard>
+    </div>
+  );
+}

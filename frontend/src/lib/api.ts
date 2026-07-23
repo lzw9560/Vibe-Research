@@ -304,9 +304,53 @@ export interface LimitUpAnalysis {
   date: string;
   gene_score: GeneScore;
   strategy_logic: StrategyLogicMatch;
+  risk: {
+    code: string;
+    date: string;
+    risk_score: number;
+    risk_level: string;
+    score_components: Record<string, any>;
+    capital_flow_signal: number;
+    capital_flow_trend: string;
+    big_fund_detected: boolean;
+    big_fund_type: string;
+    fund_flow_history: Array<Record<string, any>>;
+    dragon_tiger_risk: number;
+    one_day_seats: string[];
+    multi_seat_signal: boolean;
+    seat_confidence: number;
+    recommendation: string;
+    factors: string[];
+    last_updated: string;
+    dynamic_thresholds: Record<string, any>;
+    risk_factors: string[];
+    max_drawdown: number;
+    volatility: number;
+    liquidity_risk: number;
+    concentration_risk: number;
+  } | null;
   risk_rules: RiskRuleKnowledge[];
   backtest_points: Array<{ date: string; gene_score: number; actual_next_day: number }>;
   disclaimer: string;
+}
+
+export interface KlineBar {
+  date: string; open: number; high: number; low: number; close: number; volume: number; amount: number;
+}
+
+export interface StockDeep {
+  quote: Quote | null;
+  kline: KlineBar[] | null;
+  valuation: Valuation | null;
+  percentile: ValPercentile | null;
+  fund_flow: FundFlowRow[] | null;
+  dragon_tiger: DragonTiger | null;
+  limitup: LimitUpAnalysis | null;
+  financials: Financials | null;
+  blocks: Blocks | null;
+  hot_concepts: HotConcept[] | null;
+  announcements: Announcement[] | null;
+  reports: Report[] | null;
 }
 
 export interface ScreenerResult {
@@ -324,6 +368,59 @@ export interface BacktestPoint {
   actual_next_day: number;
   seal_rate: number;
   premium_rate: number;
+}
+
+// ---- 推荐引擎 ----
+export type RecommendationLevel = "高质量关注" | "中等质量关注" | "低质量关注" | "策略逻辑上回避";
+
+export interface StockRecommendation {
+  code: string;
+  name: string;
+  gene_score: number;
+  industry_normalized: number;
+  level: RecommendationLevel;
+  position_suggestion: string;
+  reasoning: string[];
+  risk_notes: string[];
+  factor_breakdown: Record<string, number>;
+}
+
+// ---- 胜率统计 ----
+export interface WinRateStats {
+  window_size: number;
+  total_trades: number;
+  win_count: number;
+  win_rate: number;
+  avg_return: number;
+  max_drawdown: number;
+  sharpe_ratio: number;
+  trend: string;
+  sector_breakdown: Record<string, any>;
+  strategy_breakdown: Record<string, any>;
+  score_breakdown: Record<string, any>;
+}
+
+// ---- 竞价信号 ----
+export interface AuctionSignal {
+  code: string;
+  name: string;
+  signal_type: string;
+  confidence: number;
+  open_premium: number;
+  volume_ratio: number;
+  reasoning: string[];
+}
+
+// ---- 回测结果 ----
+export interface BacktestResult {
+  period: string;
+  total_signals: number;
+  hit_count: number;
+  hit_rate: number;
+  avg_return: number;
+  max_drawdown: number;
+  sharpe_ratio: number;
+  percentile_analysis: Record<string, any>;
 }
 
 // ---- 打板策略参数配置 ----
@@ -544,4 +641,55 @@ export const api = {
     get<STIResult>(`/market/sti/latest${date ? `?date=${date}` : ""}`),
   stiTimeline: (days = 30) =>
     get<STITimelineItem[]>(`/market/sti/timeline?days=${days}`),
+  stockDeep: (code: string) => get<StockDeep>(`/stock/${code}/deep`),
+  // 性能监控（PRD V2.0.2 三层拆分）
+  metricsDataFetch: () => get<any>("/metrics/data_fetch"),
+  metricsCompute: () => get<any>("/metrics/compute"),
+  metricsApiResponse: () => get<any>("/metrics/api_response"),
+  metricsBreakdown: () => get<any>("/metrics/breakdown"),
+  // 推荐引擎
+  recommendationToday: (limit?: number) =>
+    get<StockRecommendation[]>(`/recommendation/today${limit ? `?limit=${limit}` : ""}`),
+  recommendationStock: (code: string, date?: string) =>
+    get<StockRecommendation>(`/recommendation/${code}${date ? `?date=${date}` : ""}`),
+  // 胜率追踪
+  winRateStats: (windowSize?: number) =>
+    get<WinRateStats>(`/winrate/stats${windowSize ? `?window_size=${windowSize}` : ""}`),
+  winRateAdjustments: (windowSize?: number) =>
+    get<any>(`/winrate/adjustments${windowSize ? `?window_size=${windowSize}` : ""}`),
+  winRateTrends: (windowSize?: number) =>
+    get<any[]>(`/winrate/trends${windowSize ? `?window_size=${windowSize}` : ""}`),
+  winRateSector: (sector: string, windowSize?: number) =>
+    get<any>(`/winrate/sector/${encodeURIComponent(sector)}${windowSize ? `?window_size=${windowSize}` : ""}`),
+  winRateStrategy: (strategy: string, windowSize?: number) =>
+    get<any>(`/winrate/strategy/${encodeURIComponent(strategy)}${windowSize ? `?window_size=${windowSize}` : ""}`),
+  // 竞价监控
+  auctionMonitor: () => get<AuctionSignal[]>("/auction/monitor"),
+  auctionWatchlist: () => get<string[]>("/auction/watchlist"),
+  // 战法信号
+  strategySignals: (code: string, date?: string) =>
+    get<any[]>(`/strategy/signals/${code}${date ? `?date=${date}` : ""}`),
+  strategyRegistry: () =>
+    get<any[]>("/strategy/registry"),
+  // 回测
+  backtestScatter: (start: string, end: string) =>
+    get<any[]>(`/backtest/scatter?start=${start}&end=${end}`),
+  backtestResult: (start: string, end: string) =>
+    get<BacktestResult>(`/backtest/result?start=${start}&end=${end}`),
+  // 风险仪表盘
+  riskDashboard: (date?: string) =>
+    get<any>(`/risk/dashboard${date ? `?date=${date}` : ""}`),
+  riskStock: (code: string) =>
+    get<any>(`/risk/stock/${code}`),
+  riskOnedayList: (date?: string, minRiskScore?: number) =>
+    get<any>(`/risk/oneday/list${date ? `?date=${date}` : ""}${minRiskScore !== undefined ? `&min_risk_score=${minRiskScore}` : ""}`),
+  riskSeats: () =>
+    get<any>("/risk/seats"),
+  // 板块分化度
+  sectorDivergence: (date?: string) =>
+    get<any>(`/sector/divergence${date ? `?date=${date}` : ""}`),
+  sectorRotation: (date?: string) =>
+    get<any>(`/sector/rotation${date ? `?date=${date}` : ""}`),
+  sectorDivergenceHistory: (days?: number) =>
+    get<any[]>(`/sector/divergence/history${days ? `?days=${days}` : ""}`),
 };
