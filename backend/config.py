@@ -42,8 +42,8 @@ class AssistantDefaultConfig:
     STI_PERCENTILE_WINDOW: int = 252
 
     # === 推荐引擎 ===
-    RECOMMEND_HIGH_THRESHOLD: float = 75.0
-    RECOMMEND_MEDIUM_THRESHOLD: float = 60.0
+    RECOMMEND_HIGH_THRESHOLD: float = 60.0
+    RECOMMEND_MEDIUM_THRESHOLD: float = 50.0
     RECOMMEND_INDUSTRY_PERCENTILE_MIN: float = 80.0
 
     # === 竞价监控 ===

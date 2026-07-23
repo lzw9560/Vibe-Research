@@ -31,21 +31,34 @@ _logger = logging.getLogger(__name__)
 _CACHE: dict = {}
 _CACHE_TTL = 43200  # 12 小时
 _COMPUTING: dict = {}
+_RESOLVED_DATE_CACHE: dict[str, str] = {}
+_RESOLVED_DATE_TTL = 3600  # 1 小时
 
 
 async def _resolve_date(date: str | None) -> str:
-    """解析日期参数，回推到最近交易日（异步）。"""
+    """解析日期参数，回推到最近交易日（异步，带缓存）。"""
     if date:
         return date.replace("-", "")
+    
+    # 检查缓存
+    now = time.time()
+    cache_key = "latest_trading_day"
+    cached = _RESOLVED_DATE_CACHE.get(cache_key)
+    if cached and now - cached[0] < _RESOLVED_DATE_TTL:
+        return cached[1]
+    
     today = datetime.now(_BEIJING_TZ).strftime("%Y%m%d")
     for back in range(5):
         d = (datetime.now(_BEIJING_TZ) - timedelta(days=back)).strftime("%Y%m%d")
         try:
             pool = await asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", d)
             if pool:
+                _RESOLVED_DATE_CACHE[cache_key] = (now, d)
                 return d
         except Exception:
             continue
+    
+    _RESOLVED_DATE_CACHE[cache_key] = (now, today)
     return today
 
 
@@ -73,7 +86,8 @@ async def _collect_zt_history_batch(codes: set[str], date: str, lookback: int = 
         d = (target_date - timedelta(days=back)).strftime("%Y%m%d")
         all_dates.append(d)
 
-    BATCH_SIZE = 10
+    BATCH_SIZE = 20
+    SLEEP_BETWEEN_BATCHES = 0.02
     for i in range(0, len(all_dates), BATCH_SIZE):
         batch = all_dates[i:i + BATCH_SIZE]
         tasks = [
@@ -92,7 +106,7 @@ async def _collect_zt_history_batch(codes: set[str], date: str, lookback: int = 
                     results.setdefault(code, []).append(dict(item, _pool_date=d))
 
         if i + BATCH_SIZE < len(all_dates):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(SLEEP_BETWEEN_BATCHES)
 
     return results
 
@@ -130,24 +144,32 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
             continue
         name = item.get("n", "")
         history = batch_history.get(code, [])
-        gene = compute_gene_score(code, name, history, yzt_pool, zb_pool, include_backtest=True)
-        scores.append(gene)
+        scores.append((code, name, history, yzt_pool, zb_pool))
 
-    scores.sort(key=lambda g: g.total_score, reverse=True)
+    # 并行计算基因得分
+    async def _compute_one(args: tuple) -> GeneScore:
+        c, n, h, y, z = args
+        return compute_gene_score(c, n, h, y, z, include_backtest=True)
 
-    qualified = [g for g in scores if g.qualify]
-    high_gene_list = [g for g in scores if g.high_gene]
+    gene_tasks = [_compute_one(s) for s in scores]
+    gene_results = await asyncio.gather(*gene_tasks, return_exceptions=True)
+    gene_scores = [g for g in gene_results if not isinstance(g, Exception)]
+
+    gene_scores.sort(key=lambda g: g.total_score, reverse=True)
+
+    qualified = [g for g in gene_scores if g.qualify]
+    high_gene_list = [g for g in gene_scores if g.high_gene]
 
     result = ScreenerResult(
         date=display_date,
-        gene_scores=scores,
+        gene_scores=gene_scores,
         qualified=qualified,
         high_gene=high_gene_list,
         updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
         disclaimer=DISCLAIMER,
     )
 
-    await asyncio.to_thread(save_gene_scores, display_date, scores)
+    await asyncio.to_thread(save_gene_scores, display_date, gene_scores)
     _CACHE[cache_key] = (now, result)
     return result
 

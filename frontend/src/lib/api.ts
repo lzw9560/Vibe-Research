@@ -528,6 +528,18 @@ export interface ConsensusSignal {
   disclaimer: string;
 }
 
+export interface LlmEnvStatus {
+  has_env_base_url: boolean;
+  has_env_api_key: boolean;
+  has_env_model: boolean;
+}
+
+export async function getLlmEnvStatus(): Promise<LlmEnvStatus> {
+  const res = await fetch(`/api/settings/llm-env-status`, { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get LLM env status: ${res.statusText}`, res.status);
+  return res.json();
+}
+
 export async function getLimitUpScreenerParams(): Promise<LimitUpParams> {
   const res = await fetch(`/api/limitup/screener/params`, { headers: authHeaders() });
   if (!res.ok) throw new ApiError(`Failed to get params: ${res.statusText}`, res.status);
@@ -617,12 +629,15 @@ export const api = {
     get<ScreenerResult>(`/limitup/screener${date ? `?date=${date}` : ""}`),
   limitupAnalysis: (code: string, date?: string) =>
     get<LimitUpAnalysis>(`/limitup/analysis/${code}${date ? `?date=${date}` : ""}`),
+  triggerLimitupScreener: () =>
+    request<{ status: string; date: string }>("/limitup/screener/trigger", "POST"),
   getLimitUpScreenerParams,
   saveLimitUpScreenerParams,
   getAuctionParams,
   saveAuctionParams,
   getReviewParams,
   saveReviewParams,
+  getLlmEnvStatus,
   // 竞价选股 TOP N
   auctionTop: (date?: string, n?: number) =>
     get<AuctionScreenerResult>(`/limitup/auction/top${date ? `?date=${date}` : ""}${n ? `&n=${n}` : ""}`),

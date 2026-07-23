@@ -59,16 +59,25 @@ class WinRateTracker:
         import os
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         manager = MigrationManager(db_path=self.db_path)
-        migration_sql = (
+        migration_v1 = (
             Path(__file__).resolve().parent
             / "migrations" / "win_rate_tracker" / "20250613-001_create_winrate_records.sql"
+        ).read_text(encoding="utf-8")
+        migration_v2 = (
+            Path(__file__).resolve().parent
+            / "migrations" / "win_rate_tracker" / "20250613-002_add_winrate_indexes.sql"
         ).read_text(encoding="utf-8")
         migrations = [
             {
                 "version": "20250613-001",
                 "name": "create_winrate_records",
-                "sql": migration_sql,
-            }
+                "sql": migration_v1,
+            },
+            {
+                "version": "20250613-002",
+                "name": "add_winrate_indexes",
+                "sql": migration_v2,
+            },
         ]
         manager.upgrade(migrations)
 

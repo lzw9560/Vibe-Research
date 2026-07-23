@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toast } from "sonner";
 import { loadLlm, saveLlm, clearLlm } from "@/lib/llm";
-import { loadAccessKey, saveAccessKey, getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams, getReviewParams, saveReviewParams, type LimitUpParams, type AuctionParams, type ReviewParams } from "@/lib/api";
+import { loadAccessKey, saveAccessKey, getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams, getReviewParams, saveReviewParams, getLlmEnvStatus, type LimitUpParams, type AuctionParams, type ReviewParams, type LlmEnvStatus } from "@/lib/api";
 import { subscriptionModels, apiModels, PROVIDER_BASE, isCliProvider, aiModels, type ProviderId } from "@/lib/ai-models";
 
 export function Settings() {
@@ -52,6 +52,17 @@ export function Settings() {
     getLimitUpScreenerParams().then(setLimitUpParams).catch(console.error);
     getAuctionParams().then(setAuctionParams).catch(console.error);
     getReviewParams().then(setReviewParams).catch(console.error);
+  }, []);
+
+  const [llmEnvStatus, setLlmEnvStatus] = useState<LlmEnvStatus | null>(null);
+  const [llmEnvLoading, setLlmEnvLoading] = useState(false);
+
+  useEffect(() => {
+    setLlmEnvLoading(true);
+    getLlmEnvStatus()
+      .then(setLlmEnvStatus)
+      .catch(() => setLlmEnvStatus(null))
+      .finally(() => setLlmEnvLoading(false));
   }, []);
 
   const handleSaveParams = async () => {
@@ -275,6 +286,46 @@ export function Settings() {
             ℹ OmniRoute 聚合 271 个 AI 提供商的免费/低价额度，自动故障转移。
             你的 API key 只存在本地，不上传。
           </div>
+        </div>
+      </GlassCard>
+
+      {/* 后端 LLM 环境变量状态（只读） */}
+      <GlassCard className="mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+          <h3 className="text-sm font-semibold">后端 LLM 环境变量（只读）</h3>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          后端可通过环境变量提供 LLM 兜底配置，无需在前端填写。此处仅显示配置状态，不暴露敏感值。
+        </p>
+        {llmEnvLoading ? (
+          <p className="text-xs text-muted-foreground">加载中…</p>
+        ) : llmEnvStatus ? (
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 text-center">
+              <p className="text-[11px] text-muted-foreground">Base URL</p>
+              <p className={`mt-1 text-xs font-medium ${llmEnvStatus.has_env_base_url ? "text-success" : "text-muted-foreground/50"}`}>
+                {llmEnvStatus.has_env_base_url ? "已配置" : "未配置"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 text-center">
+              <p className="text-[11px] text-muted-foreground">API Key</p>
+              <p className={`mt-1 text-xs font-medium ${llmEnvStatus.has_env_api_key ? "text-success" : "text-muted-foreground/50"}`}>
+                {llmEnvStatus.has_env_api_key ? "已配置" : "未配置"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 text-center">
+              <p className="text-[11px] text-muted-foreground">Model</p>
+              <p className={`mt-1 text-xs font-medium ${llmEnvStatus.has_env_model ? "text-success" : "text-muted-foreground/50"}`}>
+                {llmEnvStatus.has_env_model ? "已配置" : "未配置"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">无法读取后端配置状态</p>
+        )}
+        <div className="mt-3 rounded-lg bg-muted/10 border border-border/40 p-2.5 text-[11px] text-muted-foreground">
+          对应环境变量：<code className="rounded bg-muted/50 px-1">VR_LLM_BASE_URL</code> / <code className="rounded bg-muted/50 px-1">VR_LLM_API_KEY</code> / <code className="rounded bg-muted/50 px-1">VR_LLM_MODEL</code>
         </div>
       </GlassCard>
 

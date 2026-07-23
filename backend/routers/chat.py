@@ -26,6 +26,17 @@ class ChatReq(BaseModel):
     llm: LLMConfig
 
 
+@router.get("/api/settings/llm-env-status")
+def get_llm_env_status() -> Dict[str, Any]:
+    """返回后端 LLM 环境变量配置状态（不暴露敏感值）。"""
+    env_cfg = chat_layer._get_env_llm_config()
+    return {
+        "has_env_base_url": bool(env_cfg.get("baseURL")),
+        "has_env_api_key": bool(env_cfg.get("apiKey")),
+        "has_env_model": bool(env_cfg.get("model")),
+    }
+
+
 @router.post("/api/chat")
 def chat(req: ChatReq) -> StreamingResponse:
     """系统 AI 对话，**流式** NDJSON（每行一个事件 {type: tool|delta|done|error}）。
@@ -46,9 +57,18 @@ def chat(req: ChatReq) -> StreamingResponse:
             if not cli_runtime.detect_cli(kind):
                 raise HTTPException(400, f"未检测到「{kind}」对应的本机命令。请先安装并登录该 CLI，或改用「API 接入」。")
         elif not req.llm.apiKey or not req.llm.baseURL:
-            raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」里填写")
+            # 前端未填时，尝试用后端环境变量兜底
+            env_cfg = chat_layer._get_env_llm_config()
+            if not env_cfg.get("apiKey") or not env_cfg.get("baseURL"):
+                raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」里填写，或配置后端环境变量 VR_LLM_BASE_URL / VR_LLM_API_KEY")
 
     cfg = req.llm.model_dump() if not is_omni_fallback else {}
+    # 后端环境变量兜底：前端未传的字段用环境变量补全
+    if not is_omni_fallback:
+        env_cfg = chat_layer._get_env_llm_config()
+        for k in ("baseURL", "apiKey", "model"):
+            if not cfg.get(k) and env_cfg.get(k):
+                cfg[k] = env_cfg[k]
     cfg["use_omniroute"] = True  # 始终启用 OmniRoute 兜底
 
     def gen():

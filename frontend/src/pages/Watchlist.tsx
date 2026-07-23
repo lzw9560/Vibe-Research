@@ -53,11 +53,12 @@ export function Watchlist() {
   };
 
   const remove = async (c: string) => {
-    const next = codes.filter((x) => x !== c);
     await apiWatchlist.remove(c);
-    saveWatch(next); // localStorage fallback 同步
-    setCodes(next);
-    refresh(next);
+    // 重新从后端拉取最新列表，避免前后端状态不一致
+    const updated = await apiWatchlist.fetch();
+    setCodes(updated);
+    saveWatch(updated);
+    refresh(updated);
   };
 
   const aiContext = useMemo(

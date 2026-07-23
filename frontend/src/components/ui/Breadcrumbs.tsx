@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
 
 export interface BreadcrumbItem {
   label: string;
@@ -13,13 +12,14 @@ interface BreadcrumbsProps {
 }
 
 export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
+  if (!items.length) return null;
   return (
-    <nav className={cn("flex items-center gap-1 text-xs text-muted-foreground", className)}>
+    <nav className={cn("flex items-center gap-1 text-xs text-muted-foreground", className)} aria-label="Breadcrumb">
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
         return (
           <span key={index} className="flex items-center gap-1">
-            {index > 0 && <ChevronRight className="h-3 w-3" />}
+            {index > 0 && <span className="text-muted-foreground/60">/</span>}
             {item.to && !isLast ? (
               <Link to={item.to} className="hover:text-foreground transition-colors">
                 {item.label}

@@ -58,7 +58,8 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
         return true;
       }
     } catch {
-      // OmniRoute 不可用，保持未配置状态
+      // OmniRoute 不可用，明确标记为未配置
+      setConfigured(false);
     }
     return false;
   };

@@ -12,6 +12,7 @@ portfolio.json
 public/user-data/
 backend/data/fallback/
 backend/data/*.db
+backend/**/*.db
 backend/vibe_research.db
 data/
 

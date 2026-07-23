@@ -18,16 +18,25 @@ def run_migrations() -> None:
     """执行数据库迁移（仅一次）。"""
     from migrations import MigrationManager
     manager = MigrationManager(db_path=_DB_PATH)
-    migration_sql = (
-        Path(__file__).resolve().parent
+    migration_v1 = (
+        Path(__file__).resolve().parent.parent
         / "migrations" / "limitup_screener" / "20250613-001_create_gene_scores.sql"
+    ).read_text(encoding="utf-8")
+    migration_v2 = (
+        Path(__file__).resolve().parent.parent
+        / "migrations" / "limitup_screener" / "20250613-002_add_gene_scores_indexes.sql"
     ).read_text(encoding="utf-8")
     migrations = [
         {
             "version": "20250613-001",
             "name": "create_gene_scores",
-            "sql": migration_sql,
-        }
+            "sql": migration_v1,
+        },
+        {
+            "version": "20250613-002",
+            "name": "add_gene_scores_indexes",
+            "sql": migration_v2,
+        },
     ]
     manager.upgrade(migrations)
 
@@ -44,16 +53,9 @@ def save_gene_scores(date: str, scores: list) -> None:
     """保存基因得分到数据库。"""
     conn = get_db()
     with _DB_LOCK:
-        conn.execute("BEGIN TRANSACTION")
         try:
-            for s in scores:
-                conn.execute("""
-                    INSERT OR REPLACE INTO gene_scores
-                    (date, code, name, total_score, factor_premium_rate, factor_red_rate,
-                     factor_seal_rate, factor_rebound_rate, factor_freq_score,
-                     wilson_adjusted, qualify, high_gene, zt_count_250d)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
+            rows = [
+                (
                     date, s.code, s.name, s.total_score,
                     s.factors.get("次日溢价率", 0),
                     s.factors.get("红盘率", 0),
@@ -64,7 +66,16 @@ def save_gene_scores(date: str, scores: list) -> None:
                     1 if s.qualify else 0,
                     1 if s.high_gene else 0,
                     s.zt_count_250d,
-                ))
+                )
+                for s in scores
+            ]
+            conn.executemany("""
+                INSERT OR REPLACE INTO gene_scores
+                (date, code, name, total_score, factor_premium_rate, factor_red_rate,
+                 factor_seal_rate, factor_rebound_rate, factor_freq_score,
+                 wilson_adjusted, qualify, high_gene, zt_count_250d)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, rows)
             conn.commit()
         except Exception:
             conn.rollback()
@@ -75,6 +86,8 @@ def save_gene_scores(date: str, scores: list) -> None:
 
 def load_gene_scores(date: str) -> list | None:
     """从数据库加载基因得分。如果不存在则返回 None。"""
+    from limitup_screener.models import GeneScore
+
     conn = get_db()
     with _DB_LOCK:
         rows = conn.execute(
@@ -95,15 +108,15 @@ def load_gene_scores(date: str) -> list | None:
             "炸板后溢价": row["factor_rebound_rate"] or 0,
             "涨停频次": row["factor_freq_score"] or 0,
         }
-        scores.append({
-            "code": row["code"],
-            "name": row["name"] or "",
-            "total_score": row["total_score"] or 0,
-            "factors": factors,
-            "wilson_adjusted": row["wilson_adjusted"] or 0,
-            "qualify": bool(row["qualify"]),
-            "high_gene": bool(row["high_gene"]),
-            "last_zt_dates": [],
-            "zt_count_250d": row["zt_count_250d"] or 0,
-        })
+        scores.append(GeneScore(
+            code=row["code"],
+            name=row["name"] or "",
+            total_score=row["total_score"] or 0,
+            factors=factors,
+            wilson_adjusted=row["wilson_adjusted"] or 0,
+            qualify=bool(row["qualify"]),
+            high_gene=bool(row["high_gene"]),
+            last_zt_dates=[],
+            zt_count_250d=row["zt_count_250d"] or 0,
+        ))
     return scores

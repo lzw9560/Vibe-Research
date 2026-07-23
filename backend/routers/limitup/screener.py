@@ -45,4 +45,21 @@ async def save_limitup_screener_params(params: LimitUpParamsBody) -> Dict[str, s
     return {"status": "ok"}
 
 
+@router.post("/api/limitup/screener/trigger")
+async def trigger_screener() -> Dict[str, str]:
+    """手动触发今日基因得分预计算（后台异步执行）。"""
+    import asyncio
+    import threading
+    try:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        thread = threading.Thread(
+            target=lambda: asyncio.run(ls.precompute_daily_async(date_str)),
+            daemon=True,
+        )
+        thread.start()
+        return {"status": "started", "date": date_str}
+    except Exception as e:
+        raise HTTPException(500, f"触发预计算失败：{e}") from e
+
+
 __all__ = ["router"]

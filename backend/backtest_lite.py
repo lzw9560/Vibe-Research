@@ -3,12 +3,36 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
 
 import astock
 import limitup_screener as ls
 from limitup_screener import _resolve_date, _fetch_zt_pool, _collect_zt_history_batch, _compute_factors, _calc_total_score, LOOKBACK_DAYS
+
+_CACHE_FILE = Path(__file__).resolve().parent / "data" / "backtest_cache.json"
+
+
+def _load_cache() -> dict[str, dict[str, Any]]:
+    """加载回测缓存（按 start_date|end_date 键）。"""
+    try:
+        if _CACHE_FILE.exists():
+            return json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_cache(cache: dict[str, dict[str, Any]]) -> None:
+    """持久化回测缓存。"""
+    try:
+        _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 @dataclass
@@ -103,7 +127,13 @@ def _next_trading_day(date_str: str) -> str:
 
 
 async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
-    """运行简化版回测（异步版本）。"""
+    """运行简化版回测（异步版本，带增量缓存）。"""
+    cache = _load_cache()
+    cache_key = f"{start_date}|{end_date}"
+    if cache_key in cache:
+        cached = cache[cache_key]
+        return BacktestResult(**cached)
+
     scatter = []
     total_signals = 0
     hit_count = 0
@@ -159,7 +189,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
     # 分位分析
     percentile_analysis = _calc_percentile_analysis(scatter)
 
-    return BacktestResult(
+    backtest_result = BacktestResult(
         period=f"{start_date} ~ {end_date}",
         total_signals=total_signals,
         hit_count=hit_count,
@@ -170,6 +200,10 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
         scatter_data=scatter,
         percentile_analysis=percentile_analysis,
     )
+
+    cache[cache_key] = asdict(backtest_result)
+    _save_cache(cache)
+    return backtest_result
 
 
 def run_backtest(start_date: str, end_date: str) -> BacktestResult:

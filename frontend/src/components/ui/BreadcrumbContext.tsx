@@ -1,9 +1,5 @@
 import { createContext, useContext } from "react";
-
-interface BreadcrumbItem {
-  label: string;
-  to?: string;
-}
+import type { BreadcrumbItem } from "./Breadcrumbs";
 
 interface BreadcrumbContextValue {
   items: BreadcrumbItem[];

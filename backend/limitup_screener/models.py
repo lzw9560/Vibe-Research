@@ -149,8 +149,10 @@ def compute_gene_score(
     bt_points: list[dict] = []
     bt_summary: dict = {}
     if include_backtest and len(history) >= 3:
+        # 限制回测深度，避免 O(n^2) 计算
+        bt_history = history[:10]
         history_for_bt: list[dict] = []
-        for h in history:
+        for h in bt_history:
             if len(history_for_bt) >= 2:
                 bt_factors = compute_factors(history_for_bt, [], [])
                 bt_total = calc_total_score(bt_factors)

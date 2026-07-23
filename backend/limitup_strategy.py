@@ -370,7 +370,7 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
     """重新计算某只股票的 gene_score，包含回测数据。"""
     from limitup_screener import _resolve_date, _fetch_zt_pool, _collect_zt_history_batch, _compute_factors, _calc_total_score, wilson_lower_bound, LOOKBACK_DAYS, DISCLAIMER
 
-    target_date = _resolve_date(date)
+    target_date = await _resolve_date(date)
     zt_pool, yzt_pool, zb_pool = await _fetch_zt_pool(target_date)
 
     # 找该股
@@ -389,7 +389,7 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
         )
 
     name = stock_item.get("n", "")
-    history = _collect_zt_history_batch({code}, target_date, lookback=LOOKBACK_DAYS)
+    history = await _collect_zt_history_batch({code}, target_date, lookback=LOOKBACK_DAYS)
     stock_history = history.get(code, [])
     stock_yzt = [y for y in yzt_pool if str(y.get("c", "")) == code]
     stock_zb = [z for z in zb_pool if str(z.get("c", "")) == code]

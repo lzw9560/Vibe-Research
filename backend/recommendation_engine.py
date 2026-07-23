@@ -177,7 +177,7 @@ async def get_recommendation(code: str, date: str | None = None) -> StockRecomme
 
 
 async def get_today_recommendations(limit: int = 20) -> List[StockRecommendation]:
-    """获取当日推荐清单（HIGH/MEDIUM 优先）。"""
+    """获取当日推荐清单（含 LOW_QUALITY 观察池）。"""
     result = await get_screener_result()
     if not result or not result.gene_scores:
         return []
@@ -185,7 +185,7 @@ async def get_today_recommendations(limit: int = 20) -> List[StockRecommendation
     recs: List[StockRecommendation] = []
     for g in result.gene_scores:
         rec = await get_recommendation(g.code, result.date)
-        if rec and rec.level in (RecommendationLevel.HIGH_QUALITY, RecommendationLevel.MEDIUM_QUALITY):
+        if rec:
             recs.append(rec)
 
     # 按基因得分降序

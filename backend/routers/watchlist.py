@@ -15,11 +15,32 @@ class WatchlistCodesIn(BaseModel):
     codes: list[str]
 
 
+def _ensure_watchlist_table() -> None:
+    """确保 watchlist 表存在。"""
+    db = _get_db()
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS watchlist (
+            code TEXT PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    db.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_watchlist_created_at
+            ON watchlist (created_at)
+        """
+    )
+    db.commit()
+
+
 @router.get("/api/watchlist")
 def watchlist_get() -> Dict[str, Any]:
     """获取自选股列表"""
     try:
         with _DB_LOCK:
+            _ensure_watchlist_table()
             db = _get_db()
             rows = db.execute("SELECT code FROM watchlist ORDER BY created_at").fetchall()
             return {"codes": [r["code"] for r in rows]}
@@ -36,6 +57,7 @@ def watchlist_add(body: WatchlistCodesIn) -> Dict[str, Any]:
     """批量添加自选股（去重插入）"""
     try:
         with _DB_LOCK:
+            _ensure_watchlist_table()
             db = _get_db()
             codes = list(dict.fromkeys(c.strip() for c in body.codes if c.strip()))  # 去重保序
             added = 0
@@ -63,6 +85,7 @@ def watchlist_delete(code: str) -> Dict[str, Any]:
     """删除自选股"""
     try:
         with _DB_LOCK:
+            _ensure_watchlist_table()
             db = _get_db()
             db.execute("DELETE FROM watchlist WHERE code=?", (code,))
             db.commit()

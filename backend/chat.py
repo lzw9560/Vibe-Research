@@ -24,6 +24,23 @@ import gstock
 MAX_ROUNDS = 6  # 工具调用最大轮数，防死循环
 _TOOL_RESULT_CAP = 6000  # 单次工具结果注入上限（控 token）
 
+# 后端 LLM 环境变量兜底（前端未配置时使用）
+_ENV_LLM_BASE_URL = os.environ.get("VR_LLM_BASE_URL", "").strip()
+_ENV_LLM_API_KEY = os.environ.get("VR_LLM_API_KEY", "").strip()
+_ENV_LLM_MODEL = os.environ.get("VR_LLM_MODEL", "").strip()
+
+
+def _get_env_llm_config() -> dict:
+    """从环境变量读取 LLM 配置（仅作兜底，前端配置优先）。"""
+    cfg: dict = {}
+    if _ENV_LLM_BASE_URL:
+        cfg["baseURL"] = _ENV_LLM_BASE_URL
+    if _ENV_LLM_API_KEY:
+        cfg["apiKey"] = _ENV_LLM_API_KEY
+    if _ENV_LLM_MODEL:
+        cfg["model"] = _ENV_LLM_MODEL
+    return cfg
+
 # 投研分析框架：用户要「分析个股 / 给判断 / 下结论」时，AI 一律按这五维组织，
 # 让弱模型也能输出结构化、覆盖全、不漏项的专业解读。焊进 SYSTEM_PROMPT，不做成 UI 选项——
 # 用户就问，给出的就是这套框架的结论。合规：框架只规定「怎么读数据」，每维只陈述事实与相对位置，

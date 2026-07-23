@@ -22,7 +22,7 @@ export function SeatEngine() {
         const arr = Array.isArray(raw) ? raw : (raw as any).profiles || [];
         const dict: Record<string, SeatProfile> = {};
         for (const p of arr) {
-          if (p.name) dict[p.name] = p;
+          if (p.seat_name) dict[p.seat_name] = p;
         }
         setProfiles(dict);
       })
