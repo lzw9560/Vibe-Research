@@ -20,6 +20,7 @@ import Recommendation from "@/pages/Recommendation";
 import StrategySignals from "@/pages/StrategySignals";
 import RiskDashboard from "@/pages/RiskDashboard";
 import Backtest from "@/pages/Backtest";
+import { HealthPage } from "@/pages/Health";
 
 export const router = createBrowserRouter([
   {
@@ -47,6 +48,7 @@ export const router = createBrowserRouter([
       { path: "/backtest", element: <Backtest /> },
       { path: "/risk-dashboard", element: <RiskDashboard /> },
       { path: "/settings", element: <Settings /> },
+      { path: "/health", element: <HealthPage /> },
     ],
   },
 ]);

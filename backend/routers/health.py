@@ -3,7 +3,6 @@ Health check router.
 """
 from __future__ import annotations
 
-import asyncio
 import sqlite3
 from datetime import datetime
 from typing import Any, Dict
@@ -121,12 +120,12 @@ def _check_fallback() -> Dict[str, Any]:
         return {"ok": False, "detail": f"fallback_error: {exc}"}
 
 
-def _check_extreme_market() -> Dict[str, Any]:
+async def _check_extreme_market() -> Dict[str, Any]:
     """检查极端行情检测模块状态。"""
     try:
         from extreme_market_detector import get_extreme_market_signal
 
-        signal = asyncio.run(get_extreme_market_signal())
+        signal = await get_extreme_market_signal()
         if signal is None:
             return {"ok": False, "detail": "extreme_market_detector_unavailable"}
 
@@ -157,7 +156,7 @@ async def health_check() -> Dict[str, Any]:
         "data_freshness": _check_data_freshness(),
         "scheduler": _check_scheduler(),
         "fallback": _check_fallback(),
-        "extreme_market": _check_extreme_market(),
+        "extreme_market": await _check_extreme_market(),
     }
 
     overall_ok = all(item.get("ok", False) for item in checks.values())

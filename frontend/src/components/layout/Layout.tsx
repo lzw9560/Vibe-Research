@@ -66,6 +66,7 @@ const GROUPS = [
       { to: "/strategy-signals", label: "战法信号" },
       { to: "/backtest", label: "简化回测" },
       { to: "/metrics", label: "性能监控" },
+      { to: "/health", label: "系统健康" },
       { to: "/settings", label: "接入 AI" },
     ],
   },
