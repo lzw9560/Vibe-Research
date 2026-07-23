@@ -10,6 +10,10 @@ VibeResearch-专业化建议.md
 my-watchlist.json
 portfolio.json
 public/user-data/
+backend/data/fallback/
+backend/data/*.db
+backend/vibe_research.db
+data/
 
 # ── 密钥 / 环境（绝不进仓库） ──────────────────────────────────────
 .env

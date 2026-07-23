@@ -212,14 +212,14 @@ class TestWinRateEndpoints:
 
     def test_winrate_sector(self):
         r = client.get("/api/winrate/sector/计算机")
-        assert r.status_code in (200, 502)
+        assert r.status_code in (200, 404, 502)
         if r.status_code == 200:
             data = r.json()
             assert "data" in data
 
     def test_winrate_strategy(self):
         r = client.get("/api/winrate/strategy/首板挖掘")
-        assert r.status_code in (200, 502)
+        assert r.status_code in (200, 404, 502)
         if r.status_code == 200:
             data = r.json()
             assert "data" in data

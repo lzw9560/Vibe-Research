@@ -1,5 +1,0 @@
-{
-  "gene_qualify_threshold": 65.0,
-  "gene_high_threshold": 80.0,
-  "lookback_days": 250
-}

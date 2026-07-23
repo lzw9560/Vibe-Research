@@ -68,7 +68,7 @@ export async function chatStream(messages: ChatMsg[], context: string, handlers:
     resp = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ messages, context, llm: llm || {}, use_omniroute: true }),
+      body: JSON.stringify({ messages, context, llm: llm || null, use_omniroute: true }),
       signal,
     });
   } catch (e) {
