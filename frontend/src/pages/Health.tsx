@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Activity, Database, Cpu, Calendar, Shield, FlaskConical } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/lib/utils";
 
 interface HealthResponse {
@@ -77,36 +79,39 @@ export function HealthPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
-      <h1 className="text-2xl font-bold">系统健康状态</h1>
-      <p className="mt-1 text-xs text-muted-foreground">
-        最后更新：{" "}
-        {data ? new Date(data.timestamp).toLocaleString("zh-CN") : "--"}
-      </p>
+      <PageHeader
+        title="系统健康状态"
+        subtitle={`最后更新：${data ? new Date(data.timestamp).toLocaleString("zh-CN") : "--"}`}
+      />
 
       {loading && (
-        <div className="mt-6 rounded-lg border border-dashed border-muted-foreground/40 p-6 text-center text-sm text-muted-foreground">
-          正在读取后端健康状态...
-        </div>
+        <GlassCard>
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            正在读取后端健康状态...
+          </div>
+        </GlassCard>
       )}
 
       {error && (
-        <div className="mt-6 rounded-lg border border-rose-500/40 bg-rose-500/5 p-4 text-sm text-rose-600 dark:text-rose-400">
-          读取失败：{error}
-        </div>
+        <GlassCard>
+          <div className="p-4 text-sm text-rose-600 dark:text-rose-400">
+            读取失败：{error}
+          </div>
+        </GlassCard>
       )}
 
       {!loading && !error && data && (
         <div className="mt-6 space-y-3">
-          <div
+          <GlassCard
             className={cn(
-              "rounded-lg border p-4 text-sm",
+              "border",
               data.ok
                 ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300"
                 : "border-rose-500/40 bg-rose-500/5 text-rose-700 dark:text-rose-300"
             )}
           >
             总体状态：{data.ok ? "正常" : "异常"}（{data.service} {data.version}）
-          </div>
+          </GlassCard>
 
           <div className="grid gap-3">
             {checks.map((item) => {
@@ -115,10 +120,7 @@ export function HealthPage() {
                 ? "text-emerald-600 dark:text-emerald-400"
                 : "text-rose-600 dark:text-rose-400";
               return (
-                <div
-                  key={item.label}
-                  className="rounded-lg border border-muted-foreground/20 bg-background/60 p-4"
-                >
+                <GlassCard key={item.label}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Icon className={cn("h-4 w-4", statusColor)} />
@@ -138,7 +140,7 @@ export function HealthPage() {
                   <div className="mt-2 text-xs text-muted-foreground">
                     {formatDetail(item.detail)}
                   </div>
-                </div>
+                </GlassCard>
               );
             })}
           </div>

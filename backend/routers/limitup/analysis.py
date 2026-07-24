@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 import limitup_strategy as lstrat
 from routers.common import _validate
-from risk import update_one_day_risk_realtime
+from risk_models import update_one_day_risk_realtime
 
 router = APIRouter(tags=["limitup"])
 

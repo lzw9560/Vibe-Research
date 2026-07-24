@@ -18,8 +18,32 @@ from limitup_screener import (
     compute_gene_score,
     get_screener_result,
 )
-from risk import OneDayRisk
+from risk_models import OneDayRisk
 import astock
+
+
+# ===========================================================================
+# 0. A股价格校验工具
+# ===========================================================================
+
+def _round_to_tick_size(price: float, tick_size: float = 0.01) -> float:
+    """A股 tick-size rounding（默认 0.01 元）。"""
+    return round(round(price / tick_size) * tick_size, 2)
+
+
+def _validate_limit_up_price(prev_close: float, code: str = "") -> tuple[float, float]:
+    """计算A股涨跌停价（支持主板/创业板/科创板/ST股）。"""
+    if not prev_close or prev_close <= 0:
+        return 0.0, 0.0
+    if code.startswith(("300", "301", "688", "689")):
+        limit = 0.20
+    elif "ST" in (code or ""):
+        limit = 0.05
+    else:
+        limit = 0.10
+    up = _round_to_tick_size(prev_close * (1 + limit))
+    down = _round_to_tick_size(prev_close * (1 - limit))
+    return up, down
 
 
 # ===========================================================================
@@ -76,6 +100,10 @@ class StrategySignal(BaseModel):
     # 综合指标
     risk_reward_ratio: float = 0.0  # 风险收益比
     conditions: dict = {}           # 战法触发条件详情
+    # 封单/流通盘风控
+    seal_amount: float = 0.0        # 封单额（元）
+    float_shares: float = 0.0       # 流通盘（股）
+    seal_to_float_ratio: float = 0.0  # 封单/流通盘比
     # 教育性说明
     reasoning: list[str] = []       # 推荐理由（教育性表述）
     risk_notes: list[str] = []      # 风险提示
@@ -103,6 +131,11 @@ class LimitUpAnalysis(BaseModel):
     risk_rules: list[RiskRuleKnowledge]
     backtest_points: list[dict] = []  # 简化版回测数据
     disclaimer: str
+    seal_amount: float = 0.0        # 封单额（元）
+    float_shares: float = 0.0       # 流通盘（股）
+    seal_to_float_ratio: float = 0.0  # 封单/流通盘比
+    limit_up_price: float = 0.0     # 涨停价
+    limit_down_price: float = 0.0   # 跌停价
 
 
 # ===========================================================================
@@ -166,7 +199,6 @@ def _build_condition_matches(
     code: str,
     name: str,
     gene: GeneScore,
-    pool_item: dict | None = None,
 ) -> StrategyLogicMatch:
     """根据个股数据和基因得分，生成策略逻辑条件匹配。
 
@@ -175,19 +207,27 @@ def _build_condition_matches(
     matches: list[ConditionMatch] = []
 
     # 条件1：高封单比（封单金额 / 成交额 > 0.1）
-    if pool_item:
-        amount = astock._numf(pool_item.get("amount")) or 0
-        # 封单比无法从涨停池直接计算（缺封单量字段），用基因得分中的封板率近似
-        seal_rate = gene.factors.get("封板率", 0)
-        if seal_rate > SEAL_RATE_HIGH_THRESHOLD:
-            matches.append(ConditionMatch(
-                condition="高封板率",
-                value=f"封板率 {seal_rate:.1f}%",
-                description=(
-                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
-                    f"属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"
-                ),
-            ))
+    seal_rate = gene.factors.get("封板率", 0)
+    if seal_rate > SEAL_RATE_HIGH_THRESHOLD:
+        matches.append(ConditionMatch(
+            condition="高封板率",
+            value=f"封板率 {seal_rate:.1f}%",
+            description=(
+                f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
+                f"属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"
+            ),
+        ))
+
+    # 绝对封单额/流通盘风控
+    if gene.seal_to_float_ratio >= 0.05:
+        matches.append(ConditionMatch(
+            condition="高封单比",
+            value=f"封单/流通盘 {gene.seal_to_float_ratio:.2%}",
+            description=(
+                f"策略逻辑上，{name} 的封单额占流通盘比例为 {gene.seal_to_float_ratio:.2%}，"
+                f"属于较高水平。历史统计特征显示，高封单比通常意味着市场对该股的看多情绪较强。"
+            ),
+        ))
 
     # 条件2：基因高分
     if gene.total_score >= GENE_HIGH_THRESHOLD:
@@ -344,6 +384,11 @@ async def get_analysis(code: str, date: str | None = None, risk: OneDayRisk | No
         risk_rules=risk_rules,
         backtest_points=gene_obj.backtest_points,
         disclaimer=DISCLAIMER,
+        seal_amount=gene_obj.seal_amount,
+        float_shares=gene_obj.float_shares,
+        seal_to_float_ratio=gene_obj.seal_to_float_ratio,
+        limit_up_price=gene_obj.limit_up_price,
+        limit_down_price=gene_obj.limit_down_price,
     )
 
 
@@ -368,10 +413,21 @@ async def _rebuild_gene_with_backtest(code: str, date: str | None) -> GeneScore:
 
 async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneScore:
     """重新计算某只股票的 gene_score，包含回测数据。"""
-    from limitup_screener import _resolve_date, _fetch_zt_pool, _collect_zt_history_batch, _compute_factors, _calc_total_score, wilson_lower_bound, LOOKBACK_DAYS, DISCLAIMER
+    from limitup_screener.service import (
+        public_resolve_date,
+        public_fetch_zt_pool,
+        public_collect_zt_history_batch,
+    )
+    from limitup_screener.models import (
+        compute_factors,
+        calc_total_score,
+        wilson_lower_bound,
+        LOOKBACK_DAYS,
+        DISCLAIMER,
+    )
 
-    target_date = await _resolve_date(date)
-    zt_pool, yzt_pool, zb_pool = await _fetch_zt_pool(target_date)
+    target_date = await public_resolve_date(date)
+    zt_pool, yzt_pool, zb_pool = await public_fetch_zt_pool(target_date)
 
     # 找该股
     stock_item = None
@@ -389,13 +445,13 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
         )
 
     name = stock_item.get("n", "")
-    history = await _collect_zt_history_batch({code}, target_date, lookback=LOOKBACK_DAYS)
+    history = await public_collect_zt_history_batch({code}, target_date, lookback=LOOKBACK_DAYS)
     stock_history = history.get(code, [])
     stock_yzt = [y for y in yzt_pool if str(y.get("c", "")) == code]
     stock_zb = [z for z in zb_pool if str(z.get("c", "")) == code]
 
-    factors = _compute_factors(stock_history, stock_yzt, stock_zb)
-    total = _calc_total_score(factors)
+    factors = compute_factors(stock_history, stock_yzt, stock_zb)
+    total = calc_total_score(factors)
     wilson_adj = round(total * wilson_lower_bound(len(stock_history), max(len(stock_history), 1), z=1.96), 2)
 
     last_dates = sorted(set(
@@ -408,8 +464,8 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
         history_for_bt: list[dict] = []
         for h in stock_history:
             if len(history_for_bt) >= 2:
-                bt_factors = _compute_factors(history_for_bt, [], [])
-                bt_total = _calc_total_score(bt_factors)
+                bt_factors = compute_factors(history_for_bt, [], [])
+                bt_total = calc_total_score(bt_factors)
                 lbc = astock._numf(h.get("lbc")) or 0
                 bt_points.append({
                     "date": h.get("_pool_date", ""),

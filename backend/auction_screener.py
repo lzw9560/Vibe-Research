@@ -27,6 +27,26 @@ AUCTION_TOP_N = int(os.getenv("AUCTION_TOP_N", "50"))
 AUCTION_MIN_GENE_SCORE = float(os.getenv("AUCTION_MIN_GENE_SCORE", "50"))
 AUCTION_MIN_ZT_COUNT = int(os.getenv("AUCTION_MIN_ZT_COUNT", "2"))
 
+
+def _round_to_tick_size(price: float, tick_size: float = 0.01) -> float:
+    """A股 tick-size rounding（默认 0.01 元）。"""
+    return round(round(price / tick_size) * tick_size, 2)
+
+
+def _validate_limit_up_price(prev_close: float, code: str = "") -> tuple[float, float]:
+    """计算A股涨跌停价（支持主板/创业板/科创板/ST股）。"""
+    if not prev_close or prev_close <= 0:
+        return 0.0, 0.0
+    if code.startswith(("300", "301", "688", "689")):
+        limit = 0.20
+    elif "ST" in (code or ""):
+        limit = 0.05
+    else:
+        limit = 0.10
+    up = _round_to_tick_size(prev_close * (1 + limit))
+    down = _round_to_tick_size(prev_close * (1 - limit))
+    return up, down
+
 # ---- 缓存 ----
 _CACHE: dict = {}
 _CACHE_TTL = 43200  # 12 小时
@@ -63,6 +83,9 @@ class AuctionCandidate(BaseModel):
     strategy_tags: list[str] = field(default_factory=list)  # 战法标签
     signal_strength: int = 0           # 信号强度 1-5
     confidence: str = "medium"         # 置信度 high/medium/low
+    seal_amount: float = 0.0           # 封单额（元）
+    float_shares: float = 0.0          # 流通盘（股）
+    seal_to_float_ratio: float = 0.0   # 封单/流通盘比
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -146,6 +169,18 @@ class AuctionScreener:
             zbc = astock._numf(item.get("zbc", 0)) or 0           # 炸板次数
             zje = astock._numf(item.get("zje", 0)) or 0           # 涨停价
             open_price = astock._numf(item.get("open", 0)) or 0   # 开盘价
+            seal_amount = astock._numf(item.get("seal_amount")) or 0.0  # 封单额（元）
+            float_shares = astock._numf(item.get("float_shares")) or 0.0  # 流通盘（股）
+            prev_close = astock._numf(item.get("prev_close")) or 0.0  # 昨收价
+
+            # A股涨跌停价校验 + tick-size rounding
+            if prev_close > 0 and zje > 0:
+                limit_up, limit_down = _validate_limit_up_price(prev_close, code)
+                if zje > limit_up * 1.01 or zje < limit_down * 0.99:
+                    _logger.warning("价格异常: code=%s, zje=%s, prev_close=%s, limit_up=%s, limit_down=%s", code, zje, prev_close, limit_up, limit_down)
+
+            # 封单/流通盘比
+            seal_to_float_ratio = (seal_amount / float_shares) if float_shares > 0 else 0.0
             
             # 基因得分
             gene_score = gene_scores_map.get(code, {}).get("total_score", 0)
@@ -212,6 +247,9 @@ class AuctionScreener:
                 "strategy_tags": strategy_tags,
                 "signal_strength": signal_strength,
                 "confidence": confidence,
+                "seal_amount": round(seal_amount, 2),
+                "float_shares": round(float_shares, 2),
+                "seal_to_float_ratio": round(seal_to_float_ratio, 6),
             })
         
         # 5. 排序取 TOP N

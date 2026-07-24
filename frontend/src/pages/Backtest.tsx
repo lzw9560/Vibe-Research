@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface BacktestScatterPoint {
@@ -78,11 +81,14 @@ export default function Backtest() {
 
       {error && (
         <GlassCard>
-          <div className="p-4 text-sm text-red-600">加载失败：{error}</div>
+          <div className="p-4 text-sm text-red-600 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
         </GlassCard>
       )}
 
       <GlassCard>
+        <SectionHeader title="查询条件" />
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">开始日期</label>
@@ -114,30 +120,12 @@ export default function Backtest() {
 
       {result && (
         <div className="grid gap-3 md:grid-cols-3">
-          <GlassCard>
-            <div className="text-xs text-muted-foreground">总信号数</div>
-            <div className="mt-1 text-2xl font-bold">{result.total_signals}</div>
-          </GlassCard>
-          <GlassCard>
-            <div className="text-xs text-muted-foreground">命中率</div>
-            <div className="mt-1 text-2xl font-bold">{(result.hit_rate * 100).toFixed(1)}%</div>
-          </GlassCard>
-          <GlassCard>
-            <div className="text-xs text-muted-foreground">平均收益</div>
-            <div className="mt-1 text-2xl font-bold">{(result.avg_return * 100).toFixed(2)}%</div>
-          </GlassCard>
-          <GlassCard>
-            <div className="text-xs text-muted-foreground">最大回撤</div>
-            <div className="mt-1 text-2xl font-bold">{(result.max_drawdown * 100).toFixed(2)}%</div>
-          </GlassCard>
-          <GlassCard>
-            <div className="text-xs text-muted-foreground">夏普比率</div>
-            <div className="mt-1 text-2xl font-bold">{result.sharpe_ratio.toFixed(2)}</div>
-          </GlassCard>
-          <GlassCard>
-            <div className="text-xs text-muted-foreground">统计区间</div>
-            <div className="mt-1 text-sm font-medium">{result.period}</div>
-          </GlassCard>
+          <MetricCard label="总信号数" value={result.total_signals} />
+          <MetricCard label="命中率" value={`${(result.hit_rate * 100).toFixed(1)}%`} />
+          <MetricCard label="平均收益" value={`${(result.avg_return * 100).toFixed(2)}%`} />
+          <MetricCard label="最大回撤" value={`${(result.max_drawdown * 100).toFixed(2)}%`} />
+          <MetricCard label="夏普比率" value={result.sharpe_ratio.toFixed(2)} />
+          <MetricCard label="统计区间" value={result.period} />
         </div>
       )}
 
@@ -161,9 +149,11 @@ export default function Backtest() {
       )}
 
       {!loading && scatter.length === 0 && !error && (
-        <GlassCard>
-          <div className="p-6 text-center text-sm text-muted-foreground">暂无回测数据</div>
-        </GlassCard>
+        <EmptyState
+          icon={<RefreshCw className="h-8 w-8 text-muted-foreground/40" />}
+          title="暂无回测数据"
+          description="选择日期范围后点击查询，查看基因得分与次日表现统计。"
+        />
       )}
     </div>
   );

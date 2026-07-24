@@ -5,6 +5,8 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { AskAiButton } from "@/components/ui/AskAiButton";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, ApiError, type PortfolioData } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -131,17 +133,14 @@ export function Portfolio() {
             { k: "浮动盈亏", v: (totals.pnl > 0 ? "+" : "") + fmt(totals.pnl), c: pnlColor(totals.pnl) },
             { k: "盈亏比例", v: (totals.pnl_pct > 0 ? "+" : "") + totals.pnl_pct + "%", c: pnlColor(totals.pnl) },
           ].map((m) => (
-            <GlassCard key={m.k} className="p-3">
-              <p className="text-xs text-muted-foreground">{m.k}</p>
-              <p className={cn("mt-1 font-mono text-lg font-bold", m.c)}>{m.v}</p>
-            </GlassCard>
+            <MetricCard key={m.k} label={m.k} value={m.v} valueClassName={cn("font-mono text-lg font-bold", m.c)} />
           ))}
         </div>
       )}
 
       {/* 录入 */}
       <GlassCard className="mb-4">
-        <h3 className="mb-3 text-sm font-semibold">添加持仓</h3>
+        <SectionHeader title="添加持仓" />
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <Input label="股票代码" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6 位代码" className="w-28" />
@@ -211,7 +210,7 @@ export function Portfolio() {
 
       {/* 清仓录入 */}
       <GlassCard className="mb-4 mt-6">
-        <h3 className="mb-3 text-sm font-semibold">添加清仓记录</h3>
+        <SectionHeader title="添加清仓记录" />
         <div className="flex flex-wrap items-end gap-2">
           <Input label="股票代码" value={cCode} onChange={(e) => setCCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6 位代码" className="w-24" />
           <Input label="清仓日期" type="date" value={cDate} onChange={(e) => setCDate(e.target.value)} className="w-auto" />
@@ -226,7 +225,7 @@ export function Portfolio() {
 
       {/* 已清仓列表 */}
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-muted-foreground">已清仓</h3>
+        <SectionHeader title="已清仓" className="mb-0" />
         {closed.length > 0 && data && (
           <span className="text-sm">
             已实现盈亏合计 <b className={cn("font-mono", pnlColor(data.realized_pnl))}>{data.realized_pnl > 0 ? "+" : ""}{fmt(data.realized_pnl)}</b>

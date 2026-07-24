@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, FileText, Trash2, Download, Loader2, FolderOpen } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, ApiError, downloadReport, type MyReport } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -133,27 +135,30 @@ export function MyReports() {
       </GlassCard>
 
       {err && (
-        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-          {err}
-        </div>
+        <GlassCard>
+          <div className="p-3 text-sm text-destructive">{err}</div>
+        </GlassCard>
       )}
 
       {/* 列表（按行业分组） */}
       {reports.length === 0 ? (
-        <GlassCard>
-          <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-            <FolderOpen className="h-8 w-8 text-muted-foreground/40" />
-            还没有归档的研报。把你收集的研报拖进上面的框，会自动按行业分好类。
-          </div>
-        </GlassCard>
+        <EmptyState
+          icon={<FolderOpen className="h-8 w-8 text-muted-foreground/40" />}
+          title="还没有归档的研报"
+          description="把你收集的研报拖进上面的框，会自动按行业分好类。"
+        />
       ) : (
         <div className="space-y-4">
           {grouped.map(([industry, items]) => (
             <GlassCard key={industry}>
-              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                <span className="rounded bg-primary/15 px-2 py-0.5 text-xs text-primary">{industry}</span>
-                <span className="text-xs font-normal text-muted-foreground">{items.length} 份</span>
-              </h3>
+              <SectionHeader
+                title={
+                  <span className="flex items-center gap-2">
+                    <span className="rounded bg-primary/15 px-2 py-0.5 text-xs text-primary">{industry}</span>
+                    <span className="text-xs font-normal text-muted-foreground">{items.length} 份</span>
+                  </span>
+                }
+              />
               <div className="divide-y divide-border/30">
                 {items.map((r) => (
                   <div key={r.id} className="flex items-center gap-3 py-2.5">

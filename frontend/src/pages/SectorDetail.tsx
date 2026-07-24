@@ -1,11 +1,12 @@
 import { useParams, Link } from "react-router-dom";
 import { useEffect } from "react";
-import { ArrowLeft, Plus, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { useBreadcrumbs } from "@/components/ui/BreadcrumbContext";
+import { ArrowLeft, Plus, Wrench } from "lucide-react";
 import sectorsData from "@/data/sectors.json";
 
 export function SectorDetail() {
@@ -54,7 +55,7 @@ export function SectorDetail() {
 
       {sector.verified ? (
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-muted-foreground">核心环节（{sector.nodes.length}）</h3>
+          <SectionHeader title={`核心环节（${sector.nodes.length}）`} />
           <div className="flex flex-wrap gap-2.5">
             {sector.nodes.map((n) => (
               <span key={n} className="rounded-full border border-primary/40 bg-primary/15 px-3.5 py-1.5 text-sm font-medium text-foreground shadow-glow transition-colors hover:bg-primary/25">

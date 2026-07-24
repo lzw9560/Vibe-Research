@@ -33,6 +33,17 @@ _CACHE_TTL = 43200  # 12 小时
 _COMPUTING: dict = {}
 _RESOLVED_DATE_CACHE: dict[str, str] = {}
 _RESOLVED_DATE_TTL = 3600  # 1 小时
+_DATA_STALE_THRESHOLD = 3600  # 1 小时视为 stale
+_DATA_EXPIRED_THRESHOLD = 86400  # 24 小时视为 expired
+
+
+def _assess_freshness(age_seconds: float) -> str:
+    """评估数据新鲜度。"""
+    if age_seconds <= _DATA_STALE_THRESHOLD:
+        return "fresh"
+    if age_seconds <= _DATA_EXPIRED_THRESHOLD:
+        return "stale"
+    return "expired"
 
 
 async def _resolve_date(date: str | None) -> str:
@@ -76,7 +87,7 @@ async def _fetch_zt_pool(date: str):
         return [], [], []
 
 
-async def _collect_zt_history_batch(codes: set[str], date: str, lookback: int = 250) -> dict[str, list[dict]]:
+async def _collect_zt_history_batch(codes: set[str], date: str, lookback: int = 252) -> dict[str, list[dict]]:
     """批量回溯 lookback 天，收集多只股的涨停记录（并发优化）。"""
     results: dict[str, list[dict]] = {c: [] for c in codes}
     target_date = datetime.strptime(date, "%Y%m%d")
@@ -125,6 +136,8 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
             high_gene=[],
             updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
             disclaimer=DISCLAIMER,
+            data_freshness="fresh",
+            data_age_seconds=0.0,
         )
         _CACHE[cache_key] = (now, result)
         return result
@@ -144,12 +157,12 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
             continue
         name = item.get("n", "")
         history = batch_history.get(code, [])
-        scores.append((code, name, history, yzt_pool, zb_pool))
+        scores.append((code, name, history, yzt_pool, zb_pool, item))
 
     # 并行计算基因得分
     async def _compute_one(args: tuple) -> GeneScore:
-        c, n, h, y, z = args
-        return compute_gene_score(c, n, h, y, z, include_backtest=True)
+        c, n, h, y, z, item = args
+        return compute_gene_score(c, n, h, y, z, include_backtest=True, pool_item=item)
 
     gene_tasks = [_compute_one(s) for s in scores]
     gene_results = await asyncio.gather(*gene_tasks, return_exceptions=True)
@@ -167,6 +180,8 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
         high_gene=high_gene_list,
         updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
         disclaimer=DISCLAIMER,
+        data_freshness="fresh",
+        data_age_seconds=0.0,
     )
 
     await asyncio.to_thread(save_gene_scores, display_date, gene_scores)
@@ -187,7 +202,13 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
 
     hit = _CACHE.get(cache_key)
     if hit and now - hit[0] < _CACHE_TTL:
-        return hit[1]
+        age = now - hit[0]
+        freshness = _assess_freshness(age)
+        result = hit[1].model_copy(update={
+            "data_freshness": freshness,
+            "data_age_seconds": round(age, 1),
+        })
+        return result
 
     db_scores = load_gene_scores(target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:])
     if db_scores is not None:
@@ -200,6 +221,8 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
             high_gene=high_gene_list,
             updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
             disclaimer=DISCLAIMER,
+            data_freshness="fresh",
+            data_age_seconds=0.0,
         )
         _CACHE[cache_key] = (now, result)
         return result
@@ -211,7 +234,12 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
             waited += 0.5
         hit = _CACHE.get(cache_key)
         if hit and now - hit[0] < _CACHE_TTL:
-            return hit[1]
+            age = now - hit[0]
+            freshness = _assess_freshness(age)
+            return hit[1].model_copy(update={
+                "data_freshness": freshness,
+                "data_age_seconds": round(age, 1),
+            })
         db_scores = load_gene_scores(target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:])
         if db_scores is not None:
             qualified = [g for g in db_scores if g.qualify]
@@ -223,6 +251,8 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
                 high_gene=high_gene_list,
                 updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
                 disclaimer=DISCLAIMER,
+                data_freshness="fresh",
+                data_age_seconds=0.0,
             )
             _CACHE[cache_key] = (now, result)
             return result
@@ -255,7 +285,42 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
         high_gene=[],
         updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
         disclaimer=DISCLAIMER + " （计算超时，请稍后刷新）",
+        data_freshness="expired",
+        data_age_seconds=0.0,
     )
+
+
+# ---- 公有接口（供 limitup_strategy 等外部模块调用） ----
+
+async def public_resolve_date(date: str | None = None) -> str:
+    """公有：解析日期参数，回推到最近交易日。"""
+    return await _resolve_date(date)
+
+
+async def public_fetch_zt_pool(date: str):
+    """公有：获取涨停池、昨涨停池、炸板池（并发）。"""
+    return await _fetch_zt_pool(date)
+
+
+async def public_collect_zt_history_batch(codes: set[str], date: str, lookback: int = 252) -> dict[str, list[dict]]:
+    """公有：批量回溯 lookback 天，收集多只股的涨停记录（并发优化）。"""
+    return await _collect_zt_history_batch(codes, date, lookback)
+
+
+def public_get_cache() -> dict:
+    """公有：获取内存缓存（只读）。"""
+    return _CACHE
+
+
+def public_get_cache_ttl() -> int:
+    """公有：获取缓存 TTL。"""
+    return _CACHE_TTL
+
+
+def public_load_gene_scores(date: str) -> list | None:
+    """公有：从数据库加载基因得分。"""
+    from limitup_screener.data import load_gene_scores
+    return load_gene_scores(date)
 
 
 async def precompute_daily_async(date: str | None = None) -> ScreenerResult:

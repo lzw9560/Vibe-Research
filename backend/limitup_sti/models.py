@@ -93,12 +93,14 @@ class STIResult(BaseModel):
     data_updated: Optional[str] = None
     phase_explanation: Optional[str] = None
     disclaimer: str = DISCLAIMER
+    data_freshness: str = "fresh"  # fresh | stale | expired
+    data_age_seconds: float = 0.0  # 数据年龄（秒）
 
 
 def percentile_rank(value: float, lookback_series: list[float]) -> float:
     """将 value 映射到 lookback_series 的百分位排名（0-100）。"""
     n = len(lookback_series)
-    if n < 60:
+    if n < 5:
         return 50.0
     less = sum(1 for v in lookback_series if v < value)
     equal = sum(1 for v in lookback_series if v == value)

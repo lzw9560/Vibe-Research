@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Loader2, RefreshCw, Info } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, type StockRecommendation, type RecommendationLevel } from "@/lib/api";
 
@@ -97,9 +98,11 @@ export default function Recommendation() {
       </div>
 
       {!loading && items.length === 0 && (
-        <GlassCard>
-          <div className="p-6 text-center text-sm text-muted-foreground">暂无推荐数据</div>
-        </GlassCard>
+        <EmptyState
+          icon={<Info className="h-8 w-8 text-muted-foreground/40" />}
+          title="暂无推荐数据"
+          description="当前没有符合条件的关注标的，稍后再试。"
+        />
       )}
     </div>
   );

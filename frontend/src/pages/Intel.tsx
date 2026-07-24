@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
 import { api, ApiError, type RadarData, type Industry, type Announcement, type NewsItem } from "@/lib/api";
@@ -104,9 +106,11 @@ function InvestmentNewsPanel() {
       )}
 
       {!hasData && !err ? (
-        <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">
-          还没有抓取资讯，点上方<b className="text-foreground">「刷新」</b>拉取（约 20-40 秒）。
-        </div>
+        <EmptyState
+          icon={<Rss className="h-8 w-8 text-muted-foreground/40" />}
+          title="还没有抓取资讯"
+          description="点上方「刷新」拉取（约 20-40 秒）。"
+        />
       ) : (
         <>
           {/* 赛道筛选 —— 暖橙边框 pill */}
@@ -129,14 +133,15 @@ function InvestmentNewsPanel() {
             <>
               {/* 今日要点总结框（暖橙框） */}
               <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-primary">
-                    <Lightbulb className="h-4 w-4" /> 今日要点 · {cur.name}
-                  </span>
-                  {(dg?.text || dg?.err || dg?.needKey) && (
-                    <button onClick={() => genDigest(cur)} className="text-xs text-muted-foreground hover:text-primary">重新提炼</button>
-                  )}
-                </div>
+                <SectionHeader
+                  title={`今日要点 · ${cur.name}`}
+                  icon={<Lightbulb className="h-4 w-4 text-primary" />}
+                  action={
+                    (dg?.text || dg?.err || dg?.needKey) && (
+                      <button onClick={() => genDigest(cur)} className="text-xs text-muted-foreground hover:text-primary">重新提炼</button>
+                    )
+                  }
+                />
                 {dg?.loading ? (
                   <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> AI 正在读这个赛道的资讯…</p>
                 ) : dg?.text ? (
@@ -159,7 +164,10 @@ function InvestmentNewsPanel() {
               {/* 资讯列表 */}
               <div className="space-y-2">
                 {cur.items.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground/60">近 {data!.recent_days} 天该赛道暂无更新</p>
+                  <EmptyState
+                    icon={<Newspaper className="h-8 w-8 text-muted-foreground/40" />}
+                    title="近 {data!.recent_days} 天该赛道暂无更新"
+                  />
                 ) : (
                   cur.items.map((it, i) => (
                     <a key={i} href={it.url} target="_blank" rel="noreferrer"
@@ -248,9 +256,15 @@ function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
 
   if (!codes.length) {
     return (
-      <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">
-        还没有关注股票。到<Link to="/daily-review" className="text-primary">「每日复盘」</Link>加自选（6 位代码），这里会汇总它们的{kind === "filings" ? "公告" : "新闻"}。
-      </div>
+      <EmptyState
+        icon={<Star className="h-8 w-8 text-muted-foreground/40" />}
+        title="还没有关注股票"
+        description={
+          <span>
+            到<Link to="/daily-review" className="text-primary">「每日复盘」</Link>加自选（6 位代码），这里会汇总它们的{kind === "filings" ? "公告" : "新闻"}。
+          </span>
+        }
+      />
     );
   }
 
@@ -278,7 +292,10 @@ function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
       ) : loading && rows.length === 0 ? (
         <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> 正在汇总关注股的{kind === "filings" ? "公告" : "新闻"}…</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground/60">关注列表里的个股近期暂无{kind === "filings" ? "公告" : "新闻"}。</p>
+        <EmptyState
+          icon={<FileText className="h-8 w-8 text-muted-foreground/40" />}
+          title={`关注列表里的个股近期暂无${kind === "filings" ? "公告" : "新闻"}`}
+        />
       ) : (
         <div className="space-y-2">
           {rows.map((r, i) => (
@@ -331,7 +348,11 @@ export function Intel() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">{cur.desc}</p>
-            <div className="mt-4 rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">该数据源规划中——可先用右侧「Investment News」看 12 赛道公开资讯，或用「A 股公告 / 公开新闻」看关注股动态。</div>
+            <EmptyState
+              icon={<Rss className="h-8 w-8 text-muted-foreground/40" />}
+              title="该数据源规划中"
+              description="可先用右侧「Investment News」看 12 赛道公开资讯，或用「A 股公告 / 公开新闻」看关注股动态。"
+            />
           </>
         )}
       </GlassCard>

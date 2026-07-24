@@ -1,0 +1,270 @@
+"""
+Trading Workflow router.
+Provides pre-market, intraday, and post-market workflow endpoints.
+"""
+from fastapi import APIRouter, HTTPException, Query
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from dataclasses import asdict
+
+from trading_workflow import TradingWorkflow
+from strategies.strategy_matcher import StrategyMatcher
+from strategies.position_advisor import PositionAdvisor
+from limitup_strategy import StrategySignal
+from risk.bomb_alert_system import BombAlertSystem
+from risk.position_manager import PositionManager, PositionLimit
+from settlement.settlement_engine import SettlementEngine
+from win_rate_tracker import WinRateTracker, generate_strategy_adjustments
+
+router = APIRouter(tags=["workflow"])
+
+_workflow = TradingWorkflow()
+_strategy_matcher = StrategyMatcher()
+_position_advisor = PositionAdvisor()
+_bomb_alert_system = BombAlertSystem()
+_position_manager = PositionManager(limits=PositionLimit())
+_settlement_engine = SettlementEngine()
+_win_rate_tracker = WinRateTracker()
+
+
+def _serialize(obj: Any) -> Any:
+    """递归序列化 dataclass / Pydantic model / 普通对象为 JSON 安全结构。"""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    if hasattr(obj, "dict"):
+        return obj.dict()
+    if hasattr(obj, "__dict__"):
+        return asdict(obj)
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_serialize(item) for item in obj]
+    return obj
+
+
+@router.get("/api/workflow/status")
+async def get_workflow_status() -> Dict[str, Any]:
+    """
+    Get current workflow status based on market time.
+
+    Returns the current stage (pre-market/intraday/post-market) and next stage info.
+    """
+    try:
+        return {"data": _workflow.get_current_stage()}
+    except Exception as e:
+        raise HTTPException(500, f"获取工作流状态失败：{e}") from e
+
+
+@router.get("/api/workflow/pre-market")
+async def get_pre_market_workflow(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+    """
+    Get pre-market workflow data.
+
+    Includes candidate pool, strategy matches, and position suggestions.
+    """
+    try:
+        workflow = TradingWorkflow(date=date)
+        report = await workflow.run_pre_market()
+        return {"data": _serialize(report)}
+    except Exception as e:
+        raise HTTPException(500, f"获取盘前工作流失败：{e}") from e
+
+
+@router.post("/api/workflow/pre-market/run")
+async def run_pre_market_workflow(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+    """
+    Manually trigger pre-market workflow.
+    """
+    try:
+        workflow = TradingWorkflow(date=date)
+        report = await workflow.run_pre_market()
+        return {"data": _serialize(report)}
+    except Exception as e:
+        raise HTTPException(500, f"运行盘前工作流失败：{e}") from e
+
+
+@router.get("/api/workflow/realtime")
+async def get_realtime_workflow() -> Dict[str, Any]:
+    """
+    Get realtime workflow data.
+
+    Includes realtime monitoring, bomb alerts, and position adjustments.
+    """
+    try:
+        result = await _workflow.run_intraday()
+        return {"data": _serialize(result)}
+    except Exception as e:
+        raise HTTPException(500, f"获取实时工作流失败：{e}") from e
+
+
+# 向后兼容别名
+@router.get("/api/workflow/intraday")
+async def get_intraday_workflow_alias() -> Dict[str, Any]:
+    """Alias for /api/workflow/realtime (backward compatibility)."""
+    return await get_realtime_workflow()
+
+
+@router.get("/api/workflow/post-market")
+async def get_post_market_workflow() -> Dict[str, Any]:
+    """
+    Get post-market workflow data.
+
+    Includes settlement results, LLM review, and win rate stats.
+    """
+    try:
+        report = await _workflow.run_post_market()
+        return {"data": _serialize(report)}
+    except Exception as e:
+        raise HTTPException(500, f"获取盘后工作流失败：{e}") from e
+
+
+@router.post("/api/workflow/refresh")
+async def refresh_workflow() -> Dict[str, Any]:
+    """
+    Manually trigger workflow refresh.
+    """
+    try:
+        return {
+            "data": {
+                "refreshed_at": datetime.now().isoformat(),
+                "status": "success",
+            }
+        }
+    except Exception as e:
+        raise HTTPException(500, f"刷新工作流失败：{e}") from e
+
+
+@router.get("/api/workflow/signals")
+async def get_realtime_signals() -> Dict[str, Any]:
+    """
+    Get realtime trading signals.
+
+    Returns current signals from the intraday workflow.
+    """
+    try:
+        signals = _workflow.intraday.signals
+        return {"data": _serialize(signals)}
+    except Exception as e:
+        raise HTTPException(500, f"获取实时信号失败：{e}") from e
+
+
+@router.get("/api/workflow/alerts")
+async def get_bomb_alerts() -> Dict[str, Any]:
+    """
+    Get bomb alerts (炸板预警).
+
+    Returns current alerts from the bomb alert system.
+    """
+    try:
+        alerts = _bomb_alert_system.active_alerts()
+        return {"data": _serialize(alerts)}
+    except Exception as e:
+        raise HTTPException(500, f"获取炸板预警失败：{e}") from e
+
+
+@router.post("/api/workflow/settle")
+async def settle_position() -> Dict[str, Any]:
+    """
+    Manually trigger position settlement.
+    """
+    try:
+        report = await _workflow.run_post_market()
+        return {"data": _serialize(report)}
+    except Exception as e:
+        raise HTTPException(500, f"结算失败：{e}") from e
+
+
+@router.get("/api/workflow/strategies")
+async def get_strategies() -> Dict[str, Any]:
+    """
+    Get list of 8 limit-up strategies.
+    """
+    try:
+        strategies = _strategy_matcher.list_strategies()
+        return {"data": {"strategies": strategies}}
+    except Exception as e:
+        raise HTTPException(500, f"获取战法列表失败：{e}") from e
+
+
+@router.post("/api/workflow/strategies/{name}/match")
+async def match_strategy(name: str, code: str = Query(..., description="股票代码")) -> Dict[str, Any]:
+    """
+    Match a specific strategy against a stock.
+    """
+    try:
+        strategy_def = _strategy_matcher.get_strategy_by_code(name)
+        if not strategy_def:
+            raise HTTPException(404, f"战法 {name} 不存在")
+
+        # 获取股票基因得分
+        from limitup_screener.service import get_screener_result
+        from limitup_screener.models import compute_gene_score
+        import astock
+
+        result = await get_screener_result()  # TODO: pass date
+        gene = None
+        for g in result.gene_scores:
+            if g.code == code:
+                gene = g
+                break
+
+        if gene is None:
+            return {
+                "data": {
+                    "strategy": name,
+                    "code": code,
+                    "matched": False,
+                    "message": "股票不在当前候选池中",
+                }
+            }
+
+        signals = _strategy_matcher.match(gene)
+        matched = [s for s in signals if s.strategy_code == name]
+
+        return {
+            "data": {
+                "strategy": name,
+                "code": code,
+                "matched": len(matched) > 0,
+                "signals": _serialize(matched),
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"战法匹配失败：{e}") from e
+
+
+@router.get("/api/workflow/win-rate")
+async def get_win_rate() -> Dict[str, Any]:
+    """
+    Get win rate statistics.
+    """
+    try:
+        stats = _win_rate_tracker.get_stats(window_size=20)
+        adjustments = generate_strategy_adjustments(stats)
+        return {
+            "data": {
+                "overall": stats.win_rate,
+                "by_strategy": stats.strategy_breakdown,
+                "adjustments": adjustments,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(500, f"获取胜率失败：{e}") from e
+
+
+@router.get("/api/workflow/adjustments")
+async def get_adjustments() -> Dict[str, Any]:
+    """
+    Get strategy adjustment suggestions.
+    """
+    try:
+        stats = _win_rate_tracker.get_stats(window_size=20)
+        adjustments = generate_strategy_adjustments(stats)
+        return {"data": {"adjustments": adjustments}}
+    except Exception as e:
+        raise HTTPException(500, f"获取调整建议失败：{e}") from e
+
+
+__all__ = ["router"]

@@ -109,12 +109,18 @@ export function STITimelineChart({ className }: Props) {
           symbol: "circle",
           symbolSize: 8,
           connectNulls: false,
-          lineStyle: { width: 2.5 },
-          itemStyle: {
-            color: (params: any) => {
+          lineStyle: {
+            width: 2.5,
+            color: ((params: any) => {
               const idx = params.dataIndex;
               return PHASE_LINE_COLOR[phases[idx]] ?? "#f97316";
-            },
+            }) as any,
+          },
+          itemStyle: {
+            color: ((params: any) => {
+              const idx = params.dataIndex;
+              return PHASE_LINE_COLOR[phases[idx]] ?? "#f97316";
+            }) as any,
           },
           emphasis: {
             focus: "series",

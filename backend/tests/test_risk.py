@@ -2,7 +2,7 @@
 """risk.py 纯函数单测。"""
 
 import unittest
-from risk import get_dynamic_thresholds, calculate_capital_flow_trend, calculate_flow_adjustment
+from risk_models import get_dynamic_thresholds, calculate_capital_flow_trend, calculate_flow_adjustment
 
 
 class TestDynamicThresholds(unittest.TestCase):

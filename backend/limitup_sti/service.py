@@ -216,6 +216,8 @@ class STIEngine:
             change_from_yesterday=change_from_yesterday,
             data_updated=date,
             phase_explanation=PHASE_EXPLANATIONS.get(phase.value, ""),
+            data_freshness="fresh",
+            data_age_seconds=0.0,
         )
 
         self._save_result(result)
@@ -260,6 +262,8 @@ class STIEngine:
                 confidence="low",
                 change_from_yesterday=None,
                 data_updated=None,
+                data_freshness="expired",
+                data_age_seconds=0.0,
             )
 
         return self.compute(emotion_data, sentiment_data)

@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface TierMetrics {
@@ -62,16 +66,18 @@ export function Metrics() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-sm text-muted-foreground">加载性能指标…</div>
+        <Skeleton className="h-4 w-32" />
       </div>
     );
   }
 
   if (error || !breakdown) {
     return (
-      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        加载失败：{error ?? "未知错误"}
-      </div>
+      <EmptyState
+        icon={<AlertCircle className="h-8 w-8 text-muted-foreground/40" />}
+        title="加载失败"
+        description={error ?? "未知错误"}
+      />
     );
   }
 
@@ -93,10 +99,7 @@ export function Metrics() {
           const data = breakdown.tiers[tier.key];
           return (
             <GlassCard key={tier.key} className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-xl">{tier.icon}</span>
-                <h3 className={`text-sm font-semibold ${tier.color}`}>{tier.label}</h3>
-              </div>
+              <SectionHeader title={tier.label} subtitle={tier.color} />
               <div className="mb-2 text-2xl font-bold">
                 {data.target}
                 <span className="ml-1 text-xs text-muted-foreground">{breakdown.summary.unit}</span>
@@ -116,7 +119,7 @@ export function Metrics() {
       </div>
 
       <GlassCard className="p-4">
-        <h3 className="mb-2 text-sm font-semibold text-muted-foreground">汇总</h3>
+        <SectionHeader title="汇总" />
         <div className="flex items-center gap-4 text-xs">
           <div>
             总目标耗时：<b>{breakdown.summary.total_target}</b> {breakdown.summary.unit}

@@ -150,7 +150,7 @@ def test_screener_result_model():
 def test_config_defaults():
     assert GENE_QUALIFY_THRESHOLD == 60.0
     assert GENE_HIGH_THRESHOLD == 75.0
-    assert LOOKBACK_DAYS == 250
+    assert LOOKBACK_DAYS == 252
 
 
 # ===========================================================================
@@ -270,7 +270,7 @@ def test_build_condition_matches_all_factors():
         zt_count_250d=10,
         backtest_points=[],
     )
-    result = _build_condition_matches("600000", "浦发银行", gene, pool_item=None)
+    result = _build_condition_matches("600000", "浦发银行", gene)
     conditions = {m.condition for m in result.matches}
     # 应该有：基因高分、高次日溢价、高频涨停
     assert "基因高分" in conditions
@@ -298,8 +298,8 @@ def test_build_condition_matches_pool_item():
         zt_count_250d=5,
         backtest_points=[],
     )
-    # pool_item 必须是非空 dict（空 dict 在 Python 中是 falsy，会导致条件1被跳过）
-    result = _build_condition_matches("600001", "测试股份", gene, pool_item={"amount": 1000})
+    # 封板率 75 > 60 阈值，应触发高封板率条件
+    result = _build_condition_matches("600001", "测试股份", gene)
     conditions = {m.condition for m in result.matches}
     assert "高封板率" in conditions
 
@@ -324,7 +324,7 @@ def test_build_condition_matches_mid_gene():
         zt_count_250d=3,
         backtest_points=[],
     )
-    result = _build_condition_matches("600002", "中小股份", gene, pool_item=None)
+    result = _build_condition_matches("600002", "中小股份", gene)
     conditions = {m.condition for m in result.matches}
     assert "基因合格" in conditions
     # 封板率 55 < 60，不应该有高封板率
@@ -351,7 +351,7 @@ def test_build_condition_matches_very_low_gene():
         zt_count_250d=1,
         backtest_points=[],
     )
-    result = _build_condition_matches("600003", "边缘股份", gene, pool_item=None)
+    result = _build_condition_matches("600003", "边缘股份", gene)
     conditions = {m.condition for m in result.matches}
     assert "基因偏低" in conditions
     assert "低封板率" in conditions
@@ -380,7 +380,7 @@ def test_condition_match_description_contains_neutral_language():
         zt_count_250d=5,
         backtest_points=[],
     )
-    result = _build_condition_matches("600004", "测试公司", gene, pool_item=None)
+    result = _build_condition_matches("600004", "测试公司", gene)
     for match in result.matches:
         # 应该包含"策略逻辑上"而非"你应该"
         assert "策略逻辑上" in match.description

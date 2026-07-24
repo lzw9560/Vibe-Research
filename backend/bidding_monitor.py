@@ -51,11 +51,12 @@ async def build_auction_watchlist(limit: int = 20) -> list[str]:
     避免当日 screener 尚未预计算时返回空列表。
     """
     try:
-        from limitup_screener import _CACHE, _CACHE_TTL, _resolve_date, _load_gene_scores_from_db
+        from limitup_screener import public_get_cache, public_get_cache_ttl, public_resolve_date, public_load_gene_scores
+        from limitup_screener.service import _COMPUTING
         from datetime import timedelta
 
         # 使用前一交易日日期
-        target_date = await _resolve_date(None)
+        target_date = await public_resolve_date(None)
         # 简单回退一天（实际应使用交易日历，此处简化）
         prev_dt = datetime.strptime(target_date, "%Y%m%d") - timedelta(days=1)
         prev_date = prev_dt.strftime("%Y%m%d")
@@ -63,10 +64,12 @@ async def build_auction_watchlist(limit: int = 20) -> list[str]:
         now = time.time()
 
         # 正在计算中：不等待，直接返回空
-        if cache_key in ls._COMPUTING:
+        if cache_key in _COMPUTING:
             return []
 
         # 内存缓存命中
+        _CACHE = public_get_cache()
+        _CACHE_TTL = public_get_cache_ttl()
         hit = _CACHE.get(cache_key)
         if hit and now - hit[0] < _CACHE_TTL:
             result = hit[1]
@@ -75,7 +78,7 @@ async def build_auction_watchlist(limit: int = 20) -> list[str]:
 
         # 数据库预计算结果（快速路径）
         display_prev = prev_date[:4] + "-" + prev_date[4:6] + "-" + prev_date[6:]
-        db_scores = _load_gene_scores_from_db(display_prev)
+        db_scores = public_load_gene_scores(display_prev)
         if db_scores:
             return [g.code for g in db_scores[:limit]]
 

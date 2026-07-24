@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { loadNotes, deleteNote, clearNotes, type Note } from "@/lib/notes";
 
@@ -33,12 +34,11 @@ export function Notes() {
       />
 
       {notes.length === 0 ? (
-        <GlassCard>
-          <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-            <NotebookPen className="h-8 w-8 text-muted-foreground/40" />
-            还没有记录。在「每日复盘」「资讯雷达」或「问 AI」里点 <b className="text-foreground">「存入沉淀」</b> 保存分析结果。
-          </div>
-        </GlassCard>
+        <EmptyState
+          icon={<NotebookPen className="h-8 w-8 text-muted-foreground/40" />}
+          title="还没有记录"
+          description="在「每日复盘」「资讯雷达」或「问 AI」里点「存入沉淀」保存分析结果。"
+        />
       ) : (
         <div className="space-y-2">
           {notes.map((n) => {

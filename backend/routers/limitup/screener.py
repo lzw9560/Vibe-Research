@@ -14,7 +14,7 @@ router = APIRouter(tags=["limitup"])
 class LimitUpParamsBody(BaseModel):
     gene_qualify_threshold: float = Field(default=60, ge=0, le=100)
     gene_high_threshold: float = Field(default=75, ge=0, le=100)
-    lookback_days: int = Field(default=250, ge=1, le=365)
+    lookback_days: int = Field(default=252, ge=1, le=365)
 
 
 @router.get("/api/limitup/screener")

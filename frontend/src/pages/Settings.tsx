@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { KeyRound, Sparkles, ShieldCheck, Check, Trash2, Terminal, Flame } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toast } from "sonner";
@@ -255,10 +256,7 @@ export function Settings() {
 
       {/* OmniRoute 托底通道 */}
       <GlassCard className="mt-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Flame className="h-5 w-5 text-accent" />
-          <h3 className="text-sm font-semibold">OmniRoute 托底通道（可选）</h3>
-        </div>
+        <SectionHeader title="OmniRoute 托底通道（可选）" icon={<Flame className="h-4 w-4 text-accent" />} />
         <p className="mb-3 text-xs text-muted-foreground">
           启用后，AI 对话会先走 OmniRoute 本地网关，自动切换最便宜的可用模型。
           需要先在本地安装并运行 OmniRoute（<code className="rounded bg-muted/50 px-1">npm i -g omniroute</code>）。
@@ -291,10 +289,7 @@ export function Settings() {
 
       {/* 后端 LLM 环境变量状态（只读） */}
       <GlassCard className="mt-4">
-        <div className="flex items-center gap-2 mb-2">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-          <h3 className="text-sm font-semibold">后端 LLM 环境变量（只读）</h3>
-        </div>
+        <SectionHeader title="后端 LLM 环境变量（只读）" icon={<ShieldCheck className="h-4 w-4 text-primary" />} />
         <p className="mb-3 text-xs text-muted-foreground">
           后端可通过环境变量提供 LLM 兜底配置，无需在前端填写。此处仅显示配置状态，不暴露敏感值。
         </p>
@@ -331,9 +326,7 @@ export function Settings() {
 
       {/* 后端访问密钥：仅当后端部署时设置了 VR_API_KEY（公网防蹭用）才需要填 */}
       <GlassCard className="mt-4">
-        <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
-          <KeyRound className="h-4 w-4 text-primary" /> 后端访问密钥（可选）
-        </h3>
+        <SectionHeader title="后端访问密钥（可选）" icon={<KeyRound className="h-4 w-4 text-primary" />} />
         <p className="mb-3 text-xs text-muted-foreground">
           仅当后端部署时设置了 <code className="rounded bg-muted/50 px-1">VR_API_KEY</code>（公网部署防蹭用）才需要填，填后端同一个值；
           本机自用没设鉴权就留空。同样只存本地浏览器。
@@ -346,10 +339,7 @@ export function Settings() {
 
       {/* 打板策略参数 */}
       <GlassCard className="mt-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Flame className="h-5 w-5 text-primary" />
-          <h3 className="text-sm font-semibold">打板策略参数</h3>
-        </div>
+        <SectionHeader title="打板策略参数" icon={<Flame className="h-4 w-4 text-primary" />} />
         <p className="mb-4 text-xs text-muted-foreground">
           调整打板策略的筛选阈值，影响选股结果的宽松/严格程度。
         </p>
@@ -389,10 +379,7 @@ export function Settings() {
 
       {/* 竞价选股参数 */}
       <GlassCard className="mt-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Flame className="h-5 w-5 text-primary" />
-          <h3 className="text-sm font-semibold">竞价选股参数</h3>
-        </div>
+        <SectionHeader title="竞价选股参数" icon={<Flame className="h-4 w-4 text-primary" />} />
         <p className="mb-4 text-xs text-muted-foreground">
           调整竞价选股模块的筛选阈值，影响竞价预案候选股的严格程度。
         </p>
@@ -417,10 +404,7 @@ export function Settings() {
 
       {/* 复盘报告参数 */}
       <GlassCard className="mt-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Flame className="h-5 w-5 text-primary" />
-          <h3 className="text-sm font-semibold">复盘报告参数</h3>
-        </div>
+        <SectionHeader title="复盘报告参数" icon={<Flame className="h-4 w-4 text-primary" />} />
         <p className="mb-4 text-xs text-muted-foreground">
           调整复盘报告中展示的涨停股和竞价回顾数量。
         </p>

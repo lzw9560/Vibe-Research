@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
-import { Flame, Loader2, RefreshCw, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { Loader2, RefreshCw, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, type GeneScore, type ScreenerResult, type LimitUpAnalysis } from "@/lib/api";
@@ -285,6 +287,37 @@ function GeneScoreDetail({ analysis, loading, error }: {
         </div>
       </GlassCard>
 
+      {/* 封单额/流通盘 + 涨跌停价 */}
+      <GlassCard className="p-3">
+        <h4 className="mb-1.5 text-sm font-semibold text-muted-foreground">封单与涨跌停（客观数据）</h4>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-lg bg-muted/25 p-2">
+            <div className="text-muted-foreground">封单额</div>
+            <div className="mt-0.5 text-base font-bold">{(analysis.seal_amount / 10000).toFixed(1)}万</div>
+          </div>
+          <div className="rounded-lg bg-muted/25 p-2">
+            <div className="text-muted-foreground">流通盘</div>
+            <div className="mt-0.5 text-base font-bold">{(analysis.float_shares / 100000000).toFixed(2)}亿股</div>
+          </div>
+          <div className="rounded-lg bg-muted/25 p-2">
+            <div className="text-muted-foreground">封单/流通盘比</div>
+            <div className="mt-0.5 text-base font-bold">{(analysis.seal_to_float_ratio * 100).toFixed(2)}%</div>
+          </div>
+          <div className="rounded-lg bg-muted/25 p-2">
+            <div className="text-muted-foreground">涨跌停价</div>
+            <div className="mt-0.5 text-base font-bold">
+              {analysis.limit_up_price > 0 ? (
+                <span>
+                  <span className="text-primary">↑{analysis.limit_up_price.toFixed(2)}</span>
+                  <span className="text-muted-foreground mx-1">/</span>
+                  <span className="text-destructive">↓{analysis.limit_down_price.toFixed(2)}</span>
+                </span>
+              ) : "—"}
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+
       {/* 动态一日游风险评估（V2.0.2） */}
       {risk && (
         <GlassCard className="p-3">
@@ -517,37 +550,33 @@ export function GeneScreener() {
 
       {/* 统计摘要 */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <GlassCard>
-          <div className="flex items-center gap-2">
-            <Flame className="h-5 w-5 text-primary" />
-            <h3 className="text-sm font-semibold text-muted-foreground">基因合格</h3>
-          </div>
-          <p className="mt-2 text-3xl font-bold text-primary">
-            {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : screener?.qualified.length ?? "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">SCORE ≥ 60（合格线）</p>
-        </GlassCard>
-        <GlassCard>
-          <div className="flex items-center gap-2">
-            <Flame className="h-5 w-5 text-primary" />
-            <h3 className="text-sm font-semibold text-muted-foreground">高基因股票</h3>
-          </div>
-          <p className="mt-2 text-3xl font-bold text-primary">
-            {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : screener?.high_gene.length ?? "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">SCORE ≥ 75（高基因线）</p>
-        </GlassCard>
+        <MetricCard label="基因合格" value={screener?.qualified.length ?? "—"} valueClassName="text-primary" />
+        <MetricCard label="高基因股票" value={screener?.high_gene.length ?? "—"} valueClassName="text-primary" />
+        {screener?.data_freshness && (
+          <GlassCard className="sm:col-span-2">
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`inline-block rounded px-1.5 py-0.5 ${
+                screener.data_freshness === "fresh" ? "bg-green-500/10 text-green-600" :
+                screener.data_freshness === "stale" ? "bg-yellow-500/10 text-yellow-600" :
+                "bg-red-500/10 text-red-600"
+              }`}>
+                {screener.data_freshness === "fresh" ? "数据新鲜" :
+                 screener.data_freshness === "stale" ? "数据较旧" : "数据过期"}
+              </span>
+              <span className="text-muted-foreground">
+                数据年龄: {screener.data_age_seconds < 60 ? `${Math.round(screener.data_age_seconds)}秒` :
+                           screener.data_age_seconds < 3600 ? `${Math.round(screener.data_age_seconds / 60)}分钟` :
+                           `${(screener.data_age_seconds / 3600).toFixed(1)}小时`}
+              </span>
+              <span className="text-muted-foreground/50">更新时间: {screener.updated}</span>
+            </div>
+          </GlassCard>
+        )}
       </div>
 
       {/* 基因得分清单表格 */}
       <GlassCard className="mb-6">
-        <div className="mb-3 flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">涨停股基因得分清单</h3>
-          <span className="text-[11px] text-muted-foreground/50">客观数据，非推荐</span>
-          {screener?.disclaimer && (
-            <span className="ml-auto text-[11px] text-muted-foreground/50">{screener.disclaimer}</span>
-          )}
-        </div>
+        <SectionHeader title="涨停股基因得分清单" subtitle="客观数据，非推荐" />
         {error ? (
           <div className="flex items-center justify-center py-8 text-sm text-destructive">
             <Info className="mr-1.5 h-4 w-4" /> {error}

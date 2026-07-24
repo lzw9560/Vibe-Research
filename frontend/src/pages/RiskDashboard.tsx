@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { Loader2, RefreshCw, AlertTriangle, Shield, TrendingUp } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api } from "@/lib/api";
 
@@ -122,44 +124,26 @@ export default function RiskDashboard() {
         <>
           {/* 统计卡片 */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <GlassCard>
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-red-100 p-2">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-red-600">{data.high_risk_count}</div>
-                  <div className="text-xs text-muted-foreground">高风险</div>
-                </div>
-              </div>
-            </GlassCard>
-            <GlassCard>
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-amber-100 p-2">
-                  <Shield className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-amber-600">{data.medium_risk_count}</div>
-                  <div className="text-xs text-muted-foreground">中风险</div>
-                </div>
-              </div>
-            </GlassCard>
-            <GlassCard>
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-emerald-100 p-2">
-                  <TrendingUp className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-emerald-600">{data.low_risk_count}</div>
-                  <div className="text-xs text-muted-foreground">低风险</div>
-                </div>
-              </div>
-            </GlassCard>
+            <MetricCard
+              label="高风险"
+              value={data.high_risk_count}
+              valueClassName="text-red-600"
+            />
+            <MetricCard
+              label="中风险"
+              value={data.medium_risk_count}
+              valueClassName="text-amber-600"
+            />
+            <MetricCard
+              label="低风险"
+              value={data.low_risk_count}
+              valueClassName="text-emerald-600"
+            />
           </div>
 
           {/* 风险分布列表 */}
           <GlassCard>
-            <h3 className="mb-3 text-sm font-semibold">风险分布（前 20 只）</h3>
+            <SectionHeader title="风险分布（前 20 只）" />
             <div className="space-y-2">
               {data.risk_distribution.slice(0, 20).map((item) => (
                 <div
@@ -193,7 +177,7 @@ export default function RiskDashboard() {
 
           {/* 风险因素排行 */}
           <GlassCard>
-            <h3 className="mb-3 text-sm font-semibold">风险因素 TOP 10</h3>
+            <SectionHeader title="风险因素 TOP 10" />
             <div className="space-y-2">
               {data.top_risk_factors.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
@@ -207,7 +191,7 @@ export default function RiskDashboard() {
           {/* 高风险个股列表 */}
           {highRiskList.length > 0 && (
             <GlassCard>
-              <h3 className="mb-3 text-sm font-semibold">高风险个股（实时）</h3>
+              <SectionHeader title="高风险个股（实时）" />
               <div className="space-y-2">
                 {highRiskList.slice(0, 20).map((item) => (
                   <div
@@ -243,7 +227,7 @@ export default function RiskDashboard() {
           {/* 一日游席位库 */}
           {seats && (
             <GlassCard>
-              <h3 className="mb-3 text-sm font-semibold">一日游特征席位库</h3>
+              <SectionHeader title="一日游特征席位库" />
               <div className="mb-3 text-xs text-muted-foreground">{seats.disclaimer}</div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div>

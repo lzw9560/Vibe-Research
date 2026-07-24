@@ -51,7 +51,7 @@ export async function downloadReport(id: string, name: string): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-async function request<T>(path: string, method: "GET" | "POST" | "DELETE" = "GET", body?: unknown): Promise<T> {
+async function request<T>(path: string, method: "GET" | "POST" | "PUT" | "DELETE" = "GET", body?: unknown): Promise<T> {
   let resp: Response;
   const headers: Record<string, string> = { ...authHeaders() };
   const opts: RequestInit = { method };
@@ -256,6 +256,8 @@ export interface STIResult {
   data_updated: string | null;
   phase_explanation: string | null;
   disclaimer: string;
+  data_freshness: "fresh" | "stale" | "expired";
+  data_age_seconds: number;
 }
 
 export interface STITimelineItem {
@@ -264,6 +266,173 @@ export interface STITimelineItem {
   phase: string | null;
   change_from_yesterday: number | null;
 }
+
+// Sentiment Weather Station types
+export interface WeatherFactor {
+  id: string;
+  name: string;
+  score: number | null;
+  weight: number;
+  trend: "up" | "down" | "stable";
+  explanation: string;
+}
+
+export interface WeatherState {
+  weather_state: "暴风雨" | "阴天" | "晴天" | "极端反弹" | "未知";
+  weather_icon: string;
+  composite_score: number;
+  confidence: string;
+  sti_score: number | null;
+  sti_phase: string | null;
+  sti_date: string | null;
+  sti_change: number | null;
+  factors: Record<string, { score: number | null; weight: number; name: string }>;
+  data_updated: string | null;
+  data_freshness?: {
+    is_stale: boolean;
+    delay_ms: number;
+    last_trigger_count: number;
+  };
+  execution_params?: {
+    channel_latency_ms: number;
+    slippage_compensation: number;
+    settlement_buy_price: number;
+    next_day_sell_base: number;
+    t1_locked: boolean;
+  };
+}
+
+export interface StrategyMatch {
+  style: string;
+  match_score: number;
+  enabled: boolean;
+  description: string;
+  conditions: string[];
+  order_config: string;
+  execution_params?: {
+    channel_latency_ms: number;
+    slippage_compensation: number;
+    settlement_buy_price: number;
+    next_day_sell_base: number;
+    t1_locked: boolean;
+  };
+}
+
+export interface StrategyRecommendation {
+  weather_state: string;
+  strategies: StrategyMatch[];
+  driver: string;
+  risk_note: string;
+}
+
+export interface FuseRule {
+  id: string;
+  name: string;
+  status: "enabled" | "disabled";
+  trigger_condition: string;
+  current_state: string;
+  description: string;
+  last_triggered?: string;
+  is_pardoned?: boolean;
+  pardon_expires_at?: string;
+  pardon_enabled_by?: string;
+}
+
+export interface WeatherTimelineItem {
+  date: string;
+  sti_score: number | null;
+  weather_state: string;
+  composite_score: number;
+  phase: string | null;
+  change_from_yesterday: number | null;
+}
+
+export interface WeatherStats {
+  total: number;
+  晴天: number;
+  阴天: number;
+  暴风雨: number;
+  极端反弹: number;
+}
+
+export interface WeatherEvent {
+  date: string;
+  title: string;
+  description: string;
+  impact: "positive" | "negative" | "neutral";
+}
+
+// Sentiment Weather Station V2.0.3 types
+export interface DataFreshness {
+  is_stale: boolean;
+  delay_ms: number;
+  last_trigger_count: number;
+}
+
+export interface ExecutionParams {
+  channel_latency_ms: number;
+  slippage_compensation: number;
+  settlement_buy_price: number;
+  next_day_sell_base: number;
+  t1_locked: boolean;
+}
+
+export interface AuctionMetric {
+  name: string;
+  value: number;
+  unit: string;
+  phase: "pre_competitive" | "competitive";
+  threshold_high: number;
+  threshold_low: number;
+  is_warning: boolean;
+}
+
+export interface SealRiskMetric {
+  stock_code: string;
+  seal_amount: number;
+  float_shares: number;
+  seal_ratio: number;
+  min_ratio_required: number;
+  risk_level: "low" | "medium" | "high";
+  cap_category: string;
+  enforcement_action: string;
+  reason: string;
+}
+
+export interface FusePardonRecord {
+  id: string;
+  strategy_code: string;
+  strategy_name: string;
+  enabled_by: string;
+  enabled_ip: string;
+  approved_by: string;
+  max_position_pct: number;
+  created_at: string;
+  expires_at: string;
+  reason: string;
+  is_active: boolean;
+  revoked_at?: string;
+  revoked_by?: string;
+  outcome?: {
+    stock_code: string;
+    entry_price: number;
+    exit_price: number;
+    return_pct: number;
+    was_successful: boolean;
+    lessons_learned: string;
+  };
+}
+
+export interface PardonOutcome {
+  pardon_id: string;
+  stock_code: string;
+  entry_price: number;
+  exit_price: number;
+  return_pct: number;
+  was_successful: boolean;
+  lessons_learned: string;
+}
+
 export interface GeneScore {
   code: string;
   name: string;
@@ -332,6 +501,11 @@ export interface LimitUpAnalysis {
   risk_rules: RiskRuleKnowledge[];
   backtest_points: Array<{ date: string; gene_score: number; actual_next_day: number }>;
   disclaimer: string;
+  seal_amount: number;
+  float_shares: number;
+  seal_to_float_ratio: number;
+  limit_up_price: number;
+  limit_down_price: number;
 }
 
 export interface KlineBar {
@@ -360,6 +534,8 @@ export interface ScreenerResult {
   high_gene: GeneScore[];
   updated: string;
   disclaimer: string;
+  data_freshness: "fresh" | "stale" | "expired";
+  data_age_seconds: number;
 }
 
 export interface BacktestPoint {
@@ -494,6 +670,9 @@ export interface AuctionCandidate {
   strategy_tags: string[];
   signal_strength: number;
   confidence: string;
+  seal_amount: number;
+  float_shares: number;
+  seal_to_float_ratio: number;
 }
 
 export interface AuctionScreenerResult {
@@ -532,6 +711,97 @@ export interface LlmEnvStatus {
   has_env_base_url: boolean;
   has_env_api_key: boolean;
   has_env_model: boolean;
+}
+
+export interface ScheduledTask {
+  id: number;
+  name: string;
+  description: string;
+  task_type: string;
+  cron_expr: string;
+  payload: Record<string, any>;
+  enabled: boolean;
+  notify_on_success: boolean;
+  notify_on_failure: boolean;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskRun {
+  id: number;
+  task_id: number;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  result: Record<string, any>;
+  error: string | null;
+}
+
+export async function getScheduledTasks(): Promise<ScheduledTask[]> {
+  const res = await fetch("/api/scheduled-tasks", { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get scheduled tasks: ${res.statusText}`, res.status);
+  const payload = await res.json();
+  return (payload?.data ?? payload) as ScheduledTask[];
+}
+
+export async function getScheduledTask(id: number): Promise<ScheduledTask> {
+  const res = await fetch(`/api/scheduled-tasks/${id}`, { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get scheduled task: ${res.statusText}`, res.status);
+  const payload = await res.json();
+  return (payload?.data ?? payload) as ScheduledTask;
+}
+
+export async function createScheduledTask(data: Partial<ScheduledTask>): Promise<{ id: number }> {
+  const res = await fetch("/api/scheduled-tasks", {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new ApiError(`Failed to create scheduled task: ${res.statusText}`, res.status);
+  const payload = await res.json();
+  return payload as { id: number };
+}
+
+export async function updateScheduledTask(id: number, data: Partial<ScheduledTask>): Promise<void> {
+  const res = await fetch(`/api/scheduled-tasks/${id}`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new ApiError(`Failed to update scheduled task: ${res.statusText}`, res.status);
+}
+
+export async function deleteScheduledTask(id: number): Promise<void> {
+  const res = await fetch(`/api/scheduled-tasks/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new ApiError(`Failed to delete scheduled task: ${res.statusText}`, res.status);
+}
+
+export async function runScheduledTaskNow(id: number): Promise<any> {
+  const res = await fetch(`/api/scheduled-tasks/${id}/run`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new ApiError(`Failed to run scheduled task: ${res.statusText}`, res.status);
+  return res.json();
+}
+
+export async function getScheduledTaskRuns(id: number, limit = 50): Promise<TaskRun[]> {
+  const res = await fetch(`/api/scheduled-tasks/${id}/runs?limit=${limit}`, { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get task runs: ${res.statusText}`, res.status);
+  const payload = await res.json();
+  return (payload?.data ?? payload) as TaskRun[];
+}
+
+export async function getScheduledTaskTypes(): Promise<string[]> {
+  const res = await fetch("/api/scheduled-tasks/types", { headers: authHeaders() });
+  if (!res.ok) throw new ApiError(`Failed to get task types: ${res.statusText}`, res.status);
+  const payload = await res.json();
+  return (payload?.data ?? payload) as string[];
 }
 
 export async function getLlmEnvStatus(): Promise<LlmEnvStatus> {
@@ -656,6 +926,31 @@ export const api = {
     get<STIResult>(`/market/sti/latest${date ? `?date=${date}` : ""}`),
   stiTimeline: (days = 30) =>
     get<STITimelineItem[]>(`/market/sti/timeline?days=${days}`),
+  // 情绪气象站
+  sentimentWeatherLatest: () =>
+    get<WeatherState>("/sentiment/weather/latest"),
+  sentimentWeatherFactors: () =>
+    get<{ data: { weather_state: string; composite_score: number; factors: WeatherFactor[] } }>("/sentiment/weather/factors"),
+  sentimentWeatherStrategy: () =>
+    get<StrategyRecommendation>("/sentiment/weather/strategy"),
+  sentimentWeatherFuse: () =>
+    get<{ data: { rules: FuseRule[]; updated_at: string } }>("/sentiment/weather/fuse"),
+  sentimentWeatherTimeline: (days = 30) =>
+    get<{ data: { timeline: WeatherTimelineItem[]; stats: WeatherStats } }>(`/sentiment/weather/timeline?days=${days}`),
+  sentimentWeatherEvents: (days = 30) =>
+    get<{ data: { events: WeatherEvent[] } }>(`/sentiment/weather/events?days=${days}`),
+  sentimentWeatherAuction: () =>
+    get<{ data: { auction_metrics: AuctionMetric[]; phase: string } }>("/sentiment/weather/auction"),
+  sentimentWeatherSealRisk: () =>
+    get<{ data: { seal_risk_metrics: SealRiskMetric[] } }>("/sentiment/weather/seal-risk"),
+  sentimentWeatherPardon: () =>
+    get<{ data: { pardon_records: FusePardonRecord[]; is_admin: boolean } }>("/sentiment/weather/pardon"),
+  sentimentWeatherPardonToggle: (data: { strategy_code: string; reason: string; max_position_pct?: number }) =>
+    request<{ data: FusePardonRecord }>("/sentiment/weather/pardon/toggle", "POST", data),
+  sentimentWeatherPardonRevoke: (pardonId: string) =>
+    request<{ data: { success: boolean } }>(`/sentiment/weather/pardon/revoke?pardon_id=${pardonId}`, "POST"),
+  sentimentWeatherPardonOutcome: (data: PardonOutcome) =>
+    request<{ data: { success: boolean } }>("/sentiment/weather/pardon/outcome", "POST", data),
   stockDeep: (code: string) => get<StockDeep>(`/stock/${code}/deep`),
   // 性能监控（PRD V2.0.2 三层拆分）
   metricsDataFetch: () => get<any>("/metrics/data_fetch"),
@@ -707,4 +1002,14 @@ export const api = {
     get<any>(`/sector/rotation${date ? `?date=${date}` : ""}`),
   sectorDivergenceHistory: (days?: number) =>
     get<any[]>(`/sector/divergence/history${days ? `?days=${days}` : ""}`),
+  // 定时任务
+  scheduledTasks: () => get<any[]>("/scheduled-tasks"),
+  scheduledTask: (id: number) => get<any>(`/scheduled-tasks/${id}`),
+  createScheduledTask: (data: any) => request<any>("/scheduled-tasks", "POST", data),
+  updateScheduledTask: (id: number, data: any) => request<any>(`/scheduled-tasks/${id}`, "PUT", data),
+  deleteScheduledTask: (id: number) => request<{ ok: boolean }>(`/scheduled-tasks/${id}`, "DELETE"),
+  runScheduledTaskNow: (id: number) => request<any>(`/scheduled-tasks/${id}/run`, "POST"),
+  scheduledTaskRuns: (id: number, limit?: number) =>
+    get<any[]>(`/scheduled-tasks/${id}/runs${limit ? `?limit=${limit}` : ""}`),
+  scheduledTaskTypes: () => get<string[]>("/scheduled-tasks/types"),
 };

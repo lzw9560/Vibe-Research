@@ -11,9 +11,7 @@ from typing import Any
 import httpx
 
 from config import default_config
-
-
-from config import default_config
+from notification.notification_service import NotificationService
 
 # 推送节流配置
 _PUSH_THROTTLE = {
@@ -24,6 +22,17 @@ _PUSH_THROTTLE = {
 
 # 静默时段（不推送）
 _QUIET_HOURS = default_config.PUSH_QUIET_HOURS
+
+# 全局通知服务
+_notification_service: NotificationService | None = None
+
+
+def get_notification_service() -> NotificationService:
+    """获取全局通知服务实例。"""
+    global _notification_service
+    if _notification_service is None:
+        _notification_service = NotificationService()
+    return _notification_service
 
 
 class FeishuNotifier:
@@ -63,15 +72,17 @@ class FeishuNotifier:
             return False
 
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(
-                    self.webhook,
-                    json={"msg_type": "interactive", "card": card},
-                )
-                ok = resp.status_code == 200 and resp.json().get("code") == 0
-                if ok:
-                    self._mark_sent(ticker)
-                return ok
+            # 使用新的通知服务
+            service = get_notification_service()
+            result = await service.send_notification(
+                channel="feishu",
+                title=card.get("header", {}).get("title", {}).get("content", "投研助手"),
+                content=card,
+                ticker=ticker,
+            )
+            if result:
+                self._mark_sent(ticker)
+            return result
         except Exception:
             return False
 

@@ -1,6 +1,7 @@
 """
 Stock data router.
 """
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
 import time as _time
 from typing import Any, Callable, Dict, Tuple
@@ -192,6 +193,94 @@ def finance(code: str = Query(...)) -> Dict[str, Any]:
         raise HTTPException(501, str(e)) from e
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"财务源异常：{e}") from e
+
+
+@router.get("/api/stock/{code}/deep")
+async def stock_deep(code: str) -> Dict[str, Any]:
+    """个股深度数据聚合：行情 + K线 + 估值 + 资金流 + 龙虎榜 + 涨停分析 + 财务 + 板块 + 概念 + 公告 + 研报。"""
+    from routers.common import _validate
+    code = _validate(code)
+
+    async def _safe_call(name: str, fetch):
+        try:
+            return await asyncio.to_thread(fetch)
+        except Exception as e:  # noqa: BLE001
+            return None
+
+    try:
+        quote_task = _safe_call("quote", lambda: astock.tencent_quote([code]))
+        kline_task = _safe_call("kline", lambda: astock.kline(code, category=4, offset=60))
+        valuation_task = _safe_call("valuation", lambda: astock.full_valuation(code))
+        percentile_task = _safe_call("percentile", lambda: astock.valuation_percentile(code))
+        fund_flow_task = _safe_call("fund_flow", lambda: astock.stock_fund_flow_120d(code))
+        dragon_tiger_task = _safe_call("dragon_tiger", lambda: astock.dragon_tiger_board(code))
+        limitup_task = _safe_call("limitup", lambda: _limitup_analysis_sync(code))
+        financials_task = _safe_call("financials", lambda: astock.financials(code))
+        blocks_task = _safe_call("blocks", lambda: astock.concept_blocks(code))
+        hot_concepts_task = _safe_call("hot_concepts", lambda: astock.hot_concepts(code))
+        announcements_task = _safe_call("announcements", lambda: astock.announcements(code))
+        reports_task = _safe_call("reports", lambda: astock.eastmoney_reports(code, max_pages=2))
+
+        results = await asyncio.gather(
+            quote_task, kline_task, valuation_task, percentile_task,
+            fund_flow_task, dragon_tiger_task, limitup_task, financials_task,
+            blocks_task, hot_concepts_task, announcements_task, reports_task,
+            return_exceptions=True,
+        )
+
+        def _first_or_none(item):
+            if isinstance(item, Exception):
+                return None
+            return item
+
+        quote_data = _first_or_none(results[0])
+        kline_data = _first_or_none(results[1])
+        valuation_data = _first_or_none(results[2])
+        percentile_data = _first_or_none(results[3])
+        fund_flow_data = _first_or_none(results[4])
+        dragon_tiger_data = _first_or_none(results[5])
+        limitup_data = _first_or_none(results[6])
+        financials_data = _first_or_none(results[7])
+        blocks_data = _first_or_none(results[8])
+        hot_concepts_data = _first_or_none(results[9])
+        announcements_data = _first_or_none(results[10])
+        reports_data = _first_or_none(results[11])
+
+        # tencent_quote 返回 dict[str, dict]，取第一个
+        if isinstance(quote_data, dict):
+            quote_data = next(iter(quote_data.values()), None)
+
+        return {
+            "data": {
+                "quote": quote_data,
+                "kline": kline_data,
+                "valuation": valuation_data,
+                "percentile": percentile_data,
+                "fund_flow": fund_flow_data,
+                "dragon_tiger": dragon_tiger_data,
+                "limitup": limitup_data,
+                "financials": financials_data,
+                "blocks": blocks_data,
+                "hot_concepts": hot_concepts_data,
+                "announcements": announcements_data,
+                "reports": reports_data,
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"个股深度数据聚合异常：{e}") from e
+
+
+def _limitup_analysis_sync(code: str) -> Dict[str, Any]:
+    """同步包装 limitup analysis，供 asyncio.to_thread 使用。"""
+    import limitup_strategy as lstrat
+    from risk_models import update_one_day_risk_realtime
+    import asyncio as _asyncio
+
+    async def _run():
+        risk = await update_one_day_risk_realtime(code)
+        return await lstrat.get_analysis(code, None, risk=risk)
+
+    return _asyncio.run(_run())
 
 
 __all__ = ["router"]

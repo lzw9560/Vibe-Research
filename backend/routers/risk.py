@@ -4,7 +4,7 @@ Risk dashboard router.
 from fastapi import APIRouter, HTTPException, Query
 from typing import Any, Dict
 
-import risk
+import risk_models as risk
 
 router = APIRouter(tags=["risk"])
 

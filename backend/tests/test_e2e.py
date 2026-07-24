@@ -60,7 +60,7 @@ class TestLimitUpScreener:
         r = client.post("/api/limitup/screener/params", json={
             "gene_qualify_threshold": 65,
             "gene_high_threshold": 80,
-            "lookback_days": 250,
+            "lookback_days": 252,
         })
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
@@ -248,3 +248,65 @@ class TestSectorDivergenceEndpoints:
         if r.status_code == 200:
             data = r.json()
             assert "data" in data
+
+
+class TestWorkflowEndpoints:
+    def test_workflow_status(self):
+        r = client.get("/api/workflow/status")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_pre_market(self):
+        r = client.get("/api/workflow/pre-market")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_realtime(self):
+        r = client.get("/api/workflow/realtime")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_intraday(self):
+        r = client.get("/api/workflow/intraday")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_post_market(self):
+        r = client.get("/api/workflow/post-market")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_signals(self):
+        r = client.get("/api/workflow/signals")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_alerts(self):
+        r = client.get("/api/workflow/alerts")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_strategies(self):
+        r = client.get("/api/workflow/strategies")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_win_rate(self):
+        r = client.get("/api/workflow/win-rate")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+
+    def test_workflow_adjustments(self):
+        r = client.get("/api/workflow/adjustments")
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data

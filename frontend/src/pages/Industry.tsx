@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
-import { Loader2, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError, type IndustryData } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -58,14 +62,20 @@ export function Industry() {
 
       <GlassCard className="mb-6">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <span className="ml-3 text-sm text-muted-foreground">加载行业中…</span>
+          <div className="py-12">
+            <Skeleton className="mx-auto h-6 w-32" />
           </div>
         ) : error ? (
-          <div className="py-8 text-center text-sm text-destructive">{error}</div>
+          <EmptyState
+            icon={<TrendingDown className="h-8 w-8 text-destructive/40" />}
+            title="加载失败"
+            description={error}
+          />
         ) : allRows.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground/60">暂无行业数据</div>
+          <EmptyState
+            icon={<TrendingDown className="h-8 w-8 text-muted-foreground/40" />}
+            title="暂无行业数据"
+          />
         ) : (
           <>
             {/* 排序控制 */}
@@ -94,31 +104,14 @@ export function Industry() {
 
             {/* 汇总卡片 */}
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg bg-muted/20 p-3 text-center">
-                <p className="text-[11px] text-muted-foreground">行业总数</p>
-                <p className="mt-0.5 font-mono text-xl font-bold text-foreground">                  {data?.total ?? 0}</p>
-              </div>
-              <div className="rounded-lg bg-muted/20 p-3 text-center">
-                <p className="text-[11px] text-muted-foreground">领涨行业</p>
-                <p className="mt-0.5 font-mono text-xl font-bold text-danger">
-                  {allRows.filter((r) => r.change_pct > 0).length}
-                </p>
-              </div>
-              <div className="rounded-lg bg-muted/20 p-3 text-center">
-                <p className="text-[11px] text-muted-foreground">领跌行业</p>
-                <p className="mt-0.5 font-mono text-xl font-bold text-success">
-                  {allRows.filter((r) => r.change_pct < 0).length}
-                </p>
-              </div>
-              <div className="rounded-lg bg-muted/20 p-3 text-center">
-                <p className="text-[11px] text-muted-foreground">最强行业</p>
-                <p className="mt-0.5 truncate font-mono text-sm font-bold text-primary">
-                  {allRows[0]?.name ?? "—"}
-                </p>
-              </div>
+              <MetricCard label="行业总数" value={data?.total ?? 0} />
+              <MetricCard label="领涨行业" value={allRows.filter((r) => r.change_pct > 0).length} valueClassName="text-danger" />
+              <MetricCard label="领跌行业" value={allRows.filter((r) => r.change_pct < 0).length} valueClassName="text-success" />
+              <MetricCard label="最强行业" value={allRows[0]?.name ?? "—"} />
             </div>
 
             {/* 行业表格 */}
+            <SectionHeader title="行业明细" />
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

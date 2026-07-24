@@ -73,3 +73,37 @@ class TestPerformance:
             pytest.skip("数据源不可用，跳过性能测试")
         assert r.status_code == 200, f"metrics 失败: {r.text}"
         assert elapsed < 30, f"metrics 耗时 {elapsed:.1f}s，超过 30s"
+
+
+class TestWorkflowPerformance:
+    def test_workflow_status_latency(self):
+        """工作流状态查询应在 5 秒内完成。"""
+        start = time.time()
+        r = client.get("/api/workflow/status")
+        elapsed = time.time() - start
+        assert r.status_code == 200, f"workflow status 失败: {r.text}"
+        assert elapsed < 5, f"workflow status 耗时 {elapsed:.1f}s，超过 5s"
+
+    def test_workflow_signals_latency(self):
+        """实时交易信号查询应在 5 秒内完成。"""
+        start = time.time()
+        r = client.get("/api/workflow/signals")
+        elapsed = time.time() - start
+        assert r.status_code == 200, f"workflow signals 失败: {r.text}"
+        assert elapsed < 5, f"workflow signals 耗时 {elapsed:.1f}s，超过 5s"
+
+    def test_workflow_alerts_latency(self):
+        """炸板预警查询应在 5 秒内完成。"""
+        start = time.time()
+        r = client.get("/api/workflow/alerts")
+        elapsed = time.time() - start
+        assert r.status_code == 200, f"workflow alerts 失败: {r.text}"
+        assert elapsed < 5, f"workflow alerts 耗时 {elapsed:.1f}s，超过 5s"
+
+    def test_workflow_win_rate_latency(self):
+        """胜率统计查询应在 5 秒内完成。"""
+        start = time.time()
+        r = client.get("/api/workflow/win-rate")
+        elapsed = time.time() - start
+        assert r.status_code == 200, f"workflow win-rate 失败: {r.text}"
+        assert elapsed < 5, f"workflow win-rate 耗时 {elapsed:.1f}s，超过 5s"

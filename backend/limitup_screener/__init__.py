@@ -31,6 +31,12 @@ from limitup_screener.service import (
     _collect_zt_history_batch,
     _compute_and_cache_async,
     _compute_and_cache,
+    public_resolve_date,
+    public_fetch_zt_pool,
+    public_collect_zt_history_batch,
+    public_get_cache,
+    public_get_cache_ttl,
+    public_load_gene_scores,
 )
 from limitup_screener.models import compute_factors as _compute_factors
 from limitup_screener.models import calc_total_score as _calc_total_score
@@ -69,5 +75,11 @@ __all__ = [
     "_calc_total_score",
     "_compute_and_cache_async",
     "_compute_and_cache",
+    "public_resolve_date",
+    "public_fetch_zt_pool",
+    "public_collect_zt_history_batch",
+    "public_get_cache",
+    "public_get_cache_ttl",
+    "public_load_gene_scores",
     "BEIJING_TZ",
 ]

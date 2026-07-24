@@ -3,6 +3,8 @@ import { Plus, X, RefreshCw, Star } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { api, type Quote } from "@/lib/api";
@@ -116,24 +118,26 @@ export function Watchlist() {
       </GlassCard>
 
       <GlassCard glow>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="flex items-center gap-1.5 font-semibold">
-            <Star className="h-4 w-4 text-primary" /> 自选总览
-            <span className="text-xs font-normal text-muted-foreground">（{codes.length}）</span>
-          </h3>
-          <button
-            onClick={() => refresh(codes)}
-            disabled={loading}
-            className="text-muted-foreground hover:text-primary"
-            title="刷新价格"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-          </button>
-        </div>
+        <SectionHeader
+          title="自选总览"
+          icon={<Star className="h-4 w-4 text-primary" />}
+          action={
+            <button
+              onClick={() => refresh(codes)}
+              disabled={loading}
+              className="text-muted-foreground hover:text-primary"
+              title="刷新价格"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            </button>
+          }
+        />
         {codes.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground/60">
-            还没有自选股，用上面的框粘贴一串代码批量添加。
-          </p>
+          <EmptyState
+            icon={<Star className="h-8 w-8 text-muted-foreground/40" />}
+            title="还没有自选股"
+            description="用上面的框粘贴一串代码批量添加。"
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

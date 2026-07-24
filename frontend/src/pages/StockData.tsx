@@ -9,6 +9,9 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { AskAiButton } from "@/components/ui/AskAiButton";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { EarningsSnapshot } from "@/components/ui/EarningsSnapshot";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import {
@@ -40,17 +43,6 @@ const round2 = (v: number | null | undefined, suffix = "") =>
 // 百分比：后端偶发给 null/缺字段时显示 —，不出现 "NaN%" / 误导性 "0.00%"
 const pct = (v: number | null | undefined) =>
   v === null || v === undefined || !Number.isFinite(Number(v)) ? "—" : `${Number(v).toFixed(2)}%`;
-
-// 小指标块（复用于资金面/筹码卡）
-function Metric({ k, v, sub }: { k: string; v: string; sub?: string }) {
-  return (
-    <div className="rounded-lg bg-muted/30 p-3">
-      <p className="text-xs text-muted-foreground">{k}</p>
-      <p className="mt-0.5 font-mono text-base font-bold">{v}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
 
 // 估值历史分位带（理杏仁式）：绿=低估区 / 灰=合理区 / 红=高估区；只给位置，不划买卖。
 function ValBand({ label, m }: { label: string; m: ValMetric }) {
@@ -218,20 +210,18 @@ export function StockData() {
                 { k: "最低", v: fmt(gstock.quote.low), cls: "" },
                 { k: "昨收", v: fmt(gstock.quote.prev_close), cls: "" },
               ].map((m) => (
-                <div key={m.k} className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{m.k}</p>
-                  <p className={cn("mt-0.5 font-mono text-base font-bold", m.cls)}>{m.v}</p>
-                </div>
+                <MetricCard key={m.k} label={m.k} value={m.v} valueClassName={cn("font-mono text-base font-bold", m.cls)} />
               ))}
             </div>
           </GlassCard>
 
           {gstock.metrics && (
             <GlassCard className="mb-4">
-              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
-                <BarChart3 className="h-4 w-4 text-primary" /> 关键财务指标
-                <span className="text-xs font-normal text-muted-foreground/60">· {gstock.metrics.report_date}</span>
-              </h3>
+              <SectionHeader
+                title="关键财务指标"
+                icon={<BarChart3 className="h-4 w-4 text-primary" />}
+                subtitle={`· ${gstock.metrics.report_date}`}
+              />
               <p className="mb-3 text-[11px] text-muted-foreground/60">东财 GMAININDICATOR，最新报告期。金额为原生币种。</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
@@ -242,12 +232,8 @@ export function StockData() {
                   { k: "毛利率", v: round2(gstock.metrics.gross_margin, "%"), yoy: "" },
                   { k: "净利率", v: round2(gstock.metrics.net_margin, "%"), yoy: "" },
                   { k: "资产负债率", v: round2(gstock.metrics.debt_ratio, "%"), yoy: "" },
-                ].map((m) => (
-                  <div key={m.k} className="rounded-lg bg-muted/30 p-3">
-                    <p className="text-xs text-muted-foreground">{m.k}</p>
-                    <p className="mt-0.5 font-mono text-base font-bold">{m.v}</p>
-                    {m.yoy && <p className="text-[11px] text-muted-foreground">同比 {m.yoy}</p>}
-                  </div>
+                 ].map((m) => (
+                  <MetricCard key={m.k} label={m.k} value={m.v} sub={m.yoy ? `同比 ${m.yoy}` : undefined} />
                 ))}
               </div>
             </GlassCard>
@@ -271,10 +257,7 @@ export function StockData() {
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {metrics.map((m) => (
-                <div key={m.k} className="rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{m.k}</p>
-                  <p className="mt-0.5 font-mono text-lg font-bold">{m.v}</p>
-                </div>
+                <MetricCard key={m.k} label={m.k} value={m.v} valueClassName="text-lg" />
               ))}
             </div>
             {val.forecast_note && (
@@ -287,7 +270,11 @@ export function StockData() {
 
           {pctl && (pctl.metrics.pe_ttm || pctl.metrics.pb) && (
             <GlassCard glow className="mb-4">
-              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold"><LineChart className="h-4 w-4 text-primary" /> 估值历史分位 · {pctl.period}</h3>
+              <SectionHeader
+                title="估值历史分位"
+                icon={<LineChart className="h-4 w-4 text-primary" />}
+                subtitle={`· ${pctl.period}`}
+              />
               <p className="mb-4 text-[11px] text-muted-foreground/60">绿=低估区 / 灰=合理区 / 红=高估区。只显示当前处于历史什么位置，不构成买卖建议。</p>
               <div className="space-y-4">
                 {pctl.metrics.pe_ttm && <ValBand label="PE-TTM" m={pctl.metrics.pe_ttm} />}
@@ -298,7 +285,11 @@ export function StockData() {
 
           {fin && (fin.revenue || fin.roe) && (
             <GlassCard className="mb-4">
-              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold"><BarChart3 className="h-4 w-4 text-primary" /> 财务关键指标{fin.period && <span className="text-xs font-normal text-muted-foreground/60">· {fin.period}</span>}</h3>
+              <SectionHeader
+                title="财务关键指标"
+                icon={<BarChart3 className="h-4 w-4 text-primary" />}
+                subtitle={fin.period ? `· ${fin.period}` : undefined}
+              />
               <p className="mb-3 text-[11px] text-muted-foreground/60">同花顺财务摘要,最新报告期。</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
@@ -310,12 +301,8 @@ export function StockData() {
                   { k: "销售净利率", v: fin.net_margin },
                   { k: "每股净资产", v: fin.bvps },
                   { k: "每股经营现金流", v: fin.op_cf_ps },
-                ].map((m) => (
-                  <div key={m.k} className="rounded-lg bg-muted/30 p-3">
-                    <p className="text-xs text-muted-foreground">{m.k}</p>
-                    <p className="mt-0.5 font-mono text-base font-bold">{m.v ?? "—"}</p>
-                    {m.yoy && <p className="text-[11px] text-muted-foreground">同比 {m.yoy}</p>}
-                  </div>
+                 ].map((m) => (
+                  <MetricCard key={m.k} label={m.k} value={m.v ?? "—"} sub={m.yoy ? `同比 ${m.yoy}` : undefined} />
                 ))}
               </div>
             </GlassCard>
@@ -323,7 +310,7 @@ export function StockData() {
 
           {reports.length > 0 && (
             <GlassCard className="mb-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><FileText className="h-4 w-4 text-primary" /> 近期研报（{reports.length}）</h3>
+              <SectionHeader title={`近期研报（${reports.length}）`} icon={<FileText className="h-4 w-4 text-primary" />} />
               <div className="space-y-2">
                 {reports.slice(0, 12).map((r, i) => (
                   <div key={i} className="flex items-center gap-3 border-b border-border/40 pb-2 text-sm last:border-0">
@@ -343,7 +330,7 @@ export function StockData() {
 
           {anns.length > 0 && (
             <GlassCard className="mb-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><Megaphone className="h-4 w-4 text-primary" /> 近期公告（{anns.length}）</h3>
+              <SectionHeader title={`近期公告（${anns.length}）`} icon={<Megaphone className="h-4 w-4 text-primary" />} />
               <div className="space-y-2">
                 {anns.slice(0, 12).map((a, i) => (
                   <div key={i} className="flex items-center gap-3 border-b border-border/40 pb-2 text-sm last:border-0">
@@ -361,7 +348,7 @@ export function StockData() {
           )}
 
           <GlassCard>
-            <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><Newspaper className="h-4 w-4 text-primary" /> 个股新闻</h3>
+            <SectionHeader title="个股新闻" icon={<Newspaper className="h-4 w-4 text-primary" />} />
             {depNote ? (
               <p className="text-xs text-warning">{depNote}（安装后新闻/公告即可用）</p>
             ) : news.length === 0 ? (
@@ -385,13 +372,13 @@ export function StockData() {
           {/* 资金面 · 筹码（融资融券 / 股东户数 / 主力资金流 / 分红 / 大宗交易） */}
           {(margin.length > 0 || holders.length > 0 || fundFlow.length > 0 || dividend.length > 0) && (
             <GlassCard className="mb-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><Wallet className="h-4 w-4 text-primary" /> 资金面 · 筹码</h3>
+              <SectionHeader title="资金面 · 筹码" icon={<Wallet className="h-4 w-4 text-primary" />} />
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {margin[0] && <Metric k="融资余额" v={yi(margin[0].rzye)} sub={margin[0].date} />}
-                {margin[0] && <Metric k="融券余额" v={yi(margin[0].rqye)} />}
-                {holders[0] && <Metric k="股东户数" v={Number(holders[0].holder_num).toLocaleString()} sub={`环比 ${pct(holders[0].change_ratio)}`} />}
-                {fundFlow.length > 0 && <Metric k="近20日主力净流入" v={yi(fundFlow.slice(-20).reduce((s, r) => s + r.main_net, 0))} />}
-                {dividend[0] && <Metric k="最近派息(每10股)" v={`${dividend[0].bonus_rmb} 元`} sub={dividend[0].date} />}
+                {margin[0] && <MetricCard label="融资余额" value={yi(margin[0].rzye)} sub={margin[0].date} />}
+                {margin[0] && <MetricCard label="融券余额" value={yi(margin[0].rqye)} />}
+                {holders[0] && <MetricCard label="股东户数" value={Number(holders[0].holder_num).toLocaleString()} sub={`环比 ${pct(holders[0].change_ratio)}`} />}
+                {fundFlow.length > 0 && <MetricCard label="近20日主力净流入" value={yi(fundFlow.slice(-20).reduce((s, r) => s + r.main_net, 0))} />}
+                {dividend[0] && <MetricCard label="最近派息(每10股)" value={`${dividend[0].bonus_rmb} 元`} sub={dividend[0].date} />}
               </div>
               {blockT.length > 0 && (
                 <div className="mt-3 border-t border-border/40 pt-3">
@@ -415,7 +402,7 @@ export function StockData() {
           {/* 龙虎榜 */}
           {dt && dt.records.length > 0 && (
             <GlassCard className="mb-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><Trophy className="h-4 w-4 text-primary" /> 龙虎榜（近30日 {dt.records.length} 次）</h3>
+              <SectionHeader title={`龙虎榜（近30日 ${dt.records.length} 次）`} icon={<Trophy className="h-4 w-4 text-primary" />} />
               <div className="space-y-2">
                 {dt.records.slice(0, 6).map((r, i) => (
                   <div key={i} className="flex items-center gap-3 border-b border-border/40 pb-2 text-sm last:border-0">
@@ -447,7 +434,7 @@ export function StockData() {
           {/* 限售解禁 */}
           {lockup && (lockup.upcoming.length > 0 || lockup.history.length > 0) && (
             <GlassCard className="mb-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><CalendarClock className="h-4 w-4 text-primary" /> 限售解禁</h3>
+              <SectionHeader title="限售解禁" icon={<CalendarClock className="h-4 w-4 text-primary" />} />
               {lockup.upcoming.length > 0 ? (
                 <div className="mb-3 rounded-lg border border-warning/30 bg-warning/5 p-3">
                   <p className="mb-1.5 text-xs font-medium text-warning">未来 90 天待解禁（{lockup.upcoming.length}）</p>
@@ -472,7 +459,7 @@ export function StockData() {
           {/* 板块归属 · 概念 */}
           {((blocks && blocks.concept_tags.length > 0) || hotCon.length > 0) && (
             <GlassCard className="mb-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><Boxes className="h-4 w-4 text-primary" /> 板块归属 · 概念</h3>
+              <SectionHeader title="板块归属 · 概念" icon={<Boxes className="h-4 w-4 text-primary" />} />
               {blocks && blocks.concept_tags.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-1.5">
                   {blocks.concept_tags.slice(0, 24).map((t, i) => (
@@ -496,7 +483,7 @@ export function StockData() {
           {/* 投资者互动（互动易） */}
           {qa.filter((q) => q.answer).length > 0 && (
             <GlassCard className="mb-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><MessageSquare className="h-4 w-4 text-primary" /> 投资者互动（互动易）</h3>
+              <SectionHeader title="投资者互动（互动易）" icon={<MessageSquare className="h-4 w-4 text-primary" />} />
               <div className="space-y-3">
                 {qa.filter((q) => q.answer).slice(0, 5).map((q, i) => (
                   <div key={i} className="border-b border-border/40 pb-3 text-sm last:border-0">
@@ -512,12 +499,11 @@ export function StockData() {
       )}
 
       {!val && !err && !loading && (
-        <GlassCard>
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            输入一个 6 位股票代码，拉取它的行情、估值、研报与新闻。<br />
-            <span className="text-xs text-muted-foreground/60">数据来自公开源（腾讯行情 / 东财研报 / akshare）；Vibe-Research 不预置任何标的、不做推荐。</span>
-          </div>
-        </GlassCard>
+        <EmptyState
+          icon={<Search className="h-8 w-8 text-muted-foreground/40" />}
+          title="输入股票代码开始查询"
+          description="输入 A 股 6 位代码，或美股/港股/韩股代码，查看行情、估值、研报与新闻。"
+        />
       )}
 
       <Disclaimer />

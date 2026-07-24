@@ -11,7 +11,8 @@ from typing import Any
 
 import astock
 import limitup_screener as ls
-from limitup_screener import _resolve_date, _fetch_zt_pool, _collect_zt_history_batch, _compute_factors, _calc_total_score, LOOKBACK_DAYS
+from limitup_screener import public_resolve_date, public_fetch_zt_pool, public_collect_zt_history_batch, LOOKBACK_DAYS
+from limitup_screener.models import compute_factors, calc_total_score
 
 _CACHE_FILE = Path(__file__).resolve().parent / "data" / "backtest_cache.json"
 

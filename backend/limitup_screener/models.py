@@ -17,7 +17,7 @@ DISCLAIMER = (
     "股市有风险，投资需谨慎。所有分析由用户自己的 AI 给出，Vibe-Research 仅提供数据呈现工具。"
 )
 
-LOOKBACK_DAYS = int(os.getenv("LIMITUP_LOOKBACK_DAYS", "250"))
+LOOKBACK_DAYS = int(os.getenv("LIMITUP_LOOKBACK_DAYS", "252"))
 GENE_QUALIFY_THRESHOLD = float(os.getenv("LIMITUP_GENE_QUALIFY_THRESHOLD", "60"))
 GENE_HIGH_THRESHOLD = float(os.getenv("LIMITUP_GENE_HIGH_THRESHOLD", "75"))
 
@@ -36,6 +36,12 @@ class GeneScore(BaseModel):
     zt_count_250d: int  # 近 N 日涨停次数
     backtest_points: list[dict] = []  # 简化版回测数据
     backtest_summary: dict = {}  # 轻量级回测统计
+    # 封单/流通盘风控（可选，来自涨停池原始数据）
+    seal_amount: float = 0.0
+    float_shares: float = 0.0
+    seal_to_float_ratio: float = 0.0
+    limit_up_price: float = 0.0
+    limit_down_price: float = 0.0
 
 
 class ScreenerResult(BaseModel):
@@ -47,6 +53,8 @@ class ScreenerResult(BaseModel):
     high_gene: list[GeneScore]  # 高基因的
     updated: str  # 更新时间
     disclaimer: str  # 免责声明
+    data_freshness: str = "fresh"  # fresh | stale | expired
+    data_age_seconds: float = 0.0  # 数据年龄（秒）
 
 
 @dataclass
@@ -129,6 +137,34 @@ def calc_total_score(factors: dict[str, float]) -> float:
     return round(total, 2)
 
 
+def round_to_tick_size(price: float, tick_size: float = 0.01) -> float:
+    """A股 tick-size  rounding（默认 0.01 元）。"""
+    return round(round(price / tick_size) * tick_size, 2)
+
+
+def validate_limit_up_price(prev_close: float, code: str = "") -> tuple[float, float]:
+    """计算A股涨跌停价（支持主板/创业板/科创板/ST股）。
+
+    返回 (涨停价, 跌停价)。
+    """
+    if not prev_close or prev_close <= 0:
+        return 0.0, 0.0
+
+    # 创业板/科创板：20%
+    if code.startswith(("300", "301", "688", "689")):
+        limit = 0.20
+    # ST股：5%
+    elif "ST" in (code or ""):
+        limit = 0.05
+    # 主板：10%
+    else:
+        limit = 0.10
+
+    up = round_to_tick_size(prev_close * (1 + limit))
+    down = round_to_tick_size(prev_close * (1 - limit))
+    return up, down
+
+
 def compute_gene_score(
     code: str,
     name: str,
@@ -136,6 +172,7 @@ def compute_gene_score(
     yzt: list[dict],
     zb: list[dict],
     include_backtest: bool = False,
+    pool_item: dict | None = None,
 ) -> GeneScore:
     """计算单只涨停股的基因得分。"""
     factors = compute_factors(history, yzt, zb)
@@ -145,6 +182,20 @@ def compute_gene_score(
     last_dates = sorted(set(
         h.get("_pool_date", "") for h in history if h.get("_pool_date")
     ), reverse=True)[:10]
+
+    # 封单/流通盘 + 涨跌停价（来自涨停池原始数据）
+    seal_amount = 0.0
+    float_shares = 0.0
+    seal_to_float_ratio = 0.0
+    limit_up_price = 0.0
+    limit_down_price = 0.0
+    if pool_item:
+        seal_amount = astock._numf(pool_item.get("seal_amount")) or 0.0
+        float_shares = astock._numf(pool_item.get("float_shares")) or 0.0
+        seal_to_float_ratio = (seal_amount / float_shares) if float_shares > 0 else 0.0
+        prev_close = astock._numf(pool_item.get("prev_close")) or 0.0
+        if prev_close > 0:
+            limit_up_price, limit_down_price = validate_limit_up_price(prev_close, code)
 
     bt_points: list[dict] = []
     bt_summary: dict = {}
@@ -187,4 +238,9 @@ def compute_gene_score(
         zt_count_250d=len(history),
         backtest_points=bt_points,
         backtest_summary=bt_summary,
+        seal_amount=seal_amount,
+        float_shares=float_shares,
+        seal_to_float_ratio=seal_to_float_ratio,
+        limit_up_price=limit_up_price,
+        limit_down_price=limit_down_price,
     )

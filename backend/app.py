@@ -39,8 +39,8 @@ import myreports as mr
 from scheduler import start_limitup_scheduler, start_portfolio_scheduler
 
 # Router imports
-from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics
-from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market
+from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
+from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks
 
 app = FastAPI(title="Vibe-Research API", version="0.1.3")
 
@@ -135,6 +135,14 @@ app.include_router(strategy_router.router)
 app.include_router(sector_divergence.router)
 app.include_router(risk_router.router)
 app.include_router(extreme_market.router)
+app.include_router(sentiment_weather.router)
+app.include_router(workflow.router)
+app.include_router(scheduled_tasks.router)
+app.include_router(kline_history.router)
+
+# 启动定时任务调度器
+import scheduled_tasks as _st
+_st.start_scheduler()
 # ============ Unified error handling ============
 
 @app.exception_handler(HTTPException)

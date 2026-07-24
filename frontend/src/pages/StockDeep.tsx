@@ -4,6 +4,9 @@ import { ArrowLeft, TrendingUp, Dna, Banknote, Brain, Loader2, AlertCircle } fro
 import { api, type StockDeep, type ValMetric } from "@/lib/api";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/ui/TabBar";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KLineChart } from "@/components/charts/KLineChart";
 import { Disclaimer } from "@/components/ui/Disclaimer";
@@ -50,17 +53,6 @@ function FactorBar({ label, value, max }: { label: string; value: number; max: n
   );
 }
 
-// Mini metric card (reusable)
-function Metric({ k, v, cls, sub }: { k: string; v: string; cls?: string; sub?: string }) {
-  return (
-    <div className="rounded-lg bg-muted/30 p-3">
-      <p className="text-xs text-muted-foreground">{k}</p>
-      <p className={cn("mt-0.5 font-mono text-base font-bold", cls)}>{v}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
-
 // --- Tab components ---
 
 function QuoteTab({ data, code }: { data: StockDeep | null; code: string }) {
@@ -91,26 +83,22 @@ function QuoteTab({ data, code }: { data: StockDeep | null; code: string }) {
       {/* Price summary grid */}
       {q && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Metric k="昨收" v={fmt(q.last_close)} />
-          <Metric k="涨停" v={fmt(q.limit_up)} cls="text-danger" />
-          <Metric k="跌停" v={fmt(q.limit_down)} cls="text-success" />
-          <Metric k="换手率" v={pct(q.turnover_pct)} />
+          <MetricCard label="昨收" value={fmt(q.last_close)} />
+          <MetricCard label="涨停" value={fmt(q.limit_up)} trendUp={true} />
+          <MetricCard label="跌停" value={fmt(q.limit_down)} trendUp={false} />
+          <MetricCard label="换手率" value={pct(q.turnover_pct)} />
         </div>
       )}
 
       {/* KLineChart */}
       {kline && kline.length > 0 ? (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
-            <TrendingUp className="h-4 w-4 text-primary" /> K线图
-          </h3>
+          <SectionHeader title="K线图" icon={<TrendingUp className="h-4 w-4 text-primary" />} />
           <KLineChart bars={kline} />
         </GlassCard>
       ) : (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
-            <TrendingUp className="h-4 w-4 text-primary" /> K线图
-          </h3>
+          <SectionHeader title="K线图" icon={<TrendingUp className="h-4 w-4 text-primary" />} />
           <p className="py-8 text-center text-sm text-muted-foreground">暂无K线数据</p>
         </GlassCard>
       )}
@@ -118,18 +106,16 @@ function QuoteTab({ data, code }: { data: StockDeep | null; code: string }) {
       {/* Valuation */}
       {val && (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
-            <TrendingUp className="h-4 w-4 text-primary" /> 估值指标
-          </h3>
+          <SectionHeader title="估值指标" icon={<TrendingUp className="h-4 w-4 text-primary" />} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Metric k="PE(TTM)" v={fmt(val.pe_ttm)} />
-            <Metric k="PB" v={fmt(val.pb)} />
-            <Metric k="总市值" v={fmt(val.mcap_yi, " 亿")} />
-            <Metric k="EPS(26E)" v={fmt(val.eps_26e)} />
-            <Metric k="前向PE" v={fmt(val.pe_26e)} />
-            <Metric k="PEG" v={fmt(val.peg)} />
-            <Metric k="消化年" v={fmt(val.digest_years, " 年")} />
-            <Metric k="机构覆盖" v={fmt(val.analyst_count, " 家")} />
+            <MetricCard label="PE(TTM)" value={fmt(val.pe_ttm)} />
+            <MetricCard label="PB" value={fmt(val.pb)} />
+            <MetricCard label="总市值" value={fmt(val.mcap_yi)} unit="亿" />
+            <MetricCard label="EPS(26E)" value={fmt(val.eps_26e)} />
+            <MetricCard label="前向PE" value={fmt(val.pe_26e)} />
+            <MetricCard label="PEG" value={fmt(val.peg)} />
+            <MetricCard label="消化年" value={fmt(val.digest_years)} unit="年" />
+            <MetricCard label="机构覆盖" value={fmt(val.analyst_count)} unit="家" />
           </div>
         </GlassCard>
       )}
@@ -149,16 +135,16 @@ function QuoteTab({ data, code }: { data: StockDeep | null; code: string }) {
       {/* Financials */}
       {fin && (fin.revenue || fin.roe) && (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">财务关键指标{fin.period && <span className="text-xs font-normal text-muted-foreground/60">· {fin.period}</span>}</h3>
+          <SectionHeader title="财务关键指标" subtitle={fin.period ? `· ${fin.period}` : undefined} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Metric k="营收" v={fin.revenue || "—"} sub={fin.revenue_yoy ? `同比 ${fin.revenue_yoy}` : undefined} />
-            <Metric k="净利润" v={fin.net_profit || "—"} sub={fin.net_profit_yoy ? `同比 ${fin.net_profit_yoy}` : undefined} />
-            <Metric k="EPS" v={fin.eps || "—"} />
-            <Metric k="ROE" v={fin.roe || "—"} />
-            <Metric k="毛利率" v={fin.gross_margin || "—"} />
-            <Metric k="净利率" v={fin.net_margin || "—"} />
-            <Metric k="每股净资产" v={fin.bvps || "—"} />
-            <Metric k="每股经营现金流" v={fin.op_cf_ps || "—"} />
+            <MetricCard label="营收" value={fin.revenue || "—"} sub={fin.revenue_yoy ? `同比 ${fin.revenue_yoy}` : undefined} />
+            <MetricCard label="净利润" value={fin.net_profit || "—"} sub={fin.net_profit_yoy ? `同比 ${fin.net_profit_yoy}` : undefined} />
+            <MetricCard label="EPS" value={fin.eps || "—"} />
+            <MetricCard label="ROE" value={fin.roe || "—"} />
+            <MetricCard label="毛利率" value={fin.gross_margin || "—"} />
+            <MetricCard label="净利率" value={fin.net_margin || "—"} />
+            <MetricCard label="每股净资产" value={fin.bvps || "—"} />
+            <MetricCard label="每股经营现金流" value={fin.op_cf_ps || "—"} />
           </div>
         </GlassCard>
       )}
@@ -166,7 +152,7 @@ function QuoteTab({ data, code }: { data: StockDeep | null; code: string }) {
       {/* Reports */}
       {data?.reports && data.reports.length > 0 && (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">近期研报（{data.reports.length}）</h3>
+          <SectionHeader title={`近期研报（${data.reports.length}）`} />
           <div className="space-y-2">
             {data.reports.slice(0, 12).map((r, i) => (
               <div key={i} className="flex items-center gap-3 border-b border-border/40 pb-2 text-sm last:border-0">
@@ -183,7 +169,7 @@ function QuoteTab({ data, code }: { data: StockDeep | null; code: string }) {
       {/* Announcements */}
       {data?.announcements && data.announcements.length > 0 && (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">近期公告（{data.announcements.length}）</h3>
+          <SectionHeader title={`近期公告（${data.announcements.length}）`} />
           <div className="space-y-2">
             {data.announcements.slice(0, 12).map((a, i) => (
               <div key={i} className="flex items-center gap-3 border-b border-border/40 pb-2 text-sm last:border-0">
@@ -213,99 +199,97 @@ function GeneTab({ data }: { data: StockDeep | null }) {
     );
   }
 
-  return (
-    <div className="space-y-5">
-      {/* Score overview */}
-      <GlassCard>
-        <h3 className="mb-4 flex items-center gap-1.5 text-sm font-semibold">
-          <Dna className="h-4 w-4 text-primary" /> 基因评分
-        </h3>
-        <div className="mb-4 flex items-center gap-6">
-          <div className="text-center">
-            <div className={cn("text-4xl font-bold font-mono", gene.total_score >= 60 ? "text-danger" : gene.total_score >= 40 ? "text-warning" : "text-muted-foreground")}>
-              {gene.total_score}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">总分 (0-100)</p>
-          </div>
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-16 text-muted-foreground">Qualify</span>
-              <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", gene.qualify ? "bg-success/20 text-success" : "bg-muted/40 text-muted-foreground")}>
-                {gene.qualify ? "达标" : "未达标"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-16 text-muted-foreground">High Gene</span>
-              <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", gene.high_gene ? "bg-danger/20 text-danger" : "bg-muted/40 text-muted-foreground")}>
-                {gene.high_gene ? "高基因" : "普通"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-16 text-muted-foreground">Wilson分</span>
-              <span className="font-mono">{fmt(gene.wilson_adjusted)}</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-16 text-muted-foreground">250日涨停</span>
-              <span className="font-mono">{gene.zt_count_250d} 次</span>
-            </div>
-          </div>
-        </div>
+   return (
+     <div className="space-y-5">
+       {/* Score overview */}
+       <GlassCard>
+         <SectionHeader title="基因评分" icon={<Dna className="h-4 w-4 text-primary" />} />
+         <div className="mb-4 flex items-center gap-6">
+           <div className="text-center">
+             <div className={cn("text-4xl font-bold font-mono", gene.total_score >= 60 ? "text-danger" : gene.total_score >= 40 ? "text-warning" : "text-muted-foreground")}>
+               {gene.total_score}
+             </div>
+             <p className="mt-1 text-xs text-muted-foreground">总分 (0-100)</p>
+           </div>
+           <div className="flex-1 space-y-3">
+             <div className="flex items-center gap-2 text-xs">
+               <span className="w-16 text-muted-foreground">Qualify</span>
+               <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", gene.qualify ? "bg-success/20 text-success" : "bg-muted/40 text-muted-foreground")}>
+                 {gene.qualify ? "达标" : "未达标"}
+               </span>
+             </div>
+             <div className="flex items-center gap-2 text-xs">
+               <span className="w-16 text-muted-foreground">High Gene</span>
+               <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", gene.high_gene ? "bg-danger/20 text-danger" : "bg-muted/40 text-muted-foreground")}>
+                 {gene.high_gene ? "高基因" : "普通"}
+               </span>
+             </div>
+             <div className="flex items-center gap-2 text-xs">
+               <span className="w-16 text-muted-foreground">Wilson分</span>
+               <span className="font-mono">{fmt(gene.wilson_adjusted)}</span>
+             </div>
+             <div className="flex items-center gap-2 text-xs">
+               <span className="w-16 text-muted-foreground">250日涨停</span>
+               <span className="font-mono">{gene.zt_count_250d} 次</span>
+             </div>
+           </div>
+         </div>
 
-        {/* Factors */}
-        {Object.keys(gene.factors || {}).length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">五维因子</p>
-            {Object.entries(gene.factors).map(([k, v]) => (
-              <FactorBar key={k} label={k} value={v} max={100} />
-            ))}
-          </div>
-        )}
-      </GlassCard>
+         {/* Factors */}
+         {Object.keys(gene.factors || {}).length > 0 && (
+           <div className="space-y-2">
+             <p className="text-xs font-medium text-muted-foreground">五维因子</p>
+             {Object.entries(gene.factors).map(([k, v]) => (
+               <FactorBar key={k} label={k} value={v} max={100} />
+             ))}
+           </div>
+         )}
+       </GlassCard>
 
-      {/* Strategy logic matches */}
-      {strat && strat.matches && strat.matches.length > 0 && (
-        <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">策略逻辑匹配</h3>
-          <p className="mb-3 text-xs text-muted-foreground">{strat.logic_description}</p>
-          <div className="space-y-2">
-            {strat.matches.map((m, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-md bg-muted/20 p-2 text-xs">
-                <span className="shrink-0 font-medium text-primary">{m.condition}</span>
-                <span className="font-mono text-muted-foreground">{m.value}</span>
-                <span className="flex-1 text-muted-foreground">{m.description}</span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-      )}
+       {/* Strategy logic matches */}
+       {strat && strat.matches && strat.matches.length > 0 && (
+         <GlassCard>
+           <SectionHeader title="策略逻辑匹配" />
+           <p className="mb-3 text-xs text-muted-foreground">{strat.logic_description}</p>
+           <div className="space-y-2">
+             {strat.matches.map((m, i) => (
+               <div key={i} className="flex items-center gap-3 rounded-md bg-muted/20 p-2 text-xs">
+                 <span className="shrink-0 font-medium text-primary">{m.condition}</span>
+                 <span className="font-mono text-muted-foreground">{m.value}</span>
+                 <span className="flex-1 text-muted-foreground">{m.description}</span>
+               </div>
+             ))}
+           </div>
+         </GlassCard>
+       )}
 
-      {/* Risk rules */}
-      {risks && risks.length > 0 && (
-        <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">风控规则</h3>
-          <div className="space-y-2">
-            {risks.map((r, i) => (
-              <div key={i} className="rounded-md bg-muted/20 p-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-warning">{r.rule_name}</span>
-                  {r.configurable && <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">可配置</span>}
+        {/* Risk rules */}
+        {risks && risks.length > 0 && (
+          <GlassCard>
+            <SectionHeader title="风控规则" />
+            <div className="space-y-2">
+              {risks.map((r, i) => (
+                <div key={i} className="rounded-md bg-muted/20 p-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-warning">{r.rule_name}</span>
+                    {r.configurable && <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">可配置</span>}
+                  </div>
+                  <p className="mt-1 text-muted-foreground">{r.description}</p>
+                  <p className="mt-1 text-muted-foreground/70">示例：{r.example}</p>
                 </div>
-                <p className="mt-1 text-muted-foreground">{r.description}</p>
-                <p className="mt-1 text-muted-foreground/70">示例：{r.example}</p>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-      )}
+              ))}
+            </div>
+          </GlassCard>
+        )}
 
       {/* Backtest mini */}
       {gene.backtest_summary && (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">回测摘要</h3>
+          <SectionHeader title="回测摘要" />
           <div className="grid grid-cols-3 gap-3">
-            <Metric k="样本数" v={fmt(gene.backtest_summary.samples)} />
-            <Metric k="连板率" v={pct(gene.backtest_summary.lianban_rate)} />
-            <Metric k="连板均分" v={fmt(gene.backtest_summary.avg_score_lianban)} />
+            <MetricCard label="样本数" value={fmt(gene.backtest_summary.samples)} />
+            <MetricCard label="连板率" value={pct(gene.backtest_summary.lianban_rate)} />
+            <MetricCard label="连板均分" value={fmt(gene.backtest_summary.avg_score_lianban)} />
           </div>
         </GlassCard>
       )}
@@ -324,9 +308,7 @@ function FundTab({ data }: { data: StockDeep | null }) {
       {/* Fund flow table */}
       {fundFlow && fundFlow.length > 0 ? (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
-            <Banknote className="h-4 w-4 text-primary" /> 主力资金流向
-          </h3>
+          <SectionHeader title="主力资金流向" icon={<Banknote className="h-4 w-4 text-primary" />} />
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -362,9 +344,7 @@ function FundTab({ data }: { data: StockDeep | null }) {
         </GlassCard>
       ) : (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
-            <Banknote className="h-4 w-4 text-primary" /> 主力资金流向
-          </h3>
+          <SectionHeader title="主力资金流向" icon={<Banknote className="h-4 w-4 text-primary" />} />
           <p className="py-6 text-center text-sm text-muted-foreground">暂无资金流向数据</p>
         </GlassCard>
       )}
@@ -430,7 +410,7 @@ function FundTab({ data }: { data: StockDeep | null }) {
         </GlassCard>
       ) : (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">龙虎榜</h3>
+          <SectionHeader title="龙虎榜" />
           <p className="py-6 text-center text-sm text-muted-foreground">暂无龙虎榜数据</p>
         </GlassCard>
       )}
@@ -438,7 +418,7 @@ function FundTab({ data }: { data: StockDeep | null }) {
       {/* Blocks */}
       {blocks && blocks.boards && blocks.boards.length > 0 && (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">板块归属（{blocks.total}）</h3>
+          <SectionHeader title={`板块归属（${blocks.total}）`} />
           <div className="space-y-2">
             {blocks.boards.slice(0, 12).map((b, i) => (
               <div key={i} className="flex items-center gap-3 text-xs">
@@ -457,7 +437,7 @@ function FundTab({ data }: { data: StockDeep | null }) {
       {/* Hot concepts */}
       {hotCon && hotCon.length > 0 && (
         <GlassCard>
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">热门概念</h3>
+          <SectionHeader title="热门概念" />
           <div className="flex flex-wrap gap-1.5">
             {hotCon.slice(0, 24).map((h, i) => (
               <span key={i} className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
@@ -476,9 +456,7 @@ function AITab({ data: _data }: { data: StockDeep | null }) {
   return (
     <div className="space-y-5">
       <GlassCard>
-        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
-          <Brain className="h-4 w-4 text-primary" /> AI 洞察
-        </h3>
+        <SectionHeader title="AI 洞察" icon={<Brain className="h-4 w-4 text-primary" />} />
         <p className="py-6 text-center text-sm text-muted-foreground">
           暂无 AI 洞察数据。配置 AI 后将自动分析生成。
         </p>
@@ -588,18 +566,12 @@ export function StockDeep() {
       />
 
       {/* Tab bar */}
-      <div className="flex gap-1 rounded-lg bg-muted/30 p-1">
-        {TABS.map((t) => (
-          <Button
-            key={t.key}
-            variant={tab === t.key ? "primary" : "ghost"}
-            onClick={() => setTab(t.key)}
-            className="flex-1"
-          >
-            <t.icon className="mr-1.5 inline h-4 w-4" />{t.label}
-          </Button>
-        ))}
-      </div>
+      <TabBar
+        tabs={TABS.map(t => ({ key: t.key, label: t.label, icon: t.icon as any }))}
+        activeKey={tab}
+        onChange={(key) => setTab(key as TabKey)}
+        className="mb-4"
+      />
 
       {/* Tab content */}
       <GlassCard>

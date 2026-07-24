@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { SeatProfileModal } from "@/components/layout/SeatProfileModal";
 import { api, type SeatProfile } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -65,50 +69,57 @@ export function SeatEngine() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">席位引擎</h2>
-          <p className="mt-1 text-xs text-muted-foreground">龙虎榜席位统计特征 · 游资/量化/机构行为画像</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleBuild}
-            disabled={building}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary shadow-glow transition-colors hover:bg-primary/25 disabled:opacity-50"
-            title="构建席位画像（需数分钟）"
-          >
-            {building ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            {building ? "构建中…" : "构建画像"}
-          </button>
-          <button
-            onClick={loadProfiles}
-            className="text-muted-foreground hover:text-primary"
-            title="刷新"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="席位引擎"
+        subtitle="龙虎榜席位统计特征 · 游资/量化/机构行为画像"
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBuild}
+              disabled={building}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary shadow-glow transition-colors hover:bg-primary/25 disabled:opacity-50"
+              title="构建席位画像（需数分钟）"
+            >
+              {building ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {building ? "构建中…" : "构建画像"}
+            </button>
+            <button
+              onClick={loadProfiles}
+              className="text-muted-foreground hover:text-primary"
+              title="刷新"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        }
+      />
 
       <GlassCard>
         {loading && !buildDone ? (
-          <p className="py-4 text-center text-sm text-muted-foreground/60">加载中…</p>
-        ) : groups.length === 0 ? (
-          <div className="py-4 text-center">
-            <p className="text-sm text-muted-foreground">暂无席位数据</p>
-            <p className="mt-1 text-xs text-muted-foreground/50">点击「构建画像」拉取历史龙虎榜数据</p>
+          <div className="py-8">
+            <Skeleton className="mx-auto h-6 w-32" />
           </div>
+        ) : groups.length === 0 ? (
+          <EmptyState
+            icon={<RefreshCw className="h-8 w-8 text-muted-foreground/40" />}
+            title="暂无席位数据"
+            description="点击「构建画像」拉取历史龙虎榜数据"
+          />
         ) : (
           <div className="space-y-4">
             {groups.map(([type, seats]) => (
               <div key={type}>
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className={cn("text-xs font-medium", typeColors[type] || "text-muted-foreground")}>
-                    {type}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground/50">({seats.length})</span>
-                </div>
+                <SectionHeader
+                  title={
+                    <span className="flex items-center gap-2">
+                      <span className={cn("text-xs font-medium", typeColors[type] || "text-muted-foreground")}>
+                        {type}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground/50">({seats.length})</span>
+                    </span>
+                  }
+                />
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {seats.slice(0, 12).map((s) => (
                     <div

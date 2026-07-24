@@ -1,18 +1,61 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Activity, Wallet, Search,
-  ChevronDown, LineChart, Github, UserRound, Flame,
-  Cog, Cpu, Database, Cable, Rocket, FlaskConical, Menu,
+  Activity, Search, Wallet, Flame,
+  ChevronDown, LineChart, Github, UserRound,
+  Cog, Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useDarkMode";
-import type { Theme } from "@/hooks/useDarkMode";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/ui/Breadcrumbs";
 import { BreadcrumbContext } from "@/components/ui/BreadcrumbContext";
+import {
+  NAV_GROUPS,
+  routeMetaMap,
+  findActiveGroup,
+  type RouteMeta,
+} from "@/router";
+import {
+  SECTOR_LINKS,
+  THEMES,
+  APP_VERSION,
+  REPO_URL,
+  CONTACT_HANDLE,
+  SUB_TABS,
+} from "./navigation";
 
-// 解析 URL 查询参数
+// 图标映射（NAV_GROUPS 使用字符串 icon 名）
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  activity: Activity,
+  search: Search,
+  wallet: Wallet,
+  flame: Flame,
+  cog: Cog,
+};
+
+// 每个分组的 tab 列表（与 router.tsx tabsByGroup 保持一致）
+const TABS_BY_GROUP: string[][] = [
+  ["/daily-review", "/sentiment/weather", "/intel", "/sectors", "/industry"],
+  ["/stock-data", "/watchlist", "/recommendation"],
+  ["/portfolio", "/my-reports", "/notes"],
+  ["/workflow", "/workflow/pre-market", "/workflow/intraday", "/workflow/alerts", "/workflow/post-market"],
+  ["/limitup/gene", "/limitup/auction", "/limitup/seats", "/strategy-signals", "/backtest", "/risk-dashboard"],
+  ["/scheduled-tasks", "/settings", "/metrics", "/health"],
+];
+
+// 板块中心子链接的分组索引（Group 0）
+const SECTOR_GROUP_INDEX = 0;
+
+// 打板工作流的分组索引（Group 3），"更多"子菜单对应 /workflow 的子路由
+const MORE_GROUP_INDEX = 3;
+const MORE_TABS = [
+  { to: "/workflow/pre-market", label: "盘前简报" },
+  { to: "/workflow/intraday", label: "盘中监控" },
+  { to: "/workflow/alerts", label: "炸板预警" },
+  { to: "/workflow/post-market", label: "盘后复盘" },
+];
+
 function getQueryParam(url: string, key: string): string | null {
   try {
     const params = new URLSearchParams(url.split("?")[1] || "");
@@ -22,80 +65,19 @@ function getQueryParam(url: string, key: string): string | null {
   }
 }
 
-const APP_VERSION = "v0.1.3";
-const REPO_URL = "https://github.com/simonlin1212/Vibe-Research";
-const CONTACT_HANDLE = "lzw9560";
-
-// ---- 分组定义 ----
-const GROUPS = [
-  {
-    name: "市场概览",
-    icon: Activity,
-    tabs: [
-      { to: "/daily-review", label: "每日复盘" },
-      { to: "/intel", label: "资讯雷达" },
-      { to: "/sectors", label: "板块中心" },
-      { to: "/industry", label: "行业排行" },
-    ],
-  },
-  {
-    name: "个股分析",
-    icon: Search,
-    tabs: [
-      { to: "/stock-data", label: "个股数据" },
-      { to: "/watchlist", label: "自选股" },
-    ],
-  },
-  {
-    name: "投资管理",
-    icon: Wallet,
-    tabs: [
-      { to: "/portfolio", label: "我的持仓" },
-      { to: "/my-reports", label: "我的研报" },
-      { to: "/notes", label: "研究记录" },
-    ],
-  },
-  {
-    name: "打板策略",
-    icon: Flame,
-    tabs: [
-      { to: "/limitup/gene", label: "基因选股" },
-      { to: "/limitup/auction", label: "竞价预案" },
-      { to: "/limitup/seats", label: "席位引擎" },
-      { to: "/recommendation", label: "推荐关注" },
-      { to: "/strategy-signals", label: "战法信号" },
-      { to: "/backtest", label: "简化回测" },
-      { to: "/metrics", label: "性能监控" },
-      { to: "/health", label: "系统健康" },
-      { to: "/settings", label: "接入 AI" },
-    ],
-  },
-];
-
-// 板块中心子链接
-const SECTOR_LINKS = [
-  { to: "/sectors/humanoid", icon: Cog, label: "人形机器人" },
-  { to: "/sectors/ai-computing", icon: Cpu, label: "AI 算力" },
-  { to: "/sectors/hbm", icon: Database, label: "HBM" },
-  { to: "/sectors/cpo", icon: Cable, label: "光互联" },
-  { to: "/sectors/business-space", icon: Rocket, label: "商业航天" },
-  { to: "/sectors/ai-pharma", icon: FlaskConical, label: "生物医药" },
-];
-
-// 主题选项
-const THEMES: { key: Theme; emoji: string; label: string }[] = [
-  { key: "dark", emoji: "🌙", label: "暗色" },
-  { key: "light", emoji: "☀️", label: "亮色" },
-  { key: "warm-orange", emoji: "🔥", label: "暖橙" },
-];
-
-// 获取当前页面属于哪个分组和 Tab 索引
-function findActiveTab(pathname: string): { groupIndex: number; tabIndex: number } | null {
-  for (let gi = 0; gi < GROUPS.length; gi++) {
-    const tabIdx = GROUPS[gi].tabs.findIndex((t) => t.to === pathname);
-    if (tabIdx !== -1) return { groupIndex: gi, tabIndex: tabIdx };
+/**
+ * 根据 pathname 获取路由元数据
+ */
+function resolveRouteMeta(pathname: string): RouteMeta | undefined {
+  // 精确匹配
+  if (routeMetaMap[pathname]) return routeMetaMap[pathname] as RouteMeta;
+  // 前缀匹配（如 /stock/:code → /stock/:code meta, /sectors/:key → /sectors/:key meta）
+  for (const [path, meta] of Object.entries(routeMetaMap)) {
+    if (path.includes(":") && pathname.startsWith(path.replace(/:\w+/, ""))) {
+      return meta as RouteMeta;
+    }
   }
-  return null;
+  return undefined;
 }
 
 export function Layout() {
@@ -107,32 +89,55 @@ export function Layout() {
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
 
   // 当前激活的分组和 Tab
-  const active = findActiveTab(pathname);
-  const activeGroupIndex = active?.groupIndex ?? 0;
+  const groupIndex = findActiveGroup(pathname);
 
-  // 板块中心的子菜单展开状态
+  // 展开状态
   const [sectorExpanded, setSectorExpanded] = useState(false);
+  const [moreExpanded, setMoreExpanded] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("vr-sidebar", sidebarCollapsed ? "collapsed" : "expanded");
   }, [sidebarCollapsed]);
 
-  // 移动端菜单打开时锁定背景滚动
+  // 移动端菜单锁定滚动
   useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
   }, [mobileMenuOpen]);
 
-  // 点击 Tab 时自动导航（移动端关闭菜单）
+  // 面包屑生成
+  useEffect(() => {
+    const meta = resolveRouteMeta(pathname);
+    const items: BreadcrumbItem[] = [];
+
+    // 分组名称
+    if (groupIndex >= 0 && groupIndex < NAV_GROUPS.length) {
+      items.push({ label: NAV_GROUPS[groupIndex].name });
+    }
+
+    // 页面标题
+    if (meta?.title) {
+      items.push({ label: meta.title });
+    }
+
+    setBreadcrumbs(items);
+  }, [pathname, groupIndex]);
+
   const handleTabClick = (to: string) => {
     navigate(to);
     setMobileMenuOpen(false);
+  };
+
+  // 获取分组内的 tab 列表
+  const getGroupTabs = (gi: number): string[] => TABS_BY_GROUP[gi] || [];
+
+  // 获取 tab 标签
+  const getTabLabel = (tabPath: string): string => {
+    const meta = routeMetaMap[tabPath];
+    if (meta?.title) return meta.title;
+    // 对于带参数的路由，取基础路径的 meta
+    const baseKey = Object.keys(routeMetaMap).find(k => tabPath.startsWith(k.replace(/:\w+/, "")));
+    return baseKey ? (routeMetaMap[baseKey]?.title || tabPath) : tabPath;
   };
 
   return (
@@ -140,7 +145,6 @@ export function Layout() {
       {/* Sidebar */}
       <aside className={cn(
         "glass z-10 m-2 flex shrink-0 flex-col rounded-2xl transition-all duration-300",
-        // Mobile: fixed drawer
         "fixed inset-y-0 left-0 z-50 w-60 -translate-x-full md:relative md:inset-auto md:z-10 md:m-2 md:translate-x-0",
         sidebarCollapsed ? "md:w-14" : "md:w-60",
         mobileMenuOpen && "translate-x-0",
@@ -149,7 +153,7 @@ export function Layout() {
         <button
           onClick={() => setMobileMenuOpen(false)}
           className="absolute right-2 top-2 rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground md:hidden"
-          title="关闭菜单"
+          aria-label="关闭菜单"
         >
           <ChevronDown className="h-4 w-4 rotate-90" />
         </button>
@@ -159,23 +163,29 @@ export function Layout() {
           <Link to="/daily-review" className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "gap-2")}>
             <LineChart className="h-6 w-6 shrink-0 text-primary text-glow" />
             {!sidebarCollapsed && (
-              <span className="text-lg font-extrabold tracking-tight">
-                Vibe-<span className="text-primary">Research</span>
-              </span>
+              <>
+                <span className="text-lg font-extrabold tracking-tight">
+                  Vibe-<span className="text-primary">Research</span>
+                </span>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  个人 AI 投研系统 · A股/美股/港股
+                </p>
+              </>
             )}
           </Link>
-          {!sidebarCollapsed && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              个人 AI 投研系统 · A股/美股/港股
-            </p>
-          )}
         </div>
 
         {/* Group Nav */}
-        <nav className={cn("flex-1 overflow-auto", sidebarCollapsed ? "p-1.5" : "p-2.5")}>
-          {GROUPS.map((group, gi) => {
-            const isActiveGroup = gi === activeGroupIndex;
-            const Icon = group.icon;
+        <nav className={cn("flex-1 overflow-auto", sidebarCollapsed ? "p-1.5" : "p-2.5")} aria-label="主导航">
+          {NAV_GROUPS.map((group, gi) => {
+            const isActiveGroup = gi === groupIndex;
+            const Icon = ICON_MAP[group.icon] || Activity;
+            const tabs = getGroupTabs(gi);
+            const isSectorGroup = gi === SECTOR_GROUP_INDEX && group.name === "市场概览";
+            const showSectors = isSectorGroup && sectorExpanded;
+            const isMoreGroup = gi === MORE_GROUP_INDEX;
+            const showMore = isMoreGroup && moreExpanded;
+
             return (
               <div key={group.name} className="mb-1">
                 {/* 分组标题 */}
@@ -185,13 +195,17 @@ export function Layout() {
                       setSidebarCollapsed(false);
                       return;
                     }
-                    if (group.name === "sectors") {
+                    // 板块中心组：切换子菜单
+                    if (isSectorGroup) {
                       setSectorExpanded((p) => !p);
                       return;
                     }
-                    // 点击分组标题 = 跳到该分组第一个 Tab
-                    handleTabClick(group.tabs[0].to);
+                    // 其他组：跳到第一个 tab
+                    if (tabs.length > 0) {
+                      handleTabClick(tabs[0]);
+                    }
                   }}
+                  aria-expanded={isActiveGroup && !sidebarCollapsed}
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
                     isActiveGroup
@@ -203,8 +217,8 @@ export function Layout() {
                   {!sidebarCollapsed && (
                     <>
                       <span className="flex-1 text-left">{group.name}</span>
-                      {group.name === "sectors" && (
-                        <ChevronDown className={cn("h-3 w-3 transition-transform", sectorExpanded && "rotate-180")} />
+                      {(isSectorGroup || isMoreGroup) && (
+                        <ChevronDown className={cn("h-3 w-3 transition-transform", (isSectorGroup ? sectorExpanded : moreExpanded) && "rotate-180")} />
                       )}
                     </>
                   )}
@@ -213,12 +227,18 @@ export function Layout() {
                 {/* 分组 Tab 列表（展开时） */}
                 {!sidebarCollapsed && isActiveGroup && (
                   <div className="mt-0.5 space-y-0.5 pl-1">
-                    {group.tabs.map((tab) => {
-                      const isActive = pathname === tab.to;
+                    {tabs.map((tab) => {
+                      const isActive = pathname === tab || pathname.startsWith(tab + "/");
                       return (
                         <Link
-                          key={tab.to}
-                          to={tab.to}
+                          key={tab}
+                          to={tab}
+                          aria-current={isActive ? "page" : undefined}
+                          onClick={() => {
+                            if (isMoreGroup && tabs[0] && pathname === tabs[0]) {
+                              setMoreExpanded((p) => !p);
+                            }
+                          }}
                           className={cn(
                             "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
                             isActive
@@ -227,20 +247,21 @@ export function Layout() {
                           )}
                         >
                           <span className={cn("h-1.5 w-1.5 rounded-full", isActive ? "bg-primary" : "bg-muted-foreground/30")} />
-                          {tab.label}
+                          {getTabLabel(tab)}
                         </Link>
                       );
                     })}
 
                     {/* 板块中心子链接 */}
-                    {group.name === "板块中心" && sectorExpanded && (
-                      <div className="ml-3 border-l border-border/40 pl-2 space-y-0.5">
+                    {showSectors && (
+                      <div className="ml-1 border-l border-border/40 pl-2 space-y-0.5">
                         {SECTOR_LINKS.map(({ to: st, icon: SIcon, label: slabel }) => {
                           const sactive = pathname === st;
                           return (
                             <Link
                               key={st}
                               to={st}
+                              aria-current={sactive ? "page" : undefined}
                               className={cn(
                                 "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
                                 sactive
@@ -255,6 +276,31 @@ export function Layout() {
                         })}
                       </div>
                     )}
+
+                    {/* "更多"子菜单 */}
+                    {showMore && (
+                      <div className="ml-1 border-l border-border/40 pl-2 space-y-0.5">
+                        {MORE_TABS.map((tab) => {
+                          const isActive = pathname === tab.to;
+                          return (
+                            <Link
+                              key={tab.to}
+                              to={tab.to}
+                              aria-current={isActive ? "page" : undefined}
+                              className={cn(
+                                "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                                isActive
+                                  ? "bg-primary/12 font-medium text-primary"
+                                  : "text-muted-foreground/70 hover:bg-muted/40 hover:text-foreground",
+                              )}
+                            >
+                              <span className={cn("h-1.5 w-1.5 rounded-full", isActive ? "bg-primary" : "bg-muted-foreground/30")} />
+                              {tab.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -262,23 +308,22 @@ export function Layout() {
           })}
         </nav>
 
-        {/* Footer: 主题选择器 + 折叠按钮 */}
+        {/* Footer */}
         <div className={cn("border-t border-border/50", sidebarCollapsed ? "flex flex-col items-center gap-1.5 p-2" : "p-3")}>
           {sidebarCollapsed ? (
             <>
-              {/* 折叠态：只显示主题圆点和折叠按钮 */}
               <div className="flex items-center gap-1">
                 {THEMES.map(({ key, emoji }) => (
                   <button
                     key={key}
                     onClick={() => setTheme(key)}
+                    aria-label={`切换到${THEMES.find(t => t.key === key)?.label || key}主题`}
                     className={cn(
                       "flex h-6 w-6 items-center justify-center rounded-full text-xs transition-all",
                       theme === key
                         ? "bg-primary/20 ring-2 ring-primary/40 scale-110"
                         : "hover:bg-muted/40",
                     )}
-                    title={key === "dark" ? "暗色" : key === "light" ? "亮色" : "暖橙"}
                   >
                     {emoji}
                   </button>
@@ -287,14 +332,13 @@ export function Layout() {
               <button
                 onClick={() => setSidebarCollapsed(false)}
                 className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                title="展开"
+                aria-label="展开侧边栏"
               >
                 <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
               </button>
             </>
           ) : (
             <>
-              {/* 展开态：主题选择器 */}
               <div className="mb-2">
                 <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">主题</p>
                 <div className="flex items-center gap-2">
@@ -302,6 +346,7 @@ export function Layout() {
                     <button
                       key={key}
                       onClick={() => setTheme(key)}
+                      aria-pressed={theme === key}
                       className={cn(
                         "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-all",
                         theme === key
@@ -316,19 +361,21 @@ export function Layout() {
                 </div>
               </div>
 
-              {/* 链接行 */}
               <div className="flex items-center justify-between">
-                <span
+                <a
+                  href={`mailto:${CONTACT_HANDLE}`}
                   className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="联系作者"
                   title="联系作者"
                 >
                   <UserRound className="h-3.5 w-3.5" />
-                </span>
+                </a>
                 <a
                   href={REPO_URL}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="GitHub 仓库"
                   title="GitHub"
                 >
                   <Github className="h-3.5 w-3.5" />
@@ -336,6 +383,7 @@ export function Layout() {
                 <button
                   onClick={() => setSidebarCollapsed(true)}
                   className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="收起侧边栏"
                   title="收起"
                 >
                   <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
@@ -355,12 +403,12 @@ export function Layout() {
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Mobile Header with Hamburger */}
+        {/* Mobile Header */}
         <div className="flex items-center gap-3 border-b border-border/40 bg-background/60 px-4 py-3 md:hidden">
           <button
             onClick={() => setMobileMenuOpen((p) => !p)}
             className="rounded p-2 text-muted-foreground transition-colors hover:text-foreground"
-            title="菜单"
+            aria-label="打开菜单"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -377,20 +425,24 @@ export function Layout() {
           <div
             className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
             onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
           />
         )}
 
-        {/* Tab Navigation Bar */}
-        {active && (
-          <div className="border-b border-border/40 bg-background/60 backdrop-blur-sm">
-            <div className="mx-auto max-w-6xl px-6">
-              <div className="flex items-center gap-1 overflow-x-auto py-2">
-                {GROUPS[active.groupIndex].tabs.map((tab) => {
-                  const isActive = pathname === tab.to;
+        {/* Primary Tab Bar - Mobile only */}
+        {groupIndex >= 0 && (
+          <div className="border-b border-border/40 bg-background/60 backdrop-blur-sm md:hidden">
+            <div className="mx-auto max-w-6xl px-4">
+              <div className="flex items-center gap-1 overflow-x-auto py-2" role="tablist">
+                {TABS_BY_GROUP[groupIndex]?.map((tab) => {
+                  const isActive = pathname === tab || pathname.startsWith(tab + "/");
                   return (
                     <button
-                      key={tab.to}
-                      onClick={() => handleTabClick(tab.to)}
+                      key={tab}
+                      role="tab"
+                      aria-selected={isActive}
+                      aria-current={isActive ? "page" : undefined}
+                      onClick={() => handleTabClick(tab)}
                       className={cn(
                         "relative whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium transition-all",
                         isActive
@@ -404,7 +456,7 @@ export function Layout() {
                           style={{ boxShadow: "0 0 8px hsl(var(--primary) / 0.5)" }}
                         />
                       )}
-                      {tab.label}
+                      {getTabLabel(tab)}
                     </button>
                   );
                 })}
@@ -413,127 +465,39 @@ export function Layout() {
           </div>
         )}
 
-        {/* Secondary Tab Navigation (for pages with sub-tabs) */}
-        {pathname.startsWith("/stock/") && (
-          <div className="border-b border-border/30 bg-background/40">
-            <div className="mx-auto max-w-6xl px-6">
-              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
-                {[
-                  { key: "overview", label: "概览" },
-                  { key: "gene", label: "基因" },
-                  { key: "capital", label: "资金" },
-                  { key: "ai", label: "AI 分析" },
-                ].map((subTab) => {
-                  const activeTab = getQueryParam(pathname, "tab");
-                  const isActive = activeTab === subTab.key || (!activeTab && subTab.key === "overview");
-                  return (
-                    <button
-                      key={subTab.label}
-                      className={cn(
-                        "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
-                      )}
-                    >
-                      {subTab.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Secondary Sub-Tabs - Config-driven from SUB_TABS */}
+        {Object.entries(SUB_TABS).map(([prefix, tabs]) => {
+          if (!pathname.startsWith(prefix)) return null;
+          return (
+            <div key={prefix} className="border-b border-border/30 bg-background/40 md:hidden">
+              <div className="mx-auto max-w-6xl px-4">
+                <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
+                  {tabs.map((subTab) => {
+                    const activeTab = getQueryParam(pathname, "tab");
+                    const isActive = subTab.to
+                      ? pathname === subTab.to
+                      : activeTab === subTab.key || (!activeTab && subTab.key === tabs[0]?.key);
 
-        {pathname === "/intel" && (
-          <div className="border-b border-border/30 bg-background/40">
-            <div className="mx-auto max-w-6xl px-6">
-              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
-                {[
-                  { key: "events", label: "事件概率" },
-                  { key: "announcements", label: "A股公告" },
-                  { key: "news", label: "公开新闻" },
-                  { key: "investment", label: "Investment News" },
-                ].map((subTab) => {
-                  const activeTab = getQueryParam(pathname, "tab");
-                  const isActive = activeTab === subTab.key || (!activeTab && subTab.key === "events");
-                  return (
-                    <button
-                      key={subTab.label}
-                      className={cn(
-                        "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
-                      )}
-                    >
-                      {subTab.label}
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={subTab.key}
+                        onClick={() => subTab.to && handleTabClick(subTab.to)}
+                        className={cn(
+                          "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
+                        )}
+                      >
+                        {subTab.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {pathname === "/daily-review" && (
-          <div className="border-b border-border/30 bg-background/40">
-            <div className="mx-auto max-w-6xl px-6">
-              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
-                {[
-                  { key: "sectors", label: "板块热度" },
-                  { key: "zt-detail", label: "涨停明细" },
-                  { key: "auction-review", label: "竞价回顾" },
-                ].map((subTab) => {
-                  const activeTab = getQueryParam(pathname, "tab");
-                  const isActive = activeTab === subTab.key || (!activeTab && subTab.key === "sectors");
-                  return (
-                    <button
-                      key={subTab.label}
-                      className={cn(
-                        "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
-                      )}
-                    >
-                      {subTab.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(pathname === "/limitup" || pathname.startsWith("/limitup/") || pathname === "/recommendation" || pathname === "/strategy-signals") && (
-          <div className="border-b border-border/30 bg-background/40">
-            <div className="mx-auto max-w-6xl px-6">
-              <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
-                {[
-                  { to: "/limitup/gene", label: "基因选股" },
-                  { to: "/limitup/auction", label: "竞价预案" },
-                  { to: "/limitup/seats", label: "席位引擎" },
-                  { to: "/recommendation", label: "推荐关注" },
-                  { to: "/strategy-signals", label: "战法信号" },
-                ].map((subTab) => (
-                  <button
-                    key={subTab.label}
-                    onClick={() => handleTabClick(subTab.to)}
-                    className={cn(
-                      "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                      pathname === subTab.to
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground/60 hover:text-foreground hover:bg-muted/20",
-                    )}
-                  >
-                    {subTab.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        })}
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto">

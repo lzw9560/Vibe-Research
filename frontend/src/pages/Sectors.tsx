@@ -19,7 +19,10 @@ export function Sectors() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sectors.map((s) => (
           <Link key={s.key} to={`/sectors/${s.key}`}>
-            <GlassCard glow={s.hot} className="flex h-full flex-col justify-between">
+            <GlassCard
+              glow={s.hot}
+              className="flex h-full flex-col justify-between transition-transform hover:-translate-y-0.5"
+            >
               <div>
                 <div className="mb-1 flex items-center gap-2">
                   <h3 className="text-base font-bold">{s.label}</h3>

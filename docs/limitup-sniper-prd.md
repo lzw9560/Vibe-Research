@@ -13,6 +13,7 @@
 | V1.0-V1.6 | 2026-05 ~ 2026-07 | 打板策略模块：5因子基因选股 + 条件匹配展示 + 集合竞价分析 |
 | **V2.0** | **2026-07-22** | **重构为"投研助手"：三维度升级 + DSA优秀实践整合 + 投研看板→助手渐进演进** |
 | **V2.0.2** | **2026-07-22** | **Oracle审查BLOCKER修复完成：StrategySignal字段修正 + OneDayRisk动态化 + 性能三层拆分 + 路由重构** |
+| **V2.0.3** | **2026-07-23** | **用户审查BLOCKER修复：数据新鲜度/死循环防护 + A股通道滑点补偿 + 结算买入价悖论修正 + 封单额/流通盘双指标 + 竞价指标 + 赦免战法开关** |
 
 ---
 
@@ -523,6 +524,840 @@ async def precompute_sti(date: str):
     # 6. 写入数据库
     # 耗时目标：<10秒（增量模式）
 ```
+
+---
+
+### 4.1.5 情绪气象站（Sentiment Weather Station）（新增）
+
+> **文件**：
+> - 后端：`backend/routers/sentiment_weather.py`
+> - 前端：`frontend/src/pages/sentiment/SentimentWeather.tsx`
+> - UI 设计：`docs/sentiment-weather-station-ui-design.md`
+>
+> **定位**：市场情绪天气可视化中枢，通过多因子加权模型将抽象的情绪数据转化为直观的天气隐喻，动态指挥打板策略切换。
+
+#### 4.1.5.1 核心设计理念
+
+情绪气象站是 Vibe-Research 的**策略控制中枢**，解决当前系统缺少"市场环境判断 → 策略自动匹配"闭环的问题。用户无需手动判断当前是牛市、震荡市还是退潮期，系统通过客观数据自动识别并推荐最佳打板风格。
+
+#### 4.1.5.2 四种市场天气状态
+
+| 天气状态 | 核心判断指标 | 推荐打板风格 | 系统动作 |
+|---------|------------|------------|---------|
+| ⛈️ 暴风雨（退潮期） | 炸板率 > 40%、连板高度 < 3板、跌停家数 > 20家 | 空仓观望 | 自动锁死交易权限，禁止任何买入条件单 |
+| ⛅ 阴天（震荡轮动） | 涨停家数 < 50家、无明显主线、前日龙头次日多低开 | 首板挖掘（低位套利） | 激活首板监控池，过滤高位接力 |
+| ☀️ 晴天（主线主升） | 涨停家数 > 80家、连板高度不断抬升、赚钱效应扩散 | 连板接力（高位数板） | 激活连板监控池，追逐龙头 |
+| 🌪️ 极端反弹（冰点反转） | 市场经历大跌后某大题材集体爆发、跌停集体打开 | 弱转强反包 / 情绪反包 | 激活反包监控池，捕捉反转信号 |
+
+#### 4.1.5.3 多因子加权评分模型
+
+综合评分 = STI 情绪温度 × 40% + 风险指标 × 20% + 板块持续性 × 25% + 资金动量 × 10% + 舆情情绪 × 5%
+
+| 因子 | 权重 | 数据来源 | 计算逻辑 |
+|------|------|---------|---------|
+| STI 情绪温度 | 40% | 现有 STI 引擎（8维加权） | 直接使用 STI 分数（0-100） |
+| 风险指标 | 20% | 炸板率、跌停家数、连板高度 | 风险越低分数越高：100 - (跌停惩罚 + 封板率惩罚 + 连板惩罚) |
+| 板块持续性 | 25% | 板块涨停家数、资金流向 | 涨跌比 × 30 归一化 |
+| 资金动量 | 10% | 成交额变化、龙虎榜 | STI 环比变化 × 2 + 50 |
+| 舆情情绪 | 5% | 社交媒体、新闻情绪 | 预留接口，当前返回中性值 50 |
+
+**天气判定阈值**：
+- 综合评分 ≥ 75 → 晴天
+- 55 ≤ 综合评分 < 75 → 阴天
+- 35 ≤ 综合评分 < 55 → 极端反弹
+- 综合评分 < 35 → 暴风雨
+
+#### 4.1.5.4 半自动工作流（5步）
+
+```
+[步骤 1: 盘前数据扫描]
+       ↓
+[步骤 2: 自动计算情绪天气] ───→ 自动下发【今日允许打板风格指令】
+       ↓
+[步骤 3: 触发对应选股公式池] ──→ 自动将符合风格的标的加入【临盘监控池】
+       ↓
+[步骤 4: 盘中分时触发预警] ───→ 系统弹出提示、自动填好涨停价、数量（人工一键确认）
+       ↓
+[步骤 5: 次日自动执行断板流] ──→ 监控竞价，不符合预期自动挂单单清仓
+```
+
+#### 4.1.5.5 三大风格切换配置
+
+**风格 A：连板接力模式（晴天/主升浪）**
+- 核心逻辑：强者恒强，追逐市场的最高板、妖股
+- 过滤规则：2连板以上 + 主线板块成交额前三 + 板块涨停≥3只
+- 条件单设置：触发条件为价格 ≥ 涨停价 - 0.02元 且 五档卖盘萎缩，执行动作为弹窗提示 + 人工确认后涨停价扫货
+
+**风格 B：首板挖掘模式（阴天/轮动市）**
+- 核心逻辑：高位连板容易吃面，只打低位第一个涨停板，赚次日溢价就跑
+- 过滤规则：过去20日未连板 + 当日异动拉升 + 有突发利好催化
+- 条件单设置：触发条件为分时大单点火（5倍均量）且涨幅 7.5%-9%，执行动作为加入急速雷达监控 + 自动计算封板买入金额
+
+**风格 C：弱转强/反包板模式（极端反弹/冰点期结束）**
+- 核心逻辑：前一日表现很弱，次日突然超级高开，完成情绪反转
+- 过滤规则：前日长上影/跌停 + 今日竞价高开 3%+ + 竞价成交量超昨日5分钟总和
+- 条件单设置：触发条件为开盘3分钟内冲过昨日最高价，执行动作为触发"弱转强"预警 + 通知交易员准备切入
+
+#### 4.1.5.6 三条熔断规则（硬性闭环）
+
+1. **仓位熔断**：当情绪气象站判定为"暴风雨"，系统自动锁死交易权限，禁止下发任何买入条件单
+2. **撤单熔断**：排板时，如果五档盘口的封单金额跌破 3000 万，或者撤单量/封单量 > 20%，系统必须自动执行撤单，无需人工确认
+3. **次日强制离场**：次日 09:25 竞价结束，若股票未高开（≤0%）或开盘 5 分钟内无法站稳均线，系统直接自动生成市价卖出单，交易员只需按下"确定"即可完成止损
+
+#### 4.1.5.7 前端页面设计
+
+**路由**：`/sentiment/weather`（主页面） + 二级路由：
+- `/sentiment/weather` - 实时天气（默认）
+- `/sentiment/weather/history` - 历史趋势
+- `/sentiment/weather/strategy` - 策略建议
+- `/sentiment/weather/fuse` - 熔断规则
+
+**侧边栏**：在"市场概览"组新增"情绪气象"入口
+
+**二级导航**：实时天气 | 历史趋势 | 策略建议 | 熔断规则
+
+**核心组件**：
+- **WeatherHero**：天气状态大卡片，展示当前天气、STI 温度计、情绪指数、置信度
+- **MultiFactorBreakdown**：多因子情绪分解，展示 5 个因子的加权评分和贡献度
+- **StrategyRecommendation**：策略推荐卡片，根据当前天气推荐最佳打板策略
+- **FuseRulesPanel**：熔断规则监控，展示 3 条熔断规则的当前状态
+- **WeatherTimelineChart**：天气历史趋势图（ECharts）
+
+**视觉设计**：
+- 暴风雨：深灰蓝渐变背景，红色警示
+- 阴天：浅灰蓝渐变，云朵图标
+- 晴天：暖橙渐变，太阳图标
+- 极端反弹：紫红渐变，闪电图标
+
+#### 4.1.5.8 后端 API 设计
+
+| 端点 | 方法 | 职责 |
+|------|------|------|
+| `/api/sentiment/weather/latest` | GET | 获取当前天气状态 + 综合评分 + 置信度 |
+| `/api/sentiment/weather/factors` | GET | 获取多因子详细数据（用于分解图表） |
+| `/api/sentiment/weather/strategy` | GET | 获取当前天气下的策略推荐 |
+| `/api/sentiment/weather/fuse` | GET | 获取熔断规则状态 |
+| `/api/sentiment/weather/timeline` | GET | 获取历史趋势数据（近 N 天） |
+| `/api/sentiment/weather/events` | GET | 获取关键事件标注（政策/利好/利空） |
+
+**数据源**：
+- STI 数据：复用现有 `limitup_sti` 引擎和 `sti_timeline` 表
+- 风险指标：基于 STI 维度（跌停家数、封板率、连板高度）计算
+- 板块持续性：基于涨跌比推算
+- 资金动量：基于 STI 环比变化推算
+- 舆情情绪：预留接口，当前返回中性值
+
+#### 4.1.5.9 与现有系统集成
+
+- **数据层**：直接读取 `sti_timeline` 表，不修改现有 STI 引擎
+- **API 层**：独立路由器 `sentiment_weather.py`，通过 `app.py` 注册
+- **前端层**：独立页面 `SentimentWeather.tsx`，通过路由挂载到 Layout
+- **导航层**：侧边栏"市场概览"组 + 二级 Tab 栏
+- **解耦保证**：所有计算在独立模块完成，不侵入现有业务逻辑
+
+#### 4.1.5.10 数据模型
+
+**天气状态表**（`sentiment_weather_states`）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| weather_date | DATE | 日期 |
+| weather_state | VARCHAR(20) | 天气状态：暴风雨/阴天/晴天/极端反弹 |
+| composite_score | FLOAT | 综合评分 0-100 |
+| confidence | VARCHAR(10) | 置信度：高/中/低 |
+| sti_score | FLOAT | STI 情绪温度 0-100 |
+| sti_phase | VARCHAR(20) | STI 阶段：冰点/启动/分歧/高潮/退潮 |
+| risk_score | FLOAT | 风险指标 0-100 |
+| sector_continuity_score | FLOAT | 板块持续性 0-100 |
+| capital_momentum_score | FLOAT | 资金动量 0-100 |
+| public_sentiment_score | FLOAT | 舆情情绪 0-100 |
+| recommended_strategy | VARCHAR(50) | 推荐策略 |
+| data_updated | DATETIME | 数据更新时间 |
+| created_at | DATETIME | 记录创建时间 |
+
+**天气历史表**（`sentiment_weather_timeline`）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| weather_date | DATE | 日期 |
+| weather_state | VARCHAR(20) | 天气状态 |
+| composite_score | FLOAT | 综合评分 |
+| sti_score | FLOAT | STI 分数 |
+| events | JSON | 关键事件标注（政策/利好/利空） |
+
+**熔断规则配置表**（`sentiment_fuse_rules`）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| rule_name | VARCHAR(50) | 规则名称 |
+| rule_type | VARCHAR(20) | 规则类型：position/cancel/exit |
+| enabled | BOOLEAN | 是否启用 |
+| trigger_condition | TEXT | 触发条件描述 |
+| threshold_value | JSON | 阈值参数（JSON 格式） |
+| action | TEXT | 执行动作 |
+| updated_at | DATETIME | 更新时间 |
+
+#### 4.1.5.11 错误处理与边缘情况
+
+1. **数据缺失**：当 STI 数据未更新时，返回 `source_ok=false`，前端显示"数据暂未更新" + 最后可用时间
+2. **计算失败**：当因子计算异常时，记录错误日志，返回降级结果（使用历史均值或中性值）
+3. **并发保护**：使用 `_COMPUTING` 锁机制，避免重复计算
+4. **缓存策略**：5 分钟缓存，缓存失效时返回旧数据 + 警告提示
+5. **边界条件**：
+   - 综合评分 < 0 或 > 100 时，截断到有效范围
+   - 权重总和不为 1 时，自动归一化
+   - 缺失因子使用剩余因子加权平均填充
+
+#### 4.1.5.12 性能要求
+
+- **计算耗时**：增量预计算 < 10 秒（基于现有 STI 数据）
+- **API 响应**：P95 < 500ms，P99 < 1000ms
+- **前端渲染**：首屏加载 < 2 秒，交互响应 < 100ms
+- **数据更新**：支持 5 分钟自动刷新，手动刷新 < 3 秒
+
+#### 4.1.5.15 关键风险控制修正（V2.0.3 BLOCKER修复）
+
+> **审查来源**：用户审查 + Oracle审查补充  
+> **修复日期**：2026-07-23  
+> **状态**：待实施验证
+
+##### 4.1.5.15.1 日内数据延迟与死循环防护
+
+**问题**：实时数据可能存在延迟，导致系统基于过时数据反复触发条件单，形成死循环。
+
+**修复方案**：
+```python
+# 数据新鲜度校验
+DATA_FRESHNESS = {
+    "max_delay_sec": 5,           # 最大允许延迟（秒）
+    "stale_threshold_sec": 10,    # 超过此阈值标记为过期
+    "dead_loop_guard": {
+        "max_trigger_count": 3,   # 单票单日最大触发次数（窗口内）
+        "window_sec": 300,        # 统计窗口：5分钟（与前端显示一致）
+        "cooldown_sec": 60,       # 触发后冷却时间
+        "price_deviation_pct": 0.02  # 价格偏离超过2%强制校验
+    }
+}
+
+async def validate_data_freshness(
+    timestamp: datetime,
+    current_price: float,
+    trigger_price: float
+) -> tuple[bool, str]:
+    """
+    校验数据新鲜度，防止基于过期数据决策
+    
+    Returns:
+        (is_valid, reason): 是否有效及原因
+    """
+    now = datetime.now()
+    delay = (now - timestamp).total_seconds()
+    
+    # 检查数据延迟
+    if delay > DATA_FRESHNESS["stale_threshold_sec"]:
+        return False, f"数据过期（延迟{delay:.1f}秒）"
+    
+    # 检查价格偏离（死循环防护）
+    if trigger_price > 0 and current_price > 0:
+        deviation = abs(current_price - trigger_price) / trigger_price
+        if deviation > DATA_FRESHNESS["dead_loop_guard"]["price_deviation_pct"]:
+            return False, f"价格偏离过大（{deviation:.1%}），可能处于死循环"
+    
+    return True, "数据有效"
+
+async def check_dead_loop_guard(
+    stock_code: str,
+    trigger_count: int,
+    window_sec: int = 300
+) -> tuple[bool, str]:
+    """
+    死循环检测：同一股票在统计窗口内触发次数限制
+    
+    Returns:
+        (is_allowed, reason): 是否允许触发及原因
+    """
+    guard = DATA_FRESHNESS["dead_loop_guard"]
+    
+    if trigger_count >= guard["max_trigger_count"]:
+        return False, f"单票{window_sec}秒内触发次数已达上限（{trigger_count}/{guard['max_trigger_count']}）"
+    
+    return True, "允许触发"
+
+# 过期数据行为定义
+STALE_DATA_BEHAVIOR = {
+    "cancel_pending_orders": True,   # 取消待成交条件单
+    "halt_new_entries": True,        # 停止新条件单入场
+    "alert_user": True,              # 通知用户
+    "queue_for_retry": False,        # 不排队重试（防止死循环）
+    "lock_stock_sec": 600            # 锁定股票10分钟
+}
+```
+
+**前端防护**：
+- 数据时间戳显示：`最后更新: 2026-07-23 15:05:03 (延迟2秒)`
+- 过期数据警告：黄色警示条 + 禁用条件单触发按钮
+- 死循环检测：同一股票5分钟内触发超过3次，自动锁定并通知用户
+- 锁定状态显示：`🔒 已锁定（剩余8分钟）`
+
+##### 4.1.5.15.2 A股通道速度与滑点补偿
+
+**问题**：条件单执行逻辑未考虑A股T+1、涨跌停、通道速度限制，可能导致实际成交价格与预期不符。
+
+**修复方案**：
+```python
+# A股通道执行参数
+A_SHARE_EXECUTION = {
+    "t+1_settlement": True,      # T+1结算，当日买入不可卖出
+    "price_limit_pct": 0.10,     # 涨跌停10%限制（ST股5%）
+    "tick_size": 0.01,           # A股最小价格变动单位：0.01元
+    "channel_latency": {
+        "call_auction_ms": 300,  # 竞价阶段通道延迟（9:15-9:25）
+        "continuous_trading_ms": 200,  # 连续交易阶段通道延迟（9:30-11:30, 13:00-15:00）
+        "retail_broker_ms": 500, # 零售券商通道延迟上限
+        "institutional_ms": 100  # 机构席位通道延迟上限
+    },
+    "slippage_compensation": {
+        "buy_slippage": 0.001,    # 买入滑点补偿0.1%
+        "sell_slippage": 0.001,   # 卖出滑点补偿0.1%
+        "limit_up_slippage": 0.005,  # 涨停板滑点补偿0.5%
+        "limit_down_slippage": 0.005 # 跌停板滑点补偿0.5%
+    },
+    "volume_check": {
+        "min_volume_ratio": 0.3,  # 最小成交量占比30%
+        "max_volume_ratio": 5.0   # 最大成交量占比500%
+    },
+    "commission": {
+        "buy_rate": 0.00025,      # 买入佣金万2.5
+        "sell_rate": 0.00025,     # 卖出佣金万2.5
+        "stamp_tax": 0.0005,      # 印花税0.05%（卖出时收取）
+        "transfer_fee": 0.00002   # 过户费0.002%
+    }
+}
+
+def adjust_order_price(
+    base_price: float,
+    side: str,
+    market_state: str,
+    phase: str = "continuous",
+    broker_type: str = "retail"
+) -> float:
+    """
+    根据A股通道特性调整委托价格
+    
+    Args:
+        base_price: 基准价格
+        side: 买卖方向（buy/sell）
+        market_state: 市场状态（normal/limit_up/limit_down）
+        phase: 交易阶段（call_auction/continuous）
+        broker_type: 券商类型（retail/institutional）
+    
+    Returns:
+        调整后的委托价格（已四舍五入到0.01元）
+    """
+    # 获取通道延迟
+    if phase == "call_auction":
+        latency = A_SHARE_EXECUTION["channel_latency"]["call_auction_ms"]
+    else:
+        latency = A_SHARE_EXECUTION["channel_latency"]["continuous_trading_ms"]
+    
+    # 根据券商类型调整延迟
+    if broker_type == "institutional":
+        latency = min(latency, A_SHARE_EXECUTION["channel_latency"]["institutional_ms"])
+    else:
+        latency = max(latency, A_SHARE_EXECUTION["channel_latency"]["retail_broker_ms"])
+    
+    # 计算滑点补偿
+    slippage = A_SHARE_EXECUTION["slippage_compensation"]
+    if side == "buy":
+        if market_state == "limit_up":
+            adjusted = base_price * (1 + slippage["limit_up_slippage"])
+        else:
+            adjusted = base_price * (1 + slippage["buy_slippage"])
+    else:
+        if market_state == "limit_down":
+            adjusted = base_price * (1 - slippage["limit_down_slippage"])
+        else:
+            adjusted = base_price * (1 - slippage["sell_slippage"])
+    
+    # 涨跌停价格校验
+    limit_up = base_price * (1 + A_SHARE_EXECUTION["price_limit_pct"])
+    limit_down = base_price * (1 - A_SHARE_EXECUTION["price_limit_pct"])
+    adjusted = max(min(adjusted, limit_up), limit_down)
+    
+    # 最小价格变动单位四舍五入
+    adjusted = round(adjusted / A_SHARE_EXECUTION["tick_size"]) * A_SHARE_EXECUTION["tick_size"]
+    
+    return adjusted
+
+def calc_volume_check(
+    order_volume: float,
+    auction_volume: float,
+    daily_avg_volume: float
+) -> tuple[bool, str]:
+    """
+    成交量校验：确保订单量在合理范围内
+    
+    Returns:
+        (is_valid, reason): 是否有效及原因
+    """
+    check = A_SHARE_EXECUTION["volume_check"]
+    
+    if daily_avg_volume > 0:
+        volume_ratio = order_volume / daily_avg_volume
+        if volume_ratio < check["min_volume_ratio"]:
+            return False, f"成交量过低（{volume_ratio:.1%} < {check['min_volume_ratio']:.0%}）"
+        if volume_ratio > check["max_volume_ratio"]:
+            return False, f"成交量过高（{volume_ratio:.1%} > {check['max_volume_ratio']:.0%}）"
+    
+    return True, "成交量正常"
+```
+
+**前端展示**：
+- 条件单配置中显示预估成交价（含滑点补偿）：`预估买入价: ¥10.05 (含滑点0.1%)`
+- 通道延迟实时显示：`通道延迟: 300ms (竞价阶段)`
+- 滑点预估：`预估滑点: ±0.1% (涨停板: ±0.5%)`
+- 成交量校验：`成交量: 1.2倍日均量 ✓`
+
+##### 4.1.5.15.3 结算买入价逻辑悖论修正
+
+**问题**：当前逻辑中，结算买入价的计算存在悖论——使用"买入价"作为结算基准，但T+1规则下当日买入不可卖出，导致次日卖出时的成本计算混乱。
+
+**修复方案**：
+```python
+# 结算买入价计算（修正版）
+SETTLEMENT_PRICE_LOGIC = {
+    "use_auction_price": True,    # 使用竞价成交价作为买入价
+    "fallback_to_open": True,     # 竞价无成交时使用开盘价
+    "fallback_to_prev_close": True,  # 无开盘价时使用前收盘价（非涨停价）
+    "t+1_lock": True,             # T+1锁定，当日不可卖出
+    "next_day_sell_base": "prev_close_adj"  # 次日卖出基准：前收盘价调整
+}
+
+def calc_settlement_buy_price(
+    order_trigger_price: float,
+    auction_price: float,
+    open_price: float,
+    prev_close: float,
+    limit_up: float,
+    limit_down: float
+) -> tuple[float, str]:
+    """
+    计算实际结算买入价（修正悖论）
+    
+    Args:
+        order_trigger_price: 条件单触发价
+        auction_price: 竞价成交价（0表示无成交）
+        open_price: 开盘价（0表示无开盘价）
+        prev_close: 前收盘价
+        limit_up: 涨停价
+        limit_down: 跌停价
+    
+    Returns:
+        (settlement_price, source): 结算价及来源说明
+    """
+    # 校验价格有效性
+    if auction_price > 0:
+        if not (limit_down <= auction_price <= limit_up):
+            return order_trigger_price, "trigger_price (auction out of bounds)"
+        return auction_price, "auction_price"
+    
+    if open_price > 0:
+        if not (limit_down <= open_price <= limit_up):
+            return order_trigger_price, "trigger_price (open out of bounds)"
+        return open_price, "open_price"
+    
+    # 使用前收盘价作为最终回退（而非涨停价）
+    if prev_close > 0:
+        return prev_close, "prev_close (fallback)"
+    
+    # 最终回退：使用触发价
+    return order_trigger_price, "trigger_price (last resort)"
+
+def calc_next_day_sell_base(
+    next_auction_open: float,
+    next_prev_close: float,
+    next_limit_up: float,
+    next_limit_down: float
+) -> tuple[float, str]:
+    """
+    计算次日卖出基准价
+    
+    注意：次日卖出基准应为次日竞价开盘价，而非涨停价。
+    涨停价是理论上限，实际成交价通常低于涨停价。
+    
+    Returns:
+        (sell_base, source): 卖出基准价及来源说明
+    """
+    if next_auction_open > 0:
+        if not (next_limit_down <= next_auction_open <= next_limit_up):
+            return next_prev_close, "prev_close (auction out of bounds)"
+        return next_auction_open, "next_auction_open"
+    
+    # 无次日开盘价时，使用前收盘价调整（保守估计）
+    if next_prev_close > 0:
+        return next_prev_close * 1.01, "prev_close_adj (+1%)"
+    
+    return next_limit_down, "limit_down (last resort)"
+
+def calc_total_cost(
+    buy_price: float,
+    volume: int,
+    commission_rate: float = 0.00025,
+    stamp_tax_rate: float = 0.0005,
+    transfer_fee_rate: float = 0.00002
+) -> dict:
+    """
+    计算交易总成本（含佣金、印花税、过户费）
+    
+    Returns:
+        {
+            "buy_amount": 买入金额,
+            "commission": 佣金,
+            "stamp_tax": 印花税,
+            "transfer_fee": 过户费,
+            "total_cost": 总成本,
+            "effective_price": 实际成交均价
+        }
+    """
+    buy_amount = buy_price * volume
+    commission = buy_amount * commission_rate
+    stamp_tax = buy_amount * stamp_tax_rate  # 买入时收取（部分券商）
+    transfer_fee = buy_amount * transfer_fee_rate
+    
+    total_cost = buy_amount + commission + stamp_tax + transfer_fee
+    effective_price = total_cost / volume if volume > 0 else 0
+    
+    return {
+        "buy_amount": round(buy_amount, 2),
+        "commission": round(commission, 2),
+        "stamp_tax": round(stamp_tax, 2),
+        "transfer_fee": round(transfer_fee, 2),
+        "total_cost": round(total_cost, 2),
+        "effective_price": round(effective_price, 2)
+    }
+```
+
+**前端展示**：
+- 条件单详情显示：`预估买入价: ¥10.05 (竞价成交价)`
+- 次日卖出基准：`次日卖出基准: ¥10.08 (次日竞价开盘价)`
+- T+1锁定提示：`⚠️ T+1规则：当日买入不可卖出`
+- 交易成本明细：`佣金: ¥2.50 | 印花税: ¥5.00 | 过户费: ¥0.20 | 实际均价: ¥10.0527`
+
+##### 4.1.5.15.4 绝对封单额/流通盘风险控制
+
+**问题**：当前熔断规则仅使用相对指标（如封单金额跌破3000万），未考虑个股流通盘大小，导致小盘股风险控制失效。
+
+**修复方案**：
+```python
+# 绝对封单额/流通盘风险控制
+ABSOLUTE_RISK_CONTROL = {
+    "min_seal_amount_abs": 5000000,  # 绝对封单额下限：500万元（单位：元）
+    "seal_to_float_ratio_min": 0.15, # 封单额/流通盘最低比例：15%
+    "float_cap_thresholds": {
+        "micro_cap": 50000000,       # 微型股：流通盘 < 5000万股
+        "small_cap": 200000000,      # 小盘股：流通盘 < 2亿股
+        "mid_cap": 1000000000,       # 中盘股：流通盘 < 10亿股
+        "large_cap": 5000000000      # 大盘股：流通盘 >= 10亿股
+    },
+    "dynamic_adjustment": {
+        "micro_cap": 0.25,   # 微型股封单比例要求25%
+        "small_cap": 0.20,   # 小盘股封单比例要求20%
+        "mid_cap": 0.15,     # 中盘股封单比例要求15%
+        "large_cap": 0.10    # 大盘股封单比例要求10%
+    },
+    "enforcement": {
+        "action_on_unsafe": "downgrade_to_watch",  # 不安全时的处理：降级为观察
+        "alert_threshold": "high",  # 预警阈值：high
+        "auto_cancel": False,  # 不自动撤单（需人工确认）
+        "log_all_checks": True  # 记录所有检查
+    }
+}
+
+def calc_seal_risk(
+    stock_code: str,
+    seal_amount: float,      # 封单额（单位：元）
+    float_shares: float,     # 流通盘（单位：股）
+    price: float             # 当前价格（用于校验）
+) -> dict:
+    """
+    计算封单风险（绝对+相对双指标）
+    
+    Args:
+        stock_code: 股票代码
+        seal_amount: 封单额（元）
+        float_shares: 流通盘（股）
+        price: 当前价格（用于校验封单额合理性）
+    
+    Returns:
+        {
+            "is_safe": bool,
+            "seal_amount": float,
+            "float_shares": float,
+            "seal_ratio": float,
+            "min_ratio_required": float,
+            "risk_level": "low" | "medium" | "high",
+            "cap_category": str,
+            "enforcement_action": str,
+            "reason": str
+        }
+    """
+    # 校验输入
+    if float_shares <= 0 or price <= 0:
+        return {
+            "is_safe": False,
+            "risk_level": "high",
+            "reason": "无效的流通盘或价格数据"
+        }
+    
+    # 计算封单比例
+    seal_ratio = seal_amount / (float_shares * price) if (float_shares * price) > 0 else 0
+    
+    # 根据流通盘大小分类
+    thresholds = ABSOLUTE_RISK_CONTROL["float_cap_thresholds"]
+    if float_shares < thresholds["micro_cap"]:
+        cap_category = "micro_cap"
+        min_ratio = ABSOLUTE_RISK_CONTROL["dynamic_adjustment"]["micro_cap"]
+    elif float_shares < thresholds["small_cap"]:
+        cap_category = "small_cap"
+        min_ratio = ABSOLUTE_RISK_CONTROL["dynamic_adjustment"]["small_cap"]
+    elif float_shares < thresholds["mid_cap"]:
+        cap_category = "mid_cap"
+        min_ratio = ABSOLUTE_RISK_CONTROL["dynamic_adjustment"]["mid_cap"]
+    else:
+        cap_category = "large_cap"
+        min_ratio = ABSOLUTE_RISK_CONTROL["dynamic_adjustment"]["large_cap"]
+    
+    # 双指标校验
+    is_safe = (
+        seal_amount >= ABSOLUTE_RISK_CONTROL["min_seal_amount_abs"] and
+        seal_ratio >= min_ratio
+    )
+    
+    # 确定风险等级
+    if is_safe:
+        risk_level = "low"
+    elif seal_amount >= ABSOLUTE_RISK_CONTROL["min_seal_amount_abs"]:
+        risk_level = "medium"  # 绝对金额达标但比例不足
+    else:
+        risk_level = "high"
+    
+    # 确定执行动作
+    enforcement = ABSOLUTE_RISK_CONTROL["enforcement"]
+    if not is_safe:
+        action = enforcement["action_on_unsafe"]
+    else:
+        action = "allow"
+    
+    return {
+        "is_safe": is_safe,
+        "seal_amount": seal_amount,
+        "float_shares": float_shares,
+        "seal_ratio": round(seal_ratio, 4),
+        "min_ratio_required": min_ratio,
+        "risk_level": risk_level,
+        "cap_category": cap_category,
+        "enforcement_action": action,
+        "reason": f"封单额{seal_amount/10000:.0f}万/流通盘{float_shares/100000000:.2f}亿股，比例{seal_ratio:.1%}，要求≥{min_ratio:.0%}"
+    }
+```
+
+**前端展示**：
+- 封单风险卡片显示：`封单额: ¥500万 / 流通盘: 2亿股 (比例: 2.5%)`
+- 风险等级：`🟢 安全` / `🟡 中风险` / `🔴 高风险`
+- 动态阈值提示：`小盘股要求封单比例 ≥ 20%`
+- 执行动作：`✅ 允许` / `⚠️ 降级为观察` / `🔴 高风险`
+
+##### 4.1.5.15.5 竞价换手率与竞价成交额监控
+
+**新增指标**：在 RealtimeMonitor 中增加竞价阶段核心指标
+
+```python
+# 竞价阶段指标（RealtimeMonitor 新增）
+AUCTION_METRICS = {
+    "call_auction_turnover_rate": {  #  renamed from auction_turnover_rate
+        "name": "竞价换手率",
+        "formula": "竞价成交量 / 流通盘",
+        "phases": {
+            "pre_competitive": {  # 9:15-9:20 可撤单阶段
+                "threshold_high": 0.03,   # 3%以上为高换手
+                "threshold_low": 0.005,   # 0.5%以下为低换手
+            },
+            "competitive": {  # 9:20-9:25 不可撤单阶段
+                "threshold_high": 0.05,   # 5%以上为高换手
+                "threshold_low": 0.01,    # 1%以下为低换手
+            }
+        },
+        "unit": "%",
+        "data_source_requirement": "必须能区分9:15-9:20和9:20-9:25两个阶段的成交量"
+    },
+    "call_auction_amount": {
+        "name": "竞价成交额",
+        "formula": "竞价成交价 × 竞价成交量",
+        "phases": {
+            "pre_competitive": {
+                "threshold_high": 30000000,  # 3000万以上为高成交
+                "threshold_low": 500000,     # 50万以下为低成交
+            },
+            "competitive": {
+                "threshold_high": 50000000,  # 5000万以上为高成交
+                "threshold_low": 1000000,    # 100万以下为低成交
+            }
+        },
+        "unit": "元",
+        "data_source_requirement": "必须能获取分阶段竞价成交额"
+    },
+    "call_auction_volume_ratio": {
+        "name": "竞价量比",
+        "formula": "竞价成交量 / 昨日同期成交量",
+        "phases": {
+            "pre_competitive": {
+                "threshold_high": 2.5,     # 2.5倍以上为异常放量
+                "threshold_low": 0.3,      # 0.3倍以下为缩量
+            },
+            "competitive": {
+                "threshold_high": 3.0,     # 3倍以上为异常放量
+                "threshold_low": 0.5,      # 0.5倍以下为缩量
+            }
+        },
+        "unit": "x",
+        "data_source_requirement": "需要历史同期成交量数据"
+    }
+}
+```
+
+**前端展示**：
+- RealtimeMonitor 新增卡片：
+```
+竞价阶段监控 (9:20-9:25 不可撤单阶段)
+├── 竞价换手率: 2.3%    ████████████░░░░░░░░░░  阈值: 1%-5%
+├── 竞价成交额: ¥1,250万 ████████████░░░░░░░░░░  阈值: 100万-5000万
+└── 竞价量比: 2.5x    ████████████░░░░░░░░░░  阈值: 0.5x-3.0x
+```
+- 阶段切换提示：`当前阶段: 不可撤单阶段 (9:20-9:25)`
+- 高亮阈值：超过阈值显示黄色/红色警示
+
+##### 4.1.5.15.6 仓位熔断管理员赦免战法开关
+
+**新增功能**：管理员可对特定战法启用"赦免模式"，在暴风雨天气下仍允许该战法执行。
+
+```python
+# 仓位熔断赦免配置
+FUSE_PARDON_CONFIG = {
+    "enabled": False,  # 默认关闭，需管理员开启
+    "allowed_strategies": [],  # 允许赦免的战法列表
+    "max_position_pct": 0.35,  # 赦免模式下最大仓位35%（原10%过低）
+    "require_dual_approval": True,  # 需要双人审批
+    "require_2fa": True,  # 需要2FA验证
+    "ip_whitelist": [],  # 管理员IP白名单（可选）
+    "log_all_pardon": True,  # 记录所有赦免操作
+    "auto_revoke_hours": 24,   # 24小时后自动撤销赦免
+    "manual_revoke_enabled": True,  # 允许手动撤销
+    "outcome_tracking": True  # 跟踪赦免交易的执行结果
+}
+
+@dataclass
+class FusePardonRecord:
+    """仓位熔断赦免记录"""
+    id: str
+    strategy_code: str
+    strategy_name: str
+    enabled_by: str  # 管理员ID
+    enabled_ip: str  # 管理员IP（用于审计）
+    approved_by: str  # 审批人ID
+    approved_ip: str  # 审批人IP
+    max_position_pct: float
+    created_at: datetime
+    expires_at: datetime
+    reason: str
+    is_active: bool
+    revoked_at: Optional[datetime] = None
+    revoked_by: Optional[str] = None
+    outcome: Optional[dict] = None  # 交易结果跟踪
+
+@dataclass
+class PardonOutcome:
+    """赦免交易结果"""
+    pardon_id: str
+    stock_code: str
+    entry_price: float
+    exit_price: float
+    return_pct: float
+    was_successful: bool
+    lessons_learned: str
+```
+
+**API端点**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/sentiment/weather/pardon/toggle` | 切换战法赦免状态（需2FA + 双人审批） |
+| POST | `/api/sentiment/weather/pardon/revoke` | 手动撤销赦免（仅创建人或审批人） |
+| GET | `/api/sentiment/weather/pardon/history` | 获取赦免历史记录 |
+| POST | `/api/sentiment/weather/pardon/outcome` | 提交赦免交易结果（用于优化） |
+
+**前端展示**：
+- 熔断规则 Tab 新增"赦免管理"子模块
+- 战法列表显示赦免开关：`[🔒 锁定] / [🔓 赦免]`
+- 赦免记录表格：`战法 | 开启人 | 审批人 | 有效期 | 状态 | 操作`
+- 操作日志：`管理员A 于 15:30 赦免了「首板挖掘」战法，有效期24小时`
+- 结果跟踪：`✅ 成功（+5.2%）` / `❌ 失败（-3.1%）` / `⏳ 进行中`
+
+---
+
+#### 4.1.5.16 测试策略（更新）
+
+1. **单元测试**：
+   - 天气状态判定逻辑（边界值测试）
+   - 多因子加权计算（权重归一化测试）
+   - 熔断规则触发逻辑
+   - **新增**：数据新鲜度校验测试
+   - **新增**：A股通道滑点补偿计算测试
+   - **新增**：结算买入价逻辑测试
+   - **新增**：封单风险双指标校验测试
+   - **新增**：赦免战法开关逻辑测试
+
+2. **集成测试**：
+   - 与 STI 引擎数据对接
+   - **新增**：日内数据延迟场景模拟
+   - **新增**：T+1结算规则验证
+   - **新增**：封单额/流通盘动态阈值测试
+
+3. **E2E 测试**：
+   - 完整天气状态切换流程
+   - 策略推荐正确性验证
+   - 熔断规则触发场景测试
+   - **新增**：死循环防护场景测试
+   - **新增**：赦免战法操作流程测试
+
+---
+
+#### 4.1.5.17 监控与可观测性（更新）
+
+1. **业务指标**：
+   - 各天气状态分布占比
+   - 策略推荐准确率（次日验证）
+   - 熔断规则触发次数
+   - **新增**：数据延迟监控（P95延迟、过期数据占比）
+   - **新增**：条件单滑点实际值 vs 预估值对比
+   - **新增**：封单风险触发次数（按个股/按日期）
+   - **新增**：赦免战法使用频率和胜率
+
+2. **技术指标**：
+   - API 响应时间
+   - 计算耗时
+   - 缓存命中率
+   - **新增**：死循环检测触发次数
+   - **新增**：通道延迟监控
+
+3. **日志规范**：
+   - 每次天气计算记录输入参数和输出结果
+   - 熔断触发记录完整上下文
+   - 错误日志包含堆栈信息
+   - **新增**：数据过期警告日志
+   - **新增**：赦免操作审计日志（管理员ID、时间、战法、原因）
 
 ---
 
