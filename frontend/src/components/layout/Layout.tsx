@@ -4,7 +4,8 @@ import {
   Activity, Radar, LayoutGrid, Wallet, Settings, Search, NotebookPen,
   Moon, Sun, ChevronsLeft, ChevronsRight, LineChart, Github, UserRound,
   Cog, Cpu, Database, Cable, Rocket, FlaskConical, Star, FileText, Flame,
-  Menu,
+  Menu, Target, Zap, Shield, History, Cloud, BarChart3, HeartPulse, Calendar, Building2,
+  Dna, Gavel, Car,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -22,6 +23,17 @@ const NAV = [
   { to: "/portfolio", icon: Wallet, label: "我的持仓" },
   { to: "/my-reports", icon: FileText, label: "我的研报" },
   { to: "/notes", icon: NotebookPen, label: "研究记录" },
+  { to: "/recommendation", icon: Target, label: "智能推荐" },
+  { to: "/strategy-signals", icon: Zap, label: "策略信号" },
+  { to: "/risk-dashboard", icon: Shield, label: "风险看板" },
+  { to: "/sector-divergence", icon: BarChart3, label: "板块分化度" },
+  { to: "/backtest", icon: History, label: "回测验证" },
+  { to: "/sentiment/weather", icon: Cloud, label: "情绪天气" },
+  { to: "/workflow", icon: LineChart, label: "打板工作流" },
+  { to: "/metrics", icon: BarChart3, label: "指标中心" },
+  { to: "/health", icon: HeartPulse, label: "系统健康" },
+  { to: "/scheduled-tasks", icon: Calendar, label: "定时任务" },
+  { to: "/industry", icon: Building2, label: "行业分析" },
   { to: "/limitup", icon: Flame, label: "打板策略" },
   { to: "/settings", icon: Settings, label: "接入 AI" },
 ];
@@ -34,6 +46,13 @@ const SECTOR_LINKS = [
   { to: "/sectors/cpo", icon: Cable, label: "光互联" },
   { to: "/sectors/business-space", icon: Rocket, label: "商业航天" },
   { to: "/sectors/ai-pharma", icon: FlaskConical, label: "生物医药" },
+];
+
+// 打板工作流快捷入口
+const LIMITUP_LINKS = [
+  { to: "/limitup/gene", icon: Dna, label: "基因筛选" },
+  { to: "/limitup/auction", icon: Gavel, label: "竞价筛选" },
+  { to: "/limitup/seats", icon: Car, label: "席位引擎" },
 ];
 
 export function Layout() {
@@ -94,32 +113,58 @@ export function Layout() {
                   {!collapsed && label}
                 </Link>
 
-                {/* 板块中心下方：常看板块的快捷入口（缩进） */}
-                {to === "/sectors" && (
-                  <div className={cn("mt-1 space-y-0.5", !collapsed && "ml-4 border-l border-border/40 pl-1.5")}>
-                    {SECTOR_LINKS.map(({ to: st, icon: SIcon, label: slabel }) => {
-                      const sactive = pathname === st;
-                      return (
-                        <Link
-                          key={st}
-                          to={st}
-                          title={collapsed ? slabel : undefined}
-                          className={cn(
-                            "flex items-center rounded-lg transition-colors",
-                            collapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5 text-[13px]",
-                            sactive
-                              ? "bg-primary/10 font-medium text-primary"
-                              : "text-muted-foreground/80 hover:bg-muted/40 hover:text-foreground",
-                          )}
-                        >
-                          <SIcon className="h-3.5 w-3.5 shrink-0" />
-                          {!collapsed && slabel}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                 {/* 板块中心下方：常看板块的快捷入口（缩进） */}
+                 {to === "/sectors" && (
+                   <div className={cn("mt-1 space-y-0.5", !collapsed && "ml-4 border-l border-border/40 pl-1.5")}>
+                     {SECTOR_LINKS.map(({ to: st, icon: SIcon, label: slabel }) => {
+                       const sactive = pathname === st;
+                       return (
+                         <Link
+                           key={st}
+                           to={st}
+                           title={collapsed ? slabel : undefined}
+                           className={cn(
+                             "flex items-center rounded-lg transition-colors",
+                             collapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5 text-[13px]",
+                             sactive
+                               ? "bg-primary/10 font-medium text-primary"
+                               : "text-muted-foreground/80 hover:bg-muted/40 hover:text-foreground",
+                           )}
+                         >
+                           <SIcon className="h-3.5 w-3.5 shrink-0" />
+                           {!collapsed && slabel}
+                         </Link>
+                       );
+                     })}
+                   </div>
+                 )}
+
+                 {/* 打板工作流下方：快捷入口（缩进） */}
+                 {to === "/limitup" && (
+                   <div className={cn("mt-1 space-y-0.5", !collapsed && "ml-4 border-l border-border/40 pl-1.5")}>
+                     {LIMITUP_LINKS.map(({ to: st, icon: SIcon, label: slabel }) => {
+                       const sactive = pathname === st;
+                       return (
+                         <Link
+                           key={st}
+                           to={st}
+                           title={collapsed ? slabel : undefined}
+                           className={cn(
+                             "flex items-center rounded-lg transition-colors",
+                             collapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5 text-[13px]",
+                             sactive
+                               ? "bg-primary/10 font-medium text-primary"
+                               : "text-muted-foreground/80 hover:bg-muted/40 hover:text-foreground",
+                           )}
+                         >
+                           <SIcon className="h-3.5 w-3.5 shrink-0" />
+                           {!collapsed && slabel}
+                         </Link>
+                       );
+                     })}
+                   </div>
+                 )}
+               </div>
             );
           })}
         </nav>

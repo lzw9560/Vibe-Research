@@ -44,6 +44,16 @@ from routers import recommendation, win_rate, feishu, backtest, bidding, strateg
 
 app = FastAPI(title="Vibe-Research API", version="0.1.3")
 
+@app.get("/")
+async def root():
+    """API 根路径：返回基本信息，避免 404。"""
+    return {
+        "name": "Vibe-Research API",
+        "version": "0.1.3",
+        "docs": "/docs",
+        "health": "/api/health",
+    }
+
 # 日志配置
 logging.basicConfig(
     level=logging.INFO,

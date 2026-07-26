@@ -1210,8 +1210,13 @@ export const api = {
     get<any>(`/risk/dashboard${date ? `?date=${date}` : ""}`),
   riskStock: (code: string) =>
     get<any>(`/risk/stock/${code}`),
-  riskOnedayList: (date?: string, minRiskScore?: number) =>
-    get<any>(`/risk/oneday/list${date ? `?date=${date}` : ""}${minRiskScore !== undefined ? `&min_risk_score=${minRiskScore}` : ""}`),
+  riskOnedayList: (date?: string, minRiskScore?: number) => {
+    const params = new URLSearchParams();
+    if (date) params.set("date", date);
+    if (minRiskScore !== undefined) params.set("min_risk_score", String(minRiskScore));
+    const qs = params.toString();
+    return get<any>(`/risk/oneday/list${qs ? `?${qs}` : ""}`);
+  },
   riskSeats: () =>
     get<any>("/risk/seats"),
   // 板块分化度

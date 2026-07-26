@@ -60,4 +60,47 @@ export const SUB_TABS: Record<string, { key: string; label: string; to?: string 
     { to: "/sentiment/weather/strategy", key: "strategy", label: "策略建议" },
     { to: "/sentiment/weather/fuse", key: "fuse", label: "熔断规则" },
   ],
+  "/recommendation": [
+    { key: "today", label: "今日推荐" },
+    { key: "history", label: "历史记录" },
+  ],
+  "/strategy-signals": [
+    { key: "active", label: "活跃信号" },
+    { key: "history", label: "历史信号" },
+  ],
+  "/risk-dashboard": [
+    { key: "overview", label: "风险概览" },
+    { key: "list", label: "风险列表" },
+  ],
+  "/backtest": [
+    { key: "result", label: "回测结果" },
+    { key: "winrate", label: "胜率趋势" },
+  ],
+  "/workflow": [
+    { to: "/workflow/pre-market", key: "pre-market", label: "盘前简报" },
+    { to: "/workflow/intraday", key: "intraday", label: "盘中监控" },
+    { to: "/workflow/alerts", key: "alerts", label: "炸板预警" },
+    { to: "/workflow/post-market", key: "post-market", label: "盘后复盘" },
+  ],
+  "/metrics": [
+    { key: "overview", label: "指标概览" },
+    { key: "trends", label: "趋势分析" },
+  ],
+  "/health": [
+    { key: "status", label: "健康状态" },
+    { key: "logs", label: "运行日志" },
+  ],
+  "/scheduled-tasks": [
+    { key: "active", label: "执行中" },
+    { key: "history", label: "历史记录" },
+  ],
+  "/industry": [
+    { key: "overview", label: "行业概览" },
+    { key: "leaders", label: "龙头股" },
+  ],
+  "/sector-divergence": [
+    { key: "divergence", label: "分化度" },
+    { key: "rotation", label: "轮动速度" },
+    { key: "history", label: "历史趋势" },
+  ],
 };

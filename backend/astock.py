@@ -22,6 +22,10 @@ from pathlib import Path
 
 from circuit_breaker import get_breaker
 
+# 抑制 urllib3 重试警告（东财 push2 偶发断连是正常的，不需要刷屏）
+import logging
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
+
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 
