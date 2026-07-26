@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { getWorkflowStatus } from "@/lib/api";
 
 // ---- 类型定义 ----
 interface WorkflowStatus {
@@ -388,14 +389,11 @@ export default function Workflow() {
       let winRate = 0;
 
       try {
-        const res = await fetch("/api/workflow/status");
-        if (res.ok) {
-          const data = await res.json();
-          candidateCount = data.candidate_count ?? 0;
-          signalCount = data.signal_count ?? 0;
-          alertCount = data.alert_count ?? 0;
-          winRate = data.win_rate ?? 0;
-        }
+        const status = await getWorkflowStatus();
+        candidateCount = (status as any)?.candidate_count ?? (status as any)?.candidate_pool_count ?? 0;
+        signalCount = (status as any)?.signal_count ?? (status as any)?.active_signals ?? 0;
+        alertCount = (status as any)?.alert_count ?? 0;
+        winRate = (status as any)?.win_rate ?? (status as any)?.today_win_rate ?? 0;
       } catch {
         // 后端无此接口，使用默认值
       }
@@ -438,8 +436,8 @@ export default function Workflow() {
   // 排序：当前阶段置顶，然后是已完成的，最后是未开始的
   const sortedStages = useMemo(() => {
     return [...STAGE_ORDER].sort((a, b) => {
-      const aIdx = STAGE_ORDER.indexOf(currentStage);
-      const bIdx = STAGE_ORDER.indexOf(currentStage);
+      const aIdx = STAGE_ORDER.indexOf(a);
+      const bIdx = STAGE_ORDER.indexOf(b);
       const aPos = STAGE_ORDER.indexOf(a);
       const bPos = STAGE_ORDER.indexOf(b);
 

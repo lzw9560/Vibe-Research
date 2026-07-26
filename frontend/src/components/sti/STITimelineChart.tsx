@@ -25,9 +25,15 @@ export function STITimelineChart({ className }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [echarts, setEcharts] = useState<typeof import("echarts") | null>(null);
 
+  // Defensive: filter out items with missing date or score to prevent ECharts crashes
+  const validData = data.filter(
+    (d): d is NonNullable<typeof d> & { date: string; score: number } =>
+      d != null && d.date != null && d.date !== "" && d.score != null
+  );
+
   const loadData = useCallback(() => {
     setLoading(true);
-    api.stiTimeline(30)
+    api.stiTimeline(60)
       .then(setData)
       .catch((e) => setError(e instanceof ApiError ? e.message : "时间线加载失败"))
       .finally(() => setLoading(false));
@@ -44,19 +50,27 @@ export function STITimelineChart({ className }: Props) {
 
   // ECharts 渲染
   useEffect(() => {
+    console.log('[STITimeline] data.length=', data.length, 'validData.length=', validData.length, 'echarts=', !!echarts, 'chartRef=', !!chartRef.current);
     if (!chartRef.current || !echarts) return;
+    if (instanceRef.current) {
+      instanceRef.current.dispose();
+      instanceRef.current = null;
+    }
     instanceRef.current = echarts.init(chartRef.current);
+    console.log('[STITimeline] initialized, chart size:', chartRef.current.clientWidth, 'x', chartRef.current.clientHeight);
 
-    const dates = data.map((d) => d.date);
-    const scores = data.map((d) => d.score ?? null);
-    const phases = data.map((d) => d.phase ?? "");
+    // Defensive: filter out items with missing date or score to prevent ECharts crashes
+    // (validData already computed above)
+    const dates = validData.map((d) => d.date);
+    const scores = validData.map((d) => d.score);
+    const phases = validData.map((d) => d.phase ?? "");
 
     const visualMap: Array<{ dataIndex: number; itemStyle: { color: string } }> = [];
-    scores.forEach((s, i) => {
-      if (s != null) {
+    validData.forEach((d, i) => {
+      if (d.score != null) {
         visualMap.push({
           dataIndex: i,
-          itemStyle: { color: PHASE_LINE_COLOR[phases[i]] ?? "#f97316" },
+          itemStyle: { color: PHASE_LINE_COLOR[d.phase || ""] ?? "#f97316" },
         });
       }
     });
@@ -64,18 +78,19 @@ export function STITimelineChart({ className }: Props) {
     const option: import("echarts").EChartsOption = {
       tooltip: {
         trigger: "axis",
-        backgroundColor: "hsl(var(--card))",
-        borderColor: "hsl(var(--border))",
-        textStyle: { color: "hsl(var(--foreground))", fontSize: 12 },
+        backgroundColor: "rgba(20, 20, 25, 0.95)",
+        borderColor: "rgba(255,255,255,0.15)",
+        textStyle: { color: "#e5e7eb", fontSize: 12 },
         formatter: (params: any) => {
           if (!params || !params.length) return "";
           const p = params[0];
           const idx = p.dataIndex;
+          if (idx == null || idx >= validData.length) return "";
           const phase = phases[idx];
-          const change = data[idx]?.change_from_yesterday;
+          const item = validData[idx];
           let extra = "";
-          if (change != null) {
-            extra = `<br/>较昨日: ${change > 0 ? "+" : ""}${change.toFixed(1)}`;
+          if (item?.change_from_yesterday != null) {
+            extra = `<br/>较昨日: ${(item.change_from_yesterday > 0 ? "+" : "")}${item.change_from_yesterday.toFixed(1)}`;
           }
           return `<b>${dates[idx]}</b><br/>
             分数: <b style="color:${PHASE_LINE_COLOR[phase] || '#f97316'}">${scores[idx]}</b><br/>
@@ -86,8 +101,8 @@ export function STITimelineChart({ className }: Props) {
       xAxis: {
         type: "category",
         data: dates,
-        axisLine: { lineStyle: { color: "hsl(var(--chart-axis))" } },
-        axisLabel: { color: "hsl(var(--chart-text))", fontSize: 10, rotate: 45 },
+        axisLine: { lineStyle: { color: "rgba(255,255,255,0.3)" } },
+        axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 10, rotate: 45 },
         axisTick: { show: false },
       },
       yAxis: {
@@ -95,10 +110,10 @@ export function STITimelineChart({ className }: Props) {
         min: 0,
         max: 100,
         name: "STI 分数",
-        nameTextStyle: { fontSize: 10, color: "hsl(var(--chart-text))" },
-        axisLine: { lineStyle: { color: "hsl(var(--chart-axis))" } },
-        splitLine: { lineStyle: { color: "hsl(var(--chart-grid))" } },
-        axisLabel: { color: "hsl(var(--chart-text))", fontSize: 10 },
+        nameTextStyle: { fontSize: 10, color: "rgba(255,255,255,0.5)" },
+        axisLine: { lineStyle: { color: "rgba(255,255,255,0.3)" } },
+        splitLine: { lineStyle: { color: "rgba(255,255,255,0.08)" } },
+        axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 10 },
       },
       series: [
         {
@@ -113,34 +128,34 @@ export function STITimelineChart({ className }: Props) {
             width: 2.5,
             color: ((params: any) => {
               const idx = params.dataIndex;
-              return PHASE_LINE_COLOR[phases[idx]] ?? "#f97316";
+              return PHASE_LINE_COLOR[validData[idx]?.phase || ""] ?? "#f97316";
             }) as any,
           },
           itemStyle: {
             color: ((params: any) => {
               const idx = params.dataIndex;
-              return PHASE_LINE_COLOR[phases[idx]] ?? "#f97316";
+              return PHASE_LINE_COLOR[validData[idx]?.phase || ""] ?? "#f97316";
             }) as any,
           },
           emphasis: {
             focus: "series",
-            itemStyle: { borderWidth: 3, shadowBlur: 10, shadowColor: "hsl(var(--primary) / 0.4)" },
+            itemStyle: { borderWidth: 3, shadowBlur: 10, shadowColor: "rgba(249, 115, 22, 0.4)" },
           },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: "hsl(var(--primary) / 0.25)" },
-              { offset: 1, color: "hsl(var(--primary) / 0.02)" },
+              { offset: 0, color: "rgba(249, 115, 22, 0.3)" },
+              { offset: 1, color: "rgba(249, 115, 22, 0.02)" },
             ]),
           },
         },
       ],
       // 阶段色带（底部标记）
-      graphic: phases.map((p, i) => ({
+      graphic: validData.map((d, i) => ({
         type: "text",
         silent: true,
         style: {
-          text: p || "",
-          fill: PHASE_LINE_COLOR[p] || "#6b7280",
+          text: d.phase || "",
+          fill: PHASE_LINE_COLOR[d.phase || ""] || "#6b7280",
           fontSize: 9,
           textAlign: "center",
           textBaseline: "top",
@@ -152,7 +167,17 @@ export function STITimelineChart({ className }: Props) {
       })),
     };
 
-    instanceRef.current.setOption(option);
+    instanceRef.current.setOption(option, true);
+    // 确保渲染到正确尺寸 — 用 MutationObserver 等待 DOM 完全渲染
+    const tryResize = () => {
+      if (chartRef.current && chartRef.current.clientHeight > 0) {
+        instanceRef.current?.resize();
+      } else {
+        setTimeout(tryResize, 100);
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => instanceRef.current?.resize()));
+    console.log('[STITimeline] setOption done, series data length:', scores.length);
 
     const onResize = () => instanceRef.current?.resize();
     window.addEventListener("resize", onResize);
@@ -188,7 +213,7 @@ export function STITimelineChart({ className }: Props) {
     );
   }
 
-  if (data.length === 0) {
+  if (validData.length === 0) {
     return (
       <GlassCard className={cn("mb-6", className)}>
         <div className="flex items-center justify-between">
@@ -199,20 +224,20 @@ export function STITimelineChart({ className }: Props) {
         </div>
         <div className="mt-3 rounded-lg border border-border/40 bg-muted/15 p-4 text-center">
           <p className="text-sm text-muted-foreground">暂无时间线数据</p>
-          <p className="mt-1 text-[11px] text-muted-foreground/50">最近 30 个交易日的情绪温度走势</p>
+          <p className="mt-1 text-[11px] text-muted-foreground/50">最近 60 个交易日的情绪温度走势</p>
         </div>
       </GlassCard>
     );
   }
 
-  const latest = data[data.length - 1];
+  const latest = validData[validData.length - 1];
   const phaseColor = PHASE_LINE_COLOR[latest.phase || ""] || "text-muted-foreground";
 
   return (
     <GlassCard className={cn("mb-6", className)}>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">情绪温度时间线（30 日）</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground">情绪温度时间线（60 日）</h3>
           <span className={cn("text-xs font-medium", phaseColor)}>{latest.phase}</span>
         </div>
         <button onClick={loadData} className="text-muted-foreground hover:text-primary" title="刷新">
@@ -231,18 +256,18 @@ export function STITimelineChart({ className }: Props) {
         <div className="rounded-lg bg-muted/20 p-2 text-center">
           <p className="text-[10px] text-muted-foreground">最高分</p>
           <p className="font-mono text-lg font-bold text-danger">
-            {Math.max(...data.map((d) => d.score ?? 0)).toFixed(1)}
+            {Math.max(...validData.map((d) => d.score ?? 0)).toFixed(1)}
           </p>
         </div>
         <div className="rounded-lg bg-muted/20 p-2 text-center">
           <p className="text-[10px] text-muted-foreground">最低分</p>
           <p className="font-mono text-lg font-bold text-success">
-            {Math.min(...data.map((d) => d.score ?? 100)).toFixed(1)}
+            {Math.min(...validData.map((d) => d.score ?? 100)).toFixed(1)}
           </p>
         </div>
         <div className="rounded-lg bg-muted/20 p-2 text-center">
           <p className="text-[10px] text-muted-foreground">数据天数</p>
-          <p className="font-mono text-lg font-bold text-foreground">{data.length}</p>
+          <p className="font-mono text-lg font-bold text-foreground">{validData.length}</p>
         </div>
       </div>
 

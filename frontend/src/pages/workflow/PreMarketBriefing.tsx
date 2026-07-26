@@ -6,64 +6,11 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
-
-// ─── TypeScript Interfaces ───────────────────────────────────────────────────
-
-interface Candidate {
-  code: string;
-  name: string;
-  price?: number;
-  change_pct?: number;
-  score?: number;
-  [key: string]: unknown;
-}
-
-interface StrategyMatch {
-  strategy_name?: string;
-  style?: string;
-  match_score?: number;
-  confidence?: number;
-  description?: string;
-  entry_condition?: string;
-  [key: string]: unknown;
-}
-
-interface PositionSuggestion {
-  code: string;
-  name: string;
-  suggested_weight?: number;
-  weight?: number;
-  reason?: string;
-  action?: string;
-  [key: string]: unknown;
-}
-
-interface PreMarketReport {
-  date: string;
-  generated_at: string;
-  sentiment_index: number;
-  sentiment_phase: string;
-  candidates: Candidate[];
-  strong_candidates: Candidate[];
-  filtered_out: Candidate[];
-  strategy_matches: StrategyMatch[];
-  position_suggestions: PositionSuggestion[];
-  total_suggested_position: number;
-  warnings: string[];
-}
+import { getPreMarketBriefing, type PreMarketReport as ApiPreMarketReport } from "@/lib/api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const STRONG_CODES = new Set<string>();
-
-function getStrongCodeSet(report: PreMarketReport): Set<string> {
-  if (STRONG_CODES.size === 0) {
-    for (const c of report.strong_candidates) {
-      if (c.code) STRONG_CODES.add(String(c.code));
-    }
-  }
-  return STRONG_CODES;
-}
+type PreMarketReport = ApiPreMarketReport;
 
 function isStrong(code: string, strongSet: Set<string>): boolean {
   return strongSet.has(code);
@@ -121,10 +68,8 @@ export default function PreMarketBriefing() {
   const loadData = useCallback(async () => {
     try {
       setError(null);
-      const resp = await fetch("/api/workflow/pre-market");
-      const data = await resp.json();
-      const payload = data?.data ?? data;
-      setReport(payload as PreMarketReport);
+      const payload = await getPreMarketBriefing();
+      setReport(payload);
       setLastRefreshed(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
@@ -154,11 +99,9 @@ export default function PreMarketBriefing() {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Sorted + filtered candidate pool
-  const strongSet = useMemo(
-    () => (report ? getStrongCodeSet(report) : new Set<string>()),
-    [report],
-  );
+  const strongCodes = useMemo(() => {
+    return new Set((report?.candidates ?? []).map(c => String(c.code)));
+  }, [report]);
 
   const sortedCandidates = useMemo(() => {
     let list = [...(report?.candidates ?? [])];
@@ -242,8 +185,8 @@ export default function PreMarketBriefing() {
     );
   }
 
-  const sentimentVal = report.sentiment_index;
-  const phaseLabel = sentimentPhaseLabel(report.sentiment_phase);
+  const sentimentVal = report.sentiment_index ?? 0;
+  const phaseLabel = sentimentPhaseLabel(report.sentiment_phase ?? "");
   const phaseBadgeVariant =
     sentimentVal >= 70
       ? ("success" as const)
@@ -258,7 +201,7 @@ export default function PreMarketBriefing() {
       {/* ── Header ───────────────────────────────────────────────────── */}
       <PageHeader
         title="盘前简报"
-        subtitle={`${report.date} · 更新于 ${formatRelativeTime(report.generated_at)}`}
+        subtitle={`${report.date ?? ""} · 更新于 ${formatRelativeTime(report.generated_at ?? "")}`}
         actions={
           <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw className={`mr-1.5 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -320,22 +263,22 @@ export default function PreMarketBriefing() {
         {[
           {
             label: "候选池",
-            value: report.candidates.length,
+            value: report.candidates?.length ?? 0,
             icon: <Activity className="h-4 w-4 text-blue-400" />,
           },
           {
             label: "强候选",
-            value: report.strong_candidates.length,
+            value: report.strong_candidates?.length ?? 0,
             icon: <Star className="h-4 w-4 text-yellow-400" />,
           },
           {
             label: "建议仓位",
-            value: `${(report.total_suggested_position * 100).toFixed(0)}%`,
+            value: `${((report.total_suggested_position ?? 0) * 100).toFixed(0)}%`,
             icon: <TrendingUp className="h-4 w-4 text-green-400" />,
           },
           {
             label: "风险警告",
-            value: report.warnings.length,
+            value: report.warnings?.length ?? 0,
             icon: <ShieldAlert className="h-4 w-4 text-orange-400" />,
           },
         ].map((stat) => (
@@ -352,14 +295,14 @@ export default function PreMarketBriefing() {
       </div>
 
       {/* ── Risk Warnings Banner ─────────────────────────────────────── */}
-      {report.warnings.length > 0 && (
+      {(report.warnings ?? []).length > 0 && (
         <GlassCard className="border-l-4 border-l-yellow-500 p-5">
           <div className="flex items-start gap-3">
             <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
             <div>
               <h4 className="font-semibold text-yellow-400">风险提示</h4>
               <ul className="mt-1 space-y-1">
-                {report.warnings.map((w, i) => (
+                {(report.warnings ?? []).map((w, i) => (
                   <li key={i} className="text-sm text-yellow-200/80">
                     • {w}
                   </li>
@@ -446,7 +389,7 @@ export default function PreMarketBriefing() {
                 </tr>
               ) : (
                 sortedCandidates.map((c) => {
-                  const strong = isStrong(String(c.code ?? ""), strongSet);
+                  const strong = isStrong(String(c.code ?? ""), strongCodes);
                   const changeColor =
                     (c.change_pct as number) >= 0 ? "text-green-400" : "text-red-400";
                   return (
@@ -478,7 +421,7 @@ export default function PreMarketBriefing() {
           </table>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          共 {sortedCandidates.length} 只（候选池 {report.candidates.length} 只，强候选 {report.strong_candidates.length} 只）
+          共 {sortedCandidates.length} 只（候选池 {(report.candidates ?? []).length} 只，强候选 {(report.strong_candidates ?? []).length} 只）
         </p>
       </GlassCard>
 
@@ -488,11 +431,11 @@ export default function PreMarketBriefing() {
           <Activity className="h-5 w-5 text-primary" />
           战法匹配
         </h3>
-        {report.strategy_matches.length === 0 ? (
+        {(report.strategy_matches ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">暂无匹配战法</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {report.strategy_matches.map((match, idx) => {
+            {(report.strategy_matches ?? []).map((match, idx) => {
               const score = match.match_score ?? match.confidence ?? 0;
               const name = match.strategy_name || match.style || `战法 ${idx + 1}`;
               return (
@@ -536,11 +479,11 @@ export default function PreMarketBriefing() {
           <TrendingUp className="h-5 w-5 text-primary" />
           仓位建议
         </h3>
-        {report.position_suggestions.length === 0 ? (
+        {(report.position_suggestions ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">暂无仓位建议</p>
         ) : (
           <div className="space-y-3">
-            {report.position_suggestions.map((s, idx) => {
+            {(report.position_suggestions ?? []).map((s, idx) => {
               const weight = s.suggested_weight ?? s.weight ?? 0;
               return (
                 <div

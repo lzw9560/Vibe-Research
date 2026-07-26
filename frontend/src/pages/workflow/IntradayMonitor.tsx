@@ -4,6 +4,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
+import { getIntradayData } from "@/lib/api";
 import {
   Activity,
   Bell,
@@ -18,16 +19,17 @@ import {
   VolumeX,
 } from "lucide-react";
 
-// ─── TypeScript Interfaces ───────────────────────────────────────────────────
+// ─── Type aliases for local usage ─────────────────────────────────────────────
 
 interface SignalItem {
   code: string;
   name?: string;
   signal_type?: string;
   type?: string;
-  reasoning?: string;
+  reasoning?: string | string[];
   description?: string;
   time?: string;
+  [key: string]: unknown;
 }
 
 interface AlertItem {
@@ -38,6 +40,7 @@ interface AlertItem {
   condition?: string;
   message?: string;
   time?: string;
+  [key: string]: unknown;
 }
 
 interface AdjustmentItem {
@@ -46,13 +49,19 @@ interface AdjustmentItem {
   action?: string;
   reason?: string;
   time?: string;
+  [key: string]: unknown;
 }
 
 interface IntradayData {
-  date: string;
-  signals: SignalItem[];
-  alerts: AlertItem[];
-  adjustments: AdjustmentItem[];
+  date?: string;
+  signals?: SignalItem[];
+  alerts?: AlertItem[];
+  adjustments?: AdjustmentItem[];
+  updated?: string;
+  market_status?: {
+    status: string;
+    phase: string;
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -111,18 +120,6 @@ function timeAgo(from: string | undefined): string {
   } catch {
     return "";
   }
-}
-
-function resolveSignals(resp: Response): Promise<SignalItem[]> {
-  return resp.ok ? resp.json().then((b) => b?.data ?? b ?? []) : Promise.resolve([]);
-}
-
-function resolveAlerts(resp: Response): Promise<AlertItem[]> {
-  return resp.ok ? resp.json().then((b) => b?.data ?? b ?? []) : Promise.resolve([]);
-}
-
-function resolveAdjustments(resp: Response): Promise<AdjustmentItem[]> {
-  return resp.ok ? resp.json().then((b) => b?.data ?? b ?? []) : Promise.resolve([]);
 }
 
 // ─── Sound Notification Hook ─────────────────────────────────────────────────
@@ -234,26 +231,22 @@ export default function IntradayMonitor() {
   const [desktopNotifs, setDesktopNotifs] = useState(false);
   const prevAlertCount = useRef(0);
 
+  // Move hook to top level — rules of hooks compliance
+  const playAlert = useSoundNotification(soundEnabled);
+
   const loadData = useCallback(async () => {
     try {
       setError(null);
-      const [signalsResp, alertsResp, adjustmentsResp] = await Promise.all([
-        fetch("/api/workflow/signals"),
-        fetch("/api/workflow/alerts"),
-        fetch("/api/workflow/adjustments"),
-      ]);
+      const intradayData = await getIntradayData();
 
-      const [signals, alerts, adjustments] = await Promise.all([
-        resolveSignals(signalsResp),
-        resolveAlerts(alertsResp),
-        resolveAdjustments(adjustmentsResp),
-      ]);
+      const signals: SignalItem[] = (intradayData?.signals) ?? [];
+      const alerts: AlertItem[] = (intradayData?.alerts) ?? [];
+      const adjustments: AdjustmentItem[] = (intradayData?.adjustments) ?? [];
 
       // Detect new bomb alerts for notifications
       if (alerts.length > prevAlertCount.current && alerts.length > 0) {
         if (soundEnabled) {
-          const play = useSoundNotification(soundEnabled);
-          play();
+          playAlert();
         }
         if (desktopNotifs) {
           sendDesktopNotification("🚨 Bomb Alert", `${alerts.length} active alert${alerts.length > 1 ? "s" : ""}`);
@@ -262,10 +255,10 @@ export default function IntradayMonitor() {
       prevAlertCount.current = alerts.length;
 
       setData({
-        date: new Date().toISOString().split("T")[0],
-        signals: signals as SignalItem[],
-        alerts: alerts as AlertItem[],
-        adjustments: adjustments as AdjustmentItem[],
+        date: intradayData?.date ?? new Date().toISOString().split("T")[0],
+        signals,
+        alerts,
+        adjustments,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
@@ -312,21 +305,40 @@ export default function IntradayMonitor() {
     );
   }
 
-  // ── Empty state ──
-  if (!data) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="盘中监控" subtitle="Intraday Monitor" />
-        <GlassCard className="p-6">
-          <p className="text-muted-foreground">暂无盘中数据</p>
-        </GlassCard>
-      </div>
-    );
-  }
+   // ── Empty state ──
+   if (!data) {
+     return (
+       <div className="space-y-6">
+         <PageHeader title="盘中监控" subtitle="Intraday Monitor" />
+         <GlassCard className="p-6">
+           <p className="text-muted-foreground">暂无盘中数据</p>
+         </GlassCard>
+       </div>
+     );
+   }
 
-  const hasAlerts = data.alerts.length > 0;
-  const hasSignals = data.signals.length > 0;
-  const hasAdjustments = data.adjustments.length > 0;
+   // ── Non-trading day guard ──
+   const marketClosed = data?.market_status?.status !== "trading";
+   if (marketClosed) {
+     return (
+       <div className="space-y-6">
+         <PageHeader title="盘中监控" subtitle="Intraday Monitor" />
+         <GlassCard className="p-6">
+           <div className="flex flex-col items-center gap-3 text-center">
+             <Activity className="h-10 w-10 text-muted-foreground/40" />
+             <p className="text-lg font-medium text-muted-foreground">非交易日或数据源暂不可用</p>
+             <p className="text-sm text-muted-foreground/60">
+               {data?.market_status?.phase ? `当前状态：${data.market_status.phase}` : "当前非交易时段"}
+             </p>
+           </div>
+         </GlassCard>
+       </div>
+     );
+   }
+
+   const hasAlerts = (data.alerts ?? []).length > 0;
+  const hasSignals = (data.signals ?? []).length > 0;
+  const hasAdjustments = (data.adjustments ?? []).length > 0;
 
   return (
     <div className="space-y-6">
@@ -378,12 +390,12 @@ export default function IntradayMonitor() {
             <ShieldAlert className="h-5 w-5 text-red-400" />
             <h3 className="text-lg font-bold text-red-400">炸板预警</h3>
             <Badge variant="danger" className="ml-auto">
-              {data.alerts.length}
+              {(data.alerts ?? []).length}
             </Badge>
           </div>
 
           <div className="space-y-3">
-            {data.alerts.map((alert, idx) => {
+              {(data.alerts ?? []).map((alert, idx) => {
               const levelColor = ALERT_LEVEL_COLORS[alert.alert_level?.toLowerCase() ?? alert.level?.toLowerCase() ?? ""] ?? "warning";
               return (
                 <div
@@ -431,12 +443,12 @@ export default function IntradayMonitor() {
             <Activity className="h-5 w-5 text-primary" />
             <h3 className="text-lg font-bold text-primary">交易信号</h3>
             <Badge variant="primary" className="ml-auto">
-              {data.signals.length}
+              {(data.signals ?? []).length}
             </Badge>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {data.signals.map((signal, idx) => {
+              {(data.signals ?? []).map((signal, idx) => {
               const typeKey = signal.signal_type?.toLowerCase() ?? signal.type?.toLowerCase() ?? "";
               const color = SIGNAL_TYPE_COLORS[typeKey] ?? "info";
               return (
@@ -481,12 +493,12 @@ export default function IntradayMonitor() {
             <TrendingUp className="h-5 w-5 text-success" />
             <h3 className="text-lg font-bold text-success">仓位调整</h3>
             <Badge variant="success" className="ml-auto">
-              {data.adjustments.length}
+              {(data.adjustments ?? []).length}
             </Badge>
           </div>
 
           <div className="divide-y divide-border/30">
-            {data.adjustments.map((adj, idx) => {
+              {(data.adjustments ?? []).map((adj, idx) => {
               const norm = normalizeAction(adj.action);
               const badgeVar = ACTION_BADGE_MAP[norm] ?? "default";
               const Icon = ACTION_ICON_MAP[norm] ?? Minus;

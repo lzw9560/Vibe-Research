@@ -5,6 +5,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
+import { getPostMarketReview } from "@/lib/api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,8 @@ interface SettlementItem {
   won?: boolean;
   strategy_used?: string;
   type?: string;
+  result?: string;
+  [key: string]: unknown;
 }
 
 interface AdjustmentItem {
@@ -27,16 +30,24 @@ interface AdjustmentItem {
   type?: string;
   action?: string;
   reason?: string;
+  [key: string]: unknown;
 }
 
 interface PostMarketReport {
-  date: string;
-  generated_at: string;
-  settlements: SettlementItem[];
-  win_rate: number;
-  total_return: number;
-  adjustments: AdjustmentItem[];
+  date?: string;
+  generated_at?: string;
+  total_trades?: number;
+  win_count?: number;
+  loss_count?: number;
+  win_rate?: number;
+  total_return?: number;
+  avg_return?: number;
+  max_drawdown?: number;
+  settlements?: SettlementItem[];
+  adjustments?: AdjustmentItem[];
   daily_returns?: { date: string; return: number }[];
+  updated?: string;
+  disclaimer?: string;
 }
 
 type SortDirection = "asc" | "desc";
@@ -272,10 +283,8 @@ export default function PostMarketReview() {
   const loadData = async () => {
     try {
       setError(null);
-      const resp = await fetch(`/api/workflow/post-market?date=${selectedDate}`);
-      const data = await resp.json();
-      const payload = data?.data ?? data;
-      setReport(payload as PostMarketReport);
+      const payload = await getPostMarketReview(selectedDate);
+      setReport(payload as PostMarketReport | null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
@@ -356,10 +365,10 @@ export default function PostMarketReview() {
     );
   }
 
-  const totalTrades = report.settlements.length;
-  const winRate = report.win_rate;
-  const totalReturn = report.total_return;
-  const profitCount = report.settlements.filter((s) => s.won).length;
+  const totalTrades = (report.settlements ?? []).length;
+  const winRate = report.win_rate ?? 0;
+  const totalReturn = report.total_return ?? 0;
+  const profitCount = (report.settlements ?? []).filter((s) => s.won).length;
   const lossCount = totalTrades - profitCount;
 
   return (
@@ -367,7 +376,7 @@ export default function PostMarketReview() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader
         title="盘后复盘"
-        subtitle={`${report.date} · 生成于 ${report.generated_at}`}
+        subtitle={`${report.date ?? ""} · 生成于 ${report.generated_at ?? ""}`}
         actions={
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center gap-1.5 rounded-lg bg-muted/20 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted/30 transition-colors cursor-pointer">

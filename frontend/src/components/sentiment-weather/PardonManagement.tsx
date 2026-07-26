@@ -19,7 +19,7 @@ export function PardonManagement({ isAdmin, onUpdate }: PardonManagementProps) {
     setLoading(true);
     try {
       const data = await api.sentimentWeatherPardon();
-      setRecords(data.data.pardon_records);
+      setRecords((data as any).pardon_records ?? []);
     } catch (e) {
       console.error("Failed to load pardon records:", e);
     } finally {

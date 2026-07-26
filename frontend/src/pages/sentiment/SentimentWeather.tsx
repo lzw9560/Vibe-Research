@@ -56,9 +56,9 @@ export default function SentimentWeather() {
       setStrategy(strategyData as StrategyRecommendation);
       setFuseRules(fuseData as unknown as { rules: FuseRule[]; updated_at: string });
       setTimeline(timelineData as unknown as { timeline: WeatherTimelineItem[]; stats: WeatherStats });
-      setAuctionMetrics(auctionData.data as { auction_metrics: AuctionMetric[]; phase: string });
-      setSealRiskMetrics(sealRiskData.data as { seal_risk_metrics: SealRiskMetric[] });
-      setPardonData(pardonRecordsData.data as { pardon_records: FusePardonRecord[]; is_admin: boolean });
+      setAuctionMetrics(auctionData as unknown as { auction_metrics: AuctionMetric[]; phase: string });
+      setSealRiskMetrics(sealRiskData as unknown as { seal_risk_metrics: SealRiskMetric[] });
+      setPardonData(pardonRecordsData as unknown as { pardon_records: FusePardonRecord[]; is_admin: boolean });
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
@@ -168,7 +168,7 @@ export default function SentimentWeather() {
             <GlassCard className="p-5">
               <h3 className="text-sm font-medium text-foreground mb-3">今日策略建议</h3>
               <div className="space-y-2">
-                {strategy?.strategies.map((s) => (
+                {strategy?.strategies?.map((s) => (
                   <div
                     key={s.style}
                     className={`p-3 rounded-lg border ${
@@ -188,7 +188,7 @@ export default function SentimentWeather() {
                     </div>
                     <p className="text-xs text-foreground/60 mb-2">{s.description}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {s.conditions.map((c, i) => (
+                      {s.conditions?.map((c, i) => (
                         <span key={i} className="text-[10px] text-foreground/40 bg-foreground/5 px-1.5 py-0.5 rounded">
                           {c}
                         </span>
@@ -226,7 +226,7 @@ export default function SentimentWeather() {
                 isAdmin={pardonData.is_admin}
                 onUpdate={async () => {
                   const data = await api.sentimentWeatherPardon();
-                  setPardonData(data.data);
+                  setPardonData(data as unknown as { pardon_records: FusePardonRecord[]; is_admin: boolean });
                 }}
               />
             )}

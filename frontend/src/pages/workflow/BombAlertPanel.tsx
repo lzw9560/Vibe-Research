@@ -1,3 +1,4 @@
+import type { HandledAlert } from "@/lib/api";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -15,6 +16,7 @@ import {
   ChevronUp,
   History,
 } from "lucide-react";
+import { getBombAlerts } from "@/lib/api";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -27,10 +29,7 @@ interface BombAlert {
   current_seal_amount: number;
   seal_amount_change_5min: number;
   recommendation: string;
-}
-
-interface HandledAlert extends BombAlert {
-  handledAt: string; // ISO timestamp when user clicked "Handle"
+  [key: string]: unknown;
 }
 
 type AlertFilter = "all" | "red" | "yellow";
@@ -93,10 +92,18 @@ export default function BombAlertPanel() {
   const loadData = useCallback(async () => {
     try {
       setError(null);
-      const resp = await fetch("/api/workflow/alerts");
-      const data = await resp.json();
-      const payload = (data as { data?: BombAlert[] })?.data ?? data;
-      setAlerts(Array.isArray(payload) ? (payload as BombAlert[]) : []);
+      const raw = await getBombAlerts();
+      const items: BombAlert[] = (raw ?? []).map((a) => ({
+        timestamp: a.timestamp,
+        code: a.code,
+        name: a.name,
+        alert_level: a.alert_level === "orange" || a.alert_level === "blue" ? "yellow" : a.alert_level,
+        condition: a.condition ?? "",
+        current_seal_amount: a.current_seal_amount ?? 0,
+        seal_amount_change_5min: a.seal_amount_change_5min ?? 0,
+        recommendation: a.recommendation ?? "",
+      }));
+      setAlerts(items);
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
