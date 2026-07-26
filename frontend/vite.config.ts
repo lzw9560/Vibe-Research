@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
       alias: { "@": path.resolve(__dirname, "./src") },
     },
     server: {
+      host: "0.0.0.0",
       port: 5899,
       allowedHosts: ["research.myassi.eu.cc"],
       proxy: {
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      sourcemap: true,
       chunkSizeWarningLimit: 1500,
       rollupOptions: {
         output: {

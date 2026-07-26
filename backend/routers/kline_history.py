@@ -18,6 +18,29 @@ def _get_kline_db() -> sqlite3.Connection:
     return conn
 
 
+@router.get("/api/kline-history/stats")
+def kline_stats() -> Dict[str, Any]:
+    """获取历史K线数据的统计信息。"""
+    try:
+        with _DB_LOCK:
+            conn = _get_kline_db()
+            stats = conn.execute(
+                "SELECT COUNT(DISTINCT code) as stocks, MIN(date) as first_date, "
+                "MAX(date) as last_date, COUNT(*) as total_records "
+                "FROM kline WHERE open > 0"
+            ).fetchone()
+            result = {
+                "stocks": stats["stocks"],
+                "first_date": stats["first_date"],
+                "last_date": stats["last_date"],
+                "total_records": stats["total_records"],
+            }
+            conn.close()
+            return {"data": result}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"统计查询异常: {e}") from e
+
+
 @router.get("/api/kline-history/{code}")
 def kline_history(
     code: str = Path(..., description="6位股票代码"),
@@ -47,7 +70,21 @@ def kline_history(
             conn.close()
 
             if not data:
-                return {"data": [], "code": code, "count": 0}
+                # 如果本地没有数据，尝试异步触发一次拉取
+                import threading
+                def _try_sync():
+                    try:
+                        from kline_sync import main as sync_main
+                        import sys
+                        # 临时替换 argv 避免 argparse 报错
+                        old_argv = sys.argv
+                        sys.argv = ["kline_sync", "--codes", code]
+                        sync_main()
+                        sys.argv = old_argv
+                    except Exception:
+                        pass
+                threading.Thread(target=_try_sync, daemon=True).start()
+                return {"data": [], "code": code, "count": 0, "syncing": True}
 
             return {
                 "data": data,
@@ -57,29 +94,6 @@ def kline_history(
             }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"历史K线查询异常: {e}") from e
-
-
-@router.get("/api/kline-history/stats")
-def kline_stats() -> Dict[str, Any]:
-    """获取历史K线数据的统计信息。"""
-    try:
-        with _DB_LOCK:
-            conn = _get_kline_db()
-            stats = conn.execute(
-                "SELECT COUNT(DISTINCT code) as stocks, MIN(date) as first_date, "
-                "MAX(date) as last_date, COUNT(*) as total_records "
-                "FROM kline WHERE open > 0"
-            ).fetchone()
-            conn.close()
-
-            return {
-                "stocks": stats["stocks"],
-                "first_date": stats["first_date"],
-                "last_date": stats["last_date"],
-                "total_records": stats["total_records"],
-            }
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"统计查询异常: {e}") from e
 
 
 __all__ = ["router"]

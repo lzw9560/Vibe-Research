@@ -637,6 +637,16 @@ export interface SectorHeatItem {
   avg_change: number;
 }
 
+export interface AuctionTopItem {
+  code?: string;
+  name?: string;
+  score?: number;
+  rating?: number;
+  signal?: string;
+  note?: string;
+  [key: string]: unknown;
+}
+
 export interface DailyReviewReport {
   date: string;
   sti_score: number | null;
@@ -650,7 +660,7 @@ export interface DailyReviewReport {
   sector_heat: SectorHeatItem[];
   zt_stocks: ZTStockSummary[];
   prev_zt_stats: Record<string, number>;
-  auction_top: Record<string, unknown>[];
+  auction_top: AuctionTopItem[];
   updated: string;
   disclaimer: string;
 }
@@ -711,6 +721,165 @@ export interface LlmEnvStatus {
   has_env_base_url: boolean;
   has_env_api_key: boolean;
   has_env_model: boolean;
+}
+
+// ---- 打板工作流类型 ----
+
+// PreMarketBriefing
+export interface PreMarketCandidate {
+  code: string;
+  name: string;
+  price?: number;
+  change_pct?: number;
+  score?: number;
+  [key: string]: unknown;
+}
+
+export interface PreMarketStrategyMatch {
+  strategy_name?: string;
+  style?: string;
+  match_score?: number;
+  confidence?: number;
+  description?: string;
+  entry_condition?: string;
+  [key: string]: unknown;
+}
+
+export interface PositionSuggestion {
+  code?: string;
+  name?: string;
+  suggested_weight?: number;
+  weight?: number;
+  reason?: string;
+  action?: string;
+  position_pct?: number;
+  [key: string]: unknown;
+}
+
+export interface PreMarketReport {
+  date?: string;
+  generated_at?: string;
+  sentiment_index?: number;
+  sentiment_phase?: string;
+  candidates?: PreMarketCandidate[];
+  strong_candidates?: PreMarketCandidate[];
+  filtered_out?: PreMarketCandidate[];
+  strategy_matches?: PreMarketStrategyMatch[];
+  position_suggestions?: PositionSuggestion[];
+  total_suggested_position?: number;
+  warnings?: string[];
+  risk_warnings?: string[];
+  updated?: string;
+  disclaimer?: string;
+}
+
+// IntradayMonitor
+export interface TradingSignal {
+  code: string;
+  name?: string;
+  signal_type?: string;
+  type?: string;
+  reasoning?: string | string[];
+  description?: string;
+  time?: string;
+  [key: string]: unknown;
+}
+
+export interface BombAlertItem {
+  timestamp: string;
+  code: string;
+  name: string;
+  alert_level: "red" | "yellow" | "orange" | "blue";
+  condition: string;
+  current_seal_amount: number;
+  seal_amount_change_5min: number;
+  recommendation: string;
+  [key: string]: unknown;
+}
+
+export interface PositionAdjustment {
+  code: string;
+  name?: string;
+  action: "add" | "reduce" | "close" | "hold" | string;
+  reason?: string;
+  priority?: number;
+  time?: string;
+  [key: string]: unknown;
+}
+
+export interface IntradayData {
+  date?: string;
+  signals?: TradingSignal[];
+  alerts?: BombAlertItem[];
+  adjustments?: PositionAdjustment[];
+  updated?: string;
+  market_status?: {
+    status: string;
+    phase: string;
+  };
+}
+
+// BombAlertPanel (extends IntradayMonitor types)
+export interface HandledAlert extends BombAlertItem {
+  handledAt: string;
+}
+
+// PostMarketReview
+export interface SettlementTrade {
+  code: string;
+  name: string;
+  buy_price?: number | string;
+  sell_price?: number | string;
+  entry_price?: number | string;
+  exit_price?: number | string;
+  hold_days?: number;
+  return_pct?: number;
+  won?: boolean;
+  strategy_used?: string;
+  type?: string;
+  result?: string;
+  [key: string]: unknown;
+}
+
+export interface StrategyAdjustment {
+  strategy?: string;
+  type?: string;
+  action?: string;
+  reason?: string;
+  [key: string]: unknown;
+}
+
+export interface DailyReturnPoint {
+  date: string;
+  return_pct: number;
+  return?: number; // alias for compatibility
+  cumulative?: number;
+}
+
+export interface PostMarketReport {
+  date?: string;
+  generated_at?: string;
+  total_trades?: number;
+  win_count?: number;
+  loss_count?: number;
+  win_rate?: number;
+  total_return?: number;
+  avg_return?: number;
+  max_drawdown?: number;
+  settlements?: SettlementTrade[];
+  adjustments?: StrategyAdjustment[];
+  daily_returns?: DailyReturnPoint[];
+  updated?: string;
+  disclaimer?: string;
+}
+
+export interface WorkflowStatus {
+  current_stage?: string;
+  sentiment_index?: number;
+  candidate_pool_count?: number;
+  active_signals?: number;
+  today_win_rate?: number;
+  [key: string]: unknown;
 }
 
 export interface ScheduledTask {
@@ -853,6 +1022,56 @@ export async function saveReviewParams(params: ReviewParams): Promise<void> {
     body: JSON.stringify(params),
   });
   if (!res.ok) throw new ApiError(`Failed to save review params: ${res.statusText}`, res.status);
+}
+
+// Workflow status
+export async function getWorkflowStatus(): Promise<WorkflowStatus | null> {
+  try {
+    const res = await fetch("/api/workflow/status");
+    if (!res.ok) return null;
+    return res.json();
+  } catch { return null; }
+}
+
+// Pre-market briefing
+export async function getPreMarketBriefing(): Promise<PreMarketReport | null> {
+  try {
+    const res = await fetch("/api/workflow/pre-market");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.data ?? data ?? null;
+  } catch { return null; }
+}
+
+// Intraday monitor
+export async function getIntradayData(): Promise<IntradayData | null> {
+  try {
+    const res = await fetch("/api/workflow/intraday");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.data ?? data ?? null;
+  } catch { return null; }
+}
+
+// Bomb alerts (same endpoint as intraday/alerts but returns array)
+export async function getBombAlerts(): Promise<BombAlertItem[] | null> {
+  try {
+    const res = await fetch("/api/workflow/alerts");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data?.alerts ?? data?.data ?? null);
+  } catch { return null; }
+}
+
+// Post-market review
+export async function getPostMarketReview(date?: string): Promise<PostMarketReport | null> {
+  try {
+    const url = date ? `/api/workflow/post-market?date=${date}` : "/api/workflow/post-market";
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.data ?? data ?? null;
+  } catch { return null; }
 }
 
 export const api = {

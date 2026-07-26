@@ -1,5 +1,5 @@
 import {
-  Cog, Cpu, Database, Cable, Rocket, FlaskConical, Clock, TrendingUp, BarChart3,
+  Cog, Cpu, Database, Cable, Rocket, FlaskConical,
 } from "lucide-react";
 
 export interface NavGroup {
@@ -34,56 +34,6 @@ export const THEMES = [
 export const APP_VERSION = "v0.1.3";
 export const REPO_URL = "https://github.com/simonlin1212/Vibe-Research";
 export const CONTACT_HANDLE = "lzw9560";
-
-// 打板工作流阶段配置
-export const WORKFLOW_STAGES = [
-  {
-    key: "pre-market" as const,
-    label: "盘前简报",
-    timeRange: "08:00 - 09:30",
-    icon: Clock,
-    color: "text-blue-400",
-    bg: "bg-blue-500/10 border-blue-500/30",
-    description: "候选池筛选 → 战法匹配 → 仓位建议",
-    steps: ["候选池筛选", "战法匹配", "仓位建议", "推送准备"],
-    quickLinks: [
-      { to: "/workflow/pre-market", label: "盘前简报" },
-      { to: "/limitup/gene", label: "基因选股" },
-      { to: "/limitup/auction", label: "竞价预案" },
-    ],
-  },
-  {
-    key: "intraday" as const,
-    label: "盘中监控",
-    timeRange: "09:30 - 15:00",
-    icon: TrendingUp,
-    color: "text-green-400",
-    bg: "bg-green-500/10 border-green-500/30",
-    description: "实时监控 → 炸板预警 → 动态调仓",
-    steps: ["实时监控", "炸板预警", "动态调仓", "止盈止损"],
-    quickLinks: [
-      { to: "/workflow/intraday", label: "盘中监控" },
-      { to: "/workflow/alerts", label: "炸板预警" },
-      { to: "/sentiment/weather", label: "情绪气象" },
-      { to: "/limitup/seats", label: "席位引擎" },
-    ],
-  },
-  {
-    key: "post-market" as const,
-    label: "盘后复盘",
-    timeRange: "15:00 - 22:00",
-    icon: BarChart3,
-    color: "text-purple-400",
-    bg: "bg-purple-500/10 border-purple-500/30",
-    description: "自动结算 → LLM复盘 → 胜率更新",
-    steps: ["自动结算", "LLM复盘", "胜率更新", "参数优化"],
-    quickLinks: [
-      { to: "/workflow/post-market", label: "盘后复盘" },
-      { to: "/daily-review", label: "每日复盘" },
-      { to: "/metrics", label: "性能监控" },
-    ],
-  },
-];
 
 // 移动端次级 Tab 配置（按路径前缀匹配）
 export const SUB_TABS: Record<string, { key: string; label: string; to?: string }[]> = {
