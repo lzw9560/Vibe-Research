@@ -55,7 +55,7 @@ export const aiModels: ModelConfig[] = [
   { id: "qwen-code", name: "Qwen Code", description: "通义 Qwen Code 订阅", provider: "cli-qwen" },
   { id: "deepseek-cli", name: "DeepSeek CLI", description: "DeepSeek 本机 CLI 订阅", provider: "cli-deepseek" },
   { id: "codex", name: "Codex", description: "OpenAI Codex 订阅（需 codex login 登录）", provider: "cli-codex" },
-  { id: "opencode", name: "OpenCode", description: "OpenCode 订阅", provider: "cli-opencode", comingSoon: true },
+  { id: "opencode", name: "OpenCode", description: "OpenCode 订阅", provider: "cli-opencode" },
   { id: "cursor-agent", name: "Cursor Agent", description: "Cursor Agent 订阅", provider: "cli-cursor", comingSoon: true },
   { id: "kimi", name: "Kimi", description: "Kimi 订阅", provider: "cli-kimi", comingSoon: true },
   // —— API 版（填自己的 key）——

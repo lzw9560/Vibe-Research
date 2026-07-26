@@ -26,7 +26,16 @@ _CLI_DEFS: dict[str, dict] = {
     "claude": {
         "bins": ["claude", "openclaude"],
         "delivery": "system-file",
-        # -p 非交互、纯文本输出、系统提示词走文件；禁掉所有工具（只让它把问题答成文字，不读文件/联网/执行）
+        "build_args": lambda sys_file: [
+            "-p", "--output-format", "text", "--system-prompt-file", sys_file,
+            "--disallowedTools", "Read", "Write", "Edit", "Glob", "Grep", "Bash",
+            "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite", "Task",
+        ],
+        "env": {},
+    },
+    "opencode": {
+        "bins": ["opencode"],
+        "delivery": "system-file",
         "build_args": lambda sys_file: [
             "-p", "--output-format", "text", "--system-prompt-file", sys_file,
             "--disallowedTools", "Read", "Write", "Edit", "Glob", "Grep", "Bash",
@@ -35,12 +44,8 @@ _CLI_DEFS: dict[str, dict] = {
         "env": {},
     },
     "qwen": {"bins": ["qwen"], "delivery": "stdin", "build_args": lambda _: ["--yolo"], "env": {}},
-    # 注：Gemini CLI 已停止对个人版 Gemini Code Assist 的支持（登录报 "This client is no
-    # longer supported for Gemini Code Assist for individuals"），故已从订阅接入中移除。
     "deepseek": {"bins": ["deepseek", "codewhale"], "delivery": "arg",
                  "build_args": lambda _: ["exec", "--auto"], "env": {}},
-    # Codex：codex exec 默认纯文本（进度走 stderr、最终答案走 stdout）；`-` 从 stdin 读提示词，
-    # --skip-git-repo-check 跳过 git 检查（我们在临时目录跑）。复用本机 `codex login` 的订阅登录态。
     "codex": {"bins": ["codex"], "delivery": "stdin",
               "build_args": lambda _: ["exec", "--skip-git-repo-check", "-"], "env": {}},
 }
