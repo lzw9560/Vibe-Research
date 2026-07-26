@@ -24,23 +24,6 @@ import gstock
 MAX_ROUNDS = 6  # 工具调用最大轮数，防死循环
 _TOOL_RESULT_CAP = 6000  # 单次工具结果注入上限（控 token）
 
-# 后端 LLM 环境变量兜底（前端未配置时使用）
-_ENV_LLM_BASE_URL = os.environ.get("VR_LLM_BASE_URL", "").strip()
-_ENV_LLM_API_KEY = os.environ.get("VR_LLM_API_KEY", "").strip()
-_ENV_LLM_MODEL = os.environ.get("VR_LLM_MODEL", "").strip()
-
-
-def _get_env_llm_config() -> dict:
-    """从环境变量读取 LLM 配置（仅作兜底，前端配置优先）。"""
-    cfg: dict = {}
-    if _ENV_LLM_BASE_URL:
-        cfg["baseURL"] = _ENV_LLM_BASE_URL
-    if _ENV_LLM_API_KEY:
-        cfg["apiKey"] = _ENV_LLM_API_KEY
-    if _ENV_LLM_MODEL:
-        cfg["model"] = _ENV_LLM_MODEL
-    return cfg
-
 # 投研分析框架：用户要「分析个股 / 给判断 / 下结论」时，AI 一律按这五维组织，
 # 让弱模型也能输出结构化、覆盖全、不漏项的专业解读。焊进 SYSTEM_PROMPT，不做成 UI 选项——
 # 用户就问，给出的就是这套框架的结论。合规：框架只规定「怎么读数据」，每维只陈述事实与相对位置，
@@ -68,6 +51,20 @@ A 股用 query_quote / query_valuation / query_reports / query_news（传 6 位�
 - 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
 - 需要数据时先调工具拿客观数据，再基于数据回答；不要编造数字。
 - 涉及个股时用工具查到的真实数据；讲清多空两面与风险，让用户自己判断。
+- 用简洁中文回答。
+
+{ANALYSIS_FRAMEWORK}
+
+当前页面上下文：
+{{context}}"""
+
+# 对不支持 function calling 的模型使用的精简版 system prompt（不提及工具）。
+SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
+
+硬性规则（务必遵守）：
+- 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
+- 基于用户提供的客观数据回答；不要编造数字。
+- 涉及个股时用提供的真实数据；讲清多空两面与风险，让用户自己判断。
 - 用简洁中文回答。
 
 {ANALYSIS_FRAMEWORK}
@@ -247,25 +244,6 @@ def run_chat(cfg: dict, user_messages: list, context: str = "") -> dict:
     user_messages: [{role, content}, ...]
     返回: {content, trace:[{tool,args}], rounds}
     """
-    # OmniRoute 托底通道：如果启用且可达，先尝试通过 OmniRoute 路由
-    if cfg.get("use_omniroute"):
-        from omniroute_client import call_via_omniroute, OMNIRoute_MODEL
-        no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
-        sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
-        messages = [{"role": "system", "content": sys_prompt}]
-        messages.extend(user_messages)
-        result = call_via_omniroute(
-            messages,
-            model=cfg.get("omniroute_model", OMNIRoute_MODEL),
-            use_tools=not no_tools_cfg,
-            tools=TOOLS if not no_tools_cfg else None,
-        )
-        if result is not None:
-            choice = result["choices"][0]["message"]
-            content = choice.get("content") or ""
-            # OmniRoute 不支持 function calling，直接返回答案
-            return {"content": content, "trace": [], "rounds": 1}
-
     # Agnes 等不支持 function calling 的模型：用精简 prompt，跳过工具调用
     no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
     sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
@@ -377,29 +355,6 @@ def _iter_sse_deltas(resp):
 
 def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
     """API 接入流式：function-calling 循环，边流答案边推工具调用事件。"""
-    # OmniRoute 托底通道（流式）
-    if cfg.get("use_omniroute"):
-        from omniroute_client import call_via_omniroute, OMNIRoute_MODEL
-        no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
-        sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
-        messages = [{"role": "system", "content": sys_prompt}]
-        messages.extend(user_messages)
-        result = call_via_omniroute(
-            messages,
-            model=cfg.get("omniroute_model", OMNIRoute_MODEL),
-            use_tools=not no_tools_cfg,
-            tools=TOOLS if not no_tools_cfg else None,
-            stream=True,
-        )
-        if result is not None:
-            # 非 function-calling 模式：一次性拿完再吐
-            text = result["choices"][0]["message"].get("content") or ""
-            chunk_size = 4
-            for i in range(0, len(text), chunk_size):
-                yield {"type": "delta", "text": text[i:i+chunk_size]}
-            yield {"type": "done", "trace": [], "rounds": 1}
-            return
-
     no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
     sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
     messages = [{"role": "system", "content": sys_prompt}]
