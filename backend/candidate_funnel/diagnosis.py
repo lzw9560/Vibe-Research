@@ -1,0 +1,173 @@
+# -*- coding: utf-8 -*-
+"""诊断卡聚合（S002 阶段 C）。
+
+assess_activity: 规则可复现的活跃度分档（spec §5.2）。
+build_diagnosis_card: 聚合六类指标 → DiagnosisCard（AC4）；missing 透明（AC6）。
+合规：不含方向结论词（AC10）。
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from candidate_funnel.models import (
+    ActivityAssessment,
+    ActivityTier,
+    Announcement,
+    BaseThreshold,
+    DiagnosisCard,
+    IndicatorSet,
+    StabilizationSignals,
+)
+
+
+def assess_activity(ind: IndicatorSet, eff: BaseThreshold) -> ActivityAssessment:
+    """规则可复现的活跃度分档（换手/量比/成交额/振幅），不引入方向判断。
+
+    同输入两次结果一致（AC5）。rules_applied 记命中规则。
+    """
+    rules: list[str] = []
+    t = ind.turnover_pct
+    if t is None:
+        tier = ActivityTier.COLD
+        rules.append("换手未取得")
+    elif t >= eff.turnover_hot:
+        tier = ActivityTier.HOT
+        rules.append(f"换手>={eff.turnover_hot}%")
+    elif t >= eff.turnover_cold:
+        tier = ActivityTier.ACTIVE
+        rules.append(f"换手>={eff.turnover_cold}%")
+    else:
+        tier = ActivityTier.COLD
+        rules.append(f"换手<{eff.turnover_cold}%")
+
+    if ind.vol_ratio is not None and ind.vol_ratio >= eff.vol_ratio_active:
+        rules.append(f"量比>={eff.vol_ratio_active}")
+    if ind.amount_yi is not None and ind.amount_yi >= eff.amount_yi_min:
+        rules.append(f"成交额>={eff.amount_yi_min}亿")
+    if ind.amplitude_pct is not None and ind.amplitude_pct >= eff.amplitude_high:
+        rules.append(f"振幅>={eff.amplitude_high}%")
+
+    return ActivityAssessment(tier=tier, rules_applied=rules)
+
+
+def detect_stabilization(ind: IndicatorSet, market_ctx: dict | None) -> StabilizationSignals:
+    """企稳四信号命中判定（C2），evidence 记依据。
+
+    market_ctx 约定字段（市场级，任一缺失则对应信号为 None）：
+      dt_count/prev_dt_count、volume/prev_volume、main_flow/prev_main_flow、
+      max_boards/prev_max_boards。
+    """
+    ctx = market_ctx or {}
+    evidence: dict[str, str] = {}
+    s = StabilizationSignals()
+
+    # 跌停家数减少
+    dt, prev_dt = ctx.get("dt_count"), ctx.get("prev_dt_count")
+    if dt is not None and prev_dt is not None:
+        s.fewer_limit_downs = dt < prev_dt
+        evidence["fewer_limit_downs"] = f"跌停 {dt} < 前值 {prev_dt}"
+    else:
+        evidence["fewer_limit_downs"] = "跌停序列未取得"
+
+    # 量能止跌（不再下降）
+    vol, prev_vol = ctx.get("volume"), ctx.get("prev_volume")
+    if vol is not None and prev_vol is not None:
+        s.volume_stop_falling = vol >= prev_vol
+        evidence["volume_stop_falling"] = f"量能 {vol} >= 前值 {prev_vol}"
+    else:
+        evidence["volume_stop_falling"] = "量能序列未取得"
+
+    # 主力净流转正
+    mf, prev_mf = ctx.get("main_flow"), ctx.get("prev_main_flow")
+    if mf is not None and prev_mf is not None:
+        s.main_flow_turning_positive = mf > 0 and prev_mf <= 0
+        evidence["main_flow_turning_positive"] = f"主力 {mf}，前值 {prev_mf}"
+    else:
+        evidence["main_flow_turning_positive"] = "主力净流序列未取得"
+
+    # 连板高度上升
+    mb, prev_mb = ctx.get("max_boards"), ctx.get("prev_max_boards")
+    if mb is not None and prev_mb is not None:
+        s.board_height_rising = mb > prev_mb
+        evidence["board_height_rising"] = f"最高连板 {mb} > 前值 {prev_mb}"
+    else:
+        evidence["board_height_rising"] = "连板高度序列未取得"
+
+    s.evidence = evidence
+    return s
+
+
+def build_indicator_set(
+    code: str,
+    name: str,
+    genes: dict[str, dict],
+    activity: dict[str, dict],
+    fund: dict[str, dict],
+    auction: dict[str, dict],
+    catalyst: dict[str, dict],
+    board: dict,
+) -> IndicatorSet:
+    """合并各 source 片段 → IndicatorSet；取不到的字段留 None 并记入 missing（AC6）。"""
+    ind = IndicatorSet(code=code, name=name)
+    a = activity.get(code, {})
+    ind.price = a.get("price")
+    ind.change_pct = a.get("change_pct")
+    ind.turnover_pct = a.get("turnover_pct")
+    ind.vol_ratio = a.get("vol_ratio")
+    ind.amount_yi = a.get("amount_yi")
+    ind.amplitude_pct = a.get("amplitude_pct")
+    ind.limit_up = a.get("limit_up")
+    ind.limit_down = a.get("limit_down")
+
+    f = fund.get(code, {})
+    ind.main_net_inflow = f.get("main_net_inflow")
+    ind.main_net_5d = f.get("main_net_5d")
+    ind.dragon_tiger_inst_net = f.get("dragon_tiger_inst_net")
+    ind.northbound = f.get("northbound")
+
+    au = auction.get(code, {})
+    ind.auction_open_pct = au.get("auction_open_pct")
+
+    ca = catalyst.get(code, {})
+    ind.concepts = ca.get("concepts") or []
+    ind.sector_flow = ca.get("sector_flow")
+    anns = ca.get("announcements") or []
+    ind.announcements = [
+        Announcement(**x) if isinstance(x, dict) else x for x in anns
+    ]
+
+    for s in (board or {}).get("lianban_stocks", []):
+        if isinstance(s, dict) and s.get("code") == code:
+            ind.consec_boards = s.get("boards")
+            break
+
+    for src in (a, f, au, ca):
+        m = (src or {}).get("missing")
+        if isinstance(m, dict):
+            ind.missing.update(m)
+    return ind
+
+
+def build_diagnosis_card(
+    code: str,
+    name: str,
+    ind: IndicatorSet,
+    eff: BaseThreshold,
+    market_ctx: dict | None = None,
+    as_of: datetime | None = None,
+) -> DiagnosisCard:
+    """聚合 → DiagnosisCard（AC4）。risk_flags 为客观标注（AC8/§8 极端估值）。"""
+    activity = assess_activity(ind, eff)
+    stabilization = detect_stabilization(ind, market_ctx)
+    risk_flags: list[str] = []
+    return DiagnosisCard(
+        code=code,
+        name=name,
+        indicators=ind,
+        activity=activity,
+        stabilization=stabilization,
+        risk_flags=risk_flags,
+        as_of=as_of or datetime.now(),
+    )
