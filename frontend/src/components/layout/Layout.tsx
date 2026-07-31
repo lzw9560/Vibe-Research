@@ -5,7 +5,7 @@ import {
   Moon, Sun, ChevronsLeft, ChevronsRight, LineChart, Github, UserRound,
   Cog, Cpu, Database, Cable, Rocket, FlaskConical, Star, FileText, Flame,
   Menu, Target, Zap, Shield, History, Cloud, BarChart3, HeartPulse, Calendar, Building2,
-  Dna, Gavel, Car, Filter, TrendingUp,
+  Dna, Gavel, Car, Filter, TrendingUp, Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -27,6 +27,7 @@ const NAV = [
   { to: "/strategy-signals", icon: Zap, label: "策略信号" },
   { to: "/risk-dashboard", icon: Shield, label: "风险看板" },
   { to: "/sector-divergence", icon: BarChart3, label: "板块分化度" },
+  { to: "/prediction", icon: Gauge, label: "预测工作台" },
   { to: "/backtest", icon: History, label: "回测验证" },
   { to: "/sentiment/weather", icon: Cloud, label: "情绪天气" },
   { to: "/workflow", icon: LineChart, label: "打板工作流" },

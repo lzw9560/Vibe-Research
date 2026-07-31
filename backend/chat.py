@@ -149,6 +149,29 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "prediction_short_sector",
+            "description": "查短线板块预测级联快照（S1/S2/S3 阶段概率）。研究参考性判断，非投资建议。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "stage": {"type": "string", "enum": ["s1", "s2", "s3"], "description": "级联阶段：s1=T-1收盘后/s2=T开盘前/s3=T竞价"},
+                    "date": {"type": "string", "description": "交易日期 YYYY-MM-DD，默认今日"},
+                },
+                "required": ["stage"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prediction_intraday_framework",
+            "description": "查盘中教育性研判框架（S4 看什么/怎么判）：量比/分时量价/封板资金/龙头属性。教育参考，非信号、非交易指令。",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 
@@ -168,6 +191,15 @@ def _exec_tool(name: str, args: dict):
         if name == "query_global_stock":
             data = gstock.us_hk_stock(str(args.get("symbol", "")))
             return data or {"error": "未找到该美股/港股/韩股代码"}
+        if name == "prediction_short_sector":
+            from routers.prediction import prediction_payload
+            stage = str(args.get("stage", "s1"))
+            if stage not in ("s1", "s2", "s3"):
+                return {"error": "stage must be one of s1|s2|s3"}
+            return prediction_payload("short_sector", stage, args.get("date"))
+        if name == "prediction_intraday_framework":
+            from routers.prediction import intraday_framework_payload
+            return intraday_framework_payload("short_sector")
         return {"error": f"未知工具 {name}"}
     except astock.DependencyMissing as e:
         return {"error": str(e)}

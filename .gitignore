@@ -45,3 +45,6 @@ frontend/tsconfig.tsbuildinfo
 *.stackdump
 .playwright-mcp/
 candidates-smoke.png
+
+# 项目内私有数据根（API key/持仓/研报，绝不进 git）
+.vibe-research/

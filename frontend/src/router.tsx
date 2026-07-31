@@ -32,6 +32,7 @@ import IntradayMonitor from "@/pages/workflow/IntradayMonitor";
 import BombAlertPanel from "@/pages/workflow/BombAlertPanel";
 import PostMarketReview from "@/pages/workflow/PostMarketReview";
 import SectorDivergence from "@/pages/SectorDivergence";
+import { Prediction } from "@/pages/Prediction";
 
 export const router = createBrowserRouter([
   {
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
       { path: "/workflow/alerts", element: <BombAlertPanel /> },
       { path: "/workflow/post-market", element: <PostMarketReview /> },
       { path: "/sector-divergence", element: <SectorDivergence /> },
+      { path: "/prediction", element: <Prediction /> },
       { path: "/metrics", element: <Metrics /> },
       { path: "/health", element: <Health /> },
       { path: "/scheduled-tasks", element: <ScheduledTasks /> },

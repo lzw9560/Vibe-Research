@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 from predict.features.registry import FeatureSpec, Registry
+from vr_paths import resolve_data_dir
 
 # ── Module-level immutable spec declarations ────────────────────────
 
@@ -63,12 +64,10 @@ def get_fred_api_key() -> str | None:
     """Read Fred API key from ``$VR_DATA_DIR/fred_api_key``.
 
     Returns ``None`` if the env var is unset or the file is absent.
-    The key is never printed or logged.
+    The key is never printed or logged. 默认项目内 .vibe-research/
+    （vr_paths，gitignored；旧版 ~/.vibe-research/）。
     """
-    data_dir = os.environ.get("VR_DATA_DIR")
-    if not data_dir:
-        data_dir = str(Path.home() / ".vibe-research")
-    key_file = Path(data_dir) / "fred_api_key"
+    key_file = resolve_data_dir() / "fred_api_key"
     if not key_file.is_file():
         return None
     try:

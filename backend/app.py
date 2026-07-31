@@ -40,7 +40,7 @@ from scheduler import start_limitup_scheduler, start_portfolio_scheduler
 
 # Router imports
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
-from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks
+from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction
 try:
     from routers import value_funnel as value_funnel_router
 except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 quality.py 时不挡 app 启动
@@ -153,6 +153,7 @@ app.include_router(extreme_market.router)
 app.include_router(sentiment_weather.router)
 app.include_router(workflow.router)
 app.include_router(scheduled_tasks.router)
+app.include_router(prediction.router)
 app.include_router(kline_history.router)
 if value_funnel_router is not None:
     app.include_router(value_funnel_router.router)
