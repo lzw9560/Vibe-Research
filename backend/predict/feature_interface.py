@@ -12,6 +12,7 @@ from predict.features.behavior import BEHAVIOR_SPECS, register_behavior
 from predict.features.calendar import CALENDAR_SPECS, register_calendar
 from predict.features.external import EXTERNAL_SPECS, register_external
 from predict.features.fund_flow import FUND_FLOW_SPECS, register_fund_flow
+from predict.features.macro import MACRO_SPECS, register_macro
 from predict.features.registry import Registry
 from predict.features.sentiment import SENTIMENT_SPECS, register_sentiment
 from predict.features.text import TEXT_SPECS, register_text
@@ -39,6 +40,8 @@ HEAD_FEATURE_SUBSETS: dict[str, tuple[str, ...]] = {
         *(s.name for s in CALENDAR_SPECS),
         # text (1 feature, s1)
         *(s.name for s in TEXT_SPECS),
+        # macro (2 features, s2) — DXY/美债10Y，Fred key 到位后入短线头 (S019 R5)
+        *(s.name for s in MACRO_SPECS),
     ),
     "mid_long": (
         # sentiment (2 features, s1)
@@ -74,6 +77,7 @@ def build_default_registry() -> Registry:
     register_sentiment(reg)
     register_calendar(reg)
     register_text(reg)
+    register_macro(reg)
 
     _DEFAULT_REGISTRY = reg
     return reg
