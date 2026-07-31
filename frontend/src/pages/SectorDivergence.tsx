@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { pctColor } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -287,7 +288,7 @@ export default function SectorDivergence() {
                             <span className="text-muted-foreground mx-1">/</span>
                             <span className="text-red-600">{item.down_count}</span>
                           </td>
-                          <td className={`px-3 py-2.5 text-right font-mono ${item.avg_change_pct >= 0 ? "text-red-600" : "text-emerald-600"}`}>
+                          <td className={`px-3 py-2.5 text-right font-mono ${pctColor(item.avg_change_pct)}`}>
                             {item.avg_change_pct >= 0 ? "+" : ""}{item.avg_change_pct.toFixed(2)}%
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">

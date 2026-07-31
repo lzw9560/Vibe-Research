@@ -75,7 +75,7 @@ frontend/src/components/prediction/   # StageTimeline/ProbabilityEvolutionChart/
 页面 `frontend/src/pages/Prediction.tsx`，入口挂"交易工作台"导航组。
 
 ### 4.1 用户旅程
-1. **免责墙 opt-in**：首次进 `/prediction` 弹「研究参考·不构成投资建议」确认，存 localStorage。
+1. **风险提醒 opt-in**：首次进 `/prediction` 弹「历史统计特征，市场有风险」轻量提醒确认，存 localStorage（非强制免责墙）。
 2. **预测头 Tab**：短线×板块 / 短线×个股 / 中长线×板块 / 中长线×个股；起步仅短线×板块可点，其余灰显「待实现」。
 3. **阶段时间线 `<StageTimeline>`**：横向 S1→S2→S3→S4 进度条；显示当前阶段、各段快照时间戳、**概率演进折线**（P1→P2→P3 随阶段变化）；当前高亮、未到灰显。
 4. **S1 筛选表 `<PredictionTable>`**：Top 板块/个股，列=上涨概率/收益率分位区间/SHAP top3 驱动特征，带免责 chip；可排序筛选；行操作「加入关注」。
@@ -96,9 +96,9 @@ frontend/src/components/prediction/   # StageTimeline/ProbabilityEvolutionChart/
 - `src/lib/prediction.ts`：`usePrediction(head, stage)` TanStack Query hook；竞价阶段轮询 30s，盘中按需刷新。
 - 统一走 `lib/api/client.ts`（S013 落地后；未落地前用现有 fetch 封装）。
 
-### 4.4 合规 UI 约束
-- 所有概率/区间旁挂「研究参考·不构成投资建议」chip。
-- S4 面板**禁止**出现「建议买入/卖出/止损/止盈」类指令词；只有客观值 + 教育性研判提示 + 用户自标状态。
+### 4.4 合规 UI 约束（弱合规 2026-07-30）
+- 所有概率/区间旁挂轻量风险提醒 chip「历史统计特征，市场有风险」（非强制免责墙）。
+- S4 面板可出研判提示与操作建议（用户即决策者），但须挂轻量提醒、不承诺确定性收益；客观值 + 研判提示 + 用户自标状态并存。
 
 ## 5. 依赖与安装
 - `lightgbm` / `catboost` / `scikit-learn` / `hmmlearn` / `mapie`（或 `mapie>=0.7`）。

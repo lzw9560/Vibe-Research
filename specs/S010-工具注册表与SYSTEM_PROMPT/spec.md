@@ -43,7 +43,7 @@
 
 - **registry**：`@register_tool(name, description)` 装饰器，反射函数签名（inspect）生成 JSON schema 参数表；执行时 `registry.execute(name, args)` 派发。
 - **三出口**：chat 用 registry 导出 OpenAI function-calling list；mcp 用 registry 转 MCP inputSchema + execute；cli_runtime 共享工具清单（订阅出口数据须已在 context，不调工具，但清单一致）。
-- **SYSTEM_PROMPT 放宽**：从"不得引入方向性建议"改为"可给教育研究性研判，但须挂免责声明、不承诺收益、不代客决策"。具体措辞在 plan.md 细化，须 diff 审查。
+- **SYSTEM_PROMPT 放宽**：从"不得引入方向性建议"改为"可给方向性研判/买卖时机/收益预期/操作建议"，挂轻量风险提醒（非强制免责墙），不承诺确定性收益。具体措辞在 plan.md 细化，须 diff 审查。
 - **取舍**：不重构流式/SSRF 防护逻辑（保留 chat 现有 SSRF 校验、流式 NDJSON），只解耦工具表与 SYSTEM_PROMPT 措辞。
 
 ## 6. 验收标准
@@ -52,8 +52,8 @@
 - [ ] A2 chat/mcp/cli 三出口共读 registry；mcp 不再 `import chat`/调 `_exec_tool`
 - [ ] A3 MCP 5 工具实测（query_quote 600519/000858）返回正确
 - [ ] A4 `POST /api/chat`（cli + api 两种配置）流式 200，含 delta+done
-- [ ] A5 `SYSTEM_PROMPT` 含教育研究性研判允许条款 + 免责声明强制 + 收益承诺禁止
-- [ ] A6 研判输出挂「研究参考，不构成投资建议」
+- [ ] A5 `SYSTEM_PROMPT` 含方向性研判允许条款 + 轻量风险提醒（非强制免责墙）+ 确定性收益承诺禁止
+- [ ] A6 研判输出挂轻量风险提醒「历史统计特征，市场有风险」（非强制免责墙）
 - [ ] A7 `pytest -m "not live"` 全过（含 test_chat）
 - [ ] A8 合规审查：SYSTEM_PROMPT diff 按 CLAUDE.md §1 新边界通过
 
@@ -74,6 +74,6 @@
 
 ## 9. 风险与回滚
 
-- 🟡 SYSTEM_PROMPT 放宽尺度：措辞过宽会越界（如变荐股）——缓解：强制免责声明 + 收益承诺禁止 + diff 审查
+- 🟡 SYSTEM_PROMPT 放宽尺度：措辞过宽会越界（如变荐股）——缓解：轻量风险提醒 + 确定性收益承诺禁止 + 不臆造（工程底线）+ diff 审查
 - 🟡 反射签名与手写 schema 差异：边界类型（Optional/list）映射——单测比对
 - 🟢 回滚：恢复硬编码 TOOLS + 旧 SYSTEM_PROMPT

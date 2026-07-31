@@ -18,6 +18,21 @@
 
 > 没有规范不写代码。用户要求"直接改"时，先花一屏写规范再动手——这是本项目的工作纪律。
 
+### 0.1 Feature 分支工作流（2026-07-31 落地，强制）
+
+> **规范源在 `AGENTS.md`「Feature 分支工作流」**——跨工具共守（Claude Code / opencode / 所有 agent 通用）。本节为镜像，改动以 AGENTS.md 为准、两边同步。
+
+**每个 spec 的实现走独立 feature 分支，完成后 squash 合并 develop。** 解决多会话/多 agent 同 develop 并行 commit 导致的历史 interleaved + 工作树 entangle（2026-07-31 两起 `git checkout` 回退事故）。
+
+- **命名**：`feature/S<NNN>-<slug>`（如 `feature/S020-worldmonitor`）。
+- **base**：off `develop`；依赖未合并时栈式 off 依赖 feature（S020 off S019，S019 合并后 rebase）。共享基础设施（validators/TTLCache/模型）先合 develop。
+- **本地开发，不 push**：feature 分支只存本地，远程 ecs 走 tarball 同步。
+- **单一会话**：一个 feature 分支同一时刻只一个会话/agent 写。
+- **勤 commit、最小功能提交**；不准留长生命未提交工作树（防 checkout 回退丢工作）。
+- **准入门（grill 硬阻）**：合并前必过 grill/code review；🔴 = 硬阻。接外部源的 spec live 冒烟未过即不合；"待 live 后定"占位项不得以此合并，拆出可合并部分。
+- **合并**：`squash` 到 develop，一 spec 一 commit；合并后删本地分支（留 90 天）。
+- **spec 文档**：spec.md/plan.md/tasks.md 先进 develop，feature 分支只带实现代码。
+
 ### 何时可跳过规范
 - 纯文档修订、typo、依赖版本号、CI 配置微调。
 - 但**涉及数据输出/AI 提示词/交易信号**的改动一律不可跳过，必须过合规自查（弱合规下仅核查工程底线：不臆造/私有数据隔离/防封）。

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Activity, TrendingUp, ShieldAlert, RefreshCw, Star, ChevronDown, ChevronUp } from "lucide-react";
+import { pctColor } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -370,8 +371,7 @@ export default function PreMarketBriefing() {
               ) : (
                 sortedCandidates.map((c) => {
                   const strong = isStrong(String(c.code ?? ""), strongCodes);
-                  const changeColor =
-                    (c.change_pct as number) >= 0 ? "text-green-400" : "text-red-400";
+                  const changeColor = pctColor(c.change_pct as number);
                   return (
                     <tr
                       key={String(c.code)}
