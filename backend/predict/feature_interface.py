@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from predict.features.alt import ALT_SPECS, register_alt
 from predict.features.behavior import BEHAVIOR_SPECS, register_behavior
 from predict.features.calendar import CALENDAR_SPECS, register_calendar
 from predict.features.external import EXTERNAL_SPECS, register_external
@@ -78,6 +79,7 @@ def build_default_registry() -> Registry:
     register_calendar(reg)
     register_text(reg)
     register_macro(reg)
+    register_alt(reg)  # S020 worldmonitor alt features — NOT in HEAD_FEATURE_SUBSETS until live smoke (R10)
 
     _DEFAULT_REGISTRY = reg
     return reg

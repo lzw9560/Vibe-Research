@@ -33,9 +33,9 @@ def test_build_default_registry_returns_registry():
 
 
 def test_registry_total_features(registry):
-    # Total = external 4 + fund_flow 7 + behavior 5 + sentiment 2 + calendar 3 + text 1 + macro 2 = 24
+    # Total = external 4 + fund_flow 7 + behavior 5 + sentiment 2 + calendar 3 + text 1 + macro 2 + alt 7 = 31
     all_features = registry.list_for_stage("s3")
-    assert len(all_features) == 24
+    assert len(all_features) == 31
 
 
 # ── (b) Stage filtering (look-ahead guard) ─────────────────────────
@@ -48,15 +48,15 @@ def test_list_for_stage_s1_count(registry):
 
 
 def test_list_for_stage_s2_count(registry):
-    # s2: s1 14 + external 4 + calendar 3 + macro 2 = 23
+    # s2: s1 14 + external 4 + calendar 3 + macro 2 + alt 7 = 30
     s2_features = registry.list_for_stage("s2")
-    assert len(s2_features) == 23
+    assert len(s2_features) == 30
 
 
 def test_list_for_stage_s3_count(registry):
-    # s3: s2 23 + auction_signal (s3) = 24
+    # s3: s2 30 + auction_signal (s3) = 31
     s3_features = registry.list_for_stage("s3")
-    assert len(s3_features) == 24
+    assert len(s3_features) == 31
 
 
 # ── (c) HEAD_FEATURE_SUBSETS definitions ────────────────────────────
