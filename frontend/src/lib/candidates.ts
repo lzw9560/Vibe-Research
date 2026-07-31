@@ -1,7 +1,9 @@
-// 候选池漏斗 + 诊断卡 API 客户端（S002）。复用 lib/api.ts 的鉴权与错误处理。
+// 候选池漏斗 + 诊断卡 API 客户端（S002）。
+// S013 T3：req<T> 已并入 lib/api/client.ts 的 request<T>（语义等价：同鉴权/JSON/
+// payload?.data ?? payload 解包/ApiError），此处别名复用，零 call-site 改动。
 // 合规：仅客观数据，无方向/参考价位。
 
-import { ApiError, authHeaders } from "@/lib/api";
+import { request as req } from "@/lib/api/client";
 
 // ---- 类型（对齐 backend/candidate_funnel/models.py）----
 export interface Announcement { title: string; date: string; type?: string | null }
@@ -59,20 +61,8 @@ export interface FunnelResult {
 }
 export interface FunnelConfigResponse { config: ThresholdConfig; sources: Record<string, boolean> }
 
-// ---- 请求封装 ----
-async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { ...authHeaders() };
-  const opts: RequestInit = { method };
-  if (body !== undefined) { headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
-  if (Object.keys(headers).length) opts.headers = headers;
-  let resp: Response;
-  try { resp = await fetch(`/api${path}`, opts); }
-  catch { throw new ApiError("连接不到后端，请先启动 backend", 0); }
-  let payload: any = null;
-  try { payload = await resp.json(); } catch { /* 非 JSON */ }
-  if (!resp.ok) throw new ApiError(payload?.detail || `HTTP ${resp.status}`, resp.status);
-  return (payload?.data ?? payload) as T;
-}
+// ---- 请求封装：req = client.request（S013 T3 并入）----
+
 
 export const candidatesApi = {
   runFunnel: (stage = "all", date?: string) =>

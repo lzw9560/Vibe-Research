@@ -35,6 +35,11 @@ class KLineBar(BaseModel):
     volume: int | None = None  # 手
     turnover: float | None = None  # 元
     amplitude: float | None = None  # 百分数
+    # 移动均价（百度股市通源自带；其它源 None，不臆造）。S017 接 baidu kline 解 panel
+    # OOS kline 阻塞时引入——免本地重算 MA5/10/20 供行为特征直接消费。
+    ma5: float | None = None
+    ma10: float | None = None
+    ma20: float | None = None
 
 
 class KLine(BaseModel):

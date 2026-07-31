@@ -26,6 +26,54 @@ class Financials(BaseModel):
     period: str | None = None  # 报告期
 
 
+class FinancialPeriod(BaseModel):
+    """单报告期三表完整字段（S017 P1 新浪财报三表源）。
+
+    一次只取一种表（lrb/fzb/llb），故同一 period 的对象只填该表字段，其余 None
+    （不臆造）。quality-screen 7 因子与 earnings-review 5 异常信号从多期序列算。
+    字段对齐新浪 item_title（中文，别名见 mappers._SINA_ALIASES）。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    period: str | None = None  # YYYY-MM-DD
+    # ── 利润表 (lrb) ──
+    revenue: float | None = None
+    net_profit: float | None = None
+    net_profit_attr_parent: float | None = None
+    net_profit_excluding_nonrecurring: float | None = None
+    operating_cost: float | None = None
+    gross_profit: float | None = None
+    selling_expense: float | None = None
+    admin_expense: float | None = None
+    financial_expense: float | None = None
+    r_and_d_expense: float | None = None
+    operating_profit: float | None = None
+    total_profit: float | None = None
+    income_tax_expense: float | None = None
+    eps_basic: float | None = None
+    eps_diluted: float | None = None
+    # ── 资产负债表 (fzb) ──
+    total_assets: float | None = None
+    total_liabilities: float | None = None
+    shareholders_equity: float | None = None
+    total_current_assets: float | None = None
+    total_noncurrent_assets: float | None = None
+    total_current_liabilities: float | None = None
+    total_noncurrent_liabilities: float | None = None
+    cash_and_equivalents: float | None = None
+    accounts_receivable: float | None = None
+    inventory: float | None = None
+    fixed_assets: float | None = None
+    goodwill: float | None = None
+    # ── 现金流量表 (llb) ──
+    operating_cash_flow: float | None = None
+    investing_cash_flow: float | None = None
+    financing_cash_flow: float | None = None
+    net_change_in_cash: float | None = None
+    capex: float | None = None  # 资本开支（购建固定资产/无形资产/其他长期资产支付的现金）
+
+
 class ValuationPercentile(BaseModel):
     """估值历史分位（百分数）。"""
 

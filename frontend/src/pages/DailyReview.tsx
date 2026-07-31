@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Loader2, AlertCircle, RefreshCw, Gauge, ArrowDownUp, TrendingUp, TrendingDown, Plus, X, Flame, BarChart3, Globe } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -7,111 +7,127 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { api, ApiError, type IndexQuote, type Quote, type MarketOverview, type ShortTermEmotion, type TurnoverTop, type GlobalIndex, type STIResult, type DailyReviewReport } from "@/lib/api";
+import { ApiError, type IndexQuote, type Quote, type MarketOverview, type ShortTermEmotion, type TurnoverTop, type GlobalIndex, type STIResult, type DailyReviewReport } from "@/lib/api";
 import { hasLlm, chatStream } from "@/lib/llm";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
 import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
-import { cn } from "@/lib/utils";
+import { cn, pctColor } from "@/lib/utils";
 import { STICard } from "@/components/sti/StiCard";
 import { STIDetailView } from "@/components/sti/StiDetailView";
+import {
+  useIndices,
+  useGlobalIndices,
+  useMarketOverview,
+  useEmotion,
+  useTurnoverTop,
+  useStiLatest,
+  useQuote,
+  useDailyReview,
+} from "@/lib/query";
 
 // A股红涨绿跌。全球市场（美股/港股指数）**也沿用红涨**——与整个看板及东财等中国平台一致，
 // 对中国用户最不易看错（Simon 2026-07-05 确认；非国际绿涨惯例，是有意选择，勿改）。
-const pctColor = (p: number) => (p > 0 ? "text-danger" : p < 0 ? "text-success" : "text-muted-foreground");
 const fmt = (v: number) => v.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 const yi = (v: number | null) => (v == null ? "—" : `${fmt(v / 1e8)} 亿`); // 元 → 亿
 
+// 统一把 hook 抛出的 error 折成文案：ApiError 取其 message，其它兜底。
+const errMsg = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
+
 export function DailyReview() {
-  const [indices, setIndices] = useState<IndexQuote[]>([]);
-  const [idxErr, setIdxErr] = useState(false);
+  // T9：8 个只读端点全部由 TanStack Query 接管（原 useState/useEffect + fetch 全部撤除）。
+  // AI 当日复盘（chatStream）是写流，保留 useState。refetchOnWindowFocus 全局已关，
+  // isFetching 仅在初次加载与点刷新时为 true，与原手写 loading 语义一致。
+  const indicesQ = useIndices();
+  const globalQ = useGlobalIndices();
+  const overviewQ = useMarketOverview();
+  const emotionQ = useEmotion();
+  const turnoverQ = useTurnoverTop();
+  const stiQ = useStiLatest();
+
+  // 关注股票（自选，存本地）
+  const [watchCodes, setWatchCodes] = useState<string[]>(loadWatch);
+  const [watchInput, setWatchInput] = useState("");
+  const quoteQ = useQuote(watchCodes.join(","));
+
+  // 每日复盘报告（日期由用户控制 —— 改日期即改 queryKey，自动重查）
+  const [reviewReportDate, setReviewReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const reviewQ = useDailyReview(reviewReportDate);
+
+  // AI 当日复盘（chatStream 写流，非只读端点，不走 hook）
   const [review, setReview] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewErr, setReviewErr] = useState<string | null>(null);
   const [needConfig, setNeedConfig] = useState(false);
-  const [overview, setOverview] = useState<MarketOverview | null>(null);
-  const [emotion, setEmotion] = useState<ShortTermEmotion | null>(null);
-  const [turnover, setTurnover] = useState<TurnoverTop | null>(null);
-  const [globalIdx, setGlobalIdx] = useState<GlobalIndex[]>([]);
-  // STI 情绪温度
-  const [sti, setSti] = useState<STIResult | null>(null);
-  const [stiLoading, setStiLoading] = useState(false);
-  const [stiError, setStiError] = useState<string | null>(null);
+  // STI 详情弹窗
   const [showStiDetail, setShowStiDetail] = useState(false);
-  // 关注股票（自选，存本地）
-  const [watchCodes, setWatchCodes] = useState<string[]>(loadWatch);
-  const [watchQuotes, setWatchQuotes] = useState<Record<string, Quote>>({});
-  const [watchInput, setWatchInput] = useState("");
-  const [watchLoading, setWatchLoading] = useState(false);
-  // 每日复盘报告
-  const [reviewReport, setReviewReport] = useState<DailyReviewReport | null>(null);
-  const [reviewReportLoading, setReviewReportLoading] = useState(false);
-  const [reviewReportError, setReviewReportError] = useState<string | null>(null);
-  const [reviewReportDate, setReviewReportDate] = useState(new Date().toISOString().slice(0, 10));
+  // 复盘报告标签页
   const [reviewTab, setReviewTab] = useState<"sector" | "zt" | "auction">("sector");
 
-  // 各数据块请求是否已结束：区分「加载中」与「数据源暂不可用」（非交易时段/被限流时后端返回空）
-  const [ovDone, setOvDone] = useState(false);
-  const [emoDone, setEmoDone] = useState(false);
-  const [toDone, setToDone] = useState(false);
+  // ---- 各数据块派生（保持原变量名，JSX 不动）----
+  // hook data 已类型化（S013 收紧后），不再需要 as unknown as 窄→宽 cast。
+  // 大盘指数：原 .catch(()=>setIdxErr(true)) —— hook error 退化为布尔 idxErr，保持静默兜底。
+  const indices: IndexQuote[] = indicesQ.data ?? [];
+  const idxErr = !!indicesQ.error;
+  // 全球指数：原 .catch(()=>{}) 吞错→空。hook error 不渲染，data ?? [] 兜空。
+  const globalIdx: GlobalIndex[] = globalQ.data ?? [];
+  // 市场总览：原 .catch(()=>{}) 吞错→null。done = !isLoading（请求是否结束）。
+  const overview: MarketOverview | null = overviewQ.data ?? null;
+  const ovDone = !overviewQ.isLoading;
+  // 短线情绪：同上。
+  const emotion: ShortTermEmotion | null = emotionQ.data ?? null;
+  const emoDone = !emotionQ.isLoading;
+  // 成交额 TOP：同上。
+  const turnover: TurnoverTop | null = turnoverQ.data ?? null;
+  const toDone = !turnoverQ.isLoading;
+  // STI：原显式 stiError 文案，保留映射。
+  const sti: STIResult | null = stiQ.data ?? null;
+  const stiLoading = stiQ.isFetching;
+  const stiError: string | null = stiQ.error ? errMsg(stiQ.error, "STI 加载失败") : null;
+  // 关注股票行情：原 .catch(()=>{}) 吞错→空。
+  const watchQuotes: Record<string, Quote> = quoteQ.data ?? {};
+  const watchLoading = quoteQ.isFetching;
+  // 复盘报告：原显式 reviewReportError 文案，保留映射；日期改即重查，刷新按钮走 refetch。
+  const reviewReport: DailyReviewReport | null = reviewQ.data ?? null;
+  const reviewReportLoading = reviewQ.isFetching;
+  const reviewReportError: string | null = reviewQ.error ? errMsg(reviewQ.error, "复盘报告加载失败") : null;
 
-  const loadIndices = () => {
-    api.indices().then(setIndices).catch(() => setIdxErr(true));
-    api.globalIndices().then(setGlobalIdx).catch(() => {});
-    api.marketOverview().then(setOverview).catch(() => {}).finally(() => setOvDone(true));
-    api.emotion().then(setEmotion).catch(() => {}).finally(() => setEmoDone(true));
-    api.turnoverTop().then(setTurnover).catch(() => {}).finally(() => setToDone(true));
-    // STI 情绪温度
-    setStiLoading(true);
-    api.stiLatest().then(setSti).catch((e) => setStiError(e instanceof ApiError ? e.message : "STI 加载失败")).finally(() => setStiLoading(false));
-    // 每日复盘报告
-    setReviewReportLoading(true);
-    api.dailyReview(reviewReportDate).then(setReviewReport).catch((e) => setReviewReportError(e instanceof ApiError ? e.message : "复盘报告加载失败")).finally(() => setReviewReportLoading(false));
-  };
-
-  // 数据块占位：请求没回来 = 加载中；回来了但为空 = 数据源暂不可用（别让用户干等）
+  // 数据块占位：请求没回来 = 加载中；回来了但为空 = 数据源暂不可用（非交易时段/被限流时后端返回空）
   const pending = (done: boolean) => (
     <p className="py-4 text-center text-sm text-muted-foreground/60">
       {done ? "暂无数据：可能是非交易时段或数据源暂时不可用，可点「大盘指数」旁的刷新重试" : "加载中…"}
     </p>
   );
 
-  const refreshWatch = (codes: string[]) => {
-    if (!codes.length) { setWatchQuotes({}); return; }
-    setWatchLoading(true);
-    api.quote(codes.join(",")).then(setWatchQuotes).catch(() => {}).finally(() => setWatchLoading(false));
-  };
-
-  useEffect(() => {
-    loadIndices();
-    refreshWatch(loadWatch());
-  }, []);
-
-  const loadReviewReport = (date: string) => {
-    setReviewReportLoading(true);
-    setReviewReportError(null);
-    api.dailyReview(date)
-      .then(setReviewReport)
-      .catch((e) => setReviewReportError(e instanceof ApiError ? e.message : "复盘报告加载失败"))
-      .finally(() => setReviewReportLoading(false));
-  };
-
-  const onReviewDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const d = e.target.value;
-    setReviewReportDate(d);
-    loadReviewReport(d);
+  // 大盘指数旁刷新：原 loadIndices 重拉 7 个端点（不含自选行情）。逐个 refetch。
+  const refreshAll = () => {
+    void indicesQ.refetch();
+    void globalQ.refetch();
+    void overviewQ.refetch();
+    void emotionQ.refetch();
+    void turnoverQ.refetch();
+    void stiQ.refetch();
+    void reviewQ.refetch();
   };
 
   const addWatch = () => {
     // 支持一次粘贴多只（逗号 / 空格分隔）；全部无效或重复则清空输入、无副作用。
+    // watchCodes 变 → quoteQ 的 queryKey 变 → 自动重查，无需手动 refreshWatch。
     const { next, added } = addCodes(watchCodes, watchInput);
     setWatchInput("");
     if (!added) return;
-    setWatchCodes(next); saveWatch(next); refreshWatch(next);
+    setWatchCodes(next);
+    saveWatch(next);
   };
 
   const removeWatch = (c: string) => {
     const next = watchCodes.filter((x) => x !== c);
-    setWatchCodes(next); saveWatch(next); refreshWatch(next);
+    setWatchCodes(next);
+    saveWatch(next);
+  };
+
+  const onReviewDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 改日期即改 useDailyReview 的 queryKey，自动重查 —— 无需手动 loadReviewReport。
+    setReviewReportDate(e.target.value);
   };
 
   const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -171,7 +187,7 @@ export function DailyReview() {
       {/* 1. 大盘指数（实时） */}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">大盘指数</h3>
-        <button onClick={loadIndices} className="text-muted-foreground hover:text-primary" title="刷新"><RefreshCw className="h-3.5 w-3.5" /></button>
+        <button onClick={refreshAll} className="text-muted-foreground hover:text-primary" title="刷新"><RefreshCw className="h-3.5 w-3.5" /></button>
       </div>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {indices.length === 0
@@ -223,7 +239,7 @@ export function DailyReview() {
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">关注股票</h3>
         {watchCodes.length > 0 && (
-          <button onClick={() => refreshWatch(watchCodes)} className="text-muted-foreground hover:text-primary" title="刷新价格">
+          <button onClick={() => quoteQ.refetch()} className="text-muted-foreground hover:text-primary" title="刷新价格">
             {watchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           </button>
         )}
@@ -523,7 +539,7 @@ export function DailyReview() {
             className="rounded-lg border border-border bg-black/20 px-2 py-1 text-xs outline-none focus:border-primary/50"
           />
           <button
-            onClick={() => loadReviewReport(reviewReportDate)}
+            onClick={() => reviewQ.refetch()}
             className="text-muted-foreground hover:text-primary"
             title="刷新"
           >

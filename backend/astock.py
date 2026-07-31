@@ -82,6 +82,15 @@ from data.sources.mootdx_src import _mootdx_client, kline, finance  # noqa: F401
 # ── cninfo 源（直 requests 互动易）─────────────────────────────────────────
 from data.sources.cninfo import investor_qa  # noqa: F401,E402
 
+# ── baidu 源（urllib 日K线，不封 IP，自带 MA5/10/20）────────────────────────
+from data.sources.baidu import fetch_raw as baidu_kline  # noqa: F401,E402
+
+# ── 多源 kline 解析器（职责链+策略，baidu→sina→mootdx→akshare 回退）──────────
+from data.sources.kline_resolver import fetch_kline as kline_multi  # noqa: F401,E402
+
+# ── 新浪财报三表源（urllib，基本面因子组数据地基）──────────────────────────
+from data.sources.sina_financial import fetch_raw as sina_financial_report  # noqa: F401,E402
+
 
 # ---------------------------------------------------------------------------
 # 估值计算（纯函数，无数据源，留本模块）

@@ -46,7 +46,7 @@ specs/
 | [S010](S010-工具注册表与SYSTEM_PROMPT/spec.md) | AI 工具注册表 + SYSTEM_PROMPT 新边界 | 🟡草案 2026-07-29 | spec | registry 声明式+chat/mcp/cli 解耦+SYSTEM_PROMPT 按新边界放宽 |
 | [S011](S011-调度收口/spec.md) | 调度收口（删 scheduler.py+重写 scheduled_tasks+状态机接线） | 🟡草案 2026-07-29 | spec | 扩展 cron+ lifespan+WAL+去重+状态机落库（不引 APScheduler） |
 | [S012](S012-工作流标灰/spec.md) | 工作流标灰（realtime/post 桩+pre 清理） | 🟡草案 2026-07-29 | spec | 桩→NotImplementedError+UI 标灰，不补功能 |
-| [S013](S013-前端数据层/spec.md) | 前端数据层（统一 client+TanStack Query+懒加载+apiKey 代理） | 🟡草案 2026-07-29 | spec | 删 4 套 fetch 封装+替 267 处手写+apiKey 移后端 |
+| [S013](S013-前端数据层/spec.md) | 前端数据层（统一 client+TanStack Query+懒加载+apiKey 代理） | ✅已实现 2026-07-31（T6 可选余项） | spec · [plan](S013-前端数据层/plan.md) · [tasks](S013-前端数据层/tasks.md) | client 统一(T1-T5)+router 懒加载(T10)+QueryProvider(T7,T11)+pctColor/主题(T14,T15)+59 hooks(T8)+17 页接线(T9，含轮询/交易时段门控)+hook 类型收紧+vitest(T16)+T12/T13 决议保留双配置；仅 T6 按域拆 api.ts 可选未做 |
 | [S014](S014-前端UI重设计/spec.md) | 前端 UI 重设计（信息架构+交互统一+视觉+AI 对话） | 🟡草案 2026-07-29 | spec | 22项→5组+首页下沉+巨型page拆分+三态统一+移动端+echarts 跟主题 |
 | [S015](S015-配置与基础设施/spec.md) | 配置与基础设施（config 拆分+infra 收口+路由自动发现） | 🟡草案 2026-07-29 | spec | 收口 4+套缓存/限流/熔断+修 cache_response key+metrics 配置化 |
 | [S016](S016-测试网/spec.md) | 测试网（后端覆盖率+IO 录制回放+前端 vitest+CI） | 🟡草案 2026-07-29 | spec | 纯函数 ≥80%+IO 录制回放+前端快照+CI 门槛 |

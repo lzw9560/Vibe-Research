@@ -7,7 +7,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
-import { api, type Quote } from "@/lib/api";
+import { useQuote } from "@/lib/query";
 import { saveWatch, apiWatchlist, addCodes } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 
@@ -18,26 +18,19 @@ const pct = (v: number | undefined) => (v == null ? "—" : `${v > 0 ? "+" : ""}
 
 export function Watchlist() {
   const [codes, setCodes] = useState<string[]>([]);
-  const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
 
-  // 初始化：从 API 加载自选股
+  // T9：原 useState(quotes/loading) + useEffect(refresh on ready) → useQuote(codes)。
+  // codes 在 queryKey 中，增删自选后 codes 变化 → 自动重新查询（arg-driven requery）；
+  // 手动刷新按钮走 refetch()。
+  // 注：useQuote 经 Opts 参数化 data 已推断为 Record<string, Quote> | undefined，无需 cast。
+  const { data: quotes, isLoading: loading, refetch } = useQuote(codes.join(","));
+
+  // 初始化：从 API 加载自选股（codes 变非空后 useQuote 自动启用并发请求）
   useEffect(() => {
-    apiWatchlist.fetch().then((cs) => {
-      setCodes(cs);
-      setReady(true);
-    });
+    apiWatchlist.fetch().then((cs) => setCodes(cs));
   }, []);
-
-  const refresh = (cs: string[]) => {
-    if (!cs.length) { setQuotes({}); return; }
-    setLoading(true);
-    api.quote(cs.join(",")).then(setQuotes).catch(() => {}).finally(() => setLoading(false));
-  };
-  useEffect(() => { if (ready) refresh(codes); }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const add = async () => {
     const { next, added } = addCodes(codes, input);
@@ -51,7 +44,7 @@ export function Watchlist() {
     saveWatch(next); // localStorage fallback 同步
     setInput("");
     setHint(`已添加 ${result.added} 只`);
-    refresh(next);
+    // codes 变化 → useQuote queryKey 变化 → 自动重新查询
   };
 
   const remove = async (c: string) => {
@@ -60,7 +53,7 @@ export function Watchlist() {
     const updated = await apiWatchlist.fetch();
     setCodes(updated);
     saveWatch(updated);
-    refresh(updated);
+    // codes 变化 → useQuote queryKey 变化 → 自动重新查询
   };
 
   const aiContext = useMemo(
@@ -69,7 +62,7 @@ export function Watchlist() {
         ? "我的自选股：\n" +
           codes
             .map((c) => {
-              const q = quotes[c];
+              const q = quotes?.[c];
               return q
                 ? `${q.name}(${c}) 现价${q.price} ${pct(q.change_pct)} PE(TTM)${q.pe_ttm ?? "—"} 换手${q.turnover_rate ?? "—"}%`
                 : `${c}（行情未取到）`;
@@ -123,8 +116,8 @@ export function Watchlist() {
           icon={<Star className="h-4 w-4 text-primary" />}
           action={
             <button
-              onClick={() => refresh(codes)}
-              disabled={loading}
+              onClick={() => refetch()}
+              disabled={loading || !codes.length}
               className="text-muted-foreground hover:text-primary"
               title="刷新价格"
             >
@@ -152,7 +145,7 @@ export function Watchlist() {
               </thead>
               <tbody>
                 {codes.map((c) => {
-                  const q = quotes[c];
+                  const q = quotes?.[c];
                   return (
                     <tr key={c} className="border-b border-border/30">
                       <td className="px-2 py-2.5 font-medium">{q?.name || "—"}</td>

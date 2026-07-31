@@ -1,80 +1,72 @@
+// S013 T10：全量懒加载。每页 React.lazy + Suspense 包裹，Vite code-split 出独立 chunk，
+// 首包只含 Layout + 当前路由。fallback 为轻量加载占位，避免空白闪烁。
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import { lazy, Suspense, type ComponentType } from "react";
 import { Layout } from "@/components/layout/Layout";
-import { DailyReview } from "@/pages/DailyReview";
-import { Intel } from "@/pages/Intel";
-import { Sectors } from "@/pages/Sectors";
-import { SectorDetail } from "@/pages/SectorDetail";
-import { Portfolio } from "@/pages/Portfolio";
-import { StockData } from "@/pages/StockData";
-import { Watchlist } from "@/pages/Watchlist";
-import { Candidates } from "@/pages/Candidates";
-import { ValueFunnel } from "@/pages/ValueFunnel";
-import { MyReports } from "@/pages/MyReports";
-import { Notes } from "@/pages/Notes";
-import { Settings } from "@/pages/Settings";
-import { LimitUpStrategy } from "@/pages/LimitUpStrategy";
-import { StockDeep } from "@/pages/StockDeep";
-import Recommendation from "@/pages/Recommendation";
-import StrategySignals from "@/pages/StrategySignals";
-import RiskDashboard from "@/pages/RiskDashboard";
-import Backtest from "@/pages/Backtest";
-import { HealthPage as Health } from "@/pages/Health";
-import { Metrics } from "@/pages/Metrics";
-import { ScheduledTasks } from "@/pages/ScheduledTasks";
-import { Industry } from "@/pages/Industry";
-import Workflow from "@/pages/Workflow";
-import SentimentWeather from "@/pages/sentiment/SentimentWeather";
-import { GeneScreener } from "@/pages/limitup/GeneScreener";
-import { AuctionScreener } from "@/pages/limitup/AuctionScreener";
-import { SeatEngine } from "@/pages/limitup/SeatEngine";
-import PreMarketBriefing from "@/pages/workflow/PreMarketBriefing";
-import IntradayMonitor from "@/pages/workflow/IntradayMonitor";
-import BombAlertPanel from "@/pages/workflow/BombAlertPanel";
-import PostMarketReview from "@/pages/workflow/PostMarketReview";
-import SectorDivergence from "@/pages/SectorDivergence";
-import { Prediction } from "@/pages/Prediction";
+
+const PageFallback = (
+  <div className="flex h-[60vh] items-center justify-center text-sm text-gray-500">
+    加载中…
+  </div>
+);
+
+/** named export：传 name；default export：省略 name（取 m.default）。 */
+function lazyEl<T extends ComponentType<any>>(
+  loader: () => Promise<Record<string, T>>,
+  name?: string,
+) {
+  const Lazy = lazy(async () => {
+    const m = await loader();
+    return { default: (name ? (m as Record<string, T>)[name] : m.default) as ComponentType<any> };
+  });
+  return (
+    <Suspense fallback={PageFallback}>
+      <Lazy />
+    </Suspense>
+  );
+}
 
 export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
       { path: "/", element: <Navigate to="/daily-review" replace /> },
-      { path: "/daily-review", element: <DailyReview /> },
-      { path: "/intel", element: <Intel /> },
-      { path: "/sectors", element: <Sectors /> },
-      { path: "/sectors/:key", element: <SectorDetail /> },
-      { path: "/portfolio", element: <Portfolio /> },
-      { path: "/stock-data", element: <StockData /> },
-      { path: "/stock/:code", element: <StockDeep /> },
-      { path: "/watchlist", element: <Watchlist /> },
-      { path: "/candidates", element: <Candidates /> },
-      { path: "/value-funnel", element: <ValueFunnel /> },
-      { path: "/my-reports", element: <MyReports /> },
-      { path: "/notes", element: <Notes /> },
-      { path: "/settings", element: <Settings /> },
-      { path: "/limitup", element: <LimitUpStrategy /> },
-      { path: "/limitup/gene", element: <GeneScreener /> },
-      { path: "/limitup/auction", element: <AuctionScreener /> },
-      { path: "/limitup/seats", element: <SeatEngine /> },
-      { path: "/recommendation", element: <Recommendation /> },
-      { path: "/strategy-signals", element: <StrategySignals /> },
-      { path: "/backtest", element: <Backtest /> },
-      { path: "/risk-dashboard", element: <RiskDashboard /> },
-      { path: "/sentiment/weather", element: <SentimentWeather /> },
-      { path: "/sentiment/weather/history", element: <SentimentWeather /> },
-      { path: "/sentiment/weather/strategy", element: <SentimentWeather /> },
-      { path: "/sentiment/weather/fuse", element: <SentimentWeather /> },
-      { path: "/workflow", element: <Workflow /> },
-      { path: "/workflow/pre-market", element: <PreMarketBriefing /> },
-      { path: "/workflow/intraday", element: <IntradayMonitor /> },
-      { path: "/workflow/alerts", element: <BombAlertPanel /> },
-      { path: "/workflow/post-market", element: <PostMarketReview /> },
-      { path: "/sector-divergence", element: <SectorDivergence /> },
-      { path: "/prediction", element: <Prediction /> },
-      { path: "/metrics", element: <Metrics /> },
-      { path: "/health", element: <Health /> },
-      { path: "/scheduled-tasks", element: <ScheduledTasks /> },
-      { path: "/industry", element: <Industry /> },
+      { path: "/daily-review", element: lazyEl(() => import("@/pages/DailyReview"), "DailyReview") },
+      { path: "/intel", element: lazyEl(() => import("@/pages/Intel"), "Intel") },
+      { path: "/sectors", element: lazyEl(() => import("@/pages/Sectors"), "Sectors") },
+      { path: "/sectors/:key", element: lazyEl(() => import("@/pages/SectorDetail"), "SectorDetail") },
+      { path: "/portfolio", element: lazyEl(() => import("@/pages/Portfolio"), "Portfolio") },
+      { path: "/stock-data", element: lazyEl(() => import("@/pages/StockData"), "StockData") },
+      { path: "/stock/:code", element: lazyEl(() => import("@/pages/StockDeep"), "StockDeep") },
+      { path: "/watchlist", element: lazyEl(() => import("@/pages/Watchlist"), "Watchlist") },
+      { path: "/candidates", element: lazyEl(() => import("@/pages/Candidates"), "Candidates") },
+      { path: "/value-funnel", element: lazyEl(() => import("@/pages/ValueFunnel"), "ValueFunnel") },
+      { path: "/my-reports", element: lazyEl(() => import("@/pages/MyReports"), "MyReports") },
+      { path: "/notes", element: lazyEl(() => import("@/pages/Notes"), "Notes") },
+      { path: "/settings", element: lazyEl(() => import("@/pages/Settings"), "Settings") },
+      { path: "/limitup", element: lazyEl(() => import("@/pages/LimitUpStrategy"), "LimitUpStrategy") },
+      { path: "/limitup/gene", element: lazyEl(() => import("@/pages/limitup/GeneScreener"), "GeneScreener") },
+      { path: "/limitup/auction", element: lazyEl(() => import("@/pages/limitup/AuctionScreener"), "AuctionScreener") },
+      { path: "/limitup/seats", element: lazyEl(() => import("@/pages/limitup/SeatEngine"), "SeatEngine") },
+      { path: "/recommendation", element: lazyEl(() => import("@/pages/Recommendation")) },
+      { path: "/strategy-signals", element: lazyEl(() => import("@/pages/StrategySignals")) },
+      { path: "/backtest", element: lazyEl(() => import("@/pages/Backtest")) },
+      { path: "/risk-dashboard", element: lazyEl(() => import("@/pages/RiskDashboard")) },
+      { path: "/sentiment/weather", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
+      { path: "/sentiment/weather/history", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
+      { path: "/sentiment/weather/strategy", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
+      { path: "/sentiment/weather/fuse", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
+      { path: "/workflow", element: lazyEl(() => import("@/pages/Workflow")) },
+      { path: "/workflow/pre-market", element: lazyEl(() => import("@/pages/workflow/PreMarketBriefing")) },
+      { path: "/workflow/intraday", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },
+      { path: "/workflow/alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },
+      { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
+      { path: "/sector-divergence", element: lazyEl(() => import("@/pages/SectorDivergence")) },
+      { path: "/prediction", element: lazyEl(() => import("@/pages/Prediction")) },
+      { path: "/metrics", element: lazyEl(() => import("@/pages/Metrics"), "Metrics") },
+      { path: "/health", element: lazyEl(() => import("@/pages/Health"), "HealthPage") },
+      { path: "/scheduled-tasks", element: lazyEl(() => import("@/pages/ScheduledTasks"), "ScheduledTasks") },
+      { path: "/industry", element: lazyEl(() => import("@/pages/Industry"), "Industry") },
     ],
   },
 ]);

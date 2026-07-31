@@ -1,6 +1,6 @@
 # Spec: S019 — 宏观特征 Fred API 接入（macro.py 第二批）
 
-> 状态：草案  作者：Claude  日期：2026-07-30
+> 状态：已实现 2026-07-31（R5 live 冒烟通过，macro 入 short_sector；T1 离线 12 passed + T2 live DGS10/DTWEXBGS 返非空）  作者：Claude  日期：2026-07-30
 > 关联：`../S018-多源特征工程/spec.md`（§4.6 macro、验收报告 §5 遗留）、`../S017-A股涨跌预测模型栈/`、`../../CLAUDE.md` §1
 > 前置：S017-T0b 已验证东财 push2 候选 secid（美债10Y/DXY）全空，须接 Fred API 补数据源。
 
@@ -19,13 +19,13 @@ S018 macro.py 第一批（DXY / 美债 10Y）因东财端点不可得（T0b 验�
 
 ## 3. 需求清单
 
-- [ ] R1 `features/macro.py` 注册 2 特征 FeatureSpec：`us_10y_yield`（source=fred_api, category=macro, offset=1, stage=s2, ok）、`dxy`（同）。
-- [ ] R2 `get_fred_api_key() -> str | None`：从 `项目内 .vibe-research/fred_api_key`（VR_DATA_DIR）读 key，缺失返 None。key 绝不进 git、不打日志。
-- [ ] R3 `fetch_fred_series(series_id, api_key, proxy=None) -> dict | None`：调 Fred observations 端点，独立 requests 通道（不走 em_get），可选系统代理。失败/无 key 返 None。
-- [ ] R4 `parse_fred_observations(resp: dict) -> list[dict]`：纯解析 Fred JSON → `[{date:"YYYY-MM-DD", value:float|None}]`，过滤缺失值（"."）。可复算单测。
+- [x] R1 `features/macro.py` 注册 2 特征 FeatureSpec：`us_10y_yield`（source=fred_api, category=macro, offset=1, stage=s2, ok）、`dxy`（同）。
+- [x] R2 `get_fred_api_key() -> str | None`：从 `项目内 .vibe-research/fred_api_key`（VR_DATA_DIR）读 key，缺失返 None。key 绝不进 git、不打日志。
+- [x] R3 `fetch_fred_series(series_id, api_key, proxy=None) -> dict | None`：调 Fred observations 端点，独立 requests 通道（不走 em_get），可选系统代理。失败/无 key 返 None。
+- [x] R4 `parse_fred_observations(resp: dict) -> list[dict]`：纯解析 Fred JSON → `[{date:"YYYY-MM-DD", value:float|None}]`，过滤缺失值（"."）。可复算单测。
 - [x] R5 ~~注册的特征不加入 HEAD_FEATURE_SUBSETS~~ **已满足**：Fred key 到位 + live 冒烟通过后，macro 2 特征已加入 `HEAD_FEATURE_SUBSETS["short_sector"]`（short_sector 21→23，commit 10c61fc）。
-- [ ] R6 Fred 端点走独立通道，不裸调 em_get；key 隔离在 VR_DATA_DIR。
-- [ ] R7 可复现：series_id 固定、解析纯函数、key 不参与计算逻辑（仅鉴权）。
+- [x] R6 Fred 端点走独立通道，不裸调 em_get；key 隔离在 VR_DATA_DIR。
+- [x] R7 可复现：series_id 固定、解析纯函数、key 不参与计算逻辑（仅鉴权）。
 
 ## 4. 受影响文件
 
@@ -44,12 +44,12 @@ S018 macro.py 第一批（DXY / 美债 10Y）因东财端点不可得（T0b 验�
 
 ## 6. 验收标准
 
-- [ ] A1 2 FeatureSpec 注册合法（source=fred_api/stage=s2/ok）
-- [ ] A2 get_fred_api_key 读 VR_DATA_DIR，缺失返 None，不打日志
-- [ ] A3 parse_fred_observations 纯函数：正常 JSON→list，"."缺失→None value
-- [ ] A4 fetch_fred_series 无 key/失败返 None（不抛）
+- [x] A1 2 FeatureSpec 注册合法（source=fred_api/stage=s2/ok）
+- [x] A2 get_fred_api_key 读 VR_DATA_DIR，缺失返 None，不打日志
+- [x] A3 parse_fred_observations 纯函数：正常 JSON→list，"."缺失→None value
+- [x] A4 fetch_fred_series 无 key/失败返 None（不抛）
 - [x] A5 ~~macro 特征未加入任何 HEAD_FEATURE_SUBSETS~~ **已加入** short_sector（key 到位 + live 冒烟通过，S019 R5 解除）。
-- [ ] A6 `pytest -m "not live"` 全过
+- [x] A6 `pytest -m "not live"` 全过（12 passed + 全量 814 passed）
 
 ## 7. 合规自查（CLAUDE.md §1）
 

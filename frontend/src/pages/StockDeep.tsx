@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { KLineChart } from "@/components/charts/KLineChart";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { useBreadcrumbs } from "@/components/ui/BreadcrumbContext";
-import { cn } from "@/lib/utils";
+import { cn, pctColor } from "@/lib/utils";
 
 // --- Tab definitions ---
 type TabKey = "quote" | "gene" | "fund" | "ai";
@@ -25,9 +25,6 @@ const TABS: { key: TabKey; label: string; icon: typeof TrendingUp }[] = [
 // --- Helpers ---
 const fmt = (v: number | null | undefined, suffix = "") =>
   v === null || v === undefined ? "—" : `${v}${suffix}`;
-
-const pctColor = (p: number | null | undefined) =>
-  p != null && p > 0 ? "text-danger" : p != null && p < 0 ? "text-success" : "text-muted-foreground";
 
 const pct = (v: number | null | undefined) =>
   v === null || v === undefined || !Number.isFinite(Number(v)) ? "—" : `${Number(v).toFixed(2)}%`;

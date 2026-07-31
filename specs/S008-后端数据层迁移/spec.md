@@ -32,6 +32,7 @@
 - [ ] R10 `em_get` 限流/熔断/代理探测拆到 `backend/data/transport.py`；astock 拆 `data/sources/{tencent,eastmoney,akshare,mootdx,sina}.py`
 - [ ] R11 删 `backend/data_provider/` 与旧 `backend/enums.py`（功能已由 S007 models/normalize/enums 提供）
 - [ ] R12 迁移层按消费者分组（A=routers/B=chat/C=engines），每组迁完即删该组适配 shape 转换，有退出条件
+- [ ] R13 统一复权口径：`kline_resolver` 加 `adjust` 契约 + `_SOURCE_ADJUST` 源口径声明表；消费者传 `adjust="qfq"` 时只走原生前复权源（百度/akshare），不回退 raw 源（新浪/mootdx），无 qfq 源诚实返空（不臆造复权因子重算）
 
 ## 4. 受影响文件
 
@@ -65,6 +66,7 @@
 - [ ] A5 `chat.SYSTEM_PROMPT_NO_TOOLS` 仅一份；`limitup_screener/models` 不 import astock；seat_engine 可变默认值修复
 - [ ] A6 `data_provider/` 与旧 `enums.py` 已删；`data/sources/*`+`data/transport.py` 就位
 - [ ] A7 `pytest -m "not live"` 全过（含 S007 契约测试 + 新增 bug 回归测试）
+- [ ] A10 `kline_resolver.fetch_kline(code, adjust="qfq")` 只返 qfq 源（百度/akshare），不回退 raw；`list_sources(adjust="qfq") == ["baidu","akshare"]`；`t16_panel_train.fetch_stock` 走 qfq 统一口径
 - [ ] A8 :8900 现有端点行为兼容（返回 `{"data": ...}` 信封内模型 dict 形态）
 - [ ] A9 涉市值/估值数据跑 `~/tools/financial_rigor.py` 验算通过
 

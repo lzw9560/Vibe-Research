@@ -1,5 +1,8 @@
 // S005 中长线价值选股漏斗 — API 客户端
-import { ApiError, authHeaders } from "@/lib/api";
+// S013 T4：call<T> 已并入 lib/api/client.ts 的 request<T>。后端 value-funnel 端点
+// 全返裸对象（无 {data:} 包封），故 request 的 payload?.data ?? payload 解包在此
+// 回退到 payload，与原 call 的「不解包」行为等价（发散点均不触发）。别名复用，零 call-site 改动。
+import { request as call } from "@/lib/api/client";
 
 // ---------- 类型 ----------
 
@@ -59,26 +62,8 @@ export interface LLMConfig { provider?: string; baseURL?: string; apiKey?: strin
 
 // ---------- 调用 ----------
 
-async function call<T>(path: string, method: "GET" | "POST" = "GET", body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { ...authHeaders() };
-  let resp: Response;
-  const opts: RequestInit = { method, headers };
-  if (body !== undefined) {
-    headers["Content-Type"] = "application/json";
-    opts.body = JSON.stringify(body);
-  }
-  try {
-    resp = await fetch(`/api${path}`, opts);
-  } catch {
-    throw new ApiError("无法连接后端", 0);
-  }
-  if (!resp.ok) {
-    let msg = `${resp.status}`;
-    try { msg = (await resp.json()).detail || msg; } catch { /* noop */ }
-    throw new ApiError(msg, resp.status);
-  }
-  return (await resp.json()) as T;
-}
+// ---------- 请求封装：call = client.request（S013 T4 并入）----------
+
 
 export const scanValueFunnel = (direction: string) =>
   call<{ candidates: { code: string; name: string }[] }>("/value-funnel/scan", "POST", { direction });

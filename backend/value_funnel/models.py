@@ -108,3 +108,28 @@ class ValueFunnelResult(BaseModel):
     l3_analyses: dict[str, CompanyAnalysis] = {}
     l4_finals: list[DeepAnalysisSkeleton] = []
     as_of: datetime = Field(default_factory=datetime.now)
+
+
+# ---------- 财报异常信号（earnings-review §4.2）----------
+
+class AnomalySignal(BaseModel):
+    """单条财报异常信号（排雷，客观可复现）。"""
+
+    index: int                                          # 1-5
+    name: str                                           # 应收增速>营收增速 ...
+    triggered: bool = False                             # 是否触发异常
+    severity: str = "info"                             # info/warn/high（提示性，不剔除）
+    evidence: str = ""                                  # 取数+计算口径（可复现）
+    inapplicable: bool = False                         # 数据不足不适用
+    inapplicable_reason: Optional[str] = None
+
+
+class AnomalyAssessment(BaseModel):
+    """财报异常五信号检测结果。"""
+
+    signals: list[AnomalySignal]                        # 5 条
+    triggered_count: int = 0                           # 触发条数
+    period: Optional[str] = None                       # 当期报告期
+    prior_period: Optional[str] = None                 # 上期报告期（对照基准）
+    note: str = "异常信号为客观排雷提示，最终认定交用户AI；触发≠造假"
+    as_of: datetime = Field(default_factory=datetime.now)

@@ -17,7 +17,7 @@ from typing import Any
 
 from models import Market
 from models.enums import ReportType
-from models.financials import Announcement, CompanyInfo, ConceptBlock, Financials, ValuationPercentile
+from models.financials import Announcement, CompanyInfo, ConceptBlock, FinancialPeriod, Financials, ValuationPercentile
 from models.fund_flow import FundFlow
 from models.global_stock import GlobalMetrics, GlobalStock
 from models.kline import KLine, KLineBar
@@ -419,6 +419,102 @@ def kline_from_mootdx(code: str, raw_bars: list[dict], market: Market = Market.A
             volume=int(vol) if vol is not None else None,
             turnover=_numf(raw.get("amount")),
             amplitude=_numf(raw.get("amplitude")),
+        ))
+    return KLine(code=norm_code, market=norm_market, bars=tuple(bars))
+
+
+# ── FinancialPeriod (新浪财报三表源) ──────────────────────────────────────
+
+# 中文科目 → 英文字段；别名表（新浪不同报告期/版本 label 可能不同）。
+_SINA_ALIASES: dict[str, list[str]] = {
+    "revenue": ["营业总收入", "营业收入"],
+    "net_profit": ["净利润"],
+    "net_profit_attr_parent": ["归属于母公司股东的净利润", "归属于母公司所有者的净利润"],
+    "net_profit_excluding_nonrecurring": ["扣除非经常性损益后的净利润", "扣非净利润"],
+    "operating_cost": ["营业成本", "营业总成本"],
+    "gross_profit": ["毛利润", "毛利"],
+    "selling_expense": ["销售费用"],
+    "admin_expense": ["管理费用"],
+    "financial_expense": ["财务费用"],
+    "r_and_d_expense": ["研发费用"],
+    "operating_profit": ["营业利润"],
+    "total_profit": ["利润总额"],
+    "income_tax_expense": ["所得税费用", "所得税"],
+    "eps_basic": ["基本每股收益"],
+    "eps_diluted": ["稀释每股收益"],
+    "total_assets": ["资产总计", "资产合计", "资产总计期末余额"],
+    "total_liabilities": ["负债合计", "负债总计"],
+    "shareholders_equity": ["所有者权益合计", "股东权益合计", "归属于母公司股东权益合计"],
+    "total_current_assets": ["流动资产合计"],
+    "total_noncurrent_assets": ["非流动资产合计"],
+    "total_current_liabilities": ["流动负债合计"],
+    "total_noncurrent_liabilities": ["非流动负债合计"],
+    "cash_and_equivalents": ["货币资金"],
+    "accounts_receivable": ["应收账款", "应收票据及应收账款"],
+    "inventory": ["存货"],
+    "fixed_assets": ["固定资产", "固定资产净额"],
+    "goodwill": ["商誉"],
+    "operating_cash_flow": ["经营活动产生的现金流量净额", "经营活动现金流量净额"],
+    "investing_cash_flow": ["投资活动产生的现金流量净额", "投资活动现金流量净额"],
+    "financing_cash_flow": ["筹资活动产生的现金流量净额", "筹资活动现金流量净额"],
+    "net_change_in_cash": ["现金及现金等价物净增加额", "现金及现金等价物的净增加额"],
+    "capex": [
+        "购建固定资产、无形资产和其他长期资产支付的现金",
+        "购建固定资产无形资产和其他长期资产支付的现金",
+    ],
+}
+
+
+def sina_financials_from_rows(rows: list[dict], report_type: str) -> list[FinancialPeriod]:
+    """新浪财报 raw rows（中文科目键）→ ``list[FinancialPeriod]``。
+
+    按 ``_SINA_ALIASES`` 别名表把中文科目归一英文字段；值经 ``_numf`` 转 float，
+    缺字段/``'-'`` = ``None``（不臆造，与 ``financials_from_dict`` 一致）。
+    **多别名按优先级取首个非空**（如同时有"营业总收入"和"营业收入"取前者，
+    即营业总收入口径）——避免 dict 迭代顺序决定取值。``report_type`` 仅作文档。
+    """
+    periods: list[FinancialPeriod] = []
+    for raw in rows or []:
+        kwargs: dict[str, float | str | None] = {"period": raw.get("报告期")}
+        for eng, aliases in _SINA_ALIASES.items():
+            for cn in aliases:
+                if cn in raw:
+                    v = _numf(raw[cn])
+                    if v is not None:
+                        kwargs[eng] = v
+                        break  # 首个非空别名命中，按优先级
+            # 全别名缺/空 → kwargs 不设该键 → FinancialPeriod 默认 None
+        periods.append(FinancialPeriod(**kwargs))
+    return periods
+
+
+# ── KLine (百度股市通源) ──────────────────────────────────────────────────
+
+def baidu_kline_from_dict(code: str, raw_bars: list[dict], market: Market = Market.A) -> KLine:
+    """astock.baidu_kline（百度股市通源）raw bars list[dict] → KLine。
+
+    字段映射：``amount``→``turnover``（元）、``ma5/ma10/ma20``→``KLineBar.ma5/ma10/ma20``
+    （百度源自带移动均价，免本地重算）；缺字段=``None``（不臆造，与
+    ``kline_from_mootdx`` 一致的部分 bar 语义）。
+    """
+    try:
+        norm_code, norm_market = normalize_stock_code(code)
+    except (ValueError, AttributeError):
+        norm_code, norm_market = code, market
+
+    bars: list[KLineBar] = []
+    for raw in raw_bars or []:
+        bars.append(KLineBar(
+            date=raw.get("date"),
+            open=_numf(raw.get("open")),
+            close=_numf(raw.get("close")),
+            high=_numf(raw.get("high")),
+            low=_numf(raw.get("low")),
+            volume=int(v) if (v := _numf(raw.get("volume"))) is not None else None,
+            turnover=_numf(raw.get("amount")),
+            ma5=_numf(raw.get("ma5")),
+            ma10=_numf(raw.get("ma10")),
+            ma20=_numf(raw.get("ma20")),
         ))
     return KLine(code=norm_code, market=norm_market, bars=tuple(bars))
 
