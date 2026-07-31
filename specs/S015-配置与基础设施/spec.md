@@ -24,7 +24,7 @@
 - [ ] R2 类型转换加校验（`_parse_bool`/`_parse_int` 失败告警，不静默）
 - [ ] R3 建 `backend/infra/cache.py`：统一 TTL 缓存接口（收口 `astock._ztb_cache`/`market._CACHE`/`fallback` 文件缓存）
 - [ ] R4 建 `backend/infra/resilience.py`：统一熔断+限流+降级抽象（收口 `circuit_breaker` + `em_get` 限流/代理 + `fallback` 的 get_with_fallback 降级语义）
-- [ ] R5 🩹修 `app.py cache_response` key：含 path + query params + kwargs
+- [x] R5 🩹修 `app.py cache_response` key：含 path + query params + kwargs
 - [ ] R6 `_metrics_middleware` tier 分类配置化（tier 映射表）
 - [ ] R7 路由自动发现：`pkgutil.iter_modules(routers)` 自动 include 有 `router` 属性的模块，替手工 `include_router`
 - [ ] R8 `fallback.py` 合并到 infra 后删除（保留 get_with_fallback 语义在 resilience）
@@ -55,7 +55,7 @@
 - [ ] A2 `infra/cache.py` 统一 TTL 缓存；`astock`/`market`/`risk_models` 改用之；空结果不缓存
 - [ ] A3 `infra/resilience.py` 统一熔断+限流+降级；`fallback.get_with_fallback` 语义保留
 - [ ] A4 `circuit_breaker.py`/`fallback.py` 已并入 infra（或保留薄封装）
-- [ ] A5 `cache_response` key 含 path+query params；不同 code 不撞缓存（单测）
+- [x] A5 `cache_response` key 含 path+query params；不同 code 不撞缓存（单测）
 - [ ] A6 `_metrics_middleware` tier 配置化
 - [ ] A7 路由自动发现：新增 router 无需改 app.py 即挂载
 - [ ] A8 `pytest -m "not live"` 全过；:8900 端点行为不变

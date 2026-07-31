@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -179,10 +180,40 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 import functools
 import time as _time
-from typing import Any, Dict, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 _MAX_CACHE_SIZE = 1024
 _RESPONSE_CACHE: Dict[str, Tuple[float, Any]] = {}
+
+
+def _cache_key(func: Callable, args: tuple, kwargs: dict) -> str:
+    """构建响应缓存键：含 path + query params（若有 Request）+ 函数名 + 参数。
+
+    修复点：旧实现 ``f"{func.__name__}:{...kwargs...}"`` 未含 args 与 query
+    params，不同 code 在某些调用路径下可能撞缓存。现以稳定 JSON 序列化
+    args + kwargs（FastAPI 将 path/query 参数以 kwargs 注入，故不同 code →
+    不同 key）；若被装饰端点声明了 ``request: Request``，则进一步用 path +
+    sorted query params 参与键，覆盖未声明在签名里的额外 query 串。
+    """
+    request = kwargs.get("request")
+    if isinstance(request, Request):
+        payload = {
+            "path": request.url.path,
+            "params": sorted(request.query_params.multi_items()),
+        }
+    else:
+        payload = {
+            "module": func.__module__,
+            "name": func.__name__,
+            "args": list(args),
+            "kwargs": {k: v for k, v in sorted(kwargs.items())},
+        }
+    try:
+        raw = json.dumps(payload, default=str, sort_keys=True)
+    except TypeError:
+        # 不可序列化对象退化为 repr，仍保留 args/kwargs 区分
+        raw = f"{func.__module__}:{func.__name__}:{args!r}:{sorted(kwargs.items(), key=lambda kv: kv[0])}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
 def cache_response(ttl: int = 300):
@@ -190,7 +221,7 @@ def cache_response(ttl: int = 300):
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            key = f"{func.__name__}:{';'.join(f'{k}={v}' for k, v in sorted(kwargs.items()))}"
+            key = _cache_key(func, args, kwargs)
             now = _time.time()
             hit = _RESPONSE_CACHE.get(key)
             if hit and now - hit[0] < ttl:
