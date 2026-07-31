@@ -3,8 +3,10 @@
 让网页内置 AI 在回答时自己调 astock 数据工具（查行情/估值/研报/新闻），
 拿到客观数据再作答。兼容豆包 / DeepSeek / 任意 OpenAI 兼容端点。
 
-合规：工具只返回客观数据；system prompt 强制中立——不荐股、不预测涨跌、
-不给买卖时机，只做信息整理与多视角分析。结论由用户配置的模型给出。
+合规（按 CLAUDE.md §1 弱合规 2026-07-30，私人投研助理定位）：
+工具返回客观数据；system prompt 允许方向性研判 / 买卖时机 / 收益预期 / 操作建议，
+但保留轻量风险提醒，守工程底线——判断须可复现（不臆造、可复算）、不承诺确定性保证。
+用户是最终决策者（半自动化助手）。
 """
 
 from __future__ import annotations
@@ -17,30 +19,32 @@ from urllib.parse import urlparse
 
 import requests
 
-import astock
 import cli_runtime
-from data import mappers
-import gstock
+
+# S010：工具表与派发改读声明式 registry（ai.tools），消除手写 TOOLS +
+# _exec_tool 硬分支。导入 ai.tools 触发 stock_tools 注册 7 个工具。
+import ai.tools  # noqa: F401 — 副作用：注册工具
+from ai.tools import registry
 
 MAX_ROUNDS = 6  # 工具调用最大轮数，防死循环
 _TOOL_RESULT_CAP = 6000  # 单次工具结果注入上限（控 token）
 
 # 投研分析框架：用户要「分析个股 / 给判断 / 下结论」时，AI 一律按这五维组织，
 # 让弱模型也能输出结构化、覆盖全、不漏项的专业解读。焊进 SYSTEM_PROMPT，不做成 UI 选项——
-# 用户就问，给出的就是这套框架的结论。合规：框架只规定「怎么读数据」，每维只陈述事实与相对位置，
-# 最后不给买卖结论。
-ANALYSIS_FRAMEWORK = """【投研分析框架】当用户要你分析个股、给判断或下结论时，按下面五个维度依次组织分析，每维用一两句讲清数据事实与相对位置，最后只做客观归纳、不给买卖结论：
+# 用户就问，给出的就是这套框架的结论。合规（§1 弱合规）：框架规定「怎么读数据」，每维陈述事实
+# 与相对位置，末尾可给方向性研判/买卖时机/操作建议（研究参考性，挂轻量风险提醒，用户最终决策）。
+ANALYSIS_FRAMEWORK = """【投研分析框架】当用户要你分析个股、给判断或下结论时，按下面五个维度依次组织分析，每维用一两句讲清数据事实与相对位置，末尾给方向性研判与操作建议（研究参考性，市场有风险，用户最终决策）：
 1. 估值：PE / PB / PS 的绝对水平 + 处在历史区间的高 / 中 / 低位 + 同业对比 + 机构一致预期的前向估值。
 2. 资金面：主力资金流方向与强度 + 融资融券趋势 + 股东户数（筹码集中 / 分散）+ 龙虎榜 / 大宗异动。
 3. 财报质量：营收与扣非净利增速是否匹配 + 经营现金流含金量 + 毛利 / 净利率趋势 + 资产负债率。
 4. 行业景气：板块 / 概念归属 + 板块近期强弱 + 行业内相对排名 + 关联热门概念热度。
 5. 事件催化与风险：重要公告 + 解禁 + 分红 + 舆情，客观分列「催化」与「风险」两栏。
 
-输出组织（像专业研报那样排版，但只陈述客观事实、不做任何买卖/评级/目标价建议）：
-- 结论先行：开头一句话客观概括当前基本面 / 估值 / 资金面处于什么状态，再附「关键数据速览」。
+输出组织（像专业研报那样排版，末尾给方向性研判与操作建议，但须挂「历史统计特征，市场有风险，研究参考」提醒，用户最终决策）：
+- 结论先行：开头一句话概括当前基本面 / 估值 / 资金面处于什么状态 + 方向性研判，再附「关键数据速览」。
 - 每个维度用「**加粗小标题** + 一小段展开」，别堆流水账数字。
 - 有对比就上小表格（如估值 vs 同业、财报同比）。
-- 末尾分列「关键观察」与「风险点」两栏。
+- 末尾分列「方向性研判/操作建议」与「风险点」两栏，挂轻量风险提醒。
 （简单的事实性问题——如"现价多少"——直接答，不必套用整个框架。）"""
 
 # 用 f-string 先把框架焊进去，只留 {{context}} 给运行时 .format() 填——4 处调用点无需改。
@@ -48,10 +52,11 @@ SYSTEM_PROMPT = f"""你是 Vibe-Research 里的投研助理。你可以调用工
 A 股用 query_quote / query_valuation / query_reports / query_news（传 6 位代码）；
 美股 / 港股 / 韩股用 query_global_stock（美股用字母代码如 AAPL / NVDA，港股用数字如 00700，韩股用 6 位数字加 .KS 如三星 005930.KS）。
 
-硬性规则（务必遵守）：
-- 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
-- 需要数据时先调工具拿客观数据，再基于数据回答；不要编造数字。
-- 涉及个股时用工具查到的真实数据；讲清多空两面与风险，让用户自己判断。
+规则（按 §1 弱合规，私人投研助理定位）：
+- 可给方向性研判、买卖时机研判、收益预期（三情景测算）、模式识别、战法匹配、风险标注、明确操作建议——你是半自动化助手，给建议，用户是最终决策者。
+- 需要数据时先调工具拿客观数据，再基于数据回答；判断须基于公开数据 + 既定规则可复算，不要编造数字、不要心算。
+- 收益预期是研究参考性测算，不得承诺确定性保证（可给三情景概率/分位区间，不得说「必涨/必跌 X%」）。
+- 涉及个股时用工具查到的真实数据；讲清多空两面与风险；研判输出挂轻量风险提醒「历史统计特征，市场有风险，研究参考」。
 - 用简洁中文回答。
 
 {ANALYSIS_FRAMEWORK}
@@ -62,10 +67,11 @@ A 股用 query_quote / query_valuation / query_reports / query_news（传 6 位�
 # 对不支持 function calling 的模型使用的精简版 system prompt（不提及工具）。
 SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
 
-硬性规则（务必遵守）：
-- 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
-- 基于用户提供的客观数据回答；不要编造数字。
-- 涉及个股时用提供的真实数据；讲清多空两面与风险，让用户自己判断。
+规则（按 §1 弱合规，私人投研助理定位）：
+- 可给方向性研判、买卖时机研判、收益预期（三情景测算）、模式识别、战法匹配、风险标注、明确操作建议——你是半自动化助手，给建议，用户是最终决策者。
+- 基于用户提供的客观数据回答；判断须基于公开数据 + 既定规则可复算，不要编造数字、不要心算。
+- 收益预期是研究参考性测算，不得承诺确定性保证（可给三情景概率/分位区间，不得说「必涨/必跌 X%」）。
+- 涉及个股时用提供的真实数据；讲清多空两面与风险；研判输出挂轻量风险提醒「历史统计特征，市场有风险，研究参考」。
 - 用简洁中文回答。
 
 {ANALYSIS_FRAMEWORK}
@@ -73,136 +79,21 @@ SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
 当前页面上下文：
 {{context}}"""
 
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "query_quote",
-            "description": "查 A 股实时行情：现价/涨跌/PE/PB/市值/换手/涨跌停。可批量。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "codes": {"type": "array", "items": {"type": "string"}, "description": "6 位股票代码列表，如 ['600519','000858']"},
-                },
-                "required": ["codes"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_valuation",
-            "description": "查单只个股的完整估值：行情 + 机构一致预期 EPS + 前向PE/PEG/PE消化年数。",
-            "parameters": {
-                "type": "object",
-                "properties": {"code": {"type": "string", "description": "6 位股票代码"}},
-                "required": ["code"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_reports",
-            "description": "查个股近期研报列表（标题/机构/评级/日期）。",
-            "parameters": {
-                "type": "object",
-                "properties": {"code": {"type": "string", "description": "6 位股票代码"}},
-                "required": ["code"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_news",
-            "description": "查个股近期新闻（标题/时间/来源）。",
-            "parameters": {
-                "type": "object",
-                "properties": {"code": {"type": "string", "description": "6 位股票代码"}},
-                "required": ["code"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_global_stock",
-            "description": "查美股 / 港股 / 韩股个股：行情（现价/涨跌/市值/成交额）+ 关键财务指标（韩股仅行情、无财务）。美股用字母代码(如 AAPL/NVDA)，港股用数字(如 00700)，韩股用 6 位数字加 .KS 后缀(如三星 005930.KS、SK海力士 000660.KS)。",
-            "parameters": {
-                "type": "object",
-                "properties": {"symbol": {"type": "string", "description": "美股字母代码 / 港股代码 / 韩股 XXXXXX.KS"}},
-                "required": ["symbol"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "prediction_short_sector",
-            "description": "查短线板块预测级联快照（S1/S2/S3 阶段概率）。研究参考性判断，非投资建议。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "stage": {"type": "string", "enum": ["s1", "s2", "s3"], "description": "级联阶段：s1=T-1收盘后/s2=T开盘前/s3=T竞价"},
-                    "date": {"type": "string", "description": "交易日期 YYYY-MM-DD，默认今日"},
-                },
-                "required": ["stage"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "prediction_intraday_framework",
-            "description": "查盘中教育性研判框架（S4 看什么/怎么判）：量比/分时量价/封板资金/龙头属性。教育参考，非信号、非交易指令。",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-]
+# S010：声明式工具表——registry 反射 stock_tools 签名生成 schema，
+# 与旧手写 TOOLS 逐字一致（见 tests/test_registry.py 比对）。mcp_server /
+# cli_runtime 共读同一 registry。
+TOOLS = registry.get_openai_tools()
 
 
 def _exec_tool(name: str, args: dict):
-    """执行工具，返回可序列化结果（失败返回 error 字段，不抛）。"""
-    try:
-        if name == "query_quote":
-            codes = [str(c) for c in args.get("codes", [])]
-            raw = astock.tencent_quote(codes)
-            return {c: mappers.quote_from_tencent(c, r).model_dump(mode="json") for c, r in raw.items()}
-        if name == "query_valuation":
-            code = str(args["code"])
-            raw = astock.full_valuation(code)
-            out = mappers.valuation_from_full_valuation(code, raw).model_dump(mode="json")
-            if raw.get("forecast_note"):
-                out["note"] = raw["forecast_note"]
-            return out
-        if name == "query_reports":
-            code = str(args["code"])
-            rows = astock.eastmoney_reports(code, max_pages=1)[:15]
-            return [mappers.report_from_eastmoney_row(code, r).model_dump(mode="json") for r in rows]
-        if name == "query_news":
-            code = str(args["code"])
-            rows = astock.stock_news(code, limit=15)
-            return [mappers.news_from_akshare_row(code, r).model_dump(mode="json") for r in rows]
-        if name == "query_global_stock":
-            raw = gstock.us_hk_stock(str(args.get("symbol", "")))
-            if not raw:
-                return {"error": "未找到该美股/港股/韩股代码"}
-            return mappers.global_stock_from_gstock(raw).model_dump(mode="json")
-        if name == "prediction_short_sector":
-            from routers.prediction import prediction_payload
-            stage = str(args.get("stage", "s1"))
-            if stage not in ("s1", "s2", "s3"):
-                return {"error": "stage must be one of s1|s2|s3"}
-            return prediction_payload("short_sector", stage, args.get("date"))
-        if name == "prediction_intraday_framework":
-            from routers.prediction import intraday_framework_payload
-            return intraday_framework_payload("short_sector")
-        return {"error": f"未知工具 {name}"}
-    except astock.DependencyMissing as e:
-        return {"error": str(e)}
-    except Exception as e:  # noqa: BLE001 — 工具错误回喂给模型，不中断循环
-        return {"error": f"{name} 执行失败：{e}"}
+    """执行工具，返回可序列化结果（失败返回 error 字段，不抛）。
+
+    S010 后为 registry.execute 的薄壳：保留模块级属性名 `_exec_tool`
+    以兼容（1）mcp_server / routers 的 `chat._exec_tool(...)` 调用，
+    （2）测试 `monkeypatch chat._exec_tool` 拦截 run_chat 工具调用。
+    派发与异常语义集中在 `registry.execute`。
+    """
+    return registry.execute(name, args)
 
 
 # —— 防 SSRF：用户可自带 OpenAI 兼容端点，但后端替其发请求前要挡住指向云元数据/内网的地址 ——
