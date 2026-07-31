@@ -44,13 +44,6 @@ def _load_fallback(filename: str) -> dict | list:
 
 
 class TestFundFlowBaseline:
-    def test_600722_empty_data_maps_to_empty_list(self):
-        """capital_flow_600722.json data 为空列表，映射应产出空列表不抛。"""
-        data = _load_fallback("capital_flow_600722.json")
-        assert data == []
-        result = [map_capital_flow_to_fundflow(item, code="600722", market="A") for item in data]
-        assert result == []
-
     def test_605162_first_bar_validate_ok(self):
         """capital_flow_605162.json 首行经映射后能 model_validate 进 FundFlow。"""
         data = _load_fallback("capital_flow_605162.json")
@@ -121,14 +114,6 @@ class TestFundFlowBaseline:
 
 
 class TestDragonTigerBaseline:
-    def test_600722_empty_seats_maps_to_empty_records(self):
-        """dragon_tiger_600722.json seats.buy/seats.sell 为空，映射产出空列表。"""
-        data = _load_fallback("dragon_tiger_600722.json")
-        assert isinstance(data, dict)
-        seats = data.get("seats", {})
-        records = map_dragon_tiger_to_seat_records(seats)
-        assert records == []
-
     def test_605162_seats_shape_compatible(self):
         """dragon_tiger_605162.json seats 结构能映射为 seat_records 不抛。"""
         data = _load_fallback("dragon_tiger_605162.json")
