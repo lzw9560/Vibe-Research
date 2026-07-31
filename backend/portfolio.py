@@ -22,6 +22,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 import astock
+from data.mappers import quote_from_tencent
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _OLD_PF_FILE = os.path.join(HERE, ".cache", "portfolio.json")  # ≤v0.1.1 旧位置
@@ -106,7 +107,8 @@ async def close_position(code: str, date: str, price: float, shares: float, cost
         d = await asyncio.to_thread(_load)
         d.setdefault("closed", [])
         try:
-            name = astock.tencent_quote([code]).get(code, {}).get("name", code)
+            raw = astock.tencent_quote([code]) or {}
+            name = quote_from_tencent(code, raw.get(code, {})).name or code
         except Exception:
             name = code
         d["closed"].append({
@@ -138,17 +140,17 @@ async def get_portfolio() -> dict:
     rows, tmv, tcost = [], 0.0, 0.0
     if hs:
         try:
-            quotes = astock.tencent_quote([h["code"] for h in hs])
+            raw = astock.tencent_quote([h["code"] for h in hs]) or {}
         except Exception:
-            quotes = {}
+            raw = {}
         for h in hs:
-            q = quotes.get(h["code"], {})
-            price = q.get("price", 0.0)
+            model = quote_from_tencent(h["code"], raw.get(h["code"], {}))
+            price = model.price or 0.0
             mv = price * h["shares"]
             cv = h["cost"] * h["shares"]
             pnl = mv - cv
             rows.append({
-                "code": h["code"], "name": q.get("name", h["code"]),
+                "code": h["code"], "name": model.name or h["code"],
                 "price": price, "shares": h["shares"], "cost": h["cost"],
                 "market_value": round(mv, 2), "pnl": round(pnl, 2),
                 "pnl_pct": round(pnl / cv * 100, 2) if cv else 0.0,

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import astock
+from data.mappers import dragon_tiger_from_dict
 
 
 def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
@@ -30,9 +31,8 @@ def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
         except Exception:
             entry["missing"]["main_net_inflow"] = "资金流取数失败"
         try:
-            dt = astock.dragon_tiger_board(c) or {}
-            inst = dt.get("institution") or {}
-            entry["dragon_tiger_inst_net"] = inst.get("net_amt")
+            dt = dragon_tiger_from_dict(astock.dragon_tiger_board(c) or {})
+            entry["dragon_tiger_inst_net"] = dt.institution_net
             if entry["dragon_tiger_inst_net"] is None:
                 entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜待披露"
         except Exception:

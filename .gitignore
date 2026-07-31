@@ -12,9 +12,13 @@ portfolio.json
 public/user-data/
 backend/data/fallback/
 backend/data/*.db
+backend/data/*.json
 backend/**/*.db
 backend/vibe_research.db
-data/
+# 根级 ./data 运行时库（winrate.db 等），不入 git
+/data/
+# 注意：backend/data 自 S008 起同时是数据层源码包（transport.py/mappers.py/sources/*），
+# 其 .py 源码入 git；仅上面的缓存/DB/JSON 被忽略。
 
 # ── 密钥 / 环境（绝不进仓库） ──────────────────────────────────────
 .env

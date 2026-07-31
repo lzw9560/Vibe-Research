@@ -19,6 +19,7 @@ import requests
 
 import astock
 import cli_runtime
+from data import mappers
 import gstock
 
 MAX_ROUNDS = 6  # 工具调用最大轮数，防死循环
@@ -51,20 +52,6 @@ A 股用 query_quote / query_valuation / query_reports / query_news（传 6 位�
 - 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
 - 需要数据时先调工具拿客观数据，再基于数据回答；不要编造数字。
 - 涉及个股时用工具查到的真实数据；讲清多空两面与风险，让用户自己判断。
-- 用简洁中文回答。
-
-{ANALYSIS_FRAMEWORK}
-
-当前页面上下文：
-{{context}}"""
-
-# 对不支持 function calling 的模型使用的精简版 system prompt（不提及工具）。
-SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
-
-硬性规则（务必遵守）：
-- 只做信息整理、数据解读与多视角分析；不推荐任何具体买卖、不预测涨跌与价位、不给买卖时机、不承诺收益、不打分排名。
-- 基于用户提供的客观数据回答；不要编造数字。
-- 涉及个股时用提供的真实数据；讲清多空两面与风险，让用户自己判断。
 - 用简洁中文回答。
 
 {ANALYSIS_FRAMEWORK}
@@ -179,18 +166,29 @@ def _exec_tool(name: str, args: dict):
     """执行工具，返回可序列化结果（失败返回 error 字段，不抛）。"""
     try:
         if name == "query_quote":
-            return astock.tencent_quote([str(c) for c in args.get("codes", [])])
+            codes = [str(c) for c in args.get("codes", [])]
+            raw = astock.tencent_quote(codes)
+            return {c: mappers.quote_from_tencent(c, r).model_dump(mode="json") for c, r in raw.items()}
         if name == "query_valuation":
-            return astock.full_valuation(str(args["code"]))
+            code = str(args["code"])
+            raw = astock.full_valuation(code)
+            out = mappers.valuation_from_full_valuation(code, raw).model_dump(mode="json")
+            if raw.get("forecast_note"):
+                out["note"] = raw["forecast_note"]
+            return out
         if name == "query_reports":
-            rows = astock.eastmoney_reports(str(args["code"]), max_pages=1)[:15]
-            return [{k: r.get(k) for k in ("title", "publishDate", "orgSName", "emRatingName")} for r in rows]
+            code = str(args["code"])
+            rows = astock.eastmoney_reports(code, max_pages=1)[:15]
+            return [mappers.report_from_eastmoney_row(code, r).model_dump(mode="json") for r in rows]
         if name == "query_news":
-            rows = astock.stock_news(str(args["code"]), limit=15)
-            return [{k: r.get(k) for k in ("新闻标题", "发布时间", "文章来源")} for r in rows]
+            code = str(args["code"])
+            rows = astock.stock_news(code, limit=15)
+            return [mappers.news_from_akshare_row(code, r).model_dump(mode="json") for r in rows]
         if name == "query_global_stock":
-            data = gstock.us_hk_stock(str(args.get("symbol", "")))
-            return data or {"error": "未找到该美股/港股/韩股代码"}
+            raw = gstock.us_hk_stock(str(args.get("symbol", "")))
+            if not raw:
+                return {"error": "未找到该美股/港股/韩股代码"}
+            return mappers.global_stock_from_gstock(raw).model_dump(mode="json")
         if name == "prediction_short_sector":
             from routers.prediction import prediction_payload
             stage = str(args.get("stage", "s1"))

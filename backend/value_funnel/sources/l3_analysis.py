@@ -8,58 +8,59 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from models import Financials, ValuationPercentile
+
 from .. import models
 
 
 def build_analysis_skeleton(code: str, name: str = "") -> models.CompanyAnalysis:
     """构建 L3 精细分析骨架。客观数据系统填，结论留空交 AI。"""
     import astock
+    from data.mappers import (
+        company_info_from_individual_info,
+        financials_from_dict,
+        valuation_percentile_from_dict,
+    )
 
-    fin = {}
+    fin = Financials()
     try:
-        fin = astock.financials(code) or {}
+        fin = financials_from_dict(astock.financials(code) or {})
     except Exception:
-        fin = {}
+        pass
 
-    val = {}
+    val = ValuationPercentile()
     try:
-        val = astock.valuation_percentile(code) or {}
+        val = valuation_percentile_from_dict(astock.valuation_percentile(code) or {})
     except Exception:
-        val = {}
+        pass
 
     # 财务摘要（客观事实）
     fin_sum = ""
-    if fin:
-        parts = []
-        if fin.get("revenue"):
-            parts.append(f"营收 {fin['revenue']}")
-        if fin.get("net_profit"):
-            parts.append(f"净利 {fin['net_profit']}")
-        if fin.get("roe"):
-            parts.append(f"ROE {fin['roe']}")
-        if fin.get("gross_margin"):
-            parts.append(f"毛利率 {fin['gross_margin']}")
-        if fin.get("net_margin"):
-            parts.append(f"净利率 {fin['net_margin']}")
-        fin_sum = "；".join(parts) + (f"（{fin.get('period','')}）" if fin.get("period") else "")
+    parts = []
+    if fin.revenue is not None:
+        parts.append(f"营收 {fin.revenue}")
+    if fin.net_profit is not None:
+        parts.append(f"净利 {fin.net_profit}")
+    if fin.roe is not None:
+        parts.append(f"ROE {fin.roe}")
+    if fin.gross_margin is not None:
+        parts.append(f"毛利率 {fin.gross_margin}")
+    if fin.net_margin is not None:
+        parts.append(f"净利率 {fin.net_margin}")
+    fin_sum = "；".join(parts) + (f"（{fin.period}）" if fin.period else "")
 
     # 估值位置（只标位置不划买卖线）
     val_pos = ""
-    if val:
-        pe = val.get("pe_ttm") or {}
-        pb = val.get("pb") or {}
-        pct = pe.get("percentile")
-        if pct is not None:
-            val_pos = f"PE-TTM 处历史 {pct}% 分位"
-        pbpct = pb.get("percentile")
-        if pbpct is not None:
-            val_pos += f"；PB 处 {pbpct}% 分位"
+    if val.pe_ttm_percentile is not None:
+        val_pos = f"PE-TTM 处历史 {val.pe_ttm_percentile}% 分位"
+    if val.pb_percentile is not None:
+        val_pos += f"；PB 处 {val.pb_percentile}% 分位"
 
     # 商业模式（来自行业+名称，客观）
     industry = ""
     try:
-        info = astock.individual_info(code) or {}
-        industry = str(info.get("行业") or "")
+        info = company_info_from_individual_info(astock.individual_info(code) or {})
+        industry = info.industry or ""
     except Exception:
         pass
     biz = f"{name or code}（{industry}）" if industry else (name or code)

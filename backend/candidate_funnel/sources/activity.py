@@ -4,40 +4,42 @@
 from __future__ import annotations
 
 import astock
+from data.mappers import quote_from_tencent
 
 _BATCH = 50
 
 
 def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
     """返回 {code: {name, price, change_pct, turnover_pct, vol_ratio, amount_yi,
-    amplitude_pct, limit_up, limit_down, missing?}}。"""
+    amplitude_pct, limit_up, limit_down, missing?}}。
+
+    读侧经 ``quote_from_tencent`` 拿 Quote 模型（单位已统一、字段 rename 已集中），
+    输出 dict shape 保持不变以兼容下游 candidate_funnel/funnel（本轮不迁下游）。
+    """
     out: dict[str, dict] = {}
     for i in range(0, len(codes), _BATCH):
         batch = codes[i : i + _BATCH]
         try:
-            quotes = astock.tencent_quote(batch) or {}
+            raw = astock.tencent_quote(batch) or {}
         except Exception:
             for c in batch:
                 out[c] = {"missing": {"turnover_pct": "行情未取得"}}
             continue
-        for c, q in quotes.items():
-            # astock._parse_gtimg 返回 amount_wan（万），需换算成亿；
-            # 不用 `or` 兜底以免吞掉 0.0。
-            amount_wan = q.get("amount_wan")
-            if amount_wan is not None:
-                amount_yi = round(amount_wan / 10000.0, 4)
-            else:
-                amount_yi = q.get("amount_yi")
+        for c in batch:
+            model = quote_from_tencent(c, raw.get(c, {}))
+            # turnover 为元，换算成亿元；不用 `or` 兜底以免吞掉 0.0
+            turnover = model.turnover
+            amount_yi = round(turnover / 1e8, 4) if turnover is not None else None
             entry = {
-                "name": q.get("name"),
-                "price": q.get("price"),
-                "change_pct": q.get("pct") or q.get("change_pct"),
-                "turnover_pct": q.get("turnover") or q.get("turnover_pct"),
-                "vol_ratio": q.get("vol_ratio"),
+                "name": model.name,
+                "price": model.price,
+                "change_pct": model.change_pct,
+                "turnover_pct": model.turnover_rate,
+                "vol_ratio": model.vol_ratio,
                 "amount_yi": amount_yi,
-                "amplitude_pct": q.get("amplitude") or q.get("amplitude_pct"),
-                "limit_up": q.get("limit_up"),
-                "limit_down": q.get("limit_down"),
+                "amplitude_pct": model.amplitude,
+                "limit_up": model.limit_up_price,
+                "limit_down": model.limit_down_price,
             }
             missing: dict[str, str] = {}
             for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):

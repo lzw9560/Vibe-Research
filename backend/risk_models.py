@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 from pydantic import BaseModel
 
 import astock
+from data.mappers import dragon_tiger_from_dict, kline_from_mootdx
 
 
 class OneDayRisk(BaseModel):
@@ -233,20 +235,22 @@ async def _get_dragon_tiger_risk(code: str) -> float:
         import astock
         from fallback import get_with_fallback
         cache_key = f"dragon_tiger:{code}"
-        dt = await asyncio.to_thread(
-            get_with_fallback,
-            cache_key,
-            lambda: astock.dragon_tiger_board(code, look_back=30),
-            ttl=600,  # 10 分钟缓存
-            fallback_value={"records": []},
+        dt = dragon_tiger_from_dict(
+            await asyncio.to_thread(
+                get_with_fallback,
+                cache_key,
+                lambda: astock.dragon_tiger_board(code, look_back=30),
+                ttl=600,  # 10 分钟缓存
+                fallback_value={"records": []},
+            )
         )
-        records = dt.get("records", [])
+        records = dt.records
         if not records:
             return 0.0
 
         # 基于近期上榜频率和净买入额波动计算风险
         recent_days = len(records)
-        net_amounts = [r.get("net_buy", 0) for r in records[:5]]
+        net_amounts = [r.net_buy or 0 for r in records[:5]]
         avg_net = sum(net_amounts) / len(net_amounts) if net_amounts else 0
 
         # 上榜频率风险（5次以上加分）
@@ -328,9 +332,9 @@ async def _get_seat_info(code: str) -> dict:
 async def _calculate_volatility(code: str, window: int = 20) -> float:
     """计算近 window 日收益率标准差（波动率）。"""
     try:
-        import astock
-        kline = await asyncio.to_thread(lambda: astock.get_kline(code, days=window + 10))
-        closes = [k["close"] for k in kline[-window:]]
+        raw = await asyncio.to_thread(lambda: astock.kline(code, offset=window + 10))
+        bars = kline_from_mootdx(code, raw).bars
+        closes = [b.close for b in bars[-window:] if b.close is not None]
         if len(closes) < 2:
             return 0.0
         returns = [
@@ -340,16 +344,19 @@ async def _calculate_volatility(code: str, window: int = 20) -> float:
         mean = sum(returns) / len(returns)
         variance = sum((r - mean) ** 2 for r in returns) / len(returns)
         return round(variance ** 0.5 * 100, 2)  # 百分比
-    except Exception:
+    except (KeyError, ValueError, TypeError, AttributeError) as e:
+        logging.getLogger("risk_models").warning(
+            "_calculate_volatility(%s) 取数失败: %s", code, e
+        )
         return 0.0
 
 
 async def _calculate_max_drawdown(code: str, window: int = 60) -> float:
     """计算近 window 日最大回撤（百分比）。"""
     try:
-        import astock
-        kline = await asyncio.to_thread(lambda: astock.get_kline(code, days=window + 10))
-        closes = [k["close"] for k in kline[-window:]]
+        raw = await asyncio.to_thread(lambda: astock.kline(code, offset=window + 10))
+        bars = kline_from_mootdx(code, raw).bars
+        closes = [b.close for b in bars[-window:] if b.close is not None]
         if len(closes) < 2:
             return 0.0
         peak = closes[0]
@@ -361,16 +368,19 @@ async def _calculate_max_drawdown(code: str, window: int = 60) -> float:
             if dd > max_dd:
                 max_dd = dd
         return round(max_dd * 100, 2)
-    except Exception:
+    except (KeyError, ValueError, TypeError, AttributeError) as e:
+        logging.getLogger("risk_models").warning(
+            "_calculate_max_drawdown(%s) 取数失败: %s", code, e
+        )
         return 0.0
 
 
 async def _calculate_liquidity_risk(code: str) -> float:
     """计算流动性风险（基于近20日平均成交额，越低风险越高）。"""
     try:
-        import astock
-        kline = await asyncio.to_thread(lambda: astock.get_kline(code, days=20))
-        amounts = [k.get("amount", 0) for k in kline]
+        raw = await asyncio.to_thread(lambda: astock.kline(code, offset=20))
+        bars = kline_from_mootdx(code, raw).bars
+        amounts = [b.turnover or 0 for b in bars]
         if not amounts:
             return 0.0
         avg_amount = sum(amounts) / len(amounts)
@@ -378,7 +388,10 @@ async def _calculate_liquidity_risk(code: str) -> float:
         if avg_amount < 50000000:
             return round(100 - avg_amount / 50000000 * 100, 2)
         return 0.0
-    except Exception:
+    except (KeyError, ValueError, TypeError, AttributeError) as e:
+        logging.getLogger("risk_models").warning(
+            "_calculate_liquidity_risk(%s) 取数失败: %s", code, e
+        )
         return 0.0
 
 
@@ -386,14 +399,15 @@ async def _calculate_concentration_risk(code: str) -> float:
     """计算集中度风险（基于龙虎榜席位集中度）。"""
     try:
         import astock
-        dt = await asyncio.to_thread(astock.dragon_tiger_board, code, look_back=10)
-        records = dt.get("records", [])
+        dt = dragon_tiger_from_dict(
+            await asyncio.to_thread(astock.dragon_tiger_board, code, look_back=10)
+        )
+        records = dt.records
         if not records:
             return 0.0
 
         # 计算最近一次上榜的席位集中度（CR5）
-        latest = records[0]
-        net_buys = [r.get("net_buy", 0) for r in records[:5]]
+        net_buys = [r.net_buy or 0 for r in records[:5]]
         total = sum(net_buys)
         if total <= 0:
             return 0.0

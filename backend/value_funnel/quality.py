@@ -84,11 +84,12 @@ def _listing_info(code: str) -> tuple[int, str]:
     """返回 (上市年数, 行业)。失败返回 (0, '')。"""
     try:
         import astock
-        info = astock.individual_info(code) or {}
+        from data.mappers import company_info_from_individual_info
+        info = company_info_from_individual_info(astock.individual_info(code) or {})
     except Exception:
         return 0, ""
-    industry = str(info.get("行业") or "")
-    listing = str(info.get("上市时间") or info.get("上市日期") or "")
+    industry = info.industry or ""
+    listing = info.listing_date or ""
     year_str = listing[:4]
     try:
         ly = int(year_str)

@@ -118,7 +118,8 @@ def _name_of(code: str) -> str:
     # 简化：调用 astock 取名称（轻量），失败返回空
     try:
         import astock
-        q = astock.tencent_quote([code]) or {}
-        return q.get(code, {}).get("name", "") or ""
+        from data.mappers import quote_from_tencent
+        raw = astock.tencent_quote([code]) or {}
+        return quote_from_tencent(code, raw.get(code, {})).name or ""
     except Exception:
         return ""
