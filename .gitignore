@@ -52,3 +52,11 @@ candidates-smoke.png
 
 # 项目内私有数据根（API key/持仓/研报，绝不进 git）
 .vibe-research/
+
+# ── 覆盖率 / ML 训练产物 / 前端构建缓存（垃圾产物，不进仓库） ──
+.coverage
+**/.coverage
+backend/catboost_info/
+backend/gmm_result.txt
+frontend/.vite/
+frontend/data/
