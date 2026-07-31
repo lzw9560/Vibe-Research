@@ -1,5 +1,8 @@
 # Vibe-Research 打板策略模块设计文档
 
+> 📌 **前身设计**：打板策略的正式 SDD 实现以 `../specs/S002-打板工作流重构/spec.md` 为准（P1 已实现）。
+> 本文档为模块级设计背景，实现细节与验收以 S002 spec/plan/验收报告为准。
+
 > 版本: V2.0 · 2026-07-19  
 > 状态: 修订版（Oracle 审查后）  
 > 作者: Orchestrator + @oracle review  

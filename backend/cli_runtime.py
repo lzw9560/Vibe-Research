@@ -126,6 +126,8 @@ def run_cli(kind: str, system_prompt: str, user_prompt: str) -> str:
                 input=stdin_payload,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=tmpdir,
                 env=env,
                 timeout=_CLI_TIMEOUT_S,
@@ -172,7 +174,8 @@ def run_cli_stream(kind: str, system_prompt: str, user_prompt: str):
 
         proc = subprocess.Popen(
             [bin_path, *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, cwd=tmpdir, env=env, text=True, bufsize=1,
+            stderr=subprocess.DEVNULL, cwd=tmpdir, env=env, text=True,
+            encoding="utf-8", errors="replace", bufsize=1,
         )
         if stdin_payload is not None:
             try:

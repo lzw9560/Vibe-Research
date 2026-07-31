@@ -106,5 +106,35 @@ class TestCheckBaseUrl(unittest.TestCase):
             mod._check_base_url("http://192.168.1.1")
 
 
+class TestGetEnvLLMConfig(unittest.TestCase):
+    """S001: chat._get_env_llm_config 读环境变量兜底配置，返回三键 dict（缺省空串）。"""
+
+    _ENV = {
+        "VR_LLM_BASE_URL": "https://api.deepseek.com/v1",
+        "VR_LLM_API_KEY": "sk-test-redacted",
+        "VR_LLM_MODEL": "deepseek-chat",
+    }
+
+    def test_returns_three_keys_with_values(self):
+        with patch.dict(os.environ, self._ENV, clear=False):
+            cfg = chat._get_env_llm_config()
+        self.assertEqual(cfg["baseURL"], "https://api.deepseek.com/v1")
+        self.assertEqual(cfg["apiKey"], "sk-test-redacted")
+        self.assertEqual(cfg["model"], "deepseek-chat")
+
+    def test_missing_vars_default_to_empty_string(self):
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = chat._get_env_llm_config()
+        self.assertEqual(cfg, {"baseURL": "", "apiKey": "", "model": ""})
+
+    def test_partial_vars_partial_fill(self):
+        only_model = {"VR_LLM_MODEL": "deepseek-chat"}
+        with patch.dict(os.environ, only_model, clear=True):
+            cfg = chat._get_env_llm_config()
+        self.assertEqual(cfg["baseURL"], "")
+        self.assertEqual(cfg["apiKey"], "")
+        self.assertEqual(cfg["model"], "deepseek-chat")
+
+
 if __name__ == "__main__":
     unittest.main()

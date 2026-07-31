@@ -182,6 +182,19 @@ _PRIVATE_NETS = [ipaddress.ip_network(n) for n in
                  ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "::1/128", "fc00::/7")]
 
 
+def _get_env_llm_config() -> dict:
+    """从环境变量读 LLM 兜底配置（前端未传字段时补全）。
+
+    读 VR_LLM_BASE_URL / VR_LLM_API_KEY / VR_LLM_MODEL，缺省返回空串。
+    仅返回配置，不输出建议/标的/预测（合规）。不向非鉴权接口暴露敏感值。
+    """
+    return {
+        "baseURL": os.getenv("VR_LLM_BASE_URL", ""),
+        "apiKey": os.getenv("VR_LLM_API_KEY", ""),
+        "model": os.getenv("VR_LLM_MODEL", ""),
+    }
+
+
 def _ip_blocked(host: str) -> bool:
     try:
         ip = ipaddress.ip_address(host)
