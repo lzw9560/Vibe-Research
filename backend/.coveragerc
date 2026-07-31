@@ -1,0 +1,42 @@
+# S016 测试网：coverage 配置（pytest.ini addopts --cov-config 指向此文件）
+# backend 为扁平布局，--cov=. 会把整个 cwd 下的 .py 计入测量；
+# 这里排除 venv / 数据 / 缓存 / 测试自身等，只保留后端实现源码。
+
+[run]
+source = .
+branch = False
+# 排除虚拟环境、数据目录、缓存、测试目录自身、构建产物
+omit =
+    .venv/*
+    __pycache__/*
+    */__pycache__/*
+    tests/*
+    catboost_info/*
+    scripts/*
+    migrations/*
+    tools/*
+    benchmark_performance.py
+    smoke_test_apis.py
+    run_regime_tests.py
+    test_gmm_debug.py
+    test_gmm_simple.py
+
+[report]
+# 不显示完全覆盖的文件，减少噪音
+skip_covered = False
+show_missing = True
+# 排除与 [run] omit 一致（report 阶段再过滤一次，防止 venv 等漏入统计）
+omit =
+    .venv/*
+    __pycache__/*
+    */__pycache__/*
+    tests/*
+    catboost_info/*
+    scripts/*
+    migrations/*
+    tools/*
+    benchmark_performance.py
+    smoke_test_apis.py
+    run_regime_tests.py
+    test_gmm_debug.py
+    test_gmm_simple.py

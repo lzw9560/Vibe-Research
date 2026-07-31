@@ -1,0 +1,24 @@
+[tool.pytest.ini_options]
+# S016 测试网：pytest 配置（原 pytest.ini 迁移至此——TOML 固定 UTF-8，
+# 避免 GBK 系统下 iniconfig 解析中文注释崩溃）。
+# 离线快测默认跳过 live（联网冒烟），与 CLAUDE.md §测试命令一致：
+#   cd backend && .venv/Scripts/python.exe -m pytest
+# （pyproject.toml 被 pytest 自动发现，addopts 即默认参数）
+#
+# live marker 在 conftest.py:pytest_configure 中注册（唯一出处）。
+# 默认参数：跳过 live、按 backend 目录测覆盖率、输出未覆盖行号。
+# 注：backend 模块为扁平布局（无 backend 包），故 --cov=. 覆盖 cwd 下所有 .py；
+# .venv / data 等通过同目录 .coveragerc exclude 排除。
+# 纯函数门槛（--cov-fail-under）暂注释：本地 venv 缺 lightgbm/mapie/catboost，
+# 部分纯计算测试跑不全，门槛待远程全量跑后按模块定（见 S016 tasks T13 / spec R3）。
+addopts = [
+    "-m", "not live",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-config=.coveragerc",
+    # "--cov-fail-under=80",
+]
+
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
