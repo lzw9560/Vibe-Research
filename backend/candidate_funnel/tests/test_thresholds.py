@@ -10,7 +10,7 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from candidate_funnel.models import BaseThreshold, ThresholdConfig
 from candidate_funnel.thresholds import resolve_thresholds
