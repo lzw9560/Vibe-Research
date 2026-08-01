@@ -1,7 +1,7 @@
 # Vibe-Research 架构文档
 
 > 个人 AI 投研看板（A股 / 美股 / 港股 / 韩股）。本地自托管，FastAPI 后端(:8900) + React 19/Vite 前端(:5899)。
-> 定位：**把客观数据配齐摆好看板，三条出口接用户自己的 AI 做分析，全程焊死"不荐股/不预测/不给买卖时机"合规红线。** 产品自身不做任何投资判断。
+> 定位：**把客观数据配齐摆好看板，三条出口接用户自己的 AI 做分析。** 研判/推荐/买卖时机属系统能力（CLAUDE.md §1.1，2026-07-30），仅挂轻量风险提醒「历史统计特征，市场有风险」。
 > 文档基准：仓库 develop 分支，2026-07-28。
 
 ---
@@ -23,7 +23,7 @@ akshare legu/行业资金流 ─────────►  ├ _sentiment/_sec
 东财涨停四池(聚合) ──────────────►  └ get_overview/_emotion  (TTL 5min 共享缓存)
 108 RSS 源 ──────────────────────►  newsradar.py (12赛道, 40线程并发, 合规过滤)
 
-AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 五维框架与中立红线）:
+AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架）:
  1. 订阅接入  cli_runtime.py  — subprocess 调本机已登录 CLI (claude/qwen/deepseek/codex/opencode) — 不支持 function-calling，数据须已在 context
  2. API 接入  chat.py        — OpenAI 兼容 function-calling (≤6轮循环) — AI 自己调数据工具
  3. MCP 接入  mcp_server.py  — stdio JSON-RPC，复用 chat._exec_tool — 给 Claude Code 等 agent
@@ -43,7 +43,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 五维框架与中�
 | `gstock.py` | 美股/港股/韩股（东财合规子集） | `global_indices`、`resolve_symbol`、`us_hk_stock`、`_push2_stock_get`（push2→push2delay 降级） |
 | `newsradar.py` | 资讯雷达（108 RSS / 12 赛道） | `fetch_radar`、`get_radar(force)`；`ThreadPoolExecutor(40)`；原子写缓存 |
 | `market.py` | 市场情绪/板块资金/全球指数 | `get_overview`、`get_short_term_emotion`、`get_turnover_top`、`get_global_indices`；`_emotion`（涨停四池聚合→连板梯队/封板率/晋级率）；TTL 5min |
-| `chat.py` | 系统 AI 对话层 | `TOOLS`（5工具）、`_exec_tool`、`run_chat[_stream]`（API）、`run_chat_cli[_stream]`（订阅）、`SYSTEM_PROMPT`（五维框架+红线）；`MAX_ROUNDS=6`；SSRF 防护 |
+| `chat.py` | 系统 AI 对话层 | `TOOLS`（5工具）、`_exec_tool`、`run_chat[_stream]`（API）、`run_chat_cli[_stream]`（订阅）、`SYSTEM_PROMPT`（投研五维框架，S010 放宽）；`MAX_ROUNDS=6`；SSRF 防护 |
 | `mcp_server.py` | MCP server（stdio JSON-RPC） | `MCP_TOOLS`、`_handle`、`main` |
 | `cli_runtime.py` | 订阅接入：调本机 CLI | `_CLI_DEFS`、`detect_cli`、`run_cli[_stream]`；三种投递 system-file/stdin/arg；禁 CLI 内置工具防越权；subprocess `encoding="utf-8"`（Windows cp936 locale 防护，HIGH-5） |
 | `config.py` | 配置（dataclass + .env） | `AssistantDefaultConfig`、`load_config()`、`default_config` |
@@ -63,7 +63,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 五维框架与中�
 
 ## AI 三条出口
 
-三条共用 `chat.TOOLS`（5 工具）与 `SYSTEM_PROMPT`（投研五维框架 + 中立红线），保证语义一致。
+三条共用 `chat.TOOLS`（5 工具）与 `SYSTEM_PROMPT`（投研五维框架，S010 放宽），保证语义一致。
 
 | 出口 | 原理 | function-calling | 适用 |
 |---|---|---|---|
@@ -168,10 +168,10 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 五维框架与中�
 | 新战法/策略 | `strategies/` 或 `limitup_strategy.py`；需状态流转则扩 `workflow_state_machine.py` |
 | 新风险因子 | `risk_models.py` 的 `_build_risk_factors` / `OneDayRisk` |
 
-### 合规红线（扩展时务必守）
-- 工具/数据层只返回客观数据，不预置标的、不排名、不建议、不预测、不给买卖时机。
-- `market._emotion` 的涨停四池原始池含个股名，仅供聚合成不含个股名的指标，切勿直接接 API/UI。
-- `chat.SYSTEM_PROMPT` 中立规则焊死。
+### 合规（扩展时务必守）
+- 工具/数据层以客观数据为主；研判/推荐/买卖时机属系统能力（CLAUDE.md §1.1，2026-07-30），输出仅挂轻量风险提醒「历史统计特征，市场有风险」，不承诺确定性。
+- `market._emotion` 的涨停四池原始池含个股名，默认仅聚合为不含个股名的指标；若需连板股客观榜单，走 `astock.em_zt_topic_pool` 原始池出口如实呈现 code/name（设计选择，2026-07-30），聚合指标与客观榜单分层由调用方明确标注。
+- `chat.SYSTEM_PROMPT` 措辞放宽（S010），保留可复现等工程底线。
 
 ---
 

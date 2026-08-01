@@ -16,7 +16,7 @@
 
 - 调研事实见 UI agent 报告（22 项扁平 NAV `Layout.tsx:17-41`；DailyReview 28 state `:25-55`；三态分裂；移动端 `Layout.tsx:221-277` 22 项横滚；echarts `STITimelineChart.tsx:78-168` 硬编码 rgba；暖橙 `useDarkMode.ts:27-35` 无入口；AskAiButton `:108-214`）。
 - 设计文档 `docs/sentiment-weather-station-ui-design.md` V2.0.3 的 P0 项 0 落地。
-- 新合规边界：UI 可呈现"研究参考性判断"卡片，须挂免责声明。
+- 新合规边界（CLAUDE.md §1.1，2026-07-30）：UI 可呈现"研究参考性判断"卡片，挂轻量风险提醒（非强制免责墙）。
 
 ## 3. 需求清单
 

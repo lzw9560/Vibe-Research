@@ -252,7 +252,7 @@ def run_value_funnel(direction: str, stage: str) -> ValueFunnelResult:
 
 ## 5. 合规自查与技术约束
 
-- **红线**：所有模型/接口/前端不出现买卖方向、参考价位、收益预测、主观评分；`MoatSignals` 明确"综合判断交AI，系统不输出主观评分"；`CompanyAnalysis` 估值位置只标位置不划买卖线。
+- **合规边界（CLAUDE.md §1.1，2026-07-30）**：所有模型/接口/前端实现不出现买卖方向、参考价位、收益预测、主观评分（实现时口径）；`MoatSignals` 明确"综合判断交AI，系统不输出主观评分"；`CompanyAnalysis` 估值位置只标位置不划买卖线（设计选择）；研判/推荐类表述如出现，仅挂轻量风险提醒「历史统计特征，市场有风险」。
 - **去劣客观**：7条每条 `passed/inapplicable/exempt` + `evidence`（取数时点+年份+口径），可 `financial_rigor.py` 复算；豁免为"提示性标注"，最终认定交 AI/用户。
 - **双口径通过率**：`pass_rate_absolute`(N/7) + `pass_rate_adjusted`(N/(7−不适用)) 同时输出。
 - **数据年限**：≥5 年可算（降级标 `data_years_note="不足10年"`）；<5 年标不适用；银行/保险第3条标不适用。
@@ -267,5 +267,5 @@ def run_value_funnel(direction: str, stage: str) -> ValueFunnelResult:
 
 - **财务取数封 IP**：经 em_get 限流 + 熔断 + 缓存；超限时对应条标"未取得"不补全。
 - **L4 AI 不可用**：S001 未修前 L4 仅出骨架，不阻塞漏斗前三层。
-- **护城河主观化风险**：moat 层严格只出客观代理信号，综合判断交 AI，避免触碰"主观评分"红线。
+- **护城河主观化风险**：moat 层严格只出客观代理信号，综合判断交 AI（设计选择），避免主观评分污染客观代理层。
 - **回滚**：本期为新增子包 + 1 路由 + 前端页，不改动 S002/数据层/状态机；回滚=移除 `value_funnel/`、`routers/value_funnel.py`、前端页与路由注册，不影响其余功能。

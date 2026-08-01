@@ -57,11 +57,11 @@
 | `super_net` | `super_large_net` | — |
 | `mid_net` | `medium_net` | — |
 | `amount_wan` | `turnover` | ×1e4 (万→元) |
-| `lianban_stocks` | （drop，不进 Emotion） | 合规剥离 |
+| `lianban_stocks` | （drop，不进 Emotion） | 设计选择剥离 |
 
-### 4.2 合规红线（lianban_stocks）
+### 4.2 设计选择（lianban_stocks 剥离）
 
-`market._emotion()` 现返回 `lianban_stocks`（含 code/name/price/pct），违 §1「四池聚合情绪指标不得泄露个股名」。`Emotion` 模型已正确省略该字段。mapper 显式丢弃 `lianban_stocks`。若 routers/market 需连板股榜，走 `astock.em_zt_topic_pool` 原始池出口作客观榜单（不含聚合指标）——**用户已确认采用此剥离方案（2026-07-30）**。
+`market._emotion()` 现返回 `lianban_stocks`（含 code/name/price/pct）。新口径下连板股榜属公开榜单客观事实，可如实呈现个股 code/name；剥离属设计选择（聚合指标 vs 客观榜单分层，非硬约束）。`Emotion` 模型已省略该字段；mapper 显式丢弃 `lianban_stocks`。若 routers/market 需连板股榜，走 `astock.em_zt_topic_pool` 原始池出口作客观榜单（不含聚合指标）——**用户已确认采用此剥离方案（2026-07-30）**。
 
 ## 5. 删除项
 - `backend/data_provider/`（空壳，`normalize_stock_code` 已在 S007 `models/normalize.py`）

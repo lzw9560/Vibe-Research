@@ -2,7 +2,7 @@
 
 > 对应：`spec.md`（spec）+ `plan.md`（技术方案）
 > 粒度：原子任务（独立可验，1-2h/条）。每条含：依赖、改动文件、验收方式、映射 AC。
-> 规则：每条完成即跑对应单测/验收；财务端点必经 `astock.em_get`；不写方向/参考价位/主观评分（合规）；护城河只出客观代理、综合判断交 AI。
+> 规则：每条完成即跑对应单测/验收；财务端点必经 `astock.em_get`；实现不写方向/参考价位/主观评分（实现时口径，合规边界见 spec §2/plan §5）；护城河只出客观代理、综合判断交 AI（设计选择）。
 
 ---
 
@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | A1 | 建包骨架：`value_funnel/` + `__init__.py` + `tests/` | — | `value_funnel/__init__.py`、`tests/__init__.py` | `python -c "import value_funnel"` 不报错 |
 | A2 | `QualityMetric`：index/name/value/threshold/passed/inapplicable/exempt/evidence/missing | A1 | `models.py` | 实例化字段齐 |
-| A3 | `MoatSignals`：毛利率持续性/排名/ROE稳定性/可识别证据 + "综合判断交AI" note | A2 | `models.py` | 无主观评分字段 |
+| A3 | `MoatSignals`：毛利率持续性/排名/ROE稳定性/可识别证据 + "综合判断交AI" note | A2 | `models.py` | 无主观评分字段（实现时口径） |
 | A4 | `QualityAssessment`：metrics+moat+pass_count+双口径通过率+data_years+降级标注 | A2,A3 | `models.py` | 双口径字段齐 |
 | A5 | `CompanyAnalysis`：商业模式/护城河/财务/估值位置/风险 + `counter_arguments`反面论据 | A2 | `models.py` | 反面论据字段在 |
 | A6 | `MasterPerspective`+`DeepAnalysisSkeleton`：四大师框架+数据骨架+问题清单+ai_text待填+ai_pending | A2 | `models.py` | ai_pending 默认 True |
@@ -110,7 +110,7 @@
 |---|---|---|---|---|
 | H1 | 逐条核对 AC1-AC10 | F10,G8 | — | AC checklist 全绿 |
 | H2 | `financial_rigor.py` 复算去劣指标（ROE/FCF/利息覆盖等，AC8 可复现） | A15 | — | 复算结果与系统一致 |
-| H3 | 合规自查（spec §2/§5）：无方向/参考价位/主观评分/一流非一流结论词；护城河不评分 | 全部 | — | 自查表全绿 |
+| H3 | 合规自查（spec §2/§5）：实现无方向/参考价位/主观评分/一流非一流结论词（实现时口径）；护城河不评分 | 全部 | — | 自查表全绿 |
 | H4 | `pytest -m "not live"` 全过 | A16,B4,C4,D3,E4,F10 | — | 全绿 |
 | H5 | 写验收报告，更新 spec 状态"已实现(日期)" | H1-H4 | `S005-*.md` | 报告归档 |
 
@@ -139,7 +139,7 @@ C1→C2           S001（前置）
 ## 执行规则
 
 1. **一次一任务**：按 ID 顺序，完成一条跑其验收方式再开下一条。
-2. **合规前置**：每条实现前对照 spec §2/§5 合规自查栏确认不触红线（无方向/参考价位/主观评分）。
+2. **合规前置**：每条实现前对照 spec §2/§5 合规自查栏确认符合 CLAUDE.md §1.1 弱合规口径（2026-07-30）——可出研判/推荐/买卖时机但仅挂轻量风险提醒「历史统计特征，市场有风险」，保留可复现等工程底线。
 3. **数据走 em_get**：C3 等财务端点必经 `astock.em_get`，不裸调。
 4. **可复现**：A8-A15 各去劣指标均须可被 `financial_rigor.py` 复算（evidence 字段填取数时点+口径）。
 5. **护城河不评分**：C1 只出客观代理信号，综合判断交 AI，禁主观★★★。

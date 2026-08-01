@@ -59,12 +59,12 @@ def execute(name: str, args: dict): ...      # 派发
 3. chat `_exec_tool` 改读 registry；删硬分支
 4. mcp_server 改读 registry，删 `import chat`
 5. cli_runtime 接 registry
-6. SYSTEM_PROMPT 措辞放宽 + 免责声明强制
+6. SYSTEM_PROMPT 措辞放宽 + 轻量风险提醒（非强制免责墙）
 7. 单测 test_registry（反射/派发/三出口导出一致性）
 8. live：POST /api/chat（cli+api）+ MCP 5 工具实测
 9. 合规：SYSTEM_PROMPT diff 审查 + test_compliance.py
 
 ## 5. 风险点
-- SYSTEM_PROMPT 放宽过宽 → 强制免责 + 收益承诺禁止 + diff 审查三重护栏
+- SYSTEM_PROMPT 放宽过宽 → 可复现 + 不承诺确定性 + 轻量风险提醒 + diff 审查多重护栏
 - 反射签名与手写 schema 边界类型差异 → 单测比对 5 工具 schema
 - mcp 改读 registry 后 MCP 协议字段映射 → 保留 `inputSchema` 转换

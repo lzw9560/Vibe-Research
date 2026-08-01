@@ -11,7 +11,7 @@
 
 用户要私人投研助理给出板块/个股涨跌的**研究参考性概率预测**，并按短线(1-3日)/中长线(5-20日)分开建模。当前 S002/S005 漏斗只做筛选不做涨跌预测（其非目标显式排除）。本 spec 新增 ML 预测栈，与两条漏斗并列独立。
 
-**目标**：搭建四头解耦预测栈——`短线×板块` / `短线×个股` / `中长线×板块` / `中长线×个股`，各自独立训练、独立胜率看板。**起步只做 `短线×板块` 一个头**，验证样本外有真实边缘后再扩。底座 LightGBM+CatBoost 集成 + HMM 体制切换 + Conformal 校准，输出**上涨概率 + 收益率分位区间**，非点预测。
+**目标**：搭建四头解耦预测栈——`短线×板块` / `短线×个股` / `中长线×板块` / `中长线×个股`，各自独立训练、独立胜率看板。**起步只做 `短线×板块` 一个头**，验证样本外有真实边缘后再扩。底座 LightGBM+CatBoost 集成 + GMM 体制切换 + Conformal 校准，输出**上涨概率 + 收益率分位区间**，非点预测。
 
 ---
 
@@ -21,6 +21,7 @@
 - S006 系统重写纲领（S007-S016）将迁数据层为 Pydantic 契约（草案/长分支 `rewrite/main`）。**本期在 develop 上构建，特征抽取收口在接口后**，S008 迁移时只换实现不动模型。
 - §1 新边界（2026-07-29）允许教育研究性判断（含买卖时机研判/风险标注），守"不承诺收益/可复现/私有数据隔离/四池聚合不泄露个股"。本 spec 的涨跌概率预测属研究性判断，须挂免责声明、可复算、不承诺收益。
 - 与 S002/S005 关系：并列独立。S002/S005 的"不预测涨跌"非目标是其**范围选择**，非 §1 硬禁；本 spec 在新边界内显式承担预测职责。
+- 2026-07-30 平台偏离（Windows 实测）：lightgbm 4.7 access violation（可 try/except 兜底）、hmmlearn 0.3.3 fit 死循环（不可捕获）；本期 Windows 以 HistGB/GMM 落地，Linux/macOS 保留 LightGBM/HMM 路线，regime 层按 `platform.system()` 切换后端（详见 plan.md 偏离记录）。
 
 ---
 
@@ -29,7 +30,7 @@
 - [ ] R1 四头解耦架构：`predict/heads/{short_sector, short_stock, mid_sector, mid_stock}` 各自独立标签/模型/评估，互不耦合
 - [ ] R2 标签构造：短线=未来1-3日累计收益>0（二分类）；中长线=未来5-20日累计收益>0；板块=申万一级行业指数；个股=个股前复权收盘
 - [ ] R3 起步范围：仅实现并训练 `short_sector` 一个头；其余三头预留接口与空实现，验证有边缘后再逐个开
-- [ ] R4 模型栈：LightGBM + CatBoost 双模集成（软投票）→ HMM 体制切换（条件加权）→ Conformal 校准（输出校准概率与分位区间）
+- [ ] R4 模型栈：LightGBM + CatBoost 双模集成（软投票）→ GMM 体制切换（条件加权）→ Conformal 校准（输出校准概率与分位区间）
 - [ ] R5 训练协议：purged walk-forward（embargo 防 leakage）+ 滚动再训；北向资金 2024 规则变更日作分段断点
 - [ ] R6 评估：样本外胜率、混淆矩阵、概率校准曲线、衰减曲线；全部可经 `financial_rigor.py` 复算
 - [ ] R7 服务化：`/api/prediction/{head}?stage=s1|s2|s3` 返回该阶段上涨概率+分位区间+Top板块/个股+演进历史+免责声明；MCP 工具同步（走 S010 registry，若未落地暂走 `chat.TOOLS`）；S4 盘中研判框架经 `/api/prediction/{head}/intraday-framework` 返回**教育性研判指引**（看什么/怎么判，非信号）
@@ -48,7 +49,7 @@
 | ➕`backend/predict/labels.py` | 标签构造（短/中、板块/个股、>0 二分类） |
 | ➕`backend/predict/heads/{short_sector,short_stock,mid_sector,mid_stock}.py` | 四头，起步只实现 short_sector |
 | ➕`backend/predict/models/ensemble.py` | LightGBM+CatBoost 软投票集成 |
-| ➕`backend/predict/models/regime.py` | HMM 体制切换 |
+| ➕`backend/predict/models/regime.py` | GMM 体制切换（HMM 留 Linux/macOS TODO） |
 | ➕`backend/predict/models/calibration.py` | Conformal 校准（mapie 或自实现） |
 | ➕`backend/predict/train.py` / `predict.py` / `evaluate.py` | walk-forward 训练/推理/评估 |
 | ➕`backend/predict/feature_interface.py` | 特征抽取接口（对接 S018 注册表，S008 迁移时只换实现） |
@@ -56,7 +57,7 @@
 | `backend/chat.py` TOOLS | 加 prediction 工具（暂走，S010 落地后转 registry） |
 | ➕`frontend/src/pages/Prediction.tsx` + `src/lib/prediction.ts` | 看板页 |
 | `frontend/src/router.tsx` / `navigation` | 加入口 |
-| `backend/requirements` 或 `pyproject` | 加 lightgbm/catboost/scikit-learn/hmmlearn/mapie |
+| `backend/requirements` 或 `pyproject` | 加 lightgbm/catboost/scikit-learn/hmmlearn/mapie（hmmlearn 仅 Linux/macOS 需要） |
 | `specs/README.md` | 加 S017/S018 索引行 |
 
 ---
@@ -69,7 +70,7 @@
 
 **模型栈选择取舍**：
 - LightGBM+CatBoost 而非 XGBoost：同类树模型，性价比与类别特征处理更优；不选 XGBoost 单模（集成方差更小）。
-- HMM 体制切换：A 股牛/熊/震荡风格切换明显，单模跨体制拟合是重要失败源；HMM 低成本、可解释。不选深度端到端（信噪比低、样本少、过拟合重、ROI 负）。
+- GMM 体制切换：A 股牛/熊/震荡风格切换明显，单模跨体制拟合是重要失败源；GMM 低成本、可解释（Windows 实测 hmmlearn fit 死循环，故以 GMM 落地，HMM 留 Linux/macOS TODO）。不选深度端到端（信噪比低、样本少、过拟合重、ROI 负）。
 - Conformal 校准：XGB/LGB 的 `predict_proba` 在金融上普遍过度自信；Conformal 在任意基础模型上保证覆盖率，样本外仍成立，几乎无成本。输出概率+分位区间而非点预测，更诚实也更实用。
 - 不选纯 LSTM/Transformer：金融多变量时序上长期跑不过调好的树模型；留作未来可选。
 
@@ -89,7 +90,7 @@
 
 - [ ] A1 四头目录结构建立，short_sector 完整实现（标签/训练/评估/服务），其余三头有空实现+接口预留
 - [ ] A2 short_sector 标签=申万一级板块指数未来1-3日累计收益>0；可展示取数时点/口径，可复算
-- [ ] A3 模型栈 LightGBM+CatBoost+HMM+Conformal 四层接通；输出=上涨概率+收益率10/50/90分位区间
+- [ ] A3 模型栈 LightGBM+CatBoost+GMM+Conformal 四层接通；输出=上涨概率+收益率10/50/90分位区间
 - [ ] A4 训练用 purged walk-forward+embargo+滚动再训；北向规则变更日分段；无 look-ahead
 - [ ] A5 样本外胜率/混淆矩阵/校准曲线/衰减曲线可产出；关键指标可经 `financial_rigor.py` 复算
 - [ ] A6 `/api/prediction/short_sector` 返回 Top 板块概率+区间+免责声明；MCP 工具同步
@@ -118,7 +119,7 @@
 
 ## 8. 测试计划
 
-- 单测：标签构造、purged walk-forward 切分、Conformal 覆盖率、HMM 体制识别纯函数 ≥80% 覆盖
+- 单测：标签构造、purged walk-forward 切分、Conformal 覆盖率、GMM 体制识别纯函数 ≥80% 覆盖
 - 回归：录 10 只代表板块/个股特征快照，训练/预测回放比对
 - 集成：`pytest -m "not live"`；live 冒烟（:8900 `/api/prediction/short_sector` + MCP 工具实测）
 - 数据验算：胜率/校准指标跑 `financial_rigor.py` 复算

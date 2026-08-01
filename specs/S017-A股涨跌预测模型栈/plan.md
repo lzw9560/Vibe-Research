@@ -20,7 +20,7 @@ backend/predict/
 │   └── mid_stock.py          # 空实现+接口预留
 ├── models/
 │   ├── ensemble.py           # LightGBM+CatBoost 软投票
-│   ├── regime.py            # HMM 体制切换
+│   ├── regime.py            # GMM 体制切换（HMM 跨平台 TODO）
 │   └── calibration.py       # Conformal 校准
 ├── train.py                 # purged walk-forward + embargo + 滚动再训
 ├── predict.py                # S1-S3 级联推理 + snapshot store

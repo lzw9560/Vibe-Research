@@ -55,9 +55,9 @@ def _get_env_llm_config() -> dict:
 - [x] A3 `POST /api/chat` 带 baseURL+apiKey+model → 不再 500（进入流式，key 无效时返回流内 error 事件或 400，而非 500）。
 - [x] A4 `pytest -m "not live"` 全过。
 
-## 7. 合规自查
-- [x] R1 只读环境变量、返回配置，不输出建议/标的/预测。
-- [x] 不触碰 `chat.SYSTEM_PROMPT` 中立规则。
+## 7. 合规自查（口径按 CLAUDE.md §1.1，2026-07-30）
+- [x] R1 只读环境变量、返回配置，不输出建议/标的/预测（实现时口径）。
+- [x] 未改 `chat.SYSTEM_PROMPT`（实现时口径；措辞放宽见 S010）。
 - [x] 不涉及涨停四池、用户私有数据。
 - [x] 不新增东财端点。
 
