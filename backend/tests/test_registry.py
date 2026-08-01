@@ -168,4 +168,5 @@ def test_registry_only_objective_and_research_tools():
     assert names == {
         "query_quote", "query_valuation", "query_reports", "query_news",
         "query_global_stock", "prediction_short_sector", "prediction_intraday_framework",
+        "worldmonitor_query",
     }

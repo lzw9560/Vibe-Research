@@ -8,5 +8,6 @@ from __future__ import annotations
 
 from . import registry  # noqa: F401
 from . import stock_tools  # noqa: F401 — 触发 @register_tool 注册
+from . import worldmonitor_tools  # noqa: F401 — 触发 @register_tool 注册
 
-__all__ = ["registry", "stock_tools"]
+__all__ = ["registry", "stock_tools", "worldmonitor_tools"]
