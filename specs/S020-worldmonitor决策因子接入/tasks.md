@@ -72,9 +72,9 @@
 ## P6 — chat 工具（R6, A5，可选低优先）
 
 ### T11 chat worldmonitor_query + pro key 隔离
-- `chat.TOOLS` 加 `worldmonitor_query` 项 + `_exec_tool` 分支（透传 tool name + jmespath）。API/MCP/CLI 三出口同步。
-- pro key（`search_intel_history`/`get_intel_timeline`/`get_similar_events` 标 Pro）若启用：存 `VR_DATA_DIR/.vibe-research/worldmonitor_api_key`，env 读，绝不进 git/日志。
-- **验收**：`/api/chat` 工具列表含 `worldmonitor_query`；pro key 不进 git（grep 验证）。
+- [x] `chat.TOOLS` 加 `worldmonitor_query` 项 + `_exec_tool` 分支（透传 tool name + jmespath）。API/MCP/CLI 三出口同步。
+- [x] pro key（`search_intel_history`/`get_intel_timeline`/`get_similar_events` 标 Pro）若启用：存 `VR_DATA_DIR/.vibe-research/worldmonitor_api_key`，env 读，绝不进 git/日志。
+- [x] **验收**：离线降级路径通过（2026-08-01，见 `reports/acceptance/S020-2026-08-01-offline-pass.md`）；pro key 不进 git（grep 验证）。
 - **优先级**：低于 P3/P4；远程 MCP 新会话已可直调，本任务主要服务自有 AI 层。
 
 ## P7 — live 冒烟 + spec 收尾（A7, A8）

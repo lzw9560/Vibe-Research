@@ -53,6 +53,6 @@ specs/
 | [S017](S017-A股涨跌预测模型栈/spec.md) | A股涨跌预测模型栈（四头解耦） | 🟡草案 2026-07-29 | spec | 短线×板块起步，LGB+CatBoost+HMM+Conformal，输出概率+分位区间 |
 | [S018](S018-多源特征工程/spec.md) | 多源特征工程（预测模型特征供给） | 🟡草案 2026-07-29 | spec | 特征注册表+可得时间对齐表+北向分段+SHAP/Boruta 选 ≤25 特征 |
 | [S019](S019-macro-Fred-API/spec.md) | 宏观特征 Fred API 接入（macro.py 第二批） | 🟡草案 2026-07-30 | spec | 美债10Y/DXY 走 Fred 独立通道+key 隔离 VR_DATA_DIR+补登 S2 |
-| [S020](S020-worldmonitor决策因子接入/spec.md) | worldmonitor 决策因子接入（全球宏观/地缘/另类数据） | 🟡草案 2026-07-31 | spec | 远程 MCP 互补另类数据层接 newsradar/market/特征栈，Fred 仍主源 |
+| [S020](S020-worldmonitor决策因子接入/spec.md) | worldmonitor 决策因子接入（全球宏观/地缘/另类数据） | ✅已实现 2026-08-01（P0–P6；P7 live 冒烟待联网） | spec · [tasks](S020-worldmonitor决策因子接入/tasks.md) · [验收报告](reports/acceptance/S020-2026-08-01-offline-pass.md) | 远程 MCP 互补另类数据层接 newsradar/market/特征栈，Fred 仍主源 |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。

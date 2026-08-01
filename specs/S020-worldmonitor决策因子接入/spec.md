@@ -1,6 +1,6 @@
 # Spec: S020 — worldmonitor 决策因子接入（全球宏观/地缘/另类数据）
 
-> 状态：P0-P5 已实现（2026-07-31，31 离线单测绿）；P7 live 冒烟被网络阻断（worldmonitor.app 在公司网+远程 ecs 均不可达，fetcher 正确降级 None）；P6 chat/P7 纳子集待网络可用后补
+> 状态：P0-P6 已实现（2026-08-01，P6 离线降级路径验收通过，见 `reports/acceptance/S020-2026-08-01-offline-pass.md`）；P7 live 冒烟被网络阻断（worldmonitor.app 在公司网+远程 ecs 均不可达，fetcher 正确降级 None）；P7 纳子集待网络可用后补
 > 作者：Claude  日期：2026-07-31
 > 关联：`../S019-macro-Fred-API/spec.md`（美债/DXY 主源，本 spec 对其仅交叉验证）、`../S018-多源特征工程/spec.md`（特征注册表）、`../S017-A股涨跌预测模型栈/spec.md`（模型栈）、`../S008-后端数据层迁移/spec.md`（数据源层 transport/sources/mappers）、`../../CLAUDE.md` §1.2/§3
 >
