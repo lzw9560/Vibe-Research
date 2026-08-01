@@ -8,15 +8,23 @@ import os
 import pytest
 
 
-# ── (a) 2 FeatureSpec 构造合法 ─────────────────────────────────────
+# ── (a) 7 FeatureSpec 构造合法 ─────────────────────────────────────
 
 
 def test_macro_specs_valid():
     from predict.features.macro import MACRO_SPECS
 
-    assert len(MACRO_SPECS) == 2
+    assert len(MACRO_SPECS) == 7
     names = {s.name for s in MACRO_SPECS}
-    assert names == {"us_10y_yield", "dxy"}
+    assert names == {
+        "us_10y_yield",
+        "dxy",
+        "us_fed_funds_eff",
+        "us_10y2y_spread",
+        "usd_cny",
+        "wti_crude",
+        "lme_copper",
+    }
     for spec in MACRO_SPECS:
         assert spec.source == "fred_api"
         assert spec.category == "macro"
@@ -61,7 +69,15 @@ def test_list_for_stage_s2_includes_macro():
     reg = Registry()
     register_macro(reg)
     names = {s.name for s in reg.list_for_stage("s2")}
-    assert names == {"us_10y_yield", "dxy"}
+    assert names == {
+        "us_10y_yield",
+        "dxy",
+        "us_fed_funds_eff",
+        "us_10y2y_spread",
+        "usd_cny",
+        "wti_crude",
+        "lme_copper",
+    }
 
 
 def test_list_for_stage_s1_excludes_macro():
@@ -180,3 +196,38 @@ def test_fetch_fred_series_dxy_live():
     assert vals, "DTWEXBGS 应有非缺失观测值"
     # DTWEXB 废止于 2019-12-31；后继 DTWEXBGS 最新应在 2024 之后
     assert vals[-1]["date"] >= "2024-01-01"
+
+
+# ── (h) T15 batch2 live：DFF/T10Y2Y/DEXCHUS/PCOPPUSDM ──────────────
+
+
+@pytest.mark.live
+@pytest.mark.parametrize("name", ["us_fed_funds_eff", "us_10y2y_spread", "usd_cny", "lme_copper"])
+def test_fetch_fred_series_batch2_live(name):
+    """live: DFF/T10Y2Y/DEXCHUS/PCOPPUSDM 返非空 + 最新在 2024 后。"""
+    from predict.features.macro import FRED_SERIES, fetch_fred_series, get_fred_api_key, parse_fred_observations
+
+    key = get_fred_api_key()
+    if not key:
+        pytest.skip("无 Fred API key")
+    resp = fetch_fred_series(FRED_SERIES[name], key)
+    assert resp is not None
+    obs = parse_fred_observations(resp)
+    vals = [o for o in obs if o["value"] is not None]
+    assert vals, f"{name} 应有非缺失观测值"
+    assert vals[-1]["date"] >= "2024-01-01", f"{name} 最新应非陈旧数据"
+
+
+@pytest.mark.live
+def test_fetch_fred_series_wti_live():
+    """live: DCOILWTICO 返非空（不硬断言最新年份——系列可用性需现场确认）。"""
+    from predict.features.macro import FRED_SERIES, fetch_fred_series, get_fred_api_key, parse_fred_observations
+
+    key = get_fred_api_key()
+    if not key:
+        pytest.skip("无 Fred API key")
+    resp = fetch_fred_series(FRED_SERIES["wti_crude"], key)
+    assert resp is not None
+    obs = parse_fred_observations(resp)
+    vals = [o for o in obs if o["value"] is not None]
+    assert vals, "DCOILWTICO 应有非缺失观测值"
