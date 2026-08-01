@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -7,38 +7,49 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SeatProfileModal } from "@/components/layout/SeatProfileModal";
 import { api, type SeatProfile } from "@/lib/api";
-import { useSeatProfiles } from "@/lib/query";
 import { cn } from "@/lib/utils";
 
 // ── 主页面：席位引擎 ────────────────────────────────────────
 export function SeatEngine() {
-  // T9：原 useState(profiles/loading) + useCallback(loadProfiles) + useEffect → useSeatProfiles()。
-  // 构建画像（POST seatBuildProfiles）仍为直接调用，成功后 refetch() 刷新。
-  // 注：useSeatProfiles 经 Opts 参数化 data 已推断为 {profiles: SeatProfile[]; total: number} | undefined，无需 cast。
-  const { data: profilesRaw, isLoading: loading, refetch } = useSeatProfiles();
+  const [profiles, setProfiles] = useState<Record<string, SeatProfile>>({});
+  const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
   const [buildDone, setBuildDone] = useState(false);
   // 席位详情弹窗
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
 
-  // 后端返回 {profiles: [...], total: N}，构建 seat_name → profile 字典
-  const profiles: Record<string, SeatProfile> = {};
-  for (const p of profilesRaw?.profiles ?? []) {
-    if (p.seat_name) profiles[p.seat_name] = p;
-  }
+  const loadProfiles = useCallback(() => {
+    setLoading(true);
+    api.seatProfiles()
+      .then((raw) => {
+        // Backend returns {profiles: [...], total: N}
+        const arr = Array.isArray(raw) ? raw : (raw as any).profiles || [];
+        const dict: Record<string, SeatProfile> = {};
+        for (const p of arr) {
+          if (p.seat_name) dict[p.seat_name] = p;
+        }
+        setProfiles(dict);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadProfiles();
+  }, [loadProfiles]);
 
   const handleBuild = useCallback(async () => {
     setBuilding(true);
     try {
       await api.seatBuildProfiles(180);
       setBuildDone(true);
-      refetch();
+      loadProfiles();
     } catch {
       // ignore
     } finally {
       setBuilding(false);
     }
-  }, [refetch]);
+  }, [loadProfiles]);
 
   // 按类型分组
   const grouped: Record<string, SeatProfile[]> = {};
@@ -74,7 +85,7 @@ export function SeatEngine() {
               {building ? "构建中…" : "构建画像"}
             </button>
             <button
-              onClick={() => refetch()}
+              onClick={loadProfiles}
               className="text-muted-foreground hover:text-primary"
               title="刷新"
             >

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,20 +6,28 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useIndustry } from "@/lib/query";
-import { cn, pctColor } from "@/lib/utils";
+import { api, ApiError, type IndustryData } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
+const pctColor = (p: number) => (p > 0 ? "text-danger" : p < 0 ? "text-success" : "text-muted-foreground");
 const fmt = (v: number) => v.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 
 export function Industry() {
-  // T9：原 useState(data/loading/error) + useEffect(loadData, [topN]) → useIndustry(topN)。
-  // topN 仍为用户可控状态；queryKey 含 topN，变更自动重新查询，故移除手动 refetch effect。
-  // 刷新按钮保留——通过 refetch 手动触发。
-  // 注：useIndustry 经 Opts<Awaited<ReturnType<typeof api.industry>>> 参数化，data 已推断为
-  // IndustryData | undefined（api.industry 返 IndustryData），无需窄→宽 cast。
+  const [data, setData] = useState<IndustryData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [topN, setTopN] = useState(30);
-  const { data, isLoading, error, refetch } = useIndustry(topN);
   const [sortBy, setSortBy] = useState<"change_pct" | "up_count" | "down_count">("change_pct");
+
+  const loadData = () => {
+    setLoading(true);
+    api.industry(topN)
+      .then(setData)
+      .catch((e) => setError(e instanceof ApiError ? e.message : "行业数据加载失败"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadData(); }, [topN]);
 
   const allRows = data
     ? [...data.top, ...data.bottom].sort((a, b) => {
@@ -45,7 +53,7 @@ export function Industry() {
                 <option key={n} value={n}>TOP {n}</option>
               ))}
             </select>
-            <button onClick={() => refetch()} className="text-muted-foreground hover:text-primary" title="刷新">
+            <button onClick={loadData} className="text-muted-foreground hover:text-primary" title="刷新">
               <ArrowUpDown className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -53,7 +61,7 @@ export function Industry() {
       />
 
       <GlassCard className="mb-6">
-        {isLoading ? (
+        {loading ? (
           <div className="py-12">
             <Skeleton className="mx-auto h-6 w-32" />
           </div>
@@ -61,7 +69,7 @@ export function Industry() {
           <EmptyState
             icon={<TrendingDown className="h-8 w-8 text-destructive/40" />}
             title="加载失败"
-            description={error instanceof Error ? error.message : String(error)}
+            description={error}
           />
         ) : allRows.length === 0 ? (
           <EmptyState

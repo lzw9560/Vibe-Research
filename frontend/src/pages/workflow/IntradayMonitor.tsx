@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
-import { useIntradayData } from "@/lib/query";
+import { getIntradayData } from "@/lib/api";
 import {
   Activity,
   Bell,
@@ -224,14 +224,9 @@ function CountdownClock({ targetMs }: { targetMs: number }) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function IntradayMonitor() {
-  // T9：原 useState/useEffect + setInterval(30s) 数据轮询 → useIntradayData + refetchInterval。
-  // 注：getIntradayData() 返回 Promise<IntradayData | null>，hook 不 throwOnError，失败→data===null。
-  //     就地窄→宽 cast 以接入本页本地 IntradayData 接口。
-  const { data: raw, isLoading, error, refetch } = useIntradayData({
-    refetchInterval: 30_000,
-  });
-  const data = raw as unknown as IntradayData | null | undefined;
-
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<IntradayData | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [desktopNotifs, setDesktopNotifs] = useState(false);
   const prevAlertCount = useRef(0);
@@ -239,26 +234,48 @@ export default function IntradayMonitor() {
   // Move hook to top level — rules of hooks compliance
   const playAlert = useSoundNotification(soundEnabled);
 
-  // 新增炸板预警时触发提示音/桌面通知（原 loadData 副作用，迁至 data 变化的 effect）
-  const alerts = data?.alerts ?? [];
-  useEffect(() => {
-    if (alerts.length > prevAlertCount.current && alerts.length > 0) {
-      if (soundEnabled) {
-        playAlert();
-      }
-      if (desktopNotifs) {
-        sendDesktopNotification("🚨 Bomb Alert", `${alerts.length} active alert${alerts.length > 1 ? "s" : ""}`);
-      }
-    }
-    prevAlertCount.current = alerts.length;
-  }, [alerts, alerts.length, soundEnabled, desktopNotifs, playAlert]);
+  const loadData = useCallback(async () => {
+    try {
+      setError(null);
+      const intradayData = await getIntradayData();
 
-  const refresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+      const signals: SignalItem[] = (intradayData?.signals) ?? [];
+      const alerts: AlertItem[] = (intradayData?.alerts) ?? [];
+      const adjustments: AdjustmentItem[] = (intradayData?.adjustments) ?? [];
+
+      // Detect new bomb alerts for notifications
+      if (alerts.length > prevAlertCount.current && alerts.length > 0) {
+        if (soundEnabled) {
+          playAlert();
+        }
+        if (desktopNotifs) {
+          sendDesktopNotification("🚨 Bomb Alert", `${alerts.length} active alert${alerts.length > 1 ? "s" : ""}`);
+        }
+      }
+      prevAlertCount.current = alerts.length;
+
+      setData({
+        date: intradayData?.date ?? new Date().toISOString().split("T")[0],
+        signals,
+        alerts,
+        adjustments,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加载失败");
+    } finally {
+      setLoading(false);
+    }
+  }, [soundEnabled, desktopNotifs]);
+
+  // Initial load + 30 s interval
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 30000);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   // ── Loading state ──
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="space-y-6">
         <PageHeader title="盘中监控" subtitle="Intraday Monitor" />
@@ -277,10 +294,8 @@ export default function IntradayMonitor() {
           <div className="flex flex-col items-center gap-3 text-center">
             <ShieldAlert className="h-10 w-10 text-destructive" />
             <p className="text-lg font-medium text-destructive">加载失败</p>
-            <p className="text-sm text-muted-foreground">
-              {error instanceof Error ? error.message : String(error)}
-            </p>
-            <Button variant="primary" size="md" onClick={refresh}>
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <Button variant="primary" size="md" onClick={loadData}>
               <RefreshCw className="mr-1.5 h-4 w-4" />
               重试
             </Button>
@@ -290,7 +305,7 @@ export default function IntradayMonitor() {
     );
   }
 
-   // ── Empty state (hook returns null on failure → swallowed to empty) ──
+   // ── Empty state ──
    if (!data) {
      return (
        <div className="space-y-6">
@@ -358,7 +373,7 @@ export default function IntradayMonitor() {
 
             {/* Countdown + manual refresh */}
             <CountdownClock targetMs={30_000} />
-            <Button variant="ghost" size="sm" onClick={refresh}>
+            <Button variant="ghost" size="sm" onClick={loadData}>
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
               刷新
             </Button>

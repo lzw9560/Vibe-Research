@@ -7,12 +7,6 @@ const THEME_KEY = "vr-theme";
 function loadTheme(): Theme {
   const saved = localStorage.getItem(THEME_KEY);
   if (saved === "light" || saved === "warm-orange" || saved === "dark") return saved;
-  // S013 T14：无显式保存时读系统 prefers-color-scheme（light→light，否则 dark）
-  try {
-    if (window.matchMedia?.("(prefers-color-scheme: light)").matches) return "light";
-  } catch {
-    /* matchMedia 不可用（旧环境/SSR）→ 默认 dark */
-  }
   return "dark"; // 默认暗色
 }
 

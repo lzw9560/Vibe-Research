@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Play, Trash2, RefreshCw, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toast } from "sonner";
 import {
+  getScheduledTasks,
   createScheduledTask,
   updateScheduledTask,
   deleteScheduledTask,
   runScheduledTaskNow,
+  getScheduledTaskRuns,
   type ScheduledTask,
+  type TaskRun,
 } from "@/lib/api";
-import { useScheduledTasks, useScheduledTaskRuns } from "@/lib/query";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   daily_data_refresh: "每日数据刷新",
@@ -24,25 +26,11 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 };
 
 export function ScheduledTasks() {
-  // T9：原 useState/useEffect + getScheduledTasks/getScheduledTaskRuns
-  //   → useScheduledTasks / useScheduledTaskRuns。写操作保留直接调用，
-  //   成功后用 hook 的 refetch 刷新。runs hook 在 expandedTaskId 为空时
-  //   由其 enabled: !!id 自动禁用（传 0 即 falsy）。
-  // 注：hook 的 queryFn 返回 Promise<ScheduledTask[]>/Promise<TaskRun[]>，
-  //   但 options 透传泛型摩擦使 useQuery 推断为 {}，就地窄→宽 cast（同 Health.tsx 模板）。
+  const [tasks, setTasks] = useState<ScheduledTask[]>([]);
+  const [loading, setLoading] = useState(true);
   const [runningId, setRunningId] = useState<number | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
-
-  const {
-    data: tasks,
-    isLoading: loading,
-    error: tasksError,
-    refetch: refetchTasks,
-  } = useScheduledTasks();
-  const { data: runs, refetch: refetchRuns } = useScheduledTaskRuns(
-    expandedTaskId ?? 0,
-    20,
-  );
+  const [runsMap, setRunsMap] = useState<Record<number, TaskRun[]>>({});
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -53,6 +41,22 @@ export function ScheduledTasks() {
   const [formNotifySuccess, setFormNotifySuccess] = useState(false);
   const [formNotifyFailure, setFormNotifyFailure] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const loadTasks = async () => {
+    setLoading(true);
+    try {
+      const data = await getScheduledTasks();
+      setTasks(data);
+    } catch {
+      toast.error("加载定时任务失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTasks();
+  }, []);
 
   const handleCreate = async () => {
     if (!formName.trim() || !formCron.trim()) {
@@ -78,7 +82,7 @@ export function ScheduledTasks() {
       setFormCron("0 17 * * *");
       setFormNotifySuccess(false);
       setFormNotifyFailure(true);
-      await refetchTasks();
+      await loadTasks();
     } catch {
       toast.error("创建任务失败");
     } finally {
@@ -89,7 +93,7 @@ export function ScheduledTasks() {
   const handleToggle = async (task: ScheduledTask) => {
     try {
       await updateScheduledTask(task.id, { enabled: !task.enabled });
-      await refetchTasks();
+      await loadTasks();
       toast.success(task.enabled ? "任务已禁用" : "任务已启用");
     } catch {
       toast.error("更新任务状态失败");
@@ -100,7 +104,7 @@ export function ScheduledTasks() {
     if (!confirm("确定删除此任务？")) return;
     try {
       await deleteScheduledTask(id);
-      await refetchTasks();
+      await loadTasks();
       toast.success("任务已删除");
     } catch {
       toast.error("删除任务失败");
@@ -112,11 +116,8 @@ export function ScheduledTasks() {
     try {
       await runScheduledTaskNow(id);
       toast.success("任务已触发执行");
-      await refetchTasks();
-      // 仅当被触发的任务正处于展开态时刷新可见运行记录；hook 禁用时 refetch 为 no-op。
-      if (expandedTaskId === id) {
-        await refetchRuns();
-      }
+      await loadTasks();
+      await loadRuns(id);
     } catch {
       toast.error("触发任务失败");
     } finally {
@@ -124,13 +125,24 @@ export function ScheduledTasks() {
     }
   };
 
-  const toggleExpand = (taskId: number) => {
+  const loadRuns = async (taskId: number) => {
+    try {
+      const data = await getScheduledTaskRuns(taskId, 20);
+      setRunsMap((prev) => ({ ...prev, [taskId]: data }));
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleExpand = async (taskId: number) => {
     if (expandedTaskId === taskId) {
       setExpandedTaskId(null);
       return;
     }
     setExpandedTaskId(taskId);
-    // runs hook 在 expandedTaskId 变为真值时自动发起请求。
+    if (!runsMap[taskId]) {
+      await loadRuns(taskId);
+    }
   };
 
   const formatCron = (cron: string) => {
@@ -143,16 +155,13 @@ export function ScheduledTasks() {
     return `${time} ${wd}`;
   };
 
-  const taskList = tasks ?? [];
-  const runList = runs ?? [];
-
   return (
     <div>
       <PageHeader title="定时任务" subtitle="管理每日数据刷新、复盘通知等自动化任务" />
 
       <div className="mb-4 flex items-center justify-between">
         <div className="text-xs text-muted-foreground">
-          共 {taskList.length} 个任务，{taskList.filter((t) => t.enabled).length} 个已启用
+          共 {tasks.length} 个任务，{tasks.filter((t) => t.enabled).length} 个已启用
         </div>
         <Button onClick={() => setShowForm(!showForm)} className="gap-2">
           <Plus className="h-4 w-4" />
@@ -209,20 +218,12 @@ export function ScheduledTasks() {
         </GlassCard>
       )}
 
-      {tasksError && (
-        <GlassCard>
-          <div className="p-4 text-sm text-rose-600 dark:text-rose-400">
-            加载定时任务失败：{tasksError instanceof Error ? tasksError.message : String(tasksError)}
-          </div>
-        </GlassCard>
-      )}
-
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           加载中...
         </div>
-      ) : taskList.length === 0 ? (
+      ) : tasks.length === 0 ? (
         <GlassCard>
           <div className="py-8 text-center text-sm text-muted-foreground">
             暂无定时任务，点击右上角「新建任务」创建。
@@ -230,7 +231,7 @@ export function ScheduledTasks() {
         </GlassCard>
       ) : (
         <div className="space-y-3">
-          {taskList.map((task) => (
+          {tasks.map((task) => (
             <GlassCard key={task.id}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -283,9 +284,9 @@ export function ScheduledTasks() {
               {expandedTaskId === task.id && (
                 <div className="mt-4 border-t border-border/60 pt-3">
                   <h4 className="text-xs font-medium text-muted-foreground mb-2">最近运行记录</h4>
-                  {runList.length > 0 ? (
+                  {runsMap[task.id] && runsMap[task.id].length > 0 ? (
                     <div className="space-y-2">
-                      {runList.map((run) => (
+                      {runsMap[task.id].map((run) => (
                         <div key={run.id} className="flex items-start justify-between rounded-lg border border-border/40 bg-muted/10 p-2.5 text-xs">
                           <div>
                             <div className="flex items-center gap-2">

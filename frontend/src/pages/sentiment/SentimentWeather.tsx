@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { RefreshCw, Settings } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -5,16 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { FuseRule, WeatherTimelineItem, WeatherStats, AuctionMetric, SealRiskMetric, FusePardonRecord } from "@/lib/api";
-import {
-  useSentimentWeatherLatest,
-  useSentimentWeatherStrategy,
-  useSentimentWeatherFuse,
-  useSentimentWeatherTimeline,
-  useSentimentWeatherAuction,
-  useSentimentWeatherSealRisk,
-  useSentimentWeatherPardon,
-} from "@/lib/query";
+import { api } from "@/lib/api";
+import type { WeatherState, StrategyRecommendation, FuseRule, WeatherTimelineItem, WeatherStats, AuctionMetric, SealRiskMetric, FusePardonRecord } from "@/lib/api";
 import { WeatherHero } from "@/components/sentiment-weather/WeatherHero";
 import { AuctionMetricsCard } from "@/components/sentiment-weather/AuctionMetricsCard";
 import { SealRiskCard } from "@/components/sentiment-weather/SealRiskCard";
@@ -22,10 +15,6 @@ import { PardonManagement } from "@/components/sentiment-weather/PardonManagemen
 import { STITimelineChart } from "@/components/sti/STITimelineChart";
 
 type TabId = "realtime" | "history" | "strategy" | "fuse";
-
-// 5 分钟自动刷新——原 loadData 每 5 分钟 Promise.all 全量重拉，现拆为 7 个 hook
-// 各自 refetchInterval 5min，TanStack 会并行调度，效果与原 Promise.all 等价。
-const REFRESH_MS = 5 * 60 * 1000;
 
 export default function SentimentWeather() {
   const location = useLocation();
@@ -36,72 +25,62 @@ export default function SentimentWeather() {
     return "realtime" as TabId;
   })();
 
-  // T9：原 useState/useEffect + Promise.all + setInterval → 7 个 TanStack Query hook。
-  // hook data 在 v5 下退化为 {}（与 Health.tsx 同源），按 S013 T9 规约就地窄→宽 cast。
-  const latestQ = useSentimentWeatherLatest({ refetchInterval: REFRESH_MS });
-  const strategyQ = useSentimentWeatherStrategy({ refetchInterval: REFRESH_MS });
-  const fuseQ = useSentimentWeatherFuse({ refetchInterval: REFRESH_MS });
-  const timelineQ = useSentimentWeatherTimeline(30, { refetchInterval: REFRESH_MS });
-  const auctionQ = useSentimentWeatherAuction({ refetchInterval: REFRESH_MS });
-  const sealRiskQ = useSentimentWeatherSealRisk({ refetchInterval: REFRESH_MS });
-  const pardonQ = useSentimentWeatherPardon({ refetchInterval: REFRESH_MS });
+  // Data state
+  const [weather, setWeather] = useState<WeatherState | null>(null);
+  const [strategy, setStrategy] = useState<StrategyRecommendation | null>(null);
+  const [fuseRules, setFuseRules] = useState<{ rules: FuseRule[]; updated_at: string } | null>(null);
+  const [timeline, setTimeline] = useState<{ timeline: WeatherTimelineItem[]; stats: WeatherStats } | null>(null);
+  const [auctionMetrics, setAuctionMetrics] = useState<{ auction_metrics: AuctionMetric[]; phase: string } | null>(null);
+  const [sealRiskMetrics, setSealRiskMetrics] = useState<{ seal_risk_metrics: SealRiskMetric[] } | null>(null);
+  const [pardonData, setPardonData] = useState<{ pardon_records: FusePardonRecord[]; is_admin: boolean } | null>(null);
 
-  // 派生数据槽（保持原变量名，JSX 渲染逻辑不动）
-  // latest/strategy 端点返裸类型（无信封），hook data 已类型化，无需 cast。
-  // fuse/timeline/auction/sealRisk/pardon 端点返 { data: {...} } 信封，但页面按解包后的字段访问，
-  // 故这 5 个保留 as unknown as 窄→宽 cast（api 类型为信封，页面 Iface 为解包形态，类型不一致）。
-  const weather = latestQ.data;
-  const strategy = strategyQ.data;
-  const fuseRules = fuseQ.data as unknown as { rules: FuseRule[]; updated_at: string } | undefined;
-  const timeline = timelineQ.data as unknown as { timeline: WeatherTimelineItem[]; stats: WeatherStats } | undefined;
-  const auctionMetrics = auctionQ.data as unknown as { auction_metrics: AuctionMetric[]; phase: string } | undefined;
-  const sealRiskMetrics = sealRiskQ.data as unknown as { seal_risk_metrics: SealRiskMetric[] } | undefined;
-  const pardonData = pardonQ.data as unknown as { pardon_records: FusePardonRecord[]; is_admin: boolean } | undefined;
+  // UI state
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // 错误处理：原 Promise.all 任一失败即整体 setError 阻断全屏。
-  // 这里 OR 7 个 hook 的 error —— 任一失败仍显示错误屏（保留原 UX，不静默吞错）。
-  const firstError =
-    latestQ.error ||
-    strategyQ.error ||
-    fuseQ.error ||
-    timelineQ.error ||
-    auctionQ.error ||
-    sealRiskQ.error ||
-    pardonQ.error ||
-    null;
-  const error = firstError ? (firstError instanceof Error ? firstError.message : String(firstError)) : null;
-
-  // 加载态：首次全部在加载时显示骨架屏（与原 loading 语义一致）。
-  const loading =
-    latestQ.isLoading ||
-    strategyQ.isLoading ||
-    fuseQ.isLoading ||
-    timelineQ.isLoading ||
-    auctionQ.isLoading ||
-    sealRiskQ.isLoading ||
-    pardonQ.isLoading;
-
-  // 刷新中：任一 hook 在后台拉取即为刷新中（用于刷新按钮自旋 + disabled）。
-  const refreshing =
-    latestQ.isFetching ||
-    strategyQ.isFetching ||
-    fuseQ.isFetching ||
-    timelineQ.isFetching ||
-    auctionQ.isFetching ||
-    sealRiskQ.isFetching ||
-    pardonQ.isFetching;
-
-  const handleRefresh = () => {
-    void latestQ.refetch();
-    void strategyQ.refetch();
-    void fuseQ.refetch();
-    void timelineQ.refetch();
-    void auctionQ.refetch();
-    void sealRiskQ.refetch();
-    void pardonQ.refetch();
+  // Load data
+  const loadData = async () => {
+    try {
+      setError(null);
+      const [weatherData, strategyData, fuseData, timelineData, auctionData, sealRiskData, pardonRecordsData] = await Promise.all([
+        api.sentimentWeatherLatest(),
+        api.sentimentWeatherStrategy(),
+        api.sentimentWeatherFuse(),
+        api.sentimentWeatherTimeline(30),
+        api.sentimentWeatherAuction(),
+        api.sentimentWeatherSealRisk(),
+        api.sentimentWeatherPardon(),
+      ]);
+      setWeather(weatherData as WeatherState);
+      setStrategy(strategyData as StrategyRecommendation);
+      setFuseRules(fuseData as unknown as { rules: FuseRule[]; updated_at: string });
+      setTimeline(timelineData as unknown as { timeline: WeatherTimelineItem[]; stats: WeatherStats });
+      setAuctionMetrics(auctionData as unknown as { auction_metrics: AuctionMetric[]; phase: string });
+      setSealRiskMetrics(sealRiskData as unknown as { seal_risk_metrics: SealRiskMetric[] });
+      setPardonData(pardonRecordsData as unknown as { pardon_records: FusePardonRecord[]; is_admin: boolean });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加载失败");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   const weatherState = weather?.weather_state ?? "未知";
+
+  useEffect(() => {
+    setLoading(true);
+    loadData();
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(loadData, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
 
   // Render tab content
   const renderTabContent = () => {
@@ -245,9 +224,10 @@ export default function SentimentWeather() {
             {pardonData && (
               <PardonManagement
                 isAdmin={pardonData.is_admin}
-                // 原 onUpdate 手动 await api.sentimentWeatherPardon() 再 setPardonData；
-                // 现交给 pardonQ.refetch() —— hook 重拉后 data 派生自动更新。
-                onUpdate={() => { void pardonQ.refetch(); }}
+                onUpdate={async () => {
+                  const data = await api.sentimentWeatherPardon();
+                  setPardonData(data as unknown as { pardon_records: FusePardonRecord[]; is_admin: boolean });
+                }}
               />
             )}
           </div>
@@ -317,7 +297,7 @@ export default function SentimentWeather() {
       </div>
 
       {/* Weather Hero */}
-      <WeatherHero weather={weather ?? null} onRefresh={handleRefresh} refreshing={refreshing} />
+      <WeatherHero weather={weather} onRefresh={handleRefresh} refreshing={refreshing} />
 
       {/* Tab Content */}
       {renderTabContent()}

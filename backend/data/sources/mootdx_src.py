@@ -23,10 +23,16 @@ def _mootdx_client():
         raise DependencyMissing("mootdx 未安装：pip install mootdx") from e
 
 
+def _get_mootdx_client():
+    """动态获取，支持 astock._mootdx_client monkeypatch（测试用）。"""
+    import astock as _astock
+    return getattr(_astock, '_mootdx_client', _mootdx_client)
+
+
 def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
     """K线：category 4=日 5=周 6=月 11=60分钟。"""
     try:
-        client = _mootdx_client()
+        client = _get_mootdx_client()()
         df = client.bars(symbol=code, category=category, offset=offset)
     except (TypeError, ValueError, KeyError, AttributeError) as e:
         # mootdx 连不上/空返回裸解包（如 "not enough values to unpack"）→ 视作无数据
@@ -38,7 +44,7 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
 def finance(code: str) -> dict:
     """季报财务快照（37 字段，mootdx——数值不可靠，仅作原始快照）。"""
     try:
-        client = _mootdx_client()
+        client = _get_mootdx_client()()
         df = client.finance(symbol=code)
     except (TypeError, ValueError, KeyError, AttributeError) as e:
         logging.getLogger("astock").warning("finance(%s) mootdx 解析失败: %s", code, e)
