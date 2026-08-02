@@ -42,7 +42,9 @@ def _check_circuit_breaker() -> Dict[str, Any]:
         from circuit_breaker import get_breaker
 
         breaker = get_breaker("eastmoney")
-        state = breaker.state.value
+        # peek_state 尊重 recovery_timeout：陈旧 OPEN（>60s 无请求）自愈为 HALF_OPEN，
+        # 避免测试触发的瞬时 OPEN 使 health 永久报红（S022）。
+        state = breaker.peek_state().value
         return {
             "ok": state != "open",
             "detail": f"circuit_breaker_{state}",

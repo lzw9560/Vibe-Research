@@ -50,6 +50,19 @@ class CircuitBreaker:
             return True
         return False
 
+    def peek_state(self) -> CircuitState:
+        """只读探测：返回给定当前时间应处的状态（OPEN 超 recovery_timeout → HALF_OPEN）。
+
+        与 allow_request() 不同，本方法无副作用——不改 self.state、不消耗
+        half_open_calls 试探名额。供 health 检查等只读观测用；真实 OPEN→HALF_OPEN
+        转换仍由 allow_request() 在真实请求时触发（S022）。
+        """
+        if self.state == CircuitState.OPEN and (
+            time.time() - self.last_failure_time >= self.config.recovery_timeout
+        ):
+            return CircuitState.HALF_OPEN
+        return self.state
+
     def record_success(self) -> None:
         """记录成功。"""
         if self.state == CircuitState.HALF_OPEN:
