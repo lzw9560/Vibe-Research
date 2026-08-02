@@ -6,7 +6,8 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { api, type GeneScore, type ScreenerResult, type LimitUpAnalysis } from "@/lib/api";
+import { type GeneScore, type LimitUpAnalysis } from "@/lib/api";
+import { useLimitupScreener, useLimitupAnalysis } from "@/lib/query";
 
 // ── 颜色约定 ──────────────────────────────────────────────
 const scoreColor = (s: number) =>
@@ -465,47 +466,23 @@ function RowElement({ row, expanded, onToggle, displayFactors, scoreColor, fmtPc
 
 // ── 主页面：基因选股 ────────────────────────────────────────
 export function GeneScreener() {
-  const [screener, setScreener] = useState<ScreenerResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // T9：原 useState(screener/loading/error) + useCallback(loadScreener) + useEffect
+  // → useLimitupScreener()。原展开行手动管理 api.limitupAnalysis(code) 三态
+  // → useLimitupAnalysis(expandedCode)，hook 在 expandedCode 为空时自动禁用（不发请求）。
+  // 注：hook data 推断为 {}，就地窄→宽 cast 还原 ScreenerResult / LimitUpAnalysis。
+  const { data: screener, isLoading: loading, error, refetch } = useLimitupScreener();
+  const loadErr = error instanceof Error ? error.message : error ? String(error) : null;
 
   // 展开的个股
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
-  const [expandedData, setExpandedData] = useState<LimitUpAnalysis | null>(null);
-  const [expandedLoading, setExpandedLoading] = useState(false);
-  const [expandedError, setExpandedError] = useState<string | null>(null);
+  const { data: rawAnalysis, isLoading: expandedLoading, error: expandedErr } =
+    useLimitupAnalysis(expandedCode ?? "");
+  const expandedData = rawAnalysis ?? null;
+  const expandedError = expandedErr instanceof Error ? expandedErr.message : expandedErr ? String(expandedErr) : null;
 
-  const loadScreener = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    api.limitupScreener()
-      .then(setScreener)
-      .catch((e) => setError(e instanceof Error ? e.message : "加载失败"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    loadScreener();
-  }, [loadScreener]);
-
-  // 点击行展开个股分析
+  // 点击行展开个股分析：仅切换 expandedCode，数据加载由 hook 自动处理
   const handleToggle = useCallback((code: string) => {
-    setExpandedCode((prev) => {
-      if (prev === code) {
-        setExpandedData(null);
-        setExpandedError(null);
-        return null;
-      }
-      // 切换新行：先加载
-      setExpandedLoading(true);
-      setExpandedError(null);
-      setExpandedData(null);
-      api.limitupAnalysis(code)
-        .then(setExpandedData)
-        .catch((e) => setExpandedError(e instanceof Error ? e.message : "加载失败"))
-        .finally(() => setExpandedLoading(false));
-      return code;
-    });
+    setExpandedCode((prev) => (prev === code ? null : code));
   }, []);
 
   // 构建 AI 上下文
@@ -537,7 +514,7 @@ export function GeneScreener() {
               ]}
             />
             <button
-              onClick={loadScreener}
+              onClick={() => refetch()}
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-sm font-medium text-primary shadow-glow transition-colors hover:bg-primary/25"
               title="刷新数据"
             >
@@ -577,9 +554,9 @@ export function GeneScreener() {
       {/* 基因得分清单表格 */}
       <GlassCard className="mb-6">
         <SectionHeader title="涨停股基因得分清单" subtitle="客观数据，非推荐" />
-        {error ? (
+        {loadErr ? (
           <div className="flex items-center justify-center py-8 text-sm text-destructive">
-            <Info className="mr-1.5 h-4 w-4" /> {error}
+            <Info className="mr-1.5 h-4 w-4" /> {loadErr}
           </div>
         ) : (
           <ExpandableTable

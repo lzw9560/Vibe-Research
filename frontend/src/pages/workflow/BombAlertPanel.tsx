@@ -1,5 +1,5 @@
 import type { HandledAlert } from "@/lib/api";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -16,7 +16,7 @@ import {
   ChevronUp,
   History,
 } from "lucide-react";
-import { getBombAlerts } from "@/lib/api";
+import { useBombAlerts } from "@/lib/query";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -76,9 +76,8 @@ function formatTime(iso: string): string {
 // ─── Component ───────────────────────────────────────────────────────
 
 export default function BombAlertPanel() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [alerts, setAlerts] = useState<BombAlert[]>([]);
+  // T9：原 useState/useEffect + setInterval(10s) 轮询 → useBombAlerts + refetchInterval。
+  // 注：api.getBombAlerts() 返 BombAlertItem[] | null（null = 失败，不 throw），就地窄→宽 cast。
   const [handled, setHandled] = useState<HandledAlert[]>(loadHandled);
 
   // UI state
@@ -87,39 +86,30 @@ export default function BombAlertPanel() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [archivedOpen, setArchivedOpen] = useState(false);
 
-  // ── Data loading ──────────────────────────────────────────────────
+  const { data, isLoading, refetch } = useBombAlerts({
+    refetchInterval: autoRefresh ? 10_000 : false,
+  });
 
-  const loadData = useCallback(async () => {
-    try {
-      setError(null);
-      const raw = await getBombAlerts();
-      const items: BombAlert[] = (raw ?? []).map((a) => ({
+  const alerts: BombAlert[] = useMemo(
+    () =>
+      (data ?? []).map((a) => ({
         timestamp: a.timestamp,
         code: a.code,
         name: a.name,
-        alert_level: a.alert_level === "orange" || a.alert_level === "blue" ? "yellow" : a.alert_level,
+        alert_level:
+          a.alert_level === "orange" || a.alert_level === "blue"
+            ? "yellow"
+            : a.alert_level,
         condition: a.condition ?? "",
         current_seal_amount: a.current_seal_amount ?? 0,
         seal_amount_change_5min: a.seal_amount_change_5min ?? 0,
         recommendation: a.recommendation ?? "",
-      }));
-      setAlerts(items);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      })),
+    [data],
+  );
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const id = setInterval(loadData, 10000);
-    return () => clearInterval(id);
-  }, [autoRefresh, loadData]);
+  // null = fetch failed (hook 不 throw)；首次加载后 show error UI w/ refetch
+  const failed = !isLoading && data === null;
 
   // ── Derived lists ─────────────────────────────────────────────────
 
@@ -219,7 +209,7 @@ export default function BombAlertPanel() {
 
   // ── Loading ───────────────────────────────────────────────────────
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="炸板预警" subtitle="Bomb Alert Panel" />
@@ -230,9 +220,9 @@ export default function BombAlertPanel() {
     );
   }
 
-  // ── Error ─────────────────────────────────────────────────────────
+  // ── Error（null = fetch 失败，hook 不 throw）─────────────────────
 
-  if (error) {
+  if (failed) {
     return (
       <div className="space-y-6">
         <PageHeader title="炸板预警" subtitle="Bomb Alert Panel" />
@@ -240,8 +230,7 @@ export default function BombAlertPanel() {
           <div className="flex flex-col items-center gap-3 text-center">
             <XCircle className="h-10 w-10 text-destructive" />
             <p className="text-lg font-medium text-destructive">加载失败</p>
-            <p className="text-sm text-white/60">{error}</p>
-            <Button variant="primary" size="sm" onClick={loadData}>
+            <Button variant="primary" size="sm" onClick={() => refetch()}>
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
               重试
             </Button>

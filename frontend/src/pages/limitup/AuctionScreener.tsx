@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { RefreshCw, Info } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,7 +6,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { api, type AuctionScreenerResult } from "@/lib/api";
+import { useAuctionTop } from "@/lib/query";
 import { cn } from "@/lib/utils";
 
 function stiColor(phase: string | null) {
@@ -18,23 +18,13 @@ function stiColor(phase: string | null) {
 
 // ── 主页面：竞价预案 ────────────────────────────────────────
 export function AuctionScreener() {
-  const [result, setResult] = useState<AuctionScreenerResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-
-  const loadAuction = useCallback((date: string) => {
-    setLoading(true);
-    setError(null);
-    api.auctionTop(date)
-      .then(setResult)
-      .catch((e) => setError(e instanceof Error ? e.message : "加载失败"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    loadAuction(selectedDate);
-  }, [loadAuction, selectedDate]);
+  // T9：原 useState(result/loading/error) + useCallback(loadAuction) + useEffect([selectedDate])
+  // → useAuctionTop(date)。date 在 queryKey 中，切换日期自动重新查询（arg-driven requery），
+  // 移除手动 date-change effect；手动刷新走 refetch()。
+  // 注：useAuctionTop 经 Opts 参数化 data 已推断为 AuctionScreenerResult | undefined，无需 cast。
+  const { data: result, isLoading: loading, error, refetch } = useAuctionTop(selectedDate);
+  const errMsg = error instanceof Error ? error.message : error ? String(error) : null;
 
   if (loading) {
     return (
@@ -63,7 +53,7 @@ export function AuctionScreener() {
               className="rounded-lg border border-border bg-black/20 px-2 py-1 text-xs outline-none focus:border-primary/50"
             />
             <button
-              onClick={() => loadAuction(selectedDate)}
+              onClick={() => refetch()}
               className="text-muted-foreground hover:text-primary"
               title="刷新"
             >
@@ -83,11 +73,11 @@ export function AuctionScreener() {
         </div>
       )}
 
-      {error ? (
+      {errMsg ? (
         <EmptyState
           icon={<Info className="h-8 w-8 text-destructive/40" />}
           title="加载失败"
-          description={error}
+          description={errMsg}
         />
       ) : (
         <GlassCard>

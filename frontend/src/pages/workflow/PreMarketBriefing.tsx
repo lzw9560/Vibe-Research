@@ -1,16 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Activity, TrendingUp, ShieldAlert, RefreshCw, Star, ChevronDown, ChevronUp } from "lucide-react";
+import { pctColor } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
-import { getPreMarketBriefing, type PreMarketReport as ApiPreMarketReport } from "@/lib/api";
+import { usePreMarketBriefing } from "@/lib/query";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-type PreMarketReport = ApiPreMarketReport;
 
 function isStrong(code: string, strongSet: Set<string>): boolean {
   return strongSet.has(code);
@@ -55,49 +54,31 @@ type SortDir = "asc" | "desc";
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function PreMarketBriefing() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<PreMarketReport | null>(null);
+  // T9：原 useState/useEffect + setInterval(60s, 9-15h) 轮询 → usePreMarketBriefing + refetchInterval。
+  // 注：api.getPreMarketBriefing() 返 PreMarketReport | null（null = 失败，不 throw），就地窄→宽 cast。
+  // 保留原 60s 轮询节奏；盘中时段限制改由页面层 refetchInterval 动态开关（非盘中关轮询，省请求）。
+  const inTradingHours = () => {
+    const h = new Date().getHours();
+    return h >= 9 && h < 15;
+  };
+  const { data: report, isLoading, isFetching, dataUpdatedAt, refetch } = usePreMarketBriefing({
+    refetchInterval: inTradingHours() ? 60_000 : false,
+  });
+  const refreshing = isFetching;
+
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("score");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch data
-  const loadData = useCallback(async () => {
-    try {
-      setError(null);
-      const payload = await getPreMarketBriefing();
-      setReport(payload);
-      setLastRefreshed(new Date());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  // 数据成功返回时同步 lastRefreshed（用 query 的 dataUpdatedAt 时间戳）
+  useEffect(() => {
+    if (dataUpdatedAt) setLastRefreshed(new Date(dataUpdatedAt));
+  }, [dataUpdatedAt]);
 
   const handleRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  // Initial load + auto-refresh every 60s during trading hours (9:00–15:00)
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const hour = new Date().getHours();
-      if (hour >= 9 && hour < 15) {
-        loadData();
-      }
-    }, 60_000);
-    return () => clearInterval(interval);
-  }, [loadData]);
+    refetch();
+  }, [refetch]);
 
   const strongCodes = useMemo(() => {
     return new Set((report?.candidates ?? []).map(c => String(c.code)));
@@ -144,7 +125,7 @@ export default function PreMarketBriefing() {
     );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="盘前简报" subtitle="Pre-Market Briefing" />
@@ -155,7 +136,8 @@ export default function PreMarketBriefing() {
     );
   }
 
-  if (error) {
+  // null = fetch 失败（hook 不 throw）；保留重试入口
+  if (report === null) {
     return (
       <div className="space-y-6">
         <PageHeader title="盘前简报" subtitle="Pre-Market Briefing" />
@@ -163,7 +145,6 @@ export default function PreMarketBriefing() {
           <div className="text-center text-destructive">
             <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-destructive/60" />
             <p className="text-lg font-medium">加载失败</p>
-            <p className="mt-2 text-sm text-muted-foreground">{error}</p>
             <Button variant="primary" size="md" onClick={handleRefresh} className="mt-4">
               <RefreshCw className="mr-1.5 h-4 w-4" />
               重试
@@ -390,8 +371,7 @@ export default function PreMarketBriefing() {
               ) : (
                 sortedCandidates.map((c) => {
                   const strong = isStrong(String(c.code ?? ""), strongCodes);
-                  const changeColor =
-                    (c.change_pct as number) >= 0 ? "text-green-400" : "text-red-400";
+                  const changeColor = pctColor(c.change_pct as number);
                   return (
                     <tr
                       key={String(c.code)}

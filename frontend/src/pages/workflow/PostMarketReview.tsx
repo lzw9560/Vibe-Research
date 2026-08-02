@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { BarChart3, TrendingUp, TrendingDown, Calendar, RefreshCw, ChevronDown, ChevronUp, Award, Target } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
-import { getPostMarketReview } from "@/lib/api";
+import { usePostMarketReview } from "@/lib/query";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -273,28 +273,19 @@ function ReturnsTrendChart({ data }: { data: { date: string; return: number }[] 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function PostMarketReview() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<PostMarketReport | null>(null);
+  // T9：原 useState/useEffect + fetch → usePostMarketReview(date)。
+  // 注：api.getPostMarketReview() 返 PostMarketReport | null（null = 失败，不 throw），就地窄→宽 cast。
+  // date 为用户控制，queryKey 随日期变化自动重查；原页面无轮询，此处不加 refetchInterval。
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const { data: raw, isLoading, refetch } = usePostMarketReview(selectedDate);
+  const report = raw as unknown as PostMarketReport | null | undefined;
+
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "return_pct", direction: "desc" });
   const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
 
-  const loadData = async () => {
-    try {
-      setError(null);
-      const payload = await getPostMarketReview(selectedDate);
-      setReport(payload as PostMarketReport | null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [selectedDate]);
+  const loadData = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   // Sort settlements by return_pct
   const sortedSettlements = useMemo(() => {
@@ -323,7 +314,7 @@ export default function PostMarketReview() {
     return sortConfig.direction === "desc" ? <ChevronDown className="ml-1 inline h-3 w-3" /> : <ChevronUp className="ml-1 inline h-3 w-3" />;
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="盘后复盘" subtitle="Post-Market Review" />
@@ -337,14 +328,14 @@ export default function PostMarketReview() {
     );
   }
 
-  if (error) {
+  // null = fetch 失败（hook 不 throw）；保留重试入口
+  if (report === null) {
     return (
       <div className="space-y-6">
         <PageHeader title="盘后复盘" subtitle="Post-Market Review" />
         <GlassCard className="p-6">
           <div className="text-center text-red-400">
             <p className="text-lg font-medium">加载失败</p>
-            <p className="mt-2 text-sm text-white/60">{error}</p>
             <Button variant="primary" size="md" onClick={loadData} className="mt-4">
               重试
             </Button>
