@@ -1,6 +1,6 @@
 # Spec: S013 — 前端数据层（统一 client + TanStack Query + 懒加载 + apiKey 代理）
 
-> 状态：已实现 2026-07-31
+> 状态：已实现 2026-08-01
 > 作者：Claude  日期：2026-07-29
 > 关联：`../S006-系统重写纲领/spec.md`（§5 第 7 步）、`../S009`（types.ts 已生成）、`../S014`（UI 拆分用本 spec 的 hooks）、`../../ARCHITECTURE.md`（前端）
 
