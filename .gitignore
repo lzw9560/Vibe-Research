@@ -14,6 +14,9 @@ backend/data/fallback/
 backend/data/*.db
 backend/data/*.json
 backend/**/*.db
+*.db-shm
+*.db-wal
+*.db-journal
 backend/vibe_research.db
 # 根级 ./data 运行时库（winrate.db 等），不入 git
 /data/
@@ -48,6 +51,8 @@ frontend/tsconfig.tsbuildinfo
 # ── 本地运行垃圾（崩溃转储 / MCP 临时产物 / 冒烟截图，不进仓库） ──
 *.stackdump
 .playwright-mcp/
+**/playwright-report/
+**/test-results/
 candidates-smoke.png
 
 # 项目内私有数据根（API key/持仓/研报，绝不进 git）
@@ -56,7 +61,7 @@ candidates-smoke.png
 # ── 覆盖率 / ML 训练产物 / 前端构建缓存（垃圾产物，不进仓库） ──
 .coverage
 **/.coverage
-backend/catboost_info/
+**/catboost_info/
 backend/gmm_result.txt
 frontend/.vite/
 frontend/data/
