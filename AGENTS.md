@@ -44,3 +44,19 @@
 ### 适用范围
 - 所有 AI 编码代理（Claude Code / opencode / 其他）与本仓库所有会话，自 2026-07-31 起执行。
 - 历史遗留（当前 develop 上的未 push 提交 + 未提交工作树）不溯及；新 spec 实现一律走本流程。
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+本地 markdown 工单层：`.scratch/<effort-slug>/` 存放 issue 工单（`issues/NN-<slug>.md` + `map.md`）+ triage 标签，承担研究问题/原型/AFK 领取队列。**正式 spec 不在此**——仍在 `specs/SNNN-*/`（CLAUDE.md §0）；`.scratch/` effort 成熟到要正式实现则毕业迁移为 `specs/SNNN-*/spec.md`。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+默认五角色标签（`needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`），标签名即角色名。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文：根 `CONTEXT.md` + `docs/adr/`；缺失时静默跳过，由 `/domain-modeling` 懒创建。详见 `docs/agents/domain.md`。
