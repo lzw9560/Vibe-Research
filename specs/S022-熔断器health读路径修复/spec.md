@@ -1,6 +1,6 @@
 # Spec: S022 — 熔断器 health 读路径修复（尊重 recovery_timeout）
 
-> 状态：草案
+> 状态：已实现 2026-08-02（TDD 6/6 + 735 passed + Playwright 3/3）
 > 作者：Claude  日期：2026-08-02
 > 关联：`reports/system-check-2026-08-02.md`（体检报告 🔴 circuit_breaker_open）、`../../backend/routers/health.py`、`../../backend/circuit_breaker.py`、CLAUDE.md §3（熔断器）
 
