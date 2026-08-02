@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S023。
+`SNNN` 三位递增。下一个新 spec 用 S025。
 
 ## 已有规范
 
@@ -55,7 +55,9 @@ specs/
 | [S019](S019-macro-Fred-API/spec.md) | 宏观特征 Fred API 接入（macro.py 第二批） | ✅已实现 2026-07-31 | spec · [plan](S019-macro-Fred-API/plan.md) · [tasks](S019-macro-Fred-API/tasks.md) | 美债10Y/DXY 走 Fred 独立通道+key 隔离 VR_DATA_DIR+补登 S2 |
 | [S020](S020-worldmonitor决策因子接入/spec.md) | worldmonitor 决策因子接入（全球宏观/地缘/另类数据） | ✅已实现 2026-08-01（P0–P6；P7 live 冒烟待联网） | spec · [plan](S020-worldmonitor决策因子接入/plan.md) · [tasks](S020-worldmonitor决策因子接入/tasks.md) · [验收报告](../reports/acceptance/S020-2026-08-01-offline-pass.md) | 远程 MCP 互补另类数据层接 newsradar/market/特征栈，Fred 仍主源 |
 | [S022](S022-熔断器health读路径修复/spec.md) | 熔断器 health 读路径修复（尊重 recovery_timeout） | ✅已实现 2026-08-02 | spec | peek_state 只读探测 + health 读路径自愈，修体检 🔴 circuit_breaker_open |
+| [S023](S023-漏斗可用性与因子解耦/spec.md) | 漏斗可用性与因子解耦（P1 打磨：盘前简报接因子+候选详情依据链+漏斗每层可观测可调参+真实数据不静默返空） | 🟡草案 2026-08-02 | spec · [plan](S023-漏斗可用性与因子解耦/plan.md) · [tasks](S023-漏斗可用性与因子解耦/tasks.md) | 选股因子与工作流解耦，两套标准可插拔并存 |
+| [S024](S024-拓扑展示/spec.md) | 拓扑展示（关系网+漏斗流程+连板梯队树，EdgeProvider 扩展位） | 🟡草案 2026-08-02 | spec · [plan](S024-拓扑展示/plan.md) · [tasks](S024-拓扑展示/tasks.md) | 候选标的关系网+漏斗流向可视化+连板接力结构，先收敛核心边集 |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 
-> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S023。
+> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S025。
