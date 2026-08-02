@@ -1,6 +1,6 @@
 # Spec: S015 — 配置与基础设施（config 拆分 + infra 收口 + 路由自动发现）
 
-> 状态：草案
+> 状态：已实现 2026-08-01
 > 作者：Claude  日期：2026-07-29
 > 关联：`../S006-系统重写纲领/spec.md`（§5 第 9 步）、`../S008`（data/transport 建 em_get 拆分，本 spec 建 infra 收口缓存/熔断）、`../S011`（app.py lifespan 在 S011）、`../../ARCHITECTURE.md`
 

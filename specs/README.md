@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S021。
+`SNNN` 三位递增。下一个新 spec 用 S022。
 
 ## 已有规范
 
@@ -40,19 +40,21 @@ specs/
 | [S004](S004-candidates-funnel-performance/spec.md) | 候选池漏斗 run_funnel 性能优化 | 🟡草案 2026-07-29 | spec · [plan](S004-candidates-funnel-performance/plan.md) · [tasks](S004-candidates-funnel-performance/tasks.md) | 缓存+预计算+top-N 限界+独立 source 并行 |
 | [S005](S005-中长线价值选股漏斗/spec.md) | 中长线价值选股漏斗（与短线 S002 并列） | ✅已实现 2026-07-29 | spec · [plan](S005-中长线价值选股漏斗/plan.md) · [tasks](S005-中长线价值选股漏斗/tasks.md) · [验收报告](S005-中长线价值选股漏斗/验收报告.md) | 价值四层漏斗 + 去劣 7 条 |
 | [S006](S006-系统重写纲领/spec.md) | 系统重写纲领（渐进式长分支） | 🟡草案 2026-07-29 | spec | 数据契约统一+调度收口+前端 UI 重设计+测试网，分 S006b–S014 子 spec |
-| [S007](S007-契约层/spec.md) | 契约层（数据模型+回归基线+契约测试骨架） | 🟡草案 2026-07-29 | spec | Pydantic v2 7 模型 + 10 只 code 基线夹具 + 前后端契约骨架，不动 astock |
+| [S007](S007-契约层/spec.md) | 契约层（数据模型+回归基线+契约测试骨架） | ✅已实现 2026-08-01 | spec · [plan](S007-契约层/plan.md) · [tasks](S007-契约层/tasks.md) | Pydantic v2 7 模型 + 10 只 code 基线夹具 + 前后端契约骨架，不动 astock |
 | [S008](S008-后端数据层迁移/spec.md) | 后端数据层迁移（astock/gstock/market→模型） | ✅已实现 2026-07-31 | spec · [plan](S008-后端数据层迁移/plan.md) · [plan-stage1](S008-后端数据层迁移/plan-stage1.md) · [tasks](S008-后端数据层迁移/tasks.md) · [验收报告](S008-后端数据层迁移/验收报告.md) | 返模型+response_model+T13 全批次迁 C 组 engines（11 新 S007 模型）+删 data_provider |
 | [S009](S009-前后端类型同步/spec.md) | 前后端类型同步（openapi-codegen） | ✅phase 1 已实现 2026-07-31（phase 2 移交 S013） | spec · [plan](S009-前后端类型同步/plan.md) · [tasks](S009-前后端类型同步/tasks.md) | dump_openapi.py+openapi-typescript+types.ts 就位；phase 2 非机械（手写严格/生成宽松级联+T13 有损），移交 S013 协同 |
-| [S010](S010-工具注册表与SYSTEM_PROMPT/spec.md) | AI 工具注册表 + SYSTEM_PROMPT 新边界 | 🟡草案 2026-07-29 | spec | registry 声明式+chat/mcp/cli 解耦+SYSTEM_PROMPT 按新边界放宽 |
-| [S011](S011-调度收口/spec.md) | 调度收口（删 scheduler.py+重写 scheduled_tasks+状态机接线） | 🟡草案 2026-07-29 | spec | 扩展 cron+ lifespan+WAL+去重+状态机落库（不引 APScheduler） |
-| [S012](S012-工作流标灰/spec.md) | 工作流标灰（realtime/post 桩+pre 清理） | 🟡草案 2026-07-29 | spec | 桩→NotImplementedError+UI 标灰，不补功能 |
+| [S010](S010-工具注册表与SYSTEM_PROMPT/spec.md) | AI 工具注册表 + SYSTEM_PROMPT 新边界 | ✅已实现 2026-08-01 | spec · [plan](S010-工具注册表与SYSTEM_PROMPT/plan.md) · [tasks](S010-工具注册表与SYSTEM_PROMPT/tasks.md) | registry 声明式+chat/mcp/cli 解耦+SYSTEM_PROMPT 按新边界放宽 |
+| [S011](S011-调度收口/spec.md) | 调度收口（删 scheduler.py+重写 scheduled_tasks+状态机接线） | ✅已实现 2026-08-01 | spec · [plan](S011-调度收口/plan.md) · [tasks](S011-调度收口/tasks.md) | 扩展 cron+ lifespan+WAL+去重+状态机落库（不引 APScheduler） |
+| [S012](S012-工作流标灰/spec.md) | 工作流标灰（realtime/post 桩+pre 清理） | 🟡草案 2026-07-29 | spec · [plan](S012-工作流标灰/plan.md) · [tasks](S012-工作流标灰/tasks.md) | 桩→NotImplementedError+UI 标灰，不补功能 |
 | [S013](S013-前端数据层/spec.md) | 前端数据层（统一 client+TanStack Query+懒加载+apiKey 代理） | ✅已实现 2026-07-31（T6 可选余项） | spec · [plan](S013-前端数据层/plan.md) · [tasks](S013-前端数据层/tasks.md) | client 统一(T1-T5)+router 懒加载(T10)+QueryProvider(T7,T11)+pctColor/主题(T14,T15)+59 hooks(T8)+17 页接线(T9，含轮询/交易时段门控)+hook 类型收紧+vitest(T16)+T12/T13 决议保留双配置；仅 T6 按域拆 api.ts 可选未做 |
-| [S014](S014-前端UI重设计/spec.md) | 前端 UI 重设计（信息架构+交互统一+视觉+AI 对话） | 🟡草案 2026-07-29 | spec | 22项→5组+首页下沉+巨型page拆分+三态统一+移动端+echarts 跟主题 |
-| [S015](S015-配置与基础设施/spec.md) | 配置与基础设施（config 拆分+infra 收口+路由自动发现） | 🟡草案 2026-07-29 | spec | 收口 4+套缓存/限流/熔断+修 cache_response key+metrics 配置化 |
-| [S016](S016-测试网/spec.md) | 测试网（后端覆盖率+IO 录制回放+前端 vitest+CI） | 🟡草案 2026-07-29 | spec | 纯函数 ≥80%+IO 录制回放+前端快照+CI 门槛 |
-| [S017](S017-A股涨跌预测模型栈/spec.md) | A股涨跌预测模型栈（四头解耦） | 🟡草案 2026-07-29 | spec | 短线×板块起步，LGB+CatBoost+HMM+Conformal，输出概率+分位区间 |
-| [S018](S018-多源特征工程/spec.md) | 多源特征工程（预测模型特征供给） | 🟡草案 2026-07-29 | spec | 特征注册表+可得时间对齐表+北向分段+SHAP/Boruta 选 ≤25 特征 |
-| [S019](S019-macro-Fred-API/spec.md) | 宏观特征 Fred API 接入（macro.py 第二批） | 🟡草案 2026-07-30 | spec | 美债10Y/DXY 走 Fred 独立通道+key 隔离 VR_DATA_DIR+补登 S2 |
-| [S020](S020-worldmonitor决策因子接入/spec.md) | worldmonitor 决策因子接入（全球宏观/地缘/另类数据） | ✅已实现 2026-08-01（P0–P6；P7 live 冒烟待联网） | spec · [tasks](S020-worldmonitor决策因子接入/tasks.md) · [验收报告](reports/acceptance/S020-2026-08-01-offline-pass.md) | 远程 MCP 互补另类数据层接 newsradar/market/特征栈，Fred 仍主源 |
+| [S014](S014-前端UI重设计/spec.md) | 前端 UI 重设计（信息架构+交互统一+视觉+AI 对话） | ✅已实现 2026-08-02 | spec · [plan](S014-前端UI重设计/plan.md) · [tasks](S014-前端UI重设计/tasks.md) · [RECOVERY](S014-前端UI重设计/RECOVERY.md) | 22项→5组+首页下沉+巨型page拆分+三态统一+移动端+echarts 跟主题 |
+| [S015](S015-配置与基础设施/spec.md) | 配置与基础设施（config 拆分+infra 收口+路由自动发现） | ✅已实现 2026-08-01 | spec · [plan](S015-配置与基础设施/plan.md) · [tasks](S015-配置与基础设施/tasks.md) | 收口 4+套缓存/限流/熔断+修 cache_response key+metrics 配置化 |
+| [S016](S016-测试网/spec.md) | 测试网（后端覆盖率+IO 录制回放+前端 vitest+CI） | 🟡草案 2026-07-29 | spec · [plan](S016-测试网/plan.md) · [tasks](S016-测试网/tasks.md) | 纯函数 ≥80%+IO 录制回放+前端快照+CI 门槛 |
+| [S017](S017-A股涨跌预测模型栈/spec.md) | A股涨跌预测模型栈（四头解耦） | ✅已实现 2026-08-01 | spec · [plan](S017-A股涨跌预测模型栈/plan.md) · [tasks](S017-A股涨跌预测模型栈/tasks.md) | 短线×板块起步，LGB+CatBoost+HMM+Conformal，输出概率+分位区间 |
+| [S018](S018-多源特征工程/spec.md) | 多源特征工程（预测模型特征供给） | ✅已实现 2026-08-01 | spec · [plan](S018-多源特征工程/plan.md) · [tasks](S018-多源特征工程/tasks.md) · [验收报告](S018-多源特征工程/验收报告.md) | 特征注册表+可得时间对齐表+北向分段+SHAP/Boruta 选 ≤25 特征 |
+| [S019](S019-macro-Fred-API/spec.md) | 宏观特征 Fred API 接入（macro.py 第二批） | ✅已实现 2026-07-31 | spec · [plan](S019-macro-Fred-API/plan.md) · [tasks](S019-macro-Fred-API/tasks.md) | 美债10Y/DXY 走 Fred 独立通道+key 隔离 VR_DATA_DIR+补登 S2 |
+| [S020](S020-worldmonitor决策因子接入/spec.md) | worldmonitor 决策因子接入（全球宏观/地缘/另类数据） | ✅已实现 2026-08-01（P0–P6；P7 live 冒烟待联网） | spec · [plan](S020-worldmonitor决策因子接入/plan.md) · [tasks](S020-worldmonitor决策因子接入/tasks.md) · [验收报告](reports/acceptance/S020-2026-08-01-offline-pass.md) | 远程 MCP 互补另类数据层接 newsradar/market/特征栈，Fred 仍主源 |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
+
+> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S022。

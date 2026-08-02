@@ -1,6 +1,6 @@
 # Spec: S014 — 前端 UI 重设计（信息架构 + 交互统一 + 视觉系统 + AI 对话）
 
-> 状态：草案
+> 状态：已实现 2026-08-02
 > 作者：Claude  日期：2026-07-29
 > 关联：`../S006-系统重写纲领/spec.md`（§5 第 8 步）、`../S013`（hooks/client 前置）、`../S016`（测试网）、`../../docs/sentiment-weather-station-ui-design.md`（设计文档补落地）
 

@@ -1,6 +1,6 @@
 # Spec: S011 — 调度收口（删 scheduler.py + 重写 scheduled_tasks + 状态机接线）
 
-> 状态：草案
+> 状态：已实现 2026-08-01
 > 作者：Claude  日期：2026-07-29
 > 关联：`../S006-系统重写纲领/spec.md`（§5 第 5 步）、`../S012`（工作流标灰，本 spec 接线状态机后其桩维持）、`../../ARCHITECTURE.md`、`../../CLAUDE.md` §2
 

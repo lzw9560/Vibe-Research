@@ -1,6 +1,6 @@
 # Spec: S007 — 契约层（数据模型 + 回归基线 + 契约测试骨架）
 
-> 状态：草案
+> 状态：已实现 2026-08-01
 > 作者：Claude  日期：2026-07-29
 > 关联：`../S006-系统重写纲领/spec.md`（本 spec 是其 §5 顺序第 1 步，CRITICAL 前置）、`../../ARCHITECTURE.md`、`../../CLAUDE.md` §1
 > 后置依赖：`../S008`（后端数据层迁移，依赖本 spec 冻结的模型）、`../S009`（openapi-codegen，依赖路由挂 response_model 后）
