@@ -1,7 +1,8 @@
 """Tests for backend/predict/features/text.py — S018 text feature specs.
 
-TDD: (a)-(h) covering FeatureSpec construction, registration, look-ahead guard,
-LLM constants, prompt compliance, LLM response parsing, and the stub fetch.
+TDD: (a)-(j) covering FeatureSpec construction, registration, look-ahead guard,
+LLM constants, prompt compliance, LLM response parsing, env-missing graceful
+degradation, and the mocked LLM wiring for fetch_news_emotion.
 
 All tests are offline (no network calls).
 """
@@ -230,12 +231,200 @@ def test_parse_llm_emotion_empty_string():
     assert result == {"emotion_score": None, "event_type": None}
 
 
-# ── (h) fetch_news_emotion stub 不触网，返全 None ──────────────
+# ── (h) fetch_news_emotion env 未配置时优雅降级，不触网 ──────
 
 
-def test_fetch_news_emotion_stub_returns_none():
-    """fetch_news_emotion stub 不触网，返回全 None。"""
+def test_fetch_news_emotion_env_missing_returns_none(monkeypatch):
+    """VR_LLM_* 未配置时优雅降级返回全 None（不触网）。"""
     from predict.features.text import fetch_news_emotion
+
+    for key in ("VR_LLM_BASE_URL", "VR_LLM_API_KEY", "VR_LLM_MODEL"):
+        monkeypatch.delenv(key, raising=False)
 
     result = fetch_news_emotion("某公司业绩大幅增长")
     assert result == {"emotion_score": None, "event_type": None}
+
+
+# ── (i) fetch_news_emotion 接线 LLM：env 缺失 / mock 调用 ──────
+
+
+def test_fetch_news_emotion_partial_env_returns_none(monkeypatch):
+    """只配了部分 VR_LLM_* key 也降级返回全 None（不触网）。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.delenv("VR_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("VR_LLM_MODEL", raising=False)
+
+    def _fail_post(*args, **kwargs):
+        raise AssertionError("env 不完整时不应发起网络请求")
+
+    monkeypatch.setattr(text.requests, "post", _fail_post)
+    result = text.fetch_news_emotion("某公司业绩大幅增长")
+    assert result == {"emotion_score": None, "event_type": None}
+
+
+def test_fetch_news_emotion_empty_news_returns_none(monkeypatch):
+    """空 / 非字符串 news_text 返回全 None，不触网。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+
+    def _fail_post(*args, **kwargs):
+        raise AssertionError("空新闻不应发起网络请求")
+
+    monkeypatch.setattr(text.requests, "post", _fail_post)
+    assert text.fetch_news_emotion("") == {"emotion_score": None, "event_type": None}
+    assert text.fetch_news_emotion(None) == {"emotion_score": None, "event_type": None}
+
+
+def _fake_llm_chat(content: str):
+    """构造一个返回固定 content 的假 _llm_chat（不触真实网络）。"""
+
+    def _inner(cfg, messages):
+        return {"choices": [{"message": {"content": content}}]}
+
+    return _inner
+
+
+def test_fetch_news_emotion_mocked_llm_parses(monkeypatch):
+    """mock _llm_chat 返回正常 JSON → 正确解析。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+    monkeypatch.setattr(
+        text,
+        "_llm_chat",
+        _fake_llm_chat('{"emotion_score": 0.5, "event_type": "并购"}'),
+    )
+
+    result = text.fetch_news_emotion("A 公司宣布并购 B 公司")
+    assert result == {"emotion_score": 0.5, "event_type": "并购"}
+
+
+def test_fetch_news_emotion_mocked_llm_fenced_json(monkeypatch):
+    """LLM 返回 ```json 围栏 → 正确解析。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+    monkeypatch.setattr(
+        text,
+        "_llm_chat",
+        _fake_llm_chat('```json\n{"emotion_score": -0.8, "event_type": "监管"}\n```'),
+    )
+
+    result = text.fetch_news_emotion("监管出手处罚")
+    assert result == {"emotion_score": -0.8, "event_type": "监管"}
+
+
+def test_fetch_news_emotion_mocked_llm_embedded_json_block(monkeypatch):
+    """LLM 返回带前后正文的 JSON 块 → 提取并解析。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+    monkeypatch.setattr(
+        text,
+        "_llm_chat",
+        _fake_llm_chat('好的，分析如下：\n{"emotion_score": 0.3, "event_type": "业绩预告"}\n以上仅供参考。'),
+    )
+
+    result = text.fetch_news_emotion("某公司发布业绩预告")
+    assert result == {"emotion_score": 0.3, "event_type": "业绩预告"}
+
+
+def test_fetch_news_emotion_mocked_llm_clamps_and_fallbacks(monkeypatch):
+    """越界情绪 clamp、非法事件类型回退'其他'。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+    monkeypatch.setattr(
+        text,
+        "_llm_chat",
+        _fake_llm_chat('{"emotion_score": 5.0, "event_type": "内部交易"}'),
+    )
+
+    result = text.fetch_news_emotion("公司高管大幅减持")
+    assert result["emotion_score"] == 1.0
+    assert result["event_type"] == "其他"
+
+
+def test_fetch_news_emotion_prompt_contains_news(monkeypatch):
+    """传给 LLM 的 user 消息包含新闻文本与合规提示词。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+
+    captured = {}
+
+    def _capture(cfg, messages):
+        captured["messages"] = messages
+        return {"choices": [{"message": {"content": '{"emotion_score": 0.0, "event_type": "其他"}'}}]}
+
+    monkeypatch.setattr(text, "_llm_chat", _capture)
+    text.fetch_news_emotion("某条测试新闻文本")
+    user_msg = captured["messages"][-1]
+    assert user_msg["role"] == "user"
+    assert "某条测试新闻文本" in user_msg["content"]
+    assert "emotion_score" in user_msg["content"]
+
+
+def test_fetch_news_emotion_mocked_llm_error_raises(monkeypatch):
+    """LLM 接口异常（RuntimeError）向上传播。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+
+    def _boom(cfg, messages):
+        raise RuntimeError("模型接口 HTTP 500: boom")
+
+    monkeypatch.setattr(text, "_llm_chat", _boom)
+    with pytest.raises(RuntimeError, match="HTTP 500"):
+        text.fetch_news_emotion("某公司业绩大幅下滑")
+
+
+def test_fetch_news_emotion_mocked_llm_bad_json_returns_none(monkeypatch):
+    """LLM 返回非 JSON → 解析失败返回全 None。"""
+    from predict.features import text
+
+    monkeypatch.setenv("VR_LLM_BASE_URL", "https://example.com")
+    monkeypatch.setenv("VR_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("VR_LLM_MODEL", "test-model")
+    monkeypatch.setattr(text, "_llm_chat", _fake_llm_chat("抱歉，我无法完成标注"))
+
+    result = text.fetch_news_emotion("某条新闻")
+    assert result == {"emotion_score": None, "event_type": None}
+
+
+# ── (j) parse_llm_emotion 对嵌入正文的 JSON 块容错 ──────────────
+
+
+def test_parse_llm_emotion_embedded_json_block():
+    """响应含前后正文但嵌有 JSON 块 → 提取并解析。"""
+    from predict.features.text import parse_llm_emotion
+
+    response = '好的，分析如下：\n{"emotion_score": 0.3, "event_type": "业绩预告"}\n以上仅供参考。'
+    result = parse_llm_emotion(response)
+    assert result == {"emotion_score": 0.3, "event_type": "业绩预告"}
+
+
+def test_parse_llm_emotion_embedded_nested_json_block():
+    """JSON 块内含嵌套花括号 / 字符串内括号仍能按平衡括号提取。"""
+    from predict.features.text import parse_llm_emotion
+
+    response = '前缀 {"emotion_score": -0.2, "event_type": "减持", "note": "提到{a}与{b}"} 后缀'
+    result = parse_llm_emotion(response)
+    assert result == {"emotion_score": -0.2, "event_type": "减持"}

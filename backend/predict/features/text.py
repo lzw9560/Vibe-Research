@@ -7,7 +7,10 @@ All parsing is pure computation (no side effects, no network).
 from __future__ import annotations
 
 import json
+import os
 import re
+
+import requests
 
 from predict.features.registry import FeatureSpec, Registry
 
@@ -84,19 +87,59 @@ def _strip_markdown(text: str) -> str:
     return text
 
 
+def _extract_json_block(text: str) -> str | None:
+    """Extract the first balanced {...} JSON object block from text.
+
+    Handles nested braces and braces inside strings. Returns None if no
+    balanced block is found. Used to tolerate LLM responses that embed the
+    JSON object in surrounding prose.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for i, ch in enumerate(text[start:], start=start):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
 def parse_llm_emotion(response: str) -> dict:
     """Parse LLM response JSON into structured emotion data.
 
-    Tolerates markdown fences, clamps scores to [-1, 1],
-    and maps unknown event types to "其他".
+    Tolerates markdown fences and prose-embedded JSON blocks, clamps
+    scores to [-1, 1], and maps unknown event types to "其他".
     """
     if not isinstance(response, str) or not response.strip():
         return {"emotion_score": None, "event_type": None}
 
+    cleaned = _strip_markdown(response.strip())
     try:
-        data = json.loads(_strip_markdown(response.strip()))
+        data = json.loads(cleaned)
     except (json.JSONDecodeError, ValueError):
-        return {"emotion_score": None, "event_type": None}
+        block = _extract_json_block(cleaned)
+        if block is None:
+            return {"emotion_score": None, "event_type": None}
+        try:
+            data = json.loads(block)
+        except (json.JSONDecodeError, ValueError):
+            return {"emotion_score": None, "event_type": None}
 
     if not isinstance(data, dict):
         return {"emotion_score": None, "event_type": None}
@@ -132,16 +175,77 @@ def validate_prompt_compliance(prompt: str) -> bool:
     return True
 
 
-def fetch_news_emotion(news_text: str) -> dict:
-    """Fetch news emotion via LLM (STUB — does not call LLM).
+# ── LLM wiring (env-configured, no chat.py import to avoid cycles) ──
 
-    TODO: 走 chat LLM 出口（VR_LLM_*），S008/S017 接 live；
-    现仅 stub 返 parse_llm_emotion 的空结果。
+
+def _env_llm_config() -> dict:
+    """Read LLM config from env (same keys as chat.py's VR_LLM_*).
+
+    Returns:
+        dict with ``baseURL`` / ``apiKey`` / ``model``; missing keys
+        default to empty strings.
+    """
+    return {
+        "baseURL": os.environ.get("VR_LLM_BASE_URL", ""),
+        "apiKey": os.environ.get("VR_LLM_API_KEY", ""),
+        "model": os.environ.get("VR_LLM_MODEL", ""),
+    }
+
+
+def _llm_chat(cfg: dict, messages: list) -> dict:
+    """Call an OpenAI-compatible /chat/completions endpoint.
+
+    Mirrors chat.py's _call_llm (without function calling), so text.py
+    does not import chat.py (avoids circular dependency).
+
+    Raises:
+        RuntimeError: If the endpoint returns a non-200 status.
+    """
+    base = cfg["baseURL"].rstrip("/")
+    if not base.endswith(("/v1", "/v3", "/api/v3")):
+        # 多数 OpenAI 兼容端点需要 /v1；已带版本段则不动。
+        base = base + "/v1"
+    payload = {"model": cfg["model"], "messages": messages, "temperature": 0.3}
+    r = requests.post(
+        f"{base}/chat/completions",
+        headers={"Authorization": f"Bearer {cfg['apiKey']}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=90,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"模型接口 HTTP {r.status_code}: {r.text[:300]}")
+    return r.json()
+
+
+def fetch_news_emotion(news_text: str) -> dict:
+    """Fetch news emotion via LLM.
+
+    Calls an OpenAI-compatible endpoint configured through the VR_LLM_*
+    environment variables. When any of VR_LLM_BASE_URL / VR_LLM_API_KEY /
+    VR_LLM_MODEL is unset, degrades gracefully to an all-None result
+    without making any network call.
 
     Args:
         news_text: The news text to analyze.
 
     Returns:
-        dict with ``emotion_score`` and ``event_type`` both None.
+        dict with ``emotion_score`` (float in [-1, 1] or None) and
+        ``event_type`` (whitelisted string, default "其他").
+
+    Raises:
+        RuntimeError: If the LLM endpoint returns a non-200 status.
     """
-    return {"emotion_score": None, "event_type": None}
+    if not isinstance(news_text, str) or not news_text.strip():
+        return {"emotion_score": None, "event_type": None}
+
+    cfg = _env_llm_config()
+    if not (cfg["baseURL"] and cfg["apiKey"] and cfg["model"]):
+        return {"emotion_score": None, "event_type": None}
+
+    messages = [
+        {"role": "system", "content": "你是财经新闻情绪与事件标注助手，只做客观标注。"},
+        {"role": "user", "content": NEWS_EMOTION_PROMPT.replace("{news_text}", news_text)},
+    ]
+    data = _llm_chat(cfg, messages)
+    content = data["choices"][0]["message"].get("content") or ""
+    return parse_llm_emotion(content)

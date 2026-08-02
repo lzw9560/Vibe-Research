@@ -1,5 +1,7 @@
 import {
+  LayoutDashboard, Search, TrendingUp, PieChart, Settings,
   Cog, Cpu, Database, Cable, Rocket, FlaskConical,
+  
 } from "lucide-react";
 
 export interface NavGroup {
@@ -34,6 +36,67 @@ export const THEMES = [
 export const APP_VERSION = "v0.1.3";
 export const REPO_URL = "https://github.com/simonlin1212/Vibe-Research";
 export const CONTACT_HANDLE = "lzw9560";
+
+// 5 组导航（S014 R1）
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    name: "市场总览",
+    icon: LayoutDashboard,
+    tabs: [
+      { to: "/daily-review", label: "每日复盘" },
+      { to: "/intel", label: "全球情报" },
+      { to: "/industry", label: "行业研究" },
+      { to: "/sector-divergence", label: "板块分化" },
+      { to: "/prediction", label: "涨跌预测" },
+      { to: "/metrics", label: "指标分析" },
+      { to: "/health", label: "系统健康" },
+    ],
+  },
+  {
+    name: "个股研究",
+    icon: Search,
+    tabs: [
+      { to: "/stock/:code", label: "个股深度" },
+      { to: "/stock-data", label: "股票数据" },
+      { to: "/notes", label: "笔记" },
+      { to: "/recommendation", label: "推荐" },
+      { to: "/strategy-signals", label: "策略信号" },
+      { to: "/backtest", label: "回测" },
+      { to: "/risk-dashboard", label: "风险仪表盘" },
+    ],
+  },
+  {
+    name: "交易工作台",
+    icon: TrendingUp,
+    tabs: [
+      { to: "/limitup", label: "打板策略" },
+      { to: "/limitup/gene", label: "基因筛选" },
+      { to: "/limitup/auction", label: "竞价选股" },
+      { to: "/limitup/seats", label: "席位引擎" },
+      { to: "/candidates", label: "候选池" },
+      { to: "/value-funnel", label: "价值漏斗" },
+      { to: "/watchlist", label: "自选股" },
+      { to: "/workflow", label: "工作流" },
+    ],
+  },
+  {
+    name: "投资管理",
+    icon: PieChart,
+    tabs: [
+      { to: "/portfolio", label: "组合" },
+      { to: "/my-reports", label: "我的研报" },
+      { to: "/sentiment/weather", label: "情绪气象" },
+      { to: "/scheduled-tasks", label: "定时任务" },
+    ],
+  },
+  {
+    name: "系统",
+    icon: Settings,
+    tabs: [
+      { to: "/settings", label: "设置" },
+    ],
+  },
+];
 
 // 移动端次级 Tab 配置（按路径前缀匹配）
 export const SUB_TABS: Record<string, { key: string; label: string; to?: string }[]> = {

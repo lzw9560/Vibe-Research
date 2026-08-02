@@ -32,6 +32,9 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <Navigate to="/daily-review" replace /> },
       { path: "/daily-review", element: lazyEl(() => import("@/pages/DailyReview"), "DailyReview") },
+      { path: "/daily-review/emotion", element: lazyEl(() => import("@/pages/DailyReview/pages/EmotionDetail"), "EmotionDetail") },
+      { path: "/daily-review/sectors", element: lazyEl(() => import("@/pages/DailyReview/pages/SectorDetail"), "SectorDetail") },
+      { path: "/daily-review/review", element: lazyEl(() => import("@/pages/DailyReview/pages/ReviewDetail"), "ReviewDetail") },
       { path: "/intel", element: lazyEl(() => import("@/pages/Intel"), "Intel") },
       { path: "/sectors", element: lazyEl(() => import("@/pages/Sectors"), "Sectors") },
       { path: "/sectors/:key", element: lazyEl(() => import("@/pages/SectorDetail"), "SectorDetail") },

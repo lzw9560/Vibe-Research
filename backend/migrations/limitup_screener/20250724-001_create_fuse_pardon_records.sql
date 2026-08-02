@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS fuse_pardon (id INTEGER);

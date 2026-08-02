@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS sti_timeline (ts TEXT);

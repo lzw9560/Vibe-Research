@@ -23,6 +23,12 @@
 - 若 S020 依赖 S019 且 S019 未合并：`feature/S020` 基于 `feature/S019`（栈式）；S019 合并 develop 后，`feature/S020` rebase 到 develop。
 - **共享基础设施**（validators / TTLCache / 模型等被多 spec 用的）**先合 develop**，再开依赖它的派生 feature。
 
+### 验收门（提交前强制，playwright-pro）
+- **每个 spec 完成、提交（commit / squash 合并）之前**，必须运行 **playwright-pro** 回归验收测试；通过之后才允许提交。
+- **保留验收报告**：报告产物落 `reports/acceptance/<S-NNN>-<date>-<result>.md`（含：通过/失败用例数、失败明细、运行时间、测试环境）。报告随 feature 分支提交，合并前随 grill 一起核验。
+- 验收测试范围：前端 UI 冒烟 + 后端连通（`uvicorn` 起 8900 → 起 vite → Playwright 断言关键路由渲染与真实 API 数据落位）。纯数据层/无 UI 改动 spec，可只跑后端 API 冒烟，但报告同样要留。
+- 验收未过 = **硬阻**，不得提交/合并（与 grill 🔴 同级）。
+
 ### 合并准入门（grill 硬阻）
 - 合并前必过 **grill / code review**。grill 标的 🔴（含"外部源 live 冒烟未通过"）= **硬阻**，不得合并。
 - 接外部源的 spec（如 S020 worldmonitor）**live 冒烟通过前不合**；纯重构 / 数据层内部 spec，`pytest -m "not live"` 全绿 + grill 无 🔴 即可。
