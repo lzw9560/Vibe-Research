@@ -56,12 +56,39 @@ def test_peek_state_does_not_mutate_breaker_state():
     breaker = CircuitBreaker("t")
     breaker.state = CircuitState.OPEN
     breaker.last_failure_time = time.time() - 61
+    saved_failure_time = breaker.last_failure_time
     # Act：连 peek 两次
     breaker.peek_state()
     breaker.peek_state()
-    # Assert：peek 不改 self.state（仍 OPEN，真实转换由 allow_request 负责）、不消耗试探名额
+    # Assert：peek 不改 self.state（仍 OPEN，真实转换由 allow_request 负责）、不消耗试探名额、不改任何计数
     assert breaker.state == CircuitState.OPEN
     assert breaker.half_open_calls == 0
+    assert breaker.failure_count == 0
+    assert breaker.success_count == 0
+    assert breaker.last_failure_time == saved_failure_time
+
+
+def test_peek_state_half_open_returns_half_open():
+    # Arrange：HALF_OPEN（半开试探中）
+    breaker = CircuitBreaker("t")
+    breaker.state = CircuitState.HALF_OPEN
+    breaker.half_open_calls = 1
+    # Act
+    state = breaker.peek_state()
+    # Assert：HALF_OPEN 原样返回（peek 不改状态、不消耗名额）
+    assert state == CircuitState.HALF_OPEN
+    assert breaker.half_open_calls == 1
+
+
+def test_peek_state_open_with_zero_last_failure_time_returns_open():
+    # Arrange：强制 OPEN 但无 failure 时间戳（last_failure_time=0.0，异常/手工置态）
+    breaker = CircuitBreaker("t")
+    breaker.state = CircuitState.OPEN
+    breaker.last_failure_time = 0.0  # 未走 record_failure 的手工置态
+    # Act
+    state = breaker.peek_state()
+    # Assert：守卫（last_failure_time>0）阻止把"无失败时间戳的强制 OPEN"误判为已过恢复期 → 仍报 OPEN
+    assert state == CircuitState.OPEN
 
 
 # ── health 读路径自愈测（R2 / A2 / A3）────────────────────────────

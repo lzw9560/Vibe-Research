@@ -57,8 +57,10 @@ class CircuitBreaker:
         half_open_calls 试探名额。供 health 检查等只读观测用；真实 OPEN→HALF_OPEN
         转换仍由 allow_request() 在真实请求时触发（S022）。
         """
-        if self.state == CircuitState.OPEN and (
-            time.time() - self.last_failure_time >= self.config.recovery_timeout
+        if (
+            self.state == CircuitState.OPEN
+            and self.last_failure_time > 0
+            and time.time() - self.last_failure_time >= self.config.recovery_timeout
         ):
             return CircuitState.HALF_OPEN
         return self.state
