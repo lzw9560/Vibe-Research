@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import type { AuctionScreenerResult, AuctionSignal } from "@/lib/api";
+import type { AuctionScreenerResult, AuctionSignal, AuctionCandidate } from "@/lib/api";
 
 // vi.hoisted 保证 mock fn 引用在 factory 与测试间一致。
 const apiMocks = vi.hoisted(() => ({
@@ -76,5 +76,21 @@ describe("AuctionScreener 页内 TabBar (E2)", () => {
     fireEvent.click(screen.getByRole("button", { name: "竞价预案 TOP N" }));
     await waitFor(() => expect(screen.getByText("候选标的")).toBeInTheDocument());
     expect(screen.queryByText("9:25 盘中监控")).not.toBeInTheDocument();
+  });
+
+  // S025 review fix 补测：防假绿——重构后行级 .map（c.code/c.name/c.score）从未验证
+  it("tab1 候选非空 → 行级渲染 code/name/score", async () => {
+    apiMocks.auctionTop.mockResolvedValue({
+      ...emptyResult,
+      candidates: [
+        { code: "000001", name: "平安银行", score: 80, gene_score: 0.8 } as unknown as AuctionCandidate,
+      ],
+    });
+    const qc = newClient();
+    render(<AuctionScreener />, { wrapper: withClient(qc) });
+    await waitFor(() => expect(screen.getByText("候选标的")).toBeInTheDocument());
+    expect(screen.getByText("000001")).toBeInTheDocument();
+    expect(screen.getByText("平安银行")).toBeInTheDocument();
+    expect(screen.getByText("80")).toBeInTheDocument();
   });
 });

@@ -50,6 +50,8 @@ function fillRequired() {
   fireEvent.change(screen.getByLabelText("股票代码"), { target: { value: "000001" } });
   fireEvent.change(screen.getByLabelText("买入日期"), { target: { value: "2026-08-01" } });
   fireEvent.change(screen.getByLabelText("卖出日期"), { target: { value: "2026-08-02" } });
+  // S025 review fix：return_pct 现必填（防 avg_return 静默偏倚），测试须填
+  fireEvent.change(screen.getByLabelText("收益率(%)"), { target: { value: "1.5" } });
 }
 
 describe("RecordsForm (C1/C2)", () => {
@@ -64,6 +66,7 @@ describe("RecordsForm (C1/C2)", () => {
     expect(screen.getByText("股票代码必填")).toBeInTheDocument();
     expect(screen.getByText("买入日期必填")).toBeInTheDocument();
     expect(screen.getByText("卖出日期必填")).toBeInTheDocument();
+    expect(screen.getByText("收益率必填")).toBeInTheDocument();
     expect(apiMocks.winRateRecords).not.toHaveBeenCalled();
   });
 
@@ -82,6 +85,7 @@ describe("RecordsForm (C1/C2)", () => {
           stock_code: "000001",
           entry_date: "2026-08-01",
           exit_date: "2026-08-02",
+          return_pct: 1.5,
         }),
       ]),
     );

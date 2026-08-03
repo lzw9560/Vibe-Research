@@ -290,7 +290,13 @@ export function useAuctionMonitor(
 ) {
   return useQuery({
     queryKey: ["limitup", "auction", "monitor"] as const,
-    queryFn: () => Promise.all([api.auctionMonitor(), api.auctionWatchlist()]),
+    // S025 review fix：allSettled 防独立端点 fail-fast 耦合（watchlist 502 不再丢弃已成功的 monitor 信号）
+    queryFn: async () => {
+      const results = await Promise.allSettled([api.auctionMonitor(), api.auctionWatchlist()]);
+      const monitor = results[0].status === "fulfilled" ? results[0].value : [];
+      const watchlist = results[1].status === "fulfilled" ? results[1].value : [];
+      return [monitor, watchlist] as [typeof monitor, typeof watchlist];
+    },
     refetchInterval: () => (isInAuctionWindow() ? 15_000 : false),
     ...options,
   });

@@ -101,4 +101,11 @@ describe("Backtest 页内 TabBar (D2)", () => {
     await waitFor(() => expect(screen.getByText("查询条件")).toBeInTheDocument());
     expect(screen.queryByText("概览")).not.toBeInTheDocument();
   });
+
+  // S025 review fix 补测：防假绿——scatter 空态 EmptyState 从未覆盖
+  it("scatter 空 → 渲染「暂无回测数据」空态", async () => {
+    mockApi.backtestScatter.mockResolvedValue([]);
+    render(<Backtest />);
+    await waitFor(() => expect(screen.getByText("暂无回测数据")).toBeInTheDocument());
+  });
 });

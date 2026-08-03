@@ -10,8 +10,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Radio, Clock, Activity, Eye, Info } from "lucide-react";
 
-/** 窗口外倒计时轮询间隔（ms）—— 仅刷新显示，不影响 react-query refetchInterval。 */
-const COUNTDOWN_TICK_MS = 60_000;
+/** now 刷新间隔（ms）—— 1s 保证 9:15/9:30 边界即时切换 badge + 触发 refetchInterval 重判
+ * （review fix：60s 会致 polling 最晚滞后 ~60s 启动，~7% 窗口丢失；out→in 转换零测试覆盖）。 */
+const COUNTDOWN_TICK_MS = 1_000;
 /** 竞价窗口开始：周一至五 9:15（分钟数）。 */
 const AUCTION_START_MIN = 9 * 60 + 15;
 

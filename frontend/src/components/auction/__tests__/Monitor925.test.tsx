@@ -73,6 +73,20 @@ describe("Monitor925 (E1)", () => {
     expect(screen.getByText("600000")).toBeInTheDocument();
   });
 
+  // S025 review fix 补测：防假绿——空信号/空自选 EmptyState 分支从未覆盖
+  it("空信号 + 空自选 → 渲染「暂无竞价信号」/「暂无自选监控」空态", async () => {
+    vi.useFakeTimers({ now: new Date(2026, 7, 3, 9, 20, 0) }); // 周一 9:20 窗口内
+    apiMocks.auctionMonitor.mockResolvedValue([]);
+    apiMocks.auctionWatchlist.mockResolvedValue([]);
+    const qc = newClient();
+    render(<Monitor925 />, { wrapper: withClient(qc) });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText("暂无竞价信号")).toBeInTheDocument();
+    expect(screen.getByText("暂无自选监控")).toBeInTheDocument();
+  });
+
   it("窗口内 15s → 触发 refetch（api 再调一次）", async () => {
     vi.useFakeTimers({ now: new Date(2026, 7, 3, 9, 20, 0) }); // 周一 9:20
     const qc = newClient();

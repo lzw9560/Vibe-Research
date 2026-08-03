@@ -45,10 +45,13 @@ const EMPTY_FORM: FormState = {
   sector: "",
 };
 
-const REQUIRED: { key: "stock_code" | "entry_date" | "exit_date"; label: string }[] = [
+// S025 review fix：return_pct 必填——空值会致后端 rec.get("return_pct",0) 存 0.0，
+// 静默偏倚 avg_return 闭环指标（is_win=true + 空 return_pct 还产生矛盾记录）。
+const REQUIRED: { key: "stock_code" | "entry_date" | "exit_date" | "return_pct"; label: string }[] = [
   { key: "stock_code", label: "股票代码" },
   { key: "entry_date", label: "买入日期" },
   { key: "exit_date", label: "卖出日期" },
+  { key: "return_pct", label: "收益率" },
 ];
 
 // 空串/非数 → undefined（可选数值字段不传）。
@@ -180,6 +183,7 @@ export function RecordsForm({ onSubmitted }: RecordsFormProps) {
         <Input
           label="收益率(%)"
           type="number"
+          error={errors.return_pct}
           value={form.return_pct}
           onChange={(e) => update("return_pct", e.target.value)}
           placeholder="1.5"
