@@ -3,6 +3,7 @@
 // 后端 /winrate/sector/{sector}、/winrate/strategy/{strategy} 返回单对象统计；
 // 包裹 [data] 作单行表，列随维度切换（板块/战法 名 + 总交易/胜数/胜率/平均收益）。
 import { useWinRateSector, useWinRateStrategy } from "@/lib/query";
+import { formatRate, formatPercent } from "@/lib/format";
 import { DataTable } from "@/components/ui/DataTable";
 import type { Column } from "@/components/ui/DataTable";
 import { SkeletonTable } from "@/components/ui/Skeleton";
@@ -15,23 +16,20 @@ interface BreakdownTableProps {
   windowSize: number;
 }
 
-const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
-const pct2 = (v: number) => `${v.toFixed(2)}%`;
-
 const sectorColumns: Column<SectorWinStats>[] = [
   { key: "sector", header: "板块" },
   { key: "total_trades", header: "总交易", align: "right" },
   { key: "win_count", header: "胜数", align: "right" },
-  { key: "win_rate", header: "胜率", align: "right", render: (r) => pct(r.win_rate) },
-  { key: "avg_return", header: "平均收益", align: "right", render: (r) => pct2(r.avg_return) },
+  { key: "win_rate", header: "胜率", align: "right", render: (r) => formatRate(r.win_rate) },
+  { key: "avg_return", header: "平均收益", align: "right", render: (r) => formatPercent(r.avg_return) },
 ];
 
 const strategyColumns: Column<StrategyWinStats>[] = [
   { key: "strategy", header: "战法" },
   { key: "total_trades", header: "总交易", align: "right" },
   { key: "win_count", header: "胜数", align: "right" },
-  { key: "win_rate", header: "胜率", align: "right", render: (r) => pct(r.win_rate) },
-  { key: "avg_return", header: "平均收益", align: "right", render: (r) => pct2(r.avg_return) },
+  { key: "win_rate", header: "胜率", align: "right", render: (r) => formatRate(r.win_rate) },
+  { key: "avg_return", header: "平均收益", align: "right", render: (r) => formatPercent(r.avg_return) },
 ];
 
 export function BreakdownTable({ sector, strategy, windowSize }: BreakdownTableProps) {

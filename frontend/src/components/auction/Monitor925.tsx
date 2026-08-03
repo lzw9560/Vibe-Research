@@ -4,6 +4,7 @@
 // refetchInterval 由 useAuctionMonitor 按 isInAuctionWindow() 自驱（15s / false）。
 import { useState, useEffect } from "react";
 import { useAuctionMonitor, isInAuctionWindow } from "@/lib/query";
+import { AUCTION_START_MIN, isWeekday } from "@/lib/auction";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -13,18 +14,14 @@ import { Radio, Clock, Activity, Eye, Info } from "lucide-react";
 /** now 刷新间隔（ms）—— 1s 保证 9:15/9:30 边界即时切换 badge + 触发 refetchInterval 重判
  * （review fix：60s 会致 polling 最晚滞后 ~60s 启动，~7% 窗口丢失；out→in 转换零测试覆盖）。 */
 const COUNTDOWN_TICK_MS = 1_000;
-/** 竞价窗口开始：周一至五 9:15（分钟数）。 */
-const AUCTION_START_MIN = 9 * 60 + 15;
 
 /**
  * 计算下一个竞价窗口开始时刻（周一至五 9:15）。注入 now 便测。
  * 若今天工作日且当前在 9:15 前 → 今天 9:15；否则往后找下一个工作日 9:15。
  */
 export function getNextAuctionWindow(now: Date): Date {
-  const day = now.getDay();
   const minutesNow = now.getHours() * 60 + now.getMinutes();
-  const isTodayWeekday = day >= 1 && day <= 5;
-  if (isTodayWeekday && minutesNow < AUCTION_START_MIN) {
+  if (isWeekday(now) && minutesNow < AUCTION_START_MIN) {
     const d = new Date(now);
     d.setHours(9, 15, 0, 0);
     return d;
@@ -32,7 +29,7 @@ export function getNextAuctionWindow(now: Date): Date {
   const d = new Date(now);
   d.setHours(9, 15, 0, 0);
   d.setDate(d.getDate() + 1);
-  while (d.getDay() === 0 || d.getDay() === 6) {
+  while (!isWeekday(d)) {
     d.setDate(d.getDate() + 1);
   }
   return d;

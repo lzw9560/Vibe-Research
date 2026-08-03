@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import type { Opts } from "./types";
 import type { WinRateRecordInput } from "@/lib/api";
+import { AUCTION_START_MIN, AUCTION_END_MIN, isWeekday } from "@/lib/auction";
 
 // ---- 打板/竞价/席位 ----
 
@@ -275,10 +276,9 @@ export function useWinRateRecords() {
 
 // 竞价窗口判定：周一至五 9:15-9:30（客户端本地时间）。注入 now 便测；驱动 useAuctionMonitor 的 refetchInterval。
 export function isInAuctionWindow(now: Date = new Date()): boolean {
-  const day = now.getDay();
-  if (day === 0 || day === 6) return false; // 周末
+  if (!isWeekday(now)) return false; // 周末
   const minutes = now.getHours() * 60 + now.getMinutes();
-  return minutes >= 9 * 60 + 15 && minutes <= 9 * 60 + 30;
+  return minutes >= AUCTION_START_MIN && minutes <= AUCTION_END_MIN;
 }
 
 // 9:25 盘中监控：并行拉 auction/monitor + auction/watchlist；窗口内 15s 刷新，窗口外停。
