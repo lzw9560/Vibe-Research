@@ -263,7 +263,8 @@ class TestWorkflowEndpoints:
         r = client.get("/api/workflow/pre-market")
         assert r.status_code == 200
         data = r.json()
-        assert "data" in data
+        # S026: 异步化——GET 返 {status: idle|running|done|error, ...}，不再同步返 factors/data
+        assert data["status"] in ("idle", "running", "done", "error")
 
     def test_workflow_realtime(self):
         r = client.get("/api/workflow/realtime")

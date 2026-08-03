@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Any
 
 from pre_market_workflow import PreMarketWorkflow, PreMarketReport
+from factors import registry as factor_registry
+from factors.base import FactorResult
 from realtime_workflow import RealtimeWorkflow
 from post_market_workflow import PostMarketWorkflow, PostMarketReport
 from workflow_state_machine import WorkflowStatus
@@ -76,6 +78,14 @@ class TradingWorkflow:
         report = await self.pre_market.run()
         logger.info("盘前工作流完成: candidates=%d", len(report.candidates))
         return report
+
+    async def run_pre_market_factors(self) -> list[FactorResult]:
+        """执行盘前工作流（因子接口版，S023 D2）：遍历因子注册表。"""
+        logger.info("开始执行盘前因子采集: date=%s", self.date)
+        factor_registry.register_default_factors()
+        results = factor_registry.fetch_all(self.date)
+        logger.info("盘前因子采集完成: %d 个因子", len(results))
+        return results
 
     async def run_intraday(self) -> dict[str, Any]:
         """执行盘中工作流。"""

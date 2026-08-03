@@ -39,6 +39,10 @@ export interface FunnelLayer {
   layer_id: string; name: string; as_of: string;
   input_count: number; output_count: number;
   filtered_out: FilterRecord[]; output_codes: string[];
+  conditions?: string[];
+  passed?: { code: string; name: string }[];
+  data_status?: string | null;
+  data_reason?: string | null;
 }
 export interface BaseThreshold {
   turnover_cold: number; turnover_hot: number; vol_ratio_active: number;
@@ -76,4 +80,12 @@ export const candidatesApi = {
   getConfig: () => req<FunnelConfigResponse>("/workflow/funnel/config"),
   putConfig: (body: Partial<ThresholdConfig> & { sources?: Record<string, boolean> }) =>
     req<FunnelConfigResponse>("/workflow/funnel/config", "PUT", body),
+  rerunLayer: (layerId: string, date?: string, body?: Record<string, unknown>) =>
+    req<{ layer: FunnelLayer; final_candidates_count: number }>(
+      `/workflow/funnel/layers/${layerId}/rerun${date ? `?date=${date}` : ""}`, "PUT", body ?? {}
+    ),
+  rerunDownstream: (layerId: string, date?: string) =>
+    req<{ layers: FunnelLayer[]; final_candidates: DiagnosisCard[] }>(
+      `/workflow/funnel/layers/${layerId}/rerun-downstream${date ? `?date=${date}` : ""}`, "POST"
+    ),
 };

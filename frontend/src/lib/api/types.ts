@@ -709,6 +709,63 @@ export interface PreMarketReport {
   disclaimer?: string;
 }
 
+// ---- S023 选股因子接口类型 ----
+
+export interface FactorCandidate {
+  code: string;
+  name: string;
+  source_factor_id: string;
+  source_layer: string;
+  hit_rules: string[];
+  detail: Record<string, unknown>;
+}
+
+export interface FunnelLayer {
+  layer_id: string;
+  name: string;
+  as_of: string;
+  input_count: number;
+  output_count: number;
+  filtered_out: { code: string; name?: string | null; reason: string }[];
+  output_codes: string[];
+  conditions?: string[];
+  passed?: FactorCandidate[];
+  data_status?: string | null;
+  data_reason?: string | null;
+}
+
+export interface FactorResult {
+  factor_id: string;
+  factor_name: string;
+  candidates: FactorCandidate[];
+  layers: FunnelLayer[];
+  config: Record<string, unknown>;
+  as_of: string;
+  data_date: string;
+  data_status: string;
+}
+
+export interface PreMarketBriefing {
+  // S026: 异步化响应（status 驱动）；旧 fallback 字段保留供兼容
+  status?: "idle" | "running" | "done" | "error";
+  factors?: FactorResult[];
+  data_date?: string;
+  as_of?: string;
+  market_emotion?: { sentiment_index?: number | null; phase?: string | null };
+  run_id?: string;
+  msg?: string; // idle: 提示先 refresh
+  // 旧路径 fallback
+  data?: PreMarketReport;
+  fallback?: boolean;
+  error?: string;
+}
+
+export interface PreMarketRefreshResponse {
+  run_id: string;
+  status: "running";
+  msg?: string; // "已有采集在跑"
+}
+
 // IntradayMonitor
 export interface TradingSignal {
   code: string;

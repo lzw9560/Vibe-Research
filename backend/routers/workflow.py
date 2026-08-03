@@ -2,12 +2,18 @@
 Trading Workflow router.
 Provides pre-market, intraday, and post-market workflow endpoints.
 """
+import asyncio
+import uuid
+
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from dataclasses import asdict
 
 from trading_workflow import TradingWorkflow
+from factors import registry as factor_registry
+from factors.base import FactorResult
+from vr_paths import last_trading_date_str
 from strategies.strategy_matcher import StrategyMatcher
 from strategies.position_advisor import PositionAdvisor
 from limitup_strategy import StrategySignal
@@ -19,6 +25,71 @@ from win_rate_tracker import WinRateTracker, generate_strategy_adjustments
 router = APIRouter(tags=["workflow"])
 
 _workflow = TradingWorkflow()
+
+# S026: pre-market 异步采集内存缓存（进程重启丢，盘前每日重采可接受）
+_cache: dict[str, Any] = {
+    "run_id": None,
+    "status": "idle",  # idle | running | done | error
+    "factors": None,
+    "data_date": None,
+    "as_of": None,
+    "market_emotion": None,
+    "error": None,
+}
+
+
+def _now_iso() -> str:
+    return datetime.now().isoformat()
+
+
+async def _collect(run_id: str, target_date: str) -> None:
+    """后台异步采集（S026）：to_thread 释放事件循环，afetch_all 并行两因子。"""
+    try:
+        factor_registry.register_default_factors()
+        results = await factor_registry.afetch_all(target_date)
+        me = await asyncio.to_thread(_fetch_market_emotion, target_date)
+        _cache.update(
+            run_id=run_id,
+            status="done",
+            factors=[_serialize_factor(r) for r in results],
+            data_date=target_date,
+            market_emotion=me,
+            as_of=_now_iso(),
+            error=None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _cache.update(run_id=run_id, status="error", error=str(exc), as_of=_now_iso())
+
+
+def _fetch_market_emotion(date: str) -> dict[str, Any]:
+    """取当日市场情绪（复用 market 模块，失败降级）。"""
+    try:
+        import market
+        ov = market.get_overview(date)
+        return {"sentiment_index": (ov or {}).get("sentiment_index"), "phase": (ov or {}).get("phase")}
+    except Exception:
+        return {}
+
+
+def _serialize_factor(fr: FactorResult) -> dict[str, Any]:
+    """序列化 FactorResult 为前端可消费的 dict。"""
+    return {
+        "factor_id": fr.factor_id,
+        "factor_name": fr.factor_name,
+        "candidates": [
+            {
+                "code": c.code, "name": c.name,
+                "source_factor_id": c.source_factor_id, "source_layer": c.source_layer,
+                "hit_rules": c.hit_rules, "detail": c.detail,
+            }
+            for c in fr.candidates
+        ],
+        "layers": [l.model_dump(mode="json") for l in fr.layers],
+        "config": fr.config,
+        "as_of": fr.as_of,
+        "data_date": fr.data_date,
+        "data_status": fr.data_status,
+    }
 _strategy_matcher = StrategyMatcher()
 _position_advisor = PositionAdvisor()
 _bomb_alert_system = BombAlertSystem()
@@ -57,17 +128,46 @@ async def get_workflow_status() -> Dict[str, Any]:
 
 @router.get("/api/workflow/pre-market")
 async def get_pre_market_workflow(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
-    """
-    Get pre-market workflow data.
+    """盘前简报（S026 异步化）：返回最近一次采集缓存。
 
-    Includes candidate pool, strategy matches, and position suggestions.
+    idle/无结果 → 提示先 refresh；running → 状态；done → factors；error → 错误。
+    旧路径（请求即采集）已废弃：原同步 fetch_all 阻塞事件循环（health 卡死）。
     """
-    try:
-        workflow = TradingWorkflow(date=date)
-        report = await workflow.run_pre_market()
-        return {"data": _serialize(report)}
-    except Exception as e:
-        raise HTTPException(500, f"获取盘前工作流失败：{e}") from e
+    status = _cache["status"]
+    if status == "idle":
+        return {
+            "status": "idle",
+            "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
+            "data_date": None,
+        }
+    resp: dict[str, Any] = {
+        "status": status,
+        "data_date": _cache["data_date"],
+        "as_of": _cache["as_of"],
+        "market_emotion": _cache.get("market_emotion"),
+        "run_id": _cache["run_id"],
+    }
+    if status == "done":
+        resp["factors"] = _cache["factors"]
+    elif status == "error":
+        resp["error"] = _cache.get("error")
+    return resp
+
+
+@router.post("/api/workflow/pre-market/refresh")
+async def refresh_pre_market(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+    """触发后台异步采集（S026）：立即返回 run_id+status=running，不阻塞。
+
+    并发守卫：status==running 时返"已有采集在跑"+现有 run_id
+    （单事件循环下 check→set 之间无 await，原子；多 worker 才需外部协调，属 Celery/Redis TODO）。
+    """
+    target_date = date or last_trading_date_str()
+    if _cache["status"] == "running":
+        return {"run_id": _cache["run_id"], "status": "running", "msg": "已有采集在跑"}
+    run_id = uuid.uuid4().hex[:8]
+    _cache.update(run_id=run_id, status="running", data_date=target_date, error=None, as_of=_now_iso())
+    asyncio.create_task(_collect(run_id, target_date))  # 后台跑，不 await
+    return {"run_id": run_id, "status": "running"}
 
 
 @router.post("/api/workflow/pre-market/run")

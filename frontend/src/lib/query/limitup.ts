@@ -1,10 +1,11 @@
 // lib/query/limitup.ts — TanStack Query hooks（打板/工作流/调度/参数 只读端点）。S013 T8/T16。
 // 类型收紧：Opts<Awaited<ReturnType<typeof api.X|getX>>> 参数化，消 {} 放宽。
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   getWorkflowStatus,
   getPreMarketBriefing,
+  refreshPreMarket,
   getIntradayData,
   getBombAlerts,
   getPostMarketReview,
@@ -95,6 +96,15 @@ export function usePreMarketBriefing(options?: Opts<Awaited<ReturnType<typeof ge
     queryKey: ["limitup", "preMarketBriefing"] as const,
     queryFn: () => getPreMarketBriefing(),
     ...options,
+  });
+}
+
+// S026: 触发后台异步采集；成功后失效 preMarketBriefing，让轮询立即拉新状态
+export function usePreMarketRefresh() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (date?: string) => refreshPreMarket(date),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["limitup", "preMarketBriefing"] }),
   });
 }
 

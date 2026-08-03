@@ -151,6 +151,11 @@ class FunnelLayer(BaseModel):
     output_count: int
     filtered_out: list[FilterRecord] = []
     output_codes: list[str] = []
+    # S023：每层筛选条件（可读描述+情绪档位标注）、通过候选、数据状态
+    conditions: list[str] = []
+    passed: list[dict] = []
+    data_status: Optional[str] = None  # None=正常 / "未取得"=采集失败
+    data_reason: Optional[str] = None  # 失败原因
 
 
 class FunnelResult(BaseModel):

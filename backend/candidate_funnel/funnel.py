@@ -89,38 +89,77 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
     as_of = datetime.now()
     phase = _fetch_sentiment_phase(date)
     eff = resolve_thresholds(cfg, phase)
+    # 情绪档位标注（conditions 复用）
+    phase_note = f"情绪档位={phase or '未取得'}" if phase else "情绪档位未取得，沿用基数"
+    base_conditions = [
+        f"换手冷档={eff.turnover_cold}%",
+        f"换手热档={eff.turnover_hot}%",
+        f"量比活跃线={eff.vol_ratio_active}",
+        f"成交额下限={eff.amount_yi_min}亿",
+        phase_note,
+    ]
 
     # ---- R1 宽源 ----
-    genes = sources.gene.fetch_genes(date)
-    board = sources.board_ladder.fetch_board_ladder(date)
+    r1_data_status: str | None = None
+    r1_data_reason: str | None = None
+    try:
+        genes = sources.gene.fetch_genes(date)
+        board = sources.board_ladder.fetch_board_ladder(date)
+    except Exception as exc:  # noqa: BLE001 — 采集失败标记层，不静默返空（S023 C2）
+        genes, board = {}, {}
+        r1_data_status = "未取得"
+        r1_data_reason = f"R1 宽源采集失败: {exc}"
     r1_input = list(genes.keys())
     r1_kept, r1_filtered = _filter_r1(r1_input, genes)
     r1 = FunnelLayer(
         layer_id="R1", name="宽源", as_of=as_of,
         input_count=len(r1_input), output_count=len(r1_kept),
         filtered_out=r1_filtered, output_codes=r1_kept,
+        conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）", *base_conditions],
+        passed=[{"code": c, "name": genes.get(c, {}).get("name", c)} for c in r1_kept],
+        data_status=r1_data_status, data_reason=r1_data_reason,
     )
     layers: list[FunnelLayer] = [r1]
 
     # ---- R2 收敛 ----
-    activity = sources.activity.fetch_activity(r1_kept, date)
-    fund = sources.fund_flow.fetch_fund_flow(r1_kept, date)
+    r2_data_status: str | None = None
+    r2_data_reason: str | None = None
+    try:
+        activity = sources.activity.fetch_activity(r1_kept, date)
+        fund = sources.fund_flow.fetch_fund_flow(r1_kept, date)
+    except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
+        activity, fund = {}, {}
+        r2_data_status = "未取得"
+        r2_data_reason = f"R2 收敛采集失败: {exc}"
     r2_kept, r2_filtered = _filter_r2(r1_kept, activity, eff)
     r2 = FunnelLayer(
         layer_id="R2", name="收敛", as_of=as_of,
         input_count=len(r1_kept), output_count=len(r2_kept),
         filtered_out=r2_filtered, output_codes=r2_kept,
+        conditions=[f"换手>={eff.turnover_cold}%（{phase_note}）", *base_conditions],
+        passed=[{"code": c, "name": activity.get(c, {}).get("name", c)} for c in r2_kept],
+        data_status=r2_data_status, data_reason=r2_data_reason,
     )
     layers.append(r2)
 
     # ---- R3 定稿 ----
-    auction = sources.auction.fetch_auction(date)
-    catalyst = sources.catalyst.fetch_catalyst(r2_kept, date)
+    r3_data_status: str | None = None
+    r3_data_reason: str | None = None
+    try:
+        auction = sources.auction.fetch_auction(date)
+        catalyst = sources.catalyst.fetch_catalyst(r2_kept, date)
+    except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
+        auction, catalyst = {}, {}
+        r3_data_status = "未取得"
+        r3_data_reason = f"R3 定稿采集失败: {exc}"
     r3_kept, r3_filtered = _filter_r3(r2_kept, auction, catalyst)
     r3 = FunnelLayer(
         layer_id="R3", name="定稿", as_of=as_of,
         input_count=len(r2_kept), output_count=len(r3_kept),
         filtered_out=r3_filtered, output_codes=r3_kept,
+        conditions=["集合竞价异动 OR 公告催化 OR 板块联动", *base_conditions],
+        passed=[{"code": c, "name": (auction.get(c, {}).get("name") or catalyst.get(c, {}).get("name") or c)} for c in r3_kept],
+        data_status=r3_data_status, data_reason=r3_data_reason,
     )
     layers.append(r3)
 

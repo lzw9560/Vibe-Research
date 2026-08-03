@@ -11,7 +11,7 @@ import asyncio
 from datetime import date as _date
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 
 from app import cache_response
 from candidate_funnel import funnel as funnel_mod
@@ -86,3 +86,31 @@ async def put_config(body: dict):
     if isinstance(body.get("sources"), dict):
         _store["sources"].update(body["sources"])
     return {"config": _store["config"].model_dump(), "sources": _store["sources"]}
+
+
+@router.put("/funnel/layers/{layer_id}/rerun")
+async def rerun_layer(layer_id: str, date: str | None = None, body: dict | None = None):
+    """重跑单层（S023 F3）：更新 cfg 后重跑，只返回该层结果。
+
+    交互：调参→重跑该层→展示新结果→用户决定是否下游全跑。
+    实现：run_funnel 整体重跑（分层调用成本高），前端只展示目标层。
+    """
+    if body:
+        cfg_data = {k: v for k, v in body.items() if k != "sources"}
+        if cfg_data:
+            _store["config"] = ThresholdConfig(**cfg_data)
+    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or _today(), _store["config"])
+    layer = next((l for l in result.layers if l.layer_id == layer_id), None)
+    if layer is None:
+        raise HTTPException(404, f"未知漏斗层: {layer_id}")
+    return {"layer": layer.model_dump(mode="json"), "final_candidates_count": len(result.final_candidates)}
+
+
+@router.post("/funnel/layers/{layer_id}/rerun-downstream")
+async def rerun_downstream(layer_id: str, date: str | None = None):
+    """下游全跑（S023 F4）：用户确认后往下重跑，返回全部层。"""
+    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or _today(), _store["config"])
+    idx = next((i for i, l in enumerate(result.layers) if l.layer_id == layer_id), None)
+    if idx is None:
+        raise HTTPException(404, f"未知漏斗层: {layer_id}")
+    return {"layers": [l.model_dump(mode="json") for l in result.layers[idx:]], "final_candidates": [c.model_dump(mode="json") for c in result.final_candidates]}

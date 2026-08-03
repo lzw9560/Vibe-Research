@@ -34,3 +34,57 @@ def resolve_reports_dir() -> Path:
     if env:
         return Path(env)
     return resolve_data_dir() / "myreports"
+
+
+# ---------- 交易日判断（S023 C1）----------
+
+from datetime import date, datetime as _dt, timedelta as _td
+
+# A 股法定节假日（YYYY-MM-DD）。仅列固定日期节假日，调休补班日单独标。
+# 此列表保守列举已知节假日，后续可接交易日历库扩展（留扩展位）。
+_A_SHARE_HOLIDAYS: set[str] = {
+    # 元旦
+    "2026-01-01",
+    # 春节
+    "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20",
+    # 清明
+    "2026-04-06",
+    # 劳动节
+    "2026-05-04", "2026-05-05", "2026-05-06",
+    # 端午
+    "2026-06-19",
+    # 中秋
+    "2026-09-25",
+    # 国庆
+    "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08",
+}
+
+
+def is_trading_day(d: date | None = None) -> bool:
+    """判断是否 A 股交易日（周一至周五且非法定节假日）。
+
+    保守实现：仅排除周末 + 已知节假日。调休补班日（周末补班）未纳入，
+    量级极小且偶发，非交易日时因子会用上一交易日，影响可忽略。
+    扩展位：后续接交易日历库时替换此实现。
+    """
+    d = d or date.today()
+    if d.weekday() >= 5:  # 周六 5 / 周日 6
+        return False
+    return d.isoformat() not in _A_SHARE_HOLIDAYS
+
+
+def last_trading_date(d: date | None = None) -> date:
+    """返回 d 当日或之前的最近 A 股交易日。
+
+    - 非交易时段（周末/节假日/盘后）回退到最近交易日。
+    - d 为交易日则返回 d 本身；否则向前回溯直到交易日。
+    """
+    d = d or date.today()
+    while not is_trading_day(d):
+        d = d - _td(days=1)
+    return d
+
+
+def last_trading_date_str(d: date | None = None) -> str:
+    """返回 last_trading_date 的 YYYY-MM-DD 字符串。"""
+    return last_trading_date(d).isoformat()
