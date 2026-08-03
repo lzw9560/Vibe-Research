@@ -10,7 +10,7 @@ import type {
   LimitUpAnalysis, AuctionScreenerResult, DailyReviewReport, SeatProfile, ConsensusSignal,
   StockDeep, StrategyRecommendation, WeatherState, WeatherFactor, FuseRule, WeatherTimelineItem,
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord, PardonOutcome,
-  StockRecommendation, WinRateStats, AuctionSignal, BacktestResult, STIResult, STITimelineItem,
+  StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, AuctionSignal, BacktestResult, STIResult, STITimelineItem,
 } from "./api/types";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -155,6 +155,10 @@ export const api = {
     get<any>(`/winrate/sector/${encodeURIComponent(sector)}${windowSize ? `?window_size=${windowSize}` : ""}`),
   winRateStrategy: (strategy: string, windowSize?: number) =>
     get<any>(`/winrate/strategy/${encodeURIComponent(strategy)}${windowSize ? `?window_size=${windowSize}` : ""}`),
+  // S025-A2：录入交易记录（批量）。后端 POST /api/winrate/records 接 List[Dict]，返 {data:{added,...}}，
+  // request() 自动解包 .data，故泛型为内层 WinRateRecordsResponse。
+  winRateRecords: (records: WinRateRecordInput[]) =>
+    request<WinRateRecordsResponse>("/winrate/records", "POST", records),
   // 竞价监控
   auctionMonitor: () => get<AuctionSignal[]>("/auction/monitor"),
   auctionWatchlist: () => get<string[]>("/auction/watchlist"),
