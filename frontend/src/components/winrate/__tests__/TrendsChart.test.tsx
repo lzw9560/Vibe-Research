@@ -37,6 +37,9 @@ function mockEmpty() {
 function mockLoading() {
   hooks.useWinRateTrends.mockReturnValue({ data: undefined, isLoading: true, isError: false, error: null });
 }
+function mockError() {
+  hooks.useWinRateTrends.mockReturnValue({ data: undefined, isLoading: false, isError: true, error: new Error("boom") });
+}
 
 describe("TrendsChart (B2)", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -70,6 +73,13 @@ describe("TrendsChart (B2)", () => {
     mockLoading();
     render(<TrendsChart windowSize={30} />);
     expect(echartsMocks.init).not.toHaveBeenCalled();
+  });
+
+  it("error → 不 init echarts，显示占位", () => {
+    mockError();
+    render(<TrendsChart windowSize={30} />);
+    expect(echartsMocks.init).not.toHaveBeenCalled();
+    expect(screen.getByText("暂无趋势数据")).toBeInTheDocument();
   });
 
   it("窗口 resize → 调 instance.resize", () => {

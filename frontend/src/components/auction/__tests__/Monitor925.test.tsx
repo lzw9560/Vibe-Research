@@ -15,7 +15,7 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api", () => ({ api: apiMocks }));
 
-import { Monitor925, getNextAuctionWindow } from "../Monitor925";
+import { Monitor925, getNextAuctionWindow, formatCountdown } from "../Monitor925";
 
 function newClient() {
   return new QueryClient({
@@ -156,5 +156,31 @@ describe("getNextAuctionWindow", () => {
     const next = getNextAuctionWindow(now);
     expect(next.getDay()).toBe(1); // 周一
     expect(next.getDate()).toBe(10); // 8月10日
+  });
+});
+
+describe("formatCountdown", () => {
+  // 覆盖三分支：days>0、days=0&hours>0、days=0&hours=0、ms<=0。
+  it("周一 10:00 → 周二 9:15 → 23时15分", () => {
+    const from = new Date(2026, 7, 3, 10, 0, 0); // 周一 10:00
+    const to = new Date(2026, 7, 4, 9, 15, 0); // 周二 9:15
+    expect(formatCountdown(from, to)).toBe("23时15分");
+  });
+
+  it("周五 10:00 → 下周一 9:15 → 2天23时15分", () => {
+    const from = new Date(2026, 7, 7, 10, 0, 0); // 周五 10:00
+    const to = new Date(2026, 7, 10, 9, 15, 0); // 下周一 9:15
+    expect(formatCountdown(from, to)).toBe("2天23时15分");
+  });
+
+  it("周一 9:00 → 当日 9:15 → 15分（不足 1 小时不显示时）", () => {
+    const from = new Date(2026, 7, 3, 9, 0, 0); // 周一 9:00
+    const to = new Date(2026, 7, 3, 9, 15, 0); // 当日 9:15
+    expect(formatCountdown(from, to)).toBe("15分");
+  });
+
+  it("ms <= 0 → 即将开始", () => {
+    const from = new Date(2026, 7, 3, 9, 15, 0);
+    expect(formatCountdown(from, from)).toBe("即将开始");
   });
 });

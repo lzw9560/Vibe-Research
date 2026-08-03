@@ -35,8 +35,8 @@ export function getNextAuctionWindow(now: Date): Date {
   return d;
 }
 
-/** 格式化倒计时（天/时/分），ms <= 0 返回"即将开始"。 */
-function formatCountdown(from: Date, to: Date): string {
+/** 格式化倒计时（天/时/分），ms <= 0 返回"即将开始"。导出以便单测。 */
+export function formatCountdown(from: Date, to: Date): string {
   const ms = to.getTime() - from.getTime();
   if (ms <= 0) return "即将开始";
   const totalMin = Math.floor(ms / 60_000);
