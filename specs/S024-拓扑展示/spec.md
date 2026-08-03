@@ -1,7 +1,7 @@
 # Spec: S024 — 拓扑展示
 
-> 状态：草案
-> 作者：Codex（brainstorming 对齐用户）  日期：2026-08-02
+> 状态：已实现 ｜ squash 合并 develop `e2f79ed`（关系网/漏斗流程/连板梯队树）｜ tsc 0 + 前端 21 files/145 tests + 后端 764 passed（含 test_topology 20）全绿；AC1-5 全满足；合规无方向词 ｜ 完成于 2026-08-04
+> 作者：Codex（brainstorming 设计）+ CC workflow 实现  日期：2026-08-02 设计，2026-08-04 实现+合并
 > 关联：`../S023-漏斗可用性与因子解耦/spec.md`（因子产出/详情路由）、`../../ARCHITECTURE.md`、`../../CLAUDE.md` §1
 > 设计文档：`../../docs/superpowers/specs/2026-08-02-daban-workflow-p1-polish-design.md`
 
