@@ -64,6 +64,7 @@ export const router = createBrowserRouter([
       { path: "/workflow/intraday", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },
       { path: "/workflow/alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },
       { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
+      { path: "/workflow/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },
       { path: "/workflow/candidates/:code", element: lazyEl(() => import("@/pages/workflow/CandidateDetail"), "CandidateDetail") },
       { path: "/sector-divergence", element: lazyEl(() => import("@/pages/SectorDivergence")) },
       { path: "/prediction", element: lazyEl(() => import("@/pages/Prediction")) },

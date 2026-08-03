@@ -144,6 +144,7 @@ export const SUB_TABS: Record<string, { key: string; label: string; to?: string 
     { to: "/workflow/intraday", key: "intraday", label: "盘中监控" },
     { to: "/workflow/alerts", key: "alerts", label: "炸板预警" },
     { to: "/workflow/post-market", key: "post-market", label: "盘后复盘" },
+    { to: "/workflow/topology", key: "topology", label: "拓扑展示" },
   ],
   "/metrics": [
     { key: "overview", label: "指标概览" },

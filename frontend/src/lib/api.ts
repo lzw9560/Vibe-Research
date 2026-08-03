@@ -12,6 +12,8 @@ import type {
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord, PardonOutcome,
   StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, WinRateTrendPoint,
   WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint, STIResult, STITimelineItem,
+  FunnelLayer,
+  BoardLadderNode,
 } from "./api/types";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -204,4 +206,19 @@ export const api = {
   scheduledTaskRuns: (id: number, limit?: number) =>
     get<any[]>(`/scheduled-tasks/${id}/runs${limit ? `?limit=${limit}` : ""}`),
   scheduledTaskTypes: () => get<string[]>("/scheduled-tasks/types"),
+  // S024-B7 拓扑关系网：候选标的四类客观关联边（sector/fund_flow/ladder/seat）。
+  // 后端 GET /api/topology/relation 返 {nodes,edges}（无方向结论，§0 弱合规·工程底线）。
+  topologyRelation: (date?: string) =>
+    get<{ nodes: unknown[]; edges: unknown[] }>(
+      `/topology/relation${date ? `?date=${date}` : ""}`,
+    ),
+  // S024-C1 漏斗流程拓扑：复用 S023 funnel/layers，返 FunnelLayer[]（含 conditions/passed）。
+  // 后端 GET /api/workflow/funnel/layers（run_id 可选，此处不传；客观层数据流向）。
+  funnelLayers: (date?: string) =>
+    get<FunnelLayer[]>(`/workflow/funnel/layers${date ? `?date=${date}` : ""}`),
+  // S024-D2 连板梯队树：em_zt_topic_pool 涨停池，按连板高度分层，同题材归枝。
+  // 后端 GET /api/topology/board-ladder 返嵌套树（root→height→industry→stock 叶），
+  // 叶节点如实呈现 code/name（公开榜单客观事实，§0 弱合规·工程底线）。
+  boardLadder: (date?: string) =>
+    get<BoardLadderNode>(`/topology/board-ladder${date ? `?date=${date}` : ""}`),
 };

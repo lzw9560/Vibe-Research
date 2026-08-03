@@ -804,6 +804,20 @@ export interface FunnelLayer {
   data_reason?: string | null;
 }
 
+/**
+ * S024-D2 连板梯队树节点：后端 GET /api/topology/board-ladder 返嵌套树。
+ * - name 展示名（叶节点后端拼好「code name」）
+ * - code 仅叶节点带（个股代码，公开榜单客观事实）
+ * - value 叶节点=连板高度（lbc）
+ * - children 子层（height→industry→stock）
+ */
+export interface BoardLadderNode {
+  name: string;
+  code?: string;
+  value?: number;
+  children?: BoardLadderNode[];
+}
+
 export interface FactorResult {
   factor_id: string;
   factor_name: string;

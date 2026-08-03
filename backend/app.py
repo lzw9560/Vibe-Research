@@ -243,3 +243,8 @@ from routers import candidates as candidates_router  # noqa: E402
 
 app.include_router(candidates_router.router)
 
+# 拓扑展示路由（S024）：关系网 + 连板梯队树；需在 cache_response 定义后注册
+from routers import topology as topology_router  # noqa: E402
+
+app.include_router(topology_router.router)
+

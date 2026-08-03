@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Clock, TrendingUp, BarChart3, ChevronRight, RefreshCw, Flame,
-  ArrowRight, Activity, Zap,
+  ArrowRight, Activity, Zap, Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -506,6 +506,27 @@ export default function Workflow() {
           );
         })}
       </div>
+
+      {/* 拓扑展示入口 — 关系网/漏斗流程/连板梯队三视角客观关联 */}
+      <Link to="/workflow/topology">
+        <GlassCard className="p-4 transition-all hover:ring-2 hover:ring-primary/30">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+              <Share2 className="h-5 w-5 text-indigo-400" aria-hidden="true" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">拓扑展示</h3>
+                <Badge variant="default">三视角</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">
+                关系网 · 漏斗流程 · 连板梯队（客观关联，只呈现不附方向结论）
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground/50" />
+          </div>
+        </GlassCard>
+      </Link>
 
       <Disclaimer compact />
     </div>
