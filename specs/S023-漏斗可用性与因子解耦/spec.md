@@ -1,7 +1,7 @@
 # Spec: S023 — 漏斗可用性与因子解耦
 
-> 状态：草案
-> 作者：Codex（brainstorming 对齐用户）  日期：2026-08-02
+> 状态：已实现 ｜ squash 合并 develop `ed0a0fe`（漏斗可用性与因子解耦 A-F + pre-market 异步化修复，含 S026 异步修复并入）｜ 744 backend tests green + live 实证 health 0.01s during 190s 采集 ｜ 完成于 2026-08-04
+> 作者：Codex（brainstorming 对齐用户）+ CC 接手收尾（异步修复+合并）  日期：2026-08-02 起，2026-08-04 合并
 > 关联：`../S002-打板工作流重构/spec.md`（P1 漏斗）、`../../ARCHITECTURE.md`、`../../CLAUDE.md` §0/§1
 > 设计文档：`../../docs/superpowers/specs/2026-08-02-daban-workflow-p1-polish-design.md`
 
