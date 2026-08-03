@@ -1,6 +1,6 @@
 # Spec: S025 — 补前端入口（打板闭环：winrate + auction/monitor）
 
-> 状态：设计中 ｜ 分支：feature/S025-补前端入口（待起；S023 未合并，见 §9）｜ 创建：2026-08-03
+> 状态：已实现 ｜ 已 squash 合并 develop（主 `fc87a65` + review fix `951ae4e`/`501b3d3`/`b0161f8`/`2a39940`/`30e9239`）｜ code review 14/14 findings 闭环，tsc 0 error + vitest 16 files/98 tests 绿 ｜ 完成于 2026-08-04
 > 覆盖分析依据：workflow `wf_71089e37-5a0`（12 组 143 端点，13 agent）
 
 ---
