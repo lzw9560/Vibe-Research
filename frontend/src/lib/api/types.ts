@@ -540,6 +540,38 @@ export interface WinRateRecordsResponse {
   error_count: number;
 }
 
+// ---- 胜率趋势/调整/下钻（S025-A 类型收紧）----
+// 对齐后端 win_rate_tracker：get_trends / generate_strategy_adjustments /
+// get_sector_stats / get_strategy_stats 返回结构（request() 自动解包 .data）。
+export interface WinRateTrendPoint {
+  date: string;
+  total_trades: number;
+  win_count: number;
+  win_rate: number;
+}
+
+export interface WinRateAdjustment {
+  type: string;
+  reason: string;
+  action: string;
+}
+
+export interface SectorWinStats {
+  sector: string;
+  total_trades: number;
+  win_count: number;
+  win_rate: number;
+  avg_return: number;
+}
+
+export interface StrategyWinStats {
+  strategy: string;
+  total_trades: number;
+  win_count: number;
+  win_rate: number;
+  avg_return: number;
+}
+
 // ---- 竞价信号 ----
 export interface AuctionSignal {
   code: string;
@@ -561,6 +593,16 @@ export interface BacktestResult {
   max_drawdown: number;
   sharpe_ratio: number;
   percentile_analysis: Record<string, any>;
+}
+
+// 回测散点：gene_score vs 次日收益。对齐后端 backtest_lite.generate_scatter_data
+// 返回结构（date/industry 始终存在——industry 有 getattr 兜底 "未知"）。
+export interface BacktestScatterPoint {
+  gene_score: number;
+  next_day_return: number;
+  code: string;
+  date: string;
+  industry: string;
 }
 
 // ---- 打板策略参数配置 ----

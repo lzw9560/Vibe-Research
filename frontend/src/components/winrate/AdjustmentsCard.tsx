@@ -9,12 +9,6 @@ interface AdjustmentsCardProps {
   windowSize: number;
 }
 
-interface Adjustment {
-  type: string;
-  reason: string;
-  action: string;
-}
-
 export function AdjustmentsCard({ windowSize }: AdjustmentsCardProps) {
   const { data, isLoading, isError } = useWinRateAdjustments(windowSize);
 
@@ -26,11 +20,11 @@ export function AdjustmentsCard({ windowSize }: AdjustmentsCardProps) {
       </GlassCard>
     );
   }
-  if (isError || !data || (data as Adjustment[]).length === 0) {
+  if (isError || !data || data.length === 0) {
     return <EmptyState title="暂无调整建议" description="当前窗口内胜率稳定，无需调整" />;
   }
 
-  const items = data as Adjustment[];
+  const items = data;
   return (
     <GlassCard>
       <h3 className="mb-3 text-sm font-semibold text-foreground">调整建议</h3>

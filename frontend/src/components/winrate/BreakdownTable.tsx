@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import type { Column } from "@/components/ui/DataTable";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import type { SectorWinStats, StrategyWinStats } from "@/lib/api";
 
 interface BreakdownTableProps {
   sector?: string;
@@ -14,26 +15,10 @@ interface BreakdownTableProps {
   windowSize: number;
 }
 
-interface SectorStats {
-  sector: string;
-  total_trades: number;
-  win_count: number;
-  win_rate: number;
-  avg_return: number;
-}
-
-interface StrategyStats {
-  strategy: string;
-  total_trades: number;
-  win_count: number;
-  win_rate: number;
-  avg_return: number;
-}
-
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 const pct2 = (v: number) => `${v.toFixed(2)}%`;
 
-const sectorColumns: Column<SectorStats>[] = [
+const sectorColumns: Column<SectorWinStats>[] = [
   { key: "sector", header: "板块" },
   { key: "total_trades", header: "总交易", align: "right" },
   { key: "win_count", header: "胜数", align: "right" },
@@ -41,7 +26,7 @@ const sectorColumns: Column<SectorStats>[] = [
   { key: "avg_return", header: "平均收益", align: "right", render: (r) => pct2(r.avg_return) },
 ];
 
-const strategyColumns: Column<StrategyStats>[] = [
+const strategyColumns: Column<StrategyWinStats>[] = [
   { key: "strategy", header: "战法" },
   { key: "total_trades", header: "总交易", align: "right" },
   { key: "win_count", header: "胜数", align: "right" },

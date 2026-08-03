@@ -4,16 +4,10 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
 import { useWinRateTrends } from "@/lib/query";
+import type { WinRateTrendPoint } from "@/lib/api";
 
 interface TrendsChartProps {
   windowSize: number;
-}
-
-interface TrendPoint {
-  date: string;
-  total_trades: number;
-  win_count: number;
-  win_rate: number;
 }
 
 export function TrendsChart({ windowSize }: TrendsChartProps) {
@@ -24,7 +18,7 @@ export function TrendsChart({ windowSize }: TrendsChartProps) {
   useEffect(() => {
     if (!chartRef.current || !data || data.length === 0) return;
     instanceRef.current = echarts.init(chartRef.current);
-    const points: TrendPoint[] = data as TrendPoint[];
+    const points: WinRateTrendPoint[] = data;
     const option: echarts.EChartsOption = {
       tooltip: { trigger: "axis" },
       grid: { left: 36, right: 16, top: 24, bottom: 28 },

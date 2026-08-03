@@ -10,7 +10,8 @@ import type {
   LimitUpAnalysis, AuctionScreenerResult, DailyReviewReport, SeatProfile, ConsensusSignal,
   StockDeep, StrategyRecommendation, WeatherState, WeatherFactor, FuseRule, WeatherTimelineItem,
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord, PardonOutcome,
-  StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, AuctionSignal, BacktestResult, STIResult, STITimelineItem,
+  StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, WinRateTrendPoint,
+  WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint, STIResult, STITimelineItem,
 } from "./api/types";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -148,13 +149,13 @@ export const api = {
   winRateStats: (windowSize?: number) =>
     get<WinRateStats>(`/winrate/stats${windowSize ? `?window_size=${windowSize}` : ""}`),
   winRateAdjustments: (windowSize?: number) =>
-    get<any>(`/winrate/adjustments${windowSize ? `?window_size=${windowSize}` : ""}`),
+    get<WinRateAdjustment[]>(`/winrate/adjustments${windowSize ? `?window_size=${windowSize}` : ""}`),
   winRateTrends: (windowSize?: number) =>
-    get<any[]>(`/winrate/trends${windowSize ? `?window_size=${windowSize}` : ""}`),
+    get<WinRateTrendPoint[]>(`/winrate/trends${windowSize ? `?window_size=${windowSize}` : ""}`),
   winRateSector: (sector: string, windowSize?: number) =>
-    get<any>(`/winrate/sector/${encodeURIComponent(sector)}${windowSize ? `?window_size=${windowSize}` : ""}`),
+    get<SectorWinStats>(`/winrate/sector/${encodeURIComponent(sector)}${windowSize ? `?window_size=${windowSize}` : ""}`),
   winRateStrategy: (strategy: string, windowSize?: number) =>
-    get<any>(`/winrate/strategy/${encodeURIComponent(strategy)}${windowSize ? `?window_size=${windowSize}` : ""}`),
+    get<StrategyWinStats>(`/winrate/strategy/${encodeURIComponent(strategy)}${windowSize ? `?window_size=${windowSize}` : ""}`),
   // S025-A2：录入交易记录（批量）。后端 POST /api/winrate/records 接 List[Dict]，返 {data:{added,...}}，
   // request() 自动解包 .data，故泛型为内层 WinRateRecordsResponse。
   winRateRecords: (records: WinRateRecordInput[]) =>
@@ -169,7 +170,7 @@ export const api = {
     get<any[]>("/strategy/registry"),
   // 回测
   backtestScatter: (start: string, end: string) =>
-    get<any[]>(`/backtest/scatter?start=${start}&end=${end}`),
+    get<BacktestScatterPoint[]>(`/backtest/scatter?start=${start}&end=${end}`),
   backtestResult: (start: string, end: string) =>
     get<BacktestResult>(`/backtest/result?start=${start}&end=${end}`),
   // 风险仪表盘

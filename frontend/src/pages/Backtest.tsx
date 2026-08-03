@@ -6,29 +6,10 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { TabBar } from "@/components/ui/TabBar";
-import { ScatterChart, type ScatterPoint } from "@/components/charts/ScatterChart";
+import { ScatterChart } from "@/components/charts/ScatterChart";
 import { WinRateView } from "@/components/winrate/WinRateView";
 import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
-
-interface BacktestScatterPoint {
-  gene_score: number;
-  next_day_return: number;
-  code: string;
-  date: string;
-  industry: string;
-}
-
-interface BacktestResult {
-  period: string;
-  total_signals: number;
-  hit_count: number;
-  hit_rate: number;
-  avg_return: number;
-  max_drawdown: number;
-  sharpe_ratio: number;
-  percentile_analysis: Record<string, unknown>;
-}
+import { api, type BacktestResult, type BacktestScatterPoint } from "@/lib/api";
 
 // 页内 Tab key 对齐 nav SUB_TABS["/backtest"]（result / winrate）。
 type BacktestTab = "result" | "winrate";
@@ -154,7 +135,7 @@ export default function Backtest() {
           {scatter.length > 0 && (
             <GlassCard>
               <SectionHeader title="散点分布" />
-              <ScatterChart points={scatter as ScatterPoint[]} />
+              <ScatterChart points={scatter} />
             </GlassCard>
           )}
 
