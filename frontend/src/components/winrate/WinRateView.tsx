@@ -2,6 +2,7 @@
 // 四区：概览(StatsMetrics)/趋势(TrendsChart)/下钻(BreakdownTable)/建议(AdjustmentsCard)。
 // 下钻维度（板块/战法）+ 值输入由本组件持有，传给 BreakdownTable。
 import { useState } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { StatsMetrics } from "./StatsMetrics";
 import { TrendsChart } from "./TrendsChart";
@@ -32,8 +33,12 @@ export function WinRateView({ defaultWindow = 30 }: WinRateViewProps) {
   const [dimension, setDimension] = useState<Dimension>("sector");
   const [value, setValue] = useState("");
 
-  const sector = dimension === "sector" ? value : undefined;
-  const strategy = dimension === "strategy" ? value : undefined;
+  // 防抖 300ms：每键不触发请求，仅停顿后用 debounced 查询；输入框仍用 value 保响应。
+  // 清空（含切维度清空）即时断查由 useDebounce 内部处理（见 hooks/useDebounce.ts）。
+  const debounced = useDebounce(value, 300);
+
+  const sector = dimension === "sector" ? debounced : undefined;
+  const strategy = dimension === "strategy" ? debounced : undefined;
 
   const handleDimension = (d: Dimension) => {
     setDimension(d);

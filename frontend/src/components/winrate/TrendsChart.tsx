@@ -49,7 +49,7 @@ export function TrendsChart({ windowSize }: TrendsChartProps) {
       instanceRef.current?.dispose();
       instanceRef.current = null;
     };
-  }, [data, isLoading, isError]);
+  }, [data]);
 
   if (isLoading) {
     return <div className="h-[300px] w-full animate-pulse rounded-lg bg-muted/20" aria-busy="true" />;

@@ -1,8 +1,8 @@
 // S025-B5 测试：WinRateView 主体——FilterBar 窗口滑块（7/30/90）+ 四区编排 + 挂 RecordsForm。
 // spy 5 个 winrate hooks + mock echarts（TrendsChart 在 jsdom 内 init）。
 // 验证：切窗 7→30→90 → hooks 收到新 windowSize；四区 + RecordsForm 渲染。
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import type { WinRateStats } from "@/lib/api";
 
 const echartsMocks = vi.hoisted(() => {
@@ -66,7 +66,11 @@ function mockAll() {
 describe("WinRateView (B5)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     mockAll();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("初始 defaultWindow=7 → 各 hook 收到 7", () => {
@@ -103,16 +107,29 @@ describe("WinRateView (B5)", () => {
     expect(screen.getByText(/记入胜率/)).toBeInTheDocument();
   });
 
-  it("选维度 + 输入值 → 下钻 hook 收到对应值", () => {
+  it("选维度 + 输入值 → 防抖后下钻 hook 收到对应值（非每键即查）", () => {
     render(<WinRateView defaultWindow={30} />);
     // 默认维度 sector；输入板块名
     const input = screen.getByPlaceholderText("输入板块名");
     fireEvent.change(input, { target: { value: "银行" } });
+    // 防抖期内（300ms 未到）传空，不触发请求（修 #4：每键即查 + 首字符即触发）
+    expect(hooks.useWinRateSector).toHaveBeenLastCalledWith("", 30);
+    // 推进 300ms 结算后才同步查询值
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(hooks.useWinRateSector).toHaveBeenLastCalledWith("银行", 30);
-    // 切到 strategy 维度
+
+    // 切到 strategy 维度：清空即时生效（useDebounce 空值语义），无 stale 旧值串到新维度
     fireEvent.click(screen.getByText("按战法"));
     expect(hooks.useWinRateStrategy).toHaveBeenLastCalledWith("", 30);
-    fireEvent.change(input, { target: { value: "打板" } });
+    // 输入战法名（防抖期内仍空，结算后才同步）
+    const stratInput = screen.getByPlaceholderText("输入战法名");
+    fireEvent.change(stratInput, { target: { value: "打板" } });
+    expect(hooks.useWinRateStrategy).toHaveBeenLastCalledWith("", 30);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(hooks.useWinRateStrategy).toHaveBeenLastCalledWith("打板", 30);
   });
 });
