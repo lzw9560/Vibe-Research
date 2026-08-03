@@ -1,6 +1,6 @@
 # Spec: S026 — pre-market 异步化（修复服务卡死）
 
-> 状态：设计中 ｜ 分支：feature/S026-pre-market-async（栈式 off feature/S023，S023 未合并）｜ 创建：2026-08-03
+> 状态：已实现并并入 S023（异步修复作为 S023 一部分 squash 合并 develop，commit ed0a0fe；非独立分支，S026 分支已删）｜ 创建：2026-08-03
 > 依据：codex 会话诊断 + CC 独立代码核查（registry.py / workflow.py / factors/*.py）+ 用户批准
 
 ---
