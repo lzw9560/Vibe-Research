@@ -1,8 +1,8 @@
 // S025-B2 胜率趋势区：echarts 折线（胜率随日期）。
-// 复用 GeneScoreChart 初始化模式：useEffect + echarts.init + setOption + dispose；
-// 增 resize 监听（窗口缩放自适应）。消费 useWinRateTrends。
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+// 复用 useECharts hook（S024-B 抽公共）：init+setOption+resize+dispose 统一管理。
+// 消费 useWinRateTrends。
+import { useRef } from "react";
+import { useECharts } from "@/hooks/useECharts";
 import { useWinRateTrends } from "@/lib/query";
 import type { WinRateTrendPoint } from "@/lib/api";
 
@@ -12,44 +12,37 @@ interface TrendsChartProps {
 
 export function TrendsChart({ windowSize }: TrendsChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<echarts.ECharts | null>(null);
   const { data, isLoading, isError } = useWinRateTrends(windowSize);
 
-  useEffect(() => {
-    if (!chartRef.current || !data || data.length === 0) return;
-    instanceRef.current = echarts.init(chartRef.current);
-    const points: WinRateTrendPoint[] = data;
-    const option: echarts.EChartsOption = {
-      tooltip: { trigger: "axis" },
-      grid: { left: 36, right: 16, top: 24, bottom: 28 },
-      xAxis: { type: "category", data: points.map((p) => p.date) },
-      yAxis: {
-        type: "value",
-        name: "胜率(%)",
-        min: 0,
-      },
-      series: [
-        {
-          name: "胜率",
-          type: "line",
-          smooth: true,
-          data: points.map((p) => Math.round(p.win_rate * 100)),
-          itemStyle: { color: "#fb923c" },
-          lineStyle: { color: "#fb923c", width: 2 },
-          areaStyle: { color: "rgba(251,146,60,0.12)" },
+  useECharts(
+    chartRef,
+    () => {
+      const points: WinRateTrendPoint[] = data ?? [];
+      return {
+        tooltip: { trigger: "axis" },
+        grid: { left: 36, right: 16, top: 24, bottom: 28 },
+        xAxis: { type: "category", data: points.map((p) => p.date) },
+        yAxis: {
+          type: "value",
+          name: "胜率(%)",
+          min: 0,
         },
-      ],
-    };
-    instanceRef.current.setOption(option);
-
-    const onResize = () => instanceRef.current?.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      instanceRef.current?.dispose();
-      instanceRef.current = null;
-    };
-  }, [data]);
+        series: [
+          {
+            name: "胜率",
+            type: "line",
+            smooth: true,
+            data: points.map((p) => Math.round(p.win_rate * 100)),
+            itemStyle: { color: "#fb923c" },
+            lineStyle: { color: "#fb923c", width: 2 },
+            areaStyle: { color: "rgba(251,146,60,0.12)" },
+          },
+        ],
+      };
+    },
+    [data],
+    { skip: !data || data.length === 0 },
+  );
 
   if (isLoading) {
     return <div className="h-[300px] w-full animate-pulse rounded-lg bg-muted/20" aria-busy="true" />;

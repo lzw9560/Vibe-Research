@@ -1,8 +1,8 @@
 // S025-D1 散点图：echarts 散点（gene_score vs next_day_return）。
-// 复用 TrendsChart 初始化模式：useEffect + echarts.init + setOption + resize 监听 + dispose。
+// 复用 useECharts hook（S024-B 抽公共）：init+setOption+resize+dispose 统一管理。
 // 空数据显占位。tooltip 展示个股 code / 基因得分 / 次日收益。
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useRef } from "react";
+import { useECharts } from "@/hooks/useECharts";
 
 export interface ScatterPoint {
   gene_score: number;
@@ -27,12 +27,10 @@ interface TooltipData {
  */
 export function ScatterChart({ points, height = 360 }: ScatterChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<echarts.ECharts | null>(null);
 
-  useEffect(() => {
-    if (!chartRef.current || points.length === 0) return;
-    instanceRef.current = echarts.init(chartRef.current);
-    const option: echarts.EChartsOption = {
+  useECharts(
+    chartRef,
+    () => ({
       tooltip: {
         trigger: "item",
         formatter: (params: unknown) => {
@@ -71,17 +69,10 @@ export function ScatterChart({ points, height = 360 }: ScatterChartProps) {
           itemStyle: { color: "#fb923c", opacity: 0.75 },
         },
       ],
-    };
-    instanceRef.current.setOption(option);
-
-    const onResize = () => instanceRef.current?.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      instanceRef.current?.dispose();
-      instanceRef.current = null;
-    };
-  }, [points]);
+    }),
+    [points],
+    { skip: points.length === 0 },
+  );
 
   if (points.length === 0) {
     return (

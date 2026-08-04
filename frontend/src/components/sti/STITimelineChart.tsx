@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
+import * as echarts from "echarts";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/lib/utils";
 import { api, ApiError, type STITimelineItem } from "@/lib/api";
+import { useECharts } from "@/hooks/useECharts";
 
 // 阶段 → 图表色
 const PHASE_LINE_COLOR: Record<string, string> = {
@@ -19,11 +21,9 @@ interface Props {
 
 export function STITimelineChart({ className }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<any>(null);
   const [data, setData] = useState<STITimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [echarts, setEcharts] = useState<typeof import("echarts") | null>(null);
 
   // Defensive: filter out items with missing date or score to prevent ECharts crashes
   const validData = data.filter(
@@ -41,152 +41,125 @@ export function STITimelineChart({ className }: Props) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // 动态加载 echarts
-  useEffect(() => {
-    import("echarts").then((module) => {
-      setEcharts(() => module);
-    });
-  }, []);
+  useECharts(
+    chartRef,
+    () => {
+      const dates = validData.map((d) => d.date);
+      const scores = validData.map((d) => d.score);
+      const phases = validData.map((d) => d.phase ?? "");
 
-  // ECharts 渲染
-  useEffect(() => {
-    console.log('[STITimeline] data.length=', data.length, 'validData.length=', validData.length, 'echarts=', !!echarts, 'chartRef=', !!chartRef.current);
-    if (!chartRef.current || !echarts) return;
-    if (instanceRef.current) {
-      instanceRef.current.dispose();
-      instanceRef.current = null;
-    }
-    instanceRef.current = echarts.init(chartRef.current);
-    console.log('[STITimeline] initialized, chart size:', chartRef.current.clientWidth, 'x', chartRef.current.clientHeight);
+      const visualMap: Array<{ dataIndex: number; itemStyle: { color: string } }> = [];
+      validData.forEach((d, i) => {
+        if (d.score != null) {
+          visualMap.push({
+            dataIndex: i,
+            itemStyle: { color: PHASE_LINE_COLOR[d.phase || ""] ?? "#f97316" },
+          });
+        }
+      });
 
-    // Defensive: filter out items with missing date or score to prevent ECharts crashes
-    // (validData already computed above)
-    const dates = validData.map((d) => d.date);
-    const scores = validData.map((d) => d.score);
-    const phases = validData.map((d) => d.phase ?? "");
-
-    const visualMap: Array<{ dataIndex: number; itemStyle: { color: string } }> = [];
-    validData.forEach((d, i) => {
-      if (d.score != null) {
-        visualMap.push({
-          dataIndex: i,
-          itemStyle: { color: PHASE_LINE_COLOR[d.phase || ""] ?? "#f97316" },
-        });
-      }
-    });
-
-    const option: import("echarts").EChartsOption = {
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: "rgba(20, 20, 25, 0.95)",
-        borderColor: "rgba(255,255,255,0.15)",
-        textStyle: { color: "#e5e7eb", fontSize: 12 },
-        formatter: (params: any) => {
-          if (!params || !params.length) return "";
-          const p = params[0];
-          const idx = p.dataIndex;
-          if (idx == null || idx >= validData.length) return "";
-          const phase = phases[idx];
-          const item = validData[idx];
-          let extra = "";
-          if (item?.change_from_yesterday != null) {
-            extra = `<br/>较昨日: ${(item.change_from_yesterday > 0 ? "+" : "")}${item.change_from_yesterday.toFixed(1)}`;
-          }
-          return `<b>${dates[idx]}</b><br/>
-            分数: <b style="color:${PHASE_LINE_COLOR[phase] || '#f97316'}">${scores[idx]}</b><br/>
-            阶段: ${phase || "—"}${extra}`;
+      return {
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: "rgba(20, 20, 25, 0.95)",
+          borderColor: "rgba(255,255,255,0.15)",
+          textStyle: { color: "#e5e7eb", fontSize: 12 },
+          formatter: (params: any) => {
+            if (!params || !params.length) return "";
+            const p = params[0];
+            const idx = p.dataIndex;
+            if (idx == null || idx >= validData.length) return "";
+            const phase = phases[idx];
+            const item = validData[idx];
+            let extra = "";
+            if (item?.change_from_yesterday != null) {
+              extra = `<br/>较昨日: ${(item.change_from_yesterday > 0 ? "+" : "")}${item.change_from_yesterday.toFixed(1)}`;
+            }
+            return `<b>${dates[idx]}</b><br/>
+              分数: <b style="color:${PHASE_LINE_COLOR[phase] || '#f97316'}">${scores[idx]}</b><br/>
+              阶段: ${phase || "—"}${extra}`;
+          },
         },
-      },
-      grid: { left: 45, right: 15, top: 15, bottom: 35 },
-      xAxis: {
-        type: "category",
-        data: dates,
-        axisLine: { lineStyle: { color: "rgba(255,255,255,0.3)" } },
-        axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 10, rotate: 45 },
-        axisTick: { show: false },
-      },
-      yAxis: {
-        type: "value",
-        min: 0,
-        max: 100,
-        name: "STI 分数",
-        nameTextStyle: { fontSize: 10, color: "rgba(255,255,255,0.5)" },
-        axisLine: { lineStyle: { color: "rgba(255,255,255,0.3)" } },
-        splitLine: { lineStyle: { color: "rgba(255,255,255,0.08)" } },
-        axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 10 },
-      },
-      series: [
-        {
+        grid: { left: 45, right: 15, top: 15, bottom: 35 },
+        xAxis: {
+          type: "category",
+          data: dates,
+          axisLine: { lineStyle: { color: "rgba(255,255,255,0.3)" } },
+          axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 10, rotate: 45 },
+          axisTick: { show: false },
+        },
+        yAxis: {
+          type: "value",
+          min: 0,
+          max: 100,
           name: "STI 分数",
-          type: "line",
-          data: scores,
-          smooth: 0.35,
-          symbol: "circle",
-          symbolSize: 8,
-          connectNulls: false,
-          lineStyle: {
-            width: 2.5,
-            color: ((params: any) => {
-              const idx = params.dataIndex;
-              return PHASE_LINE_COLOR[validData[idx]?.phase || ""] ?? "#f97316";
-            }) as any,
-          },
-          itemStyle: {
-            color: ((params: any) => {
-              const idx = params.dataIndex;
-              return PHASE_LINE_COLOR[validData[idx]?.phase || ""] ?? "#f97316";
-            }) as any,
-          },
-          emphasis: {
-            focus: "series",
-            itemStyle: { borderWidth: 3, shadowBlur: 10, shadowColor: "rgba(249, 115, 22, 0.4)" },
-          },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: "rgba(249, 115, 22, 0.3)" },
-              { offset: 1, color: "rgba(249, 115, 22, 0.02)" },
-            ]),
-          },
+          nameTextStyle: { fontSize: 10, color: "rgba(255,255,255,0.5)" },
+          axisLine: { lineStyle: { color: "rgba(255,255,255,0.3)" } },
+          splitLine: { lineStyle: { color: "rgba(255,255,255,0.08)" } },
+          axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 10 },
         },
-      ],
-      // 阶段色带（底部标记）
-      graphic: validData.map((d, i) => ({
-        type: "text",
-        silent: true,
-        style: {
-          text: d.phase || "",
-          fill: PHASE_LINE_COLOR[d.phase || ""] || "#6b7280",
-          fontSize: 9,
-          textAlign: "center",
-          textBaseline: "top",
-        },
-        position: [
-          (i / Math.max(dates.length - 1, 1)) * 100 + "%",
-          38,
+        series: [
+          {
+            name: "STI 分数",
+            type: "line",
+            data: scores,
+            smooth: 0.35,
+            symbol: "circle",
+            symbolSize: 8,
+            connectNulls: false,
+            lineStyle: {
+              width: 2.5,
+              color: ((params: any) => {
+                const idx = params.dataIndex;
+                return PHASE_LINE_COLOR[validData[idx]?.phase || ""] ?? "#f97316";
+              }) as any,
+            },
+            itemStyle: {
+              color: ((params: any) => {
+                const idx = params.dataIndex;
+                return PHASE_LINE_COLOR[validData[idx]?.phase || ""] ?? "#f97316";
+              }) as any,
+            },
+            emphasis: {
+              focus: "series",
+              itemStyle: { borderWidth: 3, shadowBlur: 10, shadowColor: "rgba(249, 115, 22, 0.4)" },
+            },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: "rgba(249, 115, 22, 0.3)" },
+                { offset: 1, color: "rgba(249, 115, 22, 0.02)" },
+              ]),
+            },
+          },
         ],
-      })),
-    };
-
-    instanceRef.current.setOption(option, true);
-    // 确保渲染到正确尺寸 — 用 MutationObserver 等待 DOM 完全渲染
-    const tryResize = () => {
-      if (chartRef.current && chartRef.current.clientHeight > 0) {
-        instanceRef.current?.resize();
-      } else {
-        setTimeout(tryResize, 100);
-      }
-    };
-    requestAnimationFrame(() => requestAnimationFrame(() => instanceRef.current?.resize()));
-    console.log('[STITimeline] setOption done, series data length:', scores.length);
-
-    const onResize = () => instanceRef.current?.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      instanceRef.current?.dispose();
-      instanceRef.current = null;
-    };
-  }, [data, echarts]);
+        // 阶段色带（底部标记）
+        graphic: validData.map((d, i) => ({
+          type: "text",
+          silent: true,
+          style: {
+            text: d.phase || "",
+            fill: PHASE_LINE_COLOR[d.phase || ""] || "#6b7280",
+            fontSize: 9,
+            textAlign: "center",
+            textBaseline: "top",
+          },
+          position: [
+            (i / Math.max(dates.length - 1, 1)) * 100 + "%",
+            38,
+          ],
+        })),
+      };
+    },
+    [data],
+    {
+      skip: validData.length === 0,
+      notMerge: true,
+      onReady: (instance) => {
+        // 确保渲染到正确尺寸 — 双 rAF 等 DOM 布局完成后再 resize
+        requestAnimationFrame(() => requestAnimationFrame(() => instance.resize()));
+      },
+    },
+  );
 
   if (loading) {
     return (

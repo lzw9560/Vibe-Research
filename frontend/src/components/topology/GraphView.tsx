@@ -1,8 +1,9 @@
 // S024-A1 共用图引擎：接收 GraphData，echarts graph（力导向）/tree 渲染，节点点击回调。
-// 复用 ScatterChart 初始化模式：useEffect + echarts.init + setOption + resize 监听 + dispose。
+// 复用 useECharts hook（S024-B 抽公共）：init+setOption+resize+dispose 统一管理。
 // 合规（§0）：拓扑只呈现客观关联（同板块/共流入/梯队/席位），不输出方向词。
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useRef } from "react";
+import type * as echarts from "echarts";
+import { useECharts } from "@/hooks/useECharts";
 import type { EdgeType, GraphData, GraphEdge, GraphNode, LayoutMode } from "./types";
 
 /** 边类型 → 着色，客观区分关联来源（不附方向语义）。 */
@@ -140,7 +141,7 @@ function buildTreeOption(data: GraphData): echarts.EChartsOption {
 
 /**
  * 共用图引擎：graph（力导向）或 tree（正交树）渲染，节点点击回调。
- * 仿 ScatterChart：useEffect 初始化 → setOption → resize 监听 → dispose 清理。
+ * 复用 useECharts hook（S024-B）：init+setOption+resize+dispose 统一管理。
  */
 export function GraphView({
   data,
@@ -149,7 +150,6 @@ export function GraphView({
   height = 420,
 }: GraphViewProps) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<echarts.ECharts | null>(null);
   // 用 ref 持有回调/数据，避免其身份变化触发重新 init。
   const onNodeClickRef = useRef(onNodeClick);
   onNodeClickRef.current = onNodeClick;
@@ -158,43 +158,32 @@ export function GraphView({
 
   const isEmpty = data.nodes.length === 0;
 
-  useEffect(() => {
-    if (!chartRef.current || isEmpty) return;
-
-    const instance = echarts.init(chartRef.current);
-    instanceRef.current = instance;
-
-    const option =
-      layout === "tree" ? buildTreeOption(data) : buildGraphOption(data);
-    instance.setOption(option);
-
-    // 节点点击 → 回查 dataRef 取完整 GraphNode（保留 category/code/value）。
-    instance.on("click", (params: unknown) => {
-      const p = params as {
-        dataType?: string;
-        data?: { id?: string; name?: string };
-      };
-      // review fix HIGH-2：反向守卫——接受 graph 节点(dataType=node)与 tree 节点(dataType=main)，跳过边(edge)与画布(无 data)。
-      // 原 dataType!=="node" 守卫丢弃所有 tree 点击（echarts tree dataType 实为 "main"）致 FunnelFlow 节点展开功能死。
-      if (!p || !p.data) return;
-      if (p.dataType === "edge") return;
-      const d = p.data;
-      const found = dataRef.current.nodes.find((n) => n.id === d.id);
-      if (found) {
-        onNodeClickRef.current?.(found);
-      }
-    });
-
-    const onResize = () => instanceRef.current?.resize();
-    window.addEventListener("resize", onResize);
-
-    return () => {
-      window.removeEventListener("resize", onResize);
-      instanceRef.current?.dispose();
-      instanceRef.current = null;
-    };
-    // data/layout 驱动重渲染；回调经 ref 不入依赖。
-  }, [data, layout, isEmpty]);
+  useECharts(
+    chartRef,
+    () => (layout === "tree" ? buildTreeOption(data) : buildGraphOption(data)),
+    [data, layout, isEmpty],
+    {
+      skip: isEmpty,
+      onReady: (instance) => {
+        // 节点点击 → 回查 dataRef 取完整 GraphNode（保留 category/code/value）。
+        instance.on("click", (params: unknown) => {
+          const p = params as {
+            dataType?: string;
+            data?: { id?: string; name?: string };
+          };
+          // review fix HIGH-2：反向守卫——接受 graph 节点(dataType=node)与 tree 节点(dataType=main)，跳过边(edge)与画布(无 data)。
+          // 原 dataType!=="node" 守卫丢弃所有 tree 点击（echarts tree dataType 实为 "main"）致 FunnelFlow 节点展开功能死。
+          if (!p || !p.data) return;
+          if (p.dataType === "edge") return;
+          const d = p.data;
+          const found = dataRef.current.nodes.find((n) => n.id === d.id);
+          if (found) {
+            onNodeClickRef.current?.(found);
+          }
+        });
+      },
+    },
+  );
 
   if (isEmpty) {
     return (

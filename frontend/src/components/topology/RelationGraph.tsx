@@ -1,13 +1,11 @@
 // S024-B7 关系网：调 useTopologyRelation 取 GraphData → 喂 GraphView（graph 布局），
 // 节点点击进候选详情（复用 S023 CandidateDetail 路由）。边按 type 着色由 GraphView 负责。
-// 复用 ui 组件（GlassCard/SectionHeader/State）。仿 KLineChart 初始化 + CandidateDetail 数据拉取模式。
+// 复用 TopologyPanel shell（S024-B）+ ui 组件。仿 KLineChart 初始化 + CandidateDetail 数据拉取模式。
 // 合规 §0（弱合规·工程底线）：拓扑只呈现客观关联（同板块/共流入/梯队/席位），不输出方向词。
 import { useNavigate } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import { useTopologyRelation } from "@/lib/query";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { LoadingState, ErrorState } from "@/components/ui/State";
+import { TopologyPanel } from "./TopologyPanel";
 import { GraphView } from "./GraphView";
 import type { GraphNode } from "./types";
 
@@ -36,19 +34,17 @@ export function RelationGraph({ date, height = 420 }: RelationGraphProps) {
   };
 
   return (
-    <GlassCard>
-      <SectionHeader
-        title="关系网"
-        icon={<Share2 className="h-4 w-4" aria-hidden="true" />}
-        subtitle="候选标的客观关联（同板块 / 共流入 / 梯队 / 席位）"
-      />
-      {isLoading ? (
-        <LoadingState variant="inline" label="加载关系网…" />
-      ) : error ? (
-        <ErrorState message="关系网加载失败" onRetry={refetch ? () => refetch() : undefined} />
-      ) : (
-        <GraphView data={data ?? { nodes: [], edges: [] }} onNodeClick={handleNodeClick} height={height} />
-      )}
-    </GlassCard>
+    <TopologyPanel
+      title="关系网"
+      icon={<Share2 className="h-4 w-4" aria-hidden="true" />}
+      subtitle="候选标的客观关联（同板块 / 共流入 / 梯队 / 席位）"
+      isLoading={isLoading}
+      loadingLabel="加载关系网…"
+      error={error}
+      errorMessage="关系网加载失败"
+      refetch={refetch}
+    >
+      <GraphView data={data ?? { nodes: [], edges: [] }} onNodeClick={handleNodeClick} height={height} />
+    </TopologyPanel>
   );
 }

@@ -1,15 +1,13 @@
 // S024-C 漏斗流程拓扑：复用 S023 funnel/layers，构树形 GraphData（节点=漏斗层，
 // 边=数据流向 R1→R2→R3→SELF），GraphView tree 布局渲染，节点点击展开该层 passed 候选。
-// 复用 ui 组件（GlassCard/SectionHeader/State/Badge）。仿 RelationGraph 数据接线 + KLineChart 模式。
+// 复用 TopologyPanel shell（S024-B）+ ui 组件（Badge）。仿 RelationGraph 数据接线 + KLineChart 模式。
 // 合规 §0（弱合规·工程底线）：拓扑只呈现客观数据流向与候选事实，不输出方向结论词。
 import { useMemo, useState } from "react";
 import { Filter } from "lucide-react";
 import { useFunnelLayers } from "@/lib/query";
 import type { FunnelLayer } from "@/lib/api";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { LoadingState, ErrorState } from "@/components/ui/State";
 import { Badge } from "@/components/ui/Badge";
+import { TopologyPanel } from "./TopologyPanel";
 import { GraphView } from "./GraphView";
 import type { GraphData, GraphNode } from "./types";
 
@@ -135,30 +133,25 @@ export function FunnelFlow({ date, height = 420 }: FunnelFlowProps) {
   };
 
   return (
-    <GlassCard>
-      <SectionHeader
-        title="漏斗流程"
-        icon={<Filter className="h-4 w-4" aria-hidden="true" />}
-        subtitle="漏斗层数据流向（R1→R2→R3→自选），点节点展开通过候选"
-      />
-      {isLoading ? (
-        <LoadingState variant="inline" label="加载漏斗层…" />
-      ) : error ? (
-        <ErrorState
-          message="漏斗层加载失败"
-          onRetry={refetch ? () => refetch() : undefined}
+    <TopologyPanel
+      title="漏斗流程"
+      icon={<Filter className="h-4 w-4" aria-hidden="true" />}
+      subtitle="漏斗层数据流向（R1→R2→R3→自选），点节点展开通过候选"
+      isLoading={isLoading}
+      loadingLabel="加载漏斗层…"
+      error={error}
+      errorMessage="漏斗层加载失败"
+      refetch={refetch}
+    >
+      <>
+        <GraphView
+          data={graphData}
+          layout="tree"
+          onNodeClick={handleNodeClick}
+          height={height}
         />
-      ) : (
-        <>
-          <GraphView
-            data={graphData}
-            layout="tree"
-            onNodeClick={handleNodeClick}
-            height={height}
-          />
-          {expandedLayer && <PassedCandidatesPanel layer={expandedLayer} />}
-        </>
-      )}
-    </GlassCard>
+        {expandedLayer && <PassedCandidatesPanel layer={expandedLayer} />}
+      </>
+    </TopologyPanel>
   );
 }

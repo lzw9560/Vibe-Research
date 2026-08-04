@@ -1,15 +1,13 @@
 // S024-D2 连板梯队树：调 useBoardLadder 取后端嵌套树（em_zt_topic_pool 涨停池），
 // buildLadderGraph 展平为 GraphData（parent→child, type=ladder）喂 GraphView（tree 布局）。
 // 树形：根=当日涨停 → 连板高度分层（N板）→ 同题材归枝 → 叶=个股（code/name 如实呈现）。
-// 复用 ui 组件（GlassCard/SectionHeader/State）。仿 FunnelFlow 数据接线 + GraphView tree 模式。
+// 复用 TopologyPanel shell（S024-B）。仿 FunnelFlow 数据接线 + GraphView tree 模式。
 // 合规 §0（弱合规·工程底线）：拓扑只呈现客观梯队关联，不输出方向词。
 import { useMemo } from "react";
 import { Layers } from "lucide-react";
 import { useBoardLadder } from "@/lib/query";
 import type { BoardLadderNode } from "@/lib/api";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { LoadingState, ErrorState } from "@/components/ui/State";
+import { TopologyPanel } from "./TopologyPanel";
 import { GraphView } from "./GraphView";
 import type { GraphData } from "./types";
 
@@ -73,22 +71,17 @@ export function BoardLadder({ date, height = 420 }: BoardLadderProps) {
   }, [tree]);
 
   return (
-    <GlassCard>
-      <SectionHeader
-        title="连板梯队"
-        icon={<Layers className="h-4 w-4" aria-hidden="true" />}
-        subtitle="涨停池按连板高度分层，同题材归枝（叶节点呈现 code/name）"
-      />
-      {isLoading ? (
-        <LoadingState variant="inline" label="加载连板梯队…" />
-      ) : error ? (
-        <ErrorState
-          message="连板梯队加载失败"
-          onRetry={refetch ? () => refetch() : undefined}
-        />
-      ) : (
-        <GraphView data={graphData} layout="tree" height={height} />
-      )}
-    </GlassCard>
+    <TopologyPanel
+      title="连板梯队"
+      icon={<Layers className="h-4 w-4" aria-hidden="true" />}
+      subtitle="涨停池按连板高度分层，同题材归枝（叶节点呈现 code/name）"
+      isLoading={isLoading}
+      loadingLabel="加载连板梯队…"
+      error={error}
+      errorMessage="连板梯队加载失败"
+      refetch={refetch}
+    >
+      <GraphView data={graphData} layout="tree" height={height} />
+    </TopologyPanel>
   );
 }
