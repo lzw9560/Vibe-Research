@@ -4,18 +4,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Opts } from "./types";
-import type { GraphData } from "@/components/topology/types";
-import type { BoardLadderNode, FunnelLayer } from "@/lib/api";
+import type { BoardLadderNode, FunnelLayer, GraphData } from "@/lib/api";
 
 /**
  * 关系网：候选标的四类客观关联边（sector/fund_flow/ladder/seat）。
- * 后端 GET /api/topology/relation 返 {nodes,edges}，契约同 GraphData，故断言收紧。
+ * 后端 GET /api/topology/relation 返 {nodes,edges}，契约同 GraphData（API 层已类型化）。
  * data 直接喂 GraphView（graph 布局）。
  */
 export function useTopologyRelation(date?: string, options?: Opts<GraphData>) {
   return useQuery({
     queryKey: ["topology", "relation", date] as const,
-    queryFn: () => api.topologyRelation(date) as Promise<GraphData>,
+    queryFn: () => api.topologyRelation(date),
     ...options,
   });
 }
@@ -28,7 +27,7 @@ export function useTopologyRelation(date?: string, options?: Opts<GraphData>) {
 export function useFunnelLayers(date?: string, options?: Opts<FunnelLayer[]>) {
   return useQuery({
     queryKey: ["funnel", "layers", date] as const,
-    queryFn: () => api.funnelLayers(date) as Promise<FunnelLayer[]>,
+    queryFn: () => api.funnelLayers(date),
     ...options,
   });
 }
@@ -42,7 +41,7 @@ export function useFunnelLayers(date?: string, options?: Opts<FunnelLayer[]>) {
 export function useBoardLadder(date?: string, options?: Opts<BoardLadderNode>) {
   return useQuery({
     queryKey: ["topology", "board-ladder", date] as const,
-    queryFn: () => api.boardLadder(date) as Promise<BoardLadderNode>,
+    queryFn: () => api.boardLadder(date),
     ...options,
   });
 }

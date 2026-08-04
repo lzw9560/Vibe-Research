@@ -818,6 +818,55 @@ export interface BoardLadderNode {
   children?: BoardLadderNode[];
 }
 
+/**
+ * S024 拓扑图数据契约（共用图引擎 GraphView 输入）。
+ * 后端 GET /api/topology/relation 返 {nodes,edges}，契约同 GraphData。
+ * 拓扑只呈现客观关联（同板块/共流入/梯队/席位），不输出方向词（§0 弱合规·工程底线）。
+ */
+
+/**
+ * 边类型：可扩展枚举。
+ * 注意（S024-C review #4）：spec R5「新边类型加 provider 不动视图」仅后端成立——
+ * 后端可免改视图；前端需注册 EdgeType（此联合）+ EDGE_COLORS（GraphView 内 Record）。
+ * - sector: 同板块联动
+ * - fund_flow: 共资金流入
+ * - ladder: 连板梯队
+ * - seat: 共席位
+ * - flow: 漏斗层数据流向（R1→R2→R3→SELF，客观流向，非方向结论）
+ */
+export type EdgeType = "sector" | "fund_flow" | "ladder" | "seat" | "flow";
+
+/**
+ * 图节点。id 唯一；name 展示；category 分组着色；
+ * value 可用于节点大小映射；code 关联个股代码。
+ */
+export interface GraphNode {
+  id: string;
+  name: string;
+  category?: string;
+  value?: number;
+  code?: string;
+}
+
+/**
+ * 图边。source/target 指向 GraphNode.id；
+ * type 区分关联来源；weight 控制线宽/强度。
+ */
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: EdgeType;
+  weight: number;
+}
+
+/**
+ * 统一图数据格式，GraphView 的输入契约。
+ */
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
 export interface FactorResult {
   factor_id: string;
   factor_name: string;

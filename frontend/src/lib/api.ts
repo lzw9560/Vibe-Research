@@ -14,6 +14,7 @@ import type {
   WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint, STIResult, STITimelineItem,
   FunnelLayer,
   BoardLadderNode,
+  GraphData,
 } from "./api/types";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -208,10 +209,9 @@ export const api = {
   scheduledTaskTypes: () => get<string[]>("/scheduled-tasks/types"),
   // S024-B7 拓扑关系网：候选标的四类客观关联边（sector/fund_flow/ladder/seat）。
   // 后端 GET /api/topology/relation 返 {nodes,edges}（无方向结论，§0 弱合规·工程底线）。
+  // S024-C review #3：API 层直接返 GraphData（共享契约），消除 query 层 as cast。
   topologyRelation: (date?: string) =>
-    get<{ nodes: unknown[]; edges: unknown[] }>(
-      `/topology/relation${date ? `?date=${date}` : ""}`,
-    ),
+    get<GraphData>(`/topology/relation${date ? `?date=${date}` : ""}`),
   // S024-C1 漏斗流程拓扑：复用 S023 funnel/layers，返 FunnelLayer[]（含 conditions/passed）。
   // 后端 GET /api/workflow/funnel/layers（run_id 可选，此处不传；客观层数据流向）。
   funnelLayers: (date?: string) =>

@@ -4,16 +4,8 @@
 import { useRef } from "react";
 import type * as echarts from "echarts";
 import { useECharts } from "@/hooks/useECharts";
-import type { EdgeType, GraphData, GraphEdge, GraphNode, LayoutMode } from "./types";
-
-/** 边类型 → 着色，客观区分关联来源（不附方向语义）。 */
-const EDGE_COLORS: Record<EdgeType, string> = {
-  sector: "#60a5fa", // 蓝：同板块联动
-  fund_flow: "#34d399", // 绿：共资金流入
-  ladder: "#fbbf24", // 琥珀：连板梯队
-  seat: "#f87171", // 红：共席位
-  flow: "#a78bfa", // 紫：漏斗层数据流向
-};
+import type { GraphData, GraphEdge, GraphNode, LayoutMode } from "./types";
+import { EDGE_COLORS, EDGE_COLOR_FALLBACK } from "./edgeColors";
 
 interface GraphViewProps {
   data: GraphData;
@@ -93,7 +85,8 @@ function buildGraphOption(data: GraphData): echarts.EChartsOption {
           target: e.target,
           value: e.weight,
           lineStyle: {
-            color: EDGE_COLORS[e.type],
+            // review #4：兜底防后端新增 EdgeType 前端未注册致静默褪色（spec R5 仅后端免改视图）。
+            color: EDGE_COLORS[e.type] ?? EDGE_COLOR_FALLBACK,
             width: 1 + e.weight,
           },
         })),

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import { useTopologyRelation } from "@/lib/query";
 import { TopologyPanel } from "./TopologyPanel";
+import { EdgeLegend } from "./EdgeLegend";
 import { GraphView } from "./GraphView";
 import type { GraphNode } from "./types";
 
@@ -44,6 +45,7 @@ export function RelationGraph({ date, height = 420 }: RelationGraphProps) {
       errorMessage="关系网加载失败"
       refetch={refetch}
     >
+      <EdgeLegend edges={data?.edges ?? []} />
       <GraphView data={data ?? { nodes: [], edges: [] }} onNodeClick={handleNodeClick} height={height} />
     </TopologyPanel>
   );
