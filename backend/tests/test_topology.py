@@ -177,6 +177,32 @@ def test_ladder_provider_resilient(monkeypatch):
     assert LadderEdgeProvider().build_edges(_CANDIDATES) == []
 
 
+def test_ladder_provider_no_selfloop_on_dup_code(monkeypatch):
+    """review fix #11：候选含重复 code → 去重，无 {source=x,target=x} 自环边。
+
+    未修前 cand_codes 不去重 → 重复 code 在 i/i+1 配对产自环边。
+    """
+    monkeypatch.setattr(
+        topology.astock,
+        "em_zt_topic_pool",
+        lambda endpoint, date, sort="fbt:asc": [
+            _pool_item("600519", "贵州茅台", 3, "白酒"),
+            _pool_item("000858", "五粮液", 3, "白酒"),
+        ],
+    )
+    dup_candidates = [
+        {"code": "600519", "name": "贵州茅台"},
+        {"code": "600519", "name": "茅台(重复)"},  # 同 code 重复
+        {"code": "000858", "name": "五粮液"},
+    ]
+    edges = LadderEdgeProvider().build_edges(dup_candidates)
+    ld = [e for e in edges if e["type"] == "ladder"]
+    # 去重后 600519/000858 各 1 个 → 恰 1 条 ladder 边，无自环
+    assert len(ld) == 1
+    assert not any(e["source"] == e["target"] for e in ld)
+    assert {ld[0]["source"], ld[0]["target"]} == {"600519", "000858"}
+
+
 # ─────────────────────────── B5 · seat provider ───────────────────────────
 
 
@@ -194,7 +220,8 @@ def test_seat_provider_shared_seat(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "dragon_tiger_board",
-        lambda code: {
+        # review fix #1 后 build_edges 透传 trade_date；mock 须接受该 kwarg
+        lambda code, trade_date=None, **kw: {
             "600519": _board(["营业部A", "营业部B"], []),
             "000858": _board(["营业部A"], ["营业部C"]),
             "300750": _board(["营业部D"], []),
@@ -206,6 +233,25 @@ def test_seat_provider_shared_seat(monkeypatch):
     assert "600519" in pair and "000858" in pair
     assert any(e["weight"] == 1 for e in st)  # 共享 营业部A
     assert not any("300750" in (e["source"], e["target"]) for e in st)
+
+
+def test_seat_provider_passes_trade_date(monkeypatch):
+    """review fix #1：build_edges(date=...) 透传 trade_date 给 dragon_tiger_board。
+
+    未修前 dragon_tiger_board(code) 不传 trade_date → 龙虎榜恒取今日（席位永远今天）。
+    """
+    seen: dict[str, object] = {}
+
+    def _spy(code, trade_date=None, **kw):
+        seen[code] = trade_date
+        return _board([], [])
+
+    monkeypatch.setattr(topology.astock, "dragon_tiger_board", _spy)
+    SeatEdgeProvider().build_edges(_CANDIDATES, date="2026-07-15")
+    # 每个候选收到的 trade_date 均为传入日期（非 None/默认今日）
+    assert seen.get("600519") == "2026-07-15"
+    assert seen.get("000858") == "2026-07-15"
+    assert seen.get("300750") == "2026-07-15"
 
 
 def test_seat_provider_resilient(monkeypatch):
@@ -304,6 +350,37 @@ def test_board_ladder_resilient(monkeypatch):
     monkeypatch.setattr(topology.astock, "em_zt_topic_pool", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
     tree = build_board_ladder_tree()
     assert tree["children"] == []
+
+
+# ─────────────────────────── 漏斗候选加载：live config ───────────────────────────
+
+
+def test_load_candidates_uses_live_config(monkeypatch):
+    """review fix #2：_load_candidates 复用 candidates 路由 _store["config"]（live），
+    非 _default_config() 新建默认 → 关系图与候选页用同一套调参后候选池。
+
+    未修前关系图用默认 config、候选页用用户调参后 config → 两套候选池。
+    """
+    import app as app_module  # noqa: F401 — 触发 app 加载，candidates 才完整可用
+    from routers.candidates import _store
+
+    sentinel = object()  # 任意可识别对象，证 live config 被透传
+    monkeypatch.setitem(_store, "config", sentinel)
+
+    captured: dict[str, object] = {}
+
+    def _fake_run(stage, d, cfg):
+        captured["cfg"] = cfg
+        captured["date"] = d
+
+        class _Result:
+            final_candidates = []
+        return _Result()
+
+    monkeypatch.setattr(topology.funnel_mod, "run_funnel", _fake_run)
+    topology._load_candidates("2026-07-15")
+    assert captured["cfg"] is sentinel  # live config 透传，非新建默认
+    assert captured["date"] == "2026-07-15"
 
 
 # ─────────────────────────── A5 · 合规：无方向词 ───────────────────────────

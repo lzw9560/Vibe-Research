@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import date as _date
-from typing import Protocol
+from typing import Any, Callable, Protocol
 
 from fastapi import APIRouter, Query
 
@@ -31,8 +31,6 @@ except (ImportError, AttributeError):  # noqa: BLE001 — 循环 import 回退
         return deco
 
 from candidate_funnel import funnel as funnel_mod
-from candidate_funnel.models import BaseThreshold, ThresholdConfig
-from config import AssistantDefaultConfig
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/topology", tags=["topology"])
@@ -82,19 +80,13 @@ class SectorEdgeProvider:
     edge_type = "sector"
 
     def build_edges(self, candidates: list[dict], *, date: str | None = None) -> list[dict]:
-        code_tags: dict[str, set[str]] = {}
-        for c in candidates:
-            code = c.get("code", "")
-            if not code:
-                continue
-            try:
-                blocks = astock.concept_blocks(code)
-            except Exception as exc:  # noqa: BLE001 — 数据源失败不阻塞其他 provider
-                logger.warning("sector provider: concept_blocks(%s) 失败: %s", code, exc)
-                code_tags[code] = set()
-                continue
-            code_tags[code] = set((blocks or {}).get("concept_tags", []) or [])
-        return _pairwise_shared(code_tags, "sector")
+        return _collect_shared_sets(
+            candidates,
+            fetch_fn=lambda code, _d: astock.concept_blocks(code),
+            extract_fn=lambda blocks: set((blocks or {}).get("concept_tags", []) or []),
+            edge_type="sector",
+            date=date,
+        )
 
 
 # ─────────────────────── B3 · fund_flow：共流入 ───────────────────────
@@ -106,22 +98,17 @@ class FundFlowEdgeProvider:
     edge_type = "fund_flow"
 
     def build_edges(self, candidates: list[dict], *, date: str | None = None) -> list[dict]:
-        code_inflow_days: dict[str, set[str]] = {}
-        for c in candidates:
-            code = c.get("code", "")
-            if not code:
-                continue
-            try:
-                flow = astock.stock_fund_flow_120d(code)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("fund_flow provider: stock_fund_flow_120d(%s) 失败: %s", code, exc)
-                code_inflow_days[code] = set()
-                continue
-            recent = (flow or [])[-_FUND_RECENT_DAYS:]
-            code_inflow_days[code] = {
-                r.get("date", "") for r in recent if (r.get("main_net") or 0) > 0
-            }
-        return _pairwise_shared(code_inflow_days, "fund_flow")
+        return _collect_shared_sets(
+            candidates,
+            fetch_fn=lambda code, _d: astock.stock_fund_flow_120d(code),
+            extract_fn=lambda flow: {
+                r.get("date", "")
+                for r in (flow or [])[-_FUND_RECENT_DAYS:]
+                if (r.get("main_net") or 0) > 0
+            },
+            edge_type="fund_flow",
+            date=date,
+        )
 
 
 # ─────────────────────── B4 · ladder：连板梯队 ───────────────────────
@@ -145,7 +132,9 @@ class LadderEdgeProvider:
             for it in (pool or [])
         }
         edges: list[dict] = []
-        cand_codes = [c.get("code", "") for c in candidates if c.get("code")]
+        # review fix #11：去重候选 code，否则重复 code 在 i/i+1 配对时产自环边
+        # {source:a,target:a}（dict.fromkeys 保序去重，同 build_relation_graph 节点去重范式）。
+        cand_codes = list(dict.fromkeys(c.get("code", "") for c in candidates if c.get("code")))
         for i, a in enumerate(cand_codes):
             if a not in info:
                 continue
@@ -172,25 +161,20 @@ class SeatEdgeProvider:
     edge_type = "seat"
 
     def build_edges(self, candidates: list[dict], *, date: str | None = None) -> list[dict]:
-        code_seats: dict[str, set[str]] = {}
-        for c in candidates:
-            code = c.get("code", "")
-            if not code:
-                continue
-            try:
-                board = astock.dragon_tiger_board(code)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("seat provider: dragon_tiger_board(%s) 失败: %s", code, exc)
-                code_seats[code] = set()
-                continue
-            names: set[str] = set()
-            for side in ("buy", "sell"):
-                for s in ((board or {}).get("seats", {}) or {}).get(side, []) or []:
-                    nm = s.get("name", "")
-                    if nm:
-                        names.add(nm)
-            code_seats[code] = names
-        return _pairwise_shared(code_seats, "seat")
+        # review fix #1：透传 trade_date，否则龙虎榜恒取今日（席位永远今天）。
+        # 参 LadderEdgeProvider 传 date 范式（dragon_tiger_board(trade_date=date)）。
+        return _collect_shared_sets(
+            candidates,
+            fetch_fn=lambda code, d: astock.dragon_tiger_board(code, trade_date=d),
+            extract_fn=lambda board: {
+                s.get("name", "")
+                for side in ("buy", "sell")
+                for s in ((board or {}).get("seats", {}) or {}).get(side, []) or []
+                if s.get("name", "")
+            },
+            edge_type="seat",
+            date=date,
+        )
 
 
 # ─────────────────────── 共用工具 ───────────────────────
@@ -209,6 +193,36 @@ def _pairwise_shared(code_sets: dict[str, set[str]], edge_type: str) -> list[dic
                     "weight": min(len(shared), _WEIGHT_CAP),
                 })
     return edges
+
+
+def _collect_shared_sets(
+    candidates: list[dict],
+    fetch_fn: "Callable[[str, str | None], Any]",
+    extract_fn: "Callable[[Any], set[str]]",
+    edge_type: str,
+    *,
+    date: str | None = None,
+) -> list[dict]:
+    """通用骨架：逐候选 fetch_fn(code, date) → extract_fn(raw) → 共享集 → 两两配对成边。
+
+    Sector/FundFlow/Seat 三 provider 同骨架：遍历候选取数、extract 为共享集、
+    再 _pairwise_shared 配对。单候选取数抛错 → 记空集、不阻塞其他候选（原隔离语义）。
+    fetch_fn 接收 (code, date)；忽略 date 的 provider 在闭包内弃用 _d 即可。
+    LadderEdgeProvider 逻辑不同（同高度配对+行业加权），保持独立不并入本骨架。
+    """
+    code_sets: dict[str, set[str]] = {}
+    for c in candidates:
+        code = c.get("code", "")
+        if not code:
+            continue
+        try:
+            raw = fetch_fn(code, date)
+        except Exception as exc:  # noqa: BLE001 — 单候选数据源失败不阻塞其他候选
+            logger.warning("%s provider: 取数(%s) 失败: %s", edge_type, code, exc)
+            code_sets[code] = set()
+            continue
+        code_sets[code] = extract_fn(raw)
+    return _pairwise_shared(code_sets, edge_type)
 
 
 def _today_iso() -> str:
@@ -298,18 +312,17 @@ def build_board_ladder_tree(date: str | None = None) -> dict:
 # ─────────────────────── 漏斗候选加载 ───────────────────────
 
 
-def _default_config() -> ThresholdConfig:
-    """从 AssistantDefaultConfig 构造默认候选池配置（同 candidates 路由）。"""
-    d = AssistantDefaultConfig()
-    return ThresholdConfig(
-        mode=d.CANDIDATE_FUNNEL_MODE,
-        base=BaseThreshold(**d.CANDIDATE_FUNNEL_BASE),
-    )
-
-
 def _load_candidates(date: str | None) -> list[dict]:
-    """跑漏斗取定稿候选 → [{code,name}]。节点来源=漏斗定稿池（去重）。"""
-    result = funnel_mod.run_funnel("all", date or _today_iso(), _default_config())
+    """跑漏斗取定稿候选 → [{code,name}]。节点来源=漏斗定稿池（去重）。
+
+    review fix #2：复用 candidates 路由的运行时 _store["config"]（用户调参后的
+    live config），而非本地 _default_config()——否则关系图用默认 config、候选页用
+    调参后 config，会分裂成两套候选池。lazy import 避免模块加载期 import 环
+    （candidates.py 顶部 from app import cache_response 无回退，topology 单独
+    导入时若硬 import 会触发 app 部分加载循环）。
+    """
+    from routers.candidates import _store  # noqa: PLC0415 — 防 import 环，运行时取 live config
+    result = funnel_mod.run_funnel("all", date or _today_iso(), _store["config"])
     return [{"code": c.code, "name": c.name} for c in result.final_candidates]
 
 
