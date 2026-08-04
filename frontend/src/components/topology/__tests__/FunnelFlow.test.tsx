@@ -215,6 +215,22 @@ describe("FunnelFlow (S024-C2)", () => {
     expect(within(panel).getByText(/换手/)).toBeInTheDocument();
   });
 
+  // review #9：data_reason 面板未测——PassedCandidatesPanel 渲染 layer.data_reason
+  // （采集失败原因客观呈现），原测仅验 data_status 影响 node name，未验面板 reason 文本。
+  it("展开面板呈现该层 data_reason（采集失败原因，可复现追溯）", () => {
+    const layersWithReason = mockLayers.map((l, i) =>
+      i === 1
+        ? { ...l, data_status: "未取得", data_reason: "R2 收敛采集失败：东财端点超时" }
+        : l,
+    );
+    hookMock.useFunnelLayers.mockReturnValue(hookReturning({ data: layersWithReason }));
+    render(<FunnelFlow />);
+    fireEvent.click(screen.getByTestId("ff-node-trigger"));
+    const panel = screen.getByTestId("ff-passed-panel");
+    // data_reason 文本呈现在面板内（采集失败原因，不臆造）
+    expect(within(panel).getByText(/东财端点超时/)).toBeInTheDocument();
+  });
+
   it("再次点击同节点 → 折叠（toggle）", () => {
     render(<FunnelFlow />);
     fireEvent.click(screen.getByTestId("ff-node-trigger"));
