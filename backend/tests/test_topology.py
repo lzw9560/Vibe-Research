@@ -143,6 +143,29 @@ def test_fund_flow_provider_resilient(monkeypatch):
     assert FundFlowEdgeProvider().build_edges(_CANDIDATES) == []
 
 
+def test_fund_flow_window_excludes_old_dates(monkeypatch):
+    """review #6：fund_flow 仅取最近 20 日（[-_FUND_RECENT_DAYS:]）；窗口外早期正流入日不计入共享集。
+
+    喂 25 条（前 5 早期含共享正流入日 + 后 20 窗口内全净流出）→ 无 fund_flow 边。
+    闭浅覆盖：原 coinflow 测试只喂 2-3 日，未触 [-20:] 切片边界——off-by-one 抓不到。
+    """
+    # 前 5 条（窗口外）：含共享正流入日（07-10..07-14）
+    early = [("2026-07-%02d" % (10 + i), 1e8) for i in range(5)]
+    # 后 20 条（窗口内 [-20:]）：全净流出 → 无正日
+    recent = [("2026-08-%02d" % (i + 1), -1e7) for i in range(20)]
+    flow_rows = early + recent
+    assert len(flow_rows) == 25  # 守卫：>20 条
+    monkeypatch.setattr(
+        topology.astock,
+        "stock_fund_flow_120d",
+        lambda code: _flow(flow_rows),  # 三候选完全相同 → 仅窗口外有共享正日
+    )
+    edges = FundFlowEdgeProvider().build_edges(_CANDIDATES)
+    ff = [e for e in edges if e["type"] == "fund_flow"]
+    # 共享正流入日全在窗口外 → 不计入共享集 → 无 fund_flow 边
+    assert ff == []
+
+
 # ─────────────────────────── B4 · ladder provider ───────────────────────────
 
 
@@ -447,3 +470,57 @@ def test_endpoint_relation_wired(monkeypatch):
     assert set(data.keys()) == {"nodes", "edges"}
     assert len(data["nodes"]) == 2
     assert {n["code"] for n in data["nodes"]} == {"600519", "000858"}
+
+
+def test_endpoint_relation_all_four_edge_types(monkeypatch):
+    """review #7：端点集成（A2 端到端）——4 源各返非空 → response edges 含全部 4 种 type。
+
+    原 test_endpoint_relation_wired 4 源全空（仅验接线+节点去重）；补用例验
+    4 源各产边 → 端到端聚合 sector/fund_flow/ladder/seat 全出现。
+    """
+    from fastapi.testclient import TestClient
+    import app as app_module
+
+    monkeypatch.setattr(
+        topology,
+        "_load_candidates",
+        lambda date: [
+            {"code": "600519", "name": "贵州茅台"},
+            {"code": "000858", "name": "五粮液"},
+        ],
+    )
+    # sector：共享白酒+消费
+    monkeypatch.setattr(
+        topology.astock,
+        "concept_blocks",
+        lambda code: {"concept_tags": ["白酒", "消费"]},
+    )
+    # fund_flow：共享 2026-08-01 正流入（窗口内）
+    monkeypatch.setattr(
+        topology.astock,
+        "stock_fund_flow_120d",
+        lambda code: _flow([("2026-08-01", 1e8)]),
+    )
+    # ladder：同 3 板 + 同白酒行业
+    monkeypatch.setattr(
+        topology.astock,
+        "em_zt_topic_pool",
+        lambda endpoint, date, sort="fbt:asc": [
+            _pool_item("600519", "贵州茅台", 3, "白酒"),
+            _pool_item("000858", "五粮液", 3, "白酒"),
+        ],
+    )
+    # seat：共享营业部A（trade_date 透传，mock 须接受该 kwarg）
+    monkeypatch.setattr(
+        topology.astock,
+        "dragon_tiger_board",
+        lambda code, trade_date=None, **kw: _board(["营业部A"], []),
+    )
+    app_module._RESPONSE_CACHE.clear()
+    client = TestClient(app_module.app)
+    r = client.get("/api/topology/relation")
+    assert r.status_code == 200
+    data = r.json()
+    types = {e["type"] for e in data["edges"]}
+    # 4 种 EdgeType 全出现（端到端聚合，非单 provider 隔离测）
+    assert {"sector", "fund_flow", "ladder", "seat"} <= types
