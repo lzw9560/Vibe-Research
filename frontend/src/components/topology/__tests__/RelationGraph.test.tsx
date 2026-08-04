@@ -23,6 +23,7 @@ vi.mock("react-router-dom", () => ({
 }));
 
 // GraphView stub：渲染 data-testid + 暴露 node-count；trigger 按钮调 onNodeClick。
+// rg-node-trigger 传带 code 节点；rg-node-trigger-nocode 传无 code 节点（守卫 false 分支用）。
 vi.mock("../GraphView", () => ({
   GraphView: (props: { data: GraphData; onNodeClick?: (n: GraphNode) => void }) => {
     hookMock.onNodeClickRef.current = props.onNodeClick ?? null;
@@ -35,6 +36,14 @@ vi.mock("../GraphView", () => ({
           }
         >
           node
+        </button>
+        <button
+          data-testid="rg-node-trigger-nocode"
+          onClick={() =>
+            props.onNodeClick?.({ id: "no-code-node", name: "无代码节点" })
+          }
+        >
+          node-nocode
         </button>
       </div>
     );
@@ -92,6 +101,14 @@ describe("RelationGraph (S024-B7)", () => {
     fireEvent.click(screen.getByTestId("rg-node-trigger"));
     expect(navMock.navigate).toHaveBeenCalledTimes(1);
     expect(navMock.navigate).toHaveBeenCalledWith("/workflow/candidates/000001");
+  });
+
+  // review #10：if (node.code) 守卫 false 分支未测——原测只验带 code 节点
+  // → navigate 被调；无 code 节点（code? 可选）跳过导航的守卫分支未覆盖。
+  it("无 code 节点点击 → 不 navigate（守卫 false 分支）", () => {
+    render(<RelationGraph />);
+    fireEvent.click(screen.getByTestId("rg-node-trigger-nocode"));
+    expect(navMock.navigate).not.toHaveBeenCalled();
   });
 
   it("传入 date → 透传给 hook（queryKey 维度）", () => {
