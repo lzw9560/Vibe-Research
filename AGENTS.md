@@ -3,47 +3,51 @@
 > 本文件是**跨工具共守**的项目约定——Claude Code、opencode、及任何 AI 编码代理在本仓库工作时**强制遵守**。与 `CLAUDE.md` 互补：CLAUDE.md 是 Claude Code 专属约束，本文件是**所有 agent 通用**的底线。
 >
 > 2026-07-31 落地，起因：多会话/多 agent 同 `develop` 并行 commit 导致历史 interleaved + 工作树 entangle（两起 `git checkout` 回 HEAD 丢未提交改动事故）。
+> 2026-08-04 精简：原 feature 分支强制工作流过于冗长导致单一功能实现周期过长，经评估改为分级工作流——按改动规模分级匹配流程门。
 
 ---
 
-## Feature 分支工作流（强制）
+## 分级工作流（2026-08-04 落地，替代原 Feature 分支工作流）
 
-**每个 spec 的实现走独立 feature 分支，完成后 squash 合并 develop。** 不在 `develop` 上直接写实现代码。
+**改动按规模分级，匹配不同的流程门。** 不再对所有改动一刀切走 feature 分支 + 完整验收。
 
-### 分支规则
-- **命名**：`feature/S<NNN>-<slug>`（如 `feature/S020-worldmonitor`），slug 与 spec 标题一致。
-- **base**：off `develop`（或依赖未合并时 off 依赖的 feature 分支——见"栈式依赖"）。
-- **本地开发，不 push**：feature 分支只存本地，不 `git push`；远程 ecs 测试用 tarball 同步。
-- **单一会话**：一个 feature 分支**同一时刻只一个会话/agent 写**。多会话并行请各开各的 feature 分支，不共写同一分支。
+### 分级判据（组合规则）
 
-### 提交纪律
-- feature 分支上**勤 commit、最小功能提交**（`wip:` 前缀可）。**不准留长生命未提交工作树**——`git checkout` 回退事故丢的就是未提交改动；commit 进 feature 分支即受保护。
+| 级别 | 判据 |
+|---|---|
+| **small** | ≤50 行 + 单层（纯前端或纯后端） |
+| **medium** | 跨层 或 >50 行 |
+| **large** | 碰外部数据源 / 新增 AI 工具 / 涉及财务验算——自动 large，不管行数 |
 
-### 栈式依赖（依赖未合并的 spec 怎么并行）
-- 若 S020 依赖 S019 且 S019 未合并：`feature/S020` 基于 `feature/S019`（栈式）；S019 合并 develop 后，`feature/S020` rebase 到 develop。
-- **共享基础设施**（validators / TTLCache / 模型等被多 spec 用的）**先合 develop**，再开依赖它的派生 feature。
+### 流程门分级
 
-### 验收门（提交前强制，playwright-pro）
-- **每个 spec 完成、提交（commit / squash 合并）之前**，必须运行 **playwright-pro** 回归验收测试；通过之后才允许提交。
-- **保留验收报告**：报告产物落 `reports/acceptance/<S-NNN>-<date>-<result>.md`（含：通过/失败用例数、失败明细、运行时间、测试环境）。报告随 feature 分支提交，合并前随 grill 一起核验。
-- 验收测试范围：前端 UI 冒烟 + 后端连通（`uvicorn` 起 8900 → 起 vite → Playwright 断言关键路由渲染与真实 API 数据落位）。纯数据层/无 UI 改动 spec，可只跑后端 API 冒烟，但报告同样要留。
-- 验收未过 = **硬阻**，不得提交/合并（与 grill 🔴 同级）。
+| 门 | small | medium | large |
+|---|---|---|---|
+| spec.md | 免（commit message 记摘要） | 免（同） | 必写（`specs/SNNN-*/spec.md`） |
+| plan/tasks | 免 | 免（需要时并入 spec） | 必写（可合并为 spec 内一节） |
+| feature 分支 | 免（直接 develop 提交） | 免（直接 develop） | 保留（`feature/SNNN-slug`，off develop） |
+| code review / grill | 免 | issue 层（`.scratch/` 单轮） | 完整 grill |
+| review 轮数 | — | 单轮，仅 HIGH 阻断，MEDIUM 进 backlog | 单轮，仅 HIGH 阻断，MEDIUM 进 backlog |
+| playwright 验收 | 免 | 简化单表（后端冒烟 or 关键路由） | playwright-pro 完整 |
+| 归档 | 免 | 并入 squash commit message | 批量归档，不每 spec 单独 docs commit |
 
-### 合并准入门（grill 硬阻）
-- 合并前必过 **grill / code review**。grill 标的 🔴（含"外部源 live 冒烟未通过"）= **硬阻**，不得合并。
-- 接外部源的 spec（如 S020 worldmonitor）**live 冒烟通过前不合**；纯重构 / 数据层内部 spec，`pytest -m "not live"` 全绿 + grill 无 🔴 即可。
-- "待 live 后定"的占位项（availability_offset / 握手协议等）：**不得以此状态合并**——拆出可合并部分，余下挂 feature 分支等 live。
+### 通用规则（所有级别）
 
-### 合并
-- `squash` 到 develop，一个 spec 一个 commit（`feat(S020): ...`）。丢失中间调试历史是已知代价——靠 grill 报告替代追溯。
-- 合并后**删本地 feature 分支（留 90 天再清）**；分支未 push 故无远程可删。
-
-### spec 文档归属
-- `spec.md` / `plan.md` / `tasks.md` **先进 develop**（在写 feature 实现前），feature 分支只带实现代码。
+- **提交纪律**：勤 commit、最小功能提交（`wip:` 前缀可）。**不准留长生命未提交工作树**——`git checkout` 回退事故丢的就是未提交改动。
+- **合并**：large 用 `git merge --squash` 到 develop，一 spec 一 commit（`feat(SNNN): ...`）。medium/small 直接 develop commit。
+- **分支清洁**：large 的 feature 分支合并后**立即删**（`git branch -d`），不留残留。无用分支是工程洁癖的对立面。
+- **栈式依赖**：若 S020 依赖 S019 且 S019 未合并，`feature/S020` 基于 `feature/S019`（栈式）；S019 合并 develop 后 rebase。共享基础设施先合 develop。
+- **外部源 live 冒烟**：接外部源的 spec live 冒烟通过前不合；"待 live 后定"占位项不得合并，拆出可合并部分。
+- **工程底线不降级**（所有级别）：不臆造数据 / 私有数据隔离 / em_get 防封。涉及数据输出/AI 提示词/交易信号的改动，无论级别都过合规自查（弱合规，CLAUDE.md §1）。
 
 ### 适用范围
-- 所有 AI 编码代理（Claude Code / opencode / 其他）与本仓库所有会话，自 2026-07-31 起执行。
-- 历史遗留（当前 develop 上的未 push 提交 + 未提交工作树）不溯及；新 spec 实现一律走本流程。
+
+- 所有 AI 编码代理（Claude Code / opencode / 其他）与本仓库所有会话，自 2026-08-04 起执行。
+- 2026-07-31 至 2026-08-03 期间按原 Feature 分支工作流执行的 spec（S022–S026）不溯及。
+
+### 历史对照
+
+08-01 前（无流程门）：12 spec/天。08-02 后（原 feature 分支全量门）：2 spec/天。本分级方案目标：small 回归直接提交节奏，medium 轻量过审，large 保留完整门。
 
 ---
 
@@ -51,7 +55,7 @@
 
 ### Issue tracker
 
-本地 markdown 工单层：`.scratch/<effort-slug>/` 存放 issue 工单（`issues/NN-<slug>.md` + `map.md`）+ triage 标签，承担研究问题/原型/AFK 领取队列。**正式 spec 不在此**——仍在 `specs/SNNN-*/`（CLAUDE.md §0）；`.scratch/` effort 成熟到要正式实现则毕业迁移为 `specs/SNNN-*/spec.md`。详见 `docs/agents/issue-tracker.md`。
+本地 markdown 工单层：`.scratch/<effort-slug>/` 存放 issue 工单（`issues/NN-<slug>.md` + `map.md`）+ triage 标签，承担研究问题/原型/AFK 领取队列、medium 级 code review。**正式 spec 不在此**——仍在 `specs/SNNN-*/`（CLAUDE.md §0）；`.scratch/` effort 成熟到要正式实现则毕业迁移为 `specs/SNNN-*/spec.md`。详见 `docs/agents/issue-tracker.md`。
 
 ### Triage labels
 
