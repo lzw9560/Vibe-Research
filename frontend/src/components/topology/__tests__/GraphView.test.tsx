@@ -102,6 +102,21 @@ describe("GraphView (S024-A)", () => {
     expect(onNodeClick).toHaveBeenCalledWith(expected);
   });
 
+  // review fix HIGH-2：tree 模式点击——echarts tree dataType 实为 "main"（非 "node"），
+  // 原守卫 dataType!=="node" 丢弃所有 tree 点击（FunnelFlow 节点展开功能死）。反向守卫应接受。
+  it("tree 模式节点点击 → 触发 onNodeClick（dataType=main，反向守卫）", () => {
+    const onNodeClick = vi.fn();
+    render(<GraphView data={mockData} layout="tree" onNodeClick={onNodeClick} />);
+    expect(echartsMocks.on).toHaveBeenCalledWith("click", expect.any(Function));
+    const handler = echartsMocks.on.mock.calls[0][1];
+    act(() => {
+      handler({ dataType: "main", data: { id: "n1", name: "标的A" } });
+    });
+    expect(onNodeClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "n1", name: "标的A" }),
+    );
+  });
+
   it("点击非节点（如边/画布）→ 不触发 onNodeClick", () => {
     const onNodeClick = vi.fn();
     render(<GraphView data={mockData} onNodeClick={onNodeClick} />);

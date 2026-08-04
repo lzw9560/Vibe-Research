@@ -134,7 +134,7 @@ def test_fund_flow_provider_coinflow(monkeypatch):
     pair = {e["source"] for e in ff} | {e["target"] for e in ff}
     assert "600519" in pair and "000858" in pair
     assert not any("300750" in (e["source"], e["target"]) for e in ff)
-    assert all(e["weight"] >= 1 for e in ff)
+    assert any(e["weight"] == 2 for e in ff)  # 2 共享日 → weight=2（原 >=1 恒真假绿，off-by-one 抓不到）
 
 
 def test_fund_flow_provider_resilient(monkeypatch):
@@ -217,10 +217,11 @@ def test_seat_provider_resilient(monkeypatch):
 # ─────────────────────────── B6 · relation 聚合 ───────────────────────────
 
 
-def test_relation_aggregation_nodes_and_edges():
+def test_relation_aggregation_nodes_and_edges(monkeypatch):
     """聚合多 provider → GraphData{nodes,edges}；节点=候选去重。"""
+    # review fix 防封：mock concept_blocks 防离线测试发真实东财请求（§1.2 防封底线）
+    monkeypatch.setattr(topology.astock, "concept_blocks", lambda code: {"concept_tags": []})
     providers = [_FakeProvider(), SectorEdgeProvider()]  # fake + sector
-    # sector 依赖 astock.concept_blocks，但 SectorEdgeProvider 内部 try 会在测试无 mock 下返空
     graph = build_relation_graph(_CANDIDATES, providers=providers)
     assert set(graph.keys()) == {"nodes", "edges"}
     # 节点去重：3 个候选 → 3 节点，含 id/name/code/category

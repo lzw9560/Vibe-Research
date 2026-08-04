@@ -332,7 +332,8 @@ async def get_relation(date: str | None = Query(default=None, description="ISO �
     合规：只呈现客观关联，不含方向结论。
     """
     candidates = await asyncio.to_thread(_load_candidates, date)
-    return build_relation_graph(candidates, providers=get_all_edge_providers(), date=date)
+    # review fix HIGH-1：build_relation_graph 内 O(N) em_get 阻塞 → to_thread 释放事件循环（同 :334/:345，防 freeze 回归）
+    return await asyncio.to_thread(build_relation_graph, candidates, providers=get_all_edge_providers(), date=date)
 
 
 @router.get("/board-ladder")

@@ -174,7 +174,10 @@ export function GraphView({
         dataType?: string;
         data?: { id?: string; name?: string };
       };
-      if (!p || p.dataType !== "node" || !p.data) return;
+      // review fix HIGH-2：反向守卫——接受 graph 节点(dataType=node)与 tree 节点(dataType=main)，跳过边(edge)与画布(无 data)。
+      // 原 dataType!=="node" 守卫丢弃所有 tree 点击（echarts tree dataType 实为 "main"）致 FunnelFlow 节点展开功能死。
+      if (!p || !p.data) return;
+      if (p.dataType === "edge") return;
       const d = p.data;
       const found = dataRef.current.nodes.find((n) => n.id === d.id);
       if (found) {
