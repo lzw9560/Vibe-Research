@@ -83,6 +83,17 @@ describe("GraphView (S024-A)", () => {
     expect(root.children[0].name).toBe("标的B");
   });
 
+  // review #8：tree 递归建树 depth-2 未测——原测仅断 depth-1（root.children[0]），
+  // build() 的递归第二层未覆盖（若误写成只取一层子节点，原测仍绿）。
+  it("tree 模式 → depth-2 递归建树（root.children[0].children[0]=标的C）", () => {
+    render(<GraphView data={mockData} layout="tree" />);
+    const option = echartsMocks.setOption.mock.calls[0][0];
+    const root = option.series[0].data[0];
+    // n1→n2→n3：递归两层子节点（visited 防环 + adjacency 递归）
+    expect(root.children[0].name).toBe("标的B");
+    expect(root.children[0].children[0].name).toBe("标的C");
+  });
+
   it("节点点击 → 触发 onNodeClick 回调（含完整 GraphNode）", () => {
     const onNodeClick = vi.fn();
     render(<GraphView data={mockData} onNodeClick={onNodeClick} />);
