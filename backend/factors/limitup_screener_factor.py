@@ -79,6 +79,17 @@ class LimitupScreenerFactor:
                 )
             )
 
+        # 阈值常量 + 五维口径（延迟导入避免循环依赖；limitup_screener 依赖链较重）
+        from limitup_screener.models import GENE_HIGH_THRESHOLD, GENE_QUALIFY_THRESHOLD
+
+        conditions = [
+            "基因得分=次日溢价率25%+红盘率25%+封板率25%+炸板后溢价15%+涨停频次10%",
+            f"合格阈值≥{GENE_QUALIFY_THRESHOLD}",
+            f"高基因≥{GENE_HIGH_THRESHOLD}",
+            "战法匹配（8大战法自动匹配）",
+            "仓位建议",
+        ]
+
         # 单层包装（旧因子无漏斗分层）
         layer = FunnelLayer(
             layer_id="LS",
@@ -88,6 +99,7 @@ class LimitupScreenerFactor:
             output_count=len(candidates),
             filtered_out=[],
             output_codes=[c.code for c in candidates],
+            conditions=conditions,
         )
 
         config_out: dict[str, Any] = {
@@ -95,9 +107,19 @@ class LimitupScreenerFactor:
             "sentiment_phase": report.sentiment_phase,
         }
         if not candidates:
-            config_out["data_status"] = "ok" if report.candidates or report.strong_candidates else "未取得"
-            if config_out["data_status"] == "未取得":
-                config_out["reason"] = "limitup_screener 无候选（预计算可能未执行）"
+            # S028 R1：三态区分——warnings(异常/超时) / filtered_out(有数据 0 合格) / 全空(无涨停)
+            # scanned = filtered_out + candidates + strong_candidates == gene_scores 总数
+            if report.warnings:
+                config_out["data_status"] = "未取得"
+                config_out["reason"] = "涨停基因选股数据未取得（预计算可能未执行或超时）"
+            elif report.filtered_out:
+                scanned = len(report.filtered_out) + len(report.candidates) + len(report.strong_candidates)
+                config_out["data_status"] = "无合格标的"
+                config_out["reason"] = f"今日扫描 {scanned} 只涨停股，均未达合格阈值 {GENE_QUALIFY_THRESHOLD} 分"
+                config_out["scanned_count"] = scanned
+            else:
+                config_out["data_status"] = "未取得"
+                config_out["reason"] = "今日无涨停股数据"
 
         return FactorResult(
             factor_id=FACTOR_ID,

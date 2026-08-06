@@ -1,6 +1,8 @@
 """
 LimitUp screener router.
 """
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Any, Dict

@@ -135,6 +135,8 @@ export default function PreMarketBriefing() {
 /** 单因子分区：折叠区 + 候选列表（可点击进详情）。 */
 function FactorSection({ factor, onPick }: { factor: FactorResult; onPick: (code: string) => void }) {
   const missing = factor.data_status === "未取得";
+  const noQualified = factor.data_status === "无合格标的";
+  const conditions = factor.layers[0]?.conditions ?? [];
   return (
     <GlassCard className="p-4">
       <div className="flex items-center justify-between">
@@ -146,6 +148,18 @@ function FactorSection({ factor, onPick }: { factor: FactorResult; onPick: (code
         <span className="text-xs text-muted-foreground">{factor.data_date}</span>
       </div>
 
+      {/* 筛选条件：让用户看清系统在干什么（S028 R4） */}
+      {conditions.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-xs text-muted-foreground">筛选条件</div>
+          <div className="flex flex-wrap gap-1">
+            {conditions.map((c, i) => (
+              <span key={i} className="rounded bg-muted/40 px-2 py-0.5 text-xs">{c}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 数据未取得如实显示原因 */}
       {missing && (
         <p className="mt-2 text-sm text-warning">
@@ -153,8 +167,15 @@ function FactorSection({ factor, onPick }: { factor: FactorResult; onPick: (code
         </p>
       )}
 
+      {/* 无合格标的：扫描了但 0 达标，如实展示扫描摘要（非告警色，S028 R1/R4） */}
+      {noQualified && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          {String(factor.config?.reason ?? "无合格标的")}
+        </p>
+      )}
+
       {/* 候选列表 */}
-      {!missing && factor.candidates.length > 0 && (
+      {!missing && !noQualified && factor.candidates.length > 0 && (
         <div className="mt-3 space-y-1">
           {factor.candidates.slice(0, 20).map((c) => (
             <button
@@ -173,7 +194,7 @@ function FactorSection({ factor, onPick }: { factor: FactorResult; onPick: (code
       )}
 
       {/* 命中规则示例 */}
-      {!missing && factor.candidates.length > 0 && factor.candidates[0]?.hit_rules?.length > 0 && (
+      {!missing && !noQualified && factor.candidates.length > 0 && factor.candidates[0]?.hit_rules?.length > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">
           示例规则：{factor.candidates[0].hit_rules.join("，")}
         </p>

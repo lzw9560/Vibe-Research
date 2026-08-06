@@ -66,8 +66,30 @@ def _filter_r2(
     return kept, filtered
 
 
+def _resolve_name(
+    code: str,
+    genes: dict[str, dict],
+    activity: dict[str, dict],
+    auction: dict[str, dict],
+    catalyst: dict[str, dict],
+) -> str:
+    """按 genes→activity→auction→catalyst 顺序解析股票名，均缺则回退 code。
+
+    R3 层 auction/catalyst 常不带头名（仅竞价/催化数据的票才有），
+    需回退到 R1/R2 已采集的 genes/activity，避免 name 退化成 code（S028 R3）。
+    """
+    return (
+        genes.get(code, {}).get("name")
+        or activity.get(code, {}).get("name")
+        or auction.get(code, {}).get("name")
+        or catalyst.get(code, {}).get("name")
+        or code
+    )
+
+
 def _filter_r3(
-    codes: list[str], auction: dict[str, dict], catalyst: dict[str, dict]
+    codes: list[str], auction: dict[str, dict], catalyst: dict[str, dict],
+    genes: dict[str, dict], activity: dict[str, dict],
 ) -> tuple[list[str], list[FilterRecord]]:
     """R3 定稿：保留有竞价异动或公告催化的标的。"""
     kept: list[str] = []
@@ -79,7 +101,7 @@ def _filter_r3(
         if has_auction or has_catalyst:
             kept.append(c)
         else:
-            name = (auction.get(c, {}).get("name") or c)
+            name = _resolve_name(c, genes, activity, auction, catalyst)
             filtered.append(FilterRecord(code=c, name=name, reason="无竞价异动/公告催化"))
     return kept, filtered
 
@@ -152,13 +174,13 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
         auction, catalyst = {}, {}
         r3_data_status = "未取得"
         r3_data_reason = f"R3 定稿采集失败: {exc}"
-    r3_kept, r3_filtered = _filter_r3(r2_kept, auction, catalyst)
+    r3_kept, r3_filtered = _filter_r3(r2_kept, auction, catalyst, genes, activity)
     r3 = FunnelLayer(
         layer_id="R3", name="定稿", as_of=as_of,
         input_count=len(r2_kept), output_count=len(r3_kept),
         filtered_out=r3_filtered, output_codes=r3_kept,
         conditions=["集合竞价异动 OR 公告催化 OR 板块联动", *base_conditions],
-        passed=[{"code": c, "name": (auction.get(c, {}).get("name") or catalyst.get(c, {}).get("name") or c)} for c in r3_kept],
+        passed=[{"code": c, "name": _resolve_name(c, genes, activity, auction, catalyst)} for c in r3_kept],
         data_status=r3_data_status, data_reason=r3_data_reason,
     )
     layers.append(r3)
