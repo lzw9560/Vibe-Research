@@ -80,5 +80,5 @@ function FunnelLayerRow({ layer, date, onPick }: { layer: FunnelLayer; date?: st
     </>
   ) : null;
 
-  return <FunnelLayerCard layer={display} variant="neutral" onPick={onPick} footer={footer} />;
+  return <FunnelLayerCard layer={display} variant="neutral" onPick={onPick} footer={footer} date={date} />;
 }

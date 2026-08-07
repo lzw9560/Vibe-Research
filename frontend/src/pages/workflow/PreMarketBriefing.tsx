@@ -153,9 +153,9 @@ export default function PreMarketBriefing() {
         <p className="mt-4 text-xs text-muted-foreground/50">更新于 {formatRelativeTime(briefing.as_of)}</p>
       )}
 
-      {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关 */}
+      {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关（S033：传 date 供状态卡/徽标） */}
       <Sheet open={!!drawerCode} onClose={() => setDrawerCode(null)}>
-        {drawerCode && <CandidateDetailPanel code={drawerCode} />}
+        {drawerCode && <CandidateDetailPanel code={drawerCode} date={briefing.data_date} />}
       </Sheet>
     </WorkflowStage>
   );
@@ -226,11 +226,11 @@ function FactorSection({ factor, onPick }: { factor: FactorResult; onPick: (code
               return (
                 <div key={l.layer_id}>
                   <StrategyFilter strategies={strategies} selected={selected} onChange={setSelected} className="mb-2" />
-                  <FunnelLayerCard layer={l2Display} variant="info" onPick={onPick} />
+                  <FunnelLayerCard layer={l2Display} variant="info" onPick={onPick} date={factor.data_date} />
                 </div>
               );
             }
-            return <FunnelLayerCard key={l.layer_id} layer={l} variant="info" onPick={onPick} />;
+            return <FunnelLayerCard key={l.layer_id} layer={l} variant="info" onPick={onPick} date={factor.data_date} />;
           })}
         </div>
       ) : (

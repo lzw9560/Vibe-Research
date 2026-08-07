@@ -1,10 +1,13 @@
-import { type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { FunnelLayer } from "@/lib/candidates";
+import { useWorkflowStates } from "@/lib/query";
+import { STATUS_COLORS } from "@/components/workflow/statusMeta";
 
 // S031 R16/R17：漏斗层公共卡片——conditions + passed + filtered_out + 输入→输出计数。
 // 候选池页（FunnelLayers，neutral）与盘前简报因子层（FactorSection，info）共用。
 // 候选池的 rerun/downstream 经 footer 槽注入；因子层不用 footer。
+// S033 T7/T12：passed 行带 workflow_state 状态色块、filtered_out 行带红淡徽标。
 interface Props {
   layer: FunnelLayer;
   onPick?: (code: string) => void;
@@ -12,11 +15,20 @@ interface Props {
   variant?: "info" | "neutral";
   /** 底部操作槽（候选池 rerun/downstream 注入） */
   footer?: ReactNode;
+  /** 交易日：传了则叠加 workflow_state 状态徽标（S033） */
+  date?: string;
   className?: string;
 }
 
-export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, className }: Props) {
+export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, date, className }: Props) {
   const missing = layer.data_status === "未取得";
+  // S033 决策 ⑥：一次取全日状态再前端 Map filter（React hooks 不得在 map callback 调）。
+  // date 缺省（如单测/无日期上下文）时 enabled=false，不发请求。
+  const { data: stateList } = useWorkflowStates(date ?? undefined, { enabled: !!date });
+  const stateMap = useMemo(
+    () => new Map((stateList?.states ?? []).map((s) => [s.code, s.status])),
+    [stateList],
+  );
   return (
     <div className={cn("rounded-lg border border-border/40 bg-card/30 p-3", className)}>
       <div className="flex items-center justify-between">
@@ -59,8 +71,17 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, cl
                 key={c.code}
                 type="button"
                 onClick={() => onPick?.(c.code)}
-                className="flex w-full justify-between rounded px-2 py-1 text-left text-sm hover:bg-muted/50"
+                className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-muted/50"
               >
+                {date && (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "h-2 w-2 shrink-0 rounded-full",
+                      STATUS_COLORS[stateMap.get(c.code) ?? ""] ?? "bg-gray-200",
+                    )}
+                  />
+                )}
                 <span>
                   {c.name} <span className="text-xs text-muted-foreground">{c.code}</span>
                 </span>
@@ -77,9 +98,13 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, cl
         <div className="mt-2 grid gap-1 text-xs">
           <div className="text-muted-foreground">被过滤（{layer.filtered_out.length}）：</div>
           {layer.filtered_out.slice(0, 10).map((f) => (
-            <div key={f.code} className="flex justify-between">
-              <span>{f.name ? `${f.name} ${f.code}` : f.code}</span>
-              <span className="text-muted-foreground">{f.reason}</span>
+            <div key={f.code} className="flex items-center gap-2">
+              {/* S033 T12/R8：filtered 红淡徽标（与 workflow_state 的 filtered 一致） */}
+              <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-red-300" />
+              <span className="flex flex-1 justify-between">
+                <span>{f.name ? `${f.name} ${f.code}` : f.code}</span>
+                <span className="text-muted-foreground">{f.reason}</span>
+              </span>
             </div>
           ))}
         </div>

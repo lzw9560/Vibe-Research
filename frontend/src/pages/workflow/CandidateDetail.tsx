@@ -1,13 +1,15 @@
-// 候选标的诊断卡（S023 E4 + S031 R18 抽屉复用）：
-// - CandidateDetailPanel({code})：纯展示，调 candidatesApi.diagnosis(code)，内 Skeleton/错误态。
+// 候选标的诊断卡（S023 E4 + S031 R18 抽屉复用 + S033 R6 工作流状态卡）：
+// - CandidateDetailPanel({code, date})：纯展示，调 candidatesApi.diagnosis(code)，内 Skeleton/错误态；
+//   底部嵌 WorkflowStateCard（date 缺省时后端按最近交易日）。
 // - CandidateDetail（路由页）：thin 包装——useParams 取 code + 返回按钮 + Panel。
-// 合规：仅客观数据 + 命中规则，不输出方向结论词。
+// 合规：仅客观数据 + 命中规则 + 客观状态记录，不输出方向结论词。
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { candidatesApi, type DiagnosisCard, type IndicatorSet } from "@/lib/candidates";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { WorkflowStateCard } from "@/components/workflow/WorkflowStateCard";
 
 export default function CandidateDetail() {
   const { code = "" } = useParams<{ code: string }>();
@@ -25,8 +27,9 @@ export default function CandidateDetail() {
   );
 }
 
-/** S031 R18：候选诊断卡纯展示组件——路由页与 Sheet 抽屉共用。 */
-export function CandidateDetailPanel({ code }: { code: string }) {
+/** S031 R18：候选诊断卡纯展示组件——路由页与 Sheet 抽屉共用。
+ * S033：date 由抽屉传 briefing.data_date；路由页不传（状态卡内用 state.trade_date 回填）。 */
+export function CandidateDetailPanel({ code, date }: { code: string; date?: string }) {
   const [card, setCard] = useState<DiagnosisCard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +118,9 @@ export function CandidateDetailPanel({ code }: { code: string }) {
           </ul>
         </GlassCard>
       )}
+
+      {/* S033 R6：工作流状态卡——当前态徽标 + 流转历史 + 流转按钮 */}
+      <WorkflowStateCard code={code} date={date} />
     </div>
   );
 }
