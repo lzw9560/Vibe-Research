@@ -10,7 +10,6 @@
 """
 
 import asyncio
-import time
 
 import pytest
 
@@ -224,7 +223,7 @@ class TestDedup:
 # _loop 生产路径生命周期（硬阻回归：asyncio.run 每 tick 关循环取消 spawn 任务）
 class TestLoopLifecycle:
     def test_loop_completes_fire_and_forget_task(self, isolated_market_db, monkeypatch):
-        """生产路径：_loop 长生命周期循环内，_tick spawn 的任务能跑完并落一条终态 run。"""
+        """生产路径：主循环 ticker 内，_tick spawn 的任务能跑完并落一条终态 run（S032 R6）。"""
         import scheduled_tasks as st
         monkeypatch.setattr(st, "_TICK_INTERVAL", 0.05)   # 缩短心跳
         executor = st.TaskExecutor()
@@ -236,29 +235,32 @@ class TestLoopLifecycle:
             # 轮询等放行：期间任务保持 running，验证后续 tick 被 R4 去重跳过
             while not release["go"]:
                 await asyncio.sleep(0.01)
-            # 结束心跳：_running 置 False 后 ticker 不再执行 _tick，杜绝放行后重放
-            sched.stop()
+            # 结束心跳：_running 置 False + cancel ticker，杜绝放行后重放
+            await sched.stop()
             return {"ok": True}
 
         executor._executors["test_ok"] = ok
         sched = st.CronScheduler(executor=executor)
         task = st._manager.create_task(_make_task("test_ok", cron_expr="* * * * *"))
 
-        sched.start()                      # 真实 daemon 线程跑 _loop → _ticker
-        try:
-            # 跨线程轮询等 handler 真正执行（asyncio.Event 跨线程唤醒受 loop poll 限制，轮询更稳）
-            deadline = time.time() + 5.0
-            while time.time() < deadline and calls["n"] == 0:
-                time.sleep(0.05)
+        async def scenario():
+            await sched.start()  # 主循环 ticker（S032 R6，无线程）
+            loop = asyncio.get_running_loop()
+            # 等 handler 真正执行
+            deadline = loop.time() + 5.0
+            while loop.time() < deadline and calls["n"] == 0:
+                await asyncio.sleep(0.02)
             assert calls["n"] == 1, "任务应被心跳触发执行一次"
             # 再等几个心跳窗口，验证任务执行期间不被重复触发（R4 去重）
-            time.sleep(0.2)
+            await asyncio.sleep(0.2)
             assert calls["n"] == 1, "任务执行期间不应被重复触发"
-        finally:
-            release["go"] = True          # 放行 handler → execute_async 收尾 update_run
-            sched.stop()                  # 兜底停止（幂等）
-            if sched._thread is not None:
-                sched._thread.join(timeout=2.0)   # 等线程退出（避免跨测试泄漏线程）
+            release["go"] = True  # 放行 handler → execute_async 收尾 update_run
+            # 等 fire-and-forget 任务跑完（生产 stop 不等待，测试需终态 run）
+            deadline = loop.time() + 5.0
+            while loop.time() < deadline and sched._spawned:
+                await asyncio.sleep(0.02)
+
+        _run(scenario())
 
         assert calls["n"] == 1, "任务应恰好执行一次"
         runs = st._manager.list_runs(task.id)
@@ -269,16 +271,20 @@ class TestLoopLifecycle:
         assert refreshed.last_run_status == "success"
 
     def test_start_rebuilds_running_ids_from_db(self, isolated_market_db):
-        """重启恢复：DB 已有 running 行 → start() 后 _running_task_ids 含该任务 id。"""
+        """重启恢复：DB 已有 running 行 → await start() 后 _running_task_ids 含该任务 id。"""
         import scheduled_tasks as st
         task = st._manager.create_task(_make_task())
         st._manager.add_run(st.TaskRun(task_id=task.id, status="running"))
         sched = st.CronScheduler()
-        sched.start()
-        try:
-            assert task.id in sched._running_task_ids, "启动时应从 DB 重建 running 集合"
-        finally:
-            sched.stop()
+
+        async def scenario():
+            await sched.start()
+            try:
+                assert task.id in sched._running_task_ids, "启动时应从 DB 重建 running 集合"
+            finally:
+                await sched.stop()
+
+        _run(scenario())
 
     def test_tick_within_loop_not_cancelled(self, isolated_market_db, monkeypatch):
         """直接在长生命周期 loop 里跑 _tick，spawn 的任务不被取消。"""

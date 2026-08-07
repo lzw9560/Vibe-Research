@@ -679,6 +679,9 @@ class CronScheduler:
         self._task: Optional[asyncio.Task] = None
         # R4：正在执行的任务 id 集合，用于 _tick 去重（fire-and-forget）
         self._running_task_ids: set = set()
+        # S032 R6：已 spawn 的 _run_task 集合（done 即弃）——生产 stop 不等待，
+        # 测试可据此等 fire-and-forget 任务落终态 run。
+        self._spawned: set = set()
 
     async def start(self) -> None:
         """在当前（FastAPI 主）事件循环启动 ticker task。
@@ -733,7 +736,9 @@ class CronScheduler:
             if self._should_run(task, now) and task.id not in self._running_task_ids:
                 logger.info("[scheduler] 触发任务: %s (%s)", task.name, task.id)
                 self._running_task_ids.add(task.id)
-                asyncio.create_task(self._run_task(task))
+                spawned = asyncio.create_task(self._run_task(task))
+                self._spawned.add(spawned)
+                spawned.add_done_callback(self._spawned.discard)
 
     async def _run_task(self, task: ScheduledTask) -> TaskRun:
         """执行单个任务（fire-and-forget），完成后清理去重标志。"""
