@@ -79,9 +79,21 @@ def _ensure_tables() -> None:
         """)
         # WAL 模式（DB 级持久）：读不阻塞写
         conn.execute("PRAGMA journal_mode=WAL")
+        _ensure_columns(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    """S033 R1：幂等扩列 entry_price/exit_price/strategy（holding/settled 结算输入，为 S034 铺路）。
+
+    PRAGMA table_info 检查列已存在则跳过；旧数据三新列为 NULL 不影响查询。
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_state)").fetchall()}
+    for col, typ in (("entry_price", "REAL"), ("exit_price", "REAL"), ("strategy", "TEXT")):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE workflow_state ADD COLUMN {col} {typ}")
 
 
 def _now_iso() -> str:
@@ -133,6 +145,10 @@ def _row_to_state(row: sqlite3.Row) -> Dict[str, Any]:
         "reason": row["reason"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        # S033 R1：扩列字段（旧行可能为 NULL；row 无列时兜底 None）
+        "entry_price": row["entry_price"] if "entry_price" in row.keys() else None,
+        "exit_price": row["exit_price"] if "exit_price" in row.keys() else None,
+        "strategy": row["strategy"] if "strategy" in row.keys() else None,
     }
 
 
@@ -254,11 +270,19 @@ def allowed_targets(code: str, trade_date: str) -> List[str]:
 
 
 def transition(
-    code: str, trade_date: str, target: str, reason: str = ""
+    code: str,
+    trade_date: str,
+    target: str,
+    reason: str = "",
+    entry_price: Optional[float] = None,
+    exit_price: Optional[float] = None,
+    strategy: Optional[str] = None,
 ) -> tuple[bool, str]:
     """手动流转：读当前态 → 状态机规则校验 → UPDATE + history。
 
     规则单一事实源：复用 WorkflowStateMachine.transition（_ALLOWED_TRANSITIONS）。
+    S033 R2：entry_price/exit_price/strategy 为用户自填操作记录（holding 买入价/
+    settled 卖出价/战法），COALESCE 语义——传 None 不覆盖已有值。
     返回 (ok, detail)：非法/未知/无记录时 ok=False，detail 说明当前态与允许目标。
     """
     try:
@@ -284,8 +308,19 @@ def transition(
     conn = _get_connection()
     try:
         conn.execute(
-            "UPDATE workflow_state SET status = ?, reason = ?, updated_at = ? WHERE code = ? AND trade_date = ?",
-            (target_status.value, reason, now, code, trade_date),
+            """
+            UPDATE workflow_state
+            SET status = ?, reason = ?, updated_at = ?,
+                entry_price = COALESCE(?, entry_price),
+                exit_price = COALESCE(?, exit_price),
+                strategy = COALESCE(?, strategy)
+            WHERE code = ? AND trade_date = ?
+            """,
+            (
+                target_status.value, reason, now,
+                entry_price, exit_price, strategy,
+                code, trade_date,
+            ),
         )
         conn.execute(
             """
@@ -298,6 +333,15 @@ def transition(
     finally:
         conn.close()
     return True, "ok"
+
+
+def get_state_with_targets(code: str, trade_date: str) -> Optional[Dict[str, Any]]:
+    """S033 R3：单股状态 + 当前态允许的目标态（无记录返 None）。"""
+    state = get_state(code, trade_date)
+    if state is None:
+        return None
+    machine = WorkflowStateMachine(WorkflowStatus(state["status"]))
+    return {**state, "allowed_targets": [s.value for s in machine.allowed_targets()]}
 
 
 # 模块导入即建表（平行 scheduled_tasks 的 _manager 模式；WAL 为 DB 级持久）

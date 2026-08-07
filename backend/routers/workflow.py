@@ -373,11 +373,18 @@ async def get_adjustments() -> Dict[str, Any]:
 
 
 class _TransitionRequest(BaseModel):
-    """手动流转请求：code+date 定位状态行，target 为目标态。"""
+    """手动流转请求：code+date 定位状态行，target 为目标态。
+
+    S033 R2：entry_price/exit_price/strategy 为用户自填操作记录
+    （holding 买入价 / settled 卖出价 / 战法），可选填，None 不覆盖已有值。
+    """
     code: str
     date: str
     target: str
     reason: str = ""
+    entry_price: Optional[float] = None
+    exit_price: Optional[float] = None
+    strategy: Optional[str] = None
 
 
 @router.get("/api/workflow/state")
@@ -406,7 +413,10 @@ async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
     if not code.isdigit() or len(code) != 6:
         raise HTTPException(400, "code 必须是 6 位数字")
     try:
-        ok, detail = _wf_state_repo.transition(code, req.date, req.target, req.reason)
+        ok, detail = _wf_state_repo.transition(
+            code, req.date, req.target, req.reason,
+            entry_price=req.entry_price, exit_price=req.exit_price, strategy=req.strategy,
+        )
     except Exception as e:
         raise HTTPException(500, f"工作流状态流转失败：{e}") from e
     if not ok:
@@ -418,6 +428,22 @@ async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
         })
     state = _wf_state_repo.get_state(code, req.date)
     return {"data": state}
+
+
+@router.get("/api/workflow/state/{code}")
+async def get_single_workflow_state(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
+    """S033 R3：单股工作流状态 + 当前态允许的目标态（无记录 404）。
+
+    路由顺序注意：本端点须先于 /state/{code}/history 注册（FastAPI 按注册序匹配）。
+    """
+    try:
+        d = date or last_trading_date_str()
+        result = _wf_state_repo.get_state_with_targets(code, d)
+    except Exception as e:
+        raise HTTPException(500, f"获取单股工作流状态失败：{e}") from e
+    if result is None:
+        raise HTTPException(404, f"该日无此股的工作流状态记录: code={code} date={d}")
+    return {"data": result}
 
 
 @router.get("/api/workflow/state/{code}/history")
