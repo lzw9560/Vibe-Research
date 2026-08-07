@@ -34,6 +34,11 @@ backend/vibe_research.db
 # opencode 本地配置（含本地模型 apiKey）——不入 git，参考 opencode.example.json
 opencode.json
 opencode.local.json
+.opencode/opencode.db
+glm-model-catalog.json
+
+# agent 工作层（issue 工单 / 会话指令草稿，见 AGENTS.md「Issue tracker」）——本地协作产物，不入 git
+.scratch/
 
 # ── 依赖 / 构建产物 ───────────────────────────────────────────────
 **/.venv/
