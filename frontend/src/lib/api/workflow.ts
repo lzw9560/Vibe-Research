@@ -1,6 +1,9 @@
 // S013 T6: 打板工作流 5 helpers（从 api.ts 915-944 拆出），失败返 null 不抛。
 import { get, request } from "./client";
-import type { WorkflowStatus, PreMarketBriefing, PreMarketRefreshResponse, IntradayData, BombAlertItem, PostMarketReport } from "./types";
+import type {
+  WorkflowStatus, PreMarketBriefing, PreMarketRefreshResponse, IntradayData, BombAlertItem, PostMarketReport,
+  WorkflowState, WorkflowStateList, TransitionRequest, WorkflowStateHistoryItem,
+} from "./types";
 
 // Workflow status — 失败返 null（不抛），故包 try/catch（S013 T2：原裸 fetch 改走 get，
 // 顺带修 auth 部署下不发 Bearer；手动 data?.data 解包由 get 的 payload?.data ?? payload 覆盖）。
@@ -39,5 +42,42 @@ export async function getBombAlerts(): Promise<BombAlertItem[] | null> {
 export async function getPostMarketReview(date?: string): Promise<PostMarketReport | null> {
   try {
     return await get<PostMarketReport>(date ? `/workflow/post-market?date=${date}` : "/workflow/post-market");
+  } catch { return null; }
+}
+
+// ============ S033：工作流状态机（七态落库 + 手动流转） ============
+// 后端返 {data: ...}，get/request 自动解包 .data；失败返 null 不抛（本文件既有约定）。
+
+/** GET /api/workflow/state?date= → 全日状态列表 + 按态计数。 */
+export async function getWorkflowStates(date?: string): Promise<WorkflowStateList | null> {
+  try {
+    const path = date ? `/workflow/state?date=${date}` : "/workflow/state";
+    return await get<WorkflowStateList>(path);
+  } catch { return null; }
+}
+
+/** GET /api/workflow/state/{code}?date= → 单股状态 + allowed_targets（无记录后端返 404 → 此处 null）。 */
+export async function getWorkflowState(code: string, date?: string): Promise<WorkflowState | null> {
+  try {
+    const path = date ? `/workflow/state/${code}?date=${date}` : `/workflow/state/${code}`;
+    return await get<WorkflowState>(path);
+  } catch { return null; }
+}
+
+/** POST /api/workflow/state/transition → 流转后返回新状态行（含价格/战法）。 */
+export async function transitionWorkflowState(req: TransitionRequest): Promise<WorkflowState | null> {
+  try {
+    return await request<WorkflowState>("/workflow/state/transition", "POST", req);
+  } catch { return null; }
+}
+
+/** GET /api/workflow/state/{code}/history?date= → 流转历史数组（升序）。 */
+export async function getWorkflowStateHistory(code: string, date?: string): Promise<WorkflowStateHistoryItem[] | null> {
+  try {
+    const path = date
+      ? `/workflow/state/${code}/history?date=${date}`
+      : `/workflow/state/${code}/history`;
+    const data = await get<{ code: string; date: string | null; history: WorkflowStateHistoryItem[] }>(path);
+    return data?.history ?? null;
   } catch { return null; }
 }

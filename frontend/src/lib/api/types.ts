@@ -1042,3 +1042,48 @@ export interface TaskRun {
   result: Record<string, any>;
   error: string | null;
 }
+
+// ============ S033：工作流状态机（七态落库 + 手动流转） ============
+
+/** 单股工作流状态行（workflow_state 表）。entry_price/exit_price/strategy 为
+ * 用户自填操作记录（holding 买入价 / settled 卖出价 / 战法），非系统推荐。 */
+export interface WorkflowState {
+  code: string;
+  name: string;
+  trade_date: string;
+  status: string;
+  reason: string;
+  created_at: string;
+  updated_at: string;
+  entry_price?: number | null;
+  exit_price?: number | null;
+  strategy?: string | null;
+  /** 单股端点附带的当前态允许目标（全日列表端点不返） */
+  allowed_targets?: string[];
+}
+
+export interface WorkflowStateList {
+  date: string;
+  states: WorkflowState[];
+  counts: Record<string, number>;
+}
+
+/** POST /api/workflow/state/transition 请求体（价格/战法可选填）。 */
+export interface TransitionRequest {
+  code: string;
+  date: string;
+  target: string;
+  reason?: string;
+  entry_price?: number;
+  exit_price?: number;
+  strategy?: string;
+}
+
+export interface WorkflowStateHistoryItem {
+  code: string;
+  trade_date: string;
+  from_status: string;
+  to_status: string;
+  reason: string;
+  created_at: string;
+}

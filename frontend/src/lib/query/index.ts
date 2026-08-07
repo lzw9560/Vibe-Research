@@ -5,4 +5,5 @@ export * from "./market";
 export * from "./stock";
 export * from "./limitup";
 export * from "./topology";
+export * from "./workflow";
 export type { Opts } from "./types";
