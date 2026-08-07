@@ -91,7 +91,12 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
     PRAGMA table_info 检查列已存在则跳过；旧数据三新列为 NULL 不影响查询。
     """
     cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_state)").fetchall()}
-    for col, typ in (("entry_price", "REAL"), ("exit_price", "REAL"), ("strategy", "TEXT")):
+    for col, typ in (
+        ("entry_price", "REAL"),
+        ("exit_price", "REAL"),
+        ("strategy", "TEXT"),
+        ("settled_at", "TEXT"),  # S034：结算幂等锚点（结算写 winrate 后落戳）
+    ):
         if col not in cols:
             conn.execute(f"ALTER TABLE workflow_state ADD COLUMN {col} {typ}")
 
@@ -149,6 +154,7 @@ def _row_to_state(row: sqlite3.Row) -> Dict[str, Any]:
         "entry_price": row["entry_price"] if "entry_price" in row.keys() else None,
         "exit_price": row["exit_price"] if "exit_price" in row.keys() else None,
         "strategy": row["strategy"] if "strategy" in row.keys() else None,
+        "settled_at": row["settled_at"] if "settled_at" in row.keys() else None,
     }
 
 
@@ -329,10 +335,29 @@ def transition(
             """,
             (code, trade_date, current["status"], target_status.value, reason, now),
         )
+        # S034 R4：流转到 candidate = 新一轮（settled/filtered 重入）——清结算锚点，新轮可再结算
+        if target_status == WorkflowStatus.CANDIDATE:
+            conn.execute(
+                "UPDATE workflow_state SET settled_at = NULL WHERE code = ? AND trade_date = ?",
+                (code, trade_date),
+            )
         conn.commit()
     finally:
         conn.close()
     return True, "ok"
+
+
+def mark_settled(code: str, trade_date: str, settled_at: str) -> None:
+    """S034：结算成功落幂等锚点（winrate 记录写入后调用）。"""
+    conn = _get_connection()
+    try:
+        conn.execute(
+            "UPDATE workflow_state SET settled_at = ?, updated_at = ? WHERE code = ? AND trade_date = ?",
+            (settled_at, _now_iso(), code, trade_date),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def get_state_with_targets(code: str, trade_date: str) -> Optional[Dict[str, Any]]:

@@ -23,6 +23,7 @@ from risk.position_manager import PositionManager, PositionLimit
 from settlement.settlement_engine import SettlementEngine
 from win_rate_tracker import WinRateTracker, generate_strategy_adjustments
 import workflow_state_repo as _wf_state_repo  # S032 R10：七态状态落库
+import settlement_recorder as _settlement_recorder  # S034：settled 流转即结算
 
 router = APIRouter(tags=["workflow"])
 
@@ -427,7 +428,26 @@ async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
             "allowed_targets": _wf_state_repo.allowed_targets(code, req.date),
         })
     state = _wf_state_repo.get_state(code, req.date)
+    # S034 R3：settled 流转即结算（价齐 + settled_at 幂等锚点）
+    if req.target == "settled" and state is not None:
+        state["settlement"] = _settle_on_transition(code, req.date, state)
     return {"data": state}
+
+
+def _settle_on_transition(code: str, date: str, state: Dict[str, Any]) -> Dict[str, Any]:
+    """S034：settled 流转触发结算——写 winrate.db + 落 settled_at 锚点。
+
+    价缺 → 不结算（可经 settled→candidate 重入补全流程）；已结算 → 不重复记账。
+    """
+    if state.get("entry_price") is None or state.get("exit_price") is None:
+        return {"recorded": False, "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程"}
+    if state.get("settled_at"):
+        return {"recorded": False, "reason": "已结算（不重复记账）"}
+    summary = _settlement_recorder.record_settlement(state)
+    if summary is None:
+        return {"recorded": False, "reason": "结算失败（价格缺失）"}
+    _wf_state_repo.mark_settled(code, date, datetime.now().isoformat())
+    return {"recorded": True, **summary}
 
 
 @router.get("/api/workflow/state/{code}")
@@ -443,6 +463,15 @@ async def get_single_workflow_state(code: str, date: Optional[str] = Query(None,
         raise HTTPException(500, f"获取单股工作流状态失败：{e}") from e
     if result is None:
         raise HTTPException(404, f"该日无此股的工作流状态记录: code={code} date={d}")
+    # S034 R5：已结算行附结算摘要（entry/exit/trade_date/settled_at 确定性重算，同 recorder 公式）
+    if (
+        result.get("settled_at")
+        and result.get("entry_price") is not None
+        and result.get("exit_price") is not None
+    ):
+        result["settlement"] = _settlement_recorder.settlement_summary(
+            result["entry_price"], result["exit_price"], result["trade_date"], result["settled_at"],
+        )
     return {"data": result}
 
 
