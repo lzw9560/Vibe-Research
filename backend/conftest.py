@@ -19,13 +19,17 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 @pytest.fixture
 def isolated_market_db(tmp_path, monkeypatch):
-    """把 scheduled_tasks._DB_PATH 重定向到 pytest 临时目录，隔离真实 backend/data/market_data.db。"""
+    """把 market_data.db 消费方（scheduled_tasks + workflow_state_repo）的 _DB_PATH
+    重定向到 pytest 临时目录，隔离真实 backend/data/market_data.db。"""
     import scheduled_tasks as st
+    import workflow_state_repo as wsr
 
     db_path = tmp_path / "market_data.db"
     monkeypatch.setattr(st, "_DB_PATH", str(db_path))
+    monkeypatch.setattr(wsr, "_DB_PATH", str(db_path))
     # 新库需先建表（模块 import 时的 _ensure_tables 只针对真实路径）
     st._ensure_tables()
+    wsr._ensure_tables()
     yield str(db_path)
 
 

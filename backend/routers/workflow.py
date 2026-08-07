@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from dataclasses import asdict
+from pydantic import BaseModel
 
 from trading_workflow import TradingWorkflow
 from factors import registry as factor_registry
@@ -21,6 +22,7 @@ from risk.bomb_alert_system import BombAlertSystem
 from risk.position_manager import PositionManager, PositionLimit
 from settlement.settlement_engine import SettlementEngine
 from win_rate_tracker import WinRateTracker, generate_strategy_adjustments
+import workflow_state_repo as _wf_state_repo  # S032 R10：七态状态落库
 
 router = APIRouter(tags=["workflow"])
 
@@ -365,6 +367,67 @@ async def get_adjustments() -> Dict[str, Any]:
         return {"data": {"adjustments": adjustments}}
     except Exception as e:
         raise HTTPException(500, f"获取调整建议失败：{e}") from e
+
+
+# ============ S032 R10：工作流状态（七态状态机落库） ============
+
+
+class _TransitionRequest(BaseModel):
+    """手动流转请求：code+date 定位状态行，target 为目标态。"""
+    code: str
+    date: str
+    target: str
+    reason: str = ""
+
+
+@router.get("/api/workflow/state")
+async def get_workflow_states(date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
+    """S032 R10：查询某日全部 (code) 的工作流状态 + 按态计数。"""
+    try:
+        d = date or last_trading_date_str()
+        states = _wf_state_repo.list_states(d)
+        counts: Dict[str, int] = {}
+        for s in states:
+            counts[s["status"]] = counts.get(s["status"], 0) + 1
+        return {"data": {"date": d, "states": states, "counts": counts}}
+    except Exception as e:
+        raise HTTPException(500, f"获取工作流状态失败：{e}") from e
+
+
+@router.post("/api/workflow/state/transition")
+async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
+    """S032 R10：手动流转（candidate→watching→monitoring→holding→settled）。
+
+    盘中自动推进/盘后自动结算未实现（S012 桩范围），故除盘前自动落
+    candidate/filtered 外，其余流转由用户按自己操作经本端点推进。
+    非法流转 400，detail 带当前态与允许目标。
+    """
+    code = (req.code or "").strip()
+    if not code.isdigit() or len(code) != 6:
+        raise HTTPException(400, "code 必须是 6 位数字")
+    try:
+        ok, detail = _wf_state_repo.transition(code, req.date, req.target, req.reason)
+    except Exception as e:
+        raise HTTPException(500, f"工作流状态流转失败：{e}") from e
+    if not ok:
+        current = _wf_state_repo.get_state(code, req.date)
+        raise HTTPException(400, {
+            "error": detail,
+            "current": current["status"] if current else None,
+            "allowed_targets": _wf_state_repo.allowed_targets(code, req.date),
+        })
+    state = _wf_state_repo.get_state(code, req.date)
+    return {"data": state}
+
+
+@router.get("/api/workflow/state/{code}/history")
+async def get_workflow_state_history(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；不传则全部")) -> Dict[str, Any]:
+    """S032 R10：某股流转历史（可按日期过滤）。"""
+    try:
+        history = _wf_state_repo.get_history(code, date)
+        return {"data": {"code": code, "date": date, "history": history}}
+    except Exception as e:
+        raise HTTPException(500, f"获取流转历史失败：{e}") from e
 
 
 __all__ = ["router"]

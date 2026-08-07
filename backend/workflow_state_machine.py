@@ -48,6 +48,10 @@ class WorkflowStateMachine:
         """检查是否允许转换到目标状态。"""
         return target in _ALLOWED_TRANSITIONS.get(self._current, [])
 
+    def allowed_targets(self) -> list[WorkflowStatus]:
+        """当前状态允许的目标态列表（只读副本，S032 R10 手动流转提示用）。"""
+        return list(_ALLOWED_TRANSITIONS.get(self._current, []))
+
     def transition(self, target: WorkflowStatus, reason: str = "") -> bool:
         """执行状态转换。"""
         if not self.can_transition_to(target):

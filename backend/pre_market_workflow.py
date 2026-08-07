@@ -28,7 +28,6 @@ from limitup_screener.service import get_screener_result
 from limitup_strategy import StrategySignal
 from strategies.strategy_matcher import StrategyMatcher
 from strategies.position_advisor import PositionAdvisor
-from workflow_state_machine import WorkflowStatus, WorkflowStateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,6 @@ class PreMarketWorkflow:
 
     def __init__(self, date: str | None = None):
         self.date = date or self._resolve_date()
-        self.state_machine = WorkflowStateMachine(WorkflowStatus.PENDING)
         self._strategy_matcher = StrategyMatcher()
         self._position_advisor = PositionAdvisor()
 
@@ -125,6 +123,11 @@ class PreMarketWorkflow:
         report.candidates = pool.candidates
         report.strong_candidates = pool.strong_candidates
         report.filtered_out = pool.filtered_out
+
+        # 2.5 状态落库（S032 R10）：qualified→candidate、filtered_out→filtered。
+        # insert-if-absent：同日重跑不回退用户已推进的状态（watching/holding/…）。
+        # 落库是增强不是正确性依赖——失败只 warning，不阻塞盘前主流程。
+        self._persist_workflow_states(pool)
 
         # 3. 战法匹配（使用 StrategyMatcher）——匹配全部 qualified（S031 R15 去 [:20] 上限）
         for stock in pool.candidates:
@@ -166,6 +169,22 @@ class PreMarketWorkflow:
             logger.debug("获取 STI 失败: %s", e)
 
         return report
+
+    def _persist_workflow_states(self, pool: CandidatePool) -> None:
+        """S032 R10：候选池状态落库（candidate/filtered）。
+
+        数据全部来自 pool 实际字段（禁臆造）；任何异常就地吞掉并 warning——
+        状态记录是增强，不得阻塞盘前报告主流程。
+        """
+        try:
+            import workflow_state_repo as wsr
+
+            for stock in pool.candidates:
+                wsr.ensure_candidate(stock.code, stock.name, pool.date, "涨停基因得分达标")
+            for item in pool.filtered_out:
+                wsr.ensure_filtered(item["code"], item["name"], pool.date, item.get("reason", ""))
+        except Exception as e:
+            logger.warning("工作流状态落库失败（不影响盘前报告）: %s", e)
 
     def _build_candidate_pool(self, screener_result: ScreenerResult) -> CandidatePool:
         """构建候选池。"""
