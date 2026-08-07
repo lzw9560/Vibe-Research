@@ -8,9 +8,8 @@ import json
 import logging
 import os
 import sqlite3
-import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("vibe-research")
@@ -668,17 +667,21 @@ _TICK_INTERVAL = 60
 
 
 class CronScheduler:
-    """轻量 cron-like 调度器，每分钟检查一次。"""
+    """轻量 cron-like 调度器，每分钟检查一次。
+
+    S032 R6：ticker 挂调用方（FastAPI 主）事件循环——``await start()`` 在
+    当前循环 create_task；不再有 daemon 线程 + 自建循环的桥接（S011 R6 兑现）。
+    """
 
     def __init__(self, executor: Optional[TaskExecutor] = None):
         self._executor = executor or TaskExecutor()
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._task: Optional[asyncio.Task] = None
         # R4：正在执行的任务 id 集合，用于 _tick 去重（fire-and-forget）
         self._running_task_ids: set = set()
 
-    def start(self) -> None:
-        """启动调度器线程（daemon）。
+    async def start(self) -> None:
+        """在当前（FastAPI 主）事件循环启动 ticker task。
 
         R4 重启恢复：进程重启后 DB 里可能残留 status="running" 的 run 行（上一次
         进程非正常退出），启动前用 count_running 重建 _running_task_ids——残留 running
@@ -691,32 +694,25 @@ class CronScheduler:
             if t.id is not None and _manager.count_running(t.id) > 0:
                 self._running_task_ids.add(t.id)
         self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-        logger.info("[scheduler] 定时任务调度器已启动")
+        self._task = asyncio.get_running_loop().create_task(self._ticker())
+        logger.info("[scheduler] 定时任务调度器已启动（主循环 ticker）")
 
-    def stop(self) -> None:
-        # daemon 线程不阻塞退出：置 False 后 _ticker 循环自然退出，
-        # run_until_complete 返回 → loop.close；不 join 等待。
-        self._running = False
-        logger.info("[scheduler] 定时任务调度器已停止")
+    async def stop(self) -> None:
+        """停止：置标志 + cancel ticker task，限时等待不阻塞 shutdown。
 
-    def _loop(self) -> None:
-        """持有一个长期存活的事件循环，心跳嵌入循环内运行。
-
-        不能用 asyncio.run 跑单次 _tick：它每次退出都会关闭事件循环并取消所有未完成
-        任务，_tick 内 fire-and-forget 的 _run_task（含同步 handler 经 to_thread 的
-        await）会被确定性取消，run 永久卡 "running"。长期循环保证 spawned 任务跑完。
+        已 spawn 的 _run_task 子任务（fire-and-forget）随主循环关闭终止——
+        与 S031 daemon 不 join 政策一致：强杀进程时运行中任务被取消，
+        DB 残留 running 行由下次启动的 R4 恢复逻辑接管。
         """
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self._ticker())
-        finally:
+        self._running = False
+        if self._task is not None:
+            self._task.cancel()
             try:
-                loop.run_until_complete(loop.shutdown_asyncgens())
-            finally:
-                loop.close()
+                await asyncio.wait_for(asyncio.shield(self._task), timeout=2.0)
+            except BaseException:  # noqa: BLE001 — CancelledError/TimeoutError 均预期
+                pass
+            self._task = None
+        logger.info("[scheduler] 定时任务调度器已停止")
 
     async def _ticker(self) -> None:
         """心跳循环：周期性执行 _tick，异常不中断循环。"""
@@ -761,8 +757,9 @@ def get_scheduler() -> CronScheduler:
     return _scheduler
 
 
-def start_scheduler() -> None:
-    get_scheduler().start()
+async def start_scheduler() -> None:
+    """启动调度器（主循环 ticker）+ seed 默认任务。须在运行中的事件循环内 await（lifespan）。"""
+    await get_scheduler().start()
     _ensure_seed_tasks()
 
 
@@ -788,6 +785,6 @@ def _ensure_seed_tasks() -> None:
         logger.info("[scheduler] seed 默认任务 limitup_precompute 已创建（cron 30 15 * * 0-4）")
 
 
-def stop_scheduler() -> None:
+async def stop_scheduler() -> None:
     if _scheduler is not None:
-        _scheduler.stop()
+        await _scheduler.stop()

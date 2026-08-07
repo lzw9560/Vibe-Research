@@ -59,28 +59,36 @@ def test_tick_beijing_tz(cron_scheduler, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# R5：lifespan 优雅启停（mock 重启动作，只验 stop()+_portfolio_stop.set() 被调）
+# R5：lifespan 优雅启停（S032 R6 后：async start/stop + 主循环 task）
 def test_lifespan_shutdown(monkeypatch):
-    """lifespan：startup 调 start_scheduler+portfolio；shutdown 调 stop+set。"""
+    """lifespan：startup await start_scheduler+pf.start_scheduler；shutdown await stop + cancel 持仓 task。"""
     import app as appmod
 
     calls: list[str] = []
 
     class FakeSched:
-        def stop(self):
+        async def stop(self):
             calls.append("sched.stop")
 
-    monkeypatch.setattr(appmod._st, "start_scheduler", lambda: calls.append("st.start_scheduler"))
+    async def fake_st_start():
+        calls.append("st.start_scheduler")
+
+    async def fake_pf_start(interval=1800):
+        calls.append("pf.start_scheduler")
+
+        async def _noop_loop():
+            await asyncio.sleep(3600)
+
+        return asyncio.get_running_loop().create_task(_noop_loop())
+
+    monkeypatch.setattr(appmod._st, "start_scheduler", fake_st_start)
     monkeypatch.setattr(appmod._st, "get_scheduler", lambda: FakeSched())
-    monkeypatch.setattr(appmod.pf, "start_scheduler", lambda interval=1800: calls.append("pf.start_scheduler"))
-    appmod.pf._portfolio_stop.clear()
+    monkeypatch.setattr(appmod.pf, "start_scheduler", fake_pf_start)
 
     async def run():
         async with appmod.lifespan(appmod.app):
             assert "st.start_scheduler" in calls
             assert "pf.start_scheduler" in calls
-            assert appmod.pf._portfolio_stop.is_set() is False
 
     asyncio.run(run())
     assert "sched.stop" in calls
-    assert appmod.pf._portfolio_stop.is_set() is True

@@ -277,15 +277,13 @@ def test_refresh_once_logs_exception(monkeypatch, caplog):
 
 
 def test_refresh_loop_survives_and_ticks(monkeypatch):
-    """R6.4：_refresh_loop 挂主循环持续 tick，异常后存活。"""
+    """R6.4：_refresh_loop 挂主循环持续 tick（异常存活契约由 _refresh_once 保证，见上测）。"""
     import portfolio as pf
 
     ticks = {"n": 0}
 
     async def counting_refresh():
         ticks["n"] += 1
-        if ticks["n"] == 1:
-            raise RuntimeError("first tick boom")
 
     monkeypatch.setattr(pf, "_refresh_once", counting_refresh)
 

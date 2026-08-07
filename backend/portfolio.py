@@ -17,7 +17,6 @@ import logging
 import os
 import shutil
 import sys
-import threading
 from datetime import datetime, timezone, timedelta
 
 import astock
@@ -33,8 +32,7 @@ CACHE_DIR = str(resolve_data_dir())
 PF_FILE = os.path.join(CACHE_DIR, "portfolio.json")
 BEIJING = timezone(timedelta(hours=8))
 _LOCK = asyncio.Lock()
-# S031 R5：持仓后台线程停止标志——lifespan shutdown 时 set() 唤醒 wait() 退出循环
-_portfolio_stop = threading.Event()
+logger = logging.getLogger("vibe-research")
 
 
 def _migrate_legacy() -> None:
@@ -182,16 +180,29 @@ async def _refresh_snapshot() -> None:
         await asyncio.to_thread(_save, d)
 
 
-def start_scheduler(interval: int = 1800) -> None:
-    """每半小时后台刷新一次持仓数据（daemon 线程）。
+async def _refresh_once() -> None:
+    """单次后台刷新：异常记日志不向上抛（S032 R8，替原 except:pass）。"""
+    try:
+        await _refresh_snapshot()
+    except Exception as e:  # noqa: BLE001 — 后台兜底：任何异常不得中断刷新循环
+        logger.warning("[portfolio] 后台持仓刷新失败（下一 tick 自动重试）: %s", e, exc_info=True)
 
-    S031 R5：_portfolio_stop.wait(interval) 替 time.sleep——可被 lifespan shutdown
-    唤醒即时退出；except:pass 留 R8（S011b）第二轮改 logging。
+
+async def _refresh_loop(interval: int) -> None:
+    """后台周期刷新循环（S032 R6.4：挂 FastAPI 主循环）。
+
+    每 tick 即天然重试：异常由 _refresh_once 记日志，循环不中断。
     """
-    def loop() -> None:
-        while not _portfolio_stop.wait(interval):
-            try:
-                asyncio.run(_refresh_snapshot())
-            except Exception:
-                pass  # R8（S011b）第二轮改 logging
-    threading.Thread(target=loop, daemon=True).start()
+    while True:
+        await asyncio.sleep(interval)
+        await _refresh_once()
+
+
+async def start_scheduler(interval: int = 1800) -> asyncio.Task:
+    """在主事件循环启动持仓后台周期刷新 task（S032 R6.4）。
+
+    S031 及以前是 daemon 线程 + 线程内 asyncio.run 桥接，模块级 _LOCK 被请求
+    处理器（主循环）与后台线程（临时循环）跨循环共用、互斥失效；第二轮收口到
+    主循环后锁恢复单循环有效。停止：调用方 cancel 返回的 task（app.py lifespan）。
+    """
+    return asyncio.get_running_loop().create_task(_refresh_loop(interval))

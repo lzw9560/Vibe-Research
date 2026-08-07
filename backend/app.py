@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -47,18 +48,21 @@ except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 qual
     logging.warning("value_funnel 路由不可用，已跳过: %s", _vf_err)
     value_funnel_router = None
 
-# S031 R5：lifespan 优雅启停——startup 启 CronScheduler + 持仓线程；shutdown 停两者。
-# daemon 线程不 join，置停止标志后自然退出（CronScheduler.stop 置 _running=False；
-# portfolio._portfolio_stop.set 唤醒 wait() 退出循环）。
+# S032 R6：两个后台周期任务（CronScheduler ticker + 持仓刷新）统一挂 FastAPI 主循环，
+# 废除 daemon 线程 + 线程内 asyncio.run 桥接；shutdown 依次 stop/cancel。
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # startup
-    _st.start_scheduler()  # CronScheduler + seed 默认任务（R13）
-    pf.start_scheduler(1800)  # 持仓后台刷新（_portfolio_stop 可唤醒）
+    await _st.start_scheduler()  # CronScheduler 主循环 ticker + seed 默认任务（R13）
+    _pf_refresh_task = await pf.start_scheduler(1800)  # 持仓后台刷新 task
     yield
     # shutdown
-    _st.get_scheduler().stop()
-    pf._portfolio_stop.set()
+    await _st.get_scheduler().stop()
+    _pf_refresh_task.cancel()
+    try:
+        await _pf_refresh_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="Vibe-Research API", version="0.1.4", lifespan=lifespan)
