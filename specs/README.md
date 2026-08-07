@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S025。
+`SNNN` 三位递增。下一个新 spec 用 S033。
 
 ## 已有规范
 
@@ -55,9 +55,16 @@ specs/
 | [S019](S019-macro-Fred-API/spec.md) | 宏观特征 Fred API 接入（macro.py 第二批） | ✅已实现 2026-07-31 | spec · [plan](S019-macro-Fred-API/plan.md) · [tasks](S019-macro-Fred-API/tasks.md) | 美债10Y/DXY 走 Fred 独立通道+key 隔离 VR_DATA_DIR+补登 S2 |
 | [S020](S020-worldmonitor决策因子接入/spec.md) | worldmonitor 决策因子接入（全球宏观/地缘/另类数据） | ✅已实现 2026-08-01（P0–P6；P7 live 冒烟待联网） | spec · [plan](S020-worldmonitor决策因子接入/plan.md) · [tasks](S020-worldmonitor决策因子接入/tasks.md) · [验收报告](../reports/acceptance/S020-2026-08-01-offline-pass.md) | 远程 MCP 互补另类数据层接 newsradar/market/特征栈，Fred 仍主源 |
 | [S022](S022-熔断器health读路径修复/spec.md) | 熔断器 health 读路径修复（尊重 recovery_timeout） | ✅已实现 2026-08-02 | spec | peek_state 只读探测 + health 读路径自愈，修体检 🔴 circuit_breaker_open |
-| [S023](S023-漏斗可用性与因子解耦/spec.md) | 漏斗可用性与因子解耦（P1 打磨：盘前简报接因子+候选详情依据链+漏斗每层可观测可调参+真实数据不静默返空） | 🟡草案 2026-08-02 | spec · [plan](S023-漏斗可用性与因子解耦/plan.md) · [tasks](S023-漏斗可用性与因子解耦/tasks.md) | 选股因子与工作流解耦，两套标准可插拔并存 |
-| [S024](S024-拓扑展示/spec.md) | 拓扑展示（关系网+漏斗流程+连板梯队树，EdgeProvider 扩展位） | 🟡草案 2026-08-02 | spec · [plan](S024-拓扑展示/plan.md) · [tasks](S024-拓扑展示/tasks.md) | 候选标的关系网+漏斗流向可视化+连板接力结构，先收敛核心边集 |
+| [S023](S023-漏斗可用性与因子解耦/spec.md) | 漏斗可用性与因子解耦（P1 打磨：盘前简报接因子+候选详情依据链+漏斗每层可观测可调参+真实数据不静默返空） | ✅已实现 2026-08-04（`ed0a0fe`，含 S026 异步化并入） | spec · [plan](S023-漏斗可用性与因子解耦/plan.md) · [tasks](S023-漏斗可用性与因子解耦/tasks.md) | 选股因子与工作流解耦，两套标准可插拔并存 |
+| [S024](S024-拓扑展示/spec.md) | 拓扑展示（关系网+漏斗流程+连板梯队树，EdgeProvider 扩展位） | ✅已实现 2026-08-04（`e2f79ed`） | spec · [plan](S024-拓扑展示/plan.md) · [tasks](S024-拓扑展示/tasks.md) | 候选标的关系网+漏斗流向可视化+连板接力结构，先收敛核心边集 |
+| [S025](S025-补前端入口/spec.md) | 补前端入口 | ✅已实现 2026-08-04（主 `fc87a65` + review fix） | spec | code review 14/14 闭环，tsc 0 + vitest 98 绿 |
+| [S026](S026-pre-market-async/spec.md) | pre-market 异步化 | ✅已实现 2026-08-03（并入 S023 `ed0a0fe`，非独立分支） | spec | 盘前简报异步采集缓存 + 并发守卫 |
+| [S028](S028-limitup-screener-fix/spec.md) | limitup-screener 修复（文案三态/trigger/因子层 conditions） | ✅已实现 2026-08-06（`9bddc92` + 连带 `b279b31`） | spec | 9 测试 + 778 passed |
+| [S029](S029-gene-screener-wireup/spec.md) | GeneScreener 接通（阈值可配+执行检索+多层明细） | ✅已实现 2026-08-06（`6f6b2d5`） | spec | 149 前端测试 + build 绿 |
+| [S030](S030-pre-market-multilayer/spec.md) | 盘前简报多层化 + UX 收敛 | 🗑️已废弃 2026-08-07（并入 S031 重写实现，留档作决策记录） | spec | 三层漏斗+抽屉+布局重整的最初设计，经 grill 后与调度收口合并为 S031 |
+| [S031](S031-调度收口盘前多层按战法回测/spec.md) | 调度收口 + 盘前简报多层 + 交互式战法 + 按战法回测 | ✅已实现 2026-08-07（`409a31f` squash） | spec · [plan](S031-调度收口盘前多层按战法回测/plan.md) · [tasks](S031-调度收口盘前多层按战法回测/tasks.md) | 30/30 tasks；WAL/lifespan/BEIJING_TZ/预计算收口/seed/删 scheduler.py + 因子三层漏斗+战法反筛+真实回测 WinRatePanel |
+| [S032](S032-调度收口第二轮/spec.md) | 调度收口第二轮（S011b）：主循环收口 + portfolio 日志重试 + 状态机接线落库 | ✅已实现 2026-08-07 | spec · [tasks](S032-调度收口第二轮/tasks.md) | R6 ticker/持仓刷新挂主循环（废线程桥接+修跨循环锁）+ R8 日志重试 + R10 workflow_state 落库（盘前自动 candidate/filtered + 手动流转端点）+ 顺手修 timedelta NameError |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 
-> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S025。
+> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S033。

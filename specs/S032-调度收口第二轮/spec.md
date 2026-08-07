@@ -1,6 +1,6 @@
 # Spec: S032 — 调度收口第二轮（S011b）：主循环收口 + portfolio 日志重试 + 状态机接线落库
 
-> 状态：草案
+> 状态：已实现 2026-08-07（T1-T8 ✅；pytest 802 passed；:8901 冒烟——主循环 ticker 启动/优雅停机、2026-08-03 盘前实数据落库 1 candidate+98 filtered、手动流转 603221 candidate→watching、非法流转 400 带 allowed_targets、history 双跳留痕）
 > 作者：Claude  日期：2026-08-07
 > 关联：`../S011-调度收口/spec.md`（第二轮，兑现 R6/R8/R10）、`../S031-调度收口盘前多层按战法回测/spec.md`（§0 切片表：本轮 = R6/R8/R10）、`../S012-工作流标灰/spec.md`（草案，盘中/盘后桩边界——本 spec 不碰）
 >
@@ -209,3 +209,9 @@ async def start_scheduler(interval: int = 1800) -> asyncio.Task:
 - **手动流转模型**（D3/D5）：watching/monitoring/holding 无自动数据源（盘中桩未实现），诚实地让用户 API 流转；自动结算留 SettlementEngine spec。
 - **交易日历不做**：无可靠离线节假日数据，臆造违规；现状周末跳过 + 空池 no-op 足够。
 - **前端不做**：后端先行积累数据，呈现另立 spec。
+
+## 11. 实现期追加发现（2026-08-07）
+
+- **timedelta NameError（顺手修）**：`scheduled_tasks.py` 从未 `from datetime import timedelta`，但 `_execute_limitup_precompute`/`_execute_cleanup_old_runs` 共 5 处使用——seed 任务 limitup_precompute 运行即 NameError，被 handler try/except 吞成 `status="error: name 'timedelta' is not defined"`。S011 R2 声称已修实际未修。S032 一并修复。
+- **旧实验残留表迁移**：真实 `market_data.db` 内已有旧 schema 的 `workflow_state`/`workflow_state_history`（列名 date/transitioned_at，无任何在仓代码引用，两表 0 行）——`_ensure_tables` 加防御性迁移：空旧表 DROP 重建；非空保留 + warning，绝不毁数据。
+- **CronScheduler._spawned**：fire-and-forget 任务跟踪集合（done 即弃）——生产 stop 不等待（维持 S031 daemon 政策），测试据此等终态 run（TestLoopLifecycle 主循环适配）。
