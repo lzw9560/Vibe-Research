@@ -1,6 +1,6 @@
 # Spec: S034 — SettlementEngine 接线（settled 流转即结算，写 winrate.db）
 
-> 状态：草案
+> 状态：已实现 2026-08-07（T1-T7 ✅；后端 815 passed + tsc 0 + vitest 190 全绿；冒烟实证：603221 重入一轮 entry 88.8→exit 92.1 结算 +3.72%/盈/4天，gene_score 回查真实值 61.3，winrate 记录写入后冒烟清理恢复 67 条用户记录）
 > 作者：Claude  日期：2026-08-07
 > 关联：`../S033-状态机前端呈现/spec.md`（铺路：holding 行 entry_price+strategy / settled 行 exit_price）、`../S032-调度收口第二轮/spec.md`（workflow_state 落库 + 手动流转）、`../S012-工作流标灰/spec.md`（`_settle_recommendations` 桩边界——本 spec 不碰）
 >

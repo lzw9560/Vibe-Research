@@ -106,4 +106,45 @@ describe("WorkflowStateCard", () => {
     fireEvent.click(screen.getByText(/观察/));
     expect(mutate).toHaveBeenCalledWith({ code: "600001", date: "2026-08-07", target: "watching" });
   });
+
+  // ============ S034：结算摘要展示 ============
+
+  it("S034：settled 行显示结算收益（盈 + 红涨色）", () => {
+    qm.useWorkflowState.mockReturnValue({
+      data: {
+        ...stateCandidate, status: "settled", allowed_targets: ["candidate"],
+        entry_price: 10, exit_price: 11, strategy: "首板挖掘",
+        settlement: { return_pct: 10, won: true, hold_days: 3 },
+      },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    const { container } = render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    expect(screen.getByText(/结算收益 \+10%/)).toBeInTheDocument();
+    expect(screen.getByText(/盈/)).toBeInTheDocument();
+    expect(screen.getByText(/持有 3 天/)).toBeInTheDocument();
+    expect(container.querySelector(".text-danger")).not.toBeNull(); // 红涨（A 股口径）
+  });
+
+  it("S034：亏损结算显示绿跌色", () => {
+    qm.useWorkflowState.mockReturnValue({
+      data: {
+        ...stateCandidate, status: "settled", allowed_targets: ["candidate"],
+        entry_price: 10, exit_price: 9.5,
+        settlement: { return_pct: -5, won: false, hold_days: 1 },
+      },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    const { container } = render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    expect(screen.getByText(/结算收益 -5%/)).toBeInTheDocument();
+    expect(container.querySelector(".text-success")).not.toBeNull(); // 绿跌
+  });
+
+  it("S034：未 settled 行不显示结算摘要", () => {
+    qm.useWorkflowState.mockReturnValue({ data: stateCandidate, isLoading: false });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    expect(screen.queryByText(/结算收益/)).not.toBeInTheDocument();
+  });
 });

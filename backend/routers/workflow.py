@@ -430,24 +430,29 @@ async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
     state = _wf_state_repo.get_state(code, req.date)
     # S034 R3：settled 流转即结算（价齐 + settled_at 幂等锚点）
     if req.target == "settled" and state is not None:
-        state["settlement"] = _settle_on_transition(code, req.date, state)
+        settlement, settled_at = _settle_on_transition(code, req.date, state)
+        state["settlement"] = settlement
+        if settled_at:
+            state["settled_at"] = settled_at  # 落戳发生在 state 取数之后，回填响应
     return {"data": state}
 
 
-def _settle_on_transition(code: str, date: str, state: Dict[str, Any]) -> Dict[str, Any]:
+def _settle_on_transition(code: str, date: str, state: Dict[str, Any]) -> tuple[Dict[str, Any], Optional[str]]:
     """S034：settled 流转触发结算——写 winrate.db + 落 settled_at 锚点。
 
     价缺 → 不结算（可经 settled→candidate 重入补全流程）；已结算 → 不重复记账。
+    返 (settlement 摘要, settled_at 时间戳或 None)。
     """
     if state.get("entry_price") is None or state.get("exit_price") is None:
-        return {"recorded": False, "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程"}
+        return {"recorded": False, "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程"}, None
     if state.get("settled_at"):
-        return {"recorded": False, "reason": "已结算（不重复记账）"}
+        return {"recorded": False, "reason": "已结算（不重复记账）"}, None
     summary = _settlement_recorder.record_settlement(state)
     if summary is None:
-        return {"recorded": False, "reason": "结算失败（价格缺失）"}
-    _wf_state_repo.mark_settled(code, date, datetime.now().isoformat())
-    return {"recorded": True, **summary}
+        return {"recorded": False, "reason": "结算失败（价格缺失）"}, None
+    settled_at = datetime.now().isoformat()
+    _wf_state_repo.mark_settled(code, date, settled_at)
+    return {"recorded": True, **summary}, settled_at
 
 
 @router.get("/api/workflow/state/{code}")

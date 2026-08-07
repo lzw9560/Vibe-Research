@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { cn } from "@/lib/utils";
+import { cn, pctColor } from "@/lib/utils";
 import { useTransitionWorkflowState, useWorkflowState, useWorkflowStateHistory } from "@/lib/query";
 import type { TransitionRequest } from "@/lib/api";
 import { STATUS_COLORS, STATUS_LABELS } from "./statusMeta";
@@ -67,6 +67,18 @@ export function WorkflowStateCard({ code, date }: Props) {
           {state.entry_price != null && <>买入价 {state.entry_price} </>}
           {state.exit_price != null && <>卖出价 {state.exit_price} </>}
           {state.strategy && <>战法 {state.strategy}</>}
+        </p>
+      )}
+
+      {/* S034：settled 行结算摘要（用户自录交易的客观记账，红涨绿跌 A 股口径） */}
+      {state.settlement && (
+        <p className="mt-1 text-xs">
+          <span className={cn("font-medium", pctColor(state.settlement.return_pct))}>
+            结算收益 {state.settlement.return_pct > 0 ? "+" : ""}{state.settlement.return_pct}%
+          </span>
+          <span className="text-muted-foreground">
+            {" "}· {state.settlement.won ? "盈" : "亏"} · 持有 {state.settlement.hold_days} 天
+          </span>
         </p>
       )}
 

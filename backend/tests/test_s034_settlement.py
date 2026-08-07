@@ -182,6 +182,7 @@ def test_transition_settled_settles_and_records(tmp_winrate, isolated_market_db,
     settlement = r.json()["data"]["settlement"]
     assert settlement["recorded"] is True
     assert settlement["return_pct"] == 10.0
+    assert r.json()["data"]["settled_at"], "落戳应回填响应（不 stale）"
 
     rows = _winrate_rows(tmp_winrate)
     assert len(rows) == 1 and rows[0]["return_pct"] == 10.0

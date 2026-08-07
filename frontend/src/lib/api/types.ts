@@ -1058,6 +1058,8 @@ export interface WorkflowState {
   entry_price?: number | null;
   exit_price?: number | null;
   strategy?: string | null;
+  /** S034：settled 行的结算摘要（单股端点确定性重算） */
+  settlement?: { return_pct: number; won: boolean; hold_days: number } | null;
   /** 单股端点附带的当前态允许目标（全日列表端点不返） */
   allowed_targets?: string[];
 }
