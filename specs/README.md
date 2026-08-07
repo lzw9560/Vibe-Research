@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S033。
+`SNNN` 三位递增。下一个新 spec 用 S034。
 
 ## 已有规范
 
@@ -64,7 +64,8 @@ specs/
 | [S030](S030-pre-market-multilayer/spec.md) | 盘前简报多层化 + UX 收敛 | 🗑️已废弃 2026-08-07（并入 S031 重写实现，留档作决策记录） | spec | 三层漏斗+抽屉+布局重整的最初设计，经 grill 后与调度收口合并为 S031 |
 | [S031](S031-调度收口盘前多层按战法回测/spec.md) | 调度收口 + 盘前简报多层 + 交互式战法 + 按战法回测 | ✅已实现 2026-08-07（`409a31f` squash） | spec · [plan](S031-调度收口盘前多层按战法回测/plan.md) · [tasks](S031-调度收口盘前多层按战法回测/tasks.md) | 30/30 tasks；WAL/lifespan/BEIJING_TZ/预计算收口/seed/删 scheduler.py + 因子三层漏斗+战法反筛+真实回测 WinRatePanel |
 | [S032](S032-调度收口第二轮/spec.md) | 调度收口第二轮（S011b）：主循环收口 + portfolio 日志重试 + 状态机接线落库 | ✅已实现 2026-08-07 | spec · [tasks](S032-调度收口第二轮/tasks.md) | R6 ticker/持仓刷新挂主循环（废线程桥接+修跨循环锁）+ R8 日志重试 + R10 workflow_state 落库（盘前自动 candidate/filtered + 手动流转端点）+ 顺手修 timedelta NameError |
+| [S033](S033-状态机前端呈现/spec.md) | 状态机前端呈现（状态徽标+流转按钮+holding 价格采集） | ✅已实现 2026-08-07 | spec · [plan](S033-状态机前端呈现/plan.md) · [tasks](S033-状态机前端呈现/tasks.md) | workflow_state 扩列 entry_price/exit_price/strategy（COALESCE）+ 单股端点 + 列表徽标/抽屉状态卡/流转交互（watching 直连、holding/settled 表单），为 S034 SettlementEngine 铺路 |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 
-> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S033。
+> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S034。

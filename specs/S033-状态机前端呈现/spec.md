@@ -1,6 +1,6 @@
 # Spec: S033 — 状态机前端呈现（状态徽标 + 流转按钮 + holding 价格采集）
 
-> 状态：草案 2026-08-07（grill 已过，待实现）
+> 状态：已实现(2026-08-07)｜14/14 tasks ✅｜后端 806 passed + 前端 tsc 0 error + vitest 28 files/187 tests 全绿｜实数据冒烟：单股端点返 allowed_targets + COALESCE 流转链（watching→monitoring→holding 带 entry_price/strategy→settled 保持）全通
 > 作者：Codex（grill 驱动）  日期：2026-08-07
 > 关联：`../S032-调度收口第二轮/spec.md`（R10 状态机接线落库，后端已实现）、`../S031-调度收口盘前多层按战法回测/spec.md`（Sheet 抽屉 + CandidateDetailPanel + 多层漏斗，已实现）
 >
