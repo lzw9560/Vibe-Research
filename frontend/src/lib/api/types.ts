@@ -788,6 +788,15 @@ export interface FactorCandidate {
   source_layer: string;
   hit_rules: string[];
   detail: Record<string, unknown>;
+  // S031 R14/R19/R22：因子层 FunnelLayer.passed 各层语义可选字段
+  //（L2 best_strategy/confidence_value 供 R19 反筛/R22 合成胜率；L3 suggested_pct/matched_strategy；L1 gene_score）
+  best_strategy?: string;
+  confidence?: string;
+  confidence_value?: number;
+  suggested_pct?: number;
+  matched_strategy?: string;
+  gene_score?: number | null;
+  reasons?: string[];
 }
 
 export interface FunnelLayer {

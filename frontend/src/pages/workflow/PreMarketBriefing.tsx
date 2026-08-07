@@ -1,11 +1,20 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { usePreMarketBriefing, usePreMarketRefresh } from "@/lib/query";
+import { useFunnelLayers } from "@/lib/query/topology";
+import { useStrategyBacktest } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { FactorResult } from "@/lib/api";
-import { useNavigate } from "react-router-dom";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Sheet } from "@/components/ui/Sheet";
+import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
+import { StrategyFilter } from "@/components/ui/StrategyFilter";
+import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
+import { FunnelLayers } from "@/components/candidate/FunnelLayers";
+import { CandidateDetailPanel } from "./CandidateDetail";
+import type { FactorResult, FunnelLayer } from "@/lib/api";
+import { Link } from "react-router-dom";
 
 function formatRelativeTime(generatedAt: string): string {
   try {
@@ -34,7 +43,8 @@ export default function PreMarketBriefing() {
     refetchInterval: (query) => (query.state.data?.status === "running" ? 5_000 : false),
   });
   const refresh = usePreMarketRefresh();
-  const navigate = useNavigate();
+  // S031 R18：候选诊断抽屉（点候选不整页跳，弹侧边抽屉）
+  const [drawerCode, setDrawerCode] = useState<string | null>(null);
 
   // idle → 自动触发后台采集（refresh.isPending 防重入）
   useEffect(() => {
@@ -66,6 +76,11 @@ export default function PreMarketBriefing() {
         <p className="mb-4 text-xs text-muted-foreground">数据日期：{briefing.data_date}</p>
       )}
 
+      {/* S031 R24：去涨停基因阈值配置 / 全市场得分表 */}
+      <div className="mb-4">
+        <Link to="/limitup/gene" className="text-sm text-primary hover:underline">涨停基因阈值配置 / 全市场得分表 →</Link>
+      </div>
+
       {/* 状态分支（S026 异步化） */}
       {status === "running" && (
         <GlassCard className="p-6">
@@ -88,12 +103,13 @@ export default function PreMarketBriefing() {
         </GlassCard>
       )}
 
-      {/* done：情绪 + 因子分区 */}
+      {/* S031 R23：done 纵向流——情绪 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉 */}
       {status === "done" && (
         <>
+          {/* ① 市场情绪 */}
           {(emotion?.sentiment_index != null || emotion?.phase) && (
             <div className="mb-6">
-              <h3 className="mb-3 text-sm font-semibold">市场情绪</h3>
+              <SectionHeader title="市场情绪" />
               <div className="grid gap-3 sm:grid-cols-2">
                 <GlassCard className="p-4">
                   <p className="text-xs text-muted-foreground">综合评分</p>
@@ -111,93 +127,114 @@ export default function PreMarketBriefing() {
             </div>
           )}
 
+          {/* ② 涨停基因因子漏斗（打分→战法→仓位 三步） */}
           {factors.length > 0 ? (
-            <div className="space-y-6">
+            <div className="mb-6 space-y-4">
+              <SectionHeader title="涨停基因因子漏斗" subtitle="L1 打分 → L2 战法 → L3 仓位（逐层可验证）" />
               {factors.map((fr) => (
-                <FactorSection key={fr.factor_id} factor={fr} onPick={(code) => navigate(`/workflow/candidates/${code}`)} />
+                <FactorSection key={fr.factor_id} factor={fr} onPick={setDrawerCode} />
               ))}
             </div>
           ) : (
-            <GlassCard className="p-4">
+            <GlassCard className="mb-6 p-4">
               <p className="text-sm text-muted-foreground">采集完成但无候选标的（见各因子 data_status 区分采集失败 vs 真空池）。</p>
             </GlassCard>
           )}
+
+          {/* ③ 候选池 R1/R2/R3 漏斗（第二组，逐层可验证） */}
+          <CandidateFunnelEmbed date={briefing.data_date} onPick={setDrawerCode} />
+
+          {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
+          <WinRateCompareSection factors={factors} />
         </>
       )}
 
       {briefing.as_of && status === "done" && (
         <p className="mt-4 text-xs text-muted-foreground/50">更新于 {formatRelativeTime(briefing.as_of)}</p>
       )}
+
+      {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关 */}
+      <Sheet open={!!drawerCode} onClose={() => setDrawerCode(null)}>
+        {drawerCode && <CandidateDetailPanel code={drawerCode} />}
+      </Sheet>
     </WorkflowStage>
   );
 }
 
-/** 单因子分区：折叠区 + 候选列表（可点击进详情）。 */
+/** S031 R17：候选池漏斗嵌入（第二组）——调 useFunnelLayers 既有 hook。 */
+function CandidateFunnelEmbed({ date, onPick }: { date?: string; onPick: (code: string) => void }) {
+  const { data: layers, isLoading } = useFunnelLayers(date);
+  if (!layers || layers.length === 0) return null;
+  return (
+    <div className="mb-6 space-y-3">
+      <SectionHeader title="候选池漏斗" subtitle="R1/R2/R3 逐层可验证" />
+      {isLoading ? (
+        <Skeleton variant="rectangular" className="h-32" />
+      ) : (
+        <FunnelLayers layers={layers} date={date} onPick={onPick} />
+      )}
+    </div>
+  );
+}
+
+/** S031 R22：战法胜率对比——useStrategyBacktest 真实回测 + 各因子 L2 passed 合成估算。 */
+function WinRateCompareSection({ factors }: { factors: FactorResult[] }) {
+  const { data: backtest, isLoading } = useStrategyBacktest(60);
+  // 取所有因子 L2 战法层 passed（携 best_strategy + confidence_value）
+  const l2Passed = factors
+    .flatMap((f) => f.layers ?? [])
+    .filter((l) => l.layer_id === "LS-2")
+    .flatMap((l) => l.passed ?? []);
+  if (!factors.length) return null;
+  return (
+    <div className="mb-6">
+      <WinRateComparePanel backtest={backtest} l2Passed={l2Passed} loading={isLoading} />
+    </div>
+  );
+}
+
+/** S031 R14/R19：单因子多层漏斗（L1 打分 / L2 战法 / L3 仓位）——L2 挂战法多选反筛。 */
 function FactorSection({ factor, onPick }: { factor: FactorResult; onPick: (code: string) => void }) {
-  const missing = factor.data_status === "未取得";
-  const noQualified = factor.data_status === "无合格标的";
-  const conditions = factor.layers[0]?.conditions ?? [];
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const layers = factor.layers ?? [];
+  const l2 = layers.find((l) => l.layer_id === "LS-2");
+  // L2 passed 的 best_strategy 去重 → 战法 chips（非空）
+  const strategies = Array.from(
+    new Set((l2?.passed ?? []).map((c) => c.best_strategy).filter((s): s is string => !!s)),
+  );
+
   return (
     <GlassCard className="p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4" />
           <span className="font-medium">{factor.factor_name}</span>
-          <span className="text-xs text-muted-foreground">{factor.candidates.length} 只候选</span>
         </div>
         <span className="text-xs text-muted-foreground">{factor.data_date}</span>
       </div>
 
-      {/* 筛选条件：让用户看清系统在干什么（S028 R4） */}
-      {conditions.length > 0 && (
-        <div className="mt-3">
-          <div className="mb-1 text-xs text-muted-foreground">筛选条件</div>
-          <div className="flex flex-wrap gap-1">
-            {conditions.map((c, i) => (
-              <span key={i} className="rounded bg-muted/40 px-2 py-0.5 text-xs">{c}</span>
-            ))}
-          </div>
+      {layers.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {layers.map((l) => {
+            // L2 战法层：StrategyFilter 多选 + 即时反筛 passed（纯前端，不请求后端）
+            if (l.layer_id === "LS-2" && strategies.length > 0) {
+              const all = l.passed ?? [];
+              const filteredPassed = selected.size > 0
+                ? all.filter((c) => c.best_strategy && selected.has(c.best_strategy))
+                : all;
+              const l2Display: FunnelLayer = { ...l, passed: filteredPassed, output_count: filteredPassed.length };
+              return (
+                <div key={l.layer_id}>
+                  <StrategyFilter strategies={strategies} selected={selected} onChange={setSelected} className="mb-2" />
+                  <FunnelLayerCard layer={l2Display} variant="info" onPick={onPick} />
+                </div>
+              );
+            }
+            return <FunnelLayerCard key={l.layer_id} layer={l} variant="info" onPick={onPick} />;
+          })}
         </div>
-      )}
-
-      {/* 数据未取得如实显示原因 */}
-      {missing && (
-        <p className="mt-2 text-sm text-warning">
-          该因子数据未取得：{String(factor.config?.reason ?? "未知原因")}
-        </p>
-      )}
-
-      {/* 无合格标的：扫描了但 0 达标，如实展示扫描摘要（非告警色，S028 R1/R4） */}
-      {noQualified && (
-        <p className="mt-2 text-sm text-muted-foreground">
-          {String(factor.config?.reason ?? "无合格标的")}
-        </p>
-      )}
-
-      {/* 候选列表 */}
-      {!missing && !noQualified && factor.candidates.length > 0 && (
-        <div className="mt-3 space-y-1">
-          {factor.candidates.slice(0, 20).map((c) => (
-            <button
-              key={c.code}
- onClick={() => onPick(c.code)}
-              className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left hover:bg-muted/50"
-            >
-              <span className="font-medium">{c.name} <span className="text-xs text-muted-foreground">{c.code}</span></span>
-              <span className="text-xs text-muted-foreground">{c.source_layer}</span>
-            </button>
-          ))}
-          {factor.candidates.length > 20 && (
-            <p className="text-xs text-muted-foreground">…共 {factor.candidates.length} 只</p>
-          )}
-        </div>
-      )}
-
-      {/* 命中规则示例 */}
-      {!missing && !noQualified && factor.candidates.length > 0 && factor.candidates[0]?.hit_rules?.length > 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          示例规则：{factor.candidates[0].hit_rules.join("，")}
-        </p>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">无漏斗层数据</p>
       )}
     </GlassCard>
   );

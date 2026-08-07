@@ -18,7 +18,6 @@ import os
 import shutil
 import sys
 import threading
-import time
 from datetime import datetime, timezone, timedelta
 
 import astock
@@ -34,6 +33,8 @@ CACHE_DIR = str(resolve_data_dir())
 PF_FILE = os.path.join(CACHE_DIR, "portfolio.json")
 BEIJING = timezone(timedelta(hours=8))
 _LOCK = asyncio.Lock()
+# S031 R5：持仓后台线程停止标志——lifespan shutdown 时 set() 唤醒 wait() 退出循环
+_portfolio_stop = threading.Event()
 
 
 def _migrate_legacy() -> None:
@@ -182,12 +183,15 @@ async def _refresh_snapshot() -> None:
 
 
 def start_scheduler(interval: int = 1800) -> None:
-    """每半小时后台刷新一次持仓数据（daemon 线程）。"""
+    """每半小时后台刷新一次持仓数据（daemon 线程）。
+
+    S031 R5：_portfolio_stop.wait(interval) 替 time.sleep——可被 lifespan shutdown
+    唤醒即时退出；except:pass 留 R8（S011b）第二轮改 logging。
+    """
     def loop() -> None:
-        while True:
-            time.sleep(interval)
+        while not _portfolio_stop.wait(interval):
             try:
                 asyncio.run(_refresh_snapshot())
             except Exception:
-                pass
+                pass  # R8（S011b）第二轮改 logging
     threading.Thread(target=loop, daemon=True).start()

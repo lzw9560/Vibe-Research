@@ -85,14 +85,19 @@ def _check_data_freshness() -> Dict[str, Any]:
 
 
 def _check_scheduler() -> Dict[str, Any]:
-    """检查调度器状态（仅返回配置，不触发副作用）。"""
-    try:
-        from scheduler import _start_limitup_scheduler, start_portfolio_scheduler
+    """检查调度器状态（仅返回配置，不触发副作用）。
 
+    S031 R12：scheduler.py 已删，改查 scheduled_tasks CronScheduler + limitup_precompute seed。
+    """
+    try:
+        import scheduled_tasks as st
+
+        seeded = any(t.name == "limitup_precompute" for t in st._manager.list_tasks())
         return {
             "ok": True,
             "detail": {
-                "limitup_scheduler": "configured",
+                "cron_scheduler": "configured",
+                "limitup_precompute_seed": "seeded" if seeded else "missing",
                 "portfolio_scheduler": "configured",
             },
         }

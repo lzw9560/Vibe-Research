@@ -35,12 +35,28 @@ export interface DiagnosisCard {
   as_of: string;
 }
 export interface FilterRecord { code: string; name?: string | null; reason: string }
+
+/** 漏斗层通过候选——code/name 必有；其余按层语义可选（S031 R14：L2 战法层携
+ * best_strategy/confidence_value 供 R19 反筛/R22 合成胜率；L3 仓位层携 suggested_pct/
+ * matched_strategy；L1 打分层携 gene_score）。 */
+export interface PassedItem {
+  code: string;
+  name: string;
+  best_strategy?: string;
+  confidence?: string;
+  confidence_value?: number;
+  suggested_pct?: number;
+  matched_strategy?: string;
+  gene_score?: number | null;
+  reasons?: string[];
+}
+
 export interface FunnelLayer {
   layer_id: string; name: string; as_of: string;
   input_count: number; output_count: number;
   filtered_out: FilterRecord[]; output_codes: string[];
   conditions?: string[];
-  passed?: { code: string; name: string }[];
+  passed?: PassedItem[];
   data_status?: string | null;
   data_reason?: string | null;
 }

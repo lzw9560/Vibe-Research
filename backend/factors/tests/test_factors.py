@@ -138,8 +138,8 @@ def test_limitup_screener_factor_fetch_with_candidates():
     assert c.source_factor_id == LS_ID
     assert c.source_layer == "八项标准"
     assert c.detail["gene_score"] == 85.0
-    assert len(r.layers) == 1  # 单层包装
-    assert r.layers[0].layer_id == "LS"
+    assert len(r.layers) == 3  # S031 R14：打分→战法→仓位 三层
+    assert r.layers[0].layer_id == "LS-1"
     assert r.data_status == "ok"
 
 
@@ -152,7 +152,7 @@ def test_limitup_screener_factor_empty_marks_missing():
         f = LimitupScreenerFactor()
         r = f.fetch("2026-08-03")
     assert r.candidates == []
-    assert r.data_status == "未取得"
+    assert r.layers[0].data_status == "未取得"
 
 
 def test_limitup_screener_factor_describe():

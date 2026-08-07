@@ -1,14 +1,32 @@
-// 候选标的诊断卡详情（S023 E4）：依据链呈现——入口层/规则/取值/missing/阈值档位。
+// 候选标的诊断卡（S023 E4 + S031 R18 抽屉复用）：
+// - CandidateDetailPanel({code})：纯展示，调 candidatesApi.diagnosis(code)，内 Skeleton/错误态。
+// - CandidateDetail（路由页）：thin 包装——useParams 取 code + 返回按钮 + Panel。
 // 合规：仅客观数据 + 命中规则，不输出方向结论词。
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { candidatesApi, type DiagnosisCard, type IndicatorSet } from "@/lib/candidates";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function CandidateDetail() {
   const { code = "" } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  return (
+    <div className="space-y-4 p-4">
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> 返回
+      </button>
+      <CandidateDetailPanel code={code} />
+    </div>
+  );
+}
+
+/** S031 R18：候选诊断卡纯展示组件——路由页与 Sheet 抽屉共用。 */
+export function CandidateDetailPanel({ code }: { code: string }) {
   const [card, setCard] = useState<DiagnosisCard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,19 +45,20 @@ export default function CandidateDetail() {
     };
   }, [code]);
 
-  if (loading) return <div className="p-6 text-muted-foreground">加载诊断卡…</div>;
-  if (error) return <div className="p-6 text-danger">取数失败：{error}</div>;
-  if (!card) return <div className="p-6 text-muted-foreground">无数据</div>;
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton variant="rectangular" className="h-24" />
+        <Skeleton variant="rectangular" className="h-20" />
+        <Skeleton variant="rectangular" className="h-20" />
+      </div>
+    );
+  }
+  if (error) return <div className="p-6 text-sm text-danger">取数失败：{error}</div>;
+  if (!card) return <div className="p-6 text-sm text-muted-foreground">无数据</div>;
 
   return (
-    <div className="space-y-4 p-4">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> 返回
-      </button>
-
+    <div className="space-y-4">
       <GlassCard className="p-4">
         <div className="flex items-center justify-between">
           <div>
@@ -53,7 +72,6 @@ export default function CandidateDetail() {
         <p className="mt-2 text-xs text-muted-foreground">取数时点：{card.as_of}</p>
       </GlassCard>
 
-      {/* 命中规则（可复现依据） */}
       <GlassCard className="p-4">
         <h3 className="mb-2 text-sm font-semibold">命中规则（怎么选的）</h3>
         {card.activity?.rules_applied?.length ? (
@@ -69,12 +87,10 @@ export default function CandidateDetail() {
         )}
       </GlassCard>
 
-      {/* 六类指标取值 */}
       <IndicatorBlock title="量价" ind={card.indicators} />
       <IndicatorBlock title="情绪梯队" ind={card.indicators} />
       <IndicatorBlock title="资金流" ind={card.indicators} />
 
-      {/* 客观风险标注 */}
       {card.risk_flags?.length > 0 && (
         <GlassCard className="p-4">
           <h3 className="mb-2 text-sm font-semibold">风险标注</h3>
@@ -86,7 +102,6 @@ export default function CandidateDetail() {
         </GlassCard>
       )}
 
-      {/* 数据缺失透明（AC6） */}
       {Object.keys(card.indicators?.missing ?? {}).length > 0 && (
         <GlassCard className="p-4">
           <h3 className="mb-2 text-sm font-semibold">未取得（原因透明）</h3>

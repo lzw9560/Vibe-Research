@@ -126,8 +126,8 @@ class PreMarketWorkflow:
         report.strong_candidates = pool.strong_candidates
         report.filtered_out = pool.filtered_out
 
-        # 3. 战法匹配（使用 StrategyMatcher）
-        for stock in pool.candidates[:20]:  # 限制匹配数量
+        # 3. 战法匹配（使用 StrategyMatcher）——匹配全部 qualified（S031 R15 去 [:20] 上限）
+        for stock in pool.candidates:
             try:
                 signals = self._strategy_matcher.match(stock)
                 if signals:
@@ -194,34 +194,4 @@ class PreMarketWorkflow:
             strong_candidates=strong_candidates,
             filtered_out=filtered_out,
             sector_distribution=sector_distribution,
-        )
-
-    def _build_strategy_match(self, stock: GeneScore, analysis: Any) -> StrategyMatch:
-        """构建战法匹配结果（兼容旧接口）。"""
-        signals = self._strategy_matcher.match(stock)
-        if not signals:
-            return StrategyMatch(
-                code=stock.code,
-                name=stock.name,
-                matched_strategies=[],
-                best_strategy="",
-                confidence="低",
-                entry_price=0.0,
-                stop_loss=0.0,
-                take_profit=0.0,
-                position_pct=0.0,
-                reasons=[],
-            )
-        best = signals[0]
-        return StrategyMatch(
-            code=stock.code,
-            name=stock.name,
-            matched_strategies=signals,
-            best_strategy=best.strategy_name,
-            confidence="高" if best.confidence >= 0.7 else "中" if best.confidence >= 0.5 else "低",
-            entry_price=best.entry_price,
-            stop_loss=best.stop_loss,
-            take_profit=best.take_profit,
-            position_pct=0.0,
-            reasons=[m.description for m in best.matches[:3]],
         )

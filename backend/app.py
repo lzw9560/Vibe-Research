@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -27,6 +28,7 @@ import cli_runtime
 import gstock
 import newsradar
 import portfolio as pf
+import scheduled_tasks as _st
 import limitup_screener as ls
 import limitup_strategy as lstrat
 import limitup_sti as ls_sti
@@ -35,9 +37,6 @@ from auction_screener import AUCTION_TOP_N
 import daily_review as dr
 import market
 import myreports as mr
-
-# Scheduler imports
-from scheduler import start_limitup_scheduler, start_portfolio_scheduler
 
 # Router imports
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
@@ -48,7 +47,21 @@ except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 qual
     logging.warning("value_funnel 路由不可用，已跳过: %s", _vf_err)
     value_funnel_router = None
 
-app = FastAPI(title="Vibe-Research API", version="0.1.3")
+# S031 R5：lifespan 优雅启停——startup 启 CronScheduler + 持仓线程；shutdown 停两者。
+# daemon 线程不 join，置停止标志后自然退出（CronScheduler.stop 置 _running=False；
+# portfolio._portfolio_stop.set 唤醒 wait() 退出循环）。
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # startup
+    _st.start_scheduler()  # CronScheduler + seed 默认任务（R13）
+    pf.start_scheduler(1800)  # 持仓后台刷新（_portfolio_stop 可唤醒）
+    yield
+    # shutdown
+    _st.get_scheduler().stop()
+    pf._portfolio_stop.set()
+
+
+app = FastAPI(title="Vibe-Research API", version="0.1.4", lifespan=lifespan)
 
 @app.get("/")
 async def root():
@@ -67,10 +80,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("vibe-research")
-
-# 启动后台调度器
-start_portfolio_scheduler(1800)
-start_limitup_scheduler()
 
 # CORS：默认放开（本地自托管友好）；公网部署时用 VR_ALLOW_ORIGINS 收紧成白名单。
 #   例：VR_ALLOW_ORIGINS="https://myhost"  （逗号分隔多个）
@@ -159,9 +168,6 @@ app.include_router(kline_history.router)
 if value_funnel_router is not None:
     app.include_router(value_funnel_router.router)
 
-# 启动定时任务调度器
-import scheduled_tasks as _st
-_st.start_scheduler()
 # ============ Unified error handling ============
 
 @app.exception_handler(HTTPException)

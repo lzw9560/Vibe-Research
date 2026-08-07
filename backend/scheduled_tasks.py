@@ -61,6 +61,8 @@ class TaskRun:
 def _get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(_DB_PATH)
     conn.row_factory = sqlite3.Row
+    # R3：连接级 busy_timeout——写冲突时等待 30s 而非立即抛 database is locked
+    conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
 
@@ -98,6 +100,8 @@ def _ensure_tables() -> None:
             CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_enabled ON scheduled_tasks(enabled);
             CREATE INDEX IF NOT EXISTS idx_scheduled_task_runs_task_id ON scheduled_task_runs(task_id, started_at DESC);
         """)
+        # R3：WAL 模式（DB 级持久）——读不阻塞写，并发写不再 database is locked
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.commit()
     finally:
         conn.close()
@@ -438,9 +442,13 @@ class TaskExecutor:
             pass
 
     def _execute_daily_data_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """每日数据刷新：刷新持仓 + 预计算复盘。"""
+        """每日数据刷新：刷新持仓。
+
+        R7（S031）：复盘预计算统一由 limitup_precompute 驱动
+        （_execute_limitup_precompute 内对 back_days 各日调 reviewer.precompute_daily），
+        此处只保留持仓刷新——单一事实源，不再重复调 daily_review。
+        """
         import portfolio as pf
-        import daily_review as dr
 
         results: Dict[str, Any] = {}
         try:
@@ -449,16 +457,6 @@ class TaskExecutor:
         except Exception as e:
             logger.warning("[daily_data_refresh] 持仓刷新失败: %s", e)
             results["portfolio"] = f"error: {e}"
-
-        try:
-            reviewer = dr.get_reviewer()
-            today = datetime.now().strftime("%Y-%m-%d")
-            report = reviewer.precompute_daily(today)
-            results["daily_review"] = "ok"
-            results["review_date"] = today
-        except Exception as e:
-            logger.warning("[daily_data_refresh] 复盘预计算失败: %s", e)
-            results["daily_review"] = f"error: {e}"
 
         return results
 
@@ -730,7 +728,9 @@ class CronScheduler:
             await asyncio.sleep(_TICK_INTERVAL)
 
     async def _tick(self) -> None:
-        now = datetime.now()
+        # R9：统一 BEIJING_TZ——now 带时区，cron 命中按北京时间比较（懒导入避免模块级重依赖）
+        from limitup_screener import BEIJING_TZ
+        now = datetime.now(BEIJING_TZ)
         tasks = [t for t in _manager.list_tasks() if t.enabled]
         for task in tasks:
             # R4：cron 命中且未在执行中的任务才触发，避免同一任务并发重复执行
@@ -763,6 +763,29 @@ def get_scheduler() -> CronScheduler:
 
 def start_scheduler() -> None:
     get_scheduler().start()
+    _ensure_seed_tasks()
+
+
+def _ensure_seed_tasks() -> None:
+    """R13：seed 默认定时任务——盘后涨停预计算（工作日 15:30）。幂等（重名跳过）。
+
+    cron `30 15 * * 0-4`：cron_match 用 Python datetime.weekday()（0=周一..6=周日，
+    见 test_cron_should_run），故工作日=0-4（Mon-Fri）。spec 原写 `1-5`（标准 cron 习惯）
+    在本约定下=周二至周六，与"跳周末"意图不符，已按 0=周一 约定修正为 0-4。
+    节假日精确判断推 S011b（trading_calendar.json 本轮不建，非交易日由 screener
+    返空涨停池自然处理）。
+    """
+    existing = {t.name for t in _manager.list_tasks()}
+    if "limitup_precompute" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="limitup_precompute",
+            description="盘后涨停板基因得分+STI+竞价+复盘预计算（S031 R13 seed）",
+            task_type="limitup_precompute",
+            cron_expr="30 15 * * 0-4",
+            payload={"back_days": 3},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 limitup_precompute 已创建（cron 30 15 * * 0-4）")
 
 
 def stop_scheduler() -> None:

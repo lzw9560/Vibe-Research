@@ -1,6 +1,7 @@
 // S029 涨停基因选股 — 接通 GeneScreener 页（条件可配 B1 + 执行检索 + 可展开多层明细 A3）。
 // loadData 调真实 /api/limitup/screener；阈值改后保存+trigger 重算；摘要 扫描N/合格M/高基因K。
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GeneFilterForm, type GeneFilterParams } from "./components/GeneFilterForm";
 import { GeneResultTable } from "./components/GeneResultTable";
@@ -79,7 +80,7 @@ export function GeneScreener() {
 
   return (
     <div>
-      <PageHeader title="基因筛选" subtitle="Gene Screener" />
+      <PageHeader title="基因筛选" subtitle="Gene Screener（盘前简报的配置伴随页）" actions={<Link to="/workflow/pre-market" className="text-sm text-muted-foreground transition-colors hover:text-primary">← 回盘前简报</Link>} />
 
       <GeneFilterForm onSearch={doSearch} onRecompute={handleRecompute} recomputeBusy={recomputeBusy} />
 

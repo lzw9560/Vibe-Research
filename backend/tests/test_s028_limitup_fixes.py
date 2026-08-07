@@ -132,8 +132,9 @@ def test_factor_status_no_qualified(restore_workflow):
     fr = _run_factor(report)
 
     assert fr.candidates == []
-    assert fr.data_status == "无合格标的"
-    reason = fr.config.get("reason", "")
+    # S031 R14：data_status/reason 迁移到 L1（原 fr.data_status / fr.config['reason'] 已移）
+    assert fr.layers[0].data_status == "无合格标的"
+    reason = fr.layers[0].data_reason or ""
     assert "79" in reason, f"reason 应含扫描数 79: {reason}"
     assert "60" in reason, f"reason 应含阈值 60: {reason}"
     assert fr.config.get("scanned_count") == 79
@@ -154,8 +155,8 @@ def test_factor_status_screener_failed(restore_workflow):
     fr = _run_factor(report)
 
     assert fr.candidates == []
-    assert fr.data_status == "未取得"
-    assert "预计算可能未执行" in fr.config.get("reason", "")
+    assert fr.layers[0].data_status == "未取得"
+    assert "预计算可能未执行" in (fr.layers[0].data_reason or "")
 
 
 def test_factor_status_no_data(restore_workflow):
@@ -167,8 +168,8 @@ def test_factor_status_no_data(restore_workflow):
     fr = _run_factor(report)
 
     assert fr.candidates == []
-    assert fr.data_status == "未取得"
-    assert fr.config.get("reason") == "今日无涨停股数据"
+    assert fr.layers[0].data_status == "未取得"
+    assert fr.layers[0].data_reason == "今日无涨停股数据"
 
 
 # ===========================================================================
@@ -176,21 +177,23 @@ def test_factor_status_no_data(restore_workflow):
 # ===========================================================================
 
 def test_factor_layer_has_conditions(restore_workflow):
-    """R4：FunnelLayer 带 conditions（五维 + 阈值 + 战法 + 仓位）。"""
+    """R4：三层 FunnelLayer 各带 conditions（L1 五维+阈值；L2 战法；L3 仓位）。S031 R14。"""
     from pre_market_workflow import PreMarketReport
 
     report = PreMarketReport(date="2026-08-06", generated_at="2026-08-06T22:03:00")
     fr = _run_factor(report)
 
-    assert len(fr.layers) == 1
-    conds = fr.layers[0].conditions or []
-    assert conds, "layers[0].conditions 不应为空"
-    joined = " ".join(conds)
-    assert "次日溢价率" in joined  # 五维口径
-    assert "合格阈值" in joined
-    assert "高基因" in joined
-    assert "战法" in joined
-    assert "仓位" in joined
+    assert len(fr.layers) == 3  # S031 R14：打分→战法→仓位 三层
+    l1, l2, l3 = fr.layers
+    # L1 打分：五维 + 合格阈值 + 高基因
+    joined1 = " ".join(l1.conditions or [])
+    assert "次日溢价率" in joined1
+    assert "合格阈值" in joined1
+    assert "高基因" in joined1
+    # L2 战法
+    assert "战法" in " ".join(l2.conditions or [])
+    # L3 仓位
+    assert "仓位" in " ".join(l3.conditions or [])
 
 
 # ===========================================================================
