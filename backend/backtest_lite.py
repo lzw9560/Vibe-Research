@@ -17,6 +17,15 @@ from limitup_screener.models import compute_factors, calc_total_score
 
 _CACHE_FILE = Path(__file__).resolve().parent / "data" / "backtest_cache.json"
 
+# 分桶方案：(标签, 下界含, 上界) —— 上界含（末桶用 float("inf") 兜住右端点）
+_GENE_SCORE_BUCKETS = (("0-60", 0, 60.0), ("60-75", 60.0, 75.0), ("75-100", 75.0, float("inf")))
+_PREMIUM_BUCKETS = (
+    ("0-30", 0, 30.0),
+    ("30-50", 30.0, 50.0),
+    ("50-70", 50.0, 70.0),
+    ("70-100", 70.0, float("inf")),
+)
+
 
 def _load_cache() -> dict[str, dict[str, Any]]:
     """加载回测缓存（按 start_date|end_date 键）。"""
@@ -49,6 +58,7 @@ class BacktestResult:
     sharpe_ratio: float
     scatter_data: list[dict]
     percentile_analysis: dict[str, Any]
+    factor_percentile_analysis: dict[str, Any] | None = None
 
 
 def _calc_next_day_return(code: str, date_str: str) -> float:
@@ -92,6 +102,7 @@ async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
                     "code": g.code,
                     "date": current,
                     "industry": getattr(g, "industry", "未知"),
+                    "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0),
                 })
         except Exception:
             pass
@@ -159,6 +170,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
                     "code": g.code,
                     "gene_score": g.total_score,
                     "next_day_return": next_day_return,
+                    "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0),
                 })
         except Exception:
             pass
@@ -190,6 +202,9 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
 
     # 分位分析
     percentile_analysis = _calc_percentile_analysis(scatter)
+    factor_percentile_analysis = _calc_factor_percentile_analysis(
+        scatter, "factor_premium_rate", _PREMIUM_BUCKETS
+    )
 
     backtest_result = BacktestResult(
         period=f"{start_date} ~ {end_date}",
@@ -201,6 +216,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
         sharpe_ratio=round(sharpe, 4),
         scatter_data=scatter,
         percentile_analysis=percentile_analysis,
+        factor_percentile_analysis=factor_percentile_analysis,
     )
 
     cache[cache_key] = asdict(backtest_result)
@@ -213,33 +229,39 @@ def run_backtest(start_date: str, end_date: str) -> BacktestResult:
     return asyncio.run(run_backtest_async(start_date, end_date))
 
 
-def _calc_percentile_analysis(scatter: list[dict]) -> dict[str, Any]:
-    """分位分析。"""
-    buckets = {
-        "75-100": {"count": 0, "returns": []},
-        "60-75": {"count": 0, "returns": []},
-        "0-60": {"count": 0, "returns": []},
-    }
+def _calc_factor_percentile_analysis(
+    scatter: list[dict],
+    factor_key: str,
+    buckets: tuple[tuple[str, float, float], ...],
+) -> dict[str, Any]:
+    """按指定因子分桶的分位分析，各桶输出 count / avg_return / hit_rate。
+
+    buckets: (标签, 下界含, 上界) 序列；末桶上界建议 float("inf") 兜住右端点。
+    """
+    acc = {label: {"count": 0, "returns": []} for label, _, _ in buckets}
     for p in scatter:
-        score = p.get("gene_score", 0)
+        value = p.get(factor_key, 0)
         ret = p.get("next_day_return", 0)
-        if score >= 75:
-            bucket = "75-100"
-        elif score >= 60:
-            bucket = "60-75"
-        else:
-            bucket = "0-60"
-        buckets[bucket]["count"] += 1
-        buckets[bucket]["returns"].append(ret)
+        for label, lo, hi in buckets:
+            if lo <= value < hi or (hi == float("inf") and value >= lo):
+                acc[label]["count"] += 1
+                acc[label]["returns"].append(ret)
+                break
 
     result = {}
-    for bucket, data in buckets.items():
+    for label, _, _ in buckets:
+        data = acc[label]
         if data["count"] > 0:
-            result[bucket] = {
+            result[label] = {
                 "count": data["count"],
                 "avg_return": round(sum(data["returns"]) / len(data["returns"]), 4),
                 "hit_rate": round(sum(1 for r in data["returns"] if r > 0) / len(data["returns"]), 4),
             }
         else:
-            result[bucket] = {"count": 0, "avg_return": 0.0, "hit_rate": 0.0}
+            result[label] = {"count": 0, "avg_return": 0.0, "hit_rate": 0.0}
     return result
+
+
+def _calc_percentile_analysis(scatter: list[dict]) -> dict[str, Any]:
+    """分位分析（按 gene_score 三档，泛化函数的特例）。"""
+    return _calc_factor_percentile_analysis(scatter, "gene_score", _GENE_SCORE_BUCKETS)
