@@ -132,3 +132,10 @@ S033 已让 holding 行带 `entry_price+strategy`、settled 行带 `exit_price`�
 - **`_settle_recommendations` 不碰**：S012 标灰范围；本 spec 后该桩的「结算」职责事实上被 transition 结算取代，标灰 spec 落地时按桩处理即可。
 - **entry_date=trade_date 近似**（D3）：系统无真实买入日，诚实标注。
 - **持仓市价自动结算不做**：需行情源决策（em_get/mootdx 取舍 + 触发规则），另立 spec。
+
+## 11. 实现期修正（2026-08-08，按独立判断纪律自查）
+
+- **hold_days 前提纠错**：原 D3 用 `entry_date=trade_date`（候选日）算 hold_days，自评「胜率页 hold_days 维度因此不准」——**经核实 winrate_records 无 hold_days 列、WinRateStats 不返该字段**，hold_days 仅在结算响应短暂出现，**不污染任何持久统计**。原前提错误，真实影响仅限抽屉短暂显示。
+- **hold_days 改从历史表推导**（替原 D3 近似 + 原 P1「加 entry_date 列+表单」方案）：`workflow_state_history` 已记录每次流转的 `created_at`——holding 流转 created_at=买入时刻、settled 流转 created_at=结算时刻，hold_days = (结算-买入).days。**零 schema 改动、零表单、精确**（不再含 watching/monitoring 时长）。新增 `get_holding_settle_times()` repo 辅助；`settlement_summary` 改收 `(entry_at, settle_at)`；recorder/单股端点均查历史。原"加列+表单"方案被否决（次优：多一列+一表单字段，且仍需用户填买入日，不如直接读已有历史）。
+- **P0 冒烟残留清理**：603221 经 S032-S034 多轮冒烟在 workflow_state 残留 status=settled + 冒烟流转史（entry 88.8/exit 92.1/strategy 首板挖掘 + 5 条冒烟 history）。已重置为 candidate（真实盘前输出态）、NULL 价/策略/settled_at、删冒烟 history 行（保留真实 pending→candidate）。winrate.db 冒烟记录此前已清理（67 条用户记录零污染）。
+- **P2/P3 推迟**：settlement_recorder 跨 limitup_screener DB 读 gene_score 的耦合 + winrate.db 双 tracker 实例，随 #5 gene DB 迁移一并处理。

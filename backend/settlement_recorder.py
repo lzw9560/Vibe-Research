@@ -36,25 +36,29 @@ def _get_tracker():
 def settlement_summary(
     entry_price: Optional[float],
     exit_price: Optional[float],
-    trade_date: str,
-    settled_at: str,
+    entry_at: Optional[str],
+    settle_at: Optional[str],
 ) -> Dict[str, Any]:
     """结算摘要纯函数（recorder 与单股端点共享，防公式漂移）。
 
-    return_pct 两位小数；entry 缺失/0 → 0.0。hold_days = settled 日 - trade_date（异常 → 0）。
+    S034 修正：hold_days 从 entry_at（买入时刻）→ settle_at（结算时刻）算，
+    精确持有天数；二者均来自 workflow_state_history 的流转 created_at，
+    不再用 trade_date 近似（原口径把 watching/monitoring 时长也算进去，系统性高估）。
+    entry_at/settle_at 缺失 → 0（历史不全的旧行兜底）。
     """
     if entry_price and exit_price is not None:
         return_pct = round(((exit_price - entry_price) / entry_price) * 100, 2)
     else:
         return_pct = 0.0
+    return {"return_pct": return_pct, "won": return_pct > 0, "hold_days": _days_between(entry_at, settle_at)}
+
+
+def _days_between(start_at: Optional[str], end_at: Optional[str]) -> int:
+    """两个 ISO 时刻的日历日差（取 date 部分，忽略时分秒）。任一缺失/不可解析 → 0。"""
     try:
-        hold_days = (
-            datetime.strptime(settled_at[:10], "%Y-%m-%d").toordinal()
-            - datetime.strptime(trade_date[:10], "%Y-%m-%d").toordinal()
-        )
+        return datetime.fromisoformat(end_at).toordinal() - datetime.fromisoformat(start_at).toordinal()
     except (TypeError, ValueError):
-        hold_days = 0
-    return {"return_pct": return_pct, "won": return_pct > 0, "hold_days": hold_days}
+        return 0
 
 
 def _lookup_gene_score(code: str, trade_date: str) -> float:
@@ -115,4 +119,13 @@ def record_settlement(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     )
     _get_tracker().add_record(record)
 
-    return settlement_summary(float(entry_price), float(exit_price), trade_date, result.date)
+    # S034 修正：hold_days 从历史表 holding/settled 流转 created_at 算（精确持有天数，
+    # 不再把 watching/monitoring 时长算进去）。历史缺失兜底（不应发生——settled 必经 holding）。
+    from workflow_state_repo import get_holding_settle_times
+
+    buy_at, settle_at = get_holding_settle_times(state.get("code", ""), trade_date)
+    return settlement_summary(
+        float(entry_price), float(exit_price),
+        buy_at or trade_date,
+        settle_at or settle_date,
+    )

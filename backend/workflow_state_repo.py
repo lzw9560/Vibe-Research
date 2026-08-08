@@ -369,5 +369,36 @@ def get_state_with_targets(code: str, trade_date: str) -> Optional[Dict[str, Any
     return {**state, "allowed_targets": [s.value for s in machine.allowed_targets()]}
 
 
+def get_holding_settle_times(code: str, trade_date: str) -> tuple[Optional[str], Optional[str]]:
+    """S034 修正：从历史表取 holding/settled 流转的 created_at——
+    买入时刻 = 最近一次 to_status='holding' 的 created_at；
+    结算时刻 = 最近一次 to_status='settled' 的 created_at。
+    hold_days = (settle - holding).days，精确，无 trade_date 近似偏差。
+    无记录返 (None, None)。
+    """
+    conn = _get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT to_status, created_at FROM workflow_state_history
+            WHERE code = ? AND trade_date = ? AND to_status IN ('holding', 'settled')
+            ORDER BY id DESC
+            """,
+            (code, trade_date),
+        ).fetchall()
+    finally:
+        conn.close()
+    buy_at: Optional[str] = None
+    settle_at: Optional[str] = None
+    for r in rows:
+        if r["to_status"] == "settled" and settle_at is None:
+            settle_at = r["created_at"]
+        elif r["to_status"] == "holding" and buy_at is None:
+            buy_at = r["created_at"]
+        if buy_at and settle_at:
+            break
+    return buy_at, settle_at
+
+
 # 模块导入即建表（平行 scheduled_tasks 的 _manager 模式；WAL 为 DB 级持久）
 _ensure_tables()

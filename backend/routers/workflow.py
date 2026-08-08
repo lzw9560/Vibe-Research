@@ -468,14 +468,17 @@ async def get_single_workflow_state(code: str, date: Optional[str] = Query(None,
         raise HTTPException(500, f"获取单股工作流状态失败：{e}") from e
     if result is None:
         raise HTTPException(404, f"该日无此股的工作流状态记录: code={code} date={d}")
-    # S034 R5：已结算行附结算摘要（entry/exit/trade_date/settled_at 确定性重算，同 recorder 公式）
+    # S034 R5：已结算行附结算摘要（entry/exit + 历表 holding/settled 流转 created_at 重算，同 recorder 公式）
     if (
         result.get("settled_at")
         and result.get("entry_price") is not None
         and result.get("exit_price") is not None
     ):
+        buy_at, settle_at = _wf_state_repo.get_holding_settle_times(code, d)
         result["settlement"] = _settlement_recorder.settlement_summary(
-            result["entry_price"], result["exit_price"], result["trade_date"], result["settled_at"],
+            result["entry_price"], result["exit_price"],
+            buy_at or result["trade_date"],
+            settle_at or result["settled_at"],
         )
     return {"data": result}
 

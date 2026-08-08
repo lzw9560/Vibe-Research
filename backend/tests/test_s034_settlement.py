@@ -39,17 +39,55 @@ def _winrate_rows(tmp_winrate):
 def test_settlement_summary_math():
     import settlement_recorder as sr
 
-    s = sr.settlement_summary(10.0, 11.0, "2026-08-01", "2026-08-04T15:00:00")
+    # entry_at=买入时刻, settle_at=结算时刻（均 ISO，fromisoformat 解析）
+    s = sr.settlement_summary(10.0, 11.0, "2026-08-01T09:30:00", "2026-08-04T15:00:00")
     assert s["return_pct"] == 10.0
     assert s["won"] is True
-    assert s["hold_days"] == 3
+    assert s["hold_days"] == 3  # 精确持有 3 天
 
-    s = sr.settlement_summary(10.0, 9.5, "2026-08-01", "2026-08-02T15:00:00")
+    s = sr.settlement_summary(10.0, 9.5, "2026-08-01", "2026-08-02")
     assert s["return_pct"] == -5.0
     assert s["won"] is False
+    assert s["hold_days"] == 1
 
-    # entry 为 0/None 不崩
-    assert sr.settlement_summary(0.0, 11.0, "2026-08-01", "2026-08-02T15:00:00")["return_pct"] == 0.0
+    # entry 为 0/None 不崩；时刻缺失 → hold_days 0
+    assert sr.settlement_summary(0.0, 11.0, "2026-08-01", "2026-08-02")["return_pct"] == 0.0
+    assert sr.settlement_summary(10.0, 11.0, None, None)["hold_days"] == 0
+
+
+def test_hold_days_from_history(isolated_market_db):
+    """S034 修正：hold_days 从 workflow_state_history 的 holding/settled 流转 created_at 推导，精确不含 watching/monitoring 时长。"""
+    import settlement_recorder as sr
+    import workflow_state_repo as wsr
+
+    conn = wsr._get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO workflow_state (code,name,trade_date,status,created_at,updated_at) "
+            "VALUES ('600001','甲','2026-08-01','settled','2026-08-01','2026-08-04')"
+        )
+        # 模拟：候选日 08-01 → watching(08-01 08:30) → monitoring(08-01 09:00) → holding 买入(08-01 09:30) → settled 卖出(08-04 15:00)
+        # hold_days = 结算 - 买入 = 3 天（candidate/watching/monitoring 时刻不计入）
+        conn.executemany(
+            "INSERT INTO workflow_state_history (code,trade_date,from_status,to_status,reason,created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            [
+                ("600001", "2026-08-01", "pending", "candidate", "", "2026-08-01T08:00:00"),
+                ("600001", "2026-08-01", "candidate", "watching", "", "2026-08-01T08:30:00"),
+                ("600001", "2026-08-01", "watching", "monitoring", "", "2026-08-01T09:00:00"),
+                ("600001", "2026-08-01", "monitoring", "holding", "买", "2026-08-01T09:30:00"),
+                ("600001", "2026-08-01", "holding", "settled", "卖", "2026-08-04T15:00:00"),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    buy_at, settle_at = wsr.get_holding_settle_times("600001", "2026-08-01")
+    assert buy_at == "2026-08-01T09:30:00"
+    assert settle_at == "2026-08-04T15:00:00"
+    # hold_days = 结算 - 买入 = 3 天（不含 08-01→08-02 的 watching/monitoring 时长）
+    assert sr.settlement_summary(10.0, 11.0, buy_at, settle_at)["hold_days"] == 3
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +220,7 @@ def test_transition_settled_settles_and_records(tmp_winrate, isolated_market_db,
     settlement = r.json()["data"]["settlement"]
     assert settlement["recorded"] is True
     assert settlement["return_pct"] == 10.0
+    assert settlement["hold_days"] == 0  # fast chain：holding/settled 同秒，持有 0 天（历史推导）
     assert r.json()["data"]["settled_at"], "落戳应回填响应（不 stale）"
 
     rows = _winrate_rows(tmp_winrate)
