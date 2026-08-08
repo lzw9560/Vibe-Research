@@ -90,7 +90,8 @@ class AssistantDefaultConfig:
     CACHE_TTL_HOURS: int = 12
 
     # === 数据库 ===
-    DB_PATH: str = "vibe_research.db"
+    # deprecated: 用 config.GENE_SCORES_DB_PATH 替代（S037）；本文件已被 config/ 包遮蔽
+    DB_PATH: str = "gene_scores.db"
 
     # === 风险 ===
     RISK_DYNAMIC_THRESHOLDS: dict[str, dict[str, int]] = field(

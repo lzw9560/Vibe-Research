@@ -26,7 +26,8 @@ _BEIJING = timezone(timedelta(hours=8))
 def _get_tracker():
     """winrate.db 写入器（测试注入点——绝不写用户真实库）。
 
-    默认路径约定与 routers/win_rate.py 的模块级 _tracker 一致（data/winrate.db）。
+    默认路径经 config.WINRATE_DB_PATH 指向 .vibe-research/winrate.db，
+    与 routers/win_rate.py 的模块级 _tracker 一致。
     """
     from win_rate_tracker import WinRateTracker
 

@@ -33,6 +33,26 @@ _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
 
+# ── 私有数据目录 + DB 路径常量（S037）───────────────────────────
+# 复用 vr_paths.resolve_data_dir() 以兼容 VR_DATA_DIR 环境变量覆盖
+# （conftest.py 测试隔离依赖此机制），并指向仓库根 .vibe-research/。
+from vr_paths import resolve_data_dir as _resolve_data_dir
+
+PRIVATE_DATA_DIR: str = str(_resolve_data_dir())
+
+# DB 文件名（语义命名，不再共用 vibe_research.db）
+GENE_SCORES_DB = "gene_scores.db"
+STI_TIMELINE_DB = "sti_timeline.db"
+WINRATE_DB = "winrate.db"
+
+# 全路径便捷常量
+GENE_SCORES_DB_PATH = os.path.join(PRIVATE_DATA_DIR, GENE_SCORES_DB)
+STI_TIMELINE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, STI_TIMELINE_DB)
+WINRATE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, WINRATE_DB)
+
+os.makedirs(PRIVATE_DATA_DIR, exist_ok=True)
+
+
 def _parse_bool(key: str, value: str | None, default: bool) -> bool:
     """环境变量 bool 解析：非法值告警（不静默吞），返回 default。"""
     if value is None:
@@ -164,6 +184,7 @@ class AssistantDefaultConfig(NotificationConfig):
     CACHE_TTL_HOURS: int = 12
 
     # === 数据库 ===
+    # deprecated: 用 GENE_SCORES_DB_PATH 替代（S037），保留字段防 breakage
     DB_PATH: str = "vibe_research.db"
 
     # === 风险 ===

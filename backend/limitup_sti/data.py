@@ -9,11 +9,13 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from config import STI_TIMELINE_DB_PATH
+
 from migrations import MigrationManager
 
 from limitup_sti.models import STIResult, DISCLAIMER
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vibe_research.db")
+DB_PATH = STI_TIMELINE_DB_PATH
 
 
 def run_initial_migrations() -> None:

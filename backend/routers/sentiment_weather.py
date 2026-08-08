@@ -10,20 +10,12 @@ import json
 import os
 import time
 
-from config import default_config
+from config import GENE_SCORES_DB_PATH, STI_TIMELINE_DB_PATH
 
 router = APIRouter(tags=["sentiment-weather"])
 
-# Database path (same as STI engine)
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "limitup_sti", "vibe_research.db")
-
-# Pardon records are stored in the limitup_screener database
-_PARDON_DB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "..",
-    "limitup_screener",
-    "vibe_research.db",
-)
+DB_PATH = STI_TIMELINE_DB_PATH
+_PARDON_DB_PATH = GENE_SCORES_DB_PATH
 
 
 def _get_db() -> sqlite3.Connection:

@@ -27,7 +27,8 @@ def _check_database() -> Dict[str, Any]:
         with sti_db:
             sti_db.execute("SELECT 1 FROM sti_timeline LIMIT 1").fetchone()
 
-        winrate_path = "data/winrate.db"
+        from config import WINRATE_DB_PATH
+        winrate_path = WINRATE_DB_PATH
         with sqlite3.connect(winrate_path) as conn:
             conn.execute("SELECT 1 FROM winrate_records LIMIT 1").fetchone()
 

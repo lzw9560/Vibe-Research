@@ -10,13 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from config import WINRATE_DB_PATH
 from win_rate_tracker import WinRateTracker, WinRateStats
 
 
 class StrategyOptimizer:
     """策略自动优化器。"""
 
-    def __init__(self, db_path: str = "data/winrate.db") -> None:
+    def __init__(self, db_path: str = WINRATE_DB_PATH) -> None:
         self._tracker = WinRateTracker(db_path=db_path)
         self._weights: dict[str, float] = {}
 

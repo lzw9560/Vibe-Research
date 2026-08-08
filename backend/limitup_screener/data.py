@@ -9,9 +9,9 @@ import threading as _threading
 from datetime import datetime
 from pathlib import Path
 
-from config import default_config
+from config import GENE_SCORES_DB_PATH
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), default_config.DB_PATH)
+_DB_PATH = GENE_SCORES_DB_PATH
 _DB_LOCK = _threading.Lock()
 
 

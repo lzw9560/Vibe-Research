@@ -11,6 +11,8 @@ from typing import Any
 import sqlite3
 import json
 
+from config import WINRATE_DB_PATH
+
 from migrations import MigrationManager
 
 
@@ -50,7 +52,7 @@ class WinRateStats:
 class WinRateTracker:
     """胜率追踪器（SQLite 持久化）。"""
 
-    def __init__(self, db_path: str = "data/winrate.db"):
+    def __init__(self, db_path: str = WINRATE_DB_PATH):
         self.db_path = db_path
         self._migrate_schema()
 
@@ -275,7 +277,7 @@ def generate_strategy_adjustments(stats: WinRateStats) -> list[dict]:
 
 def get_trends(window_size: int = 20) -> list[dict]:
     """获取胜率趋势数据（按日期聚合）。"""
-    conn = sqlite3.connect("data/winrate.db")
+    conn = sqlite3.connect(WINRATE_DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         """
@@ -301,7 +303,7 @@ def get_trends(window_size: int = 20) -> list[dict]:
 
 def get_sector_stats(sector: str, window_size: int = 20) -> dict:
     """获取指定板块的胜率统计。"""
-    conn = sqlite3.connect("data/winrate.db")
+    conn = sqlite3.connect(WINRATE_DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         """
@@ -332,7 +334,7 @@ def get_sector_stats(sector: str, window_size: int = 20) -> dict:
 
 def get_strategy_stats(strategy: str, window_size: int = 20) -> dict:
     """获取指定战法的胜率统计。"""
-    conn = sqlite3.connect("data/winrate.db")
+    conn = sqlite3.connect(WINRATE_DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         """
