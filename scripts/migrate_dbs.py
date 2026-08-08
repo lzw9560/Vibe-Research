@@ -17,8 +17,10 @@ import sqlite3
 import sys
 from pathlib import Path
 
-# 仓库根: scripts/migrate_dbs.py -> parents[1]
+# 把 backend/ 加入 sys.path 以 import vr_paths——与 config 使用同一路径解析逻辑
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_REPO_ROOT / "backend"))
+from vr_paths import resolve_data_dir  # noqa: E402
 
 
 def _repo_relative(path: str) -> Path:
@@ -33,19 +35,19 @@ MIGRATIONS: list[dict] = [
     {
         "name": "gene_scores",
         "old": "backend/limitup_screener/vibe_research.db",
-        "new": ".vibe-research/gene_scores.db",
+        "new": "gene_scores.db",
         "tables": ["gene_scores", "fuse_pardon_records", "migrations"],
     },
     {
         "name": "sti_timeline",
         "old": "backend/limitup_sti/vibe_research.db",
-        "new": ".vibe-research/sti_timeline.db",
+        "new": "sti_timeline.db",
         "tables": ["sti_timeline", "migrations"],
     },
     {
         "name": "winrate",
         "old": "backend/data/winrate.db",
-        "new": ".vibe-research/winrate.db",
+        "new": "winrate.db",
         "tables": ["winrate_records", "migrations"],
     },
 ]
@@ -82,11 +84,17 @@ def _counts_match(old_counts: dict[str, int], new_counts: dict[str, int]) -> boo
     return old_counts == new_counts
 
 
-def migrate_db(spec: dict, dry: bool = False) -> dict:
-    """迁移单个库. 返回状态报告."""
+def migrate_db(spec: dict, dry: bool = False, data_dir: Path | None = None) -> dict:
+    """迁移单个库. 返回状态报告.
+
+    ``data_dir`` 默认走 ``vr_paths.resolve_data_dir()``，与 ``config`` 保持
+    一致（兼容 ``VR_DATA_DIR`` 环境变量）。测试可注入临时目录隔离。
+    """
     name = spec["name"]
     old_path = _repo_relative(spec["old"])
-    new_path = _repo_relative(spec["new"])
+    if data_dir is None:
+        data_dir = resolve_data_dir()
+    new_path = Path(data_dir) / spec["new"]
     tables = spec["tables"]
 
     report = {
@@ -165,7 +173,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print(f"仓库根: {_REPO_ROOT}")
-    print(f"目标目录: {_REPO_ROOT / '.vibe-research'}")
+    print(f"目标目录: {resolve_data_dir()}")
     print()
 
     reports = []

@@ -39,10 +39,10 @@ def test_migrate_basic(tmp_path):
     spec = {
         "name": "gene_scores",
         "old": "backend/limitup_screener/vibe_research.db",
-        "new": ".vibe-research/gene_scores.db",
+        "new": "gene_scores.db",
         "tables": ["gene_scores", "migrations"],
     }
-    report = mod.migrate_db(spec)
+    report = mod.migrate_db(spec, data_dir=tmp_path / ".vibe-research")
 
     assert report["status"] == "migrated"
     assert report["old_counts"]["gene_scores"] == 5
@@ -61,16 +61,16 @@ def test_migrate_idempotent(tmp_path):
     spec = {
         "name": "gene_scores",
         "old": "backend/limitup_screener/vibe_research.db",
-        "new": ".vibe-research/gene_scores.db",
+        "new": "gene_scores.db",
         "tables": ["gene_scores", "migrations"],
     }
-    report1 = mod.migrate_db(spec)
+    report1 = mod.migrate_db(spec, data_dir=tmp_path / ".vibe-research")
     assert report1["status"] == "migrated"
 
     bak = old_dir / "vibe_research.db.bak"
     bak.rename(old_dir / "vibe_research.db")
 
-    report2 = mod.migrate_db(spec)
+    report2 = mod.migrate_db(spec, data_dir=tmp_path / ".vibe-research")
     assert report2["status"] == "skip: already migrated (row counts match)"
 
 
@@ -80,10 +80,10 @@ def test_migrate_skip_missing_old(tmp_path):
     spec = {
         "name": "gene_scores",
         "old": "backend/limitup_screener/vibe_research.db",
-        "new": ".vibe-research/gene_scores.db",
+        "new": "gene_scores.db",
         "tables": ["gene_scores", "migrations"],
     }
-    report = mod.migrate_db(spec)
+    report = mod.migrate_db(spec, data_dir=tmp_path / ".vibe-research")
     assert report["status"] == "skip: old db not found"
 
 
@@ -99,10 +99,10 @@ def test_migrate_overwrite_empty_new(tmp_path):
     spec = {
         "name": "winrate",
         "old": "backend/data/winrate.db",
-        "new": ".vibe-research/winrate.db",
+        "new": "winrate.db",
         "tables": ["winrate_records", "migrations"],
     }
-    report = mod.migrate_db(spec)
+    report = mod.migrate_db(spec, data_dir=tmp_path / ".vibe-research")
     assert report["status"] == "migrated"
     assert report["new_counts"]["winrate_records"] == 10
     assert (old_dir / "winrate.db.bak").exists()
@@ -117,10 +117,37 @@ def test_migrate_dry_run(tmp_path):
     spec = {
         "name": "gene_scores",
         "old": "backend/limitup_screener/vibe_research.db",
-        "new": ".vibe-research/gene_scores.db",
+        "new": "gene_scores.db",
         "tables": ["gene_scores", "migrations"],
     }
-    report = mod.migrate_db(spec, dry=True)
+    report = mod.migrate_db(spec, dry=True, data_dir=tmp_path / ".vibe-research")
     assert report["status"] == "dry-run: would migrate"
     assert not (tmp_path / ".vibe-research" / "gene_scores.db").exists()
     assert (old_dir / "vibe_research.db").exists()
+
+
+def test_migrate_data_dir_matches_config(tmp_path, monkeypatch):
+    """VR_DATA_DIR 下, migrate_dbs 的 new_path 与 config.GENE_SCORES_DB_PATH 一致."""
+    monkeypatch.setenv("VR_DATA_DIR", str(tmp_path / "custom-data"))
+
+    # config 在 import 时已固化路径（conftest 先于本文件设了 VR_DATA_DIR）,
+    # 这里直接用 vr_paths 验证 resolve_data_dir 一致性
+    import vr_paths
+    monkeypatch.setattr(vr_paths, "_REPO_ROOT", tmp_path, raising=False)
+
+    mod = _load_migrate_module(tmp_path)
+    old_dir = tmp_path / "backend" / "limitup_screener"
+    _make_test_db(old_dir / "vibe_research.db", {"gene_scores": 1, "migrations": 1})
+
+    spec = {
+        "name": "gene_scores",
+        "old": "backend/limitup_screener/vibe_research.db",
+        "new": "gene_scores.db",
+        "tables": ["gene_scores", "migrations"],
+    }
+    report = mod.migrate_db(spec)
+
+    # new path 应该走 resolve_data_dir() → 受 VR_DATA_DIR 控制
+    expected_new = tmp_path / "custom-data" / "gene_scores.db"
+    assert report["new"] == str(expected_new), f"{report['new']} != {expected_new}"
+    assert expected_new.exists()
