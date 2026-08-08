@@ -2,6 +2,8 @@
 
 > 对应：`spec.md`（需求）、`plan.md`（技术方案）
 > 依赖：S040 先合并。级别：small，直接 develop 提交。
+>
+> 进度（2026-08-09）：阶段 A（A1/A2/A3）+ 阶段 B（B1/B2/B3）已完成，见 develop `0a867eb`；测试 `tests/test_s043_factor_percentile.py` 9/9 通过。阶段 C+D 推迟至 S040（90 天数据）合并后。
 
 ---
 
