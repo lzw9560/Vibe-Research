@@ -78,6 +78,7 @@ class PostMarketWorkflow:
 
     async def _settle_recommendations(self) -> list[SettlementResult]:
         """结算前日推荐。"""
+        # stub: 未实现，见 S036（端点 /workflow/post-market、/workflow/settle 已 early return，不触达本桩）
         # TODO: 从数据库读取前日推荐
         # TODO: 获取次日实际行情
         # TODO: 计算收益率
@@ -92,11 +93,13 @@ class PostMarketWorkflow:
 
     async def _generate_llm_review(self, report: PostMarketReport) -> str:
         """生成 LLM 复盘分析。"""
+        # stub: 未实现，见 S036（端点 /workflow/post-market 已 early return，不触达本桩）
         # TODO: 接入 LLM 生成复盘报告
         return "盘后复盘功能待实现"
 
     async def _generate_next_day_strategy(self) -> str:
         """生成次日策略。"""
+        # stub: 未实现，见 S036（端点 /workflow/post-market 已 early return，不触达本桩）
         # TODO: 基于今日数据生成次日策略
         return "次日策略待实现"
 

@@ -84,6 +84,7 @@ class RealtimeWorkflow:
 
     async def monitor_stock(self, code: str, name: str) -> RealtimeSignal | None:
         """监控单只股票，生成信号。"""
+        # stub: 未实现，见 S036（端点 /workflow/realtime 已 early return，不触达本桩）
         # TODO: 接入实时行情数据
         return None
 
@@ -109,6 +110,7 @@ class RealtimeWorkflow:
 
         # 红色预警：封单 < 流通市值 0.3%（需要额外数据）
         # TODO: 接入流通市值数据
+        # 见 S036：alerts 端点已标灰（run_intraday 不调本方法），暂不在端点路径
 
         return None
 

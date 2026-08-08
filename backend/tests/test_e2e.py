@@ -270,31 +270,41 @@ class TestWorkflowEndpoints:
         r = client.get("/api/workflow/realtime")
         assert r.status_code == 200
         data = r.json()
-        assert "data" in data
+        # S036：桩端点标灰——返 not_implemented，不返 data
+        assert data["not_implemented"] is True
+        assert data["spec"] == "S036"
 
     def test_workflow_intraday(self):
         r = client.get("/api/workflow/intraday")
         assert r.status_code == 200
         data = r.json()
-        assert "data" in data
+        # S036 别名同走 early return
+        assert data["not_implemented"] is True
+        assert data["spec"] == "S036"
 
     def test_workflow_post_market(self):
         r = client.get("/api/workflow/post-market")
         assert r.status_code == 200
         data = r.json()
-        assert "data" in data
+        # S036：桩端点标灰
+        assert data["not_implemented"] is True
+        assert data["spec"] == "S036"
 
     def test_workflow_signals(self):
         r = client.get("/api/workflow/signals")
         assert r.status_code == 200
         data = r.json()
-        assert "data" in data
+        # S036：桩端点标灰
+        assert data["not_implemented"] is True
+        assert data["spec"] == "S036"
 
     def test_workflow_alerts(self):
         r = client.get("/api/workflow/alerts")
         assert r.status_code == 200
         data = r.json()
-        assert "data" in data
+        # S036：桩端点标灰
+        assert data["not_implemented"] is True
+        assert data["spec"] == "S036"
 
     def test_workflow_strategies(self):
         r = client.get("/api/workflow/strategies")

@@ -116,6 +116,16 @@ def _serialize(obj: Any) -> Any:
     return obj
 
 
+def _not_implemented(message: str, spec: str = "S036") -> Dict[str, Any]:
+    """S036：桩端点标灰——返回结构化 not_implemented 状态，不跑桩逻辑。
+
+    端点签名/路由路径不变（契约兼容）；调用方拿到结构化降级而非 500。
+    桩方法（realtime_workflow / post_market_workflow）保留签名但端点已 early
+    return 不触达——见 S036 R7。
+    """
+    return {"not_implemented": True, "message": message, "spec": spec}
+
+
 @router.get("/api/workflow/status")
 async def get_workflow_status() -> Dict[str, Any]:
     """
@@ -188,16 +198,8 @@ async def run_pre_market_workflow(date: Optional[str] = Query(None, description=
 
 @router.get("/api/workflow/realtime")
 async def get_realtime_workflow() -> Dict[str, Any]:
-    """
-    Get realtime workflow data.
-
-    Includes realtime monitoring, bomb alerts, and position adjustments.
-    """
-    try:
-        result = await _workflow.run_intraday()
-        return {"data": _serialize(result)}
-    except Exception as e:
-        raise HTTPException(500, f"获取实时工作流失败：{e}") from e
+    """盘中监控未实现（S036 标灰）——不跑 run_intraday 桩，返回结构化降级。"""
+    return _not_implemented("盘中监控未实现")
 
 
 # 向后兼容别名
@@ -209,16 +211,8 @@ async def get_intraday_workflow_alias() -> Dict[str, Any]:
 
 @router.get("/api/workflow/post-market")
 async def get_post_market_workflow() -> Dict[str, Any]:
-    """
-    Get post-market workflow data.
-
-    Includes settlement results, LLM review, and win rate stats.
-    """
-    try:
-        report = await _workflow.run_post_market()
-        return {"data": _serialize(report)}
-    except Exception as e:
-        raise HTTPException(500, f"获取盘后工作流失败：{e}") from e
+    """盘后复盘未实现（S036 标灰）——不跑 run_post_market 桩，返回结构化降级。"""
+    return _not_implemented("盘后复盘未实现")
 
 
 @router.post("/api/workflow/refresh")
@@ -239,42 +233,20 @@ async def refresh_workflow() -> Dict[str, Any]:
 
 @router.get("/api/workflow/signals")
 async def get_realtime_signals() -> Dict[str, Any]:
-    """
-    Get realtime trading signals.
-
-    Returns current signals from the intraday workflow.
-    """
-    try:
-        signals = _workflow.intraday.signals
-        return {"data": _serialize(signals)}
-    except Exception as e:
-        raise HTTPException(500, f"获取实时信号失败：{e}") from e
+    """盘中信号未实现（S036 标灰）——不读 intraday.signals 桩，返回结构化降级。"""
+    return _not_implemented("盘中信号未实现")
 
 
 @router.get("/api/workflow/alerts")
 async def get_bomb_alerts() -> Dict[str, Any]:
-    """
-    Get bomb alerts (炸板预警).
-
-    Returns current alerts from the bomb alert system.
-    """
-    try:
-        alerts = _bomb_alert_system.active_alerts()
-        return {"data": _serialize(alerts)}
-    except Exception as e:
-        raise HTTPException(500, f"获取炸板预警失败：{e}") from e
+    """炸板预警未实现（S036 标灰）——不读 active_alerts 桩，返回结构化降级。"""
+    return _not_implemented("炸板预警未实现")
 
 
 @router.post("/api/workflow/settle")
 async def settle_position() -> Dict[str, Any]:
-    """
-    Manually trigger position settlement.
-    """
-    try:
-        report = await _workflow.run_post_market()
-        return {"data": _serialize(report)}
-    except Exception as e:
-        raise HTTPException(500, f"结算失败：{e}") from e
+    """盘后批量结算未实现（S036 标灰）——用状态机流转 settled 触发结算（见 S034）。"""
+    return _not_implemented("盘后批量结算未实现，请用状态机流转 settled 触发结算（S034）")
 
 
 @router.get("/api/workflow/strategies")
