@@ -158,3 +158,15 @@ export function useInvestorQa(code: string, options?: Opts<Awaited<ReturnType<ty
     ...options,
   });
 }
+
+// S039: 个股深度聚合（GET /stock/{code}/deep，12 源 _safe_call 聚合）。
+// 整体返 StockDeep（端点 200）；字段级 null 是后端单源失败的正常降级。
+// get<T> 会 throw ApiError（连不上后端/HTTP 错），useQuery 的 error 据此走错误态。
+export function useStockDeep(code: string, options?: Opts<Awaited<ReturnType<typeof api.stockDeep>>>) {
+  return useQuery({
+    queryKey: ["stock", "deep", code] as const,
+    queryFn: () => api.stockDeep(code),
+    enabled: !!code,
+    ...options,
+  });
+}
