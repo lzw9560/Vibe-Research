@@ -9,8 +9,7 @@ import sqlite3
 import json
 import os
 import time
-
-from config import GENE_SCORES_DB_PATH, STI_TIMELINE_DB_PATH
+from config import GENE_SCORES_DB_PATH, STI_TIMELINE_DB_PATH, default_config
 
 router = APIRouter(tags=["sentiment-weather"])
 
