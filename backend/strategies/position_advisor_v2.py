@@ -22,7 +22,14 @@ from strategies.strategy_backtest import run_strategy_backtest
 
 _DISCLAIMER = "历史统计特征，市场有风险，不构成投资建议"
 _LOOKBACK_DAYS = 90
-_DEFAULT_STOP_PCT = -3.0  # 持仓无战法命中时的默认止损线（spec D2 兜底）
+_DEFAULT_STOP_PCT = -3.0   # 层 1/2 无战法时的默认止损线
+_HARD_STOP_PCT = -5.0      # 层 3 无战法支撑的硬止损
+_ATR_PERIOD = 14
+_ATR_MULT = 2.0            # trailing stop: 最高价 - N×ATR
+_ATR_MULT_TIGHT = 1.5      # 浮盈>15% 时收紧 trailing
+_HISTORY_LOOKBACK_DAYS = 30  # 层 2 查历史涨停的天数
+_TIGHT_PROFIT_PCT = 15.0  # 浮盈超此值收紧 trailing
+_kline_cache: dict[str, list[Any]] = {}  # code -> bars（复用 strategy_backtest 模式）
 
 
 @dataclass
@@ -140,32 +147,168 @@ def _suggested_pct(win_rate: float | None) -> float:
     return 0.05
 
 
-def _holding_action(
-    pnl_pct: float, win_rate: float | None, stop_pct: float
-) -> tuple[str, str]:
-    """持仓 add/reduce/close/hold 规则（spec D2）。
+def _atr_trailing_stop(code: str, cost: float, stop_floor_pct: float | None = None) -> tuple[float | None, float | None, bool]:
+    """算 ATR trailing stop 价 + 持仓期最高价。
 
-    wr 为 0-1 小数或 None。stop_pct 为止损线（%，负值，默认 -3 或战法 stop_loss_pct）。
-    解读：硬止损 floor（触及 stop_pct）→ close，但 win_rate>=0.5 支撑时持有（D2
-    "亏损>3% 且 win_rate>=50% → hold" 与 "止损线无条件 close" 的张力按 win_rate 优先解）。
+    返回 (trailing_stop_price, high_water_mark, atr_ok)。
+    K 线 < _ATR_PERIOD+1 根 → atr_ok=False（调用方 fallback 到固定止损）。
+    stop_floor_pct: 战法 stop_loss_pct（负值），trailing 不低于此线。None=不限。
     """
-    at_stop = pnl_pct <= stop_pct
-    if at_stop:
+    bars = _kline_cache.get(code)
+    if bars is None:
+        try:
+            import astock
+            from data.mappers import kline_from_mootdx
+            raw = astock.kline(code, category=4, offset=_ATR_PERIOD + 15)
+            bars = list(kline_from_mootdx(code, raw).bars)
+            _kline_cache[code] = bars
+        except Exception:  # noqa: BLE001
+            bars = []
+            _kline_cache[code] = bars
+    if len(bars) < _ATR_PERIOD + 1:
+        return None, None, False
+    # True Range
+    trs = []
+    for i in range(1, len(bars)):
+        h = getattr(bars[i], "high", 0) or 0
+        lo = getattr(bars[i], "low", 0) or 0
+        pc = getattr(bars[i - 1], "close", 0) or 0
+        if h and lo and pc:
+            trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
+    if len(trs) < _ATR_PERIOD:
+        return None, None, False
+    atr = sum(trs[-_ATR_PERIOD:]) / _ATR_PERIOD
+    high_water = max((getattr(b, "high", 0) or 0) for b in bars)
+    if not atr or not high_water:
+        return None, None, False
+    mult = _ATR_MULT
+    trailing = round(high_water - mult * atr, 2)
+    if stop_floor_pct is not None:
+        floor = round(cost * (1 + stop_floor_pct / 100), 2)
+        trailing = max(trailing, floor)
+    return trailing, round(high_water, 2), True
+
+
+def _holding_action_layer1(
+    pnl_pct: float, win_rate: float | None, stop_pct: float, take_profit_pct: float
+) -> tuple[str, str]:
+    """层 1：当日战法，窗口内——战法固定参数驱动。"""
+    if pnl_pct <= stop_pct:
         if win_rate is not None and win_rate >= 0.5:
             return "hold", f"触及止损 {stop_pct}% 但回测胜率 {win_rate*100:.0f}% 支撑，持有观察"
-        return "close", f"触及止损 {stop_pct}%，止损"
-    if pnl_pct > 5:
-        if win_rate is not None and win_rate < 0.4:
-            return "reduce", "盈利但战法胜率偏弱，减仓锁利"
-        return "hold", "盈利 + 战法胜率支撑，持有"
-    if pnl_pct < -3:
-        if win_rate is not None and win_rate < 0.4:
-            return "close", "亏损 + 战法胜率差，止损"
-        return "hold", "亏损但胜率中等以上，观察"
-    # 浮动盈亏在 [-3, 5]
-    if win_rate is not None and win_rate < 0.4:
-        return "reduce", "信号偏弱，减仓降风险"
-    return "hold", "信号不明，观察"
+        return "close", f"触及战法止损 {stop_pct}%，止损"
+    if pnl_pct >= take_profit_pct:
+        return "reduce", f"触及战法止盈 {take_profit_pct}%，锁利"
+    if 0 < pnl_pct < take_profit_pct and win_rate is not None and win_rate < 0.4:
+        return "reduce", "盈利但战法胜率偏弱，减仓锁利"
+    return "hold", "当日战法信号有效，持有"
+
+
+def _holding_action_layer2(
+    pnl_pct: float, win_rate: float | None, stop_pct: float,
+    price: float, cost: float, code: str
+) -> tuple[str, str]:
+    """层 2：历史战法已过期——ATR trailing 止盈。"""
+    if pnl_pct <= stop_pct:
+        return "close", f"触及战法止损 {stop_pct}%，止损"
+    trailing, high_water, atr_ok = _atr_trailing_stop(code, cost, stop_pct)
+    if atr_ok and trailing is not None and price <= trailing:
+        return "reduce", f"ATR trailing 触发（止盈线 {trailing}），锁利"
+    if pnl_pct > _TIGHT_PROFIT_PCT and atr_ok and trailing is not None:
+        # 浮盈>15%，收紧 trailing
+        tight_trailing = round(high_water - _ATR_MULT_TIGHT * (high_water - trailing) / _ATR_MULT, 2) if trailing and high_water else None
+        # 直接重算收紧版
+        bars = _kline_cache.get(code, [])
+        if len(bars) >= _ATR_PERIOD + 1:
+            trs = []
+            for i in range(1, len(bars)):
+                h = getattr(bars[i], "high", 0) or 0
+                lo = getattr(bars[i], "low", 0) or 0
+                pc = getattr(bars[i-1], "close", 0) or 0
+                if h and lo and pc:
+                    trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
+            if len(trs) >= _ATR_PERIOD:
+                atr = sum(trs[-_ATR_PERIOD:]) / _ATR_PERIOD
+                tight_trailing = round(high_water - _ATR_MULT_TIGHT * atr, 2)
+                floor = round(cost * (1 + stop_pct / 100), 2)
+                tight_trailing = max(tight_trailing, floor)
+                if price <= tight_trailing:
+                    return "reduce", f"收紧 ATR trailing 触发（止盈线 {tight_trailing}），锁大部分利润"
+    if pnl_pct > 0 and win_rate is not None and win_rate < 0.4:
+        return "reduce", "历史战法胜率偏弱，主动锁利"
+    return "hold", "历史战法信号已过期，ATR trailing 守利润"
+
+
+def _holding_action_layer3(
+    pnl_pct: float, price: float, cost: float, code: str
+) -> tuple[str, str]:
+    """层 3：无战法信号——纯盈亏 + ATR trailing 止损纪律。"""
+    if pnl_pct <= _HARD_STOP_PCT:
+        return "close", f"无战法支撑，浮亏 {pnl_pct:.1f}% 超硬止损 {_HARD_STOP_PCT}%，止损"
+    trailing, high_water, atr_ok = _atr_trailing_stop(code, cost)
+    if atr_ok and trailing is not None and price <= trailing:
+        return "reduce", f"ATR trailing 触发（止盈线 {trailing}），锁利"
+    if pnl_pct > _TIGHT_PROFIT_PCT and atr_ok and trailing is not None and high_water:
+        bars = _kline_cache.get(code, [])
+        if len(bars) >= _ATR_PERIOD + 1:
+            trs = []
+            for i in range(1, len(bars)):
+                h = getattr(bars[i], "high", 0) or 0
+                lo = getattr(bars[i], "low", 0) or 0
+                pc = getattr(bars[i-1], "close", 0) or 0
+                if h and lo and pc:
+                    trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
+            if len(trs) >= _ATR_PERIOD:
+                atr = sum(trs[-_ATR_PERIOD:]) / _ATR_PERIOD
+                tight_trailing = round(high_water - _ATR_MULT_TIGHT * atr, 2)
+                if price <= tight_trailing:
+                    return "reduce", f"收紧 ATR trailing 触发（止盈线 {tight_trailing}），锁大部分利润"
+    if 0 < pnl_pct <= 5:
+        return "hold", "刚启动盈利，观察"
+    if 5 < pnl_pct <= 10:
+        return "hold", "盈利中，止损线上移至成本价保本"
+    return "hold", "无战法信号，基于盈亏状态持有"
+
+
+def _lookup_holding_strategy(
+    code: str, today_gene_map: dict[str, Any], wr_map: dict[str, tuple[float, int, str]]
+) -> tuple[str | None, str, float | None, int, str, int]:
+    """持仓战法三层匹配。返回 (strategy_code, strategy_name, win_rate, sample_size, win_rate_source, layer)。
+
+    layer: 1=当日涨停, 2=历史涨停(30天内), 3=无涨停历史
+    """
+    # 层 1：当日 gene_scores 有此 code
+    g = today_gene_map.get(code)
+    if g is not None:
+        sc, sn, wr, ss, src = _lookup_strategy(code, g, wr_map)
+        if sc:
+            return sc, sn, wr, ss, "backtest_90d", 1
+    # 层 2：查 30 天内历史 gene_scores
+    from limitup_screener.data import get_db
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT date FROM gene_scores WHERE code = ? AND date < ? "
+                "AND date >= date(?, '-30 days') ORDER BY date DESC LIMIT 1",
+                (code, today, today),
+            ).fetchone()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        row = None
+    if row:
+        hist_date = row["date"]
+        scores = load_gene_scores(hist_date) or []
+        hist_gene = next((g for g in scores if g.code == code), None)
+        if hist_gene:
+            sc, sn, wr, ss, src = _lookup_strategy(code, hist_gene, wr_map)
+            if sc:
+                return sc, sn, wr, ss, "backtest_90d_historical", 2
+    # 层 3
+    return None, "", None, 0, "none", 3
 
 
 def advise_recommendations(limit: int = 20) -> list[AdvisoryItem]:
@@ -253,7 +396,12 @@ def advise_watchlist() -> list[AdvisoryItem]:
 
 
 async def advise_holdings() -> list[AdvisoryItem]:
-    """R4：持仓 add/reduce/close/hold——浮动盈亏 + 战法 90 天 win_rate（D2 规则）。"""
+    """R4：持仓 add/reduce/close/hold——三层降级 + ATR trailing（spec D2）。
+
+    层 1 当日涨停 → 战法固定止盈止损 + win_rate。
+    层 2 历史涨停(30天内) → ATR trailing 止盈 + 历史 win_rate 参考。
+    层 3 无涨停历史 → 纯盈亏 + ATR trailing 止损纪律。
+    """
     import portfolio as pf
 
     try:
@@ -263,6 +411,7 @@ async def advise_holdings() -> list[AdvisoryItem]:
     holdings = pf_data.get("holdings") or []
     if not holdings:
         return []
+    _kline_cache.clear()  # 每次刷新清缓存（行情更新）
     gene_map = _latest_gene_map()
     wr_map = _win_rate_map()
     items: list[AdvisoryItem] = []
@@ -272,27 +421,38 @@ async def advise_holdings() -> list[AdvisoryItem]:
         cost = h.get("cost") or 0.0
         price = h.get("price") or 0.0
         name = h.get("name") or code
-        g = gene_map.get(code)
-        if g is not None:
-            sc, sn, wr, ss, src = _lookup_strategy(code, g, wr_map)
-        else:
-            sc, sn, wr, ss, src = None, "", None, 0, "none"
+
+        sc, sn, wr, ss, src, layer = _lookup_holding_strategy(code, gene_map, wr_map)
         params = _strat_params(sc)
         stop_pct = params.get("stop_loss_pct", _DEFAULT_STOP_PCT)
-        action, reason = _holding_action(pnl_pct, wr, stop_pct)
-        reasons = [f"浮动盈亏 {pnl_pct:+.2f}%"]
-        if wr is not None:
-            reasons.append(
-                f"战法「{sn or '未匹配'}」90 天回测胜率 {wr*100:.0f}%（样本 {ss}）"
-            )
+        take_profit_pct = params.get("take_profit_pct", 8.0)
+
+        if layer == 1:
+            action, reason = _holding_action_layer1(pnl_pct, wr, stop_pct, take_profit_pct)
+        elif layer == 2:
+            action, reason = _holding_action_layer2(pnl_pct, wr, stop_pct, price, cost, code)
         else:
-            reasons.append("无对应战法回测数据（win_rate_source=synthetic/none）")
+            action, reason = _holding_action_layer3(pnl_pct, price, cost, code)
+
+        reasons = [f"浮动盈亏 {pnl_pct:+.2f}%"]
+        if layer <= 2 and wr is not None:
+            tag = "当日" if layer == 1 else "历史"
+            reasons.append(
+                f"{tag}战法「{sn or '未匹配'}」90 天回测胜率 {wr*100:.0f}%（样本 {ss}）"
+            )
+        elif layer == 2:
+            reasons.append("历史战法信号已过期，win_rate 仅供参考")
+        else:
+            reasons.append("无战法信号，建议基于盈亏状态 + ATR 止损纪律")
         reasons.append(reason)
+        risk_notes = [_DISCLAIMER]
+        if layer == 2:
+            risk_notes.append("历史战法信号已超 max_hold_days 窗口")
         items.append(AdvisoryItem(
             code=code, name=name, scene="holding", action=action,
             win_rate=wr, win_rate_source=src, matched_strategy=sn or None,
-            reasons=reasons, risk_notes=[_DISCLAIMER],
-            extra={"pnl_pct": pnl_pct, "cost": cost, "price": price},
+            reasons=reasons, risk_notes=risk_notes,
+            extra={"pnl_pct": pnl_pct, "cost": cost, "price": price, "layer": layer},
         ))
     return items
 

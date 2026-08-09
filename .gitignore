@@ -18,6 +18,7 @@ backend/**/*.db
 *.db-wal
 *.db-journal
 backend/vibe_research.db
+*.db.bak
 # 根级 ./data 运行时库（winrate.db 等），不入 git
 /data/
 # 注意：backend/data 自 S008 起同时是数据层源码包（transport.py/mappers.py/sources/*），
