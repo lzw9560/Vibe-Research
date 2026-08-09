@@ -38,7 +38,7 @@ def test_seed_idempotent(isolated_market_db):
     assert len(tasks) == 1
     assert tasks[0].cron_expr == "30 15 * * 0-4"  # 0=周一约定下工作日=Mon-Fri
     assert tasks[0].task_type == "limitup_precompute"
-    assert tasks[0].payload == {"back_days": 3}
+    assert tasks[0].payload == {"back_days": 10}
     assert tasks[0].enabled is True
 
 

@@ -61,11 +61,18 @@ class BacktestResult:
     factor_percentile_analysis: dict[str, Any] | None = None
 
 
-def _calc_next_day_return(code: str, date_str: str) -> float:
-    """计算次日真实收益率（基于 K 线收盘价）。"""
+def _calc_next_day_return(code: str, date_str: str, kline_cache: dict[str, Any] | None = None) -> float:
+    """计算次日真实收益率（基于 K 线收盘价）。kline_cache 按 code 缓存 bars，跨日复用。"""
     try:
-        raw = astock.kline(code, category=4, offset=5)
-        bars = kline_from_mootdx(code, raw).bars
+        if kline_cache is not None and code in kline_cache:
+            bars = kline_cache[code]
+        else:
+            _meta = kline_cache.get("_offset") if kline_cache is not None else None
+            offset = int(_meta) if isinstance(_meta, (int, float)) else 5
+            raw = astock.kline(code, category=4, offset=offset)
+            bars = kline_from_mootdx(code, raw).bars
+            if kline_cache is not None:
+                kline_cache[code] = bars
         if not bars:
             return 0.0
         # 找到当前日期或之后第一个交易日
@@ -89,13 +96,18 @@ async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
     points: list[dict] = []
     start, end = date_range
 
+    # K 线按 code 缓存（同股跨日复用），offset = 日历天数 + 15 余量
+    from datetime import datetime as _dt
+    window_days = (_dt.strptime(end, "%Y-%m-%d") - _dt.strptime(start, "%Y-%m-%d")).days
+    kline_cache: dict[str, Any] = {"_offset": max(5, window_days + 15)}
+
     current = start
     while current <= end:
         try:
             result = await ls.get_screener_result(current)
             for g in result.gene_scores:
                 # 获取次日真实收益（基于 K 线收盘价）
-                next_day_return = _calc_next_day_return(g.code, current)
+                next_day_return = _calc_next_day_return(g.code, current, kline_cache)
                 points.append({
                     "gene_score": g.total_score,
                     "next_day_return": next_day_return,
@@ -103,6 +115,8 @@ async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
                     "date": current,
                     "industry": getattr(g, "industry", "未知"),
                     "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0),
+                    "data_source": getattr(g, "data_source", "eastmoney_live"),
+                    "missing_factors": getattr(g, "missing_factors", []),
                 })
         except Exception:
             pass
@@ -152,6 +166,11 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
     hit_count = 0
     returns: list[float] = []
 
+    # K 线按 code 缓存（同股跨日复用），offset = 日历天数 + 15 余量
+    from datetime import datetime as _dt
+    window_days = (_dt.strptime(end_date, "%Y-%m-%d") - _dt.strptime(start_date, "%Y-%m-%d")).days
+    kline_cache: dict[str, Any] = {"_offset": max(5, window_days + 15)}
+
     current = start_date
     while current <= end_date:
         try:
@@ -161,7 +180,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
                     continue
                 total_signals += 1
                 # 使用真实 K 线计算次日收益率
-                next_day_return = _calc_next_day_return(g.code, current)
+                next_day_return = _calc_next_day_return(g.code, current, kline_cache)
                 returns.append(next_day_return)
                 if next_day_return > 0:
                     hit_count += 1
@@ -171,6 +190,8 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
                     "gene_score": g.total_score,
                     "next_day_return": next_day_return,
                     "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0),
+                    "data_source": getattr(g, "data_source", "eastmoney_live"),
+                    "missing_factors": getattr(g, "missing_factors", []),
                 })
         except Exception:
             pass

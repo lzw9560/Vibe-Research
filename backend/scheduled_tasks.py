@@ -784,7 +784,7 @@ def _ensure_seed_tasks() -> None:
             description="盘后涨停板基因得分+STI+竞价+复盘预计算（S031 R13 seed）",
             task_type="limitup_precompute",
             cron_expr="30 15 * * 0-4",
-            payload={"back_days": 3},
+            payload={"back_days": 10},
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 limitup_precompute 已创建（cron 30 15 * * 0-4）")

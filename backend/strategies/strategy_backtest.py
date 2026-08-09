@@ -150,6 +150,8 @@ def run_strategy_backtest(lookback_days: int = 60) -> list[StrategyBacktestResul
                     "strategy_name": sig.strategy_name,
                     "won": res["won"],
                     "return_pct": res["return_pct"],
+                    "data_source": getattr(gene, "data_source", "eastmoney_live"),
+                    "missing_factors": getattr(gene, "missing_factors", []),
                 })
 
     # 按战法聚合

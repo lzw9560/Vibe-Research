@@ -31,6 +31,10 @@ def run_migrations() -> None:
         Path(__file__).resolve().parent.parent
         / "migrations" / "limitup_screener" / "20250724-001_create_fuse_pardon_records.sql"
     ).read_text(encoding="utf-8")
+    migration_v4 = (
+        Path(__file__).resolve().parent.parent
+        / "migrations" / "limitup_screener" / "20260809-001_add_data_source.sql"
+    ).read_text(encoding="utf-8")
     migrations = [
         {
             "version": "20250613-001",
@@ -47,6 +51,11 @@ def run_migrations() -> None:
             "name": "create_fuse_pardon_records",
             "sql": migration_v3,
         },
+        {
+            "version": "20260809-001",
+            "name": "add_data_source",
+            "sql": migration_v4,
+        },
     ]
     manager.upgrade(migrations)
 
@@ -60,7 +69,9 @@ def get_db() -> sqlite3.Connection:
 
 
 def save_gene_scores(date: str, scores: list) -> None:
-    """保存基因得分到数据库。"""
+    """保存基因得分到数据库。data_source/missing_factors 从 GeneScore 字段读。"""
+    import json as _json
+
     conn = get_db()
     with _DB_LOCK:
         try:
@@ -76,6 +87,8 @@ def save_gene_scores(date: str, scores: list) -> None:
                     1 if s.qualify else 0,
                     1 if s.high_gene else 0,
                     s.zt_count_250d,
+                    getattr(s, "data_source", "eastmoney_live"),
+                    _json.dumps(getattr(s, "missing_factors", []), ensure_ascii=False),
                 )
                 for s in scores
             ]
@@ -83,8 +96,9 @@ def save_gene_scores(date: str, scores: list) -> None:
                 INSERT OR REPLACE INTO gene_scores
                 (date, code, name, total_score, factor_premium_rate, factor_red_rate,
                  factor_seal_rate, factor_rebound_rate, factor_freq_score,
-                 wilson_adjusted, qualify, high_gene, zt_count_250d)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 wilson_adjusted, qualify, high_gene, zt_count_250d,
+                 data_source, missing_factors)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, rows)
             conn.commit()
         except Exception:
@@ -118,6 +132,13 @@ def load_gene_scores(date: str) -> list | None:
             "炸板后溢价": row["factor_rebound_rate"] or 0,
             "涨停频次": row["factor_freq_score"] or 0,
         }
+        import json as _json2
+        missing_raw = row["missing_factors"] if "missing_factors" in row.keys() else ""
+        try:
+            missing = _json2.loads(missing_raw) if missing_raw else []
+        except Exception:
+            missing = []
+        ds = row["data_source"] if "data_source" in row.keys() else "eastmoney_live"
         scores.append(GeneScore(
             code=row["code"],
             name=row["name"] or "",
@@ -128,6 +149,8 @@ def load_gene_scores(date: str) -> list | None:
             high_gene=bool(row["high_gene"]),
             last_zt_dates=[],
             zt_count_250d=row["zt_count_250d"] or 0,
+            data_source=ds,
+            missing_factors=missing,
         ))
     return scores
 

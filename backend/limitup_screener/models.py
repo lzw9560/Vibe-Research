@@ -34,7 +34,7 @@ class GeneScore(BaseModel):
     code: str
     name: str
     total_score: float  # 0-100
-    factors: dict[str, float]  # 五维因子得分（百分比形式）
+    factors: dict[str, float | None]  # 因子得分（百分比形式；K线重建时封板率/炸板后溢价=None）
     wilson_adjusted: float  # Wilson 校正后得分
     qualify: bool  # 是否合格（>= 阈值）
     high_gene: bool  # 高基因（>= 高阈值）
@@ -48,6 +48,9 @@ class GeneScore(BaseModel):
     seal_to_float_ratio: float = 0.0
     limit_up_price: float = 0.0
     limit_down_price: float = 0.0
+    # S040 v2: 数据源标注（eastmoney_live=完整5因子 / kline_rebuild=3因子重建）
+    data_source: str = "eastmoney_live"
+    missing_factors: list[str] = []  # K线重建缺失的因子名（如 ["封板率","炸板后溢价"]）
 
 
 class ScreenerResult(BaseModel):
@@ -130,16 +133,18 @@ def compute_factors(history: list[ZTPoolItem], yzt: list[ZTPoolItem], zb: list[Z
     }
 
 
-def calc_total_score(factors: dict[str, float]) -> float:
-    """五维加权合成：次日溢价率(25%) + 红盘率(25%) + 封板率(25%) + 炸板后溢价(15%) + 涨停频次(10%)。"""
+def calc_total_score(factors: dict[str, float], weights: str = "full") -> float:
+    """五维加权合成基因总分。
+
+    weights:
+        "full"（默认）: 五维全量——次日溢价率(25%) + 红盘率(25%) + 封板率(25%) + 炸板后溢价(15%) + 涨停频次(10%)
+        "rebuild": 三维重建（K 线不可推封板率/炸板后溢价）——次日溢价率(40%) + 红盘率(40%) + 涨停频次(20%)
+    """
     w = {
-        "次日溢价率": 0.25,
-        "红盘率": 0.25,
-        "封板率": 0.25,
-        "炸板后溢价": 0.15,
-        "涨停频次": 0.10,
-    }
-    total = sum(factors.get(k, 0.0) * v for k, v in w.items())
+        "full": {"次日溢价率": 0.25, "红盘率": 0.25, "封板率": 0.25, "炸板后溢价": 0.15, "涨停频次": 0.10},
+        "rebuild": {"次日溢价率": 0.40, "红盘率": 0.40, "涨停频次": 0.20},
+    }.get(weights, {"次日溢价率": 0.25, "红盘率": 0.25, "封板率": 0.25, "炸板后溢价": 0.15, "涨停频次": 0.10})
+    total = sum((factors.get(k) or 0.0) * v for k, v in w.items())
     return round(total, 2)
 
 
