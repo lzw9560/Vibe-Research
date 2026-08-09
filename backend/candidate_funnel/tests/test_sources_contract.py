@@ -56,7 +56,7 @@ class TestActivityContract(unittest.TestCase):
     def test_amount_mapped_from_amount_wan_and_converted_to_yi(self):
         """成交额：astock 返回 amount_wan(万) → source 输出 amount_yi(亿)。"""
         with mock.patch.object(activity.astock, "tencent_quote", return_value=_GTIMG_SHAPE):
-            out = activity.fetch_activity(["600519"], "2026-07-28")
+            out = activity.fetch_activity(["600519"], "2099-07-28")
         entry = out["600519"]
         # 500000 万 == 50 亿
         self.assertAlmostEqual(entry["amount_yi"], 50.0, places=4)
@@ -66,14 +66,14 @@ class TestActivityContract(unittest.TestCase):
         """amount_wan=0 应回 0.0 亿，而非被 `or` 误判为缺失走兜底。"""
         shape = {"600519": dict(_GTIMG_SHAPE["600519"], amount_wan=0.0)}
         with mock.patch.object(activity.astock, "tencent_quote", return_value=shape):
-            out = activity.fetch_activity(["600519"], "2026-07-28")
+            out = activity.fetch_activity(["600519"], "2099-07-28")
         self.assertEqual(out["600519"]["amount_yi"], 0.0)
         self.assertNotIn("amount_yi", out["600519"].get("missing", {}))
 
     def test_other_fields_mapped_by_real_keys(self):
         """换手/量比/振幅/涨跌停 必须按 astock 真实键名取到。"""
         with mock.patch.object(activity.astock, "tencent_quote", return_value=_GTIMG_SHAPE):
-            out = activity.fetch_activity(["600519"], "2026-07-28")
+            out = activity.fetch_activity(["600519"], "2099-07-28")
         e = out["600519"]
         self.assertAlmostEqual(e["turnover_pct"], 25.0)
         self.assertAlmostEqual(e["vol_ratio"], 3.0)
@@ -88,7 +88,7 @@ class TestActivityContract(unittest.TestCase):
         """astock 真的没给 amount_wan 时才标 missing（而非键名不匹配的假缺失）。"""
         shape = {"600519": {k: v for k, v in _GTIMG_SHAPE["600519"].items() if k != "amount_wan"}}
         with mock.patch.object(activity.astock, "tencent_quote", return_value=shape):
-            out = activity.fetch_activity(["600519"], "2026-07-28")
+            out = activity.fetch_activity(["600519"], "2099-07-28")
         self.assertIsNone(out["600519"]["amount_yi"])
         self.assertIn("amount_yi", out["600519"].get("missing", {}))
 
@@ -135,13 +135,24 @@ class TestFundFlowContract(unittest.TestCase):
             out = fund_flow.fetch_fund_flow(["600519"], "2026-07-28")
         self.assertEqual(out["600519"]["dragon_tiger_inst_net"], 8000.0)
 
-    def test_northbound_always_missing(self):
-        """北向不可得 → missing（§8 边界）。"""
+    def test_northbound_fetched_from_HMC_CHANGE_to_wan(self):
+        """北向：eastmoney_datacenter RPT_MUTUAL_HOLDSTOCKNDATE_STA 的 HMC_CHANGE(元) → 万（S044 R1）。"""
+        nb_rows = [{"TRADE_DATE": "2026-07-28 00:00:00", "HMC_CHANGE": 200000000.0}]
         with mock.patch.object(fund_flow.astock, "stock_fund_flow_120d", return_value=_FUND_FLOWS), \
-             mock.patch.object(fund_flow.astock, "dragon_tiger_board", return_value=_DRAGON_TIGER):
+             mock.patch.object(fund_flow.astock, "dragon_tiger_board", return_value=_DRAGON_TIGER), \
+             mock.patch.object(fund_flow.astock, "eastmoney_datacenter", return_value=nb_rows):
+            out = fund_flow.fetch_fund_flow(["600519"], "2026-07-28")
+        self.assertEqual(out["600519"]["northbound"], 20000.0)  # 2亿元 = 20000万
+        self.assertNotIn("northbound", out["600519"]["missing"])
+
+    def test_northbound_missing_when_no_data(self):
+        """北向取不到（2024-08-19 后停更/当日无数据）→ missing（spec §9 回退，不臆造）。"""
+        with mock.patch.object(fund_flow.astock, "stock_fund_flow_120d", return_value=_FUND_FLOWS), \
+             mock.patch.object(fund_flow.astock, "dragon_tiger_board", return_value=_DRAGON_TIGER), \
+             mock.patch.object(fund_flow.astock, "eastmoney_datacenter", return_value=[]):
             out = fund_flow.fetch_fund_flow(["600519"], "2026-07-28")
         self.assertIsNone(out["600519"]["northbound"])
-        self.assertEqual(out["600519"]["missing"]["northbound"], "北向数据不可得")
+        self.assertIn("northbound", out["600519"]["missing"])
 
     def test_dragon_tiger_absent_marks_pending(self):
         """龙虎榜未披露（institution 无 net_amt）→ 待披露，不臆测。"""
@@ -172,6 +183,7 @@ class TestCatalystContract(unittest.TestCase):
     """catalyst.fetch_catalyst 与 astock.announcements/concept_blocks 返回的键名契约。"""
 
     def test_announcements_mapped_by_title_date_type(self):
+        """公告 type = 按标题关键词分类（预增/重组/回购/其他，S044 R3），非 astock raw type。"""
         with mock.patch.object(catalyst.astock, "announcements", return_value=_ANNOUNCEMENTS), \
              mock.patch.object(catalyst.astock, "concept_blocks", return_value=_CONCEPT_BLOCKS):
             out = catalyst.fetch_catalyst(["600519"], "2026-07-28")
@@ -179,7 +191,8 @@ class TestCatalystContract(unittest.TestCase):
         self.assertEqual(len(anns), 2)
         self.assertEqual(anns[0]["title"], "2026 年半年度业绩预增公告")
         self.assertEqual(anns[0]["date"], "2026-07-28")
-        self.assertEqual(anns[0]["type"], "业绩")
+        self.assertEqual(anns[0]["type"], "预增")  # 标题含"预增"→分类预增
+        self.assertEqual(anns[1]["type"], "回购")  # "关于回购股份的进展"→回购
 
     def test_concepts_mapped_from_boards_name(self):
         with mock.patch.object(catalyst.astock, "announcements", return_value=_ANNOUNCEMENTS), \

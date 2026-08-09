@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import astock
 from data.mappers import dragon_tiger_from_dict
+from predict.features.fund_flow import fetch_dt_hot_money_relay, fetch_northbound
 
 
 def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
@@ -14,6 +15,7 @@ def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
             "main_net_inflow": None,
             "main_net_5d": None,
             "dragon_tiger_inst_net": None,
+            "dragon_tiger_hot_money_relay": None,
             "northbound": None,
             "missing": {},
         }
@@ -37,6 +39,19 @@ def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
                 entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜待披露"
         except Exception:
             entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜未取得"
-        entry["missing"]["northbound"] = "北向数据不可得"
+        try:
+            relay = fetch_dt_hot_money_relay(c, as_of)
+            entry["dragon_tiger_hot_money_relay"] = relay
+            if relay is None:
+                entry["missing"]["dragon_tiger_hot_money_relay"] = "龙虎榜未上榜"
+        except Exception:
+            entry["missing"]["dragon_tiger_hot_money_relay"] = "游资接力取数失败"
+        try:
+            nb = fetch_northbound(c, as_of)
+            entry["northbound"] = nb
+            if nb is None:
+                entry["missing"]["northbound"] = "北向未取得（2024-08-19 后个股日级北向停更/当日无数据）"
+        except Exception:
+            entry["missing"]["northbound"] = "北向取数失败"
         out[c] = entry
     return out

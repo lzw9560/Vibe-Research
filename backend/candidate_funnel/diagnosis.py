@@ -125,6 +125,7 @@ def build_indicator_set(
     ind.main_net_inflow = f.get("main_net_inflow")
     ind.main_net_5d = f.get("main_net_5d")
     ind.dragon_tiger_inst_net = f.get("dragon_tiger_inst_net")
+    ind.dragon_tiger_hot_money_relay = f.get("dragon_tiger_hot_money_relay")
     ind.northbound = f.get("northbound")
 
     au = auction.get(code, {})

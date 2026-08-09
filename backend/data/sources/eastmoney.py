@@ -26,6 +26,8 @@ from ._common import UA
 
 _REPORT_API = "https://reportapi.eastmoney.com/report/list"
 _PDF_TPL = "https://pdf.dfcfw.com/pdf/H3_{info_code}_1.pdf"
+# 东财 push2/push2his 端点公开 token（缺则端点返空或断连——S044 探测发现 astock 旧函数缺 ut 是 bug，非端点宕）
+_PUSH2_UT = "fa5fd1943c7b386f172d6893dbbd1"
 
 
 def _report_session():
@@ -275,6 +277,7 @@ def stock_fund_flow_120d(code: str) -> list[dict]:
         "fields1": "f1,f2,f3,f7",
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65",
         "lmt": "120",
+        "ut": _PUSH2_UT,
     }
     headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/", "Origin": "https://quote.eastmoney.com"}
     try:
@@ -379,7 +382,7 @@ def concept_blocks(code: str) -> dict:
     """个股所属板块/概念归属（东财 slist，行业/概念/地域混合，板块名自解释）。"""
     market_code = 1 if code.startswith("6") else 0
     params = {"fltt": "2", "invt": "2", "secid": f"{market_code}.{code}",
-              "spt": "3", "pi": "0", "pz": "200", "po": "1", "fields": "f12,f14,f3,f128"}
+              "spt": "3", "pi": "0", "pz": "200", "po": "1", "fields": "f12,f14,f3,f128", "ut": _PUSH2_UT}
     headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
     try:
         d = em_get("https://push2.eastmoney.com/api/qt/slist/get", params=params, headers=headers, timeout=15).json()
@@ -412,7 +415,7 @@ def industry_comparison(top_n: int = 20) -> dict:
     """全行业涨跌幅排名（东财行业板块，~100 个行业）：板块级涨跌 / 涨跌家数 / 领涨。"""
     params = {"pn": "1", "pz": "100", "po": "1", "np": "1", "fltt": "2", "invt": "2",
               "fid": "f3",  # fid=f3 + po=1：按涨跌幅降序，否则 top/bottom 切片非涨幅序（a-stock-data §3.7）
-              "fs": "m:90+t:2", "fields": "f2,f3,f4,f12,f13,f14,f104,f105,f128,f136,f140,f141,f207"}
+              "fs": "m:90+t:2", "fields": "f2,f3,f4,f12,f13,f14,f104,f105,f128,f136,f140,f141,f207", "ut": _PUSH2_UT}
     try:
         d = em_get("https://push2.eastmoney.com/api/qt/clist/get",
                    params=params, headers={"User-Agent": UA}, timeout=15).json()

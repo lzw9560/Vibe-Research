@@ -47,6 +47,7 @@ class IndicatorSet(BaseModel):
     main_net_5d: Optional[float] = None      # 5日主力累计(万)
     dragon_tiger_inst_net: Optional[float] = None  # 龙虎榜机构净额(万)
     northbound: Optional[float] = None      # 北向(万)
+    dragon_tiger_hot_money_relay: Optional[float] = None  # 龙虎榜游资接力频次(万，S044 R4)
     # 催化剂
     announcements: list[Announcement] = []
     concepts: list[str] = []
@@ -85,6 +86,7 @@ class BaseThreshold(BaseModel):
     vol_ratio_active: float = 2.0
     amount_yi_min: float = 10.0
     amplitude_high: float = 8.0
+    northbound_abs_min: float = 0.0  # S044 R5：北向净额绝对值下限(万)；默认0=有北向数据即保留，非方向占位口径
 
 
 class ThresholdConfig(BaseModel):
