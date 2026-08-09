@@ -52,6 +52,7 @@ export const router = createBrowserRouter([
       { path: "/limitup/auction", element: lazyEl(() => import("@/pages/limitup/AuctionScreener"), "AuctionScreener") },
       { path: "/limitup/seats", element: lazyEl(() => import("@/pages/limitup/SeatEngine"), "SeatEngine") },
       { path: "/recommendation", element: lazyEl(() => import("@/pages/Recommendation")) },
+      { path: "/advisory", element: lazyEl(() => import("@/pages/Advisory")) },
       { path: "/strategy-signals", element: lazyEl(() => import("@/pages/StrategySignals")) },
       { path: "/backtest", element: lazyEl(() => import("@/pages/Backtest")) },
       { path: "/risk-dashboard", element: lazyEl(() => import("@/pages/RiskDashboard")) },

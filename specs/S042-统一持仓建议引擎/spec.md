@@ -1,6 +1,6 @@
 # Spec: S042 — 统一持仓建议引擎（推荐标的 + 自选 + 持仓，三场景）
 
-> 状态：部分实现（2026-08-09）——后端 R1-R5（position_advisor_v2 + advisory 路由）+ 18 测试 passed + TestClient 冒烟 200；前端 R6（Advisory 页面）待办
+> 状态：已实现（2026-08-09）——R1-R6：后端 position_advisor_v2 + advisory 路由 + 18 测试 + TestClient 冒烟 200；前端 Advisory.tsx 三场景页 + advisorySummary API + tsc green
 > 作者：Codex  日期：2026-08-09
 > 关联：`../S040-历史数据回填90天/spec.md`（90 天回测胜率是建议依据）、`backend/recommendation_engine.py`、`backend/strategies/position_advisor.py`、`backend/strategies/strategy_backtest.py`、`backend/portfolio.py`、`backend/routers/watchlist.py`、`frontend/src/components/ui/WinRateComparePanel.tsx`
 >

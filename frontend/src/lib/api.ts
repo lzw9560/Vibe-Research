@@ -16,6 +16,7 @@ import type {
   FunnelLayer,
   BoardLadderNode,
   GraphData,
+  AdvisorySummary,
 } from "./api/types";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -225,4 +226,7 @@ export const api = {
   // 叶节点如实呈现 code/name（公开榜单客观事实，§0 弱合规·工程底线）。
   boardLadder: (date?: string) =>
     get<BoardLadderNode>(`/topology/board-ladder${date ? `?date=${date}` : ""}`),
+  // S042 建议中心：三场景建议汇总（推荐/自选/持仓）
+  advisorySummary: (limit?: number) =>
+    get<AdvisorySummary>(`/advisory/summary${limit ? `?limit=${limit}` : ""}`),
 };

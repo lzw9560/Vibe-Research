@@ -1120,3 +1120,32 @@ export interface WorkflowStateHistoryItem {
   reason: string;
   created_at: string;
 }
+
+// S042 统一持仓建议引擎（推荐/自选/持仓三场景）
+export interface AdvisoryItem {
+  code: string;
+  name: string;
+  scene: "recommendation" | "watchlist" | "holding";
+  action: "enter" | "add" | "reduce" | "close" | "hold" | "no_signal";
+  win_rate: number | null;
+  win_rate_source: "backtest_90d" | "synthetic" | "none";
+  matched_strategy: string | null;
+  reasons: string[];
+  risk_notes: string[];
+  disclaimer: string;
+  gene_score?: number;
+  suggested_pct?: number;
+  stop_loss_pct?: number;
+  take_profit_pct?: number;
+  pnl_pct?: number;
+  cost?: number;
+  price?: number;
+  status?: string;
+}
+
+export interface AdvisorySummary {
+  recommendations: AdvisoryItem[];
+  watchlist: AdvisoryItem[];
+  holdings: AdvisoryItem[];
+  disclaimer: string;
+}
