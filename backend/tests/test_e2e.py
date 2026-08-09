@@ -26,7 +26,11 @@ client = TestClient(app_module.app)
 def test_health():
     r = client.get("/api/health")
     assert r.status_code == 200
-    assert r.json()["ok"] is True
+    body = r.json()
+    # database 检查 = 迁移修复（4beb951）目标：gene_scores/sti_timeline/winrate_records 三表在
+    # fresh 测试 DB（conftest 临时 VR_DATA_DIR）可读。data_freshness 在空 DB 下 ok=False 是预期
+    #（无数据→MAX(updated_at)=None），非回归；故不断言整体 ok（否则空 DB 恒 False）。
+    assert body["checks"]["database"]["ok"] is True
 
 
 def test_api_root_returns_404():
