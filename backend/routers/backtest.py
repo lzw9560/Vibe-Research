@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Any, Dict
 
 from backtest_lite import run_backtest_async, generate_scatter_data
+import scheduled_tasks as _st  # S041：复用 market_data.db 连接 + get_backtest_snapshots
 
 router = APIRouter(tags=["backtest"])
 
@@ -44,6 +45,24 @@ async def backtest_result(
         }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"回测结果异常：{e}") from e
+
+
+@router.get("/api/backtest/trend")
+async def backtest_trend(
+    days: int = Query(90, ge=1, le=365, description="最近 N 天快照"),
+) -> Dict[str, Any]:
+    """S041：回测指标趋势时间序列（hit_rate/avg_return/各战法 win_rate 随日期变化）。
+
+    返回 {data: [{snapshot_date, engine, hit_rate, avg_return, max_drawdown,
+    sharpe_ratio, total_signals, percentile_json, strategy_breakdown_json, created_at}, ...]}。
+    按 snapshot_date 升序，engine 升序（同日 lite 在 strategy 前）。
+    JSON 字段已反序列化成 dict/list，缺失为 None。
+    """
+    try:
+        rows = _st.get_backtest_snapshots(days)
+        return {"data": rows}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"回测趋势数据异常：{e}") from e
 
 
 __all__ = ["router"]

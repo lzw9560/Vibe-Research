@@ -2,7 +2,7 @@
 """TaskExecutor + CronScheduler 任务执行/去重单测（S011-A R2/R4）。
 
 覆盖：
-- 6 种内置任务类型已注册（不联网执行）。
+- 内置任务类型已注册（不联网执行；S041 加 daily_backtest_run 共 7 种）。
 - execute_async 成功/失败/同步处理器各只产生一条 run 记录（R2：add_run 不重复，
   成功/失败走 update_run 而非二次 add_run）。
 - count_running 去重辅助 + CronScheduler._tick 跳过执行中任务（R4 去重）。
@@ -22,7 +22,8 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-# 内置 6 种任务类型（须与 TaskExecutor._executors 保持一致）
+# 内置任务类型（须与 TaskExecutor._executors 保持一致）。
+# S041 新增 daily_backtest_run（每日回测快照）。
 _EXPECTED_TASK_TYPES = {
     "daily_data_refresh",
     "daily_review_notify",
@@ -30,6 +31,7 @@ _EXPECTED_TASK_TYPES = {
     "portfolio_refresh",
     "market_data_sync",
     "cleanup_old_runs",
+    "daily_backtest_run",
 }
 
 
@@ -48,7 +50,7 @@ def _make_task(task_type="test_ok", cron_expr="* * * * *", name=None):
 # ---------------------------------------------------------------------------
 # 任务类型注册
 class TestRegisteredTypes:
-    def test_six_builtin_types_registered(self):
+    def test_builtin_types_registered(self):
         executor = TaskExecutor()
         assert set(executor._executors) == _EXPECTED_TASK_TYPES
 

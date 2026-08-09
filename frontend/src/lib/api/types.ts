@@ -605,6 +605,33 @@ export interface BacktestScatterPoint {
   industry: string;
 }
 
+// ---- S041 回测趋势看板 ----
+// GET /api/backtest/trend?days=90 返 BacktestSnapshotRow[]（daily_backtest_run 定时任务
+// 每日落库的快照）。engine=lite 行带 hit_rate/avg_return；engine=strategy 行带
+// strategy_breakdown_json（8 战法聚合 JSON 字符串，前端解析为 StrategyBacktestItem[]）。
+export interface BacktestSnapshotRow {
+  snapshot_date: string;        // "2026-08-09"
+  engine: "lite" | "strategy";
+  hit_rate: number | null;     // 0-1，仅 lite
+  avg_return: number | null;   // 百分比小数（lite）或百分比数（strategy）
+  max_drawdown: number | null;
+  sharpe_ratio: number | null;
+  total_signals: number | null;
+  percentile_json: string | null;         // lite 分位分析 JSON 字符串
+  strategy_breakdown_json: string | null; // strategy 战法明细 JSON 字符串
+  created_at: string;
+}
+
+// strategy_breakdown_json 解析后元素类型。对齐 backend/strategies/strategy_backtest.py
+// StrategyBacktestResult（strategy_code/strategy_name/win_rate 0-1/avg_return 百分比/sample_size）。
+export interface StrategyBacktestItem {
+  strategy_code: string;
+  strategy_name: string;
+  win_rate: number;      // 0-1
+  avg_return: number;    // 百分比
+  sample_size: number;
+}
+
 // ---- 打板策略参数配置 ----
 export interface LimitUpParams {
   gene_qualify_threshold: number;

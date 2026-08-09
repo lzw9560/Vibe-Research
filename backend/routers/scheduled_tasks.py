@@ -76,6 +76,7 @@ async def list_task_types() -> Dict[str, List[str]]:
             "portfolio_refresh",
             "market_data_sync",
             "cleanup_old_runs",
+            "daily_backtest_run",
         ]
     }
 

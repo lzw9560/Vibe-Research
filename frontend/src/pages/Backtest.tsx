@@ -7,16 +7,22 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { TabBar } from "@/components/ui/TabBar";
 import { ScatterChart } from "@/components/charts/ScatterChart";
+import {
+  HitRateChart,
+  AvgReturnChart,
+  StrategyWinRateChart,
+} from "@/components/charts/TrendChart";
 import { WinRateView } from "@/components/winrate/WinRateView";
-import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
-import { api, type BacktestResult, type BacktestScatterPoint } from "@/lib/api";
+import { Loader2, RefreshCw, AlertCircle, TrendingUp } from "lucide-react";
+import { api, type BacktestResult, type BacktestScatterPoint, type BacktestSnapshotRow } from "@/lib/api";
 
-// 页内 Tab key 对齐 nav SUB_TABS["/backtest"]（result / winrate）。
-type BacktestTab = "result" | "winrate";
+// 页内 Tab key 对齐 nav SUB_TABS["/backtest"]（result / winrate / trend）。
+type BacktestTab = "result" | "winrate" | "trend";
 
 const TABS: { key: BacktestTab; label: string }[] = [
   { key: "result", label: "回测结果" },
   { key: "winrate", label: "胜率趋势" },
+  { key: "trend", label: "趋势看板" },
 ];
 
 export default function Backtest() {
@@ -31,6 +37,11 @@ export default function Backtest() {
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // S041 趋势看板态：独立于 result tab 的查询条件——趋势是固定 90 天快照，无日期选择器。
+  const [trendRows, setTrendRows] = useState<BacktestSnapshotRow[]>([]);
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendError, setTrendError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -49,9 +60,29 @@ export default function Backtest() {
     }
   };
 
+  const loadTrend = async () => {
+    setTrendLoading(true);
+    setTrendError(null);
+    try {
+      const data = await api.backtestTrend(90);
+      setTrendRows(Array.isArray(data) ? data : []);
+    } catch (e: unknown) {
+      setTrendError(e instanceof Error ? e.message : "趋势数据加载失败");
+    } finally {
+      setTrendLoading(false);
+    }
+  };
+
   useEffect(() => {
     load();
   }, []);
+
+  // 切到趋势 tab 时懒加载趋势数据（首次进入才请求，重进不重复请求除非手动刷新）
+  useEffect(() => {
+    if (activeTab === "trend" && trendRows.length === 0 && !trendLoading && !trendError) {
+      loadTrend();
+    }
+  }, [activeTab]);
 
   return (
     <div className="space-y-4">
@@ -60,11 +91,13 @@ export default function Backtest() {
         subtitle="基因得分 vs 次日表现（教育性统计，非收益保证）"
         actions={
           <button
-            onClick={load}
-            disabled={loading}
+            onClick={() => (activeTab === "trend" ? loadTrend() : load())}
+            disabled={activeTab === "trend" ? trendLoading : loading}
             className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {((activeTab === "trend" ? trendLoading : loading))
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <RefreshCw className="h-4 w-4" />}
             刷新
           </button>
         }
@@ -80,6 +113,60 @@ export default function Backtest() {
 
       {activeTab === "winrate" ? (
         <WinRateView defaultWindow={30} />
+      ) : activeTab === "trend" ? (
+        <>
+          {trendError && (
+            <GlassCard>
+              <div className="p-4 text-sm text-red-600 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {trendError}
+              </div>
+            </GlassCard>
+          )}
+
+          {trendLoading && (
+            <GlassCard>
+              <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground/60">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 加载趋势数据…
+              </div>
+            </GlassCard>
+          )}
+
+          {!trendLoading && !trendError && trendRows.length === 0 && (
+            <EmptyState
+              icon={<TrendingUp className="h-8 w-8 text-muted-foreground/40" />}
+              title="暂无趋势快照"
+              description="每日收盘后定时任务 daily_backtest_run 会落库命中率/收益/战法胜率快照，积累后此处显示趋势。"
+            />
+          )}
+
+          {!trendLoading && !trendError && trendRows.length > 0 && (
+            <>
+              <GlassCard>
+                <SectionHeader
+                  title="命中率趋势"
+                  subtitle="backtest_lite · 30 天滚动窗口每日快照"
+                />
+                <HitRateChart rows={trendRows} />
+              </GlassCard>
+
+              <GlassCard>
+                <SectionHeader
+                  title="平均收益趋势"
+                  subtitle="backtest_lite · 30 天滚动窗口每日快照"
+                />
+                <AvgReturnChart rows={trendRows} />
+              </GlassCard>
+
+              <GlassCard>
+                <SectionHeader
+                  title="战法胜率趋势"
+                  subtitle="strategy_backtest · 8 战法每日快照"
+                />
+                <StrategyWinRateChart rows={trendRows} />
+              </GlassCard>
+            </>
+          )}
+        </>
       ) : (
         <>
           {error && (

@@ -96,8 +96,24 @@ def _ensure_tables() -> None:
                 FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS backtest_daily_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_date TEXT NOT NULL,
+                engine TEXT NOT NULL,
+                hit_rate REAL,
+                avg_return REAL,
+                max_drawdown REAL,
+                sharpe_ratio REAL,
+                total_signals INTEGER,
+                percentile_json TEXT,
+                strategy_breakdown_json TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(snapshot_date, engine)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_enabled ON scheduled_tasks(enabled);
             CREATE INDEX IF NOT EXISTS idx_scheduled_task_runs_task_id ON scheduled_task_runs(task_id, started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_backtest_snapshots_date ON backtest_daily_snapshots(snapshot_date DESC, engine);
         """)
         # R3：WAL 模式（DB 级持久）——读不阻塞写，并发写不再 database is locked
         conn.execute("PRAGMA journal_mode=WAL")
@@ -317,6 +333,103 @@ class ScheduledTaskManager:
 # ============================================================================
 
 
+def _save_snapshot(snapshot_date: str, engine: str, result: Any) -> None:
+    """S041：幂等写回测快照行（同天重跑覆盖）。
+
+    result 对 lite 是 BacktestResult dataclass，对 strategy 是 list[StrategyBacktestResult]。
+    按 engine 字段区分提取字段——lite 取 hit_rate/avg_return/max_drawdown/sharpe_ratio/
+    total_signals/percentile_json；strategy 取 strategy_breakdown_json（8 战法聚合）。
+    """
+    conn = _get_connection()
+    try:
+        if engine == "lite":
+            hit_rate = getattr(result, "hit_rate", None)
+            avg_return = getattr(result, "avg_return", None)
+            max_drawdown = getattr(result, "max_drawdown", None)
+            sharpe_ratio = getattr(result, "sharpe_ratio", None)
+            total_signals = getattr(result, "total_signals", None)
+            percentile_json = json.dumps(getattr(result, "percentile_analysis", None), ensure_ascii=False)
+            strategy_breakdown_json = None
+        elif engine == "strategy":
+            # result: list[StrategyBacktestResult]
+            breakdown = [
+                {
+                    "strategy_code": getattr(r, "strategy_code", ""),
+                    "strategy_name": getattr(r, "strategy_name", ""),
+                    "win_rate": getattr(r, "win_rate", None),
+                    "avg_return": getattr(r, "avg_return", None),
+                    "sample_size": getattr(r, "sample_size", None),
+                    "available_days": getattr(r, "available_days", None),
+                    "skipped": getattr(r, "skipped", 0),
+                }
+                for r in (result or [])
+            ]
+            hit_rate = None
+            avg_return = None
+            max_drawdown = None
+            sharpe_ratio = None
+            total_signals = None
+            percentile_json = None
+            strategy_breakdown_json = json.dumps(breakdown, ensure_ascii=False)
+        else:
+            raise ValueError(f"未知 engine: {engine}")
+
+        conn.execute(
+            """
+            INSERT INTO backtest_daily_snapshots
+                (snapshot_date, engine, hit_rate, avg_return, max_drawdown,
+                 sharpe_ratio, total_signals, percentile_json, strategy_breakdown_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(snapshot_date, engine) DO UPDATE SET
+                hit_rate = excluded.hit_rate,
+                avg_return = excluded.avg_return,
+                max_drawdown = excluded.max_drawdown,
+                sharpe_ratio = excluded.sharpe_ratio,
+                total_signals = excluded.total_signals,
+                percentile_json = excluded.percentile_json,
+                strategy_breakdown_json = excluded.strategy_breakdown_json
+            """,
+            (snapshot_date, engine, hit_rate, avg_return, max_drawdown,
+             sharpe_ratio, total_signals, percentile_json, strategy_breakdown_json),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_backtest_snapshots(days: int = 90) -> List[Dict[str, Any]]:
+    """S041：查最近 N 天回测快照（按 snapshot_date 升序）。
+
+    返回 list[dict]——percentile_json/strategy_breakdown_json 已反序列化成 dict/list，
+    None 保留为 None。供 GET /api/backtest/trend 端点用。
+    """
+    conn = _get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT snapshot_date, engine, hit_rate, avg_return, max_drawdown,
+                   sharpe_ratio, total_signals, percentile_json, strategy_breakdown_json,
+                   created_at
+            FROM backtest_daily_snapshots
+            WHERE snapshot_date >= date('now', ?)
+            ORDER BY snapshot_date ASC, engine ASC
+            """,
+            (f"-{days} days",),
+        ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            d["percentile_json"] = json.loads(d["percentile_json"]) if d.get("percentile_json") else None
+            d["strategy_breakdown_json"] = (
+                json.loads(d["strategy_breakdown_json"]) if d.get("strategy_breakdown_json") else None
+            )
+            out.append(d)
+        return out
+    finally:
+        conn.close()
+
+
+
 class TaskExecutor:
     """内置任务执行器。"""
 
@@ -328,6 +441,7 @@ class TaskExecutor:
             "portfolio_refresh": self._execute_portfolio_refresh,
             "market_data_sync": self._execute_market_data_sync,
             "cleanup_old_runs": self._execute_cleanup_old_runs,
+            "daily_backtest_run": self._execute_daily_backtest_run,  # S041：回测定时任务
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -576,6 +690,49 @@ class TaskExecutor:
         except Exception as e:
             logger.warning("[daily_review_notify] 通知发送失败: %s", e)
             results["error"] = str(e)
+
+        return results
+
+    def _execute_daily_backtest_run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S041：每日回测快照——跑 backtest_lite + strategy_backtest，存入 backtest_daily_snapshots。
+
+        lite 是 async，在 sync handler 里用 asyncio.run() 驱动；strategy 是 sync 直调。
+        单引擎失败不阻断另一个——回测是增强，失败兜底记 error。
+        """
+        from backtest_lite import run_backtest_async
+        from strategies.strategy_backtest import run_strategy_backtest
+
+        lookback = int(payload.get("lookback_days", 30))
+        today_dt = datetime.now().date()
+        today = today_dt.strftime("%Y-%m-%d")
+        start = (today_dt - timedelta(days=lookback)).strftime("%Y-%m-%d")
+
+        results: Dict[str, Any] = {"snapshot_date": today, "lookback_days": lookback, "start": start}
+
+        # lite 引擎
+        try:
+            lite_result = asyncio.run(run_backtest_async(start, today))
+            _save_snapshot(today, "lite", lite_result)
+            results["lite"] = {
+                "hit_rate": lite_result.hit_rate,
+                "avg_return": lite_result.avg_return,
+                "total_signals": lite_result.total_signals,
+            }
+        except Exception as e:
+            logger.warning("[daily_backtest_run] lite 回测失败: %s", e)
+            results["lite"] = f"error: {e}"
+
+        # strategy 引擎
+        try:
+            strat_results = run_strategy_backtest(lookback)
+            _save_snapshot(today, "strategy", strat_results)
+            results["strategy"] = {
+                "strategies": len(strat_results),
+                "total_sample": sum(getattr(r, "sample_size", 0) for r in strat_results),
+            }
+        except Exception as e:
+            logger.warning("[daily_backtest_run] strategy 回测失败: %s", e)
+            results["strategy"] = f"error: {e}"
 
         return results
 

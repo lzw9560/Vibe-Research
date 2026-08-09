@@ -11,7 +11,8 @@ import type {
   StockDeep, StrategyRecommendation, WeatherState, WeatherFactor, FuseRule, WeatherTimelineItem,
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord, PardonOutcome,
   StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, WinRateTrendPoint,
-  WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint, STIResult, STITimelineItem,
+  WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint,
+  BacktestSnapshotRow, STIResult, STITimelineItem,
   FunnelLayer,
   BoardLadderNode,
   GraphData,
@@ -176,6 +177,9 @@ export const api = {
     get<BacktestScatterPoint[]>(`/backtest/scatter?start=${start}&end=${end}`),
   backtestResult: (start: string, end: string) =>
     get<BacktestResult>(`/backtest/result?start=${start}&end=${end}`),
+  // S041 趋势看板：daily_backtest_run 落库快照的时间序列。days 默认 90。
+  backtestTrend: (days?: number) =>
+    get<BacktestSnapshotRow[]>(`/backtest/trend?days=${days ?? 90}`),
   // 风险仪表盘
   riskDashboard: (date?: string) =>
     get<any>(`/risk/dashboard${date ? `?date=${date}` : ""}`),
