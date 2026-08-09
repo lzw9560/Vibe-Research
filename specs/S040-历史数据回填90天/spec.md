@@ -1,6 +1,6 @@
 # Spec: S040 — 历史涨停池数据 K 线重建 + 双轨累积（v2）
 
-> 状态：R1-R9 代码完成（`feature/S040-backfill90` / 817becd+8f9e1b9+4d3bc2f+a0e46bb，测试 57/57）；live smoke 通过（单日重建50只涨停股，data_source/missing_factors 标注正确）；90天后台回填执行中（nohup PID 79124）
+> 状态：已实现（R1-R9 代码完成 + 测试 57/57 + live smoke 通过 + 90天回填完成）；DB 覆盖 149 个交易日（2026-01-05 ~ 2026-08-10），kline_rebuild 122 天 + eastmoney_live 27 天，共 5715 条记录；缺口 5/12~7/8 已补齐（40 天成功 + 1 天空池 6/19 验证确认无涨停股）
 > 作者：Codex  日期：2026-08-09
 > 关联：`backend/limitup_screener/models.py`（compute_factors/calc_total_score/ZTPoolItem）、
 > `backend/limitup_screener/service.py`（get_screener_result/save_gene_scores）、
