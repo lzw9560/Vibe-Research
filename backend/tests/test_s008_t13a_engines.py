@@ -82,7 +82,8 @@ def test_bidding_monitor_missing_quote_falls_back(monkeypatch):
 
 def test_activity_output_shape_unchanged(monkeypatch):
     monkeypatch.setattr(astock, "tencent_quote", lambda codes: _raw_quote())
-    out = activity.fetch_activity(["600519"], "2026-07-30")
+    # 未来日→tencent 路径（S044 R7 历史日走 kline 复算；本测试验 tencent-path shape 不变）
+    out = activity.fetch_activity(["600519"], "2099-07-30")
     assert "600519" in out
     e = out["600519"]
     # 下游 candidate_funnel 依赖的 keys 仍在
@@ -102,7 +103,8 @@ def test_activity_output_shape_unchanged(monkeypatch):
 def test_activity_missing_fields_flagged(monkeypatch):
     """raw 缺字段时 missing 标记仍在（下游依赖此信号）。"""
     monkeypatch.setattr(astock, "tencent_quote", lambda codes: {"600519": {"name": "X", "price": 1.0}})
-    out = activity.fetch_activity(["600519"], "2026-07-30")
+    # 未来日→tencent 路径（同上；raw 缺 vol_ratio → missing 标记）
+    out = activity.fetch_activity(["600519"], "2099-07-30")
     e = out["600519"]
     assert "missing" in e
     assert "vol_ratio" in e["missing"]

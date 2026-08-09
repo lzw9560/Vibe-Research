@@ -1,4 +1,6 @@
 // S033 T11/R7：holding/settled 流转表单——买入价/卖出价 + 战法下拉 + 理由，全部可选填。
+// S038：settled 流转加「按市价自动结算」toggle——on=后端拉市价即结（不显示卖出价输入框），
+// off=手填卖出价（原 S033 行为）。
 // 合规：entry_price/exit_price/strategy 是用户自填操作记录，非系统推荐。
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -28,6 +30,8 @@ export function TransitionForm({ code, date, target, onSubmit, onCancel, submitt
   const [exitPrice, setExitPrice] = useState("");
   const [strategy, setStrategy] = useState("");
   const [reason, setReason] = useState("");
+  // S038：按市价自动结算——仅 settled 流转时可选；on=后端拉市价即结
+  const [autoFill, setAutoFill] = useState(false);
 
   const handleSubmit = () => {
     onSubmit({
@@ -36,8 +40,10 @@ export function TransitionForm({ code, date, target, onSubmit, onCancel, submitt
       target,
       reason: reason.trim() || undefined,
       entry_price: target === "holding" ? toOptionalNumber(entryPrice) : undefined,
-      exit_price: target === "settled" ? toOptionalNumber(exitPrice) : undefined,
+      // toggle on 时 exit_price 不传（后端拉市价填）；off 时走手填
+      exit_price: target === "settled" && !autoFill ? toOptionalNumber(exitPrice) : undefined,
       strategy: strategy || undefined,
+      auto_fill_exit_price: target === "settled" ? autoFill : undefined,
     });
   };
 
@@ -53,13 +59,27 @@ export function TransitionForm({ code, date, target, onSubmit, onCancel, submitt
         />
       )}
       {target === "settled" && (
-        <Input
-          label="卖出价（可选）"
-          placeholder="如 13.80"
-          inputMode="decimal"
-          value={exitPrice}
-          onChange={(e) => setExitPrice(e.target.value)}
-        />
+        <>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={autoFill}
+              onChange={(e) => setAutoFill(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            <span className="font-medium">按市价自动结算</span>
+            <span className="text-xs text-muted-foreground">（勾选后后端自动拉市价即结，无需手填卖出价）</span>
+          </label>
+          {!autoFill && (
+            <Input
+              label="卖出价（可选）"
+              placeholder="如 13.80"
+              inputMode="decimal"
+              value={exitPrice}
+              onChange={(e) => setExitPrice(e.target.value)}
+            />
+          )}
+        </>
       )}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-muted-foreground" htmlFor="s033-strategy-select">

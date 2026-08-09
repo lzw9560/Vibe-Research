@@ -65,7 +65,13 @@ export function WorkflowStateCard({ code, date }: Props) {
       {(state.entry_price != null || state.exit_price != null || state.strategy) && (
         <p className="mt-1 text-xs text-muted-foreground">
           {state.entry_price != null && <>买入价 {state.entry_price} </>}
-          {state.exit_price != null && <>卖出价 {state.exit_price} </>}
+          {state.exit_price != null && (
+            <>
+              卖出价 {state.exit_price}{" "}
+              {state.settlement?.exit_price_source === "market" && <span>（市价自动）</span>}
+              {state.settlement?.exit_price_source === "manual" && <span>（手动填写）</span>}
+            </>
+          )}
           {state.strategy && <>战法 {state.strategy}</>}
         </p>
       )}

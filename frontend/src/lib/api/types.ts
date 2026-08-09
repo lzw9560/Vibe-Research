@@ -1058,8 +1058,10 @@ export interface WorkflowState {
   entry_price?: number | null;
   exit_price?: number | null;
   strategy?: string | null;
-  /** S034：settled 行的结算摘要（单股端点确定性重算） */
-  settlement?: { return_pct: number; won: boolean; hold_days: number } | null;
+  /** S034：settled 行的结算摘要（单股端点确定性重算）。
+   * S038：exit_price_source 标注卖出价来源——"market"（后端拉市价即结）/
+   * "manual"（用户手填）/ null（未结算/缺价跳过）。 */
+  settlement?: { return_pct: number; won: boolean; hold_days: number; exit_price_source?: "market" | "manual" | null } | null;
   /** 单股端点附带的当前态允许目标（全日列表端点不返） */
   allowed_targets?: string[];
 }
@@ -1070,7 +1072,8 @@ export interface WorkflowStateList {
   counts: Record<string, number>;
 }
 
-/** POST /api/workflow/state/transition 请求体（价格/战法可选填）。 */
+/** POST /api/workflow/state/transition 请求体（价格/战法可选填）。
+ * S038：auto_fill_exit_price=true → 后端拉市价即结（exit_price 空时）。 */
 export interface TransitionRequest {
   code: string;
   date: string;
@@ -1079,6 +1082,7 @@ export interface TransitionRequest {
   entry_price?: number;
   exit_price?: number;
   strategy?: string;
+  auto_fill_exit_price?: boolean;
 }
 
 export interface WorkflowStateHistoryItem {

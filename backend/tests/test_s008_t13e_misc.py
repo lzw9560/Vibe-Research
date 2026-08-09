@@ -137,7 +137,8 @@ def test_catalyst_via_model(monkeypatch):
     monkeypatch.setattr(astock, "concept_blocks", lambda c: {"boards": [{"name": "新能源"}]})
     out = catalyst.fetch_catalyst(["600519"], "2026-07-30")
     e = out["600519"]
-    assert e["announcements"] == [{"title": "回购", "date": "2026-07-30", "type": "利好"}]
+    # S044 R3：type 经 classify_announcement 按标题机械分类（"回购"→"回购"），非原始 eastmoney 列
+    assert e["announcements"] == [{"title": "回购", "date": "2026-07-30", "type": "回购"}]
     assert e["concepts"] == ["新能源"]
 
 

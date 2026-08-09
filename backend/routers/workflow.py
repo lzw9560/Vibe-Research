@@ -24,6 +24,7 @@ from settlement.settlement_engine import SettlementEngine
 from win_rate_tracker import WinRateTracker, generate_strategy_adjustments
 import workflow_state_repo as _wf_state_repo  # S032 R10：七态状态落库
 import settlement_recorder as _settlement_recorder  # S034：settled 流转即结算
+from market_price import fetch_current_price  # S038：settled 时自动拉市价填 exit_price
 
 router = APIRouter(tags=["workflow"])
 
@@ -358,6 +359,7 @@ class _TransitionRequest(BaseModel):
     entry_price: Optional[float] = None
     exit_price: Optional[float] = None
     strategy: Optional[str] = None
+    auto_fill_exit_price: bool = False  # S038：true=exit_price 空时后端自动拉市价
 
 
 @router.get("/api/workflow/state")
@@ -385,6 +387,21 @@ async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
     code = (req.code or "").strip()
     if not code.isdigit() or len(code) != 6:
         raise HTTPException(400, "code 必须是 6 位数字")
+    # S038：settled 流转 + exit_price 空 + auto_fill=true → 拉市价预填 req.exit_price。
+    # 拉到价则经下方 _wf_state_repo.transition(exit_price=...) 自然落库；拉不到 req.exit_price
+    # 仍为 None，_settle_on_transition 走 S034 既有"缺价跳过"路径。
+    exit_price_source: Optional[str] = None
+    if (
+        req.target == "settled"
+        and req.auto_fill_exit_price
+        and req.exit_price is None
+    ):
+        market_price = fetch_current_price(code)
+        if market_price is not None:
+            req.exit_price = market_price
+            exit_price_source = "market"
+    elif req.target == "settled" and req.exit_price is not None:
+        exit_price_source = "manual"
     try:
         ok, detail = _wf_state_repo.transition(
             code, req.date, req.target, req.reason,
@@ -402,29 +419,37 @@ async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
     state = _wf_state_repo.get_state(code, req.date)
     # S034 R3：settled 流转即结算（价齐 + settled_at 幂等锚点）
     if req.target == "settled" and state is not None:
-        settlement, settled_at = _settle_on_transition(code, req.date, state)
+        settlement, settled_at = _settle_on_transition(code, req.date, state, exit_price_source)
         state["settlement"] = settlement
         if settled_at:
             state["settled_at"] = settled_at  # 落戳发生在 state 取数之后，回填响应
     return {"data": state}
 
 
-def _settle_on_transition(code: str, date: str, state: Dict[str, Any]) -> tuple[Dict[str, Any], Optional[str]]:
+def _settle_on_transition(
+    code: str,
+    date: str,
+    state: Dict[str, Any],
+    exit_price_source: Optional[str] = None,
+) -> tuple[Dict[str, Any], Optional[str]]:
     """S034：settled 流转触发结算——写 winrate.db + 落 settled_at 锚点。
 
     价缺 → 不结算（可经 settled→candidate 重入补全流程）；已结算 → 不重复记账。
     返 (settlement 摘要, settled_at 时间戳或 None)。
+
+    S038：exit_price_source 由端点层标注并透传——"market"（拉价预填）/
+    "manual"（用户手填）/ None（未结算/缺价跳过）。未结算分支也回填该字段。
     """
     if state.get("entry_price") is None or state.get("exit_price") is None:
-        return {"recorded": False, "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程"}, None
+        return {"recorded": False, "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程", "exit_price_source": None}, None
     if state.get("settled_at"):
-        return {"recorded": False, "reason": "已结算（不重复记账）"}, None
+        return {"recorded": False, "reason": "已结算（不重复记账）", "exit_price_source": None}, None
     summary = _settlement_recorder.record_settlement(state)
     if summary is None:
-        return {"recorded": False, "reason": "结算失败（价格缺失）"}, None
+        return {"recorded": False, "reason": "结算失败（价格缺失）", "exit_price_source": None}, None
     settled_at = datetime.now().isoformat()
     _wf_state_repo.mark_settled(code, date, settled_at)
-    return {"recorded": True, **summary}, settled_at
+    return {"recorded": True, **summary, "exit_price_source": exit_price_source}, settled_at
 
 
 @router.get("/api/workflow/state/{code}")

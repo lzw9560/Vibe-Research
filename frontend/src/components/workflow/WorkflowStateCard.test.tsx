@@ -147,4 +147,96 @@ describe("WorkflowStateCard", () => {
     render(<WorkflowStateCard code="600001" date="2026-08-07" />);
     expect(screen.queryByText(/结算收益/)).not.toBeInTheDocument();
   });
+
+  // ============ S038：市价自动结算 toggle + exit_price_source 标注 ============
+
+  it("S038：settled 流转勾选市价自动结算 → 请求体含 auto_fill_exit_price:true 且无 exit_price", () => {
+    const mutate = vi.fn();
+    qm.useTransitionWorkflowState.mockReturnValue({ mutate, isPending: false });
+    qm.useWorkflowState.mockReturnValue({
+      data: { ...stateCandidate, status: "holding", allowed_targets: ["settled", "candidate"] },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+
+    fireEvent.click(screen.getByText(/结算/));
+    // 勾选「按市价自动结算」
+    fireEvent.click(screen.getByRole("checkbox"));
+    // 勾选后卖出价输入框应消失
+    expect(screen.queryByPlaceholderText("如 13.80")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("确认流转"));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({
+      code: "600001", date: "2026-08-07", target: "settled",
+      auto_fill_exit_price: true, exit_price: undefined,
+    }));
+  });
+
+  it("S038：settled 流转不勾选 + 手填卖出价 → 请求体含 exit_price 且 auto_fill_exit_price 为 false", () => {
+    const mutate = vi.fn();
+    qm.useTransitionWorkflowState.mockReturnValue({ mutate, isPending: false });
+    qm.useWorkflowState.mockReturnValue({
+      data: { ...stateCandidate, status: "holding", allowed_targets: ["settled", "candidate"] },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+
+    fireEvent.click(screen.getByText(/结算/));
+    // 不勾选——直接手填卖出价
+    const exitInput = screen.getByPlaceholderText("如 13.80");
+    fireEvent.change(exitInput, { target: { value: "13.8" } });
+    fireEvent.click(screen.getByText("确认流转"));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({
+      code: "600001", date: "2026-08-07", target: "settled",
+      exit_price: 13.8, auto_fill_exit_price: false,
+    }));
+  });
+
+  it("S038：exit_price_source=market → 卖出价后标「市价自动」", () => {
+    qm.useWorkflowState.mockReturnValue({
+      data: {
+        ...stateCandidate, status: "settled", allowed_targets: ["candidate"],
+        entry_price: 10, exit_price: 1800.5,
+        settlement: { return_pct: 50, won: true, hold_days: 0, exit_price_source: "market" },
+      },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    expect(screen.getByText(/卖出价 1800.5/)).toBeInTheDocument();
+    expect(screen.getByText(/市价自动/)).toBeInTheDocument();
+    expect(screen.queryByText(/手动填写/)).not.toBeInTheDocument();
+  });
+
+  it("S038：exit_price_source=manual → 卖出价后标「手动填写」", () => {
+    qm.useWorkflowState.mockReturnValue({
+      data: {
+        ...stateCandidate, status: "settled", allowed_targets: ["candidate"],
+        entry_price: 10, exit_price: 11,
+        settlement: { return_pct: 10, won: true, hold_days: 0, exit_price_source: "manual" },
+      },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    expect(screen.getByText(/手动填写/)).toBeInTheDocument();
+    expect(screen.queryByText(/市价自动/)).not.toBeInTheDocument();
+  });
+
+  it("S038：exit_price_source 缺失（null）→ 卖出价后不标来源", () => {
+    qm.useWorkflowState.mockReturnValue({
+      data: {
+        ...stateCandidate, status: "settled", allowed_targets: ["candidate"],
+        entry_price: 10, exit_price: 11,
+        settlement: { return_pct: 10, won: true, hold_days: 0 },
+      },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    expect(screen.getByText(/卖出价 11/)).toBeInTheDocument();
+    expect(screen.queryByText(/市价自动/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/手动填写/)).not.toBeInTheDocument();
+  });
 });
