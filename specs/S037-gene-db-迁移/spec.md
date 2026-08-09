@@ -1,6 +1,6 @@
 # Spec: S037 — gene DB 路径迁移（#5：三库 + winrate 统一到 .vibe-research/）
 
-> 状态：草案
+> 状态：已实现
 > 作者：Codex  日期：2026-08-08
 > 关联：`../S028-limitup-screener-fix/spec.md`（#5 延迟项）、`../S034-结算接线/spec.md`（winrate.db cwd 依赖 wart）、`backend/limitup_screener/data.py`、`backend/limitup_sti/data.py`、`backend/win_rate_tracker.py`、`backend/routers/sentiment_weather.py`、`backend/config/__init__.py`
 >
