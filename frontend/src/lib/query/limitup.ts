@@ -97,6 +97,10 @@ export function usePreMarketBriefing(options?: Opts<Awaited<ReturnType<typeof ge
   return useQuery({
     queryKey: ["limitup", "preMarketBriefing"] as const,
     queryFn: () => getPreMarketBriefing(),
+    // 盘前简报为日级数据，采集完成(done)后当天稳定；全局 staleTime 30s 对此过短，
+    // 导致切页/聚焦反复重发。拉长到 5min（running 轮询走 refetchInterval，不受 staleTime 影响；
+    // 手动刷新走 refetch()）。采集中的 idle→running 轮询仍由 refetchInterval 驱动。
+    staleTime: 5 * 60_000,
     ...options,
   });
 }
