@@ -39,6 +39,9 @@ def test_collect_success_writes_done_cache(monkeypatch):
     monkeypatch.setattr(wf.factor_registry, "afetch_all", fake_afetch)
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
     monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d: {"sentiment": "neutral"})
+    # S048：funnel_layers 构建（真跑会碰外部源）与快照落盘均隔离
+    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [])
+    monkeypatch.setattr(wf, "_save_snapshot", lambda payload: None)
     _reset_cache(monkeypatch, status="running", run_id="rid1")
 
     asyncio.run(wf._collect("rid1", "2026-08-03"))
@@ -57,6 +60,8 @@ def test_collect_failure_writes_error_cache(monkeypatch):
     monkeypatch.setattr(wf.factor_registry, "afetch_all", boom)
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
     monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d: {})
+    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [])
+    monkeypatch.setattr(wf, "_save_snapshot", lambda payload: None)
     _reset_cache(monkeypatch, status="running", run_id="rid1")
 
     asyncio.run(wf._collect("rid1", "2026-08-03"))
