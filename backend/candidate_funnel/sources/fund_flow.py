@@ -28,6 +28,12 @@ def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
                 entry["main_net_5d"] = round(
                     sum((f.get("main_net") or 0) for f in last5) / 10000.0, 1
                 )
+                # S049a：降级源（push2delay）只回最新 1 行——单行时不拿当日
+                # 净流冒充"5 日累计"，标 missing 透明（AC6）；≥2 行沿用既有
+                # 契约"不足 5 天按可用天数求和"（test_main_net_5d_is_sum_of_last_five_in_wan）。
+                if len(flows) < 2:
+                    entry["main_net_5d"] = None
+                    entry["missing"]["main_net_5d"] = "资金流仅 1 天（降级源），5 日累计暂不可得"
             else:
                 entry["missing"]["main_net_inflow"] = "资金流未取得"
         except Exception:

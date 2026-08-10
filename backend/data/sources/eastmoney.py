@@ -270,7 +270,11 @@ def dividend_history(code: str, page_size: int = 20) -> list[dict]:
 
 
 def stock_fund_flow_120d(code: str) -> list[dict]:
-    """个股资金流（日级，最近 120 交易日）：主力 / 小单 / 中单 / 大单 / 超大单净流入（元）。"""
+    """个股资金流（日级，最近 120 交易日）：主力 / 小单 / 中单 / 大单 / 超大单净流入（元）。
+
+    S049a：push2his 断连时降级 push2delay（东财延迟镜像，同 path 同 ut 仅 host 不同；
+    资金流为日级盘后数据，延迟无实质影响）。首个返非空 klines 的 host 即用；都失败返空。
+    """
     market_code = 1 if code.startswith("6") else 0
     params = {
         "secid": f"{market_code}.{code}",
@@ -280,13 +284,22 @@ def stock_fund_flow_120d(code: str) -> list[dict]:
         "ut": _PUSH2_UT,
     }
     headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/", "Origin": "https://quote.eastmoney.com"}
-    try:
-        d = em_get("https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get",
-                   params=params, headers=headers, timeout=15).json()
-    except Exception:
-        return []
+    for host in ("push2his.eastmoney.com", "push2delay.eastmoney.com"):
+        try:
+            d = em_get(f"https://{host}/api/qt/stock/fflow/daykline/get",
+                       params=params, headers=headers, timeout=15).json()
+        except Exception:
+            continue  # 断连/限流 → 下一 host
+        rows = _parse_fflow_klines(d)
+        if rows:  # 200 但 klines 空（断连恢复期）也视同失败，继续降级
+            return rows
+    return []
+
+
+def _parse_fflow_klines(d: dict) -> list[dict]:
+    """fflow/daykline klines 解析（S049a 从 stock_fund_flow_120d 抽出，降级复用）。"""
     rows = []
-    for line in d.get("data", {}).get("klines", []):
+    for line in (d or {}).get("data", {}).get("klines", []):
         p = line.split(",")
         if len(p) >= 6:
             def _f(x):

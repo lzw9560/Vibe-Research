@@ -49,6 +49,67 @@ def test_stock_fund_flow_120d_shape(monkeypatch):
     assert r["super_net"] == 800.0
 
 
+def test_fund_flow_120d_first_host_ok_no_fallback(monkeypatch):
+    """S049a R5：push2his 成功 → 用首 host，不降级（em_get 只调 1 次）。"""
+    hosts = []
+    payload = {"data": {"klines": ["2026-08-08,100,-50,20,30,80"]}}
+
+    def fake_em_get(url, *a, **k):
+        hosts.append(url)
+        return _FakeResp(payload)
+
+    monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
+    rows = eastmoney.stock_fund_flow_120d("600519")
+    assert len(rows) == 1
+    assert len(hosts) == 1
+    assert "push2his." in hosts[0]
+
+
+def test_fund_flow_120d_fallback_to_push2delay(monkeypatch):
+    """S049a R5：push2his 断连 + push2delay 成功 → 用 push2delay（em_get 调 2 次）。"""
+    hosts = []
+    payload = {"data": {"klines": ["2026-08-08,664611600,-1,2,3,4"]}}
+
+    def fake_em_get(url, *a, **k):
+        hosts.append(url)
+        if "push2his." in url:
+            raise ConnectionError("Max retries exceeded")
+        return _FakeResp(payload)
+
+    monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
+    rows = eastmoney.stock_fund_flow_120d("600519")
+    assert len(rows) == 1
+    assert rows[0]["main_net"] == 664611600.0
+    assert len(hosts) == 2
+    assert "push2delay." in hosts[1]
+
+
+def test_fund_flow_120d_empty_klines_falls_back(monkeypatch):
+    """S049a：push2his 返 200 但 klines 空（断连恢复期）→ 视同失败继续下一 host。"""
+    hosts = []
+    ok = {"data": {"klines": ["2026-08-08,5,5,5,5,5"]}}
+
+    def fake_em_get(url, *a, **k):
+        hosts.append(url)
+        if "push2his." in url:
+            return _FakeResp({"data": {"klines": []}})
+        return _FakeResp(ok)
+
+    monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
+    rows = eastmoney.stock_fund_flow_120d("600519")
+    assert len(rows) == 1
+    assert len(hosts) == 2
+
+
+def test_fund_flow_120d_both_hosts_fail_empty(monkeypatch):
+    """S049a R4：两 host 都失败 → 空列表（现状行为，上层标 missing）。"""
+    def fake_em_get(url, *a, **k):
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
+    assert eastmoney.stock_fund_flow_120d("600519") == []
+
+
 def test_em_zt_topic_pool_caches(monkeypatch):
     """同 (endpoint,date,sort) 二次调用不重复请求（24h 缓存）。"""
     eastmoney._ztb_cache.clear()
