@@ -2,6 +2,7 @@
 // 节点点击进候选详情（复用 S023 CandidateDetail 路由）。边按 type 着色由 GraphView 负责。
 // 复用 TopologyPanel shell（S024-B）+ ui 组件。仿 KLineChart 初始化 + CandidateDetail 数据拉取模式。
 // 合规 §0（弱合规·工程底线）：拓扑只呈现客观关联（同板块/共流入/梯队/席位），不输出方向词。
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import { useTopologyRelation } from "@/lib/query";
@@ -9,6 +10,7 @@ import { TopologyPanel } from "./TopologyPanel";
 import { EdgeLegend } from "./EdgeLegend";
 import { GraphView } from "./GraphView";
 import type { GraphNode } from "./types";
+import type { EdgeType } from "@/lib/api/types";
 
 interface RelationGraphProps {
   /** ISO 日期；默认今日（后端处理）。 */
@@ -28,6 +30,19 @@ export function RelationGraph({ date, height = 420 }: RelationGraphProps) {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useTopologyRelation(date);
 
+  // S048 R12：fund_flow 默认隐藏（后端阈值 ≥3 已降噪，前端再默认弱化；图例可点开）
+  const [hiddenTypes, setHiddenTypes] = useState<EdgeType[]>(["fund_flow"]);
+
+  const toggleEdgeType = (t: EdgeType) => {
+    setHiddenTypes((prev) =>
+      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+    );
+  };
+
+  const allEdges = data?.edges ?? [];
+  const hiddenSet = new Set(hiddenTypes);
+  const visibleEdges = allEdges.filter((e) => !hiddenSet.has(e.type));
+
   const handleNodeClick = (node: GraphNode) => {
     if (node.code) {
       navigate(`/workflow/candidates/${node.code}`);
@@ -45,8 +60,13 @@ export function RelationGraph({ date, height = 420 }: RelationGraphProps) {
       errorMessage="关系网加载失败"
       refetch={refetch}
     >
-      <EdgeLegend edges={data?.edges ?? []} />
-      <GraphView data={data ?? { nodes: [], edges: [] }} onNodeClick={handleNodeClick} height={height} />
+      {/* 图例按未过滤边集判存在性（隐藏类型也在，点击切换）；GraphView 只喂过滤后边 */}
+      <EdgeLegend edges={allEdges} hidden={hiddenTypes} onToggle={toggleEdgeType} />
+      <GraphView
+        data={{ nodes: data?.nodes ?? [], edges: visibleEdges }}
+        onNodeClick={handleNodeClick}
+        height={height}
+      />
     </TopologyPanel>
   );
 }

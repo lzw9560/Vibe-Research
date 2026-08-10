@@ -28,7 +28,11 @@ vi.mock("../GraphView", () => ({
   GraphView: (props: { data: GraphData; onNodeClick?: (n: GraphNode) => void }) => {
     hookMock.onNodeClickRef.current = props.onNodeClick ?? null;
     return (
-      <div data-testid="rg-graph" data-node-count={props.data.nodes.length}>
+      <div
+        data-testid="rg-graph"
+        data-node-count={props.data.nodes.length}
+        data-edge-types={props.data.edges.map((e) => e.type).sort().join(",")}
+      >
         <button
           data-testid="rg-node-trigger"
           onClick={() =>
@@ -143,5 +147,37 @@ describe("RelationGraph (S024-B7)", () => {
     render(<RelationGraph />);
     const gv = screen.getByTestId("rg-graph");
     expect(gv.getAttribute("data-node-count")).toBe("0");
+  });
+
+  // ---- S048 R12：fund_flow 默认隐藏 + 图例 toggle ----
+
+  it("R12: 默认 fund_flow 不进 GraphView，但图例显示（按未过滤边集判存在，aria-pressed=false）", () => {
+    render(<RelationGraph />);
+    const gv = screen.getByTestId("rg-graph");
+    expect(gv.getAttribute("data-edge-types")).toBe("ladder,seat,sector"); // 无 fund_flow
+    const legendBtn = screen.getByRole("button", { name: /共流入/ });
+    expect(legendBtn.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("R12: 点图例「共流入」→ fund_flow 恢复显示，再点隐藏", () => {
+    render(<RelationGraph />);
+    const legendBtn = screen.getByRole("button", { name: /共流入/ });
+    fireEvent.click(legendBtn);
+    expect(screen.getByTestId("rg-graph").getAttribute("data-edge-types")).toContain("fund_flow");
+    expect(legendBtn.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(legendBtn);
+    expect(screen.getByTestId("rg-graph").getAttribute("data-edge-types")).not.toContain("fund_flow");
+  });
+
+  it("R12: 只有 fund_flow 边的数据 → 图例仍有共流入（未过滤集判存在），GraphView 初始 0 边", () => {
+    hookMock.useTopologyRelation.mockReturnValue(hookReturning({
+      data: {
+        nodes: mockData.nodes,
+        edges: [{ source: "000001", target: "600519", type: "fund_flow", weight: 2 }],
+      },
+    }));
+    render(<RelationGraph />);
+    expect(screen.getByRole("button", { name: /共流入/ })).toBeInTheDocument();
+    expect(screen.getByTestId("rg-graph").getAttribute("data-edge-types")).toBe("");
   });
 });
