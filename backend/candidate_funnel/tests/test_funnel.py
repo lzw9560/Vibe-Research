@@ -69,6 +69,7 @@ class TestRunFunnelEndToEnd(unittest.TestCase):
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
+        funnel_mod.clear_funnel_cache()
         cfg = ThresholdConfig(mode="manual")
         result = run_funnel(stage="all", date="2026-07-28", cfg=cfg)
         layer_ids = [l.layer_id for l in result.layers]
@@ -91,6 +92,7 @@ class TestRunFunnelEndToEnd(unittest.TestCase):
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
+        funnel_mod.clear_funnel_cache()
         cfg = ThresholdConfig(mode="manual")
         result = run_funnel(stage="all", date="2026-07-28", cfg=cfg)
         r1, r2, r3 = (next(l for l in result.layers if l.layer_id == x) for x in ("R1", "R2", "R3"))
@@ -102,6 +104,7 @@ class TestRunFunnelEndToEnd(unittest.TestCase):
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
+        funnel_mod.clear_funnel_cache()
         cfg = ThresholdConfig(mode="manual")
         result = run_funnel(stage="all", date="2026-07-28", cfg=cfg)
         self.assertIn("SELF", [l.layer_id for l in result.layers])
@@ -119,12 +122,14 @@ class TestRunFunnelEmptyLayer(unittest.TestCase):
              mock.patch.object(funnel_mod.sources.catalyst, "fetch_catalyst", return_value={}), \
              mock.patch.object(funnel_mod.sources.watchlist_in, "get_watchlist_codes", return_value=[]), \
              mock.patch.object(funnel_mod, "_fetch_sentiment_phase", return_value=None):
+            funnel_mod.clear_funnel_cache()
             cfg = ThresholdConfig(mode="manual")
-            result = run_funnel(stage="all", date="2026-07-28", cfg=cfg)
+            result = run_funnel(stage="all", date="2026-07-29", cfg=cfg)
             r1 = next(l for l in result.layers if l.layer_id == "R1")
             self.assertEqual(r1.output_count, 0)
             self.assertEqual(result.final_candidates, [])
             # 不抛异常即通过
+            funnel_mod.clear_funnel_cache()
 
 
 if __name__ == "__main__":

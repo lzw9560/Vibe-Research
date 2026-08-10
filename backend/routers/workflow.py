@@ -141,6 +141,8 @@ async def _collect(run_id: str, target_date: str) -> None:
             as_of=as_of,
             error=None,
         )
+        # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _build_funnel_layers 重建）
+        funnel_mod.clear_funnel_cache(target_date)
         try:
             _save_snapshot({
                 "schema": _SNAPSHOT_SCHEMA,
@@ -297,6 +299,9 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
         }
         if status == "done":
             resp["factors"] = _cache["factors"]
+            # S049 D4：live done 透出 funnel_layers（与快照路径对齐；_build_funnel_layers 命中 run_funnel 缓存不重复请求）
+            funnel_layers = await asyncio.to_thread(_build_funnel_layers, d)
+            resp["funnel_layers"] = funnel_layers
         elif status == "error":
             resp["error"] = _cache.get("error")
         return resp

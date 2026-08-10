@@ -40,6 +40,19 @@ def _fetch_sentiment_phase(date: str) -> str | None:
         return None
 
 
+# S049 D6：run_funnel (date,config) TTL 缓存——_collect（因子）与 _build_funnel_layers（漏斗）
+# 各跑一遍会重复外部请求；缓存命中即复用。rerun 不受影响（done 即清）。
+_FUNNEL_CACHE: dict[str, tuple[float, "FunnelResult"]] = {}
+_FUNNEL_CACHE_TTL = 300  # 5 分钟
+
+
+def _funnel_cache_key(date: str, cfg: ThresholdConfig) -> str:
+    """缓存键=date + config 排序 JSON（防不同阈值串数据）。"""
+    import json
+    cfg_dict = cfg.model_dump(mode="json")
+    return f"{date}|{json.dumps(cfg_dict, sort_keys=True, ensure_ascii=False)}"
+
+
 def _filter_r1(codes: list[str], genes: dict[str, dict]) -> tuple[list[str], list[FilterRecord]]:
     kept: list[str] = []
     filtered: list[FilterRecord] = []
@@ -118,6 +131,27 @@ def _r3_triggers(code: str, auction: dict[str, dict], catalyst: dict[str, dict])
     return triggers
 
 
+def _consec_boards_for(code: str, board: dict) -> int | None:
+    """从 board.lianban_stocks 按 code 匹配个股连板数（与 build_indicator_set 同口径）。"""
+    for s in (board or {}).get("lianban_stocks", []):
+        if isinstance(s, dict) and s.get("code") == code:
+            return s.get("boards")
+    return None
+
+
+def _catalyst_summary(code: str, catalyst: dict[str, dict]) -> str | None:
+    """催化摘要：公告标题首条 + 概念名（前端矩阵列展示用）。无催化返 None。"""
+    cat = catalyst.get(code, {})
+    anns = cat.get("announcements") or []
+    concepts = cat.get("concepts") or []
+    parts: list[str] = []
+    if anns:
+        parts.append(anns[0].get("title", "") if isinstance(anns[0], dict) else str(anns[0]))
+    if concepts:
+        parts.append("/".join(concepts[:3]))
+    return "；".join(parts) if parts else None
+
+
 def _filter_r3(
     codes: list[str], auction: dict[str, dict], catalyst: dict[str, dict],
     genes: dict[str, dict], activity: dict[str, dict],
@@ -150,7 +184,43 @@ def _filter_r3(
 
 
 def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
-    """R1→R2→R3 + 自选并行；返回 FunnelResult。"""
+    """R1→R2→R3 + 自选并行；返回 FunnelResult。
+
+    S049 D6：(date,config) TTL 缓存——_collect（因子）与 _build_funnel_layers（漏斗）
+    各跑一遍会重复外部请求；命中缓存即复用。rerun 走 run_funnel_force（清缓存路径）。
+    """
+    import time
+    key = _funnel_cache_key(date, cfg)
+    now = time.time()
+    hit = _FUNNEL_CACHE.get(key)
+    if hit and now - hit[0] < _FUNNEL_CACHE_TTL:
+        return hit[1]
+    result = _run_funnel_impl(stage, date, cfg)
+    _FUNNEL_CACHE[key] = (now, result)
+    return result
+
+
+def run_funnel_force(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
+    """rerun 显式清缓存路径（不受 TTL 缓存影响）。"""
+    import time
+    key = _funnel_cache_key(date, cfg)
+    _FUNNEL_CACHE.pop(key, None)
+    result = _run_funnel_impl(stage, date, cfg)
+    _FUNNEL_CACHE[key] = (time.time(), result)
+    return result
+
+
+def clear_funnel_cache(date: str | None = None) -> None:
+    """清缓存（done 即清，或按 date 清）。"""
+    if date is None:
+        _FUNNEL_CACHE.clear()
+        return
+    for k in [k for k in _FUNNEL_CACHE if k.startswith(f"{date}|")]:
+        _FUNNEL_CACHE.pop(k, None)
+
+
+def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
+    """R1→R2→R3 + 自选并行实现（无缓存，由 run_funnel 包裹缓存）。"""
     as_of = datetime.now()
     phase = _fetch_sentiment_phase(date)
     eff = resolve_thresholds(cfg, phase)
@@ -183,7 +253,12 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
         input_count=len(r1_input), output_count=len(r1_kept),
         filtered_out=r1_filtered, output_codes=r1_kept,
         conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）", *base_conditions],
-        passed=[{"code": c, "name": genes.get(c, {}).get("name", c), "gene_score": genes.get(c, {}).get("gene_score")} for c in r1_kept],
+        passed=[
+            {"code": c, "name": genes.get(c, {}).get("name", c),
+             "gene_score": genes.get(c, {}).get("gene_score"),
+             "consec_boards": _consec_boards_for(c, board)}
+            for c in r1_kept
+        ],
         data_status=r1_data_status, data_reason=r1_data_reason,
     )
     layers: list[FunnelLayer] = [r1]
@@ -204,7 +279,19 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
         input_count=len(r1_kept), output_count=len(r2_kept),
         filtered_out=r2_filtered, output_codes=r2_kept,
         conditions=[f"换手>={eff.turnover_cold}%（{phase_note}）", *base_conditions],
-        passed=[{"code": c, "name": activity.get(c, {}).get("name", c), "gene_score": genes.get(c, {}).get("gene_score")} for c in r2_kept],
+        passed=[
+            {"code": c, "name": activity.get(c, {}).get("name", c),
+             "gene_score": genes.get(c, {}).get("gene_score"),
+             "consec_boards": _consec_boards_for(c, board),
+             "turnover_pct": activity.get(c, {}).get("turnover_pct"),
+             "vol_ratio": activity.get(c, {}).get("vol_ratio"),
+             "amount_yi": activity.get(c, {}).get("amount_yi"),
+             "amplitude_pct": activity.get(c, {}).get("amplitude_pct"),
+             "main_net_inflow": (fund.get(c, {}) or {}).get("main_net_inflow"),
+             "main_net_5d": (fund.get(c, {}) or {}).get("main_net_5d"),
+             "northbound": (fund.get(c, {}) or {}).get("northbound")}
+            for c in r2_kept
+        ],
         data_status=r2_data_status, data_reason=r2_data_reason,
     )
     layers.append(r2)
@@ -228,7 +315,10 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
         passed=[
             {"code": c, "name": _resolve_name(c, genes, activity, auction, catalyst),
              "gene_score": genes.get(c, {}).get("gene_score"),
-             "matched_triggers": _r3_triggers(c, auction, catalyst)}
+             "consec_boards": _consec_boards_for(c, board),
+             "auction_open_pct": auction.get(c, {}).get("auction_open_pct"),
+             "matched_triggers": _r3_triggers(c, auction, catalyst),
+             "catalyst_summary": _catalyst_summary(c, catalyst)}
             for c in r3_kept
         ],
         data_status=r3_data_status, data_reason=r3_data_reason,
