@@ -64,4 +64,4 @@ def test_load_config_invalid_env_does_not_raise(monkeypatch):
     cfg = config.load_config()
     # 非法值 → 保留 dataclass 默认
     assert cfg.CONCURRENT_REQUESTS == 10
-    assert cfg.GENE_QUALIFY_THRESHOLD == 60.0
+    assert cfg.GENE_QUALIFY_THRESHOLD == 50.0

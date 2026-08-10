@@ -19,7 +19,10 @@ class AssistantDefaultConfig:
 
     # === 基因选股 ===
     GENE_LOOKBACK_DAYS: int = 252
-    GENE_QUALIFY_THRESHOLD: float = 60.0
+    # 60→50（2026-08-10 grill）：强封板市况下炸板后溢价恒 0（占权重 15%），total_score 结构性
+    # 上限 ~52，阈值 60 会清空候选池、L2 战法层无输入；降到 50 让头部候选进战法层。
+    # 权重口径调整（炸板后溢价降权/改口径）待 S041 回测验证后正式改稿。
+    GENE_QUALIFY_THRESHOLD: float = 50.0
     GENE_HIGH_THRESHOLD: float = 75.0
     GENE_FACTORS_WEIGHT: dict[str, float] = field(
         default_factory=lambda: {

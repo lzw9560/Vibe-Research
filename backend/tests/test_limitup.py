@@ -149,7 +149,7 @@ def test_screener_result_model():
 # ===========================================================================
 
 def test_config_defaults():
-    assert GENE_QUALIFY_THRESHOLD == 60.0
+    assert GENE_QUALIFY_THRESHOLD == 50.0
     assert GENE_HIGH_THRESHOLD == 75.0
     assert LOOKBACK_DAYS == 252
 
