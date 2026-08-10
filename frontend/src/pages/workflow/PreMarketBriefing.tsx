@@ -8,13 +8,14 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Sheet } from "@/components/ui/Sheet";
+import { Button } from "@/components/ui/Button";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { StrategyFilter } from "@/components/ui/StrategyFilter";
 import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
 import { FunnelLayers } from "@/components/candidate/FunnelLayers";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import type { FactorResult, FunnelLayer } from "@/lib/api";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 function formatRelativeTime(generatedAt: string): string {
   try {
@@ -38,30 +39,39 @@ function phaseLabel(phase: string): string {
 }
 
 export default function PreMarketBriefing() {
-  // S026: 异步化——running 时 5s 轮询，其余停轮询
-  // S048 R8: usePreMarketBriefing 改签名 (date?, options?)——date 暂传 undefined，Task 5 接 URL query 真 date
-  const { data: briefing, isLoading, refetch } = usePreMarketBriefing(undefined, {
+  // S048 R2：date 来自 URL query（Workflow 首页日期选择器写入；无参数=今日实时）
+  const [searchParams] = useSearchParams();
+  const date = searchParams.get("date") ?? undefined;
+  const isHistorical = !!date;
+
+  // S026: running 5s 轮询；S048 R8: staleTime 由 hook 按 date/status 动态处理
+  const { data: briefing, isLoading, refetch } = usePreMarketBriefing(date, {
     refetchInterval: (query) => (query.state.data?.status === "running" ? 5_000 : false),
   });
   const refresh = usePreMarketRefresh();
   // S031 R18：候选诊断抽屉（点候选不整页跳，弹侧边抽屉）
   const [drawerCode, setDrawerCode] = useState<string | null>(null);
 
-  // idle → 自动触发后台采集（refresh.isPending 防重入）
+  // idle → 自动触发后台采集（仅今日实时链路；历史日期 idle 由用户显式操作，防误触外部源）
   useEffect(() => {
-    if (briefing?.status === "idle" && !refresh.isPending) {
+    if (briefing?.status === "idle" && !isHistorical && !refresh.isPending) {
       refresh.mutate(undefined);
     }
-  }, [briefing?.status, refresh]);
+  }, [briefing?.status, isHistorical, refresh]);
+
+  const status = briefing?.status ?? "idle";
+  // S048 R7：历史日期 done 后不可变——刷新入口整体移除（UI + staleTime Infinity 双保险）
+  const isHistoryDone = isHistorical && status === "done";
+  const canRefresh = !isHistoryDone;
 
   const handleRefresh = useCallback(() => {
-    if (briefing?.status !== "running") refresh.mutate(undefined);
+    if (!canRefresh) return;
+    if (status !== "running") refresh.mutate(date);
     refetch();
-  }, [refetch, refresh, briefing?.status]);
+  }, [canRefresh, status, refresh, refetch, date]);
 
   if (!briefing) return null;
 
-  const status = briefing.status ?? "idle";
   const factors: FactorResult[] = briefing.factors ?? [];
   const emotion = briefing.market_emotion;
 
@@ -70,11 +80,18 @@ export default function PreMarketBriefing() {
       title="盘前简报"
       subtitle="Pre-Market Briefing"
       loading={isLoading}
-      onRefresh={handleRefresh}
+      onRefresh={canRefresh ? handleRefresh : undefined}
     >
       {/* 数据日期 */}
       {briefing.data_date && (
         <p className="mb-4 text-xs text-muted-foreground">数据日期：{briefing.data_date}</p>
+      )}
+
+      {/* S048 R7/R9：历史快照不可变提示（from_snapshot/is_backfill 徽标） */}
+      {isHistoryDone && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          历史快照（不可变）{briefing.from_snapshot ? " · 读盘数据" : ""}{briefing.is_backfill ? " · 补采" : ""}
+        </p>
       )}
 
       {/* S031 R24：去涨停基因阈值配置 / 全市场得分表 */}
@@ -94,13 +111,31 @@ export default function PreMarketBriefing() {
 
       {status === "idle" && (
         <GlassCard className="p-6">
-          <p className="text-sm text-muted-foreground">未采集，正在触发后台采集…</p>
+          <p className="text-sm text-muted-foreground">
+            {isHistorical ? "该日未采集，可点右上方刷新触发采集。" : "未采集，正在触发后台采集…"}
+          </p>
         </GlassCard>
       )}
 
       {status === "error" && (
         <GlassCard className="border border-warning/30 p-4">
           <p className="text-sm text-warning">采集失败：{briefing.error ?? "未知错误"}</p>
+        </GlassCard>
+      )}
+
+      {/* S048 R7：历史无快照 → 显式补采入口（不自动触发；外部源历史数据会变，标注出入） */}
+      {status === "no_snapshot" && (
+        <GlassCard className="space-y-3 p-6">
+          <p className="text-sm text-muted-foreground">{date} 无采集快照。</p>
+          <p className="text-xs text-warning">补采数据可能与当日实盘所见有出入（外部源历史数据会变动）。</p>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={refresh.isPending}
+            onClick={() => refresh.mutate(date)}
+          >
+            {refresh.isPending ? "补采中…" : "补采该日数据"}
+          </Button>
         </GlassCard>
       )}
 
@@ -142,8 +177,12 @@ export default function PreMarketBriefing() {
             </GlassCard>
           )}
 
-          {/* ③ 候选池 R1/R2/R3 漏斗（第二组，逐层可验证） */}
-          <CandidateFunnelEmbed date={briefing.data_date} onPick={setDrawerCode} />
+          {/* ③ 候选池 R1/R2/R3 漏斗（from_snapshot 时用快照层，历史零外部请求） */}
+          <CandidateFunnelEmbed
+            date={briefing.data_date}
+            onPick={setDrawerCode}
+            snapshotLayers={briefing.from_snapshot ? briefing.funnel_layers ?? [] : undefined}
+          />
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
           <WinRateCompareSection factors={factors} />
@@ -162,14 +201,25 @@ export default function PreMarketBriefing() {
   );
 }
 
-/** S031 R17：候选池漏斗嵌入（第二组）——调 useFunnelLayers 既有 hook。 */
-function CandidateFunnelEmbed({ date, onPick }: { date?: string; onPick: (code: string) => void }) {
-  const { data: layers, isLoading } = useFunnelLayers(date);
+/** S031 R17 候选池漏斗嵌入；S048 R9：snapshotLayers 存在（from_snapshot）时直渲快照、
+ * 禁用 live 查询（enabled:false + date undefined，历史零外部请求）。 */
+function CandidateFunnelEmbed({
+  date,
+  onPick,
+  snapshotLayers,
+}: {
+  date?: string;
+  onPick: (code: string) => void;
+  snapshotLayers?: FunnelLayer[];
+}) {
+  const useLive = snapshotLayers === undefined;
+  const { data: liveLayers, isLoading } = useFunnelLayers(useLive ? date : undefined, { enabled: useLive });
+  const layers = snapshotLayers ?? liveLayers;
   if (!layers || layers.length === 0) return null;
   return (
     <div className="mb-6 space-y-3">
       <SectionHeader title="候选池漏斗" subtitle="R1/R2/R3 逐层可验证" />
-      {isLoading ? (
+      {useLive && isLoading ? (
         <Skeleton variant="rectangular" className="h-32" />
       ) : (
         <FunnelLayers layers={layers} date={date} onPick={onPick} />
