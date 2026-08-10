@@ -12,6 +12,9 @@ TODO: live fetchers (em_get calls) wired during S008 migration.
 
 from __future__ import annotations
 
+import time
+from datetime import date as _dt_date
+
 import astock  # 数据门面；fetcher 经 astock.eastmoney_datacenter 走 em_get 限流（防封底线）
 
 from predict.features.registry import FeatureSpec, Registry
@@ -295,38 +298,100 @@ def fetch_dt_hot_money_relay(code: str, date: str | None = None, look_back: int 
 # 东财 push2 端点公开 token（缺则 push2 clist/slist 返空或断连——根因非端点宕，是 astock 旧函数缺 ut）
 _EM_PUSH2_UT = "fa5fd1943c7b386f172d6893dbbd1"
 
+# S044-R2 收尾（2026-08-10 live 修复）：板块 clist 缓存（TTL 10 分钟）。
+# 同日板块资金流对每候选相同——漏斗循环内复用单次 clist，避免逐候选重复探测触发东财限流。
+_SECTOR_CACHE_TTL = 600
+_SECTOR_PAGE_SIZE = 100   # 东财该 fs 单页上限 100（pz=200 实测仍返 100）
+_SECTOR_MAX_PAGES = 8     # 496 板块 ≈ 5 页，留余量防异常翻页
+_sector_cache: dict[str, tuple[float, dict]] = {}  # "flows" → (ts, {归一化板块名: f62(元)})
+
+
+def _industry_of(code: str) -> str:
+    """个股所属行业（东财二级行业，如「白酒Ⅱ」）——push2delay stock/get + ut 取 f127。
+
+    不用 akshare individual_info：其 push2 stock/get 缺 ut 被断连（且不走 em_get 限流）。
+    不走 push2 主host：stock/get 路径限流未恢复（2026-08-10 live 实测），delay host 可用；
+    行业为静态属性，延迟行情足够。取不到 → ""。
+    """
+    market = 1 if code.startswith("6") else 0
+    try:
+        r = astock.em_get(
+            "https://push2delay.eastmoney.com/api/qt/stock/get",
+            params={"secid": f"{market}.{code}", "fields": "f127", "ut": _EM_PUSH2_UT},
+            timeout=15,
+        )
+        return str((r.json().get("data") or {}).get("f127") or "").strip()
+    except Exception:
+        return ""
+
+
+def _normalize_board_name(name: str) -> str:
+    """板块/行业名归一：去空白 + 级别后缀（Ⅰ/Ⅱ/Ⅲ）。
+
+    f127 行业字段带级别后缀（「白酒Ⅱ」），板块列表 f14 不带（「白酒」）——
+    不归一化则 live 永远匹配不上（2026-08-10 live 发现）。
+    """
+    return name.strip().rstrip("ⅠⅡⅢ").strip()
+
+
+def _sector_board_flows() -> dict[str, float]:
+    """行业板块主力净流入 {归一化名: f62(元)}——push2 clist(fid=f62)+ut，TTL 缓存。
+
+    共 ~496 板块、服务端单页上限 100 → 翻页取全；push2 主host 限流断连时降级
+    push2delay（与 market_turnover_rank 同款降级；板块资金流日级聚合，延迟可接受）。
+    端点失败/data 空 → {}（调用方防御返 None）。
+    """
+    now = time.time()
+    hit = _sector_cache.get("flows")
+    if hit and now - hit[0] < _SECTOR_CACHE_TTL:
+        return hit[1]
+    flows: dict[str, float] = {}
+    for host in ("push2.eastmoney.com", "push2delay.eastmoney.com"):
+        try:
+            for pn in range(1, _SECTOR_MAX_PAGES + 1):
+                r = astock.em_get(
+                    f"https://{host}/api/qt/clist/get",
+                    params={"fid": "f62", "po": "1", "pz": str(_SECTOR_PAGE_SIZE), "pn": str(pn),
+                            "fs": "m:90+t:2+f:!50", "fields": "f12,f14,f62", "ut": _EM_PUSH2_UT},
+                    timeout=15,
+                )
+                diff = (r.json().get("data") or {}).get("diff") or {}
+                items = list(diff.values()) if isinstance(diff, dict) else (diff or [])
+                if not items:
+                    break
+                for it in items:
+                    if not isinstance(it, dict):
+                        continue
+                    name = str(it.get("f14") or "").strip()
+                    if name:
+                        flows[_normalize_board_name(name)] = it.get("f62")
+            if flows:
+                break
+        except Exception:
+            flows = {}  # 本 host 中断 → 换下一 host 从头取
+            continue
+    if flows:
+        _sector_cache["flows"] = (now, flows)
+    return flows
+
 
 def fetch_sector_flow(code: str, date: str | None = None) -> float | None:
-    """个股所属行业板块当日主力净流入（万元）。S044 R2。
+    """个股所属行业板块当日主力净流入（万元）。S044 R2（2026-08-10 live 修复版）。
 
-    走 astock.em_get push2 clist(fid=f62, ut=...) 取行业板块主力净流入（东财 push2 端点需 ut token，
-    旧 astock.concept_blocks/stock_fund_flow_120d 缺 ut 故返空/断连——根因非端点宕）；个股行业经
-    astock.individual_info 取；行业名匹配 clist f14 → f62(元)→万元。取不到（行业/匹配/端点限流）→ None(missing)。
+    行业经 push2delay stock/get+ut（f127）；板块资金流经 push2 clist(fid=f62)+ut（TTL 缓存、
+    分页取全、push2→push2delay 降级）；行业名归一化（去 Ⅰ/Ⅱ/Ⅲ 级别后缀）后匹配板块，f62(元)→万元。
+    任一环节失败 → None（防御式，R3 不过滤）。
+
+    date 语义与 activity 历史分支一致：date < 今日 → 历史 → 返 None（端点仅当日值，
+    防未来函数——不得拿今日资金流冒充历史日数据）；date 缺省或 >= 今日 → live 取数。
     """
-    try:
-        info = astock.individual_info(code) or {}
-    except Exception:
+    if date is not None and date < _dt_date.today().isoformat():
         return None
-    industry = (info.get("行业") or "").strip() if isinstance(info, dict) else ""
+    industry = _industry_of(code)
     if not industry:
         return None
+    f62 = _sector_board_flows().get(_normalize_board_name(industry))
     try:
-        r = astock.em_get("https://push2.eastmoney.com/api/qt/clist/get",
-            params={"fid": "f62", "po": "1", "pz": "200", "pn": "1",
-                    "fs": "m:90+t:2+f:!50", "fields": "f12,f14,f62", "ut": _EM_PUSH2_UT},
-            timeout=15)
-        d = r.json()
-    except Exception:
+        return round(float(f62) / 10000.0, 1)  # 元 → 万元
+    except (TypeError, ValueError):
         return None
-    diff = (d.get("data") or {}).get("diff") or {}
-    items = list(diff.values()) if isinstance(diff, dict) else (diff or [])
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        if str(it.get("f14", "")).strip() == industry:
-            f62 = it.get("f62")
-            try:
-                return round(float(f62) / 10000.0, 1)  # 元 → 万元
-            except (TypeError, ValueError):
-                return None
-    return None
