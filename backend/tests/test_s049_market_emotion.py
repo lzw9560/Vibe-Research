@@ -75,5 +75,45 @@ class TestFetchMarketEmotion(unittest.TestCase):
         self.assertIsNone(out["sti_phase"])
 
 
+# ── C: diagnose as_of 最早日期 ─────────────────────────────────────────────
+
+
+class TestDiagnoseAsOf(unittest.TestCase):
+    """S049 R-C1：diagnose as_of=各源 _as_of 最早；全无→≈now。"""
+
+    def test_as_of_is_earliest_source_date(self):
+        from candidate_funnel import funnel as fmod
+        from candidate_funnel.models import ThresholdConfig
+
+        # activity _as_of=2026-08-10, fund _as_of=2026-08-08 → 最早 08-08
+        with mock.patch.object(fmod.sources.gene, "fetch_genes", return_value={"600519": {"name": "茅台"}}), \
+             mock.patch.object(fmod.sources.board_ladder, "fetch_board_ladder", return_value={"lianban_stocks": []}), \
+             mock.patch.object(fmod.sources.activity, "fetch_activity", return_value={"600519": {"name": "茅台", "_as_of": "2026-08-10", "turnover_pct": 15.0}}), \
+             mock.patch.object(fmod.sources.fund_flow, "fetch_fund_flow", return_value={"600519": {"main_net_inflow": 5000.0, "_as_of": "2026-08-08"}}), \
+             mock.patch.object(fmod.sources.auction, "fetch_auction", return_value={}), \
+             mock.patch.object(fmod.sources.catalyst, "fetch_catalyst", return_value={}), \
+             mock.patch.object(fmod, "_fetch_sentiment_phase", return_value=None):
+            card = fmod.diagnose("600519", "2026-08-10", ThresholdConfig())
+        self.assertEqual(str(card.as_of)[:10], "2026-08-08")
+
+    def test_as_of_falls_back_to_now_when_no_dates(self):
+        from candidate_funnel import funnel as fmod
+        from candidate_funnel.models import ThresholdConfig
+        from datetime import datetime
+
+        with mock.patch.object(fmod.sources.gene, "fetch_genes", return_value={"600519": {"name": "茅台"}}), \
+             mock.patch.object(fmod.sources.board_ladder, "fetch_board_ladder", return_value={"lianban_stocks": []}), \
+             mock.patch.object(fmod.sources.activity, "fetch_activity", return_value={"600519": {"name": "茅台"}}), \
+             mock.patch.object(fmod.sources.fund_flow, "fetch_fund_flow", return_value={"600519": {}}), \
+             mock.patch.object(fmod.sources.auction, "fetch_auction", return_value={}), \
+             mock.patch.object(fmod.sources.catalyst, "fetch_catalyst", return_value={}), \
+             mock.patch.object(fmod, "_fetch_sentiment_phase", return_value=None):
+            before = datetime.now()
+            card = fmod.diagnose("600519", "2026-08-10", ThresholdConfig())
+            after = datetime.now()
+        self.assertGreaterEqual(card.as_of, before)
+        self.assertLessEqual(card.as_of, after)
+
+
 if __name__ == "__main__":
     unittest.main()

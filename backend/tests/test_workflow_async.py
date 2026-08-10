@@ -42,6 +42,9 @@ def test_collect_success_writes_done_cache(monkeypatch):
     # S048：funnel_layers 构建（真跑会碰外部源）与快照落盘均隔离
     monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [])
     monkeypatch.setattr(wf, "_save_snapshot", lambda payload: None)
+    # S049 C4：final_candidates 诊断卡构建隔离（真跑会碰外部源）
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg: type("R", (), {"final_candidates": []})())
+    monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     _reset_cache(monkeypatch, status="running", run_id="rid1")
 
     asyncio.run(wf._collect("rid1", "2026-08-03"))

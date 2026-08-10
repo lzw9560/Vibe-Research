@@ -69,6 +69,8 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
             entry["missing"]["turnover_pct"] = "历史K线未取得该日"
             out[c] = entry
             continue
+        # S049 C2：暴露数据源日期（供 diagnose as_of 取最早）
+        entry["_as_of"] = target
         close = _f(bar.get("close"))
         prev_close = _f(prev.get("close")) if prev else None
         high = _f(bar.get("high"))
@@ -127,6 +129,8 @@ def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
                 "amplitude_pct": model.amplitude,
                 "limit_up": model.limit_up_price,
                 "limit_down": model.limit_down_price,
+                # S049 C2：当日行情数据源日期=as_of（tencent_quote 仅当日）
+                "_as_of": as_of,
             }
             missing: dict[str, str] = {}
             for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):

@@ -34,6 +34,8 @@ def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
                 if len(flows) < 2:
                     entry["main_net_5d"] = None
                     entry["missing"]["main_net_5d"] = "资金流仅 1 天（降级源），5 日累计暂不可得"
+                # S049 C2：暴露数据源最新行日期（供 diagnose as_of 取最早）
+                entry["_as_of"] = (flows[-1].get("date") or "")[:10] or None
             else:
                 entry["missing"]["main_net_inflow"] = "资金流未取得"
         except Exception:

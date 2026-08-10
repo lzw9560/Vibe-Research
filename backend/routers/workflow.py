@@ -144,6 +144,14 @@ async def _collect(run_id: str, target_date: str) -> None:
         # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _build_funnel_layers 重建）
         funnel_mod.clear_funnel_cache(target_date)
         try:
+            # S049 C4：快照存 final_candidates 诊断卡（抽屉查看历史快照日期时优先用，无才 live diagnose）
+            final_cards: list[dict] = []
+            try:
+                from routers.candidates import _store  # noqa: PLC0415
+                result = funnel_mod.run_funnel("all", target_date, _store["config"])
+                final_cards = [c.model_dump(mode="json") for c in result.final_candidates]
+            except Exception as exc:  # noqa: BLE001 — 诊断卡构建失败不影响快照主态
+                logger.warning("final_candidates 诊断卡构建失败 %s: %s", target_date, exc)
             _save_snapshot({
                 "schema": _SNAPSHOT_SCHEMA,
                 "data_date": target_date,
@@ -152,6 +160,7 @@ async def _collect(run_id: str, target_date: str) -> None:
                 "market_emotion": me,
                 "factors": factors,
                 "funnel_layers": funnel_layers,
+                "final_candidates": final_cards,
                 # 补采标记：采集时刻 target_date 早于最近交易日
                 "is_backfill": target_date < last_trading_date_str(),
             })

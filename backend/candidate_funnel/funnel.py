@@ -359,8 +359,11 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResul
 
 
 def diagnose(code: str, date: str, cfg: ThresholdConfig) -> DiagnosisCard:
-    """构建单只股票诊断卡（E3 GET /candidates/{code}/diagnosis 用）。"""
-    as_of = datetime.now()
+    """构建单只股票诊断卡（E3 GET /candidates/{code}/diagnosis 用）。
+
+    S049 C1：as_of=数据源最早行日期（数据下限，比最晚保守——最晚会掩盖某源陈旧）；
+    全无日期 fallback now()。
+    """
     phase = _fetch_sentiment_phase(date)
     eff = resolve_thresholds(cfg, phase)
     genes = sources.gene.fetch_genes(date)
@@ -374,5 +377,12 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig) -> DiagnosisCard:
         or activity.get(code, {}).get("name")
         or code
     )
+    # S049 C1：收集各源 _as_of 取最早（YYYY-MM-DD 字典序=日历序），无则 now()
+    src_dates: list[str] = []
+    for src in (activity.get(code, {}), fund.get(code, {}), auction.get(code, {}), catalyst.get(code, {})):
+        d = (src or {}).get("_as_of")
+        if d:
+            src_dates.append(d)
+    as_of = min(src_dates) if src_dates else datetime.now()
     ind = build_indicator_set(code, name, genes, activity, fund, auction, catalyst, board)
     return build_diagnosis_card(code, name, ind, eff, market_ctx=board, as_of=as_of)
