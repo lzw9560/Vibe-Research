@@ -92,7 +92,7 @@ describe("RelationGraph (S024-B7)", () => {
     hookMock.useTopologyRelation.mockReturnValue(hookReturning({ data: mockData }));
   });
 
-  it("成功 → 调 useTopologyRelation，GraphView 渲染且收到完整 GraphData（4 类边）", () => {
+  it("成功 → 调 useTopologyRelation，GraphView 渲染 3 节点（S048 R12：fund_flow 默认过滤，边集见专属用例）", () => {
     render(<RelationGraph />);
     expect(hookMock.useTopologyRelation).toHaveBeenCalled();
     const gv = screen.getByTestId("rg-graph");

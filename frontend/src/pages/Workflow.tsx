@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { useWorkflowStatus, usePreMarketBriefing, useWorkflowStates } from "@/lib/query";
+import { useWorkflowStatus, usePreMarketBriefing, usePreMarketDates, useWorkflowStates } from "@/lib/query";
 
 // ---- 类型定义 ----
 interface WorkflowStatus {
@@ -390,6 +390,8 @@ export default function Workflow() {
   // S048 R3：历史视角数据源——盘前卡读快照候选数，盘中/盘后卡读该日状态计数
   const { data: histBriefing } = usePreMarketBriefing(selectedDate ?? undefined);
   const { data: histStates } = useWorkflowStates(selectedDate ?? undefined);
+  // I1：有快照的日期列表（日期选择器标注）
+  const { data: datesData } = usePreMarketDates();
 
   // T9：原 useState/useEffect + setInterval(60s) + getWorkflowStatus() → useWorkflowStatus + refetchInterval。
   // 注：getWorkflowStatus() 返 T | null（null 为失败/空信号，不 throw），故无 error UI——null 时各计数回落 0。
@@ -496,6 +498,34 @@ export default function Workflow() {
 
       {/* Session Map — 横向时间线 */}
       <SessionMap currentStage={currentStage} />
+
+      {/* I1：历史快照日期 chips（有快照的日期可点击跳转；当前选中高亮） */}
+      {datesData?.dates && datesData.dates.length > 0 && (
+        <GlassCard className="p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground/70">历史快照</span>
+            {datesData.dates.map((d) => {
+              const isActive = d === selectedDate;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => handleDateChange(d)}
+                  aria-pressed={isActive}
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-xs transition-colors",
+                    isActive
+                      ? "border-primary/50 bg-primary/15 text-primary"
+                      : "border-border/40 bg-muted/10 text-muted-foreground hover:border-primary/30 hover:text-primary",
+                  )}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+        </GlassCard>
+      )}
 
       {/* 当前状态摘要 */}
       {status && (

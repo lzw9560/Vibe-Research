@@ -7,12 +7,14 @@ import { MemoryRouter } from "react-router-dom";
 const qMocks = vi.hoisted(() => ({
   useWorkflowStatus: vi.fn(),
   usePreMarketBriefing: vi.fn(),
+  usePreMarketDates: vi.fn(),
   useWorkflowStates: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
   useWorkflowStatus: qMocks.useWorkflowStatus,
   usePreMarketBriefing: qMocks.usePreMarketBriefing,
+  usePreMarketDates: qMocks.usePreMarketDates,
   useWorkflowStates: qMocks.useWorkflowStates,
 }));
 
@@ -32,6 +34,7 @@ describe("Workflow 首页 (S048)", () => {
       refetch: vi.fn(),
     });
     qMocks.usePreMarketBriefing.mockReturnValue({ data: undefined });
+    qMocks.usePreMarketDates.mockReturnValue({ data: undefined });
     qMocks.useWorkflowStates.mockReturnValue({ data: undefined });
   });
 
@@ -86,6 +89,7 @@ describe("Workflow 首页 (S048)", () => {
     vi.clearAllMocks();
     qMocks.useWorkflowStatus.mockReturnValue({ data: {}, isLoading: false, isFetching: false, refetch: vi.fn() });
     qMocks.usePreMarketBriefing.mockReturnValue({ data: undefined });
+    qMocks.usePreMarketDates.mockReturnValue({ data: undefined });
     qMocks.useWorkflowStates.mockReturnValue({ data: undefined });
     renderAt();
     expect(qMocks.useWorkflowStatus).toHaveBeenCalledWith({ refetchInterval: 60_000 });
@@ -102,5 +106,29 @@ describe("Workflow 首页 (S048)", () => {
     renderAt("/workflow?date=2026-07-01");
     fireEvent.click(screen.getByRole("button", { name: "回到今日" }));
     expect(qMocks.usePreMarketBriefing).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("I1: 有快照日期 → 渲染 chips；点 chip → hooks 收到该 date", () => {
+    qMocks.usePreMarketDates.mockReturnValue({ data: { dates: ["2026-08-03", "2026-07-01"] } });
+    renderAt();
+    const chips = screen.getAllByRole("button", { name: "2026-08-03" });
+    expect(chips.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("button", { name: "2026-07-01" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "2026-08-03" }));
+    expect(qMocks.usePreMarketBriefing).toHaveBeenLastCalledWith("2026-08-03");
+  });
+
+  it("I1: 当前 ?date= 匹配的 chip 高亮（aria-pressed=true）", () => {
+    qMocks.usePreMarketDates.mockReturnValue({ data: { dates: ["2026-08-03", "2026-07-01"] } });
+    renderAt("/workflow?date=2026-08-03");
+    const chip = screen.getByRole("button", { name: "2026-08-03" });
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "2026-07-01" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("I1: 无快照日期 → 不渲染 chips 区", () => {
+    qMocks.usePreMarketDates.mockReturnValue({ data: { dates: [] } });
+    renderAt();
+    expect(screen.queryByText("历史快照")).not.toBeInTheDocument();
   });
 });
