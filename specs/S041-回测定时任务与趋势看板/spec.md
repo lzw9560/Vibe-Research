@@ -1,6 +1,6 @@
 # Spec: S041 — 回测定时任务 + 趋势看板
 
-> 状态：草案
+> 状态：已实现（`26e7cb7`）——`daily_backtest_run` task_type 注册于 `TaskExecutor._executors`（scheduled_tasks.py:444）+ `backtest_daily_snapshots` 表 + `GET /api/backtest/trend` + Backtest.tsx 趋势看板 Tab（Recharts）。本行由归档补录（原状态误留"草案"）。
 > 作者：Codex  日期：2026-08-09
 > 关联：`../S040-历史数据回填90天/spec.md`（90 天数据是前提）、`backend/scheduled_tasks.py`（`_execute_limitup_precompute` task_type 注册模式）、`backend/backtest_lite.py`（`run_backtest_async`）、`backend/strategies/strategy_backtest.py`（`run_strategy_backtest`）、`frontend/src/pages/Backtest.tsx`
 >
@@ -23,11 +23,11 @@
 
 ## 3. 需求清单
 
-- [ ] R1 新增 task_type `daily_backtest_run` 在 `scheduled_tasks.TaskExecutor`：每天收盘后（17:00 cron）跑 `backtest_lite.run_backtest_async(前30天, 今天)` + `strategy_backtest.run_strategy_backtest(30)`，结果存入新 DB 表 `backtest_daily_snapshots`
-- [ ] R2 新表 `backtest_daily_snapshots`（在 `market_data.db`）：字段 `id, snapshot_date, engine(lite/strategy), hit_rate, avg_return, max_drawdown, sharpe_ratio, total_signals, percentile_json, strategy_breakdown_json, created_at`。`snapshot_date + engine` 唯一约束（幂等，同天重跑覆盖）
-- [ ] R3 新增 API `GET /api/backtest/trend?days=90`：返回时间序列 `[{date, engine, hit_rate, avg_return, ...}, ...]`
-- [ ] R4 前端 `Backtest.tsx` 新增 Tab "趋势看板"：折线图展示 hit_rate / avg_return / 8 战法 win_rate 随日期变化。用 Recharts（已在依赖中）
-- [ ] R5 定时任务支持 `--lookback_days` payload 参数（默认 30），控制回测窗口大小
+- [x] R1 新增 task_type `daily_backtest_run` 在 `scheduled_tasks.TaskExecutor`：每天收盘后（17:00 cron）跑 `backtest_lite.run_backtest_async(前30天, 今天)` + `strategy_backtest.run_strategy_backtest(30)`，结果存入新 DB 表 `backtest_daily_snapshots`
+- [x] R2 新表 `backtest_daily_snapshots`（在 `market_data.db`）：字段 `id, snapshot_date, engine(lite/strategy), hit_rate, avg_return, max_drawdown, sharpe_ratio, total_signals, percentile_json, strategy_breakdown_json, created_at`。`snapshot_date + engine` 唯一约束（幂等，同天重跑覆盖）
+- [x] R3 新增 API `GET /api/backtest/trend?days=90`：返回时间序列 `[{date, engine, hit_rate, avg_return, ...}, ...]`
+- [x] R4 前端 `Backtest.tsx` 新增 Tab "趋势看板"：折线图展示 hit_rate / avg_return / 8 战法 win_rate 随日期变化。用 Recharts（已在依赖中）
+- [x] R5 定时任务支持 `--lookback_days` payload 参数（默认 30），控制回测窗口大小
 
 ## 4. 受影响文件
 
@@ -66,12 +66,12 @@ backtest_lite 的 JSON 缓存和 strategy_backtest 的内存缓存保持不变�
 
 ## 6. 验收标准
 
-- [ ] A1 定时任务注册成功，`GET /api/scheduled-tasks/types` 包含 `daily_backtest_run`
-- [ ] A2 手动触发 `daily_backtest_run` 后 `backtest_daily_snapshots` 表新增 2 行（lite + strategy）
-- [ ] A3 同天重复触发：行数不变（INSERT OR REPLACE 幂等）
-- [ ] A4 `GET /api/backtest/trend?days=90` 返回时间序列数组，按日期升序
-- [ ] A5 前端趋势看板渲染折线图，数据点数 = DB 中快照天数
-- [ ] A6 `pytest -m "not live"` 全过
+- [x] A1 定时任务注册成功，`GET /api/scheduled-tasks/types` 包含 `daily_backtest_run`
+- [x] A2 手动触发 `daily_backtest_run` 后 `backtest_daily_snapshots` 表新增 2 行（lite + strategy）
+- [x] A3 同天重复触发：行数不变（INSERT OR REPLACE 幂等）
+- [x] A4 `GET /api/backtest/trend?days=90` 返回时间序列数组，按日期升序
+- [x] A5 前端趋势看板渲染折线图，数据点数 = DB 中快照天数
+- [x] A6 `pytest -m "not live"` 全过
 
 ## 7. 合规与工程底线自查
 

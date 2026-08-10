@@ -1,6 +1,6 @@
 # Spec: S038 — 持仓市价自动结算（holding 流转 settled 时自动拉价填 exit_price）
 
-> 状态：草案
+> 状态：已实现（`0681061`）——settled 流转拉 `astock.tencent_quote` 市价预填 exit_price 即结；`exit_price_source` 标注 market/manual；拉价失败 fallback S034 缺价跳过。后端 `backend/market_price.py` + `routers/workflow.py` + 前端 `WorkflowStateCard` 显示市价/手动来源。本行由归档补录（原状态误留"草案"）。
 > 作者：Codex  日期：2026-08-08
 > 关联：`../S034-结算接线/spec.md`（transition 即结算，本 spec 补自动拉价步骤）、`../S037-gene-db-迁移/spec.md`（gene_score 回查路径依赖 #5 先落）、`backend/routers/workflow.py`（`_settle_on_transition`）、`backend/settlement_recorder.py`、`backend/astock.py`（`tencent_quote` 行情源）
 >
@@ -24,11 +24,11 @@ S034 已实装 transition 即结算：用户在 workflow_state 流转 holding→
 
 ## 3. 需求清单
 
-- [ ] R1 新函数 `backend/market_price.py`（或 `settlement_recorder.py` 内加函数）：`fetch_current_price(code: str) -> float | None`——调 `astock.tencent_quote([code])` → `mappers.quote_from_tencent` → 返 `price`；任一异常/空返 `None`。
-- [ ] R2 `routers/workflow.py` `_settle_on_transition`：settled 流转时，如果 `exit_price` 为 None → 调 `fetch_current_price(code)` 预填 → 拉到价则用市价做 exit_price 走正常结算；拉不到 → fallback S034 既有"缺价跳过"。
-- [ ] R3 如果用户已手填 exit_price：不拉价，直接走 S034 正常结算（用户手填优先）。
-- [ ] R4 结算响应带 `exit_price_source`：`"market"`（自动拉价）/ `"manual"`（用户手填）/ `null`（未结算）。
-- [ ] R5 前端 `WorkflowStateCard`：settled 流转前，如果 exit_price 为空，显示"按市价自动结算"选项（toggle 或按钮），让用户选自动拉价或手动填。拉到价后预填 exit_price 输入框（用户可改）。
+- [x] R1 新函数 `backend/market_price.py`（或 `settlement_recorder.py` 内加函数）：`fetch_current_price(code: str) -> float | None`——调 `astock.tencent_quote([code])` → `mappers.quote_from_tencent` → 返 `price`；任一异常/空返 `None`。
+- [x] R2 `routers/workflow.py` `_settle_on_transition`：settled 流转时，如果 `exit_price` 为 None → 调 `fetch_current_price(code)` 预填 → 拉到价则用市价做 exit_price 走正常结算；拉不到 → fallback S034 既有"缺价跳过"。
+- [x] R3 如果用户已手填 exit_price：不拉价，直接走 S034 正常结算（用户手填优先）。
+- [x] R4 结算响应带 `exit_price_source`：`"market"`（自动拉价）/ `"manual"`（用户手填）/ `null`（未结算）。
+- [x] R5 前端 `WorkflowStateCard`：settled 流转前，如果 exit_price 为空，显示"按市价自动结算"选项（toggle 或按钮），让用户选自动拉价或手动填。拉到价后预填 exit_price 输入框（用户可改）。
 
 ## 4. 受影响文件
 
@@ -65,13 +65,13 @@ portfolio.json（`{code, shares, cost}`）和 workflow_state（`{code, trade_dat
 
 ## 6. 验收标准
 
-- [ ] A1 settled 流转时 exit_price 为空 → 自动拉 `tencent_quote` → 拉到价则用市价结算，响应 `exit_price_source: "market"`
-- [ ] A2 exit_price 已手填 → 不拉价，直接结算，响应 `exit_price_source: "manual"`
-- [ ] A3 拉价失败 → fallback S034 缺价跳过，响应 `exit_price_source: null`，`settlement.recorded: false`
-- [ ] A4 前端 WorkflowStateCard 显示市价结算选项，拉到价后预填 exit_price 可覆盖
-- [ ] A5 `pytest -m "not live"` 全过（mock tencent_quote）
-- [ ] A6 live 冒烟：holding 股流转 settled → 自动拉价 → winrate.db 新增记录，exit_price_source = "market"
-- [ ] A7 不改 S034 结算链路后续步骤（`record_settlement` / `SettlementEngine` / `WinRateTracker` 零改动）
+- [x] A1 settled 流转时 exit_price 为空 → 自动拉 `tencent_quote` → 拉到价则用市价结算，响应 `exit_price_source: "market"`
+- [x] A2 exit_price 已手填 → 不拉价，直接结算，响应 `exit_price_source: "manual"`
+- [x] A3 拉价失败 → fallback S034 缺价跳过，响应 `exit_price_source: null`，`settlement.recorded: false`
+- [x] A4 前端 WorkflowStateCard 显示市价结算选项，拉到价后预填 exit_price 可覆盖
+- [x] A5 `pytest -m "not live"` 全过（mock tencent_quote）
+- [x] A6 live 冒烟：holding 股流转 settled → 自动拉价 → winrate.db 新增记录，exit_price_source = "market"
+- [x] A7 不改 S034 结算链路后续步骤（`record_settlement` / `SettlementEngine` / `WinRateTracker` 零改动）
 
 ## 7. 合规与工程底线自查
 
