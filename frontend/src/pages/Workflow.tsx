@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Clock, TrendingUp, BarChart3, ChevronRight, RefreshCw, Flame,
   ArrowRight, Activity, Zap, Share2,
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { useWorkflowStatus } from "@/lib/query";
+import { useWorkflowStatus, usePreMarketBriefing, useWorkflowStates } from "@/lib/query";
 
 // ---- 类型定义 ----
 interface WorkflowStatus {
@@ -157,7 +157,7 @@ function SessionMap({ currentStage }: { currentStage: string }) {
   return (
     <GlassCard className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">今日交易时段</h3>
+        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">今日交易时段</h4>
         <span className="text-xs text-muted-foreground/60">实时更新</span>
       </div>
 
@@ -253,11 +253,17 @@ function StageCard({
   isActive,
   isPast,
   status,
+  histValue,
+  selectedDate,
 }: {
   stageKey: string;
   isActive: boolean;
   isPast: boolean;
   status: WorkflowStatus | null;
+  /** S048 R3：历史视角数值；undefined=今日视角（用 status 计数），null=历史无数据（"--"） */
+  histValue?: number | null;
+  /** S048 R2：子页链接携带的 date */
+  selectedDate?: string;
 }) {
   const config = STAGE_CONFIG[stageKey];
   const Icon = config.icon;
@@ -281,7 +287,11 @@ function StageCard({
       icon: BarChart3,
     },
   };
-  const stat = stats[stageKey];
+  const base = stats[stageKey];
+  // S048 R3：历史视角覆盖数值（label/icon 不变，无数据显示 "--"）
+  const stat = histValue !== undefined
+    ? { label: base.label, value: histValue ?? "--", icon: base.icon }
+    : base;
 
   return (
     <GlassCard
@@ -355,7 +365,7 @@ function StageCard({
       {/* 快捷链接 */}
       <div className="flex flex-wrap gap-2">
         {config.links.map((link) => (
-          <Link key={link.to} to={link.to}>
+          <Link key={link.to} to={selectedDate ? `${link.to}?date=${selectedDate}` : link.to}>
             <Button variant="ghost" size="sm" className={cn(
               "text-xs",
               isActive ? config.color : "text-muted-foreground/60",
@@ -372,12 +382,23 @@ function StageCard({
 
 // ---- 主页面 ----
 export default function Workflow() {
+  // S048 R2：顶级日期选择——?date= 存在即历史视角（不带参数=今日实时，现状不变）
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedDate = searchParams.get("date");
+  const isHistorical = !!selectedDate;
+
+  // S048 R3：历史视角数据源——盘前卡读快照候选数，盘中/盘后卡读该日状态计数
+  const { data: histBriefing } = usePreMarketBriefing(selectedDate ?? undefined);
+  const { data: histStates } = useWorkflowStates(selectedDate ?? undefined);
+
   // T9：原 useState/useEffect + setInterval(60s) + getWorkflowStatus() → useWorkflowStatus + refetchInterval。
   // 注：getWorkflowStatus() 返 T | null（null 为失败/空信号，不 throw），故无 error UI——null 时各计数回落 0。
   // 时间信息由 getAStockTimeInfo() 就地计算；useMemo 依赖 backend，每次 60s 重取时连同时间一并刷新（保留原行为）。
   // hook data 已类型化（api WorkflowStatus 含 [key: string]: unknown 索引签名），
   // 各字段经 `as number` 取值即可，不再需要 as unknown as Record<string, unknown> 放宽 cast。
-  const { data: backend, isLoading: loading, isFetching, refetch } = useWorkflowStatus({ refetchInterval: 60_000 });
+  const { data: backend, isLoading: loading, isFetching, refetch } = useWorkflowStatus({
+    refetchInterval: isHistorical ? false : 60_000,
+  });
   const refreshing = isFetching && !loading;
 
   const status = useMemo<WorkflowStatus | null>(() => {
@@ -409,27 +430,31 @@ export default function Workflow() {
   // 当前阶段
   const currentStage = status?.stageKey ?? "pre-market";
 
-  // 排序：当前阶段置顶，然后是已完成的，最后是未开始的
-  const sortedStages = useMemo(() => {
-    return [...STAGE_ORDER].sort((a, b) => {
-      const aIdx = STAGE_ORDER.indexOf(a);
-      const bIdx = STAGE_ORDER.indexOf(b);
-      const aPos = STAGE_ORDER.indexOf(a);
-      const bPos = STAGE_ORDER.indexOf(b);
+  // S048 R3：历史视角三卡数值（无数据 null → 渲染 "--"）
+  const histValues: Record<string, number | null> = {
+    "pre-market": histBriefing?.status === "done"
+      ? (histBriefing.factors ?? []).reduce((n, f) => n + (f.candidates?.length ?? 0), 0)
+      : null,
+    "intraday": histStates?.counts?.monitoring ?? null,
+    "post-market": histStates?.counts?.settled ?? null,
+  };
 
-      // 当前阶段排第一
-      if (a === currentStage) return -1;
-      if (b === currentStage) return 1;
-
-      // 已完成的排在前面
-      const aPast = aIdx > aPos;
-      const bPast = bIdx > bPos;
-      if (aPast && !bPast) return -1;
-      if (!aPast && bPast) return 1;
-
-      return 0;
+  // S048 R2：日期切换——写 URL query，子页链接同携 date
+  const handleDateChange = (value: string) => {
+    if (!value) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("date", value);
+      return next;
     });
-  }, [currentStage]);
+  };
+  const clearDate = () => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("date");
+      return next;
+    });
+  };
 
   if (loading) {
     return (
@@ -451,9 +476,21 @@ export default function Workflow() {
         title="打板工作流"
         subtitle="盘前 · 盘中 · 盘后 三阶段闭环"
         actions={
-          <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} className="p-2" aria-label="刷新">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={selectedDate ?? ""}
+              onChange={(e) => handleDateChange(e.target.value)}
+              aria-label="选择历史日期"
+              className="rounded-lg border border-border/40 bg-muted/10 px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+            {selectedDate && (
+              <Button variant="ghost" size="sm" onClick={clearDate}>回到今日</Button>
+            )}
+            <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} className="p-2" aria-label="刷新">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         }
       />
 
@@ -487,12 +524,12 @@ export default function Workflow() {
         </GlassCard>
       )}
 
-      {/* 阶段卡片 — 纵向流程 */}
+      {/* 阶段卡片 — S048 R1：恒按 盘前→盘中→盘后 固定位（删 sortedStages 重排，当前阶段用高亮/徽标表达） */}
       <div className="space-y-4">
-        {sortedStages.map((stageKey) => {
+        {STAGE_ORDER.map((stageKey) => {
           const isCurrent = stageKey === currentStage;
-          const pastIdx = STAGE_ORDER.indexOf(currentStage);
           const stageIdx = STAGE_ORDER.indexOf(stageKey);
+          const pastIdx = STAGE_ORDER.indexOf(currentStage);
           const isPast = stageIdx < pastIdx && !isCurrent;
 
           return (
@@ -502,6 +539,8 @@ export default function Workflow() {
               isActive={isCurrent}
               isPast={isPast}
               status={status}
+              histValue={isHistorical ? histValues[stageKey] : undefined}
+              selectedDate={selectedDate ?? undefined}
             />
           );
         })}
