@@ -3,18 +3,22 @@ Trading Workflow router.
 Provides pre-market, intraday, and post-market workflow endpoints.
 """
 import asyncio
+import json
+import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
 from dataclasses import asdict
 from pydantic import BaseModel
 
 from trading_workflow import TradingWorkflow
 from factors import registry as factor_registry
 from factors.base import FactorResult
-from vr_paths import last_trading_date_str
+from vr_paths import last_trading_date_str, resolve_data_dir
+from candidate_funnel import funnel as funnel_mod
 from strategies.strategy_matcher import StrategyMatcher
 from strategies.position_advisor import PositionAdvisor
 from limitup_strategy import StrategySignal
@@ -26,6 +30,7 @@ import workflow_state_repo as _wf_state_repo  # S032 R10：七态状态落库
 import settlement_recorder as _settlement_recorder  # S034：settled 流转即结算
 from market_price import fetch_current_price  # S038：settled 时自动拉市价填 exit_price
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["workflow"])
 
 _workflow = TradingWorkflow()
@@ -41,26 +46,115 @@ _cache: dict[str, Any] = {
     "error": None,
 }
 
+# ============ S048 R4：盘前快照持久化（历史不可变，纯读盘零请求） ============
+
+_SNAPSHOT_SCHEMA = "v1"
+
+
+def _snapshot_dir() -> Path:
+    """快照目录：<私有数据根>/workflow/pre-market/（VR_DATA_DIR 可覆盖，conftest 已隔离）。"""
+    return resolve_data_dir() / "workflow" / "pre-market"
+
+
+def _snapshot_path(date: str) -> Path:
+    """快照文件路径：<快照目录>/<date>.json。"""
+    return _snapshot_dir() / f"{date}.json"
+
+
+def _is_valid_date(d: str) -> bool:
+    try:
+        datetime.strptime(d, "%Y-%m-%d")
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def _save_snapshot(payload: dict) -> None:
+    """整体原子写盘（临时文件 rename，避免半截 JSON）；文件名取 payload[data_date]。"""
+    date = payload.get("data_date", "")
+    if not _is_valid_date(date):
+        raise ValueError(f"快照 data_date 非法: {date!r}")
+    d = _snapshot_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".{date}.tmp"
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(d / f"{date}.json")
+
+
+def _load_snapshot(date: str) -> Optional[dict]:
+    """读快照；不存在/损坏返 None（只读语义，不自愈删除）。"""
+    try:
+        p = _snapshot_path(date)
+        if not p.is_file():
+            return None
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("快照读取失败 %s: %s", date, exc)
+        return None
+
+
+def _list_snapshot_dates() -> list[str]:
+    """有快照的日期降序列表；忽略非日期文件名。"""
+    d = _snapshot_dir()
+    if not d.is_dir():
+        return []
+    return sorted((p.stem for p in d.glob("*.json") if _is_valid_date(p.stem)), reverse=True)
+
+
+def _build_funnel_layers(date: str) -> list[dict]:
+    """当日漏斗层（随快照落盘 → 历史视角纯读盘，零外部请求）。
+
+    config 取 candidates 路由的 live config（用户调参后一致，同 topology
+    _load_candidates 范式）；失败返空列表，不影响采集 done。
+    """
+    try:
+        from routers.candidates import _store  # noqa: PLC0415 — lazy import 防循环，运行时取 live config
+        result = funnel_mod.run_funnel("all", date, _store["config"])
+        return [l.model_dump(mode="json") for l in result.layers]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("funnel_layers 构建失败 (%s): %s", date, exc)
+        return []
+
 
 def _now_iso() -> str:
     return datetime.now().isoformat()
 
 
 async def _collect(run_id: str, target_date: str) -> None:
-    """后台异步采集（S026）：to_thread 释放事件循环，afetch_all 并行两因子。"""
+    """后台异步采集（S026）：to_thread 释放事件循环，afetch_all 并行两因子。
+
+    S048 R4：done 后整体按日落盘快照（含漏斗层）；写盘失败不影响内存 done。
+    """
     try:
         factor_registry.register_default_factors()
         results = await factor_registry.afetch_all(target_date)
         me = await asyncio.to_thread(_fetch_market_emotion, target_date)
+        funnel_layers = await asyncio.to_thread(_build_funnel_layers, target_date)
+        as_of = _now_iso()
+        factors = [_serialize_factor(r) for r in results]
         _cache.update(
             run_id=run_id,
             status="done",
-            factors=[_serialize_factor(r) for r in results],
+            factors=factors,
             data_date=target_date,
             market_emotion=me,
-            as_of=_now_iso(),
+            as_of=as_of,
             error=None,
         )
+        try:
+            _save_snapshot({
+                "schema": _SNAPSHOT_SCHEMA,
+                "data_date": target_date,
+                "as_of": as_of,
+                "run_id": run_id,
+                "market_emotion": me,
+                "factors": factors,
+                "funnel_layers": funnel_layers,
+                # 补采标记：采集时刻 target_date 早于最近交易日
+                "is_backfill": target_date < last_trading_date_str(),
+            })
+        except Exception as exc:  # noqa: BLE001 — 落盘失败不影响内存态
+            logger.warning("快照写盘失败 %s: %s", target_date, exc)
     except Exception as exc:  # noqa: BLE001
         _cache.update(run_id=run_id, status="error", error=str(exc), as_of=_now_iso())
 
@@ -142,30 +236,72 @@ async def get_workflow_status() -> Dict[str, Any]:
 
 @router.get("/api/workflow/pre-market")
 async def get_pre_market_workflow(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
-    """盘前简报（S026 异步化）：返回最近一次采集缓存。
+    """盘前简报（S026 异步化 + S048 历史视角）：内存态优先，历史读盘上快照。
 
-    idle/无结果 → 提示先 refresh；running → 状态；done → factors；error → 错误。
-    旧路径（请求即采集）已废弃：原同步 fetch_all 阻塞事件循环（health 卡死）。
+    级联（S048 R5）：
+    ① 内存 data_date==date 且 running/done/error → 返内存态；
+    ② 内存 data_date==date 且 idle → idle 提示；
+    ③ 盘上有快照 → done + from_snapshot=true（纯读盘零请求）；
+    ④ date==最近交易日 → idle（当日可采集）；
+    ⑤ 否则 → no_snapshot（需显式补采）。
     """
-    status = _cache["status"]
-    if status == "idle":
+    d = date or last_trading_date_str()
+    if not _is_valid_date(d):
+        raise HTTPException(400, f"日期格式错误（应为 YYYY-MM-DD）：{date}")
+
+    if _cache["data_date"] == d:
+        status = _cache["status"]
+        if status == "idle":
+            return {
+                "status": "idle",
+                "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
+                "data_date": None,
+            }
+        resp: dict[str, Any] = {
+            "status": status,
+            "data_date": _cache["data_date"],
+            "as_of": _cache["as_of"],
+            "market_emotion": _cache.get("market_emotion"),
+            "run_id": _cache["run_id"],
+        }
+        if status == "done":
+            resp["factors"] = _cache["factors"]
+        elif status == "error":
+            resp["error"] = _cache.get("error")
+        return resp
+
+    snap = _load_snapshot(d)
+    if snap is not None:
+        return {
+            "status": "done",
+            "from_snapshot": True,
+            "data_date": snap.get("data_date", d),
+            "as_of": snap.get("as_of"),
+            "run_id": snap.get("run_id"),
+            "market_emotion": snap.get("market_emotion"),
+            "factors": snap.get("factors", []),
+            "funnel_layers": snap.get("funnel_layers", []),
+            "is_backfill": snap.get("is_backfill", False),
+        }
+
+    if d == last_trading_date_str():
         return {
             "status": "idle",
             "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
             "data_date": None,
         }
-    resp: dict[str, Any] = {
-        "status": status,
-        "data_date": _cache["data_date"],
-        "as_of": _cache["as_of"],
-        "market_emotion": _cache.get("market_emotion"),
-        "run_id": _cache["run_id"],
+
+    return {
+        "status": "no_snapshot",
+        "msg": f"{d} 无采集快照，可显式补采（补采数据可能与当日所见有出入）",
+        "data_date": d,
     }
-    if status == "done":
-        resp["factors"] = _cache["factors"]
-    elif status == "error":
-        resp["error"] = _cache.get("error")
-    return resp
+
+
+@router.get("/api/workflow/pre-market/dates")
+async def get_pre_market_dates() -> Dict[str, Any]:
+    """S048 R5：有快照的日期降序列表（供日期选择器标注）。"""
+    return {"dates": _list_snapshot_dates()}
 
 
 @router.post("/api/workflow/pre-market/refresh")

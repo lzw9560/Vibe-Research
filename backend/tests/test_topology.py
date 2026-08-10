@@ -109,6 +109,20 @@ def test_sector_provider_empty_when_no_tags(monkeypatch):
     assert SectorEdgeProvider().build_edges(_CANDIDATES) == []
 
 
+def test_sector_single_shared_concept_no_edge(monkeypatch):
+    """S048 R9 阈值边界：仅共享 1 概念（<2）→ 无 sector 边。"""
+    monkeypatch.setattr(
+        topology.astock,
+        "concept_blocks",
+        lambda code: {
+            "600519": {"concept_tags": ["白酒", "消费"]},
+            "000858": {"concept_tags": ["白酒", "新能源"]},  # 与 600519 仅共享 白酒
+            "300750": {"concept_tags": ["新能源", "储能"]},  # 与 000858 仅共享 新能源
+        }[code],
+    )
+    assert SectorEdgeProvider().build_edges(_CANDIDATES) == []
+
+
 # ─────────────────────────── B3 · fund_flow provider ───────────────────────────
 
 
@@ -118,15 +132,15 @@ def _flow(rows):
 
 
 def test_fund_flow_provider_coinflow(monkeypatch):
-    """两候选近期同日主力净流入（同向）→ fund_flow 边。"""
-    shared_dates = [("2026-08-01", 1e8), ("2026-08-02", 2e8)]
+    """两候选近期同日主力净流入（同向）≥3 天 → fund_flow 边（S048 R9 阈值 ≥3）。"""
+    shared_dates = [("2026-08-01", 1e8), ("2026-08-02", 2e8), ("2026-08-03", 3e8)]
     monkeypatch.setattr(
         topology.astock,
         "stock_fund_flow_120d",
         lambda code: {
-            "600519": _flow(shared_dates + [("2026-08-03", -1e8)]),
-            "000858": _flow(shared_dates),  # 两天共享正流入
-            "300750": _flow([("2026-08-01", -5e7)]),  # 净流出 → 无共享
+            "600519": _flow(shared_dates + [("2026-08-04", -1e8)]),
+            "000858": _flow(shared_dates),  # 三天共享正流入 → weight=3
+            "300750": _flow(shared_dates[:2]),  # 仅 2 天共享（<3）→ 不达阈值无边
         }[code],
     )
     edges = FundFlowEdgeProvider().build_edges(_CANDIDATES)
@@ -134,7 +148,18 @@ def test_fund_flow_provider_coinflow(monkeypatch):
     pair = {e["source"] for e in ff} | {e["target"] for e in ff}
     assert "600519" in pair and "000858" in pair
     assert not any("300750" in (e["source"], e["target"]) for e in ff)
-    assert any(e["weight"] == 2 for e in ff)  # 2 共享日 → weight=2（原 >=1 恒真假绿，off-by-one 抓不到）
+    assert any(e["weight"] == 3 for e in ff)  # 3 共享日 → weight=3
+
+
+def test_fund_flow_below_threshold_no_edge(monkeypatch):
+    """S048 R9 阈值边界：恰好 2 共享日（<3）→ 无 fund_flow 边。"""
+    monkeypatch.setattr(
+        topology.astock,
+        "stock_fund_flow_120d",
+        lambda code: _flow([("2026-08-01", 1e8), ("2026-08-02", 2e8)]),  # 三候选全共享 2 天
+    )
+    edges = FundFlowEdgeProvider().build_edges(_CANDIDATES)
+    assert [e for e in edges if e["type"] == "fund_flow"] == []
 
 
 def test_fund_flow_provider_resilient(monkeypatch):
@@ -330,6 +355,40 @@ def test_relation_provider_failure_isolated():
     assert "ok" in types and "boom" not in types
 
 
+def test_relation_graph_degree_cap():
+    """S048 R9：每节点边数封顶 4——贪心按 weight 降序保留，低权边被裁。
+
+    a 连 b/c/d/e/f（weight 5..1）共 5 条 → cap 4 裁掉 a-f(w1)；
+    b-c(w1) 两端度数未超限 → 保留。
+    """
+
+    class _Scripted:
+        edge_type = "scripted"
+
+        def __init__(self, edges):
+            self._edges = edges
+
+        def build_edges(self, c, *, date=None):
+            return list(self._edges)
+
+    candidates = [{"code": c, "name": c} for c in ("a", "b", "c", "d", "e", "f")]
+    edges = [
+        {"source": "a", "target": "b", "type": "scripted", "weight": 5},
+        {"source": "a", "target": "c", "type": "scripted", "weight": 4},
+        {"source": "a", "target": "d", "type": "scripted", "weight": 3},
+        {"source": "a", "target": "e", "type": "scripted", "weight": 2},
+        {"source": "a", "target": "f", "type": "scripted", "weight": 1},
+        {"source": "b", "target": "c", "type": "scripted", "weight": 1},
+    ]
+    graph = build_relation_graph(candidates, providers=[_Scripted(edges)])
+    kept = {(e["source"], e["target"]) for e in graph["edges"]}
+    assert ("a", "b") in kept and ("a", "c") in kept and ("a", "d") in kept and ("a", "e") in kept
+    assert ("a", "f") not in kept  # 第 5 条低权边被 cap 裁掉
+    assert ("b", "c") in kept
+    deg_a = sum(1 for e in graph["edges"] if "a" in (e["source"], e["target"]))
+    assert deg_a == 4
+
+
 # ─────────────────────────── D1 · board-ladder 树 ───────────────────────────
 
 
@@ -495,11 +554,11 @@ def test_endpoint_relation_all_four_edge_types(monkeypatch):
         "concept_blocks",
         lambda code: {"concept_tags": ["白酒", "消费"]},
     )
-    # fund_flow：共享 2026-08-01 正流入（窗口内）
+    # fund_flow：共享 3 日正流入（窗口内；S048 R9 阈值 ≥3）
     monkeypatch.setattr(
         topology.astock,
         "stock_fund_flow_120d",
-        lambda code: _flow([("2026-08-01", 1e8)]),
+        lambda code: _flow([("2026-08-01", 1e8), ("2026-08-02", 1e8), ("2026-08-03", 1e8)]),
     )
     # ladder：同 3 板 + 同白酒行业
     monkeypatch.setattr(

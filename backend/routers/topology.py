@@ -86,6 +86,7 @@ class SectorEdgeProvider:
             extract_fn=lambda blocks: set((blocks or {}).get("concept_tags", []) or []),
             edge_type="sector",
             date=date,
+            min_shared=2,  # S048 R9：共享概念 ≥2 才连边（<2 噪声过密）
         )
 
 
@@ -108,6 +109,7 @@ class FundFlowEdgeProvider:
             },
             edge_type="fund_flow",
             date=date,
+            min_shared=3,  # S048 R9：共享 ≥3 天才连边（<3 偶发同向不构成关联）
         )
 
 
@@ -180,14 +182,17 @@ class SeatEdgeProvider:
 # ─────────────────────── 共用工具 ───────────────────────
 
 
-def _pairwise_shared(code_sets: dict[str, set[str]], edge_type: str) -> list[dict]:
-    """两两候选共享元素 → 边；weight = 共享数（封顶 _WEIGHT_CAP）。"""
+def _pairwise_shared(code_sets: dict[str, set[str]], edge_type: str, min_shared: int = 1) -> list[dict]:
+    """两两候选共享元素 → 边；weight = 共享数（封顶 _WEIGHT_CAP）。
+
+    S048 R9：min_shared 阈值——共享数 <min_shared 不产边（降噪，防 clique 过密）。
+    """
     edges: list[dict] = []
     codes = list(code_sets)
     for i, a in enumerate(codes):
         for b in codes[i + 1:]:
             shared = code_sets[a] & code_sets[b]
-            if shared:
+            if len(shared) >= min_shared:
                 edges.append({
                     "source": a, "target": b, "type": edge_type,
                     "weight": min(len(shared), _WEIGHT_CAP),
@@ -202,6 +207,7 @@ def _collect_shared_sets(
     edge_type: str,
     *,
     date: str | None = None,
+    min_shared: int = 1,
 ) -> list[dict]:
     """通用骨架：逐候选 fetch_fn(code, date) → extract_fn(raw) → 共享集 → 两两配对成边。
 
@@ -209,6 +215,7 @@ def _collect_shared_sets(
     再 _pairwise_shared 配对。单候选取数抛错 → 记空集、不阻塞其他候选（原隔离语义）。
     fetch_fn 接收 (code, date)；忽略 date 的 provider 在闭包内弃用 _d 即可。
     LadderEdgeProvider 逻辑不同（同高度配对+行业加权），保持独立不并入本骨架。
+    S048 R9：min_shared 透传 _pairwise_shared（sector=2 / fund_flow=3 / seat=1 默认）。
     """
     code_sets: dict[str, set[str]] = {}
     for c in candidates:
@@ -222,7 +229,7 @@ def _collect_shared_sets(
             code_sets[code] = set()
             continue
         code_sets[code] = extract_fn(raw)
-    return _pairwise_shared(code_sets, edge_type)
+    return _pairwise_shared(code_sets, edge_type, min_shared=min_shared)
 
 
 def _today_iso() -> str:
@@ -237,6 +244,27 @@ def _compact(iso_date: str) -> str:
 # ─────────────────────── B6 · relation 聚合 ───────────────────────
 
 
+# S048 R9：每节点度数封顶（贪心按 weight 降序保留，两端任一超限即弃）。
+_MAX_DEGREE = 4
+
+
+def _cap_degree(edges: list[dict], max_degree: int = _MAX_DEGREE) -> list[dict]:
+    """S048 R9：每节点边数封顶 max_degree——贪心按 weight 降序保留。
+
+    同 weight 保持 provider 产出原序（sorted 稳定）；两端点当前度数均
+    <max_degree 才保留该边，否则弃（杜绝 hub 节点 clique 爆炸）。
+    """
+    degree: dict[str, int] = {}
+    kept: list[dict] = []
+    for e in sorted(edges, key=lambda e: -(e.get("weight") or 0)):
+        s, t = e.get("source", ""), e.get("target", "")
+        if degree.get(s, 0) < max_degree and degree.get(t, 0) < max_degree:
+            kept.append(e)
+            degree[s] = degree.get(s, 0) + 1
+            degree[t] = degree.get(t, 0) + 1
+    return kept
+
+
 def build_relation_graph(
     candidates: list[dict],
     providers: list[EdgeProvider] | None = None,
@@ -245,6 +273,7 @@ def build_relation_graph(
     """聚合各 provider → GraphData{nodes,edges}。节点=候选去重，边=客观关联。
 
     单个 provider 抛错则跳过该 provider，不阻塞整体（隔离故障）。
+    S048 R9：聚合后经 _cap_degree 封顶每节点边数（_MAX_DEGREE=4）。
     """
     # 节点去重（按 code）
     seen: set[str] = set()
@@ -267,7 +296,7 @@ def build_relation_graph(
             edges.extend(p.build_edges(candidates, date=date))
         except Exception as exc:  # noqa: BLE001 — 单 provider 故障隔离
             logger.warning("relation: provider %s 失败: %s", getattr(p, "edge_type", "?"), exc)
-    return {"nodes": nodes, "edges": edges}
+    return {"nodes": nodes, "edges": _cap_degree(edges)}
 
 
 # ─────────────────────── D1 · board-ladder 梯队树 ───────────────────────
