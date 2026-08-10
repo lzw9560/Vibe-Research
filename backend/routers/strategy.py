@@ -87,4 +87,25 @@ async def strategy_backtest(lookback_days: int = Query(60, ge=1, le=365)) -> Dic
     }
 
 
+@router.get("/api/strategy/backtest/trades")
+async def strategy_backtest_trades(
+    strategy_code: str = Query(..., description="战法代码"),
+    lookback_days: int = Query(60, ge=1, le=365),
+) -> Dict[str, Any]:
+    """S049 D8：某战法回溯交易明细懒加载——trades 含 date/code/name（前端战法展开回溯明细）。
+
+    只跑 DB 已有日（R21 防封）；available_days 如实标样本天数。
+    客观历史统计特征，市场有风险。
+    """
+    from strategies.strategy_backtest import list_trades
+    result = await asyncio.to_thread(list_trades, strategy_code, lookback_days)
+    return {
+        "disclaimer": "历史统计特征，市场有风险。",
+        "strategy_code": result["strategy_code"],
+        "trades": result["trades"],
+        "available_days": result["available_days"],
+        "lookback_days": result["lookback_days"],
+    }
+
+
 __all__ = ["router"]

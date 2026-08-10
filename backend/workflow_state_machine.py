@@ -25,7 +25,7 @@ class WorkflowStatus(str, Enum):
 _ALLOWED_TRANSITIONS = {
     WorkflowStatus.PENDING: [WorkflowStatus.CANDIDATE, WorkflowStatus.FILTERED],
     WorkflowStatus.CANDIDATE: [WorkflowStatus.WATCHING, WorkflowStatus.FILTERED],
-    WorkflowStatus.WATCHING: [WorkflowStatus.MONITORING, WorkflowStatus.FILTERED],
+    WorkflowStatus.WATCHING: [WorkflowStatus.MONITORING, WorkflowStatus.FILTERED, WorkflowStatus.CANDIDATE],  # S049 D7：取消观察→回候选池
     WorkflowStatus.MONITORING: [WorkflowStatus.HOLDING, WorkflowStatus.FILTERED],
     WorkflowStatus.HOLDING: [WorkflowStatus.SETTLED, WorkflowStatus.FILTERED],
     WorkflowStatus.SETTLED: [WorkflowStatus.CANDIDATE],  # 下一轮循环

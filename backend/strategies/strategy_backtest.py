@@ -146,6 +146,9 @@ def run_strategy_backtest(lookback_days: int = 60) -> list[StrategyBacktestResul
                     skipped += 1
                     continue
                 trades.append({
+                    "date": d,
+                    "code": gene.code,
+                    "name": getattr(gene, "name", gene.code),
                     "strategy_code": sig.strategy_code,
                     "strategy_name": sig.strategy_name,
                     "won": res["won"],
@@ -184,3 +187,58 @@ def clear_cache() -> None:
     """清结果缓存（测试 / 强制重算用）。"""
     _CACHE.clear()
     _CACHE_TS.clear()
+
+
+def list_trades(strategy_code: str, lookback_days: int = 60) -> dict[str, Any]:
+    """S049 D8：某战法的回溯交易明细（懒加载，复用 run_strategy_backtest 缓存的 trades 不重算）。
+
+    只返 DB 已有日期的交易（R21 防封：不触发 em_get 拉 K 线之外的历史）。
+    available_days 如实标样本天数。
+    """
+    results = run_strategy_backtest(lookback_days)
+    matching = next((r for r in results if r.strategy_code == strategy_code), None)
+    available = matching.available_days if matching else 0
+    # 重跑取 trades 列表（run_strategy_backtest 内部 12h 缓存，重复请求不重算）
+    dates = _get_available_dates(lookback_days)
+    strat_params = {s["code"]: s for s in STRATEGY_REGISTRY}
+    params = strat_params.get(strategy_code)
+    if not params:
+        return {"strategy_code": strategy_code, "trades": [], "available_days": 0, "lookback_days": lookback_days}
+    kline_cache: dict[str, list[Any]] = {}
+
+    def get_bars(code: str) -> list[Any]:
+        if code not in kline_cache:
+            try:
+                raw = astock.kline(code, category=4, offset=lookback_days + 15)
+                kline_cache[code] = kline_from_mootdx(code, raw).bars
+            except Exception:
+                kline_cache[code] = []
+        return kline_cache[code]
+
+    trades: list[dict[str, Any]] = []
+    for d in dates:
+        scores = load_gene_scores(d) or []
+        for gene in scores:
+            bars = get_bars(gene.code)
+            signals = match_strategies(gene.code, gene)
+            for sig in signals:
+                if sig.strategy_code != strategy_code:
+                    continue
+                res = _backtest_single(
+                    bars, d,
+                    int(params.get("max_hold_days", 3)),
+                    float(params.get("stop_loss_pct", -7)),
+                    float(params.get("take_profit_pct", 15)),
+                )
+                if res is None:
+                    continue
+                trades.append({
+                    "date": d, "code": gene.code, "name": getattr(gene, "name", gene.code),
+                    "won": res["won"], "return_pct": res["return_pct"],
+                })
+    return {
+        "strategy_code": strategy_code,
+        "trades": trades,
+        "available_days": available,
+        "lookback_days": lookback_days,
+    }

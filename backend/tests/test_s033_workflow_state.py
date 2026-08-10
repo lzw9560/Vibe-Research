@@ -83,6 +83,34 @@ def test_single_state_endpoint(isolated_market_db):
     assert r.status_code == 404
 
 
+def test_watching_allowed_targets_includes_candidate(isolated_market_db):
+    """S049 D7：watching 态 allowed_targets 含 candidate（取消观察）。"""
+    from fastapi.testclient import TestClient
+    import app as appmod
+    import workflow_state_repo as wsr
+
+    wsr.ensure_candidate("600002", "测试乙", "2026-08-07", "")
+    assert wsr.transition("600002", "2026-08-07", "watching", "")[0]
+    client = TestClient(appmod.app)
+
+    r = client.get("/api/workflow/state/600002", params={"date": "2026-08-07"})
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["status"] == "watching"
+    assert "candidate" in data["allowed_targets"]  # 取消观察
+
+
+def test_watching_to_candidate_transition(isolated_market_db):
+    """S049 D7：watching→candidate 合法（取消观察回候选池）。"""
+    import workflow_state_repo as wsr
+
+    wsr.ensure_candidate("600003", "测试丙", "2026-08-07", "")
+    assert wsr.transition("600003", "2026-08-07", "watching", "")[0]
+    ok, _ = wsr.transition("600003", "2026-08-07", "candidate", "取消观察")
+    assert ok
+    assert wsr.get_state("600003", "2026-08-07")["status"] == "candidate"
+
+
 def test_transition_endpoint_with_price(isolated_market_db):
     """POST transition 带 entry_price/strategy 经端点写入。"""
     from fastapi.testclient import TestClient
