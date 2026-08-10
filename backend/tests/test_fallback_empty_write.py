@@ -119,3 +119,47 @@ def test_get_with_fallback_正常fetch正常缓存(isolated_cache):
 def test_save_cache_标量0正常缓存(isolated_cache):
     fallback.save_cache("k", 0)
     assert fallback.load_cache("k") == 0
+
+
+# ============ S046 二次污染：嵌套空骨架（2026-08-10 dragon_tiger 事故） ============
+
+_DT_SKELETON = {
+    "records": [],
+    "seats": {"buy": [], "sell": []},
+    "institution": {"buy_amt": 0.0, "sell_amt": 0.0, "net_amt": 0.0},
+}
+_DT_GOOD = {"records": [{"date": "2026-07-23", "net_buy": 2467.5}],
+            "seats": {"buy": [{"name": "X", "buy_amt": 1.0}], "sell": []},
+            "institution": {"buy_amt": 1.0, "sell_amt": 0.0, "net_amt": 1.0}}
+
+
+def test_is_empty_嵌套空骨架为空():
+    assert fallback._is_empty(_DT_SKELETON) is True
+    assert fallback._is_empty({"top": [], "bottom": []}) is True
+    assert fallback._is_empty({"zt": [], "dt": [], "zb": []}) is True
+
+
+def test_is_empty_有实数据骨架不为空():
+    assert fallback._is_empty(_DT_GOOD) is False
+    assert fallback._is_empty({"records": [{"a": 1}]}) is False
+    assert fallback._is_empty([{"main_net": 100}]) is False  # 顶层 list 非空即非空
+
+
+def test_save_cache_空骨架不覆盖好缓存(isolated_cache):
+    fallback.save_cache("k", _DT_GOOD)
+    fallback.save_cache("k", _DT_SKELETON)  # 限流空骨架——不应覆盖
+    assert fallback.load_cache("k") == _DT_GOOD
+
+
+def test_get_with_fallback_空骨架用好缓存兜底(isolated_cache):
+    fallback.save_cache("k", _DT_GOOD)
+    result = fallback.get_with_fallback("k", lambda: _DT_SKELETON, ttl=600, fallback_value={"records": []})
+    assert result == _DT_GOOD
+    assert fallback.load_cache("k") == _DT_GOOD
+
+
+def test_load_cache_损坏空骨架自愈(isolated_cache):
+    path = isolated_cache / "k.json"
+    path.write_text(json.dumps({"ts": 99999999999, "data": _DT_SKELETON}))
+    assert fallback.load_cache("k") is None
+    assert not path.exists()

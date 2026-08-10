@@ -23,14 +23,37 @@ def _cache_path(key: str) -> Path:
     return _CACHE_DIR / f"{safe_key}.json"
 
 
-def _is_empty(data: Any) -> bool:
-    """空数据判定——东财限流/失败的典型表现是返空。
+def _is_empty_leaf(value: Any) -> bool:
+    """深空叶子判定：None / 空容器 / 纯 0 数值皆空。递归处理嵌套 dict/list。"""
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return value == 0
+    if isinstance(value, (str, bytes)):
+        return len(value) == 0  # 显式先行，避免落入通用 __len__ 递归（str 迭代=字符串无限递归）
+    if isinstance(value, dict):
+        return all(_is_empty_leaf(v) for v in value.values())  # all([])=True：空 dict 为空
+    if hasattr(value, "__len__"):
+        if len(value) == 0:
+            return True
+        return all(_is_empty_leaf(v) for v in value)
+    return False
 
-    None / 空容器（[]、{}、''、()、set()）视为空；标量 0/False/0.0 不算空（合法值）。
-    用于防止把"限流返空"当作合法数据写覆盖好缓存。
+
+def _is_empty(data: Any) -> bool:
+    """空数据判定（深递归）——东财限流/失败的典型表现是返空或"空骨架"。
+
+    None / 空容器为空；**dict 深判：所有值皆深空（含纯 0 叶子）视为空骨架**——
+    如龙虎榜限流返 {"records": [], "seats": {"buy": [], ...}, "institution": {0.0...}}，
+    顶层非空但无任何信息，写盘会覆盖好缓存（2026-08-10 二次污染根因）。
+    顶层标量 0/False 不算空（合法值，如单值缓存）。
     """
     if data is None:
         return True
+    if isinstance(data, dict):
+        return _is_empty_leaf(data)
     if hasattr(data, "__len__") and len(data) == 0:
         return True
     return False
