@@ -1,7 +1,7 @@
 // S013 T6: 打板工作流 5 helpers（从 api.ts 915-944 拆出），失败返 null 不抛。
 import { get, request } from "./client";
 import type {
-  WorkflowStatus, PreMarketBriefing, PreMarketRefreshResponse, IntradayData, BombAlertItem, PostMarketReport,
+  WorkflowStatus, PreMarketBriefing, PreMarketDates, PreMarketRefreshResponse, IntradayData, BombAlertItem, PostMarketReport,
   WorkflowState, WorkflowStateList, TransitionRequest, WorkflowStateHistoryItem,
 } from "./types";
 
@@ -11,10 +11,20 @@ export async function getWorkflowStatus(): Promise<WorkflowStatus | null> {
   try { return await get<WorkflowStatus>("/workflow/status"); } catch { return null; }
 }
 
-// Pre-market briefing
-export async function getPreMarketBriefing(): Promise<PreMarketBriefing | null> {
-  // S026: 后端异步化后返 {status, factors?(done), data_date, as_of, market_emotion, run_id, msg?(idle), error?(error)}
-  try { return await get<PreMarketBriefing>("/workflow/pre-market"); } catch { return null; }
+// Pre-market briefing（S048：date 可选——历史视角按日取，级联降级由后端负责）
+export async function getPreMarketBriefing(date?: string): Promise<PreMarketBriefing | null> {
+  // 后端异步化后返 {status, factors?(done), data_date, as_of, market_emotion, run_id, msg?(idle), error?(error)}
+  // S048 追加：no_snapshot 态 / from_snapshot / funnel_layers / is_backfill
+  try {
+    return await get<PreMarketBriefing>(
+      date ? `/workflow/pre-market?date=${date}` : "/workflow/pre-market",
+    );
+  } catch { return null; }
+}
+
+// S048 R6: 有快照的日期降序列表（日期选择器标注用）
+export async function getPreMarketDates(): Promise<PreMarketDates | null> {
+  try { return await get<PreMarketDates>("/workflow/pre-market/dates"); } catch { return null; }
 }
 
 // Pre-market refresh（S026）: 触发后台异步采集，立即返 run_id + status=running

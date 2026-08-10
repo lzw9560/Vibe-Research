@@ -931,18 +931,27 @@ export interface FactorResult {
 }
 
 export interface PreMarketBriefing {
-  // S026: 异步化响应（status 驱动）；旧 fallback 字段保留供兼容
-  status?: "idle" | "running" | "done" | "error";
+  // S026: 异步化响应（status 驱动）；S048: 加 no_snapshot（历史无快照待补采）
+  status?: "idle" | "running" | "done" | "error" | "no_snapshot";
   factors?: FactorResult[];
+  // S048 R9/R4：快照随带漏斗层（from_snapshot 时前端直渲，历史零外部请求）
+  funnel_layers?: FunnelLayer[];
+  from_snapshot?: boolean;   // true = 来自盘上快照（非内存态）
+  is_backfill?: boolean;     // true = 该快照为事后补采（非当日采集）
   data_date?: string;
   as_of?: string;
   market_emotion?: { sentiment_index?: number | null; phase?: string | null };
   run_id?: string;
-  msg?: string; // idle: 提示先 refresh
+  msg?: string; // idle: 提示先 refresh；no_snapshot: 提示可补采
   // 旧路径 fallback
   data?: PreMarketReport;
   fallback?: boolean;
   error?: string;
+}
+
+/** S048 R6：GET /api/workflow/pre-market/dates 响应——有快照的日期降序。 */
+export interface PreMarketDates {
+  dates: string[];
 }
 
 export interface PreMarketRefreshResponse {
