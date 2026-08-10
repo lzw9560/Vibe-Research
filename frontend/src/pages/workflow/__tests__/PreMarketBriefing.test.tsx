@@ -35,9 +35,11 @@ function renderAt(entry = "/workflow/pre-market") {
   return render(<MemoryRouter initialEntries={[entry]}><PreMarketBriefing /></MemoryRouter>);
 }
 
+// S049 D2：快照层带 passed（矩阵渲染需 passed 字段）
 const snapshotLayer = {
   layer_id: "R1", name: "R1 基础过滤", as_of: "2026-07-01T08:00:00",
   input_count: 10, output_count: 5, filtered_out: [], output_codes: ["600519"],
+  passed: [{ code: "600519", name: "贵州茅台", gene_score: 80 }],
 };
 
 describe("PreMarketBriefing (S048)", () => {
@@ -47,7 +49,7 @@ describe("PreMarketBriefing (S048)", () => {
     qMocks.useFunnelLayers.mockReturnValue({ data: undefined, isLoading: false });
     qMocks.useStrategyBacktest.mockReturnValue({ data: [], isLoading: false });
     qMocks.usePreMarketBriefing.mockReturnValue({
-      data: { status: "done", factors: [], data_date: "2026-08-07" },
+      data: { status: "done", factors: [], data_date: "2026-08-07", funnel_layers: [] },
       isLoading: false,
       refetch: vi.fn(),
     });
@@ -82,7 +84,7 @@ describe("PreMarketBriefing (S048)", () => {
     expect(screen.getByText(/历史快照（不可变）/)).toBeInTheDocument();
   });
 
-  it("R9: from_snapshot → 直渲 briefing.funnel_layers，live 漏斗查询禁用", () => {
+  it("R9: from_snapshot → 直渲 briefing.funnel_layers，live 漏斗查询禁用（S049 D4：不发 GET）", () => {
     qMocks.usePreMarketBriefing.mockReturnValue({
       data: {
         status: "done", from_snapshot: true, data_date: "2026-07-01",
@@ -93,15 +95,14 @@ describe("PreMarketBriefing (S048)", () => {
       refetch: vi.fn(),
     });
     renderAt("/workflow/pre-market?date=2026-07-01");
-    const stub = screen.getByTestId("funnel-stub");
-    expect(stub.getAttribute("data-count")).toBe("1");
-    // live 查询禁用：date 传 undefined + enabled false（历史零外部请求）
-    expect(qMocks.useFunnelLayers).toHaveBeenCalledWith(undefined, { enabled: false });
+    // S049 D2/D4：直渲 briefing.funnel_layers（矩阵行渲染 R1 passed 的 600519）
+    expect(screen.getByText("600519")).toBeInTheDocument();
+    // S049 D4：live 查询不再启用（funnel_layers 由 briefing 携带，不发 GET）
+    expect(qMocks.useFunnelLayers).not.toHaveBeenCalled();
   });
 
-  it("R2: 今日 done（无 date）→ live 漏斗查询启用，刷新按钮在", () => {
+  it("R2: 今日 done（无 date）→ 刷新按钮在（S049 D4：funnel_layers 由 briefing 携带）", () => {
     renderAt();
-    expect(qMocks.useFunnelLayers).toHaveBeenCalledWith("2026-08-07", { enabled: true });
     expect(screen.getByTitle("刷新")).toBeInTheDocument();
   });
 

@@ -36,7 +36,6 @@ export function DiagnosisCardView({ card }: { card: Card }) {
         {row("成交额", ind.amount_yi, "亿")}
         {row("振幅", ind.amplitude_pct, "%")}
         {row("连板数", ind.consec_boards)}
-        {row("封板率", ind.seal_rate)}
         {row("主力净流", ind.main_net_inflow, "万")}
         {row("5日主力", ind.main_net_5d, "万")}
         {row("龙虎榜机构", ind.dragon_tiger_inst_net, "万")}

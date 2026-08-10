@@ -940,13 +940,60 @@ export interface PreMarketBriefing {
   is_backfill?: boolean;     // true = 该快照为事后补采（非当日采集）
   data_date?: string;
   as_of?: string;
-  market_emotion?: { sentiment_index?: number | null; phase?: string | null };
+  // S049 B：市场情绪区重写——STI 分数+阶段 + 三率 + ladder + 涨跌停家数
+  market_emotion?: MarketEmotionBriefing;
   run_id?: string;
   msg?: string; // idle: 提示先 refresh；no_snapshot: 提示可补采
+  // S049 C4：快照随带 final_candidates 诊断卡（抽屉查看历史快照日期时优先用）
+  final_candidates?: import("@/lib/candidates").DiagnosisCard[];
   // 旧路径 fallback
   data?: PreMarketReport;
   fallback?: boolean;
   error?: string;
+}
+
+/** S049 B：盘前简报市场情绪区 shape（_fetch_market_emotion 重写后）。 */
+export interface MarketEmotionBriefing {
+  sti_score: number | null;
+  sti_phase: string | null;  // 高潮/启动/分歧/冰点/退潮
+  seal_rate: number | null;   // 封板率
+  break_rate: number | null;  // 炸板率
+  promotion_rate: number | null;  // 晋级率
+  ladder: { boards: number; count: number; plus?: boolean }[];
+  zt_count: number | null;   // 涨停家数
+  dt_count: number | null;   // 跌停家数
+}
+
+/** S049 D1：漏斗层 passed 全参数（行=三层 union，列=R1/R2/R3 + 统一参数列）。 */
+export interface FunnelPassedEntry extends FactorCandidate {
+  consec_boards?: number | null;
+  turnover_pct?: number | null;
+  vol_ratio?: number | null;
+  amount_yi?: number | null;
+  amplitude_pct?: number | null;
+  main_net_inflow?: number | null;
+  main_net_5d?: number | null;
+  northbound?: number | null;
+  auction_open_pct?: number | null;
+  catalyst_summary?: string | null;
+  matched_triggers?: string[];
+}
+
+/** S049 D8：战法回溯交易明细（GET /api/strategy/backtest/trades）。 */
+export interface BacktestTrade {
+  date: string;
+  code: string;
+  name: string;
+  won: boolean;
+  return_pct: number;
+}
+
+export interface BacktestTradesResponse {
+  disclaimer: string;
+  strategy_code: string;
+  trades: BacktestTrade[];
+  available_days: number;
+  lookback_days: number;
 }
 
 /** S048 R6：GET /api/workflow/pre-market/dates 响应——有快照的日期降序。 */

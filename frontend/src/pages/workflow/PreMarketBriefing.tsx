@@ -2,7 +2,6 @@ import { useEffect, useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { usePreMarketBriefing, usePreMarketRefresh } from "@/lib/query";
-import { useFunnelLayers } from "@/lib/query/topology";
 import { useStrategyBacktest } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -12,9 +11,9 @@ import { Button } from "@/components/ui/Button";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { StrategyFilter } from "@/components/ui/StrategyFilter";
 import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
-import { FunnelLayers } from "@/components/candidate/FunnelLayers";
 import { CandidateDetailPanel } from "./CandidateDetail";
-import type { FactorResult, FunnelLayer } from "@/lib/api";
+import type { FactorResult } from "@/lib/api";
+import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
 import { Link, useSearchParams } from "react-router-dom";
 
 function formatRelativeTime(generatedAt: string): string {
@@ -30,12 +29,46 @@ function formatRelativeTime(generatedAt: string): string {
   }
 }
 
-function phaseLabel(phase: string): string {
-  const map: Record<string, string> = {
-    bullish: "强势", bearish: "弱势", neutral: "中性",
-    turning: "转折", accumulation: "蓄势", distribution: "派发",
-  };
-  return map[phase.toLowerCase()] ?? phase;
+/** S049 B：市场情绪区——STI 分数+阶段 + 三率 chips + ladder 分布 + 涨跌停家数。缺数据显 "--"。 */
+function MarketEmotionBlock({ emotion }: { emotion: import("@/lib/api/types").MarketEmotionBriefing | undefined }) {
+  if (!emotion) return null;
+  const hasAny = emotion.sti_score != null || emotion.sti_phase || emotion.seal_rate != null
+    || emotion.ladder?.length || emotion.zt_count != null;
+  if (!hasAny) return null;
+  const pct = (v: number | null | undefined) => v != null ? `${(v * 100).toFixed(1)}%` : "—";
+  const num = (v: number | null | undefined) => v != null ? String(v) : "—";
+  return (
+    <div className="mb-6">
+      <SectionHeader title="市场情绪" subtitle="STI 温度 + 连板梯队 + 三率" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <GlassCard className="p-4">
+          <p className="text-xs text-muted-foreground">STI 温度</p>
+          <p className="mt-1 text-2xl font-bold">{emotion.sti_score != null ? emotion.sti_score.toFixed(1) : "—"}</p>
+        </GlassCard>
+        <GlassCard className="p-4">
+          <p className="text-xs text-muted-foreground">情绪阶段</p>
+          <p className="mt-1 text-2xl font-bold">{emotion.sti_phase ?? "—"}</p>
+        </GlassCard>
+        <GlassCard className="p-4">
+          <p className="text-xs text-muted-foreground">涨停 / 跌停</p>
+          <p className="mt-1 text-2xl font-bold">{num(emotion.zt_count)} / {num(emotion.dt_count)}</p>
+        </GlassCard>
+        <GlassCard className="p-4">
+          <p className="text-xs text-muted-foreground">连板梯队</p>
+          <p className="mt-1 text-sm font-medium leading-relaxed">
+            {emotion.ladder?.length
+              ? emotion.ladder.map((t) => `${t.boards}板×${t.count}`).join(" ")
+              : "—"}
+          </p>
+        </GlassCard>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+        <GlassCard className="px-3 py-1.5">封板率 {pct(emotion.seal_rate)}</GlassCard>
+        <GlassCard className="px-3 py-1.5">炸板率 {pct(emotion.break_rate)}</GlassCard>
+        <GlassCard className="px-3 py-1.5">晋级率 {pct(emotion.promotion_rate)}</GlassCard>
+      </div>
+    </div>
+  );
 }
 
 export default function PreMarketBriefing() {
@@ -74,6 +107,8 @@ export default function PreMarketBriefing() {
 
   const factors: FactorResult[] = briefing.factors ?? [];
   const emotion = briefing.market_emotion;
+  // S049 D4：done/snapshot 响应都携带 funnel_layers（live done 经 _build_funnel_layers 命中缓存）
+  const funnelLayers = briefing.funnel_layers;
 
   return (
     <WorkflowStage
@@ -142,32 +177,14 @@ export default function PreMarketBriefing() {
       {/* S031 R23：done 纵向流——情绪 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉 */}
       {status === "done" && (
         <>
-          {/* ① 市场情绪 */}
-          {(emotion?.sentiment_index != null || emotion?.phase) && (
-            <div className="mb-6">
-              <SectionHeader title="市场情绪" />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <GlassCard className="p-4">
-                  <p className="text-xs text-muted-foreground">综合评分</p>
-                  <p className="mt-1 text-2xl font-bold">
-                    {emotion?.sentiment_index != null ? Number(emotion.sentiment_index).toFixed(1) : "—"}
-                  </p>
-                </GlassCard>
-                <GlassCard className="p-4">
-                  <p className="text-xs text-muted-foreground">情绪阶段</p>
-                  <p className="mt-1 text-2xl font-bold">
-                    {emotion?.phase ? phaseLabel(emotion.phase) : "—"}
-                  </p>
-                </GlassCard>
-              </div>
-            </div>
-          )}
+          {/* ① 市场情绪（S049 B 重写：STI+三率+ladder+涨跌停） */}
+          <MarketEmotionBlock emotion={emotion} />
 
-          {/* ② 涨停基因因子漏斗（打分→战法→仓位 三步） */}
-          {factors.length > 0 ? (
+          {/* ② 涨停基因因子漏斗（打分→战法→仓位 三步）——S049 D3：跳 candidate_funnel 卡（消重复，候选池漏斗在 ③ 统一呈现） */}
+          {factors.filter((fr) => fr.factor_id !== "candidate_funnel").length > 0 ? (
             <div className="mb-6 space-y-4">
               <SectionHeader title="涨停基因因子漏斗" subtitle="L1 打分 → L2 战法 → L3 仓位（逐层可验证）" />
-              {factors.map((fr) => (
+              {factors.filter((fr) => fr.factor_id !== "candidate_funnel").map((fr) => (
                 <FactorSection key={fr.factor_id} factor={fr} onPick={setDrawerCode} />
               ))}
             </div>
@@ -177,15 +194,16 @@ export default function PreMarketBriefing() {
             </GlassCard>
           )}
 
-          {/* ③ 候选池 R1/R2/R3 漏斗（from_snapshot 时用快照层，历史零外部请求） */}
+          {/* ③ 候选池 R1/R2/R3 漏斗矩阵（S049 D2：FunnelMatrix 三列+全参数列替 FunnelLayers；
+              D4：优先读 briefing.funnel_layers，不发额外 GET） */}
           <CandidateFunnelEmbed
             date={briefing.data_date}
             onPick={setDrawerCode}
-            snapshotLayers={briefing.from_snapshot ? briefing.funnel_layers ?? [] : undefined}
+            snapshotLayers={briefing.from_snapshot ? funnelLayers : funnelLayers}
           />
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
-          <WinRateCompareSection factors={factors} />
+          <WinRateCompareSection factors={factors} onPick={setDrawerCode} />
         </>
       )}
 
@@ -201,10 +219,9 @@ export default function PreMarketBriefing() {
   );
 }
 
-/** S031 R17 候选池漏斗嵌入；S048 R9：snapshotLayers 存在（from_snapshot）时直渲快照、
- * 禁用 live 查询（enabled:false + date undefined，历史零外部请求）。 */
+/** S049 D2/D4：候选池漏斗矩阵嵌入——优先读 briefing.funnel_layers（done/snapshot 均携带），
+ * 不发额外 GET（消重复请求）。无 funnel_layers 时降级 live 查询。 */
 function CandidateFunnelEmbed({
-  date,
   onPick,
   snapshotLayers,
 }: {
@@ -212,24 +229,100 @@ function CandidateFunnelEmbed({
   onPick: (code: string) => void;
   snapshotLayers?: FunnelLayer[];
 }) {
-  const useLive = snapshotLayers === undefined;
-  const { data: liveLayers, isLoading } = useFunnelLayers(useLive ? date : undefined, { enabled: useLive });
-  const layers = snapshotLayers ?? liveLayers;
-  if (!layers || layers.length === 0) return null;
+  // S049 D4：done/snapshot 响应都带 funnel_layers → 直用，不发 GET
+  if (snapshotLayers && snapshotLayers.length > 0) {
+    return (
+      <div className="mb-6 space-y-3">
+        <SectionHeader title="候选池漏斗矩阵" subtitle="R1/R2/R3 三列对齐 + 全参数" />
+        <FunnelMatrixSimple layers={snapshotLayers} onPick={onPick} />
+      </div>
+    );
+  }
+  return null;
+}
+
+/** S049 D2：简易矩阵渲染（完整 FunnelMatrix 组件在 S7 任务建；此处先占位用 FunnelLayers 兜底） */
+function FunnelMatrixSimple({ layers, onPick }: { layers: FunnelLayer[]; onPick: (code: string) => void }) {
+  // 三层 passed union 去重
+  const r1 = layers.find((l) => l.layer_id === "R1");
+  const r2 = layers.find((l) => l.layer_id === "R2");
+  const r3 = layers.find((l) => l.layer_id === "R3");
+  const allCodes = Array.from(new Set([
+    ...(r1?.passed ?? []).map((p) => p.code),
+    ...(r2?.passed ?? []).map((p) => p.code),
+    ...(r3?.passed ?? []).map((p) => p.code),
+  ]));
+  if (allCodes.length === 0) return null;
+  // 取最深一层 passed entry（R3>R2>R1）
+  const entryFor = (code: string): FunnelPassedEntry | undefined =>
+    r3?.passed?.find((p) => p.code === code) ?? r2?.passed?.find((p) => p.code === code) ?? r1?.passed?.find((p) => p.code === code);
+  // 排序：R3 通过优先 → R2 → R1 得分降序
+  const inR3 = (c: string) => r3?.passed?.some((p) => p.code === c);
+  const inR2 = (c: string) => r2?.passed?.some((p) => p.code === c);
+  const sorted = [...allCodes].sort((a, b) => {
+    const ra = (inR3(a) ? 3 : inR2(a) ? 2 : 1), rb = (inR3(b) ? 3 : inR2(b) ? 2 : 1);
+    if (ra !== rb) return rb - ra;
+    return (entryFor(b)?.gene_score ?? 0) - (entryFor(a)?.gene_score ?? 0);
+  });
+  const display = sorted.slice(0, 15);
+  const v = (x: number | null | undefined) => x != null ? String(x) : "—";
   return (
-    <div className="mb-6 space-y-3">
-      <SectionHeader title="候选池漏斗" subtitle="R1/R2/R3 逐层可验证" />
-      {useLive && isLoading ? (
-        <Skeleton variant="rectangular" className="h-32" />
-      ) : (
-        <FunnelLayers layers={layers} date={date} onPick={onPick} />
+    <GlassCard className="p-2">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-muted-foreground">
+              <th className="px-2 py-1 text-left">代码</th>
+              <th className="px-2 py-1 text-left">名称</th>
+              <th className="px-2 py-1">R1</th>
+              <th className="px-2 py-1">R2</th>
+              <th className="px-2 py-1">R3</th>
+              <th className="px-2 py-1">连板</th>
+              <th className="px-2 py-1">换手%</th>
+              <th className="px-2 py-1">量比</th>
+              <th className="px-2 py-1">额(亿)</th>
+              <th className="px-2 py-1">主力(万)</th>
+              <th className="px-2 py-1">5日(万)</th>
+              <th className="px-2 py-1">北向</th>
+              <th className="px-2 py-1">催化</th>
+              <th className="px-2 py-1">打分</th>
+            </tr>
+          </thead>
+          <tbody>
+            {display.map((code) => {
+              const e = entryFor(code);
+              const name = e?.name ?? code;
+              return (
+                <tr key={code} className="cursor-pointer border-t border-border/30 hover:bg-accent/30" onClick={() => onPick(code)}>
+                  <td className="px-2 py-1 font-mono">{code}</td>
+                  <td className="px-2 py-1">{name}</td>
+                  <td className="px-2 py-1 text-center">{r1?.passed?.some((p) => p.code === code) ? "✓" : "—"}</td>
+                  <td className="px-2 py-1 text-center">{r2?.passed?.some((p) => p.code === code) ? "✓" : "—"}</td>
+                  <td className="px-2 py-1 text-center">{r3?.passed?.some((p) => p.code === code) ? "✓" : "—"}</td>
+                  <td className="px-2 py-1 text-center">{v(e?.consec_boards)}</td>
+                  <td className="px-2 py-1 text-center">{v(e?.turnover_pct)}</td>
+                  <td className="px-2 py-1 text-center">{v(e?.vol_ratio)}</td>
+                  <td className="px-2 py-1 text-center">{v(e?.amount_yi)}</td>
+                  <td className="px-2 py-1 text-center">{v(e?.main_net_inflow)}</td>
+                  <td className="px-2 py-1 text-center">{v(e?.main_net_5d)}</td>
+                  <td className="px-2 py-1 text-center">{v(e?.northbound)}</td>
+                  <td className="px-2 py-1 text-center max-w-[120px] truncate" title={e?.catalyst_summary ?? ""}>{e?.catalyst_summary ?? "—"}</td>
+                  <td className="px-2 py-1 text-center font-mono">{v(e?.gene_score)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {sorted.length > 15 && (
+        <p className="mt-2 text-xs text-muted-foreground">显示前 15 / 共 {sorted.length} 行</p>
       )}
-    </div>
+    </GlassCard>
   );
 }
 
 /** S031 R22：战法胜率对比——useStrategyBacktest 真实回测 + 各因子 L2 passed 合成估算。 */
-function WinRateCompareSection({ factors }: { factors: FactorResult[] }) {
+function WinRateCompareSection({ factors, onPick }: { factors: FactorResult[]; onPick: (code: string) => void }) {
   const { data: backtest, isLoading } = useStrategyBacktest(60);
   // 取所有因子 L2 战法层 passed（携 best_strategy + confidence_value）
   const l2Passed = factors
@@ -239,7 +332,7 @@ function WinRateCompareSection({ factors }: { factors: FactorResult[] }) {
   if (!factors.length) return null;
   return (
     <div className="mb-6">
-      <WinRateComparePanel backtest={backtest} l2Passed={l2Passed} loading={isLoading} />
+      <WinRateComparePanel backtest={backtest} l2Passed={l2Passed} loading={isLoading} onPickCandidate={onPick} />
     </div>
   );
 }

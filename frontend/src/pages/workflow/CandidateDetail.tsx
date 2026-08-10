@@ -132,7 +132,7 @@ function IndicatorBlock({ title, ind }: { title: string; ind: IndicatorSet }) {
       ["换手率%", "turnover_pct"], ["量比", "vol_ratio"], ["成交额(亿)", "amount_yi"], ["振幅%", "amplitude_pct"],
     ],
     情绪梯队: [
-      ["连板数", "consec_boards"], ["封板率%", "seal_rate"], ["炸板率%", "bomb_rate"], ["晋级率%", "advance_rate"],
+      ["连板数", "consec_boards"],
     ],
     资金流: [
       ["主力净流入", "main_net_inflow"], ["5日累计", "main_net_5d"], ["龙虎榜机构", "dragon_tiger_inst_net"], ["北向", "northbound"],

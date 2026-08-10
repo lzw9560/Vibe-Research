@@ -12,7 +12,7 @@ export interface IndicatorSet {
   price?: number | null; change_pct?: number | null;
   turnover_pct?: number | null; vol_ratio?: number | null; amount_yi?: number | null;
   amplitude_pct?: number | null; limit_up?: number | null; limit_down?: number | null;
-  consec_boards?: number | null; seal_rate?: number | null; bomb_rate?: number | null; advance_rate?: number | null;
+  consec_boards?: number | null;
   main_net_inflow?: number | null; main_net_5d?: number | null; dragon_tiger_inst_net?: number | null; northbound?: number | null;
   announcements: Announcement[]; concepts: string[]; sector_flow?: number | null;
   ma5?: number | null; ma10?: number | null; ma20?: number | null; boll_upper?: number | null; boll_lower?: number | null; macd?: number | null;
@@ -38,7 +38,7 @@ export interface FilterRecord { code: string; name?: string | null; reason: stri
 
 /** 漏斗层通过候选——code/name 必有；其余按层语义可选（S031 R14：L2 战法层携
  * best_strategy/confidence_value 供 R19 反筛/R22 合成胜率；L3 仓位层携 suggested_pct/
- * matched_strategy；L1 打分层携 gene_score）。 */
+ * matched_strategy；L1 打分层携 gene_score）。S049 D1：全参数 passed（矩阵统一列）。 */
 export interface PassedItem {
   code: string;
   name: string;
@@ -51,6 +51,20 @@ export interface PassedItem {
   reasons?: string[];
   /** S045 R2：R3 触发类型（竞价异动/公告催化/概念联动），供多选筛选 */
   matched_triggers?: string[];
+  /** S049 D1：R1+ 连板数 */
+  consec_boards?: number | null;
+  /** S049 D1：R2+ 量价 */
+  turnover_pct?: number | null;
+  vol_ratio?: number | null;
+  amount_yi?: number | null;
+  amplitude_pct?: number | null;
+  /** S049 D1：R2+ 资金流 */
+  main_net_inflow?: number | null;
+  main_net_5d?: number | null;
+  northbound?: number | null;
+  /** S049 D1：R3+ 催化 */
+  auction_open_pct?: number | null;
+  catalyst_summary?: string | null;
 }
 
 export interface FunnelLayer {

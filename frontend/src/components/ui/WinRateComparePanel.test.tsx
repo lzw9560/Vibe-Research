@@ -18,7 +18,7 @@ const l2Passed: PassedItem[] = [
 describe("WinRateComparePanel", () => {
   it("渲染回测胜率 + 合成估算两列", () => {
     render(<WinRateComparePanel backtest={backtest} l2Passed={l2Passed} />);
-    expect(screen.getByText("首板挖掘")).toBeInTheDocument();
+    expect(screen.getByText(/首板挖掘/)).toBeInTheDocument();
     expect(screen.getByText("62.3%")).toBeInTheDocument(); // 回测
     expect(screen.getByText("88.0%")).toBeInTheDocument(); // 合成(0.85→0.88)
     expect(screen.getAllByText("估算").length).toBe(2); // 两行合成均标估算
