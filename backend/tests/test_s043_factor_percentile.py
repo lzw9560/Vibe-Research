@@ -88,3 +88,72 @@ class TestBacktestResult:
             percentile_analysis={},
         )
         assert r.factor_percentile_analysis is None
+
+
+# ===========================================================================
+# R4：GET /api/backtest/factor-analysis 端点（mock generate_scatter_data，不碰外部源）
+# ===========================================================================
+
+
+class TestFactorAnalysisEndpoint:
+    def _scatter(self):
+        return [
+            {"factor_premium_rate": 80, "next_day_return": 0.04, "code": "a", "date": "2026-08-01"},
+            {"factor_premium_rate": 82, "next_day_return": -0.02, "code": "b", "date": "2026-08-01"},
+            {"factor_premium_rate": 10, "next_day_return": 0.01, "code": "c", "date": "2026-08-02"},
+        ]
+
+    def test_returns_four_buckets(self, monkeypatch, isolated_market_db):
+        from fastapi.testclient import TestClient
+        import app as appmod
+        import routers.backtest as bt_router
+
+        async def _fake_scatter(date_range):
+            return self._scatter()
+
+        monkeypatch.setattr(bt_router, "generate_scatter_data", _fake_scatter)
+
+        client = TestClient(appmod.app)
+        r = client.get(
+            "/api/backtest/factor-analysis",
+            params={"start": "2026-08-01", "end": "2026-08-05", "factor": "premium_rate"},
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["factor"] == "premium_rate"
+        assert data["period"] == "2026-08-01 ~ 2026-08-05"
+        assert data["sample_size"] == 3
+        assert set(data["buckets"]) == {"0-30", "30-50", "50-70", "70-100"}
+        hi = data["buckets"]["70-100"]
+        assert hi["count"] == 2
+        assert hi["avg_return"] == round((0.04 - 0.02) / 2, 4)
+        assert hi["hit_rate"] == 0.5
+
+    def test_factor_default_premium_rate(self, monkeypatch, isolated_market_db):
+        from fastapi.testclient import TestClient
+        import app as appmod
+        import routers.backtest as bt_router
+
+        async def _fake_scatter(date_range):
+            return self._scatter()
+
+        monkeypatch.setattr(bt_router, "generate_scatter_data", _fake_scatter)
+
+        client = TestClient(appmod.app)
+        r = client.get(
+            "/api/backtest/factor-analysis",
+            params={"start": "2026-08-01", "end": "2026-08-05"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["factor"] == "premium_rate"
+
+    def test_unknown_factor_400(self, isolated_market_db):
+        from fastapi.testclient import TestClient
+        import app as appmod
+
+        client = TestClient(appmod.app)
+        r = client.get(
+            "/api/backtest/factor-analysis",
+            params={"start": "2026-08-01", "end": "2026-08-05", "factor": "bogus"},
+        )
+        assert r.status_code == 400

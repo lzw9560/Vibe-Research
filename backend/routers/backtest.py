@@ -4,7 +4,12 @@ Backtest router.
 from fastapi import APIRouter, HTTPException, Query
 from typing import Any, Dict
 
-from backtest_lite import run_backtest_async, generate_scatter_data
+from backtest_lite import (
+    run_backtest_async,
+    generate_scatter_data,
+    _calc_factor_percentile_analysis,
+    _PREMIUM_BUCKETS,
+)
 import scheduled_tasks as _st  # S041：复用 market_data.db 连接 + get_backtest_snapshots
 
 router = APIRouter(tags=["backtest"])
@@ -63,6 +68,37 @@ async def backtest_trend(
         return {"data": rows}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"回测趋势数据异常：{e}") from e
+
+
+@router.get("/api/backtest/factor-analysis")
+async def backtest_factor_analysis(
+    start: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    factor: str = Query("premium_rate", description="因子名，当前仅支持 premium_rate（次日溢价率）"),
+) -> Dict[str, Any]:
+    """S043 R4：单因子分位分析——按因子值分桶，输出各桶 count / avg_return / hit_rate。
+
+    样本取该区间全部基因候选（不按 qualify 阈值过滤），避免幸存者偏差。
+    """
+    _FACTOR_MAP = {"premium_rate": ("factor_premium_rate", _PREMIUM_BUCKETS)}
+    if factor not in _FACTOR_MAP:
+        raise HTTPException(400, f"不支持的因子：{factor}，可选：{', '.join(_FACTOR_MAP)}")
+    factor_key, buckets = _FACTOR_MAP[factor]
+    try:
+        scatter = await generate_scatter_data((start, end))
+        analysis = _calc_factor_percentile_analysis(scatter, factor_key, buckets)
+        return {
+            "data": {
+                "factor": factor,
+                "period": f"{start} ~ {end}",
+                "sample_size": len(scatter),
+                "buckets": analysis,
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"因子分位分析异常：{e}") from e
 
 
 __all__ = ["router"]

@@ -12,7 +12,7 @@ import type {
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord, PardonOutcome,
   StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, WinRateTrendPoint,
   WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint,
-  BacktestSnapshotRow, STIResult, STITimelineItem,
+  BacktestSnapshotRow, STIResult, STITimelineItem, FactorAnalysisResult,
   FunnelLayer,
   BoardLadderNode,
   GraphData,
@@ -178,6 +178,9 @@ export const api = {
     get<BacktestScatterPoint[]>(`/backtest/scatter?start=${start}&end=${end}`),
   backtestResult: (start: string, end: string) =>
     get<BacktestResult>(`/backtest/result?start=${start}&end=${end}`),
+  // S043：单因子分位分析（当前仅 premium_rate=次日溢价率）。
+  backtestFactorAnalysis: (start: string, end: string, factor = "premium_rate") =>
+    get<FactorAnalysisResult>(`/backtest/factor-analysis?start=${start}&end=${end}&factor=${factor}`),
   // S041 趋势看板：daily_backtest_run 落库快照的时间序列。days 默认 90。
   backtestTrend: (days?: number) =>
     get<BacktestSnapshotRow[]>(`/backtest/trend?days=${days ?? 90}`),

@@ -632,6 +632,22 @@ export interface StrategyBacktestItem {
   sample_size: number;
 }
 
+// ---- S043 单因子分位分析 ----
+// GET /api/backtest/factor-analysis 返回结构。buckets 键为桶标签（"0-30"/"30-50"/"50-70"/"70-100"），
+// 值含 count/avg_return/hit_rate（avg_return 为小数收益率，hit_rate 0-1）。
+export interface FactorPercentileBucket {
+  count: number;
+  avg_return: number;
+  hit_rate: number;
+}
+
+export interface FactorAnalysisResult {
+  factor: string;
+  period: string;
+  sample_size: number;
+  buckets: Record<string, FactorPercentileBucket>;
+}
+
 // ---- 打板策略参数配置 ----
 export interface LimitUpParams {
   gene_qualify_threshold: number;

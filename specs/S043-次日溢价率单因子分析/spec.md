@@ -1,7 +1,7 @@
 # Spec: S043 — 次日溢价率单因子分位分析
 
-> 状态：部分完成——阶段 A+B（R1/R2/R3 纯后端重构）已提交 develop；阶段 C+D（R4 端点 + R5 前端 + 90 天数据验收）推迟至 S040 合并后
-> 作者：Codex  日期：2026-08-09
+> 状态：已实现——R1-R5 全部完成（2026-08-10 R4 端点 + R5 前端因子分位 Tab + 端点测试）
+> 作者：Codex  日期：2026-08-09（R4/R5：2026-08-10）
 > 关联：`../S040-历史数据回填90天/spec.md`（90 天数据是前提）、`backend/backtest_lite.py`（分位分析模式）、`backend/limitup_screener/models.py`（`premium_rate` 因子）、`backend/limitup_screener/data.py`（`factor_premium_rate` DB 字段）、`backend/limitup_strategy.py`（`premium > 60` 条件触发）
 >
 > 级别：**small**（单函数改动 + 一个新端点）
@@ -25,8 +25,8 @@
 - [x] R1 新函数 `backtest_lite._calc_factor_percentile_analysis(scatter, factor_name)`: 按指定因子分桶（而非 gene_score），输出各桶 `count / avg_return / hit_rate`
 - [x] R2 分桶方案：`factor_premium_rate` 四档（0-30 / 30-50 / 50-70 / 70-100），更细粒度看因子边际效应
 - [x] R3 `BacktestResult` 新增 `factor_percentile_analysis` 字段（可选，不破坏现有字段）
-- [ ] R4 新 API `GET /api/backtest/factor-analysis?start=...&end=...&factor=premium_rate`: 返回单因子分位结果
-- [ ] R5 前端 Backtest 页面新增 Tab "因子分位"：展示单因子分位表
+- [x] R4 新 API `GET /api/backtest/factor-analysis?start=...&end=...&factor=premium_rate`: 返回单因子分位结果
+- [x] R5 前端 Backtest 页面新增 Tab "因子分位"：展示单因子分位表
 
 ## 4. 受影响文件
 
@@ -58,11 +58,11 @@
 
 ## 6. 验收标准
 
-- [ ] A1 `GET /api/backtest/factor-analysis?factor=premium_rate` 返回四档分位结果
-- [ ] A2 每档含 `count / avg_return / hit_rate`
-- [ ] A3 现有 `GET /api/backtest/result` 不受影响（`factor_percentile_analysis` 是新增字段）
-- [ ] A4 前端因子分位 Tab 渲染表格
-- [ ] A5 `pytest -m "not live"` 全过
+- [x] A1 `GET /api/backtest/factor-analysis?factor=premium_rate` 返回四档分位结果
+- [x] A2 每档含 `count / avg_return / hit_rate`
+- [x] A3 现有 `GET /api/backtest/result` 不受影响（`factor_percentile_analysis` 是新增字段）
+- [x] A4 前端因子分位 Tab 渲染表格
+- [x] A5 `pytest -m "not live"` 全过（916 passed；龙虎榜基线 3 例因本地 fallback 缓存被 live 运行覆写为空而挂，恢复基线数据后 6 passed，与 S043 无关）
 
 ## 7. 合规与工程底线自查
 

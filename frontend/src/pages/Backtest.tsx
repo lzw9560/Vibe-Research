@@ -14,15 +14,16 @@ import {
 } from "@/components/charts/TrendChart";
 import { WinRateView } from "@/components/winrate/WinRateView";
 import { Loader2, RefreshCw, AlertCircle, TrendingUp } from "lucide-react";
-import { api, type BacktestResult, type BacktestScatterPoint, type BacktestSnapshotRow } from "@/lib/api";
+import { api, type BacktestResult, type BacktestScatterPoint, type BacktestSnapshotRow, type FactorAnalysisResult } from "@/lib/api";
 
-// 页内 Tab key 对齐 nav SUB_TABS["/backtest"]（result / winrate / trend）。
-type BacktestTab = "result" | "winrate" | "trend";
+// 页内 Tab key 对齐 nav SUB_TABS["/backtest"]（result / winrate / trend / factor）。
+type BacktestTab = "result" | "winrate" | "trend" | "factor";
 
 const TABS: { key: BacktestTab; label: string }[] = [
   { key: "result", label: "回测结果" },
   { key: "winrate", label: "胜率趋势" },
   { key: "trend", label: "趋势看板" },
+  { key: "factor", label: "因子分位" },
 ];
 
 export default function Backtest() {
@@ -42,6 +43,11 @@ export default function Backtest() {
   const [trendRows, setTrendRows] = useState<BacktestSnapshotRow[]>([]);
   const [trendLoading, setTrendLoading] = useState(false);
   const [trendError, setTrendError] = useState<string | null>(null);
+
+  // S043 因子分位态：复用页面级 startDate/endDate 查询条件。
+  const [factorData, setFactorData] = useState<FactorAnalysisResult | null>(null);
+  const [factorLoading, setFactorLoading] = useState(false);
+  const [factorError, setFactorError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -73,6 +79,19 @@ export default function Backtest() {
     }
   };
 
+  const loadFactor = async () => {
+    setFactorLoading(true);
+    setFactorError(null);
+    try {
+      const data = await api.backtestFactorAnalysis(startDate, endDate);
+      setFactorData(data);
+    } catch (e: unknown) {
+      setFactorError(e instanceof Error ? e.message : "因子分位数据加载失败");
+    } finally {
+      setFactorLoading(false);
+    }
+  };
+
   useEffect(() => {
     load();
   }, []);
@@ -84,6 +103,13 @@ export default function Backtest() {
     }
   }, [activeTab]);
 
+  // 切到因子分位 tab 时懒加载（同趋势 tab 逻辑）
+  useEffect(() => {
+    if (activeTab === "factor" && !factorData && !factorLoading && !factorError) {
+      loadFactor();
+    }
+  }, [activeTab]);
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -91,11 +117,11 @@ export default function Backtest() {
         subtitle="基因得分 vs 次日表现（教育性统计，非收益保证）"
         actions={
           <button
-            onClick={() => (activeTab === "trend" ? loadTrend() : load())}
-            disabled={activeTab === "trend" ? trendLoading : loading}
+            onClick={() => (activeTab === "trend" ? loadTrend() : activeTab === "factor" ? loadFactor() : load())}
+            disabled={activeTab === "trend" ? trendLoading : activeTab === "factor" ? factorLoading : loading}
             className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
           >
-            {((activeTab === "trend" ? trendLoading : loading))
+            {((activeTab === "trend" ? trendLoading : activeTab === "factor" ? factorLoading : loading))
               ? <Loader2 className="h-4 w-4 animate-spin" />
               : <RefreshCw className="h-4 w-4" />}
             刷新
@@ -113,6 +139,108 @@ export default function Backtest() {
 
       {activeTab === "winrate" ? (
         <WinRateView defaultWindow={30} />
+      ) : activeTab === "factor" ? (
+        <>
+          {factorError && (
+            <GlassCard>
+              <div className="p-4 text-sm text-red-600 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {factorError}
+              </div>
+            </GlassCard>
+          )}
+
+          {factorLoading && (
+            <GlassCard>
+              <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground/60">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 加载因子分位数据…
+              </div>
+            </GlassCard>
+          )}
+
+          {!factorLoading && !factorError && factorData && (
+            <>
+              <GlassCard>
+                <SectionHeader title="查询条件" />
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">开始日期</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">结束日期</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={loadFactor}
+                    disabled={factorLoading}
+                    className="rounded-lg bg-primary/90 px-4 py-1.5 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
+                  >
+                    查询
+                  </button>
+                </div>
+              </GlassCard>
+
+              <GlassCard>
+                <SectionHeader
+                  title="次日溢价率因子分位"
+                  subtitle={`样本 ${factorData.sample_size} 条 · 区间 ${factorData.period} · 历史统计特征，市场有风险`}
+                />
+                {factorData.sample_size === 0 ? (
+                  <EmptyState
+                    icon={<TrendingUp className="h-8 w-8 text-muted-foreground/40" />}
+                    title="暂无样本"
+                    description="所选区间无基因候选样本，调整日期范围后重新查询。"
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/50 text-left text-xs text-muted-foreground">
+                          {["溢价率区间", "样本数", "平均次日收益", "命中率"].map((h) => (
+                            <th key={h} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(factorData.buckets).map(([label, b]) => (
+                          <tr key={label} className="border-b border-border/30">
+                            <td className="px-2 py-2 font-mono">{label}</td>
+                            <td className="px-2 py-2 font-mono">{b.count}</td>
+                            <td className={`px-2 py-2 font-mono ${b.avg_return > 0 ? "text-danger" : b.avg_return < 0 ? "text-success" : "text-muted-foreground"}`}>
+                              {b.count === 0 ? "—" : `${b.avg_return > 0 ? "+" : ""}${(b.avg_return * 100).toFixed(2)}%`}
+                            </td>
+                            <td className="px-2 py-2 font-mono">{b.count === 0 ? "—" : `${(b.hit_rate * 100).toFixed(1)}%`}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground/60">
+                  命中率/收益随溢价率档位单调递增说明因子有预测力；平坦或倒挂则因子无效（spec §5 D3 判读口径）。
+                </p>
+              </GlassCard>
+            </>
+          )}
+
+          {!factorLoading && !factorError && !factorData && (
+            <EmptyState
+              icon={<TrendingUp className="h-8 w-8 text-muted-foreground/40" />}
+              title="暂无因子分位数据"
+              description="选择日期范围后查询，查看次日溢价率因子各档位的命中率与平均收益。"
+            />
+          )}
+        </>
       ) : activeTab === "trend" ? (
         <>
           {trendError && (
