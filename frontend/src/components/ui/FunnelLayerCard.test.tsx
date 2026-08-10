@@ -93,4 +93,85 @@ describe("FunnelLayerCard", () => {
     const { container } = renderWithClient(<FunnelLayerCard layer={base} />);
     expect(container.querySelector(".bg-red-300")).not.toBeNull();
   });
+
+  // ============ S045：得分显示 + 得分排序 + 多选筛选 ============
+
+  const scored: FunnelLayer = {
+    ...base,
+    output_count: 3,
+    filtered_out: [],
+    passed: [
+      { code: "000001", name: "平安银行", gene_score: 52.17 },
+      { code: "000002", name: "万科A", gene_score: 50.38 },
+      { code: "000003", name: "国商A", gene_score: 55.0 },
+    ],
+  };
+
+  it("S045：passed 每行显示 gene_score", () => {
+    renderWithClient(<FunnelLayerCard layer={scored} />);
+    expect(screen.getByText("52.2")).toBeInTheDocument();
+    expect(screen.getByText("50.4")).toBeInTheDocument();
+    expect(screen.getByText("55.0")).toBeInTheDocument();
+  });
+
+  it("S045：默认按得分降序（55 → 52.17 → 50.38）", () => {
+    const { container } = renderWithClient(<FunnelLayerCard layer={scored} />);
+    const text = container.textContent ?? "";
+    expect(text.indexOf("国商A")).toBeLessThan(text.indexOf("平安银行"));
+    expect(text.indexOf("平安银行")).toBeLessThan(text.indexOf("万科A"));
+  });
+
+  it("S045：点『得分排序』切回原序", () => {
+    const { container } = renderWithClient(<FunnelLayerCard layer={scored} />);
+    fireEvent.click(screen.getByText(/得分排序/));
+    const text = container.textContent ?? "";
+    // 原序：平安银行(52.17) → 万科A(50.38) → 国商A(55)
+    expect(text.indexOf("平安银行")).toBeLessThan(text.indexOf("万科A"));
+    expect(text.indexOf("万科A")).toBeLessThan(text.indexOf("国商A"));
+  });
+
+  const withStrategy: FunnelLayer = {
+    ...base,
+    output_count: 3,
+    filtered_out: [],
+    passed: [
+      { code: "000001", name: "平安银行", gene_score: 52, best_strategy: "首板挖掘" },
+      { code: "000002", name: "万科A", gene_score: 50, best_strategy: "连板接力" },
+      { code: "000003", name: "国商A", gene_score: 55, best_strategy: "首板挖掘" },
+    ],
+  };
+
+  it("S045：战法多选筛选——选首板挖掘只看首板候选", () => {
+    renderWithClient(<FunnelLayerCard layer={withStrategy} />);
+    fireEvent.click(screen.getByText("首板挖掘"));
+    expect(screen.getByText(/平安银行/)).toBeInTheDocument();
+    expect(screen.getByText(/国商A/)).toBeInTheDocument();
+    expect(screen.queryByText(/万科A/)).not.toBeInTheDocument();
+  });
+
+  it("S045：战法多选——同时选两个战法显示并集", () => {
+    renderWithClient(<FunnelLayerCard layer={withStrategy} />);
+    fireEvent.click(screen.getByText("首板挖掘"));
+    fireEvent.click(screen.getByText("连板接力"));
+    expect(screen.getByText(/平安银行/)).toBeInTheDocument();
+    expect(screen.getByText(/万科A/)).toBeInTheDocument();
+    expect(screen.getByText(/国商A/)).toBeInTheDocument();
+  });
+
+  const withTriggers: FunnelLayer = {
+    ...base,
+    output_count: 2,
+    filtered_out: [],
+    passed: [
+      { code: "000001", name: "平安银行", gene_score: 52, matched_triggers: ["竞价异动", "公告催化"] },
+      { code: "000002", name: "万科A", gene_score: 50, matched_triggers: ["公告催化"] },
+    ],
+  };
+
+  it("S045：R3 触发类型多选筛选——选竞价异动只留有竞价触发的候选", () => {
+    renderWithClient(<FunnelLayerCard layer={withTriggers} />);
+    fireEvent.click(screen.getByText("竞价异动"));
+    expect(screen.getByText(/平安银行/)).toBeInTheDocument();
+    expect(screen.queryByText(/万科A/)).not.toBeInTheDocument();
+  });
 });

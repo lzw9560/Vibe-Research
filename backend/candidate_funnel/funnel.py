@@ -105,6 +105,19 @@ def _resolve_name(
     )
 
 
+def _r3_triggers(code: str, auction: dict[str, dict], catalyst: dict[str, dict]) -> list[str]:
+    """R3 触发类型（竞价异动/公告催化/概念联动）——与 _filter_r3 判定一致，供前端多选筛选（S045 R2）。"""
+    triggers: list[str] = []
+    if auction.get(code, {}).get("auction_open_pct") is not None:
+        triggers.append("竞价异动")
+    cat = catalyst.get(code, {})
+    if cat.get("announcements"):
+        triggers.append("公告催化")
+    if cat.get("concepts"):
+        triggers.append("概念联动")
+    return triggers
+
+
 def _filter_r3(
     codes: list[str], auction: dict[str, dict], catalyst: dict[str, dict],
     genes: dict[str, dict], activity: dict[str, dict],
@@ -170,7 +183,7 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
         input_count=len(r1_input), output_count=len(r1_kept),
         filtered_out=r1_filtered, output_codes=r1_kept,
         conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）", *base_conditions],
-        passed=[{"code": c, "name": genes.get(c, {}).get("name", c)} for c in r1_kept],
+        passed=[{"code": c, "name": genes.get(c, {}).get("name", c), "gene_score": genes.get(c, {}).get("gene_score")} for c in r1_kept],
         data_status=r1_data_status, data_reason=r1_data_reason,
     )
     layers: list[FunnelLayer] = [r1]
@@ -191,7 +204,7 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
         input_count=len(r1_kept), output_count=len(r2_kept),
         filtered_out=r2_filtered, output_codes=r2_kept,
         conditions=[f"换手>={eff.turnover_cold}%（{phase_note}）", *base_conditions],
-        passed=[{"code": c, "name": activity.get(c, {}).get("name", c)} for c in r2_kept],
+        passed=[{"code": c, "name": activity.get(c, {}).get("name", c), "gene_score": genes.get(c, {}).get("gene_score")} for c in r2_kept],
         data_status=r2_data_status, data_reason=r2_data_reason,
     )
     layers.append(r2)
@@ -212,7 +225,12 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
         input_count=len(r2_kept), output_count=len(r3_kept),
         filtered_out=r3_filtered, output_codes=r3_kept,
         conditions=["集合竞价异动 OR 公告催化 OR 板块联动", *base_conditions],
-        passed=[{"code": c, "name": _resolve_name(c, genes, activity, auction, catalyst)} for c in r3_kept],
+        passed=[
+            {"code": c, "name": _resolve_name(c, genes, activity, auction, catalyst),
+             "gene_score": genes.get(c, {}).get("gene_score"),
+             "matched_triggers": _r3_triggers(c, auction, catalyst)}
+            for c in r3_kept
+        ],
         data_status=r3_data_status, data_reason=r3_data_reason,
     )
     layers.append(r3)

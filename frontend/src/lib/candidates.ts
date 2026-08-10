@@ -49,6 +49,8 @@ export interface PassedItem {
   matched_strategy?: string;
   gene_score?: number | null;
   reasons?: string[];
+  /** S045 R2：R3 触发类型（竞价异动/公告催化/概念联动），供多选筛选 */
+  matched_triggers?: string[];
 }
 
 export interface FunnelLayer {
