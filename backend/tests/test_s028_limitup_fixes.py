@@ -136,7 +136,9 @@ def test_factor_status_no_qualified(restore_workflow):
     assert fr.layers[0].data_status == "无合格标的"
     reason = fr.layers[0].data_reason or ""
     assert "79" in reason, f"reason 应含扫描数 79: {reason}"
-    assert "60" in reason, f"reason 应含阈值 60: {reason}"
+    # 阈值动态取（不硬编码，防阈值调整再碎）；factor reason 嵌的是 models.GENE_QUALIFY_THRESHOLD
+    from limitup_screener.models import GENE_QUALIFY_THRESHOLD
+    assert str(int(GENE_QUALIFY_THRESHOLD)) in reason, f"reason 应含阈值 {GENE_QUALIFY_THRESHOLD}: {reason}"
     assert fr.config.get("scanned_count") == 79
     # 不再出现误导文案
     assert "预计算可能未执行" not in reason
