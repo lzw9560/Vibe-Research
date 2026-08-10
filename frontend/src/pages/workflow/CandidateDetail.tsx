@@ -38,15 +38,16 @@ export function CandidateDetailPanel({ code, date }: { code: string; date?: stri
     let alive = true;
     setLoading(true);
     setError(null);
+    // S049 C3：diagnosis 调用透传 date（抽屉查看快照日期时取该日诊断卡）
     candidatesApi
-      .diagnosis(code)
+      .diagnosis(code, date)
       .then((c) => alive && setCard(c))
       .catch((e) => alive && setError(String(e?.message ?? e)))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-  }, [code]);
+  }, [code, date]);
 
   if (loading) {
     return (
@@ -130,6 +131,7 @@ function IndicatorBlock({ title, ind }: { title: string; ind: IndicatorSet }) {
   const groups: Record<string, [string, keyof IndicatorSet][]> = {
     量价: [
       ["换手率%", "turnover_pct"], ["量比", "vol_ratio"], ["成交额(亿)", "amount_yi"], ["振幅%", "amplitude_pct"],
+      ["竞价开盘%", "auction_open_pct"],
     ],
     情绪梯队: [
       ["连板数", "consec_boards"],

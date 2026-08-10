@@ -112,6 +112,28 @@ export function WorkflowStateCard({ code, date }: Props) {
               >
                 → {STATUS_LABELS[target] ?? target}
               </button>
+            ) : target === "filtered" && state.status === "candidate" ? (
+              // S049 D7：candidate 态"取消选中"→filtered（danger variant）
+              <button
+                key={target}
+                type="button"
+                disabled={transition.isPending}
+                onClick={() => handleDirect(target)}
+                className="rounded-lg bg-warning/15 px-3 py-1.5 text-xs font-medium text-warning hover:bg-warning/25 disabled:opacity-50"
+              >
+                ✕ 取消选中
+              </button>
+            ) : target === "candidate" && state.status === "watching" ? (
+              // S049 D7：watching 态"取消观察"→candidate（回候选池重审）
+              <button
+                key={target}
+                type="button"
+                disabled={transition.isPending}
+                onClick={() => handleDirect(target)}
+                className="rounded-lg bg-warning/15 px-3 py-1.5 text-xs font-medium text-warning hover:bg-warning/25 disabled:opacity-50"
+              >
+                取消观察
+              </button>
             ) : (
               <button
                 key={target}

@@ -98,7 +98,7 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
     });
 
   return (
-    <div className={cn("rounded-lg border border-border/40 bg-card/30 p-3", className)}>
+    <div className={cn("rounded-lg border border-border/40 bg-card/30 p-3 max-w-2xl", className)}>
       <div className="flex items-center justify-between">
         <div className="font-medium">
           <span className="mr-2 text-xs text-muted-foreground">{layer.layer_id}</span>
@@ -123,8 +123,9 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
                 "rounded px-2 py-0.5 text-xs",
                 variant === "info" ? "bg-primary/10 text-primary" : "bg-muted/40",
               )}
+              title={c}
             >
-              {c}
+              {c.length > 24 ? `${c.slice(0, 24)}…` : c}
             </span>
           ))}
         </div>
@@ -180,6 +181,7 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
                   type="button"
                   onClick={() => onPick?.(c.code)}
                   className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-muted/50"
+                  title={c.name}
                 >
                   {date && (
                     <span
@@ -190,7 +192,7 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
                       )}
                     />
                   )}
-                  <span className="flex-1">
+                  <span className="flex-1 truncate">
                     {c.name} <span className="text-xs text-muted-foreground">{c.code}</span>
                   </span>
                   {disp !== null && (
@@ -216,9 +218,11 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
             <div key={f.code} className="flex items-center gap-2">
               {/* S033 T12/R8：filtered 红淡徽标（与 workflow_state 的 filtered 一致） */}
               <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-red-300" />
-              <span className="flex flex-1 justify-between">
-                <span>{f.name ? `${f.name} ${f.code}` : f.code}</span>
-                <span className="text-muted-foreground">{f.reason}</span>
+              <span className="flex flex-1 justify-between gap-2">
+                <span className="truncate" title={`${f.name ?? ""} ${f.code}`}>
+                  {f.name ? `${f.name} ${f.code}` : f.code}
+                </span>
+                <span className="truncate text-muted-foreground" title={f.reason}>{f.reason}</span>
               </span>
             </div>
           ))}

@@ -63,7 +63,8 @@ describe("WorkflowStateCard", () => {
     qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
     render(<WorkflowStateCard code="600001" date="2026-08-07" />);
     expect(screen.getByText(/观察/)).toBeInTheDocument();
-    expect(screen.getByText(/过滤/)).toBeInTheDocument();
+    // S049 D7：candidate 态"取消选中"按钮文案（→filtered）
+    expect(screen.getByText(/取消选中/)).toBeInTheDocument();
     expect(screen.queryByText(/持仓/)).not.toBeInTheDocument(); // holding 不在 allowed
   });
 
@@ -238,5 +239,34 @@ describe("WorkflowStateCard", () => {
     expect(screen.getByText(/卖出价 11/)).toBeInTheDocument();
     expect(screen.queryByText(/市价自动/)).not.toBeInTheDocument();
     expect(screen.queryByText(/手动填写/)).not.toBeInTheDocument();
+  });
+
+  // ============ S049 D7：取消观察/取消选中按钮 ============
+
+  it("S049 D7：candidate 态渲染「✕ 取消选中」按钮（→filtered）", () => {
+    const mutate = vi.fn();
+    qm.useTransitionWorkflowState.mockReturnValue({ mutate, isPending: false });
+    qm.useWorkflowState.mockReturnValue({ data: stateCandidate, isLoading: false });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    const btn = screen.getByText(/取消选中/);
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(mutate).toHaveBeenCalledWith({ code: "600001", date: "2026-08-07", target: "filtered" });
+  });
+
+  it("S049 D7：watching 态渲染「取消观察」按钮（→candidate）", () => {
+    const mutate = vi.fn();
+    qm.useTransitionWorkflowState.mockReturnValue({ mutate, isPending: false });
+    qm.useWorkflowState.mockReturnValue({
+      data: { ...stateCandidate, status: "watching", allowed_targets: ["monitoring", "filtered", "candidate"] },
+      isLoading: false,
+    });
+    qm.useWorkflowStateHistory.mockReturnValue({ data: [] });
+    render(<WorkflowStateCard code="600001" date="2026-08-07" />);
+    const btn = screen.getByText(/取消观察/);
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(mutate).toHaveBeenCalledWith({ code: "600001", date: "2026-08-07", target: "candidate" });
   });
 });
