@@ -312,6 +312,10 @@ async def refresh_pre_market(date: Optional[str] = Query(None, description="日�
     （单事件循环下 check→set 之间无 await，原子；多 worker 才需外部协调，属 Celery/Redis TODO）。
     """
     target_date = date or last_trading_date_str()
+    # I2：历史不可变守卫——盘上已有该日快照且为历史日期（< 最近交易日）→ 拒绝覆写。
+    # 今日（== 最近交易日）允许重采（当日采集可更新）；历史无快照允许补采（no_snapshot 链路）。
+    if target_date < last_trading_date_str() and _load_snapshot(target_date) is not None:
+        raise HTTPException(409, f"{target_date} 历史快照已存在，不可覆写（历史不可变；补采请先删快照）")
     if _cache["status"] == "running":
         return {"run_id": _cache["run_id"], "status": "running", "msg": "已有采集在跑"}
     run_id = uuid.uuid4().hex[:8]

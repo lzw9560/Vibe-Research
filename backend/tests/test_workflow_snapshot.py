@@ -241,6 +241,51 @@ def test_get_snapshot_zero_external_requests(monkeypatch):
     assert r["status"] == "done" and r["from_snapshot"] is True
 
 
+# ── R7 后端历史不可变守卫（I2）──────────────────────────────────────────
+
+
+def test_refresh_rejects_overwrite_of_history_snapshot(monkeypatch):
+    """I2：盘上已有历史快照 + target_date < 最近交易日 → refresh 返 409，不覆写。"""
+    _reset_cache(monkeypatch, status="idle")
+    wf._save_snapshot({"schema": "v1", "data_date": "2026-07-01", "factors": [], "funnel_layers": []})
+    monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
+
+    with pytest.raises(HTTPException) as ei:
+        asyncio.run(wf.refresh_pre_market(date="2026-07-01"))
+    assert ei.value.status_code == 409
+    assert "2026-07-01" in ei.value.detail
+    assert wf._cache["status"] == "idle"  # 未进入 running 态
+
+
+def test_refresh_allows_today_even_with_snapshot(monkeypatch):
+    """I2：今日（target_date == 最近交易日）有快照仍可重采——今日不可变守卫不触发。"""
+    _reset_cache(monkeypatch, status="idle")
+    wf._save_snapshot({"schema": "v1", "data_date": "2026-08-07", "factors": [], "funnel_layers": []})
+    monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
+
+    # 守卫不触发；进 running 后 asyncio.create_task 挂后台不 await，直接返 running
+    async def _noop_create_task(*_a, **_kw):
+        pass
+
+    monkeypatch.setattr(wf.asyncio, "create_task", _noop_create_task)
+    r = asyncio.run(wf.refresh_pre_market(date="2026-08-07"))
+    assert r["status"] == "running"
+
+
+def test_refresh_allows_backfill_for_missing_history(monkeypatch):
+    """I2：历史日期无快照 → refresh 正常触发（no_snapshot → 补采链路）。"""
+    _reset_cache(monkeypatch, status="idle")
+    monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
+    assert wf._load_snapshot("2026-06-01") is None
+
+    async def _noop_create_task(*_a, **_kw):
+        pass
+
+    monkeypatch.setattr(wf.asyncio, "create_task", _noop_create_task)
+    r = asyncio.run(wf.refresh_pre_market(date="2026-06-01"))
+    assert r["status"] == "running"
+
+
 def test_get_today_no_snapshot_idle(monkeypatch):
     """无快照 + d == 最近交易日 → idle（提示 refresh）。"""
     _reset_cache(monkeypatch, status="idle")
