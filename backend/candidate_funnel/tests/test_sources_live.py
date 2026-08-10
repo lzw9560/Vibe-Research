@@ -33,9 +33,6 @@ class TestSourcesLive(unittest.TestCase):
 
     def test_board_ladder_structure(self):
         out = sources.board_ladder.fetch_board_ladder(_TODAY)
-        self.assertIn("seal_rate", out)
-        self.assertIn("bomb_rate", out)
-        self.assertIn("advance_rate", out)
         self.assertIn("lianban_stocks", out)
 
     def test_activity_structure(self):

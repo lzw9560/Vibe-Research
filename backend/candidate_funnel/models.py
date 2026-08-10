@@ -38,10 +38,7 @@ class IndicatorSet(BaseModel):
     limit_up: Optional[float] = None
     limit_down: Optional[float] = None
     # 情绪梯队
-    consec_boards: Optional[int] = None  # 连板数
-    seal_rate: Optional[float] = None  # 封板率
-    bomb_rate: Optional[float] = None  # 炸板率
-    advance_rate: Optional[float] = None  # 晋级率
+    consec_boards: Optional[int] = None  # 连板数（个股自身；市场级三率移盘前简报市场情绪区）
     # 资金流（单位：万；source 层须保证换算到万，见 activity/fund_flow）
     main_net_inflow: Optional[float] = None  # 主力净流入(万)
     main_net_5d: Optional[float] = None      # 5日主力累计(万)

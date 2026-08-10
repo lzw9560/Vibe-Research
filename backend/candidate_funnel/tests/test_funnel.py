@@ -25,7 +25,7 @@ _GENES = {
     "000001": {"name": "平安银行", "gene_score": 65.0, "high_gene": False, "qualify": True},
     "603555": {"name": "ST贵人", "gene_score": 70.0, "high_gene": False, "qualify": True},  # 应被 ST 过滤
 }
-_BOARD_LADDER = {"seal_rate": 0.6, "bomb_rate": 0.2, "advance_rate": 0.3, "lianban_stocks": []}
+_BOARD_LADDER = {"lianban_stocks": []}
 _ACTIVITY = {
     # 600519 活跃；000001 冷股应被 R2 过滤
     "600519": {"name": "贵州茅台", "price": 1800.0, "change_pct": 5.0, "turnover_pct": 25.0,

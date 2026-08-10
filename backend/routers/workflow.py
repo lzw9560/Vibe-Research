@@ -160,13 +160,44 @@ async def _collect(run_id: str, target_date: str) -> None:
 
 
 def _fetch_market_emotion(date: str) -> dict[str, Any]:
-    """取当日市场情绪（复用 market 模块，失败降级）。"""
+    """取当日市场情绪（STI 分数+阶段 + 三率 + ladder + 涨跌停家数）。
+
+    S049 B：重写——旧实现 market.get_overview(date) 签名不匹配（get_overview 不接收 date）
+    抛 TypeError→恒 {}。现复用 board_ladder.get_market_emotion_raw（TTL 缓存，与 STI
+    compute 共用同一份 emotion 不重复外调）+ limitup_sti engine。
+
+    返回 shape：
+      {sti_score, sti_phase, seal_rate, break_rate, promotion_rate,
+       ladder, zt_count, dt_count}
+    任一数据源失败 → 对应字段 None，不崩。
+    """
+    from candidate_funnel.sources.board_ladder import get_market_emotion_raw  # noqa: PLC0415
+    out: dict[str, Any] = {
+        "sti_score": None, "sti_phase": None,
+        "seal_rate": None, "break_rate": None, "promotion_rate": None,
+        "ladder": [], "zt_count": None, "dt_count": None,
+    }
+    emo = get_market_emotion_raw(date)
+    if emo:
+        out["seal_rate"] = emo.get("seal_rate")
+        out["break_rate"] = emo.get("break_rate")
+        out["promotion_rate"] = emo.get("promotion_rate")
+        out["ladder"] = emo.get("ladder") or []
+        out["zt_count"] = emo.get("zt_count")
+        out["dt_count"] = emo.get("dt_count")
+    # STI 复用同一份 emotion（不重复外调），失败降级 None
     try:
+        from limitup_sti.service import get_sti_engine  # noqa: PLC0415
+        engine = get_sti_engine()
         import market
-        ov = market.get_overview(date)
-        return {"sentiment_index": (ov or {}).get("sentiment_index"), "phase": (ov or {}).get("phase")}
+        sentiment = market._sentiment(date) or {}
+        sti = engine.compute(emo, sentiment)
+        if sti.source_ok:
+            out["sti_score"] = sti.score
+            out["sti_phase"] = sti.phase.value if sti.phase else None
     except Exception:
-        return {}
+        pass
+    return out
 
 
 def _serialize_factor(fr: FactorResult) -> dict[str, Any]:
