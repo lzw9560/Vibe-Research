@@ -39,7 +39,8 @@ function phaseLabel(phase: string): string {
 
 export default function PreMarketBriefing() {
   // S026: 异步化——running 时 5s 轮询，其余停轮询
-  const { data: briefing, isLoading, refetch } = usePreMarketBriefing({
+  // S048 R8: usePreMarketBriefing 改签名 (date?, options?)——date 暂传 undefined，Task 5 接 URL query 真 date
+  const { data: briefing, isLoading, refetch } = usePreMarketBriefing(undefined, {
     refetchInterval: (query) => (query.state.data?.status === "running" ? 5_000 : false),
   });
   const refresh = usePreMarketRefresh();

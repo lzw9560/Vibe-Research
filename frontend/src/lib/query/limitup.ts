@@ -5,6 +5,7 @@ import {
   api,
   getWorkflowStatus,
   getPreMarketBriefing,
+  getPreMarketDates,
   refreshPreMarket,
   getIntradayData,
   getBombAlerts,
@@ -93,13 +94,45 @@ export function useWorkflowStatus(options?: Opts<Awaited<ReturnType<typeof getWo
   });
 }
 
-export function usePreMarketBriefing(options?: Opts<Awaited<ReturnType<typeof getPreMarketBriefing>>>) {
+// S048 R8：staleTime 常量——今日非 done 态 30s（与全局一致）；done/历史 → Infinity（幂等不重拉）。
+export const BRIEFING_STALE_MS = 30_000;
+
+/** 本地时区今日 YYYY-MM-DD（判"历史日期"用，不走 UTC 防时区偏移）。 */
+export function localTodayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, "0")}-${`${d.getDate()}`.padStart(2, "0")}`;
+}
+
+/** S048 R8 缓存语义（纯函数便测）：done 或历史日期 → Infinity；否则 30s。
+ * running 的 5s 轮询走 refetchInterval，不受 staleTime 约束；重采走显式 invalidate
+ * （前缀 ["limitup","preMarketBriefing"] 天然覆盖带 date 的 key）。 */
+export function preMarketBriefingStaleTime(
+  date: string | undefined,
+  status: string | undefined,
+  today: string,
+): number {
+  if (status === "done") return Infinity;
+  if (date && date < today) return Infinity;
+  return BRIEFING_STALE_MS;
+}
+
+export function usePreMarketBriefing(
+  date?: string,
+  options?: Opts<Awaited<ReturnType<typeof getPreMarketBriefing>>>,
+) {
   return useQuery({
-    queryKey: ["limitup", "preMarketBriefing"] as const,
-    queryFn: () => getPreMarketBriefing(),
-    // 盘前简报为日级数据，采集完成(done)后当天稳定；全局 staleTime 30s 对此过短，
-    // 导致切页/聚焦反复重发。拉长到 5min（running 轮询走 refetchInterval，不受 staleTime 影响；
-    // 手动刷新走 refetch()）。采集中的 idle→running 轮询仍由 refetchInterval 驱动。
+    queryKey: ["limitup", "preMarketBriefing", date] as const,
+    queryFn: () => getPreMarketBriefing(date),
+    staleTime: (query) => preMarketBriefingStaleTime(date, query.state.data?.status, localTodayStr()),
+    ...options,
+  });
+}
+
+/** S048 R6：快照日期列表（日期选择器标注哪些日期有快照）。 */
+export function usePreMarketDates(options?: Opts<Awaited<ReturnType<typeof getPreMarketDates>>>) {
+  return useQuery({
+    queryKey: ["limitup", "preMarketDates"] as const,
+    queryFn: () => getPreMarketDates(),
     staleTime: 5 * 60_000,
     ...options,
   });
