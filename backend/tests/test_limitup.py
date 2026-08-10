@@ -150,7 +150,7 @@ def test_screener_result_model():
 
 def test_config_defaults():
     assert GENE_QUALIFY_THRESHOLD == 50.0
-    assert GENE_HIGH_THRESHOLD == 75.0
+    assert GENE_HIGH_THRESHOLD == 60.0
     assert LOOKBACK_DAYS == 252
 
 
@@ -306,11 +306,11 @@ def test_build_condition_matches_pool_item():
 
 
 def test_build_condition_matches_mid_gene():
-    """测试基因合格但未达高分的情况。"""
+    """测试基因合格但未达高分的情况（high=60 后合格区间为 [50,60)）。"""
     gene = GeneScore(
         code="600002",
         name="中小股份",
-        total_score=65.0,
+        total_score=55.0,
         factors={
             "次日溢价率": 50,
             "红盘率": 55,

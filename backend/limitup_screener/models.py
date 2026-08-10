@@ -25,7 +25,9 @@ DISCLAIMER = (
 
 LOOKBACK_DAYS = int(os.getenv("LIMITUP_LOOKBACK_DAYS", "252"))
 GENE_QUALIFY_THRESHOLD = float(os.getenv("LIMITUP_GENE_QUALIFY_THRESHOLD", "50"))
-GENE_HIGH_THRESHOLD = float(os.getenv("LIMITUP_GENE_HIGH_THRESHOLD", "75"))
+# 75→60（2026-08-10 grill）：75 结构性不可达（满分需五因子全满），high_gene 恒 False；
+# 60 在 60-70 区间有真实样本。recalc/kline_rebuild/limitup_strategy 均吃此模块级默认。
+GENE_HIGH_THRESHOLD = float(os.getenv("LIMITUP_GENE_HIGH_THRESHOLD", "60"))
 
 
 class GeneScore(BaseModel):

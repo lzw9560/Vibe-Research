@@ -102,7 +102,9 @@ class AssistantDefaultConfig(NotificationConfig):
     # 60→50（2026-08-10 grill）：强封板市况炸板后溢价恒 0（占权重 15%）致 total_score 上限 ~52，
     # 阈值 60 清空候选池、L2 战法层无输入；降到 50 让头部候选进战法层。权重改稿待 S041 回测。
     GENE_QUALIFY_THRESHOLD: float = 50.0
-    GENE_HIGH_THRESHOLD: float = 75.0
+    # 75→60（2026-08-10 grill）：权重满分 75 需五因子全满，历史 5783 行从未出现，
+    # 75 阈值结构性不可达、high_gene 恒 False；60 在 60-70 区间有真实样本（46 行），语义成立。
+    GENE_HIGH_THRESHOLD: float = 60.0
     GENE_FACTORS_WEIGHT: dict[str, float] = field(
         default_factory=lambda: {
             "premium": 0.25,

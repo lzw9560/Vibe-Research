@@ -23,7 +23,9 @@ class AssistantDefaultConfig:
     # 上限 ~52，阈值 60 会清空候选池、L2 战法层无输入；降到 50 让头部候选进战法层。
     # 权重口径调整（炸板后溢价降权/改口径）待 S041 回测验证后正式改稿。
     GENE_QUALIFY_THRESHOLD: float = 50.0
-    GENE_HIGH_THRESHOLD: float = 75.0
+    # 75→60（2026-08-10 grill）：与 config/__init__.py 同步；本文件被 config/ 包 shadow，
+    # 但保留不一致会造成两处口径坑。
+    GENE_HIGH_THRESHOLD: float = 60.0
     GENE_FACTORS_WEIGHT: dict[str, float] = field(
         default_factory=lambda: {
             "premium": 0.25,

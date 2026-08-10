@@ -26,8 +26,8 @@ export function Settings() {
 
   // 打板策略参数
   const [limitUpParams, setLimitUpParams] = useState<LimitUpParams>({
-    gene_qualify_threshold: 60,
-    gene_high_threshold: 75,
+    gene_qualify_threshold: 50,
+    gene_high_threshold: 60,
     lookback_days: 60,
   });
   const [paramsLoading, setParamsLoading] = useState(false);
