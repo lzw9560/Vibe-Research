@@ -1,6 +1,6 @@
 # Spec: S048 — 工作流打磨（固定阶段位 + 历史视角 + 缓存 + 拓扑精简）
 
-> 状态：实现中
+> 状态：已实现（2026-08-10）
 > 作者：Codex  日期：2026-08-10
 > 级别：**medium**（跨前后端、>50 行；不接新外部源、无财务验算）
 > 关联：grill 结论 `.scratch/grill-workflow-polish/plan.md`（7 决策锁定）；S026（盘前异步采集）、S036（盘中/盘后标灰）、S024（拓扑）、S032（状态机落库）、S046（空写防护同范式）
@@ -26,18 +26,18 @@
 
 ## 3. 需求清单
 
-- [ ] R1 **固定阶段位**（Q6）：删 `Workflow.tsx` `sortedStages` 重排，恒按 盘前→盘中→盘后 渲染；当前阶段用既有高亮/徽标表达，不靠位置。
-- [ ] R2 **顶级日期选择**（Q1/Q2）：Workflow 首页 PageHeader 加日期选择器（`<input type="date">` + "回到今日"）；选中日期写入 URL query `?date=YYYY-MM-DD`；不带参数=今日实时（现状行为不变）。首页卡片链接进子页时携带 date。
-- [ ] R3 **历史视角卡片**（Q6）：date 存在时——盘前卡显示该日快照候选数（usePreMarketBriefing(date)），盘中卡=该日 monitoring 计数、盘后卡=settled 计数（useWorkflowStates(date) 的 counts），无数据显示 "--"；今日视角维持现状（candidateCount/signalCount/winRate）。历史视角停用 60s 轮询。
-- [ ] R4 **快照持久化**（Q4）：`_collect` done 后整体写 `.vibe-research/workflow/pre-market/<date>.json`（经 `resolve_data_dir()`），永久保留不清理。payload：`{schema:1, data_date, as_of, run_id, market_emotion, factors, funnel_layers, is_backfill}`；`is_backfill = target_date < last_trading_date_str()`（采集时刻判定）。写盘失败只 log 不阻断 done。
-- [ ] R5 **GET 按日分级降级**（Q3，向后兼容）：`GET /api/workflow/pre-market?date=` 按序：① 内存 data_date==d 且 running/done/error → 返内存态；② 内存 data_date==d 且 idle → idle 提示；③ 盘上有 `<d>.json` → done + `from_snapshot:true`（读盘内容，零外部请求）；④ d==last_trading_date_str() → idle；⑤ 否则 → `{status:"no_snapshot"}`。非法日期格式 → 400。
-- [ ] R6 **快照日期列表**（Q4）：新增 `GET /api/workflow/pre-market/dates` → `{dates:[...]}` 降序（目录内合法 `<date>.json` 文件名），供日期选择器标注哪些日期有快照。
-- [ ] R7 **补采入口**（Q3）：`no_snapshot` 页显提示 + 显式"补采"按钮（复用 `refresh(date)`，不自动触发）；UI 标注"补采数据可能与当日实盘所见有出入"。历史日期 done 后刷新按钮置灰（不可变），唯 no_snapshot 可补采。
-- [ ] R8 **缓存语义**（Q5）：`usePreMarketBriefing(date)` queryKey 含 date；staleTime 动态——历史日期或 status done → Infinity（幂等不重拉），其余 30s；running 维持 5s 轮询（refetchInterval 不受 staleTime 约束）；显式重采走既有 invalidate（前缀 `["limitup","preMarketBriefing"]` 天然覆盖带 date 的 key）。浏览器硬刷新重建缓存时后端走盘上快照即返（零外部请求）。
-- [ ] R9 **历史漏斗层随快照**：`_collect` 经独立函数 `_build_funnel_layers(date)`（asyncio.to_thread 跑 `run_funnel("all", date, config)`，config 取 `routers.candidates._store["config"]` lazy import，同 topology.py `_load_candidates` 范式）写入快照；PreMarketBriefing 页在 `from_snapshot` 时渲染 `briefing.funnel_layers`、停用 `useFunnelLayers` live 查询（历史零外部请求）。
-- [ ] R10 **拓扑精简·阈值**（Q7①②）：`_pairwise_shared` 加 `min_shared` 参数；fund_flow ≥3 共享日、sector ≥2 共享概念才连边；seat 维持 ≥1、ladder 不动。
-- [ ] R11 **拓扑精简·度数封顶**（Q7④）：`build_relation_graph` 加 `max_degree=4`——全部边按 weight 降序贪心，两端点度数均 <4 才保留（杜绝 clique 爆炸）。
-- [ ] R12 **拓扑精简·图例开关**（Q7①③）：EdgeLegend 加 `hidden`/`onToggle` props 变可点击 toggle（无 onToggle 时保持纯展示，兼容他处用法）；RelationGraph 默认 `hidden={"fund_flow"}`，过滤后再喂 GraphView，图例按未过滤边集判存在性。
+- [x] R1 **固定阶段位**（Q6）：删 `Workflow.tsx` `sortedStages` 重排，恒按 盘前→盘中→盘后 渲染；当前阶段用既有高亮/徽标表达，不靠位置。
+- [x] R2 **顶级日期选择**（Q1/Q2）：Workflow 首页 PageHeader 加日期选择器（`<input type="date">` + "回到今日"）；选中日期写入 URL query `?date=YYYY-MM-DD`；不带参数=今日实时（现状行为不变）。首页卡片链接进子页时携带 date。
+- [x] R3 **历史视角卡片**（Q6）：date 存在时——盘前卡显示该日快照候选数（usePreMarketBriefing(date)），盘中卡=该日 monitoring 计数、盘后卡=settled 计数（useWorkflowStates(date) 的 counts），无数据显示 "--"；今日视角维持现状（candidateCount/signalCount/winRate）。历史视角停用 60s 轮询。
+- [x] R4 **快照持久化**（Q4）：`_collect` done 后整体写 `.vibe-research/workflow/pre-market/<date>.json`（经 `resolve_data_dir()`），永久保留不清理。payload：`{schema:1, data_date, as_of, run_id, market_emotion, factors, funnel_layers, is_backfill}`；`is_backfill = target_date < last_trading_date_str()`（采集时刻判定）。写盘失败只 log 不阻断 done。
+- [x] R5 **GET 按日分级降级**（Q3，向后兼容）：`GET /api/workflow/pre-market?date=` 按序：① 内存 data_date==d 且 running/done/error → 返内存态；② 内存 data_date==d 且 idle → idle 提示；③ 盘上有 `<d>.json` → done + `from_snapshot:true`（读盘内容，零外部请求）；④ d==last_trading_date_str() → idle；⑤ 否则 → `{status:"no_snapshot"}`。非法日期格式 → 400。
+- [x] R6 **快照日期列表**（Q4）：新增 `GET /api/workflow/pre-market/dates` → `{dates:[...]}` 降序（目录内合法 `<date>.json` 文件名），供日期选择器标注哪些日期有快照。
+- [x] R7 **补采入口**（Q3）：`no_snapshot` 页显提示 + 显式"补采"按钮（复用 `refresh(date)`，不自动触发）；UI 标注"补采数据可能与当日实盘所见有出入"。历史日期 done 后刷新按钮置灰（不可变），唯 no_snapshot 可补采。
+- [x] R8 **缓存语义**（Q5）：`usePreMarketBriefing(date)` queryKey 含 date；staleTime 动态——历史日期或 status done → Infinity（幂等不重拉），其余 30s；running 维持 5s 轮询（refetchInterval 不受 staleTime 约束）；显式重采走既有 invalidate（前缀 `["limitup","preMarketBriefing"]` 天然覆盖带 date 的 key）。浏览器硬刷新重建缓存时后端走盘上快照即返（零外部请求）。
+- [x] R9 **历史漏斗层随快照**：`_collect` 经独立函数 `_build_funnel_layers(date)`（asyncio.to_thread 跑 `run_funnel("all", date, config)`，config 取 `routers.candidates._store["config"]` lazy import，同 topology.py `_load_candidates` 范式）写入快照；PreMarketBriefing 页在 `from_snapshot` 时渲染 `briefing.funnel_layers`、停用 `useFunnelLayers` live 查询（历史零外部请求）。
+- [x] R10 **拓扑精简·阈值**（Q7①②）：`_pairwise_shared` 加 `min_shared` 参数；fund_flow ≥3 共享日、sector ≥2 共享概念才连边；seat 维持 ≥1、ladder 不动。
+- [x] R11 **拓扑精简·度数封顶**（Q7④）：`build_relation_graph` 加 `max_degree=4`——全部边按 weight 降序贪心，两端点度数均 <4 才保留（杜绝 clique 爆炸）。
+- [x] R12 **拓扑精简·图例开关**（Q7①③）：EdgeLegend 加 `hidden`/`onToggle` props 变可点击 toggle（无 onToggle 时保持纯展示，兼容他处用法）；RelationGraph 默认 `hidden={"fund_flow"}`，过滤后再喂 GraphView，图例按未过滤边集判存在性。
 
 ## 4. 受影响文件
 
@@ -74,24 +74,24 @@
 
 ## 6. 验收标准
 
-- [ ] A1 `/workflow` 三卡片恒按 盘前→盘中→盘后 顺序，跨时段不变（删 sortedStages，测试断言渲染序）
-- [ ] A2 首页选历史日期 → URL 出现 `?date=`，盘前卡显示快照候选数，盘中/盘后卡显示 monitoring/settled 计数或 "--"
-- [ ] A3 `GET /api/workflow/pre-market?date=<有快照>` 返 `status=done, from_snapshot=true`，零外部请求（单测断言不触 factor_registry/astock）
-- [ ] A4 `GET ?date=<无快照非今日>` 返 `no_snapshot`；前端显示补采按钮 + 出入标注；补采后快照落盘可读
-- [ ] A5 `GET /api/workflow/pre-market/dates` 返降序快照日期列表
-- [ ] A6 后端重启后今日 GET 仍返 done（盘上快照），无需重采
-- [ ] A7 前端：历史日期或 done 后路由切换/返回不重发请求（staleTime Infinity 测试）；running 仍 5s 轮询
-- [ ] A8 `pytest backend/tests -m "not live"` 全过（含改稿后 test_topology / test_workflow_async）
-- [ ] A9 `npx vitest run` + `tsc` 全过
-- [ ] A10 关系网：fund_flow 默认不显示、图例可点开；sector 仅共享 ≥2 概念相连；任意节点边数 ≤4
+- [x] A1 `/workflow` 三卡片恒按 盘前→盘中→盘后 顺序，跨时段不变（删 sortedStages，测试断言渲染序）
+- [x] A2 首页选历史日期 → URL 出现 `?date=`，盘前卡显示快照候选数，盘中/盘后卡显示 monitoring/settled 计数或 "--"
+- [x] A3 `GET /api/workflow/pre-market?date=<有快照>` 返 `status=done, from_snapshot=true`，零外部请求（单测断言不触 factor_registry/astock）
+- [x] A4 `GET ?date=<无快照非今日>` 返 `no_snapshot`；前端显示补采按钮 + 出入标注；补采后快照落盘可读
+- [x] A5 `GET /api/workflow/pre-market/dates` 返降序快照日期列表
+- [x] A6 后端重启后今日 GET 仍返 done（盘上快照），无需重采
+- [x] A7 前端：历史日期或 done 后路由切换/返回不重发请求（staleTime Infinity 测试）；running 仍 5s 轮询
+- [x] A8 `pytest backend/tests -m "not live"` 全过（含改稿后 test_topology / test_workflow_async）— 948 passed / 9 deselected
+- [x] A9 `npx vitest run` + `tsc` 全过 — 36 files / 252 tests passed；tsc exit 0
+- [x] A10 关系网：fund_flow 默认不显示、图例可点开；sector 仅共享 ≥2 概念相连；任意节点边数 ≤4
 
 ## 7. 合规与工程底线自查（逐条确认）
 
-- [ ] 不臆造数据：历史视角纯读快照原文；no_snapshot 明示无数据而非编造；补采 UI 标注"可能与当日所见有出入"
-- [ ] 用户私有数据隔离：快照落 `.vibe-research/`（gitignored），经 `resolve_data_dir()`（测试 conftest 已隔离）；不进 git
-- [ ] 不新增东财端点：补采复用既有因子/漏斗链路（既有 em_get 限流）；历史读盘零外部请求
-- [ ] 拓扑精简不附方向语义：阈值/cap 为客观计数裁剪，图例文案不变（§0 弱合规）
-- [ ] 快照含 as_of/data_date 来源戳，判断可复现
+- [x] 不臆造数据：历史视角纯读快照原文；no_snapshot 明示无数据而非编造；补采 UI 标注"可能与当日所见有出入"
+- [x] 用户私有数据隔离：快照落 `.vibe-research/`（gitignored），经 `resolve_data_dir()`（测试 conftest 已隔离）；不进 git
+- [x] 不新增东财端点：补采复用既有因子/漏斗链路（既有 em_get 限流）；历史读盘零外部请求
+- [x] 拓扑精简不附方向语义：阈值/cap 为客观计数裁剪，图例文案不变（§0 弱合规）
+- [x] 快照含 as_of/data_date 来源戳，判断可复现
 
 ## 8. 测试计划（严格 TDD：红→绿，测试先行）
 
