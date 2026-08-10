@@ -33,6 +33,7 @@
 
 ### 通用规则（所有级别）
 
+- **语言**：与用户交流一律使用中文（含中间更新与最终回复）；commit message、spec/issue 文档默认中文，代码标识符保持英文。
 - **提交纪律**：勤 commit、最小功能提交（`wip:` 前缀可）。**不准留长生命未提交工作树**——`git checkout` 回退事故丢的就是未提交改动。
 - **合并**：large 用 `git merge --squash` 到 develop，一 spec 一 commit（`feat(SNNN): ...`）。medium/small 直接 develop commit。
 - **分支清洁**：large 的 feature 分支合并后**立即删**（`git branch -d`），不留残留。无用分支是工程洁癖的对立面。
