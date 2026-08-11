@@ -1,8 +1,8 @@
 // S050 W0：行为闭环独立页——票根 + 影子对照 + 独立性基线。
 // 与工作流解耦：不依赖盘前简报采集态，直接调 /api/winrate/shadow-comparison。
-// 只出客观算账，不出方向结论；挂「历史统计特征，市场有风险，研究参考」。
+// 弱合规定位（私人投研助理）：可给方向性研判建议，保留工程底线（不臆造/可复现）。
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Info } from "lucide-react";
+import { ChevronDown, ChevronRight, Info, Lightbulb } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -30,11 +30,12 @@ export default function BehaviorLoop() {
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="text-sm text-muted-foreground">
             <p>
-              W0 不加新能力，先把行为测出来：每笔结算关联系统信号（候选/战法）或显式标「感觉单」，
+              W0 把行为测出来：每笔结算关联系统信号（候选/战法）或显式标「感觉单」，
               系统建议单 vs 用户实际单并排算账，含「漏掉候选」的影子收益。
+              数据积累后给方向性研判，仍由你最终决策。
             </p>
             <p className="mt-1">
-              ≥4 周观察期后凭数据决定建设方向；当前属观察期，样本量 caveat，仅观察不结论。
+              ≥4 周观察期样本更稳；当前窗口数据已有研判参考价值，样本不足时会诚实标注。
             </p>
           </div>
         </div>
@@ -80,7 +81,7 @@ export default function BehaviorLoop() {
   );
 }
 
-/** 三桶算账 + 独立性指标 + 诚实标记。 */
+/** 三桶算账 + 独立性指标 + 行为研判。 */
 function ShadowReport({ data }: { data: ShadowComparison }) {
   return (
     <>
@@ -108,10 +109,13 @@ function ShadowReport({ data }: { data: ShadowComparison }) {
         <OverviewCard
           label="样本充足性"
           value={data.sufficient ? "充足" : "不足"}
-          hint={data.sufficient ? "三桶均 ≥5" : "三桶任一 <5，仅观察"}
+          hint={data.sufficient ? "三桶均 ≥5" : "三桶任一 <5，研判仅供参考"}
           warn={!data.sufficient}
         />
       </div>
+
+      {/* 行为研判（弱合规：可给方向性建议，数据驱动非臆造） */}
+      <BehaviorAssessment data={data} />
 
       {/* 三桶算账表 */}
       <div className="mb-6">
@@ -171,6 +175,95 @@ function ShadowReport({ data }: { data: ShadowComparison }) {
       <Disclaimer />
     </>
   );
+}
+
+/** 行为研判：基于三桶算账给方向性建议（弱合规定位，数据驱动非臆造）。 */
+function BehaviorAssessment({ data }: { data: ShadowComparison }) {
+  const tips = _deriveAssessmentTips(data);
+  if (tips.length === 0) return null;
+  return (
+    <GlassCard className="mb-6 border border-primary/20 p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <Lightbulb className="h-4 w-4 text-primary" />
+        <span className="font-medium">行为研判</span>
+        {!data.sufficient && (
+          <span className="text-xs text-muted-foreground">· 样本不足，仅供参考</span>
+        )}
+      </div>
+      <ul className="space-y-1.5">
+        {tips.map((t, i) => (
+          <li key={i} className="flex items-start gap-2 text-sm">
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+            <span className="text-foreground/90">{t}</span>
+          </li>
+        ))}
+      </ul>
+    </GlassCard>
+  );
+}
+
+/** 从三桶数据派生研判建议（纯函数，便于测试）。 */
+function _deriveAssessmentTips(data: ShadowComparison): string[] {
+  const tips: string[] = [];
+  const { follow, feeling, missed, independence, sufficient } = data;
+
+  // follow vs feeling 胜率对比（核心研判）
+  if (follow.n > 0 && feeling.n > 0 && follow.win_rate != null && feeling.win_rate != null) {
+    const diff = follow.win_rate - feeling.win_rate;
+    if (diff > 0.15) {
+      tips.push(
+        `跟系统单胜率 ${(follow.win_rate * 100).toFixed(1)}% 显著高于感觉单 ${(feeling.win_rate * 100).toFixed(1)}%，` +
+        `可考虑多跟系统候选/战法信号。`,
+      );
+    } else if (diff < -0.15) {
+      tips.push(
+        `感觉单胜率 ${(feeling.win_rate * 100).toFixed(1)}% 反而高于跟系统单 ${(follow.win_rate * 100).toFixed(1)}%，` +
+        `当前系统信号质量待校准（W2 校准轨），暂可倾向自主判断。`,
+      );
+    } else {
+      tips.push(
+        `跟系统单与感觉单胜率接近（差 ${(Math.abs(diff) * 100).toFixed(1)}pp），` +
+        `两者表现相当，独立判断能力稳健。`,
+      );
+    }
+  }
+
+  // 一致率研判
+  if (independence.agreement_rate != null) {
+    const ar = independence.agreement_rate;
+    if (ar >= 0.7) {
+      tips.push(`一致率 ${(ar * 100).toFixed(1)}% 偏高，对系统信号依赖较大，注意保留独立判断空间。`);
+    } else if (ar <= 0.3 && (follow.n + feeling.n) > 0) {
+      tips.push(`一致率 ${(ar * 100).toFixed(1)}% 偏低，自主决策占比大，可关注 missed 桶看漏掉的候选。`);
+    }
+  }
+
+  // missed 影子收益研判
+  if (missed.n > 0 && missed.win_rate != null) {
+    if (missed.win_rate > 0.5 && missed.avg_return != null && missed.avg_return > 0) {
+      tips.push(
+        `漏掉的候选影子胜率 ${(missed.win_rate * 100).toFixed(1)}%、均收益 ${missed.avg_return.toFixed(2)}%，` +
+        `系统建议质量不错，可考虑多采纳候选池标的。`,
+      );
+    } else if (missed.win_rate < 0.3 && missed.n >= 5) {
+      tips.push(
+        `漏掉的候选影子胜率仅 ${(missed.win_rate * 100).toFixed(1)}%，不跟可能是对的——` +
+        `说明你对候选的自主筛选有超额判断力。`,
+      );
+    }
+  }
+
+  // 样本不足时压低研判权重
+  if (!sufficient) {
+    tips.push("当前样本不足（三桶任一 <5），以上研判仅供参考，建议积累到 ≥4 周再做强决策。");
+  }
+
+  // 全空兜底
+  if (follow.n === 0 && feeling.n === 0 && missed.n === 0) {
+    tips.push("窗口内无已结算交易也无候选快照，暂无行为数据可研判。结算一笔交易或等待盘前采集后查看。");
+  }
+
+  return tips;
 }
 
 function OverviewCard({ label, value, hint, warn }: { label: string; value: string; hint: string; warn?: boolean }) {

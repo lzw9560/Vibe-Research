@@ -52,7 +52,7 @@ describe("BehaviorLoop (S050 W0)", () => {
   it("渲染页面标题 + 观察期说明", () => {
     renderAt();
     expect(screen.getByText("行为闭环")).toBeInTheDocument();
-    expect(screen.getByText(/W0 不加新能力/)).toBeInTheDocument();
+    expect(screen.getByText(/W0 把行为测出来/)).toBeInTheDocument();
     expect(screen.getByText(/≥4 周观察期/)).toBeInTheDocument();
   });
 
@@ -86,7 +86,7 @@ describe("BehaviorLoop (S050 W0)", () => {
     });
     renderAt();
     expect(screen.getByText("不足")).toBeInTheDocument();
-    expect(screen.getByText(/三桶任一 <5，仅观察/)).toBeInTheDocument();
+    expect(screen.getByText(/三桶任一 <5，研判仅供参考/)).toBeInTheDocument();
     // 一致率 null → "—"
     const overviewCards = screen.getAllByText("—");
     expect(overviewCards.length).toBeGreaterThan(0);
@@ -160,5 +160,47 @@ describe("BehaviorLoop (S050 W0)", () => {
     // 点击展开
     fireEvent.click(followTitle);
     expect(screen.getByText(/用户实际买入且结算的标的中/)).toBeInTheDocument();
+  });
+
+  it("S050 弱合规：行为研判区呈现方向性建议（follow 胜率显著高于 feeling）", () => {
+    renderAt();
+    expect(screen.getByText("行为研判")).toBeInTheDocument();
+    expect(screen.getByText(/可考虑多跟系统候选\/战法信号/)).toBeInTheDocument();
+  });
+
+  it("S050 弱合规：feeling 胜率反超 → 给「系统信号质量待校准」研判", () => {
+    const reverse: ShadowComparison = {
+      ...FULL_DATA,
+      follow: { n: 8, win_rate: 0.25, avg_return: -1.5 },
+      feeling: { n: 6, win_rate: 0.5, avg_return: 2.0 },
+    };
+    qMock.useShadowComparison.mockReturnValue({
+      data: reverse, isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderAt();
+    expect(screen.getByText(/系统信号质量待校准/)).toBeInTheDocument();
+  });
+
+  it("S050 弱合规：missed 影子胜率高 → 给「可考虑多采纳候选池」研判", () => {
+    const strongMissed: ShadowComparison = {
+      ...FULL_DATA,
+      missed: { n: 10, win_rate: 0.7, avg_return: 3.5, missing_kline: 0, approx_note: "信号日收盘→次日收盘，近似" },
+    };
+    qMock.useShadowComparison.mockReturnValue({
+      data: strongMissed, isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderAt();
+    expect(screen.getByText(/系统建议质量不错，可考虑多采纳候选池标的/)).toBeInTheDocument();
+  });
+
+  it("S050 弱合规：样本不足时压低研判权重（标注仅供参考）", () => {
+    qMock.useShadowComparison.mockReturnValue({
+      data: INSUFFICIENT_DATA, isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderAt();
+    const matches = screen.getAllByText(/样本不足/);
+    expect(matches.length).toBeGreaterThan(0);
+    const refs = screen.getAllByText(/仅供参考/);
+    expect(refs.length).toBeGreaterThan(0);
   });
 });
