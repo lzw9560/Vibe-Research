@@ -7,9 +7,10 @@ import { WorkflowStage } from "./components/WorkflowStage";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useDailyWinReview } from "@/lib/query";
+import { Button } from "@/components/ui/Button";
+import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState } from "@/lib/query";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
-import { useShadowComparison } from "@/lib/query";
+import type { TransitionRequest } from "@/lib/api";
 
 const TEACHING_POINTS = [
   "复盘的意义是迭代：每天回答三问，漏斗用你的真实数据校准",
@@ -40,8 +41,15 @@ export default function PostMarketReview() {
   const { data: review, isLoading } = useDailyWinReview(date);
   // 研判用 shadow-comparison window=28（daily-review 无 shadow 数据时兜底）
   const { data: shadow } = useShadowComparison(28);
+  const transition = useTransitionWorkflowState();
+  const [entryCode, setEntryCode] = useState<string | null>(null);
 
   const tips = shadow ? deriveAssessmentTips(shadow) : [];
+
+  const handleEntrySubmit = (req: TransitionRequest) => {
+    transition.mutate(req);
+    setEntryCode(null);
+  };
 
   return (
     <WorkflowStage title="盘后复盘" subtitle="Post-Market Review" loading={isLoading}>
@@ -108,7 +116,16 @@ export default function PostMarketReview() {
 
             {/* ② 你买了什么 */}
             <GlassCard className="p-4">
-              <p className="mb-2 text-sm font-medium">② 你买了什么</p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium">② 你买了什么</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEntryCode("manual")}
+                >
+                  + 录入今日买入
+                </Button>
+              </div>
               {review.bought.length === 0 ? (
                 <p className="text-xs text-muted-foreground">{EMPTY_STATES.noBought}</p>
               ) : (
@@ -130,6 +147,19 @@ export default function PostMarketReview() {
               <p className="mt-2 text-[10px] text-muted-foreground/70">
                 占位标签「待判定」——结算后才显真票根，避免预判误导
               </p>
+              {entryCode && (
+                <div className="mt-3">
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    录入 {date} 新建仓（target=holding）
+                  </p>
+                  <ManualEntryForm
+                    date={date}
+                    submitting={transition.isPending}
+                    onSubmit={handleEntrySubmit}
+                    onCancel={() => setEntryCode(null)}
+                  />
+                </div>
+              )}
             </GlassCard>
 
             {/* ③ 漏了什么 */}
@@ -252,5 +282,87 @@ export default function PostMarketReview() {
         </>
       )}
     </WorkflowStage>
+  );
+}
+
+/** 手动录入建仓表单——code/name/entry_price + target=holding，调 transitionWorkflowState。 */
+function ManualEntryForm({
+  date,
+  submitting,
+  onSubmit,
+  onCancel,
+}: {
+  date: string;
+  submitting: boolean;
+  onSubmit: (req: TransitionRequest) => void;
+  onCancel: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [entryPrice, setEntryPrice] = useState("");
+  const [strategy, setStrategy] = useState("");
+
+  const handleSubmit = () => {
+    if (!code.trim()) return;
+    const ep = entryPrice.trim() ? Number(entryPrice) : undefined;
+    onSubmit({
+      code: code.trim(),
+      date,
+      target: "holding",
+      reason: name.trim() || undefined,
+      entry_price: Number.isFinite(ep) ? ep : undefined,
+      strategy: strategy || undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/40 bg-muted/20 p-3">
+      <div className="flex gap-2">
+        <input
+          className="flex-1 rounded border border-border/50 bg-background px-2 py-1 text-xs"
+          placeholder="股票代码（如 600519）"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <input
+          className="flex-1 rounded border border-border/50 bg-background px-2 py-1 text-xs"
+          placeholder="名称（可选）"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div className="flex gap-2">
+        <input
+          className="flex-1 rounded border border-border/50 bg-background px-2 py-1 text-xs"
+          placeholder="买入价（可选）"
+          inputMode="decimal"
+          value={entryPrice}
+          onChange={(e) => setEntryPrice(e.target.value)}
+        />
+        <select
+          className="flex-1 rounded border border-border/50 bg-background px-2 py-1 text-xs"
+          value={strategy}
+          onChange={(e) => setStrategy(e.target.value)}
+        >
+          <option value="">战法（可选）</option>
+          <option value="first_plate">首板挖掘</option>
+          <option value="consecutive_relay">连板接力</option>
+          <option value="break_reseal">炸板回封</option>
+          <option value="low_absorption">低吸龙头</option>
+          <option value="reverse_package">反包战法</option>
+          <option value="n_shape_counterattack">N字反击</option>
+          <option value="platform_breakout">平台突破</option>
+          <option value="end_of_day_sneak">尾盘偷袭</option>
+        </select>
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Button size="sm" onClick={handleSubmit} disabled={submitting || !code.trim()}>
+          确认录入
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={submitting}>
+          取消
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -35,14 +35,15 @@ export function useWorkflowState(code: string, date?: string, options?: Opts<Wor
   });
 }
 
-/** 手动流转 mutation。成功后 invalidate ["workflow","state"] 前缀——
- * 列表/单股/history 三类 query key 同前缀，一并刷新。 */
+/** 手动流转 mutation。成功后 invalidate ["workflow","state"] + ["winrate"] 前缀——
+ * 列表/单股/history 三类 query key 同前缀，一并刷新；winrate 前缀刷新三问区/影子对照。 */
 export function useTransitionWorkflowState() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (req: TransitionRequest) => transitionWorkflowState(req),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["workflow", "state"] });
+      void qc.invalidateQueries({ queryKey: ["winrate"] });
     },
   });
 }

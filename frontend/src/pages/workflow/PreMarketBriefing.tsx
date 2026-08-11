@@ -13,7 +13,8 @@ import { StrategyFilter } from "@/components/ui/StrategyFilter";
 import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
-import type { FactorResult } from "@/lib/api";
+import { useTransitionWorkflowState } from "@/lib/query";
+import type { TransitionRequest, FactorResult } from "@/lib/api";
 import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -85,6 +86,15 @@ export default function PreMarketBriefing() {
   const refresh = usePreMarketRefresh();
   // S031 R18：候选诊断抽屉（点候选不整页跳，弹侧边抽屉）
   const [drawerCode, setDrawerCode] = useState<string | null>(null);
+  // S054：盘前录入建仓入口（候选矩阵「买入」按钮 → 弹 TransitionForm）
+  const [buyEntry, setBuyEntry] = useState<{ code: string; name: string } | null>(null);
+  const transition = useTransitionWorkflowState();
+
+  const handleBuy = (entry: { code: string; name: string }) => setBuyEntry(entry);
+  const handleBuySubmit = (req: TransitionRequest) => {
+    transition.mutate(req);
+    setBuyEntry(null);
+  };
 
   // idle → 自动触发后台采集（仅今日实时链路；历史日期 idle 由用户显式操作，防误触外部源）
   useEffect(() => {
@@ -200,6 +210,7 @@ export default function PreMarketBriefing() {
           <CandidateFunnelEmbed
             date={briefing.data_date}
             onPick={setDrawerCode}
+            onBuy={handleBuy}
             snapshotLayers={briefing.from_snapshot ? funnelLayers : funnelLayers}
           />
 
@@ -219,6 +230,23 @@ export default function PreMarketBriefing() {
       <Sheet open={!!drawerCode} onClose={() => setDrawerCode(null)}>
         {drawerCode && <CandidateDetailPanel code={drawerCode} date={briefing.data_date} />}
       </Sheet>
+
+      {/* S054：盘前录入建仓抽屉——候选矩阵「买入」按钮触发 */}
+      <Sheet open={!!buyEntry} onClose={() => setBuyEntry(null)}>
+        {buyEntry && (
+          <div className="space-y-3 p-4">
+            <SectionHeader title="录入建仓" subtitle={`${buyEntry.code} ${buyEntry.name}`} />
+            <BuyEntryForm
+              code={buyEntry.code}
+              name={buyEntry.name}
+              date={briefing.data_date}
+              submitting={transition.isPending}
+              onSubmit={handleBuySubmit}
+              onCancel={() => setBuyEntry(null)}
+            />
+          </div>
+        )}
+      </Sheet>
     </WorkflowStage>
   );
 }
@@ -227,10 +255,12 @@ export default function PreMarketBriefing() {
  * 不发额外 GET（消重复请求）。无 funnel_layers 时降级 live 查询。 */
 function CandidateFunnelEmbed({
   onPick,
+  onBuy,
   snapshotLayers,
 }: {
   date?: string;
   onPick: (code: string) => void;
+  onBuy?: (entry: { code: string; name: string }) => void;
   snapshotLayers?: FunnelLayer[];
 }) {
   // S049 D4：done/snapshot 响应都带 funnel_layers → 直用，不发 GET
@@ -238,7 +268,7 @@ function CandidateFunnelEmbed({
     return (
       <div className="mb-6 space-y-3">
         <SectionHeader title="候选池漏斗矩阵" subtitle="R1/R2/R3 三列对齐 + 全参数" />
-        <FunnelMatrixSimple layers={snapshotLayers} onPick={onPick} />
+        <FunnelMatrixSimple layers={snapshotLayers} onPick={onPick} onBuy={onBuy} />
       </div>
     );
   }
@@ -246,7 +276,7 @@ function CandidateFunnelEmbed({
 }
 
 /** S049 D2：简易矩阵渲染（完整 FunnelMatrix 组件在 S7 任务建；此处先占位用 FunnelLayers 兜底） */
-function FunnelMatrixSimple({ layers, onPick }: { layers: FunnelLayer[]; onPick: (code: string) => void }) {
+function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; onPick: (code: string) => void; onBuy?: (entry: { code: string; name: string }) => void }) {
   // 三层 passed union 去重
   const r1 = layers.find((l) => l.layer_id === "R1");
   const r2 = layers.find((l) => l.layer_id === "R2");
@@ -290,6 +320,7 @@ function FunnelMatrixSimple({ layers, onPick }: { layers: FunnelLayer[]; onPick:
               <th className="px-2 py-1">北向</th>
               <th className="px-2 py-1">催化</th>
               <th className="px-2 py-1">打分</th>
+              <th className="px-2 py-1">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -312,6 +343,18 @@ function FunnelMatrixSimple({ layers, onPick }: { layers: FunnelLayer[]; onPick:
                   <td className="px-2 py-1 text-center">{v(e?.northbound)}</td>
                   <td className="px-2 py-1 text-center max-w-[120px] truncate" title={e?.catalyst_summary ?? ""}>{e?.catalyst_summary ?? "—"}</td>
                   <td className="px-2 py-1 text-center font-mono">{v(e?.gene_score)}</td>
+                  <td className="px-2 py-1 text-center">
+                    <button
+                      type="button"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onBuy?.({ code, name });
+                      }}
+                      className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/25"
+                    >
+                      买入
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -448,6 +491,79 @@ function PreMarketBehaviorBlock() {
           <Link to="/behavior-loop" className="text-xs text-primary hover:underline">深看 →</Link>
         </div>
       </GlassCard>
+    </div>
+  );
+}
+
+/** S054：盘前录入建仓表单——code/name 固定，填 entry_price/strategy，target=holding。 */
+function BuyEntryForm({
+  code,
+  name,
+  date,
+  submitting,
+  onSubmit,
+  onCancel,
+}: {
+  code: string;
+  name: string;
+  date?: string;
+  submitting: boolean;
+  onSubmit: (req: TransitionRequest) => void;
+  onCancel: () => void;
+}) {
+  const [entryPrice, setEntryPrice] = useState("");
+  const [strategy, setStrategy] = useState("");
+  const [reason, setReason] = useState("");
+
+  const handleSubmit = () => {
+    const ep = entryPrice.trim() ? Number(entryPrice) : undefined;
+    onSubmit({
+      code,
+      date: date ?? "",
+      target: "holding",
+      reason: reason.trim() || name,
+      entry_price: Number.isFinite(ep) ? ep : undefined,
+      strategy: strategy || undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/40 bg-muted/20 p-3">
+      <div className="text-xs text-muted-foreground">
+        <span className="font-mono">{code}</span> {name}
+      </div>
+      <input
+        className="w-full rounded border border-border/50 bg-background px-2 py-1 text-xs"
+        placeholder="买入价（可选）"
+        inputMode="decimal"
+        value={entryPrice}
+        onChange={(e) => setEntryPrice(e.target.value)}
+      />
+      <select
+        className="w-full rounded border border-border/50 bg-background px-2 py-1 text-xs"
+        value={strategy}
+        onChange={(e) => setStrategy(e.target.value)}
+      >
+        <option value="">战法（可选）</option>
+        <option value="first_plate">首板挖掘</option>
+        <option value="consecutive_relay">连板接力</option>
+        <option value="break_reseal">炸板回封</option>
+        <option value="low_absorption">低吸龙头</option>
+        <option value="reverse_package">反包战法</option>
+        <option value="n_shape_counterattack">N字反击</option>
+        <option value="platform_breakout">平台突破</option>
+        <option value="end_of_day_sneak">尾盘偷袭</option>
+      </select>
+      <input
+        className="w-full rounded border border-border/50 bg-background px-2 py-1 text-xs"
+        placeholder="理由（可选）"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <div className="flex gap-2 pt-1">
+        <Button size="sm" onClick={handleSubmit} disabled={submitting}>确认录入建仓</Button>
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={submitting}>取消</Button>
+      </div>
     </div>
   );
 }
