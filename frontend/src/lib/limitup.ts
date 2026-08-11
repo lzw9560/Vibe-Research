@@ -25,9 +25,10 @@ export function getGeneParams(): Promise<GeneScreenerParams> {
   return request<GeneScreenerParams>("/limitup/screener/params");
 }
 
-/** 持久化阈值参数（同时更新后端模块常量，需 trigger 重跑才重算 qualify 标志）。 */
-export function saveGeneParams(params: GeneScreenerParams): Promise<{ status: string }> {
-  return request<{ status: string }>("/limitup/screener/params", "POST", params);
+/** 持久化阈值参数（同时更新后端模块常量，需 trigger 重跑才重算 qualify 标志）。
+ * S051 D2：响应带可选 warnings（阈值越界提醒）。 */
+export function saveGeneParams(params: GeneScreenerParams): Promise<{ status: string; warnings?: string[] }> {
+  return request<{ status: string; warnings?: string[] }>("/limitup/screener/params", "POST", params);
 }
 
 /** 手动触发今日基因得分预计算（后台异步，~90s 内懒算落库）。 */

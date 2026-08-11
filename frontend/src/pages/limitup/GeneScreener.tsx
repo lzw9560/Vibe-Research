@@ -1,9 +1,9 @@
 // S029 涨停基因选股 — 接通 GeneScreener 页（条件可配 B1 + 执行检索 + 可展开多层明细 A3）。
-// loadData 调真实 /api/limitup/screener；阈值改后保存+trigger 重算；摘要 扫描N/合格M/高基因K。
-import { useState, useEffect, useCallback } from "react";
+// S051 D3：分段视图 qualified/all/custom——doSearch 始终拉全量，按 viewMode 过滤。
+import { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { GeneFilterForm, type GeneFilterParams } from "./components/GeneFilterForm";
+import { GeneFilterForm, type GeneFilterParams, type ViewMode } from "./components/GeneFilterForm";
 import { GeneResultTable } from "./components/GeneResultTable";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -17,6 +17,8 @@ import type { GeneScore, ScreenerResult } from "@/lib/api";
 
 export function GeneScreener() {
   const [data, setData] = useState<GeneScore[]>([]);
+  const [allScores, setAllScores] = useState<GeneScore[]>([]);  // S051 D3：全量留底，viewMode 切换不重查
+  const [viewMode, setViewMode] = useState<ViewMode>("qualified");
   const [allCount, setAllCount] = useState(0);
   const [qualifiedCount, setQualifiedCount] = useState(0);
   const [highCount, setHighCount] = useState(0);
@@ -25,48 +27,63 @@ export function GeneScreener() {
   const [error, setError] = useState<string | null>(null);
   const [recomputeBusy, setRecomputeBusy] = useState(false);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+  const [recomputeWarnings, setRecomputeWarnings] = useState<string[]>([]);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
-  const doSearch = useCallback(async (params: GeneFilterParams) => {
+  // S051 D3：doSearch 始终拉全量；按 viewMode 过滤（qualified→qualify 标志；all→全量；custom→分数段）
+  const applyView = useCallback((all: GeneScore[], mode: ViewMode, params: GeneFilterParams) => {
+    let filtered: GeneScore[];
+    if (mode === "qualified") {
+      filtered = all.filter((g) => g.qualify);
+    } else if (mode === "all") {
+      filtered = [...all];
+    } else {
+      filtered = all.filter((g) => g.total_score >= params.minScore && g.total_score <= params.maxScore);
+    }
+    filtered.sort((a, b) => b.total_score - a.total_score);
+    setData(filtered);
+  }, []);
+
+  const doSearch = useCallback(async (params: GeneFilterParams, mode: ViewMode) => {
     setLoading(true);
     setError(null);
+    setViewMode(mode);
     try {
       const result: ScreenerResult = await getGeneScreener(params.date);
       const all = result.gene_scores ?? [];
-      const filtered = all.filter(
-        (g) => g.total_score >= params.minScore && g.total_score <= params.maxScore,
-      );
-      // 按得分降序
-      filtered.sort((a, b) => b.total_score - a.total_score);
-      setData(filtered);
+      setAllScores(all);
       setAllCount(all.length);
       setQualifiedCount(all.filter((g) => g.qualify).length);
       setHighCount(all.filter((g) => g.high_gene).length);
       setFreshness(result.data_freshness ?? "");
+      applyView(all, mode, params);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setData([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyView]);
 
-  useEffect(() => {
-    doSearch({
-      minScore: 60,
-      maxScore: 100,
-      date: new Date().toISOString().slice(0, 10),
-    });
-  }, [doSearch]);
+  // S051 D3：viewMode 切换不重查（用已拉全量）
+  const switchView = useCallback((mode: ViewMode, params: GeneFilterParams) => {
+    setViewMode(mode);
+    applyView(allScores, mode, params);
+  }, [allScores, applyView]);
 
   const handleRecompute = useCallback(async (params: GeneScreenerParams) => {
     setRecomputeBusy(true);
     setRecomputeMsg(null);
+    setRecomputeWarnings([]);
     setError(null);
     try {
-      await saveGeneParams(params);
+      const resp = await saveGeneParams(params);
       await triggerGenePrecompute();
       setRecomputeMsg("阈值已保存，后台预计算进行中（~90s 落库）。稍后点「筛选」刷新 qualify/高基因标志。");
+      // S051 D2：sanity warnings 回显
+      if (resp?.warnings?.length) {
+        setRecomputeWarnings(resp.warnings);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -82,7 +99,7 @@ export function GeneScreener() {
     <div>
       <PageHeader title="基因筛选" subtitle="Gene Screener（盘前简报的配置伴随页）" actions={<Link to="/workflow/pre-market" className="text-sm text-muted-foreground transition-colors hover:text-primary">← 回盘前简报</Link>} />
 
-      <GeneFilterForm onSearch={doSearch} onRecompute={handleRecompute} recomputeBusy={recomputeBusy} />
+      <GeneFilterForm onSearch={doSearch} onSwitchView={switchView} viewMode={viewMode} onRecompute={handleRecompute} recomputeBusy={recomputeBusy} />
 
       {/* 摘要：扫描 N / 合格 M / 高基因 K + 数据新鲜度 */}
       <GlassCard className="mb-4 p-3">
@@ -103,6 +120,13 @@ export function GeneScreener() {
         {recomputeMsg && (
           <p className="mt-2 text-xs text-primary">{recomputeMsg}</p>
         )}
+        {recomputeWarnings.length > 0 && (
+          <div className="mt-2 space-y-0.5">
+            {recomputeWarnings.map((w, i) => (
+              <p key={i} className="text-xs text-warning">⚠ {w}</p>
+            ))}
+          </div>
+        )}
         {error && (
           <p className="mt-2 text-xs text-warning">检索失败：{error}</p>
         )}
@@ -113,6 +137,7 @@ export function GeneScreener() {
         loading={loading}
         expandedCode={expandedCode}
         onToggle={handleToggle}
+        viewMode={viewMode}
       />
 
       <Disclaimer />

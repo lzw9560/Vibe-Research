@@ -1,11 +1,12 @@
 /** 基因筛选表单（S029：阈值动态可配 B1 + 执行检索）。
- *  筛选：按 minScore/maxScore 即时过滤得分（不等重算）。
+ *  S051 D3：分段视图 qualified/all/custom——合格按后端 qualify 标志；全部全量按分降序（未合格行降级）；自定义走分数区间。
  *  保存阈值并重算：持久化 qualify/high/lookback → 触发后台重算（异步，~90s 落库）。
  */
 import { useEffect, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { getGeneParams, type GeneScreenerParams } from "@/lib/limitup";
+import { cn } from "@/lib/utils";
 
 export interface GeneFilterParams {
   minScore: number;
@@ -13,35 +14,50 @@ export interface GeneFilterParams {
   date: string;
 }
 
+export type ViewMode = "qualified" | "all" | "custom";
+
 interface Props {
-  onSearch: (params: GeneFilterParams) => void;
+  onSearch: (params: GeneFilterParams, mode: ViewMode) => void;
+  onSwitchView: (mode: ViewMode, params: GeneFilterParams) => void;
+  viewMode: ViewMode;
   onRecompute: (params: GeneScreenerParams) => void;
   recomputeBusy?: boolean;
 }
 
-export function GeneFilterForm({ onSearch, onRecompute, recomputeBusy }: Props) {
-  const [minScore, setMinScore] = useState(60);
+const VIEW_TABS: { key: ViewMode; label: string }[] = [
+  { key: "qualified", label: "合格" },
+  { key: "all", label: "全部" },
+  { key: "custom", label: "自定义分数段" },
+];
+
+export function GeneFilterForm({ onSearch, onSwitchView, viewMode, onRecompute, recomputeBusy }: Props) {
+  const [minScore, setMinScore] = useState(50);  // 跟后端 GENE_QUALIFY_THRESHOLD 默认对齐，getGeneParams 返回后覆盖
   const [maxScore, setMaxScore] = useState(100);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [qualify, setQualify] = useState(60);
-  const [high, setHigh] = useState(75);
+  const [qualify, setQualify] = useState(50);
+  const [high, setHigh] = useState(60);
   const [lookback, setLookback] = useState(252);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // 初始阈值从后端加载（非硬编码）
+  // 初始阈值从后端加载（非硬编码）；默认 qualified 视图，首次检索拉全量后按 qualify 过滤
   useEffect(() => {
     getGeneParams()
       .then((p) => {
-        if (p?.gene_qualify_threshold) setQualify(p.gene_qualify_threshold);
+        const q = p?.gene_qualify_threshold ?? 50;
         if (p?.gene_high_threshold) setHigh(p.gene_high_threshold);
         if (p?.lookback_days) setLookback(p.lookback_days);
+        setQualify(q);
+        setMinScore(q);
+        onSearch({ minScore: q, maxScore, date }, "qualified");
       })
       .catch(() => {
-        /* 后端未起/未配，沿用默认 */
+        onSearch({ minScore: 50, maxScore, date }, "qualified");
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSearch = () => onSearch({ minScore, maxScore, date });
+  const handleSearch = () => onSearch({ minScore, maxScore, date }, viewMode);
+  const handleSwitchView = (mode: ViewMode) => onSwitchView(mode, { minScore, maxScore, date });
 
   const handleRecompute = () =>
     onRecompute({
@@ -53,23 +69,46 @@ export function GeneFilterForm({ onSearch, onRecompute, recomputeBusy }: Props) 
   return (
     <GlassCard className="p-4 mb-6">
       <h3 className="mb-3 text-sm font-semibold">基因筛选</h3>
+
+      {/* S051 D3：分段视图切换 */}
+      <div className="mb-3 flex items-center gap-1">
+        {VIEW_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => handleSwitchView(t.key)}
+            aria-pressed={viewMode === t.key}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+              viewMode === t.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
-          <label className="text-xs text-muted-foreground">最低分</label>
+          <label className="text-xs text-muted-foreground">最低分（仅自定义模式生效）</label>
           <input
             type="number"
             value={minScore}
             onChange={(e) => setMinScore(Number(e.target.value))}
-            className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm"
+            disabled={viewMode !== "custom"}
+            className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm disabled:opacity-50"
           />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">最高分</label>
+          <label className="text-xs text-muted-foreground">最高分（仅自定义模式生效）</label>
           <input
             type="number"
             value={maxScore}
             onChange={(e) => setMaxScore(Number(e.target.value))}
-            className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm"
+            disabled={viewMode !== "custom"}
+            className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm disabled:opacity-50"
           />
         </div>
         <div>

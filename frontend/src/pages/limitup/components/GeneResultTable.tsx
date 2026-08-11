@@ -1,16 +1,19 @@
 /** 基因结果表格（S029：可展开多层明细 A3）。
+ *  S051 D3：all 模式下未合格行视觉降级（得分置灰 + 未合格标签）。
  *  每行 expand → 五维 factors + qualify/high 标记 + 回测摘要 + qualified 行跳候选详情（看战法/仓位）。
  */
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { GeneScore } from "@/lib/api";
+import type { ViewMode } from "./GeneFilterForm";
 
 interface Props {
   data: GeneScore[];
   loading: boolean;
   expandedCode: string | null;
   onToggle: (code: string) => void;
+  viewMode: ViewMode;
 }
 
 const scoreColor = (s: number) => (s >= 75 ? "text-primary" : s >= 60 ? "text-blue-400" : "text-gray-400");
@@ -85,7 +88,7 @@ function ExpandedDetail({ row }: { row: GeneScore }) {
   );
 }
 
-export function GeneResultTable({ data, loading, expandedCode, onToggle }: Props) {
+export function GeneResultTable({ data, loading, expandedCode, onToggle, viewMode }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -95,23 +98,36 @@ export function GeneResultTable({ data, loading, expandedCode, onToggle }: Props
   }
 
   if (data.length === 0) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">暂无数据</div>;
+    // S051 D3：空态文案区分——all 模式无数据 vs qualified 模式无合格标的
+    const emptyMsg = viewMode === "qualified"
+      ? "今日无合格标的（点「全部」查看全量得分）"
+      : viewMode === "custom"
+        ? "当前分数段无匹配标的"
+        : "暂无数据";
+    return <div className="py-8 text-center text-sm text-muted-foreground">{emptyMsg}</div>;
   }
 
   return (
     <div className="space-y-2">
       {data.map((row) => {
         const expanded = expandedCode === row.code;
+        // S051 D3：all 模式下未合格行视觉降级
+        const dim = viewMode === "all" && !row.qualify;
         return (
-          <div key={row.code} className="rounded-lg border border-border/30 bg-card/30">
+          <div key={row.code} className={cn("rounded-lg border border-border/30 bg-card/30", dim && "opacity-60")}>
             <button
               onClick={() => onToggle(row.code)}
               className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/20"
             >
               <span className="w-6 text-xs text-muted-foreground/50">{row.code}</span>
-              <span className="flex-1 font-medium">{row.name}</span>
+              <span className="flex-1 font-medium">
+                {row.name}
+                {dim && (
+                  <span className="ml-2 rounded bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground">未合格</span>
+                )}
+              </span>
               <span className="text-xs text-muted-foreground">溢价{fmtPct(row.factors["次日溢价率"])}</span>
-              <span className={cn("font-mono font-bold", scoreColor(row.total_score))}>{row.total_score}</span>
+              <span className={cn("font-mono font-bold", dim ? "text-gray-400" : scoreColor(row.total_score))}>{row.total_score}</span>
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {expanded && <div className="px-3 pb-3"><ExpandedDetail row={row} /></div>}

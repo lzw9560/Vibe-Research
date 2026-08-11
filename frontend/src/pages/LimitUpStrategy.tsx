@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Flame, Loader2, RefreshCw, Info } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
@@ -9,6 +10,8 @@ import { ExpandableTable } from "./limitup/components/ExpandableTable";
 import { AuctionScreenerSection } from "./limitup/components/AuctionScreenerSection";
 import { SeatEngineSection } from "./limitup/components/SeatEngineSection";
 import type { ScreenerResult, LimitUpAnalysis } from "@/lib/api";
+// S051 D4：阈值动态化——读 GET /api/limitup/screener/params，不写死 60/75
+import { getGeneParams } from "@/lib/limitup";
 
 const fmtPct = (v: number | null | undefined) => v == null ? "—" : `${v.toFixed(1)}%`;
 
@@ -20,6 +23,15 @@ export function LimitUpStrategy() {
   const [expandedData, setExpandedData] = useState<LimitUpAnalysis | null>(null);
   const [expandedLoading, setExpandedLoading] = useState(false);
   const [expandedError, setExpandedError] = useState<string | null>(null);
+
+  // S051 D4：阈值动态化——读 GET /api/limitup/screener/params，不写死 60/75
+  const { data: params } = useQuery({
+    queryKey: ["limitup", "params"],
+    queryFn: () => getGeneParams(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const qualifyThreshold = params?.gene_qualify_threshold ?? 50;
+  const highThreshold = params?.gene_high_threshold ?? 60;
 
   const loadScreener = useCallback(() => {
     setLoading(true);
@@ -82,7 +94,7 @@ export function LimitUpStrategy() {
             <h3 className="text-sm font-semibold text-muted-foreground">基因合格</h3>
           </div>
           <p className="mt-2 text-3xl font-bold text-primary">{loading ? <Loader2 className="h-6 w-6 animate-spin" /> : screener?.qualified.length ?? "—"}</p>
-          <p className="mt-1 text-xs text-muted-foreground">SCORE ≥ 60（合格线）</p>
+          <p className="mt-1 text-xs text-muted-foreground">SCORE ≥ {qualifyThreshold}（合格线）</p>
         </GlassCard>
         <GlassCard className="p-4">
           <div className="flex items-center gap-2">
@@ -90,7 +102,7 @@ export function LimitUpStrategy() {
             <h3 className="text-sm font-semibold text-muted-foreground">高基因股票</h3>
           </div>
           <p className="mt-2 text-3xl font-bold text-primary">{loading ? <Loader2 className="h-6 w-6 animate-spin" /> : screener?.high_gene.length ?? "—"}</p>
-          <p className="mt-1 text-xs text-muted-foreground">SCORE ≥ 75（高基因线）</p>
+          <p className="mt-1 text-xs text-muted-foreground">SCORE ≥ {highThreshold}（高基因线）</p>
         </GlassCard>
       </div>
 
