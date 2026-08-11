@@ -667,11 +667,19 @@ export interface FactorPercentileBucket {
   hit_rate: number;
 }
 
+// S059：因子 IC 评估（Pearson + Spearman 秩相关）。样本<20 返 null（诚实标注）。
+export interface FactorIcAnalysis {
+  ic: number;
+  rank_ic: number;
+  n: number;
+}
+
 export interface FactorAnalysisResult {
   factor: string;
   period: string;
   sample_size: number;
   buckets: Record<string, FactorPercentileBucket>;
+  ic_analysis: FactorIcAnalysis | null;
 }
 
 // ---- 打板策略参数配置 ----

@@ -1,6 +1,6 @@
 # Spec: S059 — 因子 IC 评估（backtest_lite 扩展）
 
-> 状态：草案
+> 状态：已实现（T1-T7 全落地，纯函数单测 13 + 端点测试 2 + 前端 298 tests 全绿；样本<20 返 None 诚实标注）
 > 作者：Codex（DSA 借鉴 grill 会话）  日期：2026-08-11
 > 级别：**small-medium**（S043 同形：单函数 + 端点扩展 + Tab 加列）
 > 流程门：develop 直提；commit message 记摘要

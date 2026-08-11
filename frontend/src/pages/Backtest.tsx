@@ -202,34 +202,76 @@ export default function Backtest() {
                     description="所选区间无基因候选样本，调整日期范围后重新查询。"
                   />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50 text-left text-xs text-muted-foreground">
-                          {["溢价率区间", "样本数", "平均次日收益", "命中率"].map((h) => (
-                            <th key={h} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(factorData.buckets).map(([label, b]) => (
-                          <tr key={label} className="border-b border-border/30">
-                            <td className="px-2 py-2 font-mono">{label}</td>
-                            <td className="px-2 py-2 font-mono">{b.count}</td>
-                            <td className={`px-2 py-2 font-mono ${b.avg_return > 0 ? "text-danger" : b.avg_return < 0 ? "text-success" : "text-muted-foreground"}`}>
-                              {b.count === 0 ? "—" : `${b.avg_return > 0 ? "+" : ""}${(b.avg_return * 100).toFixed(2)}%`}
-                            </td>
-                            <td className="px-2 py-2 font-mono">{b.count === 0 ? "—" : `${(b.hit_rate * 100).toFixed(1)}%`}</td>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border/50 text-left text-xs text-muted-foreground">
+                            {["溢价率区间", "样本数", "平均次日收益", "命中率"].map((h) => (
+                              <th key={h} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {Object.entries(factorData.buckets).map(([label, b]) => (
+                            <tr key={label} className="border-b border-border/30">
+                              <td className="px-2 py-2 font-mono">{label}</td>
+                              <td className="px-2 py-2 font-mono">{b.count}</td>
+                              <td className={`px-2 py-2 font-mono ${b.avg_return > 0 ? "text-danger" : b.avg_return < 0 ? "text-success" : "text-muted-foreground"}`}>
+                                {b.count === 0 ? "—" : `${b.avg_return > 0 ? "+" : ""}${(b.avg_return * 100).toFixed(2)}%`}
+                              </td>
+                              <td className="px-2 py-2 font-mono">{b.count === 0 ? "—" : `${(b.hit_rate * 100).toFixed(1)}%`}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground/60">
+                      命中率/收益随溢价率档位单调递增说明因子有预测力；平坦或倒挂则因子无效（spec §5 D3 判读口径）。
+                    </p>
+                  </>
                 )}
-                <p className="mt-3 text-xs text-muted-foreground/60">
-                  命中率/收益随溢价率档位单调递增说明因子有预测力；平坦或倒挂则因子无效（spec §5 D3 判读口径）。
-                </p>
               </GlassCard>
+
+              {factorData.ic_analysis && (
+                <GlassCard>
+                  <SectionHeader
+                    title="因子整体预测力（IC）"
+                    subtitle={`Pearson IC + Spearman Rank IC · 样本 ${factorData.ic_analysis.n} 对 · 历史统计特征，市场有风险`}
+                  />
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-lg border border-border/50 p-3">
+                      <div className="text-xs text-muted-foreground">IC（Pearson）</div>
+                      <div className={`mt-1 font-mono text-lg ${factorData.ic_analysis.ic > 0 ? "text-danger" : factorData.ic_analysis.ic < 0 ? "text-success" : "text-muted-foreground"}`}>
+                        {factorData.ic_analysis.ic > 0 ? "+" : ""}{factorData.ic_analysis.ic.toFixed(4)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/50 p-3">
+                      <div className="text-xs text-muted-foreground">Rank IC（Spearman）</div>
+                      <div className={`mt-1 font-mono text-lg ${factorData.ic_analysis.rank_ic > 0 ? "text-danger" : factorData.ic_analysis.rank_ic < 0 ? "text-success" : "text-muted-foreground"}`}>
+                        {factorData.ic_analysis.rank_ic > 0 ? "+" : ""}{factorData.ic_analysis.rank_ic.toFixed(4)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/50 p-3">
+                      <div className="text-xs text-muted-foreground">样本对数</div>
+                      <div className="mt-1 font-mono text-lg">{factorData.ic_analysis.n}</div>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground/60">
+                    IC&gt;0 因子与次日收益正相关（正值越大预测力越强）；IC≈0 无预测力；IC&lt;0 负相关。Rank IC 对异常值更稳健。|IC|&lt;0.03 通常视为无效。
+                  </p>
+                </GlassCard>
+              )}
+
+              {factorData.sample_size > 0 && !factorData.ic_analysis && (
+                <GlassCard>
+                  <SectionHeader title="因子整体预测力（IC）" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    样本不足 20 对，IC 不计算（诚实标注，不补零）。
+                  </div>
+                </GlassCard>
+              )}
             </>
           )}
 

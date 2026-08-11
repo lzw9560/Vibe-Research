@@ -8,6 +8,7 @@ from backtest_lite import (
     run_backtest_async,
     generate_scatter_data,
     _calc_factor_percentile_analysis,
+    _calc_factor_ic,
     _PREMIUM_BUCKETS,
 )
 import scheduled_tasks as _st  # S041：复用 market_data.db 连接 + get_backtest_snapshots
@@ -87,12 +88,14 @@ async def backtest_factor_analysis(
     try:
         scatter = await generate_scatter_data((start, end))
         analysis = _calc_factor_percentile_analysis(scatter, factor_key, buckets)
+        ic_analysis = _calc_factor_ic(scatter, factor_key)
         return {
             "data": {
                 "factor": factor,
                 "period": f"{start} ~ {end}",
                 "sample_size": len(scatter),
                 "buckets": analysis,
+                "ic_analysis": ic_analysis,
             }
         }
     except HTTPException:

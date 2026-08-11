@@ -59,6 +59,7 @@ class BacktestResult:
     scatter_data: list[dict]
     percentile_analysis: dict[str, Any]
     factor_percentile_analysis: dict[str, Any] | None = None
+    factor_ic_analysis: dict[str, Any] | None = None
 
 
 def _calc_next_day_return(code: str, date_str: str, kline_cache: dict[str, Any] | None = None) -> float:
@@ -226,6 +227,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
     factor_percentile_analysis = _calc_factor_percentile_analysis(
         scatter, "factor_premium_rate", _PREMIUM_BUCKETS
     )
+    factor_ic_analysis = _calc_factor_ic(scatter, "factor_premium_rate")
 
     backtest_result = BacktestResult(
         period=f"{start_date} ~ {end_date}",
@@ -238,6 +240,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
         scatter_data=scatter,
         percentile_analysis=percentile_analysis,
         factor_percentile_analysis=factor_percentile_analysis,
+        factor_ic_analysis=factor_ic_analysis,
     )
 
     cache[cache_key] = asdict(backtest_result)
@@ -286,3 +289,71 @@ def _calc_factor_percentile_analysis(
 def _calc_percentile_analysis(scatter: list[dict]) -> dict[str, Any]:
     """分位分析（按 gene_score 三档，泛化函数的特例）。"""
     return _calc_factor_percentile_analysis(scatter, "gene_score", _GENE_SCORE_BUCKETS)
+
+
+def _calc_factor_ic(scatter: list[dict], factor_key: str) -> dict[str, Any] | None:
+    """单因子 IC 评估——因子值与次日收益的截面相关。
+
+    返回 {ic, rank_ic, n}（Pearson + Spearman 秩相关）。样本<20 或因子值/收益缺失
+    导致有效对<20 时返 None（诚实标注，不补零）。纯标准库实现，不引 scipy。
+
+    scatter 项须含 factor_key 字段与 next_day_return 字段；缺失项逐对排除。
+    """
+    pairs: list[tuple[float, float]] = []
+    for p in scatter:
+        fv = p.get(factor_key)
+        rv = p.get("next_day_return")
+        if fv is None or rv is None:
+            continue
+        try:
+            fv_f = float(fv)
+            rv_f = float(rv)
+        except (TypeError, ValueError):
+            continue
+        pairs.append((fv_f, rv_f))
+
+    n = len(pairs)
+    if n < 20:
+        return None
+
+    xs = [p[0] for p in pairs]
+    ys = [p[1] for p in pairs]
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in pairs)
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    var_y = sum((y - mean_y) ** 2 for y in ys)
+    denom = (var_x * var_y) ** 0.5
+    ic = cov / denom if denom > 0 else 0.0
+
+    # Spearman 秩相关：对 x/y 分别排名次（平均秩处理并列），再对秩做 Pearson。
+    def _ranks(values: list[float]) -> list[float]:
+        indexed = sorted(range(len(values)), key=lambda i: values[i])
+        ranks = [0.0] * len(values)
+        i = 0
+        while i < len(values):
+            j = i
+            while j + 1 < len(values) and values[indexed[j + 1]] == values[indexed[i]]:
+                j += 1
+            avg_rank = (i + j) / 2.0 + 1.0  # 1-indexed
+            for k in range(i, j + 1):
+                ranks[indexed[k]] = avg_rank
+            i = j + 1
+        return ranks
+
+    rx = _ranks(xs)
+    ry = _ranks(ys)
+    mean_rx = sum(rx) / n
+    mean_ry = sum(ry) / n
+    cov_r = sum((rx[i] - mean_rx) * (ry[i] - mean_ry) for i in range(n))
+    var_rx = sum((r - mean_rx) ** 2 for r in rx)
+    var_ry = sum((r - mean_ry) ** 2 for r in ry)
+    denom_r = (var_rx * var_ry) ** 0.5
+    rank_ic = cov_r / denom_r if denom_r > 0 else 0.0
+
+    return {
+        "ic": round(ic, 4),
+        "rank_ic": round(rank_ic, 4),
+        "n": n,
+    }
