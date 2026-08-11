@@ -90,8 +90,8 @@ export function WorkflowStateCard({ code, date }: Props) {
 
       {timeline.length > 0 && (
         <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
-          {timeline.map((h, i) => (
-            <div key={i} className="text-xs text-muted-foreground">
+          {timeline.map((h) => (
+            <div key={`${h.from_status}-${h.to_status}-${h.created_at}`} className="text-xs text-muted-foreground">
               {STATUS_LABELS[h.from_status] ?? h.from_status} → {STATUS_LABELS[h.to_status] ?? h.to_status}
               {h.reason && <span>（{h.reason}）</span>}
               <span className="ml-1 opacity-60">{h.created_at.replace("T", " ").slice(0, 16)}</span>

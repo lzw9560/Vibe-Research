@@ -118,7 +118,7 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
         <div className="mt-2 flex flex-wrap gap-1">
           {layer.conditions.map((c, i) => (
             <span
-              key={i}
+              key={`${layer.layer_id}-${c.slice(0, 8)}-${i}`}
               className={cn(
                 "rounded px-2 py-0.5 text-xs",
                 variant === "info" ? "bg-primary/10 text-primary" : "bg-muted/40",

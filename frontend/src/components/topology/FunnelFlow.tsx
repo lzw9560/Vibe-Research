@@ -77,7 +77,7 @@ function PassedCandidatesPanel({ layer }: { layer: FunnelLayer }) {
       {layer.conditions && layer.conditions.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {layer.conditions.map((c, i) => (
-            <Badge key={i} variant="default">
+            <Badge key={`${layer.layer_id}-${c.slice(0, 8)}-${i}`} variant="default">
               {c}
             </Badge>
           ))}

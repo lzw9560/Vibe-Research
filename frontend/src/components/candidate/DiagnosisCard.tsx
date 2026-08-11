@@ -57,8 +57,8 @@ export function DiagnosisCardView({ card }: { card: Card }) {
       {(ind.announcements.length > 0 || ind.concepts.length > 0) && (
         <div className="text-sm">
           <div className="text-muted-foreground mb-1">催化剂：</div>
-          {ind.announcements.slice(0, 5).map((a, i) => (
-            <div key={i}>{a.date} · {a.title}</div>
+          {ind.announcements.slice(0, 5).map((a) => (
+            <div key={`${a.date}-${a.title.slice(0, 12)}`}>{a.date} · {a.title}</div>
           ))}
           {ind.concepts.length > 0 && (
             <div className="text-muted-foreground mt-1">板块：{ind.concepts.join("、")}</div>

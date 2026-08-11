@@ -116,7 +116,7 @@ const PADDING_TOP = 10;
 
         {/* Price grid lines */}
         {gridLines.map((g, i) => (
-          <g key={i}>
+          <g key={`grid-${i}`}>
             <line
               x1="2"
               x2={W - 2}
@@ -151,7 +151,7 @@ const PADDING_TOP = 10;
           const wickBot = priceToY(b.low);
 
           return (
-            <g key={i}>
+            <g key={`bar-${i}`}>
               {/* Wick */}
               <line
                 x1={x}
@@ -233,7 +233,7 @@ const PADDING_TOP = 10;
         {/* Date labels */}
         {dateLabels.map((dl, i) => (
           <text
-            key={i}
+            key={`date-${i}`}
             x={dl.x}
             y={MAIN_H + GAP + VOL_H + 10}
             textAnchor="middle"

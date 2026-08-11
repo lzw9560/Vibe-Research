@@ -146,7 +146,7 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
                     </div>
                   )}
                   {msgs.map((m, i) => (
-                    <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+                    <div key={`msg-${i}-${m.role}`} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                       <div className={cn(
                         "max-w-[85%] rounded-2xl px-3 py-2 leading-relaxed",
                         m.role === "user" ? "bg-primary/20 text-foreground" : "bg-muted/40 text-foreground",
@@ -155,7 +155,7 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
                           <div className="mb-1.5 flex flex-wrap items-center gap-1">
                             <span className="text-[10px] text-muted-foreground/70">数据来源</span>
                             {m.tools.map((t, j) => (
-                              <span key={j} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                              <span key={`tool-${j}-${t.name}`} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
                                 <Wrench className="h-2.5 w-2.5" /> {TOOL_LABEL[t.name] || t.name}{t.arg ? ` ${t.arg}` : ""}
                               </span>
                             ))}

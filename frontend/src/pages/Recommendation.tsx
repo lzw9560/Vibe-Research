@@ -82,7 +82,7 @@ export default function Recommendation() {
 
               <div className="space-y-1">
                 {item.reasoning.slice(0, 2).map((r, i) => (
-                  <div key={i} className="text-xs text-muted-foreground">• {r}</div>
+                  <div key={`reason-${i}-${r.slice(0, 12)}`} className="text-xs text-muted-foreground">• {r}</div>
                 ))}
               </div>
 
