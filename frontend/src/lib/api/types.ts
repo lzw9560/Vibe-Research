@@ -704,6 +704,50 @@ export interface ZTStockSummary {
   zbc: number;
 }
 
+// ---- S054 W0：盘后三问 daily-review ----
+// 对齐后端 GET /api/winrate/daily-review（routers/win_rate.py:_daily_review_impl）。
+// pushed/bought/missed 三问 + prev_day_missed 上一交易日漏单次日收益。
+export interface DailyReviewPushedItem {
+  code: string;
+  name: string;
+  gene_score: number | null;
+  strategies: string[];
+}
+export interface DailyReviewBoughtItem {
+  code: string;
+  name: string;
+  entry_price: number | null;
+  strategy: string | null;
+  status: string;
+  placeholder: string;
+}
+export interface DailyReviewMissedItem {
+  code: string;
+}
+export interface PrevDayMissedItem {
+  code: string;
+  next_day_return: number;
+}
+export interface PrevDayMissedSummary {
+  n: number;
+  avg_return: number;
+  win_rate: number;
+  signal_date: string;
+}
+export interface DailyReviewResponse {
+  date: string;
+  no_snapshot: boolean;
+  pushed: DailyReviewPushedItem[];
+  bought: DailyReviewBoughtItem[];
+  missed: DailyReviewMissedItem[];
+  prev_day_missed: {
+    items: PrevDayMissedItem[];
+    summary: PrevDayMissedSummary | null;
+  };
+  missing_kline: number;
+  disclaimer: string;
+}
+
 export interface SectorHeatItem {
   sector: string;
   zt_count: number;
