@@ -241,7 +241,7 @@ def test_execute_daily_backtest_run_writes_two_rows(isolated_market_db, monkeypa
         return _lite_result()
 
     monkeypatch.setattr("backtest_lite.run_backtest_async", _fake_run)
-    monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lb: _strat_results())
+    monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lb, as_of=None: _strat_results())
 
     result = st.TaskExecutor()._execute_daily_backtest_run({"lookback_days": 30})
 
@@ -265,7 +265,7 @@ def test_execute_daily_backtest_run_idempotent(isolated_market_db, monkeypatch):
         return _lite_result()
 
     monkeypatch.setattr("backtest_lite.run_backtest_async", _fake_run)
-    monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lb: _strat_results())
+    monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lb, as_of=None: _strat_results())
 
     ex = st.TaskExecutor()
     ex._execute_daily_backtest_run({"lookback_days": 30})
@@ -287,7 +287,7 @@ def test_execute_daily_backtest_run_survives_lite_failure(isolated_market_db, mo
         raise RuntimeError("网络炸")
 
     monkeypatch.setattr("backtest_lite.run_backtest_async", _boom)
-    monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lb: _strat_results())
+    monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lb, as_of=None: _strat_results())
 
     result = st.TaskExecutor()._execute_daily_backtest_run({"lookback_days": 30})
 

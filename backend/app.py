@@ -55,6 +55,9 @@ async def lifespan(_app: FastAPI):
     # startup
     await _st.start_scheduler()  # CronScheduler 主循环 ticker + seed 默认任务（R13）
     _pf_refresh_task = await pf.start_scheduler(1800)  # 持仓后台刷新 task
+    # S052 D4：启动缺口补跑——回测快照缺失日后台排队回填
+    from backfill_snapshots import startup_backfill_gap_check  # noqa: PLC0415
+    await startup_backfill_gap_check()
     yield
     # shutdown
     await _st.get_scheduler().stop()

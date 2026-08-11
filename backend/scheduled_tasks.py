@@ -698,21 +698,32 @@ class TaskExecutor:
 
         lite 是 async，在 sync handler 里用 asyncio.run() 驱动；strategy 是 sync 直调。
         单引擎失败不阻断另一个——回测是增强，失败兜底记 error。
+
+        S052 D1/D6：payload 增可选 as_of_date（YYYY-MM-DD）——point-in-time 回算。
+        缺省=今天（行为不变）；给了则 snapshot_date=as_of、窗口终点=as_of、strategy 传 as_of。
         """
         from backtest_lite import run_backtest_async
         from strategies.strategy_backtest import run_strategy_backtest
 
         lookback = int(payload.get("lookback_days", 30))
+        as_of = payload.get("as_of_date")  # S052 D1：可选 point-in-time 日期
         today_dt = datetime.now().date()
-        today = today_dt.strftime("%Y-%m-%d")
-        start = (today_dt - timedelta(days=lookback)).strftime("%Y-%m-%d")
+        if as_of:
+            snapshot_date = as_of
+            end = as_of
+            start_dt = datetime.strptime(as_of, "%Y-%m-%d").date()
+        else:
+            snapshot_date = today_dt.strftime("%Y-%m-%d")
+            end = snapshot_date
+            start_dt = today_dt
+        start = (start_dt - timedelta(days=lookback)).strftime("%Y-%m-%d")
 
-        results: Dict[str, Any] = {"snapshot_date": today, "lookback_days": lookback, "start": start}
+        results: Dict[str, Any] = {"snapshot_date": snapshot_date, "lookback_days": lookback, "start": start, "as_of_date": as_of}
 
         # lite 引擎
         try:
-            lite_result = asyncio.run(run_backtest_async(start, today))
-            _save_snapshot(today, "lite", lite_result)
+            lite_result = asyncio.run(run_backtest_async(start, end))
+            _save_snapshot(snapshot_date, "lite", lite_result)
             results["lite"] = {
                 "hit_rate": lite_result.hit_rate,
                 "avg_return": lite_result.avg_return,
@@ -724,8 +735,8 @@ class TaskExecutor:
 
         # strategy 引擎
         try:
-            strat_results = run_strategy_backtest(lookback)
-            _save_snapshot(today, "strategy", strat_results)
+            strat_results = run_strategy_backtest(lookback, as_of)
+            _save_snapshot(snapshot_date, "strategy", strat_results)
             results["strategy"] = {
                 "strategies": len(strat_results),
                 "total_sample": sum(getattr(r, "sample_size", 0) for r in strat_results),

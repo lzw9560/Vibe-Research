@@ -51,14 +51,24 @@ _CACHE_TS: dict[int, float] = {}
 _CACHE_TTL = 43200  # 12 小时
 
 
-def _get_available_dates(lookback_days: int) -> list[str]:
-    """查 DB DISTINCT date（只跑 DB 已有日，不触发 em_get）。按日期降序。"""
+def _get_available_dates(lookback_days: int, as_of: str | None = None) -> list[str]:
+    """查 DB DISTINCT date（只跑 DB 已有日，不触发 em_get）。按日期降序。
+
+    S052 D1/D6：as_of 给定时只取 date <= as_of（point-in-time：信号只取当日及之前）。
+    as_of=None 行为与现状字节级一致（不截断）。
+    """
     conn = get_db()
     try:
-        rows = conn.execute(
-            "SELECT DISTINCT date FROM gene_scores ORDER BY date DESC LIMIT ?",
-            (lookback_days,),
-        ).fetchall()
+        if as_of is not None:
+            rows = conn.execute(
+                "SELECT DISTINCT date FROM gene_scores WHERE date <= ? ORDER BY date DESC LIMIT ?",
+                (as_of, lookback_days),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT DISTINCT date FROM gene_scores ORDER BY date DESC LIMIT ?",
+                (lookback_days,),
+            ).fetchall()
         return [r["date"] for r in rows]
     finally:
         conn.close()
@@ -99,16 +109,18 @@ def _backtest_single(
     return {"won": ret > 0, "return_pct": round(ret, 2)}
 
 
-def run_strategy_backtest(lookback_days: int = 60) -> list[StrategyBacktestResult]:
+def run_strategy_backtest(lookback_days: int = 60, as_of: str | None = None) -> list[StrategyBacktestResult]:
     """对 8 战法各跑历史 lookback_days（按 DB 实际可用天数截断）。
 
+    S052 D1/D6：as_of 给定时只取 date <= as_of 的 gene_scores（point-in-time）。
     返回 8 个 StrategyBacktestResult（按 STRATEGY_REGISTRY 顺序，sample_size=0 的也列出）。
     """
+    cache_key = (lookback_days, as_of)  # S052 D1：as_of 进缓存键（不同 as_of 不串数据）
     now = time.time()
-    if lookback_days in _CACHE and now - _CACHE_TS.get(lookback_days, 0) < _CACHE_TTL:
-        return _CACHE[lookback_days]
+    if cache_key in _CACHE and now - _CACHE_TS.get(cache_key, 0) < _CACHE_TTL:
+        return _CACHE[cache_key]
 
-    dates = _get_available_dates(lookback_days)
+    dates = _get_available_dates(lookback_days, as_of)
     available_days = len(dates)
 
     strat_params = {s["code"]: s for s in STRATEGY_REGISTRY}
@@ -178,8 +190,8 @@ def run_strategy_backtest(lookback_days: int = 60) -> list[StrategyBacktestResul
             skipped=skipped,
         ))
 
-    _CACHE[lookback_days] = results
-    _CACHE_TS[lookback_days] = now
+    _CACHE[cache_key] = results
+    _CACHE_TS[cache_key] = now
     return results
 
 
@@ -189,17 +201,18 @@ def clear_cache() -> None:
     _CACHE_TS.clear()
 
 
-def list_trades(strategy_code: str, lookback_days: int = 60) -> dict[str, Any]:
+def list_trades(strategy_code: str, lookback_days: int = 60, as_of: str | None = None) -> dict[str, Any]:
     """S049 D8：某战法的回溯交易明细（懒加载，复用 run_strategy_backtest 缓存的 trades 不重算）。
 
+    S052 D1：as_of 给定时只取 date <= as_of 的交易（point-in-time）。
     只返 DB 已有日期的交易（R21 防封：不触发 em_get 拉 K 线之外的历史）。
     available_days 如实标样本天数。
     """
-    results = run_strategy_backtest(lookback_days)
+    results = run_strategy_backtest(lookback_days, as_of)
     matching = next((r for r in results if r.strategy_code == strategy_code), None)
     available = matching.available_days if matching else 0
     # 重跑取 trades 列表（run_strategy_backtest 内部 12h 缓存，重复请求不重算）
-    dates = _get_available_dates(lookback_days)
+    dates = _get_available_dates(lookback_days, as_of)
     strat_params = {s["code"]: s for s in STRATEGY_REGISTRY}
     params = strat_params.get(strategy_code)
     if not params:
