@@ -250,3 +250,125 @@ async def shadow_comparison(window_days: int = Query(28, ge=7, le=90)) -> Dict[s
     except Exception as e:  # noqa: BLE001
         _logger.exception("影子对照异常")
         raise HTTPException(502, f"影子对照异常：{e}") from e
+
+
+# ============ S054 W0：盘后三问 daily-review 端点 ============
+
+
+def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
+    """S054 R1：盘后三问纯实现（端点薄壳调用，便于测试注入 tracker）。
+
+    pushed：当日快照 final_candidates（code/name/gene_score/strategies/完整性标记）；无快照则 no_snapshot=true
+    bought：当日 workflow_state 新建仓（entry_status=holding），逐只带占位标签「待判定」
+    missed：pushed − bought 的 code 名单（无收益，留白）
+    prev_day_missed：上一交易日 missed 的标的次日收益 + 汇总
+    只读本地库，零外部调用。
+    """
+    from snapshot_store import load_snapshot
+    from vr_paths import last_trading_date_str
+    import workflow_state_repo as wsr
+    from backtest_lite import _calc_next_day_return
+
+    today = date
+
+    # pushed：当日快照
+    snap = load_snapshot(today)
+    if not snap:
+        return {"date": today, "no_snapshot": True, "pushed": [], "bought": [], "missed": [],
+                "prev_day_missed": {"items": [], "summary": None},
+                "missing_kline": 0, "disclaimer": "历史统计特征，市场有风险，研究参考"}
+
+    finals = snap.get("final_candidates") or []
+    pushed = [
+        {
+            "code": fc.get("code"),
+            "name": fc.get("name") or fc.get("stock_name") or "",
+            "gene_score": fc.get("gene_score") or fc.get("total_score"),
+            "strategies": fc.get("strategies") or fc.get("best_strategy") or [],
+        }
+        for fc in finals if isinstance(fc, dict) and fc.get("code")
+    ]
+    pushed_codes = {p["code"] for p in pushed}
+
+    # bought：当日 holding 记录（entry 约等于 trade_date）
+    states = wsr.list_states(today)
+    bought = [
+        {
+            "code": s["code"],
+            "name": s.get("name") or "",
+            "entry_price": s.get("entry_price"),
+            "strategy": s.get("strategy"),
+            "status": s["status"],
+            "placeholder": "待判定",
+        }
+        for s in states if s.get("status") == "holding"
+    ]
+    bought_codes = {b["code"] for b in bought}
+
+    # missed：pushed − bought
+    missed = [{"code": c} for c in pushed_codes if c not in bought_codes]
+
+    # prev_day_missed：上一交易日的 missed，次日收益
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        prev_td = _dt.strptime(today, "%Y-%m-%d").date()
+        prev_td = _dt.strptime(last_trading_date_str(prev_td - _td(days=1)), "%Y-%m-%d").date()
+        prev_str = prev_td.strftime("%Y-%m-%d")
+    except Exception:  # noqa: BLE001
+        prev_str = None
+
+    prev_items: list[Dict[str, Any]] = []
+    missing_kline = 0
+    if prev_str:
+        prev_snap = load_snapshot(prev_str)
+        if prev_snap:
+            prev_finals = prev_snap.get("final_candidates") or []
+            prev_pushed = [fc.get("code") for fc in prev_finals if isinstance(fc, dict) and fc.get("code")]
+            prev_states = wsr.list_states(prev_str)
+            prev_bought = {s["code"] for s in prev_states if s.get("status") in ("holding", "settled", "monitoring")}
+            prev_missed = [c for c in prev_pushed if c not in prev_bought]
+            kline_cache: dict = {}
+            for code in prev_missed:
+                ret = _calc_next_day_return(code, prev_str, kline_cache)
+                if ret == 0.0:
+                    missing_kline += 1
+                    continue
+                prev_items.append({"code": code, "next_day_return": round(ret, 4)})
+
+    prev_summary = None
+    if prev_items:
+        rets = [it["next_day_return"] for it in prev_items]
+        prev_summary = {
+            "n": len(prev_items),
+            "avg_return": round(sum(rets) / len(rets), 4),
+            "win_rate": round(sum(1 for r in rets if r > 0) / len(rets), 4),
+            "signal_date": prev_str,
+        }
+
+    return {
+        "date": today,
+        "no_snapshot": False,
+        "pushed": pushed,
+        "bought": bought,
+        "missed": missed,
+        "prev_day_missed": {"items": prev_items, "summary": prev_summary},
+        "missing_kline": missing_kline,
+        "disclaimer": "历史统计特征，市场有风险，研究参考",
+    }
+
+
+@router.get("/api/winrate/daily-review")
+async def daily_review(date: Optional[str] = Query(None, description="YYYY-MM-DD，默认今日")) -> Dict[str, Any]:
+    """S054 R1：盘后三问——系统推了什么 / 你买了什么 / 漏了什么。
+
+    pushed：当日快照 final_candidates；bought：当日新建仓（占位「待判定」）；
+    missed：pushed − bought；prev_day_missed：上一交易日漏单次日收益 + 汇总。
+    无快照诚实返回 no_snapshot=true；零外部调用。
+    """
+    from datetime import datetime as _dt
+    target = date or _dt.now().strftime("%Y-%m-%d")
+    try:
+        return _daily_review_impl(target, _tracker)
+    except Exception as e:  # noqa: BLE001
+        _logger.exception("盘后三问异常")
+        raise HTTPException(502, f"盘后三问异常：{e}") from e
