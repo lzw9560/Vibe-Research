@@ -272,6 +272,38 @@ export interface FuseRule {
   is_pardoned?: boolean;
   pardon_expires_at?: string;
   pardon_enabled_by?: string;
+  // S056
+  is_triggered?: boolean;
+  weather_state?: string;
+  data_status?: string;
+}
+
+// S056：熔断状态汇总
+export interface FuseState {
+  rules: FuseRule[];
+  fuse_state: "triggered" | "normal";
+  weather_state: string;
+  updated_at: string;
+}
+
+// S056：次日强制离场信号
+export interface ExitSignal {
+  code: string;
+  name: string;
+  signal: string | null;
+  reason: string;
+  change_pct?: number | null;
+  price?: number | null;
+  ma_price?: number | null;
+  data_status: "ok" | "missing";
+}
+
+export interface ExitSignalsResult {
+  date: string;
+  signals: ExitSignal[];
+  summary: { total: number; triggered: number; missing: number };
+  ma_days: number;
+  note: string;
 }
 
 export interface WeatherTimelineItem {

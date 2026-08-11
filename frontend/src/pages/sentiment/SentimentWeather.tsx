@@ -52,7 +52,7 @@ export default function SentimentWeather() {
   // 故这 5 个保留 as unknown as 窄→宽 cast（api 类型为信封，页面 Iface 为解包形态，类型不一致）。
   const weather = latestQ.data;
   const strategy = strategyQ.data;
-  const fuseRules = fuseQ.data as unknown as { rules: FuseRule[]; updated_at: string } | undefined;
+  const fuseRules = fuseQ.data as unknown as { rules: FuseRule[]; fuse_state: string; weather_state: string; updated_at: string } | undefined;
   const timeline = timelineQ.data as unknown as { timeline: WeatherTimelineItem[]; stats: WeatherStats } | undefined;
   const auctionMetrics = auctionQ.data as unknown as { auction_metrics: AuctionMetric[]; phase: string } | undefined;
   const sealRiskMetrics = sealRiskQ.data as unknown as { seal_risk_metrics: SealRiskMetric[] } | undefined;

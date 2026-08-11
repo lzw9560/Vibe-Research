@@ -8,7 +8,8 @@ import type {
   Report, NewsItem, MarginRow, BlockTradeRow, HolderRow, DividendRow, FundFlowRow,
   DragonTiger, Lockup, Blocks, HotConcept, QaRow, IndustryData, MyReport, ScreenerResult,
   LimitUpAnalysis, AuctionScreenerResult, DailyReviewReport, SeatProfile, ConsensusSignal,
-  StockDeep, StrategyRecommendation, WeatherState, WeatherFactor, FuseRule, WeatherTimelineItem,
+  StockDeep, StrategyRecommendation, WeatherState, WeatherFactor, FuseState, ExitSignalsResult,
+  WeatherTimelineItem,
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord, PardonOutcome,
   StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, WinRateTrendPoint,
   WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint,
@@ -122,7 +123,9 @@ export const api = {
   sentimentWeatherStrategy: () =>
     get<StrategyRecommendation>("/sentiment/weather/strategy"),
   sentimentWeatherFuse: () =>
-    get<{ data: { rules: FuseRule[]; updated_at: string } }>("/sentiment/weather/fuse"),
+    get<{ data: FuseState }>("/sentiment/weather/fuse"),
+  sentimentWeatherExitSignals: (date: string) =>
+    get<{ data: ExitSignalsResult }>(`/sentiment/weather/exit-signals?date=${date}`),
   sentimentWeatherTimeline: (days = 30) =>
     get<{ data: { timeline: WeatherTimelineItem[]; stats: WeatherStats } }>(`/sentiment/weather/timeline?days=${days}`),
   sentimentWeatherEvents: (days = 30) =>

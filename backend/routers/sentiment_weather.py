@@ -462,25 +462,44 @@ def _get_risk_note(weather_state: str) -> str:
 
 @router.get("/api/sentiment/weather/fuse")
 def get_weather_fuse() -> Dict[str, Any]:
-    """获取熔断规则状态。"""
+    """获取熔断规则状态（S056：三铁律补全——软 gate，只提醒不锁死）。
+
+    R1 仓位熔断：天气=暴风雨 → fuse_state=triggered
+    R2 撤单熔断：依赖 S055 封单时序 → 置桩（data_status=待S055）
+    R3 次日强制离场：竞价未高开/破均线 → 独立端点 /api/sentiment/weather/exit-signals
+    """
     try:
-        # Placeholder: integrate with actual fuse rule engine
+        # 取当前天气状态判定 R1
+        try:
+            weather = get_weather_latest()
+            weather_state = (weather.get("data") or {}).get("weather_state", "未知")
+        except Exception:
+            weather_state = "未知"
+
+        # R1 仓位熔断：暴风雨 → triggered
+        r1_triggered = weather_state == "暴风雨"
+        r1_state = "triggered" if r1_triggered else "normal"
+
         rules = [
             {
                 "id": "position_fuse",
                 "name": "仓位熔断",
                 "status": "enabled",
-                "trigger_condition": "天气=暴风雨 → 自动锁死交易权限",
-                "current_state": "正常",
-                "description": "当情绪气象站判定为暴风雨时，系统自动禁止下发任何买入条件单",
+                "trigger_condition": "天气=暴风雨 → 红色熔断横幅 + 候选照常产出（软 gate）",
+                "current_state": r1_state,
+                "weather_state": weather_state,
+                "description": "情绪气象站判定暴风雨时，盘前简报挂红色横幅提醒风险，候选照常产出（Q3 软 gate：不锁死买入）",
+                "is_triggered": r1_triggered,
             },
             {
                 "id": "cancel_fuse",
                 "name": "撤单熔断",
                 "status": "enabled",
                 "trigger_condition": "封单<3000万 或 撤单/封单>20%",
-                "current_state": "监控中",
-                "description": "排板时，如果五档盘口的封单金额跌破3000万，或者撤单量/封单量>20%，系统自动执行撤单",
+                "current_state": "待S055",
+                "data_status": "待S055",
+                "description": "排板时封单额跌破3000万或撤单比>20%触发提醒。依赖 S055 盘中封单时序采集，未合并前置桩",
+                "is_triggered": False,
             },
             {
                 "id": "next_day_exit",
@@ -488,11 +507,23 @@ def get_weather_fuse() -> Dict[str, Any]:
                 "status": "enabled",
                 "trigger_condition": "未高开(≤0%) 或 开盘5分钟未站稳均线",
                 "current_state": "待触发",
-                "description": "次日09:25竞价结束，若股票未高开或开盘5分钟内无法站稳均线，系统直接自动生成市价卖出单",
+                "description": "次日09:25竞价未高开或开盘5分钟破均线 → 生成强制离场信号（见 /api/sentiment/weather/exit-signals）",
+                "is_triggered": False,
             },
         ]
 
-        return {"data": {"rules": rules, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}}
+        # fuse_state 汇总：任一 triggered → triggered；否则 normal
+        any_triggered = any(r.get("is_triggered") for r in rules)
+        fuse_state = "triggered" if any_triggered else "normal"
+
+        return {
+            "data": {
+                "rules": rules,
+                "fuse_state": fuse_state,
+                "weather_state": weather_state,
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        }
     except Exception as e:
         raise HTTPException(502, f"熔断规则查询异常：{e}") from e
 
@@ -841,10 +872,32 @@ def submit_weather_pardon_outcome(data: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.get("/api/sentiment/weather/fuse/history")
 def get_weather_fuse_history(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
-    """获取熔断规则触发历史。"""
+    """获取熔断规则触发历史（S056：R1 仓位熔断触发/解除记录）。
+
+    从 SQLite 持久化 fuse_history 表读取（S056 新增）。
+    """
     try:
-        # Placeholder: integrate with fuse rule engine logs
-        history = []
+        db = _get_db()
+        try:
+            rows = db.execute(
+                "SELECT rule_id, action, weather_state, triggered_at, note "
+                "FROM fuse_history WHERE triggered_at >= date('now', ?) "
+                "ORDER BY triggered_at DESC LIMIT 100",
+                (f"-{days} days",),
+            ).fetchall()
+            history = [
+                {
+                    "rule_id": r["rule_id"],
+                    "action": r["action"],
+                    "weather_state": r["weather_state"],
+                    "triggered_at": r["triggered_at"],
+                    "note": r["note"],
+                }
+                for r in rows
+            ]
+        except Exception:
+            # fuse_history 表不存在时返空（首调）
+            history = []
         return {"data": {"history": history}}
     except Exception as e:
         raise HTTPException(502, f"熔断历史查询异常：{e}") from e
@@ -867,6 +920,134 @@ def refresh_weather() -> Dict[str, Any]:
         return get_weather_latest()
     except Exception as e:
         raise HTTPException(502, f"天气刷新异常：{e}") from e
+
+
+# =============================================================================
+# S056：次日强制离场信号（铁律三，软 gate）
+# =============================================================================
+
+# 均线口径：前 N 日均价（可配，默认 5）
+EXIT_SIGNAL_MA_DAYS = 5
+# 高开阈值：竞价涨幅 ≤ 0% 触发（可配）
+EXIT_SIGNAL_NO_GAP_THRESHOLD = 0.0
+
+
+@router.get("/api/sentiment/weather/exit-signals")
+def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD")) -> Dict[str, Any]:
+    """S056 R3：次日强制离场信号——持仓股竞价未高开或开盘 5 分钟破均线。
+
+    软 gate：生成信号 + 醒目提醒，不自动下单。
+    数据源：workflow_state_repo 持仓 + 腾讯实时行情（竞价/开盘价）。
+    缺数据诚实标注（missing），不臆造。
+    """
+    try:
+        import workflow_state_repo as wsr
+        import astock
+
+        holdings = wsr.list_states(date)
+        holding_codes = [
+            h for h in holdings
+            if h.get("status") == "holding"
+        ]
+
+        if not holding_codes:
+            return {
+                "data": {
+                    "date": date,
+                    "signals": [],
+                    "summary": {"total": 0, "triggered": 0, "missing": 0},
+                    "note": "无持仓股，不生成离场信号",
+                }
+            }
+
+        codes = [h["code"] for h in holding_codes]
+        try:
+            quotes = astock.tencent_quote(codes) or {}
+        except Exception:
+            quotes = {}
+
+        signals = []
+        triggered_count = 0
+        missing_count = 0
+
+        for h in holding_codes:
+            code = h["code"]
+            name = h.get("name", code)
+            q = quotes.get(code, {})
+            # 竞价涨幅（change_pct）+ 开盘价
+            change_pct = q.get("pct") if isinstance(q, dict) else None
+            open_price = q.get("open") if isinstance(q, dict) else None
+            price = q.get("price") if isinstance(q, dict) else None
+
+            # 均线口径：前 N 日均价（用 K 线近似）
+            ma_price = None
+            try:
+                bars = astock.kline(code, EXIT_SIGNAL_MA_DAYS + 1, 10) or []
+                if len(bars) >= EXIT_SIGNAL_MA_DAYS:
+                    closes = [float(b.get("close") or 0) for b in bars[-EXIT_SIGNAL_MA_DAYS:]]
+                    ma_price = sum(closes) / len(closes) if closes else None
+            except Exception:
+                ma_price = None
+
+            # 判定
+            no_gap = change_pct is not None and float(change_pct) <= EXIT_SIGNAL_NO_GAP_THRESHOLD
+            below_ma = (price is not None and ma_price is not None and float(price) < ma_price)
+
+            if change_pct is None and price is None:
+                missing_count += 1
+                signals.append({
+                    "code": code,
+                    "name": name,
+                    "signal": None,
+                    "reason": "行情数据未取得",
+                    "data_status": "missing",
+                })
+                continue
+
+            if no_gap or below_ma:
+                triggered_count += 1
+                reasons = []
+                if no_gap:
+                    reasons.append(f"竞价未高开({change_pct}%)")
+                if below_ma:
+                    reasons.append(f"开盘破{EXIT_SIGNAL_MA_DAYS}日均线({price}<{ma_price:.2f})")
+                signals.append({
+                    "code": code,
+                    "name": name,
+                    "signal": "强制离场",
+                    "reason": "；".join(reasons),
+                    "change_pct": change_pct,
+                    "price": price,
+                    "ma_price": round(ma_price, 2) if ma_price else None,
+                    "data_status": "ok",
+                })
+            else:
+                signals.append({
+                    "code": code,
+                    "name": name,
+                    "signal": None,
+                    "reason": "竞价高开且站稳均线",
+                    "change_pct": change_pct,
+                    "price": price,
+                    "ma_price": round(ma_price, 2) if ma_price else None,
+                    "data_status": "ok",
+                })
+
+        return {
+            "data": {
+                "date": date,
+                "signals": signals,
+                "summary": {
+                    "total": len(holding_codes),
+                    "triggered": triggered_count,
+                    "missing": missing_count,
+                },
+                "ma_days": EXIT_SIGNAL_MA_DAYS,
+                "note": "软 gate：信号 + 提醒，不自动下单；历史统计特征，市场有风险",
+            }
+        }
+    except Exception as e:
+        raise HTTPException(502, f"离场信号查询异常：{e}") from e
 
 
 __all__ = ["router"]
