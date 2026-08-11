@@ -14,6 +14,7 @@ import pytest
 
 from backfill_snapshots import (
     _compute_backfill_gap,
+    _compute_historical_gap,
     backfill_backtest_snapshots,
     _get_snapshot_max_date,
     _get_gene_scores_dates_since,
@@ -77,14 +78,14 @@ def test_backfill_idempotent_run_twice(monkeypatch):
 
     monkeypatch.setattr("scheduled_tasks.TaskExecutor._execute_daily_backtest_run", fake_execute)
     # 第一次：3 日缺口
-    monkeypatch.setattr("backfill_snapshots._compute_backfill_gap",
-                        lambda: ["2026-08-06", "2026-08-07", "2026-08-08"])
+    monkeypatch.setattr("backfill_snapshots._compute_historical_gap",
+                        lambda days=60: ["2026-08-06", "2026-08-07", "2026-08-08"])
     r1 = backfill_backtest_snapshots(60)
     assert r1["backfilled"] == 3
     assert call_count["n"] == 3
 
     # 第二次：无缺口（已回填）
-    monkeypatch.setattr("backfill_snapshots._compute_backfill_gap", lambda: [])
+    monkeypatch.setattr("backfill_snapshots._compute_historical_gap", lambda days=60: [])
     r2 = backfill_backtest_snapshots(60)
     assert r2["backfilled"] == 0
     assert call_count["n"] == 3  # 未再调
@@ -98,8 +99,8 @@ def test_backfill_single_day_failure_not_blocking(monkeypatch):
         return {"snapshot_date": payload["as_of_date"], "_status": "ok"}
 
     monkeypatch.setattr("scheduled_tasks.TaskExecutor._execute_daily_backtest_run", fake_execute)
-    monkeypatch.setattr("backfill_snapshots._compute_backfill_gap",
-                        lambda: ["2026-08-06", "2026-08-07", "2026-08-08"])
+    monkeypatch.setattr("backfill_snapshots._compute_historical_gap",
+                        lambda days=60: ["2026-08-06", "2026-08-07", "2026-08-08"])
     r = backfill_backtest_snapshots(60)
     assert r["backfilled"] == 2
     assert r["failed"] == 1
@@ -111,7 +112,7 @@ def test_backfill_endpoint(monkeypatch):
     from fastapi.testclient import TestClient
     from routers import scheduled_tasks as strat_router
 
-    monkeypatch.setattr("backfill_snapshots._compute_backfill_gap", lambda: ["2026-08-06"])
+    monkeypatch.setattr("backfill_snapshots._compute_historical_gap", lambda days=60: ["2026-08-06"])
     monkeypatch.setattr("scheduled_tasks.TaskExecutor._execute_daily_backtest_run",
                         lambda self, p: {"snapshot_date": p["as_of_date"], "_status": "ok"})
 

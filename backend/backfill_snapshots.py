@@ -72,15 +72,46 @@ def _compute_backfill_gap(yesterday: str | None = None) -> List[str]:
     return gap
 
 
+def _get_existing_snapshot_dates() -> set[str]:
+    """查 backtest_daily_snapshots 已有的 snapshot_date 集合（任一 engine）。"""
+    try:
+        import sqlite3
+        from scheduled_tasks import _DB_PATH
+        conn = sqlite3.connect(_DB_PATH)
+        rows = conn.execute(
+            "SELECT DISTINCT snapshot_date FROM backtest_daily_snapshots"
+        ).fetchall()
+        conn.close()
+        return {r[0] for r in rows}
+    except Exception:
+        return set()
+
+
+def _compute_historical_gap(days: int = 60) -> List[str]:
+    """S052 D1：一次性回填缺口——回溯历史 N 个交易日。
+
+    目标日 = gene_scores 已有日 ∩ 最近 days 个交易日 − 已有快照日（幂等）。
+    与 _compute_backfill_gap（启动增量补跑，只看 last_have 之后）不同：
+    本函数回溯历史，补 last_have 之前的缺口。
+    返回升序列表（早的先补）。
+    """
+    target_dates = _get_gene_scores_dates_since(None, limit_days=days)
+    existing = _get_existing_snapshot_dates()
+    gap = [d for d in target_dates if d not in existing]
+    gap.sort()
+    return gap
+
+
 def backfill_backtest_snapshots(days: int = 60) -> Dict[str, Any]:
     """S052 D2：一次性回填入口——逐日调 _execute_daily_backtest_run。
 
     目标日 = gene_scores 已有日 ∩ 最近 days 个交易日 − 已有快照日（幂等）。
     单日失败记 warning 不阻断整批；串行后台跑。
+    回溯历史 N 日（与启动增量补跑 _compute_backfill_gap 互补）。
     """
     import scheduled_tasks as st
 
-    gap = _compute_backfill_gap()
+    gap = _compute_historical_gap(days)
     if not gap:
         return {"backfilled": 0, "days": [], "msg": "无缺口，快照已齐"}
 
