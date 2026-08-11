@@ -185,6 +185,19 @@ async def backfill_backtest(days: int = Query(60, ge=1, le=90)) -> Dict[str, Any
     return {"data": result}
 
 
+@router.post("/api/winrate/backfill-samples")
+async def backfill_winrate_samples_endpoint(days: int = Query(30, ge=1, le=90)) -> Dict[str, Any]:
+    """S054：回填合成 winrate 样本——假设用户按推荐建仓，补全三桶数据。
+
+    70% 推荐标的假设买入（funnel_candidate），30% 留作 missed 桶。
+    return_pct 用次日 K 线收益（信号日 close→次日 close）。
+    幂等：signal_ref='backfill:synthetic' 标记，重复跑先删旧行。
+    """
+    from backfill_winrate_samples import backfill_winrate_samples  # noqa: PLC0415
+    result = await asyncio.to_thread(backfill_winrate_samples, days)
+    return {"data": result}
+
+
 @router.get("/api/scheduled-tasks/{task_id}/runs")
 async def list_task_runs(task_id: int, limit: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
     """List recent runs for a task."""
