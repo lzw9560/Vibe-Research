@@ -47,12 +47,19 @@ _cache: dict[str, Any] = {
 }
 
 # ============ S048 R4：盘前快照持久化（历史不可变，纯读盘零请求） ============
+# S050：读侧（_load_snapshot/_list_snapshot_dates）抽至 snapshot_store.py 共用；
+# _save_snapshot 仍留此处（写盘是采集链路职责，settlement 只读不写）。
 
 _SNAPSHOT_SCHEMA = "v1"
 
+from snapshot_store import load_snapshot as _load_snapshot, list_snapshot_dates as _list_snapshot_dates  # noqa: E402
+
 
 def _snapshot_dir() -> Path:
-    """快照目录：<私有数据根>/workflow/pre-market/（VR_DATA_DIR 可覆盖，conftest 已隔离）。"""
+    """快照目录：<私有数据根>/workflow/pre-market/（VR_DATA_DIR 可覆盖，conftest 已隔离）。
+
+    保留供 _save_snapshot 写盘用；读侧已迁 snapshot_store。
+    """
     return resolve_data_dir() / "workflow" / "pre-market"
 
 
@@ -79,26 +86,6 @@ def _save_snapshot(payload: dict) -> None:
     tmp = d / f".{date}.tmp"
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(d / f"{date}.json")
-
-
-def _load_snapshot(date: str) -> Optional[dict]:
-    """读快照；不存在/损坏返 None（只读语义，不自愈删除）。"""
-    try:
-        p = _snapshot_path(date)
-        if not p.is_file():
-            return None
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("快照读取失败 %s: %s", date, exc)
-        return None
-
-
-def _list_snapshot_dates() -> list[str]:
-    """有快照的日期降序列表；忽略非日期文件名。"""
-    d = _snapshot_dir()
-    if not d.is_dir():
-        return []
-    return sorted((p.stem for p in d.glob("*.json") if _is_valid_date(p.stem)), reverse=True)
 
 
 def _build_funnel_layers(date: str) -> list[dict]:
@@ -545,6 +532,7 @@ class _TransitionRequest(BaseModel):
     exit_price: Optional[float] = None
     strategy: Optional[str] = None
     auto_fill_exit_price: bool = False  # S038：true=exit_price 空时后端自动拉市价
+    attention_mode: Optional[str] = None  # S050 W0：用户自填关注模式 A/B/C（结算透传 winrate_records）
 
 
 @router.get("/api/workflow/state")
@@ -591,6 +579,7 @@ async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
         ok, detail = _wf_state_repo.transition(
             code, req.date, req.target, req.reason,
             entry_price=req.entry_price, exit_price=req.exit_price, strategy=req.strategy,
+            attention_mode=req.attention_mode,
         )
     except Exception as e:
         raise HTTPException(500, f"工作流状态流转失败：{e}") from e

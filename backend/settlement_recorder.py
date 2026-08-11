@@ -76,6 +76,68 @@ def _lookup_gene_score(code: str, trade_date: str) -> float:
     return 0.0
 
 
+# S050：value 类战法（均值回归语义）——edge_family/target_holding_period 推断用。
+_VALUE_STRATEGIES = {"value_rebound", "oversold_rebound", "mean_reversion"}
+
+
+def _infer_signal_attribution(code: str, trade_date: str, strategy: str) -> dict:
+    """S050 R2 票根关联三分支 + edge_family/target_holding_period 推断。
+
+    1. 当日快照 final_candidates 含 code → funnel_candidate（signal_ref='funnel:final'）
+    2. 否则战法回测 trades 含 (trade_date, code) → strategy_hit（signal_ref=战法码）
+    3. 皆无 → feeling；任何异常 → 兜底 feeling（不阻塞结算）
+
+    edge_family：funnel_candidate→momentum_premium；value 类战法→mean_reversion；其余 ''
+    target_holding_period：funnel/动量战法→T+1；value 类→20-60d；其余 ''
+    """
+    out = {
+        "signal_source": "feeling",
+        "signal_ref": "",
+        "edge_family": "",
+        "target_holding_period": "",
+    }
+    # 分支 1：快照 final_candidates 命中
+    try:
+        from snapshot_store import load_snapshot
+
+        snap = load_snapshot(trade_date)
+        if snap:
+            finals = snap.get("final_candidates") or []
+            for fc in finals:
+                if isinstance(fc, dict) and fc.get("code") == code:
+                    out.update(
+                        signal_source="funnel_candidate",
+                        signal_ref="funnel:final",
+                        edge_family="momentum_premium",
+                        target_holding_period="T+1",
+                    )
+                    return out
+    except Exception as e:  # noqa: BLE001 — 快照查找失败兜底
+        logger.debug("[settlement] 票根快照查找失败 %s %s: %s", code, trade_date, e)
+
+    # 分支 2：战法回测 trades 命中
+    try:
+        from strategies.strategy_backtest import list_trades
+
+        if strategy:
+            result = list_trades(strategy, lookback_days=60)
+            for t in result.get("trades") or []:
+                if t.get("code") == code and (t.get("date") or "")[:10] == trade_date[:10]:
+                    is_value = strategy in _VALUE_STRATEGIES
+                    out.update(
+                        signal_source="strategy_hit",
+                        signal_ref=strategy,
+                        edge_family="mean_reversion" if is_value else "",
+                        target_holding_period="20-60d" if is_value else "T+1",
+                    )
+                    return out
+    except Exception as e:  # noqa: BLE001 — 战法回查找失败兜底
+        logger.debug("[settlement] 票根战法查找失败 %s %s: %s", code, trade_date, e)
+
+    # 分支 3：皆无 → feeling（edge_family/period 留空，无系统信号可推断）
+    return out
+
+
 def record_settlement(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """结算一条 settled 状态行 → 写 winrate_records → 返摘要；价缺返 None。
 
@@ -104,19 +166,31 @@ def record_settlement(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     from win_rate_tracker import WinRateRecord
 
+    code = state.get("code", "")
+    strategy = state.get("strategy") or ""
+    # S050 R2：票根关联三分支 + edge_family/holding_period 推断
+    attribution = _infer_signal_attribution(code, trade_date, strategy)
+    # S050 R3：attention_mode 从 state 行读（缺省 'A'）
+    attention_mode = state.get("attention_mode") or "A"
+
     record = WinRateRecord(
-        stock_code=state.get("code", ""),
+        stock_code=code,
         stock_name=state.get("name", ""),
-        strategy_used=state.get("strategy") or "",
+        strategy_used=strategy,
         entry_date=trade_date,          # D3：候选日≈信号日（诚实近似）
         entry_price=float(entry_price),
         exit_date=settle_date,
         exit_price=float(exit_price),
         return_pct=round(result.return_pct, 2),
         is_win=result.won,
-        gene_score=_lookup_gene_score(state.get("code", ""), trade_date),
+        gene_score=_lookup_gene_score(code, trade_date),
         sti_label="",                    # 无数据源，留空（列可空）
         sector="",
+        signal_source=attribution["signal_source"],
+        signal_ref=attribution["signal_ref"],
+        edge_family=attribution["edge_family"],
+        target_holding_period=attribution["target_holding_period"],
+        attention_mode=attention_mode,
     )
     _get_tracker().add_record(record)
 

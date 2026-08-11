@@ -96,6 +96,7 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
         ("exit_price", "REAL"),
         ("strategy", "TEXT"),
         ("settled_at", "TEXT"),  # S034：结算幂等锚点（结算写 winrate 后落戳）
+        ("attention_mode", "TEXT"),  # S050 W0：用户自填关注模式 A/B/C（结算透传 winrate_records）
     ):
         if col not in cols:
             conn.execute(f"ALTER TABLE workflow_state ADD COLUMN {col} {typ}")
@@ -155,6 +156,7 @@ def _row_to_state(row: sqlite3.Row) -> Dict[str, Any]:
         "exit_price": row["exit_price"] if "exit_price" in row.keys() else None,
         "strategy": row["strategy"] if "strategy" in row.keys() else None,
         "settled_at": row["settled_at"] if "settled_at" in row.keys() else None,
+        "attention_mode": row["attention_mode"] if "attention_mode" in row.keys() else None,  # S050
     }
 
 
@@ -283,12 +285,14 @@ def transition(
     entry_price: Optional[float] = None,
     exit_price: Optional[float] = None,
     strategy: Optional[str] = None,
+    attention_mode: Optional[str] = None,
 ) -> tuple[bool, str]:
     """手动流转：读当前态 → 状态机规则校验 → UPDATE + history。
 
     规则单一事实源：复用 WorkflowStateMachine.transition（_ALLOWED_TRANSITIONS）。
     S033 R2：entry_price/exit_price/strategy 为用户自填操作记录（holding 买入价/
     settled 卖出价/战法），COALESCE 语义——传 None 不覆盖已有值。
+    S050 R3：attention_mode 用户自填关注模式 A/B/C（COALESCE，缺省不覆盖）。
     返回 (ok, detail)：非法/未知/无记录时 ok=False，detail 说明当前态与允许目标。
     """
     try:
@@ -319,12 +323,13 @@ def transition(
             SET status = ?, reason = ?, updated_at = ?,
                 entry_price = COALESCE(?, entry_price),
                 exit_price = COALESCE(?, exit_price),
-                strategy = COALESCE(?, strategy)
+                strategy = COALESCE(?, strategy),
+                attention_mode = COALESCE(?, attention_mode)
             WHERE code = ? AND trade_date = ?
             """,
             (
                 target_status.value, reason, now,
-                entry_price, exit_price, strategy,
+                entry_price, exit_price, strategy, attention_mode,
                 code, trade_date,
             ),
         )
