@@ -45,7 +45,11 @@ def _load_fallback(filename: str) -> dict | list:
 
 class TestFundFlowBaseline:
     def test_605162_first_bar_validate_ok(self):
-        """capital_flow_605162.json 首行经映射后能 model_validate 进 FundFlow。"""
+        """capital_flow_605162.json 首行经映射后能 model_validate 进 FundFlow，值与源行一致。
+
+        fallback 文件是 gitignored 本地捕获产物，日期/数值随采集会话刷新，
+        故不写死具体日期/数值——改为动态一致性断言（映射后值 == 源行同名字段）。
+        """
         data = _load_fallback("capital_flow_605162.json")
         assert isinstance(data, list) and len(data) > 0
         first = data[0]
@@ -53,15 +57,15 @@ class TestFundFlowBaseline:
         ff = FundFlow.model_validate(mapped)
         assert ff.code == "605162"
         assert ff.market == Market.A
-        assert ff.date == "2026-01-27"
-        assert ff.main_net == -2878962.0
-        assert ff.super_large_net == -668657.0
-        assert ff.large_net == -2210305.0
-        assert ff.medium_net == 853488.0
-        assert ff.small_net == 2025474.0
+        assert ff.date == first["date"]
+        assert ff.main_net == first["main_net"]
+        assert ff.super_large_net == first["super_net"]
+        assert ff.large_net == first["large_net"]
+        assert ff.medium_net == first["mid_net"]
+        assert ff.small_net == first["small_net"]
 
     def test_605162_last_bar_validate_ok(self):
-        """capital_flow_605162.json 末行经映射后能 model_validate 进 FundFlow。"""
+        """capital_flow_605162.json 末行经映射后能 model_validate 进 FundFlow，值与源行一致。"""
         data = _load_fallback("capital_flow_605162.json")
         assert isinstance(data, list) and len(data) > 0
         last = data[-1]
@@ -69,7 +73,12 @@ class TestFundFlowBaseline:
         ff = FundFlow.model_validate(mapped)
         assert ff.code == "605162"
         assert ff.market == Market.A
-        assert ff.date == "2026-07-28"
+        assert ff.date == last["date"]
+        assert ff.main_net == last["main_net"]
+        assert ff.super_large_net == last["super_net"]
+        assert ff.large_net == last["large_net"]
+        assert ff.medium_net == last["mid_net"]
+        assert ff.small_net == last["small_net"]
 
     def test_round_trip_consistency(self):
         """fallback → mapped → model_validate → model_dump，关键字段值一致。"""
