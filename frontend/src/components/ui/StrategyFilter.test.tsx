@@ -37,4 +37,41 @@ describe("StrategyFilter", () => {
     expect(screen.getByText("首板挖掘")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("全部")).toHaveAttribute("aria-pressed", "false");
   });
+
+  // S058：天气适配度标签渲染
+  it("weatherFit 传入时：适配战法显绿色「适配」标签", () => {
+    render(
+      <StrategyFilter
+        strategies={["连板接力"]}
+        selected={new Set()}
+        onChange={() => {}}
+        weatherFit={{ "连板接力": "适配" }}
+      />,
+    );
+    expect(screen.getByText("适配")).toBeInTheDocument();
+  });
+
+  it("weatherFit 传入时：不适配战法显淡色 + 「不适配」标签", () => {
+    render(
+      <StrategyFilter
+        strategies={["连板接力"]}
+        selected={new Set()}
+        onChange={() => {}}
+        weatherFit={{ "连板接力": "不适配" }}
+      />,
+    );
+    expect(screen.getByText("不适配")).toBeInTheDocument();
+  });
+
+  it("weatherFit 中性时不显标签（无冗余信息）", () => {
+    render(
+      <StrategyFilter
+        strategies={["首板挖掘"]}
+        selected={new Set()}
+        onChange={() => {}}
+        weatherFit={{ "首板挖掘": "中性" }}
+      />,
+    );
+    expect(screen.queryByText("中性")).not.toBeInTheDocument();
+  });
 });

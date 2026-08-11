@@ -1,6 +1,6 @@
 # Spec: S058 — 战法双层卡片层与天气适配软过滤
 
-> 状态：草案
+> 状态：已实现（T1-T9 全落地，后端 17 passed + 前端 StrategyFilter 8 passed；query_strategy_card AI 工具三出口透明复用）
 > 作者：Codex（DSA 借鉴 grill 会话）  日期：2026-08-11
 > 级别：**medium**（跨层；新增一个 AI 工具但复用现有 registry，非新 AI 框架）
 > 流程门：develop 直提 + 勤 commit；issue 级 review；简化验收

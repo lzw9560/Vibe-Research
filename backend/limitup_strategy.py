@@ -504,6 +504,8 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破前日收盘价-3%",
         "take_profit_condition": "涨至+5%~+10%后回落",
         "exit_condition": "持仓3日未盈利或触发止损/止盈",
+        "weather_regimes": ["阴天"],
+        "aliases": ["首板", "首次涨停"],
     },
     {
         "code": "consecutive_relay",
@@ -516,6 +518,8 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破前日收盘价",
         "take_profit_condition": "涨至+8%~+15%后回落",
         "exit_condition": "连板高度≥3板或触发止损/止盈",
+        "weather_regimes": ["晴天"],
+        "aliases": ["连板", "接力"],
     },
     {
         "code": "break_reseal",
@@ -529,6 +533,8 @@ STRATEGY_REGISTRY: list[dict] = [
         "take_profit_condition": "涨至+5%~+8%后回落",
         "exit_condition": "当日收盘前未回封或触发止损/止盈",
         "note": "60日无信号：炸板后溢价因子疑似缺供（S053 查因中）",
+        "weather_regimes": ["阴天", "极端反弹"],
+        "aliases": ["回封", "炸板回封"],
     },
     {
         "code": "low_absorption",
@@ -541,6 +547,8 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破10日均线",
         "take_profit_condition": "涨至+8%~+12%后回落",
         "exit_condition": "跌破10日线或持仓5日未盈利",
+        "weather_regimes": ["晴天", "阴天"],
+        "aliases": ["低吸", "龙头低吸"],
     },
     {
         "code": "reverse_package",
@@ -554,6 +562,8 @@ STRATEGY_REGISTRY: list[dict] = [
         "take_profit_condition": "涨至+5%~+8%后回落",
         "exit_condition": "未出现反包或触发止损/止盈",
         "note": "60日无信号：炸板后溢价因子疑似缺供（S053 查因中）",
+        "weather_regimes": ["极端反弹"],
+        "aliases": ["反包", "地天板"],
     },
     {
         "code": "n_shape_counterattack",
@@ -567,6 +577,8 @@ STRATEGY_REGISTRY: list[dict] = [
         "take_profit_condition": "涨至+5%~+10%后回落",
         "exit_condition": "未出现放量反弹或触发止损/止盈",
         "note": "60日无信号：条件定义待重定义（涨停频次>30 ∧ zt_count_250d≤10 自相矛盾）",
+        "weather_regimes": ["晴天", "极端反弹"],
+        "aliases": ["N字", "反击"],
     },
     {
         "code": "platform_breakout",
@@ -579,6 +591,8 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破平台上沿",
         "take_profit_condition": "涨至+8%~+15%后回落",
         "exit_condition": "突破失败回落或触发止损/止盈",
+        "weather_regimes": ["晴天"],
+        "aliases": ["突破", "平台"],
     },
     {
         "code": "end_of_day_sneak",
@@ -591,8 +605,32 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破封板价",
         "take_profit_condition": "涨至+3%~+5%后回落",
         "exit_condition": "未封板或触发止损/止盈",
+        "weather_regimes": ["阴天"],
+        "aliases": ["尾盘", "偷袭"],
     },
 ]
+
+
+# S058：天气适配度软过滤——适配/不适配/中性三态
+def calc_weather_fit(strategy_code: str, weather_state: str | None) -> str:
+    """战法×天气适配度（软过滤，降权不屏蔽）。
+
+    返回 "适配" / "不适配" / "中性"：
+    - weather_state ∈ strategy.weather_regimes → "适配"
+    - weather_regimes 非空且不含 weather_state → "不适配"
+    - weather_state 为 None/未知 或 regimes 为空 → "中性"（不降权）
+    """
+    if not weather_state:
+        return "中性"
+    s = next((s for s in STRATEGY_REGISTRY if s["code"] == strategy_code), None)
+    if not s:
+        return "中性"
+    regimes = s.get("weather_regimes") or []
+    if not regimes:
+        return "中性"
+    if weather_state in regimes:
+        return "适配"
+    return "不适配"
 
 
 def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) -> list[StrategySignal]:
@@ -749,7 +787,10 @@ async def get_strategy_signals(code: str, date: str | None = None) -> list[Strat
 
 
 def get_strategy_registry() -> list[dict]:
-    """获取战法库定义（用于前端展示）。"""
+    """获取战法库定义（用于前端展示）。
+
+    S058：增 weather_regimes / aliases 字段（天气适配软过滤 + 别名检索）。
+    """
     return [
         {
             "code": s["code"],
@@ -760,6 +801,8 @@ def get_strategy_registry() -> list[dict]:
             "take_profit_condition": s["take_profit_condition"],
             "exit_condition": s["exit_condition"],
             "max_hold_days": s["max_hold_days"],
+            "weather_regimes": s.get("weather_regimes", []),
+            "aliases": s.get("aliases", []),
         }
         for s in STRATEGY_REGISTRY
     ]
