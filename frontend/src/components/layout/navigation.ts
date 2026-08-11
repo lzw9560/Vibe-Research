@@ -77,6 +77,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/value-funnel", label: "价值漏斗" },
       { to: "/watchlist", label: "自选股" },
       { to: "/workflow", label: "工作流" },
+      { to: "/behavior-loop", label: "行为闭环" },
     ],
   },
   {

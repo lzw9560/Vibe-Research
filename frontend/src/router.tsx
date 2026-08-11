@@ -62,6 +62,7 @@ export const router = createBrowserRouter([
       { path: "/sentiment/weather/fuse", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
       { path: "/workflow", element: lazyEl(() => import("@/pages/Workflow")) },
       { path: "/workflow/pre-market", element: lazyEl(() => import("@/pages/workflow/PreMarketBriefing")) },
+      { path: "/behavior-loop", element: lazyEl(() => import("@/pages/BehaviorLoop")) },
       { path: "/workflow/intraday", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },
       { path: "/workflow/alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },
       { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
