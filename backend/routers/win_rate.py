@@ -268,6 +268,7 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
     from vr_paths import last_trading_date_str
     import workflow_state_repo as wsr
     from backtest_lite import _calc_next_day_return
+    from limitup_screener.data import load_gene_scores
 
     today = date
 
@@ -279,15 +280,23 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
                 "missing_kline": 0, "disclaimer": "历史统计特征，市场有风险，研究参考"}
 
     finals = snap.get("final_candidates") or []
-    pushed = [
-        {
-            "code": fc.get("code"),
-            "name": fc.get("name") or fc.get("stock_name") or "",
-            "gene_score": fc.get("gene_score") or fc.get("total_score"),
-            "strategies": fc.get("strategies") or fc.get("best_strategy") or [],
-        }
-        for fc in finals if isinstance(fc, dict) and fc.get("code")
-    ]
+    # 从 gene_scores.db 补 total_score（DiagnosisCard 无 gene_score 字段）
+    gene_map: dict[str, float] = {}
+    gs = load_gene_scores(today)
+    if gs:
+        gene_map = {g.code: g.total_score for g in gs}
+
+    pushed = []
+    for fc in finals:
+        if not isinstance(fc, dict) or not fc.get("code"):
+            continue
+        code = fc["code"]
+        pushed.append({
+            "code": code,
+            "name": fc.get("name") or "",
+            "gene_score": gene_map.get(code) if code in gene_map else fc.get("gene_score"),
+            "strategies": [],  # 战法匹配在回测引擎，非单股持久化字段；诚实留空
+        })
     pushed_codes = {p["code"] for p in pushed}
 
     # bought：当日 holding 记录（entry 约等于 trade_date）

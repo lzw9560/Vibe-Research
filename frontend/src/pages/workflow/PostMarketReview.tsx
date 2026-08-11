@@ -221,8 +221,8 @@ export default function PostMarketReview() {
             <GlassCard className="mb-6 border border-primary/20 p-4">
               <p className="mb-2 text-sm font-medium">行为研判</p>
               <ul className="space-y-1.5">
-                {tips.map((t, i) => (
-                  <li key={i} className="text-xs text-foreground/90">
+                {tips.map((t) => (
+                  <li key={t.slice(0, 20)} className="text-xs text-foreground/90">
                     · {t}
                   </li>
                 ))}
@@ -237,8 +237,8 @@ export default function PostMarketReview() {
           <GlassCard className="mb-4 p-4">
             <p className="mb-2 text-xs font-medium text-muted-foreground">教学点</p>
             <ul className="space-y-1">
-              {TEACHING_POINTS.map((t, i) => (
-                <li key={i} className="text-[11px] text-muted-foreground/80">
+              {TEACHING_POINTS.map((t) => (
+                <li key={t.slice(0, 16)} className="text-[11px] text-muted-foreground/80">
                   · {t}
                 </li>
               ))}

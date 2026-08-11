@@ -436,8 +436,8 @@ function PreMarketBehaviorBlock() {
           <div className="mt-3 border-t border-border/30 pt-3">
             <p className="mb-1 text-xs font-medium">行为研判</p>
             <ul className="space-y-1">
-              {tips.map((t, i) => (
-                <li key={i} className="text-xs text-foreground/90">· {t}</li>
+              {tips.map((t) => (
+                <li key={t.slice(0, 20)} className="text-xs text-foreground/90">· {t}</li>
               ))}
             </ul>
           </div>

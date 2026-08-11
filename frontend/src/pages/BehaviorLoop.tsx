@@ -192,8 +192,8 @@ function BehaviorAssessment({ data }: { data: ShadowComparison }) {
         )}
       </div>
       <ul className="space-y-1.5">
-        {tips.map((t, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm">
+        {tips.map((t) => (
+          <li key={t.slice(0, 20)} className="flex items-start gap-2 text-sm">
             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
             <span className="text-foreground/90">{t}</span>
           </li>
