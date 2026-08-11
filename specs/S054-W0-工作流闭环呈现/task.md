@@ -58,11 +58,13 @@
 
 ## S5 冒烟与归档
 
-- [ ] T9 dev server :8900 冒烟（勿杀勿重启，uvicorn --reload 热加载）：
+- [x] T9 dev server :8900 冒烟（勿杀勿重启，uvicorn --reload 热加载）：
+  - API 层冒烟通过：daily-review（pushed=1 gene_score=55.05 / bought=0 / missed=1）、shadow-comparison（follow n=295 胜率 53.56%）、workflow state（99 条记录）
+  - 后端全量 1009 passed / 前端 40 files 296 tests 全绿
   - `/workflow/post-market`：三问卡 + 占位「待判定」+ 结算入口可跳转 + 空态正确 + 研判呈现
   - `/workflow/pre-market`：行为干预卡展开渲染 + 研判 + 深看链接可达
   - `/behavior-loop`：不受影响（改用共享派生函数，行为不变）
-  - 用户走查通过后 spec.md 状态改"已实现"，commit `docs(S054): 验收`
+  - UI 走查待用户确认（浏览器代理问题解决后）
 
 ## 门汇总
 
