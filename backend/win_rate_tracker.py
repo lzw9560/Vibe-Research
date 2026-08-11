@@ -31,6 +31,12 @@ class WinRateRecord:
     gene_score: float
     sti_label: str
     sector: str
+    # S050 W0：信号归因 5 列（全可空，向前兼容；旧行 NULL → legacy 桶）
+    signal_source: str = ""        # funnel_candidate | strategy_hit | feeling
+    signal_ref: str = ""           # funnel:final / 战法码 / 空
+    edge_family: str = ""          # momentum_premium | mean_reversion | ''
+    target_holding_period: str = ""  # T+1 | 20-60d | ''
+    attention_mode: str = "A"      # A | B | C（用户自填，缺省 A）
 
 
 @dataclass
@@ -69,6 +75,10 @@ class WinRateTracker:
             Path(__file__).resolve().parent
             / "migrations" / "win_rate_tracker" / "20250613-002_add_winrate_indexes.sql"
         ).read_text(encoding="utf-8")
+        migration_v3 = (
+            Path(__file__).resolve().parent
+            / "migrations" / "win_rate_tracker" / "20260811-003_add_signal_attribution.sql"
+        ).read_text(encoding="utf-8")
         migrations = [
             {
                 "version": "20250613-001",
@@ -80,6 +90,11 @@ class WinRateTracker:
                 "name": "add_winrate_indexes",
                 "sql": migration_v2,
             },
+            {
+                "version": "20260811-003",
+                "name": "add_signal_attribution",
+                "sql": migration_v3,
+            },
         ]
         manager.upgrade(migrations)
 
@@ -90,8 +105,9 @@ class WinRateTracker:
             """
             INSERT INTO winrate_records (
                 stock_code, stock_name, strategy_used, entry_date, entry_price,
-                exit_date, exit_price, return_pct, is_win, gene_score, sti_label, sector, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                exit_date, exit_price, return_pct, is_win, gene_score, sti_label, sector, created_at,
+                signal_source, signal_ref, edge_family, target_holding_period, attention_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.stock_code,
@@ -107,6 +123,11 @@ class WinRateTracker:
                 record.sti_label,
                 record.sector,
                 datetime.now().isoformat(),
+                record.signal_source or None,
+                record.signal_ref or None,
+                record.edge_family or None,
+                record.target_holding_period or None,
+                record.attention_mode or "A",
             ),
         )
         conn.commit()
