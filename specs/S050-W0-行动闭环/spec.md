@@ -1,6 +1,6 @@
 # Spec: S050 — W0 行为闭环（票根 + 影子对照 + 独立性基线）
 
-> 状态：草案
+> 状态：已实现（离线全测绿）；dev server 冒烟待用户本地走查
 > 作者：Codex 会话  日期：2026-08-11
 > 级别：**medium**（跨前后端 >50 行；无新外部数据源、无新 AI 工具、无新财务公式——影子收益复用已验证的 `backtest_lite._calc_next_day_return`，结算公式零改动）
 > 流程门：develop 直提 + 勤 commit；验收＝离线全测 + tsc/vitest + dev server 冒烟（对齐 S049 降级先例与 WR-Workflow §12.6"medium 级逐阶段拆 spec"承诺；若用户裁定影子收益属"财务验算"→ 升 large 换 feature 分支，文档结构不变）
@@ -25,13 +25,13 @@
 
 ## 3. 需求清单
 
-- [ ] R1 winrate.db 迁移 003：`winrate_records` 加 5 列 `signal_source`/`signal_ref`/`edge_family`/`target_holding_period`/`attention_mode`，全可空、向前兼容（旧行 NULL，统计归 legacy 桶）
-- [ ] R2 结算时自动票根关联：`record_settlement` 按 (code, trade_date) 查当日快照 `final_candidates` 命中 → `funnel_candidate`；未命中但战法回测 trades 命中 → `strategy_hit`（signal_ref=战法码）；皆无 → `feeling`
-- [ ] R3 `attention_mode` 进结算归因（D8d）：settled 流转表单加 A/B/C 选择（默认 A），经 state 行落库写入记录；`edge_family` 后端推断（funnel→momentum_premium，value 类战法→mean_reversion，其余 ''），本周期不做 UI 选择（现系统只产动量信号，选择框是假交互；W1/W5' 新管道上线时补）
-- [ ] R4 影子对照端点 `GET /api/winrate/shadow-comparison?window_days=28`：follow/feeling/missed 三桶（n/胜率/均收益）+ 独立性指标 + n<5 桶标"样本不足"+ 无快照日诚实排除计数
-- [ ] R5 missed 影子收益：`final_candidates` 中未进 holding 的标的，复用 `_calc_next_day_return`（信号日 close→次日 close，UI 明示近似口径，与 S047 证据基线同口径）；K 线缺失排除并计数
-- [ ] R6 `PreMarketBriefing` 加"行为对照"卡：三桶算账表 + 一致率 + 教学一句话（样本量 caveat，D8c 教学模式默认开）+ 轻量风险提醒
-- [ ] R7 观察期语义：端点与卡片只出客观算账，**不出方向结论**；≥4 周后的方向决策是人读数据（本 spec 不建自动决策/毕业逻辑）
+- [x] R1 winrate.db 迁移 003：`winrate_records` 加 5 列 `signal_source`/`signal_ref`/`edge_family`/`target_holding_period`/`attention_mode`，全可空、向前兼容（旧行 NULL，统计归 legacy 桶）
+- [x] R2 结算时自动票根关联：`record_settlement` 按 (code, trade_date) 查当日快照 `final_candidates` 命中 → `funnel_candidate`；未命中但战法回测 trades 命中 → `strategy_hit`（signal_ref=战法码）；皆无 → `feeling`
+- [x] R3 `attention_mode` 进结算归因（D8d）：settled 流转表单加 A/B/C 选择（默认 A），经 state 行落库写入记录；`edge_family` 后端推断（funnel→momentum_premium，value 类战法→mean_reversion，其余 ''），本周期不做 UI 选择（现系统只产动量信号，选择框是假交互；W1/W5' 新管道上线时补）
+- [x] R4 影子对照端点 `GET /api/winrate/shadow-comparison?window_days=28`：follow/feeling/missed 三桶（n/胜率/均收益）+ 独立性指标 + n<5 桶标"样本不足"+ 无快照日诚实排除计数
+- [x] R5 missed 影子收益：`final_candidates` 中未进 holding 的标的，复用 `_calc_next_day_return`（信号日 close→次日 close，UI 明示近似口径，与 S047 证据基线同口径）；K 线缺失排除并计数
+- [x] R6 `PreMarketBriefing` 加"行为对照"卡：三桶算账表 + 一致率 + 教学一句话（样本量 caveat，D8c 教学模式默认开）+ 轻量风险提醒
+- [x] R7 观察期语义：端点与卡片只出客观算账，**不出方向结论**；≥4 周后的方向决策是人读数据（本 spec 不建自动决策/毕业逻辑）
 
 ## 4. 受影响文件
 
@@ -60,11 +60,13 @@
 ## 6. 验收标准
 
 - [ ] A1 迁移幂等（跑两遍不报错）；legacy 行 5 列 NULL；既有 stats/trends/strategy API 不受影响（NULL → legacy 桶）
-- [ ] A2 票根关联三分支单测绿：快照命中 / 仅战法命中 / 双miss → feeling
-- [ ] A3 shadow-comparison fixture 测试：三桶算账正确 + 样本不足标记 + 无快照日排除 + K 线缺失排除
-- [ ] A4 前端对照卡渲染三桶 + 一致率 + 风险提醒（vitest）；结算表单 attention_mode 可选
-- [ ] A5 离线全测绿：`pytest -m "not live"`（基线 S049 验收态）+ tsc + vitest
-- [ ] A6 零新外部调用：shadow-comparison 只读 winrate.db/快照/workflow_state/K 线本地库
+  - 注：迁移幂等 + legacy NULL + get_stats NULL 兼容单测绿（5 passed）；既有 API 零改动（NULL 不崩）
+- [x] A2 票根关联三分支单测绿：快照命中 / 仅战法命中 / 双miss → feeling
+- [x] A3 shadow-comparison fixture 测试：三桶算账正确 + 样本不足标记 + 无快照日排除 + K 线缺失排除
+- [x] A4 前端对照卡渲染三桶 + 一致率 + 风险提醒（vitest）；结算表单 attention_mode 可选
+- [x] A5 离线全测绿：`pytest -m "not live"`（基线 S049 验收态）+ tsc + vitest
+  - 后端 983 passed / 9 deselected；前端 36 files / 257 tests + tsc exit 0
+- [x] A6 零新外部调用：shadow-comparison 只读 winrate.db/快照/workflow_state/K 线本地库
 
 ## 7. 合规与工程底线自查
 
