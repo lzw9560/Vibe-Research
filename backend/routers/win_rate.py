@@ -132,3 +132,121 @@ async def add_winrate_records(records: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 __all__ = ["router"]
+
+
+# ============ S050 W0：影子对照端点 ============
+
+
+def _shadow_comparison_impl(window_days: int, tracker: WinRateTracker) -> Dict[str, Any]:
+    """S050 R4：影子对照算账纯实现（端点薄壳调用，便于测试注入 tracker）。
+
+    follow/feeling/missed 三桶 + 独立性指标；只读 winrate.db/快照/workflow_state/K 线本地库，零外呼。
+    """
+    import sqlite3
+    from datetime import datetime, timedelta
+    from snapshot_store import load_snapshot, list_snapshot_dates
+
+    db_path = tracker.db_path
+    today = datetime.now().date()
+    since = (today - timedelta(days=window_days)).strftime("%Y-%m-%d")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = [dict(r) for r in conn.execute(
+        "SELECT * FROM winrate_records WHERE entry_date >= ? ORDER BY entry_date DESC", (since,),
+    ).fetchall()]
+    conn.close()
+
+    # follow 桶：signal_source ∈ (funnel_candidate, strategy_hit)
+    follow = [r for r in rows if r.get("signal_source") in ("funnel_candidate", "strategy_hit")]
+    # feeling 桶：signal_source='feeling'（legacy NULL 不计两桶）
+    feeling = [r for r in rows if r.get("signal_source") == "feeling"]
+
+    def _bucket(trades: list[dict]) -> dict:
+        n = len(trades)
+        if n == 0:
+            return {"n": 0, "win_rate": None, "avg_return": None}
+        wins = sum(1 for t in trades if t.get("is_win"))
+        rets = [t["return_pct"] for t in trades if t.get("return_pct") is not None]
+        return {
+            "n": n,
+            "win_rate": round(wins / n, 4),
+            "avg_return": round(sum(rets) / len(rets), 4) if rets else 0.0,
+        }
+
+    follow_b = _bucket(follow)
+    feeling_b = _bucket(feeling)
+
+    # missed 桶：窗口内各快照日 final_candidates − 当日 holding/settled codes → 影子收益
+    import workflow_state_repo as wsr
+
+    snap_dates = [d for d in list_snapshot_dates() if d >= since]
+    missed_returns: list[float] = []
+    no_suggestion_days = 0
+    missing_kline = 0
+    from backtest_lite import _calc_next_day_return
+
+    kline_cache: dict = {}
+    for d in snap_dates:
+        snap = load_snapshot(d)
+        if not snap:
+            no_suggestion_days += 1
+            continue
+        finals = snap.get("final_candidates") or []
+        candidate_codes = [fc.get("code") for fc in finals if isinstance(fc, dict) and fc.get("code")]
+        if not candidate_codes:
+            no_suggestion_days += 1
+            continue
+        # 当日 holding/settled codes（用户实际买入的）
+        states = wsr.list_states(d)
+        held = {s["code"] for s in states if s.get("status") in ("holding", "settled", "monitoring")}
+        missed_codes = [c for c in candidate_codes if c not in held]
+        for code in missed_codes:
+            ret = _calc_next_day_return(code, d, kline_cache)
+            if ret == 0.0:
+                # 0.0 可能是真 0 或 K 线缺返兜底——近似口径下保守计入 missing
+                missing_kline += 1
+                continue
+            missed_returns.append(ret)
+    missed_b = {
+        "n": len(missed_returns),
+        "win_rate": round(sum(1 for r in missed_returns if r > 0) / len(missed_returns), 4) if missed_returns else None,
+        "avg_return": round(sum(missed_returns) / len(missed_returns), 4) if missed_returns else None,
+    }
+
+    # 独立性指标：一致率 = follow_n / (follow_n + feeling_n)；feeling 胜率
+    denom = follow_b["n"] + feeling_b["n"]
+    agreement_rate = round(follow_b["n"] / denom, 4) if denom > 0 else None
+
+    # 诚实标记：任一桶 n<5 → sufficient=false
+    sufficient = all(b["n"] >= 5 for b in (follow_b, feeling_b, missed_b))
+
+    return {
+        "window_days": window_days,
+        "follow": follow_b,
+        "feeling": feeling_b,
+        "missed": {**missed_b, "missing_kline": missing_kline, "approx_note": "信号日收盘→次日收盘，近似口径"},
+        "independence": {
+            "agreement_rate": agreement_rate,
+            "feeling_win_rate": feeling_b["win_rate"],
+        },
+        "no_suggestion_days": no_suggestion_days,
+        "sufficient": sufficient,
+        "disclaimer": "历史统计特征，市场有风险，研究参考",
+    }
+
+
+@router.get("/api/winrate/shadow-comparison")
+async def shadow_comparison(window_days: int = Query(28, ge=7, le=90)) -> Dict[str, Any]:
+    """S050 W0：影子对照——系统建议单 vs 用户实际单并排算账。
+
+    follow 桶（signal_source=funnel_candidate/strategy_hit）/ feeling 桶 / missed 桶
+    （快照候选未买入的影子收益，close-to-close 近似口径）+ 独立性指标（一致率/feeling 胜率）。
+    诚实标记：n<5 → sufficient=false；无快照日计数；K 线缺失排除计数。
+    只读本地私有库，零新外部调用。
+    """
+    try:
+        return _shadow_comparison_impl(window_days, _tracker)
+    except Exception as e:  # noqa: BLE001
+        _logger.exception("影子对照异常")
+        raise HTTPException(502, f"影子对照异常：{e}") from e
