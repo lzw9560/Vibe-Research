@@ -528,6 +528,7 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破回封价",
         "take_profit_condition": "涨至+5%~+8%后回落",
         "exit_condition": "当日收盘前未回封或触发止损/止盈",
+        "note": "60日无信号：炸板后溢价因子疑似缺供（S053 查因中）",
     },
     {
         "code": "low_absorption",
@@ -552,6 +553,7 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破前日最低价",
         "take_profit_condition": "涨至+5%~+8%后回落",
         "exit_condition": "未出现反包或触发止损/止盈",
+        "note": "60日无信号：炸板后溢价因子疑似缺供（S053 查因中）",
     },
     {
         "code": "n_shape_counterattack",
@@ -564,6 +566,7 @@ STRATEGY_REGISTRY: list[dict] = [
         "stop_loss_condition": "跌破回调低点",
         "take_profit_condition": "涨至+5%~+10%后回落",
         "exit_condition": "未出现放量反弹或触发止损/止盈",
+        "note": "60日无信号：条件定义待重定义（涨停频次>30 ∧ zt_count_250d≤10 自相矛盾）",
     },
     {
         "code": "platform_breakout",

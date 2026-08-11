@@ -81,6 +81,7 @@ async def strategy_backtest(lookback_days: int = Query(60, ge=1, le=365)) -> Dic
                 "avg_return": r.avg_return,
                 "sample_size": r.sample_size,
                 "available_days": r.available_days,
+                "note": next((s.get("note", "") for s in __import__("limitup_strategy").STRATEGY_REGISTRY if s["code"] == r.strategy_code), ""),
             }
             for r in results
         ],

@@ -11,6 +11,7 @@ export interface StrategyBacktestItem {
   avg_return: number;
   sample_size: number;
   available_days: number;
+  note?: string;  // S051 D5：零样本战法诚实注记（60日无信号原因）
 }
 
 /** S031 R22：按战法回测——GET /api/strategy/backtest?lookback_days。

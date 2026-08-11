@@ -70,7 +70,12 @@ export function WinRateComparePanel({ backtest, l2Passed, loading, onPickCandida
                     className="border-t border-border/30 cursor-pointer hover:bg-accent/30"
                     onClick={() => hits.length > 0 && setExpanded(isOpen ? null : b.strategy_code)}
                   >
-                    <td className="py-1 pr-3">{b.strategy}{hits.length > 0 && (isOpen ? " ▼" : " ▶")}</td>
+                    <td className="py-1 pr-3">
+                      <div>{b.strategy}{hits.length > 0 && (isOpen ? " ▼" : " ▶")}</div>
+                      {b.sample_size === 0 && b.note && (
+                        <div className="text-xs text-muted-foreground/70">{b.note}</div>
+                      )}
+                    </td>
                     <td className="py-1 pr-3">
                       {b.sample_size > 0 ? `${(b.win_rate * 100).toFixed(1)}%` : "—"}
                     </td>
