@@ -17,6 +17,7 @@ export interface IndicatorSet {
   announcements: Announcement[]; concepts: string[]; sector_flow?: number | null;
   ma5?: number | null; ma10?: number | null; ma20?: number | null; boll_upper?: number | null; boll_lower?: number | null; macd?: number | null;
   seal_amount?: number | null; auction_open_pct?: number | null;
+  float_market_cap?: number | null;  // S057：流通市值（元）
   missing: Record<string, string>;
 }
 export type ActivityTier = "冷" | "活跃" | "热";
@@ -26,6 +27,21 @@ export interface StabilizationSignals {
   main_flow_turning_positive?: boolean | null; board_height_rising?: boolean | null;
   evidence: Record<string, string>;
 }
+// S057：八项标准三态判定
+export type EightStandardStatus = "pass" | "fail" | "missing";
+export interface EightStandardItem {
+  key: string;
+  label: string;
+  status: EightStandardStatus;
+  actual?: string | null;
+  expected: string;
+  note?: string | null;
+}
+export interface EightStandardResult {
+  items: EightStandardItem[];
+  fail_count: number;
+  missing_count: number;
+}
 export interface DiagnosisCard {
   code: string; name: string;
   indicators: IndicatorSet;
@@ -33,6 +49,9 @@ export interface DiagnosisCard {
   stabilization: StabilizationSignals;
   risk_flags: string[];
   as_of: string;
+  eight_standards?: EightStandardResult | null;  // S057
+  capped?: boolean;  // S057：未过≥3 → 封顶 55
+  cap_reason?: string | null;
 }
 export interface FilterRecord { code: string; name?: string | null; reason: string }
 

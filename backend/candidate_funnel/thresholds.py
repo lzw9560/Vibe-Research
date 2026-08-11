@@ -60,3 +60,19 @@ def resolve_thresholds(cfg: ThresholdConfig, sti_phase: str | None) -> BaseThres
     cfg.adjustment = applied
     cfg.effective = eff
     return eff
+
+
+# ---------- S057：八项标准封顶配置 ----------
+# 八项标准阈值（spec §2 DSA 原型，可在 thresholds.py 调整）
+EIGHT_STANDARD_FLOAT_CAP_MIN = 30e8  # 流通市值下限 30 亿（元）
+EIGHT_STANDARD_FLOAT_CAP_MAX = 150e8  # 流通市值上限 150 亿（元）
+EIGHT_STANDARD_TURNOVER_MIN = 5.0  # 换手下限 %
+EIGHT_STANDARD_TURNOVER_MAX = 20.0  # 换手上限 %
+EIGHT_STANDARD_VOL_RATIO_MIN = 1.5  # 量比下限
+EIGHT_STANDARD_SEAL_TIME_HOUR = 10  # 10:30 前封板
+EIGHT_STANDARD_SEAL_TIME_MINUTE = 30
+EIGHT_STANDARD_MAX_REOPENS = 1  # 开板次数上限
+EIGHT_STANDARD_SEAL_RATIO_MIN = 0.01  # 封单>流通市值 1%
+EIGHT_STANDARD_HOT_SECTOR_TOPN = 10  # 题材热度 TOP10
+EIGHT_STANDARD_CAP_THRESHOLD = 55  # 封顶后最终得分上限
+EIGHT_STANDARD_FAIL_CAP_COUNT = 3  # 未过数阈值

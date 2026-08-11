@@ -46,9 +46,13 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
             "name": None, "price": None, "change_pct": None, "turnover_pct": None,
             "vol_ratio": None, "amount_yi": None, "amplitude_pct": None,
             "limit_up": None, "limit_down": None, "missing": {},
+            "float_market_cap": None,  # S057：八项标准①流通市值
         }
         model = quote_from_tencent(c, today_quote.get(c, {}))
         entry["name"] = model.name
+        # S057：流通市值（元）—— tencent_quote 的 float_market_cap 字段
+        if model.float_market_cap:
+            entry["float_market_cap"] = model.float_market_cap
         float_shares = None
         if model.float_market_cap and model.price:
             float_shares = model.float_market_cap / model.price
@@ -131,6 +135,8 @@ def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
                 "limit_down": model.limit_down_price,
                 # S049 C2：当日行情数据源日期=as_of（tencent_quote 仅当日）
                 "_as_of": as_of,
+                # S057：流通市值（元）—— 供八项标准①判定
+                "float_market_cap": model.float_market_cap,
             }
             missing: dict[str, str] = {}
             for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):

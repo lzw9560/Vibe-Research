@@ -62,6 +62,8 @@ class IndicatorSet(BaseModel):
     chip_profit_ratio: Optional[float] = None
     block_trade_premium: Optional[float] = None
     holder_num_change: Optional[float] = None
+    # S057：八项标准所需字段
+    float_market_cap: Optional[float] = None  # 流通市值（元）；activity source 已有，build_indicator_set 塞入
     # 数据缺失透明（AC6）：field -> 原因
     missing: dict[str, str] = {}
 
@@ -120,6 +122,7 @@ class DiagnosisCard(BaseModel):
     """个股诊断卡：六类指标 + 活跃度档 + 企稳信号 + 客观风险标。
 
     合规 AC10：不含"回撤/出货/健康/买卖"等方向结论词，方向交用户 AI。
+    S057：增 eight_standards（八项标准三态判定）+ capped/cap_reason（封顶标记）。
     """
 
     code: str
@@ -129,6 +132,32 @@ class DiagnosisCard(BaseModel):
     stabilization: StabilizationSignals
     risk_flags: list[str] = []  # ST/新股/停牌/极端估值 等客观标注
     as_of: datetime
+    eight_standards: Optional["EightStandardResult"] = None
+    capped: bool = False  # 八项未过≥3 → 最终得分封顶 55
+    cap_reason: Optional[str] = None
+
+
+# ---------- S057 八项标准 ----------
+class EightStandardItem(BaseModel):
+    """八项标准单条检查结果：pass / fail / missing 三态。
+
+    missing 不计入通过数也不计入未过数（独立第三态，守不臆造红线）。
+    """
+
+    key: str  # 1-8 编号
+    label: str
+    status: Literal["pass", "fail", "missing"]
+    actual: Optional[str] = None  # 实际值（missing 时为 None）
+    expected: str  # 期望区间/条件（人类可读）
+    note: Optional[str] = None
+
+
+class EightStandardResult(BaseModel):
+    """八项标准检查结果汇总。"""
+
+    items: list[EightStandardItem] = []
+    fail_count: int = 0
+    missing_count: int = 0
 
 
 # ---------- 漏斗 ----------

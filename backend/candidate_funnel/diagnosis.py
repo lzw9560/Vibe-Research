@@ -17,9 +17,11 @@ from candidate_funnel.models import (
     Announcement,
     BaseThreshold,
     DiagnosisCard,
+    EightStandardResult,
     IndicatorSet,
     StabilizationSignals,
 )
+from candidate_funnel.eight_standards import check_eight_standards
 
 
 def assess_activity(ind: IndicatorSet, eff: BaseThreshold) -> ActivityAssessment:
@@ -128,6 +130,9 @@ def build_indicator_set(
     ind.dragon_tiger_hot_money_relay = f.get("dragon_tiger_hot_money_relay")
     ind.northbound = f.get("northbound")
 
+    # S057：流通市值——activity source 已取（tencent_quote.float_cap），塞入 IndicatorSet
+    ind.float_market_cap = a.get("float_market_cap")
+
     au = auction.get(code, {})
     ind.auction_open_pct = au.get("auction_open_pct")
 
@@ -159,10 +164,20 @@ def build_diagnosis_card(
     market_ctx: dict | None = None,
     as_of: datetime | None = None,
 ) -> DiagnosisCard:
-    """聚合 → DiagnosisCard（AC4）。risk_flags 为客观标注（AC8/§8 极端估值）。"""
+    """聚合 → DiagnosisCard（AC4）。risk_flags 为客观标注（AC8/§8 极端估值）。
+
+    S057：增八项标准三态判定（check_eight_standards），结果挂入 eight_standards 字段；
+    未过数≥3 标 capped=True + cap_reason（封顶阈值在 funnel.py 消费侧实施）。
+    """
     activity = assess_activity(ind, eff)
     stabilization = detect_stabilization(ind, market_ctx)
     risk_flags: list[str] = []
+    eight = check_eight_standards(ind, market_ctx)
+    capped = eight.fail_count >= 3
+    cap_reason = (
+        f"八项标准未过{eight.fail_count}项，得分封顶{_CAP_THRESHOLD}"
+        if capped else None
+    )
     return DiagnosisCard(
         code=code,
         name=name,
@@ -171,4 +186,10 @@ def build_diagnosis_card(
         stabilization=stabilization,
         risk_flags=risk_flags,
         as_of=as_of or datetime.now(),
+        eight_standards=eight,
+        capped=capped,
+        cap_reason=cap_reason,
     )
+
+
+from candidate_funnel.thresholds import EIGHT_STANDARD_CAP_THRESHOLD as _CAP_THRESHOLD  # noqa: E402, I001

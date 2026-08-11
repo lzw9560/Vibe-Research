@@ -79,6 +79,32 @@ export function DiagnosisCardView({ card }: { card: Card }) {
         </div>
       )}
 
+      {card.eight_standards && (
+        <div className="text-sm">
+          <div className="text-muted-foreground mb-1">八项标准：</div>
+          <div className="grid grid-cols-1 gap-y-1">
+            {card.eight_standards.items.map((it) => (
+              <div key={it.key} className="flex justify-between gap-2">
+                <span className="text-muted-foreground">{it.label}</span>
+                <span className={
+                  it.status === "pass" ? "text-emerald-600" :
+                  it.status === "fail" ? "text-red-600" :
+                  "text-muted-foreground/60"
+                }>
+                  {it.status === "pass" ? "通过" : it.status === "fail" ? "未过" : "—"}
+                  {it.actual ? `（${it.actual}）` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+          {card.capped && card.cap_reason && (
+            <div className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
+              封顶标记：{card.cap_reason}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="pt-2 border-t border-border">
         <span className="text-xs text-muted-foreground">方向判断交用户 AI，系统不输出结论</span>
         <div className="mt-2">

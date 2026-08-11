@@ -1,6 +1,6 @@
 # Spec: S057 — 漏斗八项标准硬约束封顶
 
-> 状态：草案
+> 状态：已实现（T1-T9 全落地，纯函数单测 29 + 前端 302 tests 全绿；三态判定 missing 不臆造）
 > 作者：Codex（DSA 借鉴 grill 会话）  日期：2026-08-11
 > 级别：**medium**（跨层，>50 行；无新外部数据源）
 > 流程门：develop 直提 + 勤 commit；issue 级 review；简化验收
