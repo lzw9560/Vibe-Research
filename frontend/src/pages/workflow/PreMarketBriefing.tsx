@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
-import { usePreMarketBriefing, usePreMarketRefresh } from "@/lib/query";
+import { usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
 import { useStrategyBacktest } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -12,6 +12,7 @@ import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { StrategyFilter } from "@/components/ui/StrategyFilter";
 import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
 import { CandidateDetailPanel } from "./CandidateDetail";
+import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { FactorResult } from "@/lib/api";
 import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
 import { Link, useSearchParams } from "react-router-dom";
@@ -211,6 +212,9 @@ export default function PreMarketBriefing() {
         <p className="mt-4 text-xs text-muted-foreground/50">更新于 {formatRelativeTime(briefing.as_of)}</p>
       )}
 
+      {/* S054 R4：盘前行为干预卡（展开不收起）——三桶算账 + 研判 + 深看链接 */}
+      {status === "done" && <PreMarketBehaviorBlock />}
+
       {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关（S033：传 date 供状态卡/徽标） */}
       <Sheet open={!!drawerCode} onClose={() => setDrawerCode(null)}>
         {drawerCode && <CandidateDetailPanel code={drawerCode} date={briefing.data_date} />}
@@ -381,5 +385,69 @@ function FactorSection({ factor, onPick }: { factor: FactorResult; onPick: (code
         <p className="mt-2 text-sm text-muted-foreground">无漏斗层数据</p>
       )}
     </GlassCard>
+  );
+}
+
+/** S054 R4：盘前行为干预卡——展开不收起。三桶算账 + 一致率 + 研判 + 深看链接。 */
+function PreMarketBehaviorBlock() {
+  const { data, isLoading } = useShadowComparison(28);
+  if (isLoading) {
+    return (
+      <div className="mb-6">
+        <SectionHeader title="盘前行为账单" subtitle="follow/feeling/missed 三桶 + 独立性" />
+        <GlassCard className="p-4">
+          <Skeleton variant="rounded" className="h-24" />
+        </GlassCard>
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const fmtPct = (v: number | null | undefined) => v != null ? `${(v * 100).toFixed(1)}%` : "—";
+  const fmtRet = (v: number | null | undefined) => v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "—";
+
+  const tips = deriveAssessmentTips(data);
+
+  return (
+    <div className="mb-6">
+      <SectionHeader title="盘前行为账单" subtitle="决策前先看自己的行为账单" />
+      <GlassCard className="p-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-muted-foreground">跟随单 follow</p>
+            <p className="mt-1 text-sm font-medium">n={data.follow.n} · 胜率 {fmtPct(data.follow.win_rate)} · 均收益 {fmtRet(data.follow.avg_return)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">感觉单 feeling</p>
+            <p className="mt-1 text-sm font-medium">n={data.feeling.n} · 胜率 {fmtPct(data.feeling.win_rate)} · 均收益 {fmtRet(data.feeling.avg_return)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">漏单 missed</p>
+            <p className="mt-1 text-sm font-medium">n={data.missed.n} · 胜率 {fmtPct(data.missed.win_rate)} · 均收益 {fmtRet(data.missed.avg_return)}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span>一致率 {fmtPct(data.independence.agreement_rate)}</span>
+          {!data.sufficient && <span className="text-warning">样本不足（任一桶 n&lt;5），参考价值低</span>}
+        </div>
+
+        {tips.length > 0 && (
+          <div className="mt-3 border-t border-border/30 pt-3">
+            <p className="mb-1 text-xs font-medium">行为研判</p>
+            <ul className="space-y-1">
+              {tips.map((t, i) => (
+                <li key={i} className="text-xs text-foreground/90">· {t}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-[10px] text-muted-foreground/60">{data.disclaimer}</p>
+          <Link to="/behavior-loop" className="text-xs text-primary hover:underline">深看 →</Link>
+        </div>
+      </GlassCard>
+    </div>
   );
 }
