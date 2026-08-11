@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { WorkflowStage } from "../components/WorkflowStage";
 import IntradayMonitor from "../IntradayMonitor";
-import PostMarketReview from "../PostMarketReview";
 import BombAlertPanel from "../BombAlertPanel";
 
-// S036：工作流标灰——三页不调 hook 渲染未实现态 + WorkflowStage notImplemented prop。
+// S036 工作流标灰——IntradayMonitor/BombAlertPanel 未实现态 + WorkflowStage notImplemented prop。
+// PostMarketReview S054 已去桩重写（三问区），不再属 S036 未实现态，其测试在 PostMarketReview.test.tsx。
 
 describe("S036 工作流标灰", () => {
   it("WorkflowStage notImplemented=true 渲染未实现横幅，不渲染 children", () => {
@@ -38,12 +38,6 @@ describe("S036 工作流标灰", () => {
     render(<IntradayMonitor />);
     expect(screen.getByText("未实现")).toBeInTheDocument();
     expect(screen.getByText(/盘中实时监控/)).toBeInTheDocument();
-  });
-
-  it("PostMarketReview 渲染未实现态（不调 hook）", () => {
-    render(<PostMarketReview />);
-    expect(screen.getByText("未实现")).toBeInTheDocument();
-    expect(screen.getByText(/盘后批量结算/)).toBeInTheDocument();
   });
 
   it("BombAlertPanel 渲染未实现态（不调 hook）", () => {
