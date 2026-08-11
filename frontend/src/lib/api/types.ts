@@ -540,6 +540,32 @@ export interface WinRateRecordsResponse {
   error_count: number;
 }
 
+// ---- S050 W0：影子对照（行为闭环）----
+// 对齐后端 GET /api/winrate/shadow-comparison（routers/win_rate.py:_shadow_comparison_impl）。
+// 三桶算账 + 独立性指标 + 诚实标记（sufficient/no_suggestion_days/missing_kline）。
+export interface ShadowBucket {
+  n: number;
+  win_rate: number | null;
+  avg_return: number | null;
+}
+export interface ShadowMissedBucket extends ShadowBucket {
+  missing_kline: number;
+  approx_note: string;
+}
+export interface ShadowComparison {
+  window_days: number;
+  follow: ShadowBucket;
+  feeling: ShadowBucket;
+  missed: ShadowMissedBucket;
+  independence: {
+    agreement_rate: number | null;
+    feeling_win_rate: number | null;
+  };
+  no_suggestion_days: number;
+  sufficient: boolean;
+  disclaimer: string;
+}
+
 // ---- 胜率趋势/调整/下钻（S025-A 类型收紧）----
 // 对齐后端 win_rate_tracker：get_trends / generate_strategy_adjustments /
 // get_sector_stats / get_strategy_stats 返回结构（request() 自动解包 .data）。
@@ -1182,6 +1208,7 @@ export interface TransitionRequest {
   exit_price?: number;
   strategy?: string;
   auto_fill_exit_price?: boolean;
+  attention_mode?: "A" | "B" | "C";  // S050 W0：结算归因用（缺省 A）
 }
 
 export interface WorkflowStateHistoryItem {

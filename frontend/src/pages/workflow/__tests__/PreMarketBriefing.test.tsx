@@ -9,11 +9,13 @@ const qMocks = vi.hoisted(() => ({
   usePreMarketRefresh: vi.fn(),
   useFunnelLayers: vi.fn(),
   useStrategyBacktest: vi.fn(),
+  useShadowComparison: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
   usePreMarketBriefing: qMocks.usePreMarketBriefing,
   usePreMarketRefresh: qMocks.usePreMarketRefresh,
+  useShadowComparison: qMocks.useShadowComparison,
 }));
 vi.mock("@/lib/query/topology", () => ({ useFunnelLayers: qMocks.useFunnelLayers }));
 vi.mock("@/lib/query/strategy", () => ({
@@ -48,6 +50,7 @@ describe("PreMarketBriefing (S048)", () => {
     qMocks.usePreMarketRefresh.mockReturnValue({ mutate: mutateMock, isPending: false });
     qMocks.useFunnelLayers.mockReturnValue({ data: undefined, isLoading: false });
     qMocks.useStrategyBacktest.mockReturnValue({ data: [], isLoading: false });
+    qMocks.useShadowComparison.mockReturnValue({ data: undefined, isLoading: false });
     qMocks.usePreMarketBriefing.mockReturnValue({
       data: { status: "done", factors: [], data_date: "2026-08-07", funnel_layers: [] },
       isLoading: false,

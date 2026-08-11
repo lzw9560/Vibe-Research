@@ -6,4 +6,5 @@ export * from "./stock";
 export * from "./limitup";
 export * from "./topology";
 export * from "./workflow";
+export * from "./winrate";  // S050 W0：影子对照
 export type { Opts } from "./types";

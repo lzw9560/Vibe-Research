@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
-import { usePreMarketBriefing, usePreMarketRefresh } from "@/lib/query";
+import { usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
 import { useStrategyBacktest } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -204,6 +204,9 @@ export default function PreMarketBriefing() {
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
           <WinRateCompareSection factors={factors} onPick={setDrawerCode} />
+
+          {/* ⑤ S050 W0：行为对照卡（三桶算账 + 一致率，盘前决策前见） */}
+          <ShadowComparisonSection />
         </>
       )}
 
@@ -334,6 +337,77 @@ function WinRateCompareSection({ factors, onPick }: { factors: FactorResult[]; o
     <div className="mb-6">
       <WinRateComparePanel backtest={backtest} l2Passed={l2Passed} loading={isLoading} onPickCandidate={onPick} />
     </div>
+  );
+}
+
+/** S050 W0：行为对照卡——三桶算账 + 一致率 + 样本不足标记 + 教学一句话。
+ * 只出客观算账，不出方向结论；挂「历史统计特征，市场有风险，研究参考」。
+ * 折叠默认收起（观察期数据积累，避免信息过载）。 */
+function ShadowComparisonSection() {
+  const { data, isLoading } = useShadowComparison(28);
+  const [open, setOpen] = useState(false);
+  if (isLoading) return null;
+  if (!data) return null;
+
+  const pct = (v: number | null | undefined) => v != null ? `${(v * 100).toFixed(1)}%` : "—";
+  const num = (v: number | null | undefined) => v != null ? v.toFixed(2) : "—";
+  const Row = ({ label, b }: { label: string; b: { n: number; win_rate: number | null; avg_return: number | null } }) => (
+    <tr className="border-t border-border/30">
+      <td className="py-1 pr-3 text-xs text-muted-foreground">{label}</td>
+      <td className="py-1 pr-3 text-sm">{b.n}</td>
+      <td className="py-1 pr-3 text-sm">{b.n > 0 ? pct(b.win_rate) : "—"}</td>
+      <td className="py-1 text-sm">{b.n > 0 ? `${num(b.avg_return)}%` : "—"}</td>
+    </tr>
+  );
+
+  return (
+    <GlassCard className="p-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between"
+      >
+        <span className="font-medium">行为对照 {open ? "▼" : "▶"}</span>
+        <span className="text-xs text-muted-foreground">
+          一致率 {data.independence.agreement_rate != null ? pct(data.independence.agreement_rate) : "—（样本不足）"}
+          {!data.sufficient && " · 样本不足，仅观察"}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-xs text-muted-foreground">
+                  <th className="py-1 pr-3">桶</th>
+                  <th className="py-1 pr-3">N</th>
+                  <th className="py-1 pr-3">胜率</th>
+                  <th className="py-1">均收益</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Row label="跟系统（follow）" b={data.follow} />
+                <Row label="感觉单（feeling）" b={data.feeling} />
+                <Row label="漏掉候选（missed）" b={data.missed} />
+              </tbody>
+            </table>
+          </div>
+          {data.missed.missing_kline > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">漏掉候选 K 线缺失排除 {data.missed.missing_kline} 笔</p>
+          )}
+          {data.no_suggestion_days > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">无系统建议日（无快照）{data.no_suggestion_days} 天</p>
+          )}
+          <p className="mt-2 text-xs text-muted-foreground">
+            missed 影子口径：{data.missed.approx_note}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            ≥4 周观察期后凭数据决定建设方向；当前样本量 caveat，仅观察不结论。
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground/70">{data.disclaimer}</p>
+        </div>
+      )}
+    </GlassCard>
   );
 }
 

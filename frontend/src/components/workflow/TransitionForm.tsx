@@ -32,6 +32,8 @@ export function TransitionForm({ code, date, target, onSubmit, onCancel, submitt
   const [reason, setReason] = useState("");
   // S038：按市价自动结算——仅 settled 流转时可选；on=后端拉市价即结
   const [autoFill, setAutoFill] = useState(false);
+  // S050 W0：attention_mode 关注模式（A=全神贯注/B=边看边做/C=随手一试，结算归因用）
+  const [attentionMode, setAttentionMode] = useState<"A" | "B" | "C">("A");
 
   const handleSubmit = () => {
     onSubmit({
@@ -44,6 +46,8 @@ export function TransitionForm({ code, date, target, onSubmit, onCancel, submitt
       exit_price: target === "settled" && !autoFill ? toOptionalNumber(exitPrice) : undefined,
       strategy: strategy || undefined,
       auto_fill_exit_price: target === "settled" ? autoFill : undefined,
+      // S050：settled 流转透传 attention_mode（holding 不带，结算时才落库）
+      attention_mode: target === "settled" ? attentionMode : undefined,
     });
   };
 
@@ -103,6 +107,24 @@ export function TransitionForm({ code, date, target, onSubmit, onCancel, submitt
         value={reason}
         onChange={(e) => setReason(e.target.value)}
       />
+      {/* S050 W0：attention_mode——仅 settled 流转时选（结算归因用） */}
+      {target === "settled" && (
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-muted-foreground" htmlFor="s050-attention-mode">
+            关注模式（归因用）
+          </label>
+          <select
+            id="s050-attention-mode"
+            value={attentionMode}
+            onChange={(e) => setAttentionMode(e.target.value as "A" | "B" | "C")}
+            className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none transition-colors focus:border-primary/50"
+          >
+            <option value="A">A · 全神贯注</option>
+            <option value="B">B · 边看边做</option>
+            <option value="C">C · 随手一试</option>
+          </select>
+        </div>
+      )}
       <div className="flex gap-2 pt-1">
         <Button size="sm" onClick={handleSubmit} disabled={submitting}>确认流转</Button>
         <Button size="sm" variant="ghost" onClick={onCancel} disabled={submitting}>取消</Button>
