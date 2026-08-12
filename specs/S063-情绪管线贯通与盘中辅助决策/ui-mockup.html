@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S063 UI Mockup · 工作流 Pipeline 闭环</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{
+bg:'hsl(222 47% 6%)',card:'hsl(222 40% 9%)',primary:'hsl(15 89% 56%)',accent:'hsl(25 95% 58%)',
+muted:'hsl(220 28% 15%)','muted-fg':'hsl(215 18% 62%)',border:'hsl(210 30% 22%)',
+success:'hsl(145 62% 47%)',danger:'hsl(0 74% 60%)',warning:'hsl(38 92% 55%)',
+'w-sunny':'hsl(38 92% 55%)','w-cloudy':'hsl(215 16% 52%)','w-storm':'hsl(0 74% 60%)','w-rebound':'hsl(265 85% 65%)'
+}}}}
+</script>
+<style>
+body{background:hsl(222 47% 6%);color:hsl(210 30% 92%);font-family:-apple-system,'SF Pro','PingFang SC',sans-serif;margin:0}
+.glass{background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.012));border:1px solid rgba(255,232,214,0.10);box-shadow:0 4px 6px -1px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);border-radius:0.75rem}
+.mono{font-family:'SF Mono','JetBrains Mono',monospace}
+.wb-sunny{background:linear-gradient(135deg,hsla(38,92%,55%,0.08),hsla(25,95%,58%,0.04) 50%,transparent);border-bottom:1px solid hsla(38,92%,55%,0.20)}
+.wb-cloudy{background:linear-gradient(135deg,hsla(215,16%,52%,0.08),hsla(215,16%,42%,0.04) 50%,transparent);border-bottom:1px solid hsla(215,16%,52%,0.20)}
+.zg{background:hsla(145,62%,47%,0.10)}.zy{background:hsla(38,92%,55%,0.10)}.zr{background:hsla(0,74%,60%,0.10)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:9999px;font-size:11px;font-weight:500}
+.chip-allow{background:hsla(15,89%,56%,0.15);color:hsl(15,89%,66%);border:1px solid hsla(15,89%,56%,0.30)}
+.chip-block{background:hsla(220,28%,15%,0.50);color:hsl(215,18%,42%);border:1px solid hsla(210,30%,22%,0.50);text-decoration:line-through}
+.fuse-ok{background:hsl(145,62%,40%)}.fuse-trig{background:hsl(0,74%,60%);animation:p 1.5s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:0.4}}
+.sl{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:hsl(215,18%,52%)}
+.sc{border:1px solid hsla(210,30%,22%,0.60);border-radius:0.5rem;padding:12px}
+.si{color:hsl(38,92%,60%);font-weight:600;font-size:11px}.spark{height:32px;width:120px}
+.page{display:none}.page.active{display:block}
+.nav-btn{padding:6px 16px;border-radius:0.5rem;font-size:12px;font-weight:500;border:1px solid transparent;cursor:pointer;transition:all 0.15s}
+.nav-btn.active{background:hsla(15,89%,56%,0.15);color:hsl(15,89%,66%);border-color:hsla(15,89%,56%,0.30)}
+.nav-btn:not(.active){color:hsl(215,18%,52%);border-color:hsla(210,30%,22%,0.50)}
+.nav-btn:not(.active):hover{color:hsl(210,30%,82%);border-color:hsla(210,30%,22%,0.80)}
+.pipe-circle{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;border:2px solid}
+.pipe-done{border-color:hsl(145,62%,47%);background:hsla(145,62%,47%,0.15);color:hsl(145,62%,60%)}
+.pipe-active{border-color:hsl(15,89%,56%);background:hsla(15,89%,56%,0.20);color:hsl(15,89%,66%);animation:pp 2s ease-in-out infinite}
+.pipe-pending{border-color:hsla(210,30%,22%,0.60);background:hsla(222,40%,9%,0.50);color:hsl(215,18%,42%)}
+@keyframes pp{0%,100%{box-shadow:0 0 0 0 hsla(15,89%,56%,0.40)}50%{box-shadow:0 0 0 6px hsla(15,89%,56%,0)}}
+.pipe-arrow{color:hsla(210,30%,22%,0.60);font-size:16px}
+.sm-node{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:500;border:1px solid}
+.sm-pending{border-color:hsla(210,30%,22%,0.60);color:hsl(215,18%,52%);background:hsla(222,40%,9%,0.50)}
+.sm-candidate{border-color:hsla(38,92%,55%,0.40);color:hsl(38,92%,60%);background:hsla(38,92%,55%,0.08)}
+.sm-watching{border-color:hsla(25,95%,58%,0.40);color:hsl(25,95%,63%);background:hsla(25,95%,58%,0.08)}
+.sm-monitoring{border-color:hsla(15,89%,56%,0.40);color:hsl(15,89%,66%);background:hsla(15,89%,56%,0.08)}
+.sm-holding{border-color:hsla(145,62%,47%,0.40);color:hsl(145,62%,60%);background:hsla(145,62%,47%,0.08)}
+.sm-settled{border-color:hsla(265,85%,65%,0.40);color:hsl(265,85%,70%);background:hsla(265,85%,65%,0.08)}
+.sm-filtered{border-color:hsla(0,0%,40%,0.40);color:hsl(0,0%,55%);background:hsla(0,0%,20%,0.30);text-decoration:line-through}
+/* 可点击项 */
+.clickable{cursor:pointer;transition:all 0.15s;border-radius:0.25rem}
+.clickable:hover{background:hsla(15,89%,56%,0.08)!important;box-shadow:0 0 0 1px hsla(15,89%,56%,0.30)}
+.clickable:active{transform:scale(0.98)}
+/* 详情overlay */
+#detail-overlay{position:fixed;inset:0;z-index:100;display:none;backdrop-filter:blur(8px);background:hsla(222,47%,6%,0.80)}
+#detail-overlay.active{display:block}
+#detail-panel{max-width:900px;margin:40px auto;height:calc(100vh - 80px);border-radius:1rem;overflow-y:auto;animation:su 0.2s ease-out}
+@keyframes su{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.breadcrumb{display:flex;align-items:center;gap:4px;font-size:12px;color:hsl(215,18%,52%)}
+.breadcrumb a{cursor:pointer;color:hsl(215,18%,72%);text-decoration:none}
+.breadcrumb a:hover{color:hsl(15,89%,66%)}
+.breadcrumb .sep{color:hsl(215,18%,32%)}
+.breadcrumb .current{color:hsl(210,30%,92%);font-weight:500}
+.back-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:0.5rem;font-size:12px;border:1px solid hsla(210,30%,22%,0.50);color:hsl(215,18%,72%);cursor:pointer;transition:all 0.15s}
+.back-btn:hover{border-color:hsla(15,89%,56%,0.30);color:hsl(15,89%,66%);background:hsla(15,89%,56%,0.08)}
+table.dt{width:100%;border-collapse:collapse;font-size:12px}
+table.dt th{text-align:left;padding:6px 8px;font-weight:500;color:hsl(215,18%,52%);border-bottom:1px solid hsla(210,30%,22%,0.50);font-size:11px}
+table.dt td{padding:8px;border-bottom:1px solid hsla(210,30%,22%,0.30)}
+.kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid hsla(210,30%,22%,0.20)}
+.kv-k{color:hsl(215,18%,52%);font-size:12px}.kv-v{font-size:12px;font-weight:500}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- 顶部导航 -->
+<div class="sticky top-0 z-50 backdrop-blur-md border-b border-border/40" style="background:hsla(222,47%,6%,0.85)">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3"><span class="text-sm font-bold">打板工作流</span><span class="text-xs text-muted-fg">S063 · 情绪管线贯通</span></div>
+    <div class="flex items-center gap-1">
+      <button class="nav-btn active" onclick="showPage('overview',this)">Pipeline 总览</button>
+      <button class="nav-btn" onclick="showPage('pre',this)">盘前简报</button>
+      <button class="nav-btn" onclick="showPage('intra',this)">盘中监控</button>
+      <button class="nav-btn" onclick="showPage('post',this)">盘后复盘</button>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-muted-fg"><span class="mono">2026-08-12</span><span>·</span><span>晴→阴</span></div>
+  </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-6 py-6 space-y-5">
+
+<!-- ===================== Pipeline 总览 ===================== -->
+<div id="page-overview" class="page active space-y-5">
+  <div class="glass p-6">
+    <h3 class="text-sm font-semibold mb-4">情绪管线 · 全景数据流</h3>
+    <div class="flex items-center justify-between gap-2 overflow-x-auto pb-2">
+      <div class="flex flex-col items-center gap-1 min-w-80px"><div class="pipe-circle pipe-done">T-1</div><div class="text-[10px] text-muted-fg text-center">盘后 STI<br>计算+持久化</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="flex flex-col items-center gap-1 min-w-80px"><div class="pipe-circle pipe-done">Ctx</div><div class="text-[10px] text-muted-fg text-center">SentimentContext<br>构建</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="flex flex-col items-center gap-1 min-w-80px"><div class="pipe-circle pipe-active">T 盘前</div><div class="text-[10px] text-primary text-center font-medium">战法开关<br>阈值自适应<br>仓位限制</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="flex flex-col items-center gap-1 min-w-80px"><div class="pipe-circle pipe-pending">T 盘中</div><div class="text-[10px] text-muted-fg text-center">4 层辅助决策<br>15min 采样</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="flex flex-col items-center gap-1 min-w-80px"><div class="pipe-circle pipe-pending">T 盘后</div><div class="text-[10px] text-muted-fg text-center">STI 计算<br>结算<br>T+1 校准</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="flex flex-col items-center gap-1 min-w-80px"><div class="pipe-circle pipe-pending">T+1</div><div class="text-[10px] text-muted-fg text-center">新硬标准<br>循环</div></div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-border/40 grid grid-cols-3 gap-4 text-xs">
+      <div class="clickable p-2 rounded" onclick="showDetail('datasource','t1_source')"><span class="sl block mb-1">T-1 数据源</span><span class="text-muted-fg">market._emotion(T-1) + market._sentiment(T-1) → engine.compute() → sti_timeline DB</span></div>
+      <div class="clickable p-2 rounded" onclick="showDetail('datasource','intraday_source')"><span class="sl block mb-1">盘中数据源</span><span class="text-muted-fg">em_zt_topic_pool(4池) + akshare(涨跌家数) → 4维度固定阈值 → sti_intraday DB</span></div>
+      <div class="clickable p-2 rounded" onclick="showDetail('datasource','t1_calibration')"><span class="sl block mb-1">T+1 校准源</span><span class="text-muted-fg">14:30 投影 score vs 收盘 actual_score → 偏差记录 → 准确率累积</span></div>
+    </div>
+  </div>
+
+  <div class="glass p-6">
+    <h3 class="text-sm font-semibold mb-2">七态状态机 · 个股生命周期</h3>
+    <p class="text-xs text-muted-fg mb-4">每只候选股在管线中的流转轨迹，状态落库 workflow_state_repo</p>
+    <div class="flex items-center gap-2 flex-wrap text-sm">
+      <span class="sm-node sm-pending clickable" onclick="showDetail('state','pending')">pending</span><span class="text-muted-fg/40">→</span>
+      <span class="sm-node sm-candidate clickable" onclick="showDetail('state','candidate')">candidate</span><span class="text-muted-fg/40">→</span>
+      <span class="sm-node sm-watching clickable" onclick="showDetail('state','watching')">watching</span><span class="text-muted-fg/40">→</span>
+      <span class="sm-node sm-monitoring clickable" onclick="showDetail('state','monitoring')">monitoring</span><span class="text-muted-fg/40">→</span>
+      <span class="sm-node sm-holding clickable" onclick="showDetail('state','holding')">holding</span><span class="text-muted-fg/40">→</span>
+      <span class="sm-node sm-settled clickable" onclick="showDetail('state','settled')">settled</span><span class="text-muted-fg/40">→ 下一轮</span>
+      <span class="sm-node sm-filtered ml-4">filtered（可重新入池）</span>
+    </div>
+    <div class="mt-4 pt-4 border-t border-border/40">
+      <div class="sl mb-2">今日状态分布（58 只候选）</div>
+      <div class="flex items-center gap-1 h-8 rounded-lg overflow-hidden">
+        <div class="h-full flex items-center justify-center text-[10px] font-medium clickable" style="width:62%;background:hsla(38,92%,55%,0.20);color:hsl(38,92%,60%)" onclick="showDetail('statelist','candidate')">candidate 36</div>
+        <div class="h-full flex items-center justify-center text-[10px] font-medium clickable" style="width:17%;background:hsla(25,95%,58%,0.20);color:hsl(25,95%,63%)" onclick="showDetail('statelist','watching')">watch 10</div>
+        <div class="h-full flex items-center justify-center text-[10px] font-medium clickable" style="width:7%;background:hsla(15,89%,56%,0.20);color:hsl(15,89%,66%)" onclick="showDetail('statelist','monitoring')">mon 4</div>
+        <div class="h-full flex items-center justify-center text-[10px] font-medium clickable" style="width:5%;background:hsla(145,62%,47%,0.20);color:hsl(145,62%,60%)" onclick="showDetail('statelist','holding')">hold 3</div>
+        <div class="h-full flex items-center justify-center text-[10px] font-medium clickable" style="width:5%;background:hsla(265,85%,65%,0.20);color:hsl(265,85%,70%)" onclick="showDetail('statelist','settled')">sett 3</div>
+        <div class="h-full flex items-center justify-center text-[10px] clickable" style="width:4%;background:hsla(0,0%,20%,0.30);color:hsl(0,0%,55%)" onclick="showDetail('statelist','filtered')">filt 2</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass p-6">
+    <h3 class="text-sm font-semibold mb-4">三阶段 Pipeline 对照</h3>
+    <div class="grid grid-cols-3 gap-4">
+      <div class="sc" style="border-color:hsla(38,92%,55%,0.20)">
+        <div class="flex items-center gap-2 mb-3"><span class="sl text-w-sunny">盘前 08:00-09:30</span></div>
+        <div class="space-y-2 text-xs">
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','sti_schedule')"><span class="dot" style="background:hsl(145,62%,47%)"></span><span>STI 盘后定时计算 (T-1 15:30)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','ctx_build')"><span class="dot" style="background:hsl(145,62%,47%)"></span><span>SentimentContext 构建</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','factor_fetch')"><span class="dot fuse-ok"></span><span>因子采集 (涨停基因/连板梯队)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','funnel_r1r2r3')"><span class="dot fuse-ok"></span><span>候选池漏斗 R1→R2→R3</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','strategy_match')"><span class="dot fuse-ok"></span><span>战法匹配 (×weather_fit)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','position_advise')"><span class="dot fuse-ok"></span><span>仓位建议 (×weather 限制)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','threshold_adapt')"><span class="dot fuse-ok"></span><span>阈值自适应 (晴天收紧)</span></div>
+          <div class="p-1"><span class="dot" style="background:hsl(15,89%,56%)"></span><span class="text-primary font-medium">WeatherDecisionBar 头部</span></div>
+        </div>
+      </div>
+      <div class="sc" style="border-color:hsla(15,89%,56%,0.20)">
+        <div class="flex items-center gap-2 mb-3"><span class="sl text-primary">盘中 09:30-15:00</span></div>
+        <div class="space-y-2 text-xs">
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','intraday_sample')"><span class="dot fuse-ok"></span><span>em_zt_topic_pool 按黄金窗口采样</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','intraday_score')"><span class="dot fuse-ok"></span><span>4 维度评分 → sti_intraday DB</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','layer1')"><span class="dot fuse-ok"></span><span>L1: 分数+色带+趋势</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','layer2')"><span class="dot fuse-ok"></span><span>L2: 持仓×情绪联动</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','layer3')"><span class="dot fuse-ok"></span><span>L3: 条件场景 if-then</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','layer4')"><span class="dot" style="background:hsl(265,85%,65%)"></span><span>L4: T+1 预判 (14:30)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','fuse_monitor')"><span class="dot" style="background:hsl(0,74%,60%)"></span><span>熔断监控</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','sm_flow')"><span class="dot" style="background:hsl(145,62%,47%)"></span><span>状态机流转</span></div>
+        </div>
+      </div>
+      <div class="sc" style="border-color:hsla(215,16%,52%,0.20)">
+        <div class="flex items-center gap-2 mb-3"><span class="sl text-w-cloudy">盘后 15:00-22:00</span></div>
+        <div class="space-y-2 text-xs">
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','sti_compute_t')"><span class="dot fuse-ok"></span><span>STI 计算 (T 收盘数据)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','settlement')"><span class="dot fuse-ok"></span><span>持仓结算 (盈亏/胜率)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','sm_settle')"><span class="dot fuse-ok"></span><span>状态机流转 (hold→settled)</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','replay')"><span class="dot fuse-ok"></span><span>盘中轨迹回放</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','calibration')"><span class="dot" style="background:hsl(265,85%,65%)"></span><span>T+1 预判校准</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','t1_preview')"><span class="dot" style="background:hsl(145,62%,47%)"></span><span>T+1 硬标准预览</span></div>
+          <div class="clickable p-1 rounded" onclick="showDetail('pipeline_step','t1_action')"><span class="dot" style="background:hsl(145,62%,47%)"></span><span>持仓 T+1 行动</span></div>
+          <div class="p-1"><span class="dot" style="background:hsl(15,89%,56%)"></span><span class="text-primary">LLM 复盘 (可选)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 盘前简报 ===================== -->
+<div id="page-pre" class="page space-y-5">
+  <div class="glass px-5 py-3 flex items-center gap-2 overflow-x-auto">
+    <span class="sl">Pipeline</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">T-1</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">Ctx</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-active" style="width:28px;height:28px;font-size:10px">盘前</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-pending" style="width:28px;height:28px;font-size:10px">盘中</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-pending" style="width:28px;height:28px;font-size:10px">盘后</span><span class="ml-auto text-xs text-muted-fg">当前: 盘前 · 因子采集+漏斗筛选+战法匹配</span>
+  </div>
+
+  <!-- WeatherDecisionBar -->
+  <div class="wb-sunny rounded-xl p-5">
+    <div class="flex items-start justify-between">
+      <div class="space-y-3">
+        <div class="flex items-center gap-2"><span class="sl">昨日情绪</span><span class="text-xs text-muted-fg mono">2026-08-11 (T-1)</span></div>
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2"><svg class="w-8 h-8 text-w-sunny" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/><path d="M10 0v3M10 17v3M0 10h3M17 10h3M2.5 2.5l2 2M15.5 15.5l2 2M17.5 2.5l-2 2M4.5 15.5l-2 2" stroke="currentColor" stroke-width="1.5"/></svg><div><div class="text-lg font-bold text-w-sunny">晴天</div><div class="text-xs text-muted-fg">主线主升期</div></div></div>
+          <div class="h-10 w-px bg-border/60"></div><div><div class="text-xs text-muted-fg">STI 温度</div><div class="text-xl font-bold mono">72.3</div></div>
+          <div class="h-10 w-px bg-border/60"></div><div><div class="text-xs text-muted-fg">情绪阶段</div><div class="text-xl font-bold">发酵期</div></div>
+          <div class="h-10 w-px bg-border/60"></div><div><div class="text-xs text-muted-fg">综合评分</div><div class="text-xl font-bold mono">76.5</div></div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2"><span class="text-xs text-muted-fg">允许:</span><span class="chip chip-allow clickable" onclick="showDetail('strategy','consecutive_relay')">连板接力</span><span class="chip chip-allow clickable" onclick="showDetail('strategy','first_plate')">低位首板</span><span class="text-xs text-muted-fg ml-2">禁用:</span><span class="chip chip-block clickable" onclick="showDetail('strategy','weak_turn_strong')">弱转强</span><span class="chip chip-block clickable" onclick="showDetail('strategy','emotional_rebound')">情绪反包</span></div>
+        <div class="flex items-center gap-4"><span class="text-xs text-muted-fg">熔断:</span><div class="flex items-center gap-1.5 clickable" onclick="showDetail('fuse','position')"><span class="dot fuse-ok"></span><span class="text-xs">仓位 正常</span></div><div class="flex items-center gap-1.5 clickable" onclick="showDetail('fuse','cancel')"><span class="dot fuse-ok"></span><span class="text-xs">撤单 正常</span></div><div class="flex items-center gap-1.5 clickable" onclick="showDetail('fuse','exit')"><span class="dot fuse-ok"></span><span class="text-xs">离场 正常</span></div></div>
+      </div>
+      <div class="text-right clickable" onclick="showDetail('sti_timeline','')"><div class="sl mb-1">STI 30日趋势</div><svg class="spark" viewBox="0 0 120 32"><polyline points="0,28 12,24 24,26 36,20 48,22 60,16 72,18 84,12 96,14 108,8 120,6" fill="none" stroke="hsl(15,89%,56%)" stroke-width="1.5"/><circle cx="120" cy="6" r="3" fill="hsl(15,89%,56%)"/></svg><div class="text-xs text-muted-fg mono mt-1">72.3 <span class="text-success">+2.1</span></div></div>
+    </div>
+  </div>
+
+  <!-- 市场情绪详情 -->
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">市场情绪</h3><span class="text-xs text-muted-fg">涨停四池聚合 · em_zt_topic_pool</span></div>
+    <div class="grid grid-cols-6 gap-3">
+      <div class="text-center clickable p-1 rounded" onclick="showDetail('metric','zt_count')"><div class="text-xs text-muted-fg">涨停</div><div class="text-lg font-bold mono">68</div></div>
+      <div class="text-center clickable p-1 rounded" onclick="showDetail('metric','dt_count')"><div class="text-xs text-muted-fg">跌停</div><div class="text-lg font-bold mono text-danger">12</div></div>
+      <div class="text-center clickable p-1 rounded" onclick="showDetail('metric','seal_rate')"><div class="text-xs text-muted-fg">封板率</div><div class="text-lg font-bold mono text-success">85%</div></div>
+      <div class="text-center clickable p-1 rounded" onclick="showDetail('metric','break_rate')"><div class="text-xs text-muted-fg">炸板率</div><div class="text-lg font-bold mono">15%</div></div>
+      <div class="text-center clickable p-1 rounded" onclick="showDetail('metric','promotion_rate')"><div class="text-xs text-muted-fg">晋级率</div><div class="text-lg font-bold mono">42%</div></div>
+      <div class="text-center clickable p-1 rounded" onclick="showDetail('metric','max_boards')"><div class="text-xs text-muted-fg">最高连板</div><div class="text-lg font-bold mono">5板</div></div>
+    </div>
+    <div class="mt-3 flex items-center gap-2 text-xs text-muted-fg"><span>连板梯队:</span><span class="chip clickable" style="background:hsla(15,89%,56%,0.10)" onclick="showDetail('ladder','2')">2板×18</span><span class="chip clickable" style="background:hsla(15,89%,56%,0.10)" onclick="showDetail('ladder','3')">3板×7</span><span class="chip clickable" style="background:hsla(15,89%,56%,0.10)" onclick="showDetail('ladder','4')">4板×3</span><span class="chip clickable" style="background:hsla(15,89%,56%,0.15)" onclick="showDetail('ladder','5')">5板×1</span></div>
+  </div>
+
+  <!-- 涨停基因因子漏斗 -->
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">涨停基因因子漏斗</h3><span class="text-xs text-muted-fg">三步筛选 · factor_registry.afetch_all</span></div>
+    <div class="space-y-2">
+      <div class="clickable flex items-center gap-2 p-1 rounded" onclick="showDetail('factor','limitup_screener')"><div class="pipe-circle pipe-done" style="width:24px;height:24px;font-size:10px">1</div><span class="text-muted-fg text-xs">基因得分 ≥60</span><div class="flex-1 h-1 rounded-full bg-muted/30 overflow-hidden"><div class="h-full bg-success" style="width:39%"></div></div><span class="mono text-xs">158 → 62</span></div>
+      <div class="clickable flex items-center gap-2 p-1 rounded" onclick="showDetail('factor','limitup_screener')"><div class="pipe-circle pipe-done" style="width:24px;height:24px;font-size:10px">2</div><span class="text-muted-fg text-xs">连板梯队 + 昨涨停表现</span><div class="flex-1 h-1 rounded-full bg-muted/30 overflow-hidden"><div class="h-full bg-success" style="width:45%"></div></div><span class="mono text-xs">62 → 28</span></div>
+      <div class="clickable flex items-center gap-2 p-1 rounded" onclick="showDetail('factor','limitup_screener')"><div class="pipe-circle pipe-done" style="width:24px;height:24px;font-size:10px">3</div><span class="text-muted-fg text-xs">板块+资金确认</span><div class="flex-1 h-1 rounded-full bg-muted/30 overflow-hidden"><div class="h-full bg-success" style="width:43%"></div></div><span class="mono text-xs">28 → 12</span></div>
+    </div>
+  </div>
+
+  <!-- 候选池漏斗 R1-R3 -->
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">候选池漏斗</h3><span class="text-xs text-muted-fg">阈值: 情绪档=晴天（自动收紧）· resolve_thresholds(ctx.weather_state)</span></div>
+    <div class="grid grid-cols-4 gap-3">
+      <div class="text-center p-3 rounded-lg clickable" style="background:hsla(222,40%,9%,0.60)" onclick="showDetail('funnel_layer','R1')"><div class="text-xs text-muted-fg">R1 宽源</div><div class="text-2xl font-bold mono">58</div><div class="text-[10px] text-muted-fg/60 mt-1">涨停基因+连板</div><div class="mt-1"><span class="sm-node sm-candidate text-[9px]">candidate</span></div></div>
+      <div class="text-center p-3 rounded-lg clickable" style="background:hsla(222,40%,9%,0.60)" onclick="showDetail('funnel_layer','R2')"><div class="text-xs text-muted-fg">R2 精筛</div><div class="text-2xl font-bold mono">24</div><div class="text-[10px] text-muted-fg/60 mt-1">换手+量比+成交额</div><div class="mt-1"><span class="sm-node sm-watching text-[9px]">watching</span></div></div>
+      <div class="text-center p-3 rounded-lg clickable" style="background:hsla(15,89%,56%,0.08)" onclick="showDetail('funnel_layer','R3')"><div class="text-xs text-muted-fg">R3 定稿</div><div class="text-2xl font-bold mono text-primary">9</div><div class="text-[10px] text-muted-fg/60 mt-1">活跃度+企稳信号</div><div class="mt-1"><span class="sm-node sm-monitoring text-[9px]">monitoring</span></div></div>
+      <div class="text-center p-3 rounded-lg clickable" style="background:hsla(145,62%,47%,0.08)" onclick="showDetail('funnel_layer','holding')"><div class="text-xs text-muted-fg">持仓</div><div class="text-2xl font-bold mono text-success">3</div><div class="text-[10px] text-muted-fg/60 mt-1">已触发买入</div><div class="mt-1"><span class="sm-node sm-holding text-[9px]">holding</span></div></div>
+    </div>
+  </div>
+
+  <!-- 战法胜率对比 -->
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">战法胜率对比</h3><span class="text-xs text-muted-fg">近30日 · 按 weather_fit 排序 · calc_weather_fit(code, ctx.weather_state)</span></div>
+    <div class="space-y-2">
+      <div class="clickable flex items-center gap-3 p-2 rounded-lg" style="background:hsla(145,62%,47%,0.06)" onclick="showDetail('strategy','consecutive_relay')"><span class="chip chip-allow">适配</span><span class="text-sm font-medium">连板接力</span><div class="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden"><div class="h-full bg-success" style="width:72%"></div></div><span class="mono text-sm font-bold text-success">72%</span><span class="text-xs text-muted-fg">12次</span></div>
+      <div class="clickable flex items-center gap-3 p-2 rounded-lg" style="background:hsla(145,62%,47%,0.06)" onclick="showDetail('strategy','first_plate')"><span class="chip chip-allow">适配</span><span class="text-sm font-medium">首板挖掘</span><div class="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden"><div class="h-full bg-success" style="width:65%"></div></div><span class="mono text-sm font-bold text-success">65%</span><span class="text-xs text-muted-fg">8次</span></div>
+      <div class="clickable flex items-center gap-3 p-2 rounded-lg opacity-40" onclick="showDetail('strategy','weak_turn_strong')"><span class="chip chip-block">不适配</span><span class="text-sm font-medium line-through">弱转强</span><div class="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden"><div class="h-full bg-warning" style="width:48%"></div></div><span class="mono text-sm text-warning">48%</span><span class="text-xs text-muted-fg">5次</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 盘中监控 ===================== -->
+<div id="page-intra" class="page space-y-5">
+  <div class="glass px-5 py-3 flex items-center gap-2 overflow-x-auto">
+    <span class="sl">Pipeline</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">T-1</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">Ctx</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">盘前</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-active" style="width:28px;height:28px;font-size:10px">盘中</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-pending" style="width:28px;height:28px;font-size:10px">盘后</span><span class="ml-auto text-xs text-muted-fg">当前: 盘中 · 14:32 · ctx 不变（硬标准）</span>
+  </div>
+
+  <div class="wb-sunny rounded-xl px-5 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2"><svg class="w-6 h-6 text-w-sunny" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/><path d="M10 0v3M10 17v3M0 10h3M17 10h3M2.5 2.5l2 2M15.5 15.5l2 2M17.5 2.5l-2 2M4.5 15.5l-2 2" stroke="currentColor" stroke-width="1.5"/></svg><div><span class="text-sm font-bold text-w-sunny">晴天</span> <span class="text-xs text-muted-fg ml-1">T-1 硬标准 · 连板接力+低位首板</span></div></div>
+      <div class="h-8 w-px bg-border/60"></div><div class="flex items-center gap-2"><span class="text-xs text-muted-fg">STI</span><span class="mono text-sm font-bold">72.3</span></div><div class="flex items-center gap-2"><span class="text-xs text-muted-fg">盘中分数</span><span class="mono text-lg font-bold text-danger">52</span><span class="chip" style="background:hsla(0,74%,60%,0.15);color:hsl(0,74%,65%);border:1px solid hsla(0,74%,60%,0.30)">红色区 ↓</span></div>
+    </div>
+    <div class="flex items-center gap-3"><div class="flex items-center gap-1.5 clickable" onclick="showDetail('fuse','position')"><span class="dot fuse-ok"></span><span class="text-xs">仓位</span></div><div class="flex items-center gap-1.5 clickable" onclick="showDetail('fuse','cancel')"><span class="dot fuse-ok"></span><span class="text-xs">撤单</span></div><div class="flex items-center gap-1.5 clickable" onclick="showDetail('fuse','exit')"><span class="dot fuse-ok"></span><span class="text-xs">离场</span></div><span class="text-xs text-muted-fg mono ml-2">14:32</span></div>
+  </div>
+
+  <!-- 状态机实时看板 -->
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">状态机实时看板</h3><span class="text-xs text-muted-fg">workflow_state_repo · 今日 58 只</span></div>
+    <div class="grid grid-cols-6 gap-2 text-center">
+      <div class="clickable p-2 rounded-lg" style="background:hsla(210,30%,22%,0.20)" onclick="showDetail('statelist','filtered')"><div class="text-lg font-bold mono">2</div><div class="text-[10px] text-muted-fg">filtered</div></div>
+      <div class="clickable p-2 rounded-lg" style="background:hsla(38,92%,55%,0.08)" onclick="showDetail('statelist','candidate')"><div class="text-lg font-bold mono text-warning">36</div><div class="text-[10px] text-muted-fg">candidate</div></div>
+      <div class="clickable p-2 rounded-lg" style="background:hsla(25,95%,58%,0.08)" onclick="showDetail('statelist','watching')"><div class="text-lg font-bold mono text-accent">10</div><div class="text-[10px] text-muted-fg">watching</div></div>
+      <div class="clickable p-2 rounded-lg" style="background:hsla(15,89%,56%,0.08)" onclick="showDetail('statelist','monitoring')"><div class="text-lg font-bold mono text-primary">4</div><div class="text-[10px] text-muted-fg">monitoring</div></div>
+      <div class="clickable p-2 rounded-lg" style="background:hsla(145,62%,47%,0.08)" onclick="showDetail('statelist','holding')"><div class="text-lg font-bold mono text-success">3</div><div class="text-[10px] text-muted-fg">holding</div></div>
+      <div class="clickable p-2 rounded-lg" style="background:hsla(265,85%,65%,0.08)" onclick="showDetail('statelist','settled')"><div class="text-lg font-bold mono text-w-rebound">3</div><div class="text-[10px] text-muted-fg">settled</div></div>
+    </div>
+    <div class="mt-3 pt-3 border-t border-border/40 space-y-1 text-xs">
+      <div class="clickable flex items-center gap-2 p-1 rounded" onclick="showDetail('candidate','600001')"><span class="mono text-muted-fg">09:35</span><span class="sm-node sm-candidate text-[9px]">candidate</span><span class="text-muted-fg">→</span><span class="sm-node sm-watching text-[9px]">watching</span><span class="text-muted-fg ml-2">A 连板接力 · 基因 78 · 进入观察</span></div>
+      <div class="clickable flex items-center gap-2 p-1 rounded" onclick="showDetail('candidate','600001')"><span class="mono text-muted-fg">09:42</span><span class="sm-node sm-watching text-[9px]">watching</span><span class="text-muted-fg">→</span><span class="sm-node sm-monitoring text-[9px]">monitoring</span><span class="text-muted-fg ml-2">A · 竞价高开 3.2% · 进入监控</span></div>
+      <div class="clickable flex items-center gap-2 p-1 rounded" onclick="showDetail('candidate','600001')"><span class="mono text-muted-fg">09:45</span><span class="sm-node sm-monitoring text-[9px]">monitoring</span><span class="text-muted-fg">→</span><span class="sm-node sm-holding text-[9px]">holding</span><span class="text-success ml-2">A · 封板 · 买入 @10.52</span></div>
+      <div class="clickable flex items-center gap-2 p-1 rounded" onclick="showDetail('candidate','600003')"><span class="mono text-muted-fg">10:15</span><span class="sm-node sm-holding text-[9px]">holding</span><span class="text-muted-fg">→</span><span class="sm-node sm-holding text-[9px]">holding</span><span class="text-danger ml-2">C · 炸板未回封 · 红色区 · 双重压力</span></div>
+    </div>
+  </div>
+
+  <!-- Layer 1 -->
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><div class="flex items-center gap-2"><span class="sl">Layer 1</span><h3 class="text-sm font-semibold">情绪走势</h3><span class="text-xs text-muted-fg">T-1 基线 72.3 · em_zt_topic_pool</span></div><div class="flex items-center gap-2"><span class="text-2xl font-bold mono">52</span><span class="chip" style="background:hsla(0,74%,60%,0.15);color:hsl(0,74%,65%);border:1px solid hsla(0,74%,60%,0.30)">↓ 红色区</span><span class="text-xs text-muted-fg">偏离 -20</span></div></div>
+    <div class="relative h-40 rounded-lg overflow-hidden" style="background:hsla(222,40%,9%,0.50)">
+      <div class="absolute inset-x-0 top-0 h-1/4 zg"></div><div class="absolute inset-x-0 top-1/4 h-1/4 zy"></div><div class="absolute inset-x-0 top-2/4 h-2/4 zr"></div>
+      <div class="absolute inset-x-0 border-t border-dashed border-w-sunny/40" style="top:28%"></div><div class="absolute right-2 text-[10px] text-w-sunny/60" style="top:24%">T-1: 72</div>
+      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 400 160" preserveAspectRatio="none"><polyline points="0,50 30,48 55,55 80,62 110,68 140,72 170,80 200,78 230,88 260,95 290,100 320,108 350,115 380,120" fill="none" stroke="hsl(15,89%,56%)" stroke-width="2"/><circle cx="380" cy="120" r="4" fill="hsl(0,74%,60%)"/></svg>
+      <div class="absolute inset-x-0 bottom-0 flex justify-between px-2 text-[9px] text-muted-fg/50"><span>09:30</span><span>10:00</span><span>10:30</span><span>11:00</span><span>11:30</span><span>13:00</span><span>13:30</span><span>14:00</span><span>14:30</span></div>
+    </div>
+    <details class="mt-2"><summary class="text-xs text-muted-fg cursor-pointer hover:text-primary">展开 4 维度明细</summary><div class="grid grid-cols-4 gap-2 mt-2"><div class="clickable text-center p-2 rounded" style="background:hsla(222,40%,9%,0.60)" onclick="showDetail('dimension','zt_count')"><div class="text-[10px] text-muted-fg">涨停</div><div class="text-sm font-bold mono text-danger">42</div></div><div class="clickable text-center p-2 rounded" style="background:hsla(222,40%,9%,0.60)" onclick="showDetail('dimension','seal_rate')"><div class="text-[10px] text-muted-fg">封板率</div><div class="text-sm font-bold mono text-danger">48%</div></div><div class="clickable text-center p-2 rounded" style="background:hsla(222,40%,9%,0.60)" onclick="showDetail('dimension','break_rate')"><div class="text-[10px] text-muted-fg">炸板率</div><div class="text-sm font-bold mono text-danger">28%</div></div><div class="clickable text-center p-2 rounded" style="background:hsla(222,40%,9%,0.60)" onclick="showDetail('dimension','ad_ratio')"><div class="text-[10px] text-muted-fg">涨跌比</div><div class="text-sm font-bold mono text-danger">0.8</div></div></div></details>
+  </div>
+
+  <!-- Layer 2 -->
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><div class="flex items-center gap-2"><span class="sl">Layer 2</span><h3 class="text-sm font-semibold">持仓 × 情绪联动</h3></div><span class="text-xs text-muted-fg">workflow_state_repo(holding) + tencent_quote</span></div>
+    <table class="w-full border-collapse text-xs">
+      <thead><tr style="border-bottom:1px solid hsla(210,30%,22%,0.50)"><th class="text-left text-muted-fg" style="font-size:11px">持仓</th><th class="text-left text-muted-fg" style="font-size:11px">状态</th><th class="text-left text-muted-fg" style="font-size:11px">盈亏</th><th class="text-left text-muted-fg" style="font-size:11px">封板状态</th><th class="text-left text-muted-fg" style="font-size:11px">情绪色带</th><th class="text-left text-muted-fg" style="font-size:11px">决策上下文</th></tr></thead>
+      <tbody>
+        <tr class="clickable" style="background:hsla(0,74%,60%,0.08);border-bottom:1px solid hsla(210,30%,22%,0.30)" onclick="showDetail('candidate','600003')"><td class="font-medium">C 连板接力</td><td><span class="sm-node sm-holding text-[9px]">holding</span></td><td class="mono text-danger">-0.5%</td><td><span class="chip" style="background:hsla(0,74%,60%,0.15);color:hsl(0,74%,65%)">炸板未回封</span></td><td><span class="dot" style="background:hsl(0,74%,60%)"></span> <span class="text-danger">红色区 ↓</span></td><td class="text-danger font-medium">双重压力，优先关注</td></tr>
+        <tr class="clickable" style="border-bottom:1px solid hsla(210,30%,22%,0.30)" onclick="showDetail('candidate','600002')"><td class="font-medium">B 连板接力</td><td><span class="sm-node sm-holding text-[9px]">holding</span></td><td class="mono text-danger">-1.1%</td><td><span class="chip" style="background:hsla(38,92%,55%,0.15);color:hsl(38,92%,60%)">炸板回封</span></td><td><span class="dot" style="background:hsl(38,92%,55%)"></span> <span class="text-warning">黄色区 ↓</span></td><td class="text-muted-fg">个股分歧+市场走弱</td></tr>
+        <tr class="clickable" style="border-bottom:1px solid hsla(210,30%,22%,0.30)" onclick="showDetail('candidate','600001')"><td class="font-medium">A 连板接力</td><td><span class="sm-node sm-holding text-[9px]">holding</span></td><td class="mono text-success">+3.2%</td><td><span class="chip" style="background:hsla(145,62%,47%,0.15);color:hsl(145,62%,60%)">封住</span></td><td><span class="dot" style="background:hsl(145,62%,47%)"></span> <span class="text-success">绿色区</span></td><td class="text-muted-fg">情绪与持仓同向</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Layer 3 -->
+  <div class="glass p-5">
+    <div class="flex items-center gap-2 mb-3"><span class="sl">Layer 3</span><h3 class="text-sm font-semibold">条件场景推演</h3><span class="text-xs text-muted-fg">当前: 52 · 红色区 · ↓ · 14:32</span></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="clickable sc" style="border-color:hsla(0,74%,60%,0.30)" onclick="showDetail('scenario','decline')"><div class="si mb-2">IF 分数维持 <55 持续 2 snapshot</div><div class="text-xs text-muted-fg space-y-1"><div>T-1 晴天计划的边际优势在衰减</div><div>建议: 收紧 B/C 止损，暂停新建连板仓位</div><div class="opacity-60">历史参照: 近 20 日类似走势 3 次，2 次走弱至收盘 <span class="opacity-40">(样本=3)</span></div></div></div>
+      <div class="clickable sc" style="border-color:hsla(145,62%,47%,0.30)" onclick="showDetail('scenario','rebound')"><div class="si mb-2" style="color:hsl(145,62%,60%)">IF 分数反弹回 60+</div><div class="text-xs text-muted-fg space-y-1"><div>T-1 计划维持有效</div><div>继续: A 持有，B 观察封板回封</div><div class="opacity-60">历史参照: 反弹回 60+ 概率 35% <span class="opacity-40">(样本=3)</span></div></div></div>
+    </div>
+  </div>
+
+  <!-- Layer 4 -->
+  <div class="glass p-5" style="border-color:hsla(265,85%,65%,0.25)">
+    <div class="flex items-center gap-2 mb-3"><span class="sl" style="color:hsl(265,85%,70%)">Layer 4</span><h3 class="text-sm font-semibold">T+1 预判</h3><span class="chip" style="background:hsla(265,85%,65%,0.15);color:hsl(265,85%,70%);border:1px solid hsla(265,85%,65%,0.30)">14:30 触发</span><span class="text-xs text-muted-fg/60">投影，非最终判定</span></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="clickable sc" style="border-color:hsla(0,74%,60%,0.30)" onclick="showDetail('t1_projection','maintain')"><div class="si mb-2">IF 收盘维持当前水位</div><div class="text-xs text-muted-fg space-y-1"><div>预计今日 STI ≈ <span class="mono font-bold text-danger">45-50</span></div><div>投影天气: <span class="text-w-rebound">极端反弹</span> / <span class="text-danger">暴风雨</span></div><div>T+1 标准: 晴天 → 极端反弹/暴风雨</div><div>建议: 收盘前评估减仓</div></div></div>
+      <div class="clickable sc" style="border-color:hsla(215,16%,52%,0.30)" onclick="showDetail('t1_projection','rebound')"><div class="si mb-2" style="color:hsl(215,16%,62%)">IF 尾盘反弹</div><div class="text-xs text-muted-fg space-y-1"><div>预计今日 STI ≈ <span class="mono font-bold text-w-cloudy">55-60</span></div><div>投影天气: <span class="text-w-cloudy">阴天</span></div><div>T+1 标准: 晴天 → 阴天</div><div>建议: 维持持仓，T+1 可能切首板套利</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 盘后复盘 ===================== -->
+<div id="page-post" class="page space-y-5">
+  <div class="glass px-5 py-3 flex items-center gap-2 overflow-x-auto">
+    <span class="sl">Pipeline</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">T-1</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">Ctx</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">盘前</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-done" style="width:28px;height:28px;font-size:10px">盘中</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-active" style="width:28px;height:28px;font-size:10px">盘后</span><span class="pipe-arrow">→</span><span class="pipe-circle pipe-pending" style="width:28px;height:28px;font-size:10px">T+1</span><span class="ml-auto text-xs text-muted-fg">当前: 盘后 · STI 计算+结算+T+1 校准</span>
+  </div>
+
+  <div class="wb-cloudy rounded-xl p-5">
+    <div class="flex items-start justify-between">
+      <div class="space-y-3">
+        <div class="flex items-center gap-2"><span class="sl">今日情绪结算</span><span class="text-xs text-muted-fg mono">2026-08-12 (T)</span></div>
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2"><svg class="w-8 h-8 text-w-cloudy" fill="currentColor" viewBox="0 0 20 20"><path d="M5 5a5 5 0 018-3.5A4 4 0 0117 11H5a3 3 0 01-1-5.84z"/></svg><div><div class="text-lg font-bold text-w-cloudy">阴天</div><div class="text-xs text-muted-fg">震荡轮动期</div></div></div>
+          <div class="h-10 w-px bg-border/60"></div><div><div class="text-xs text-muted-fg">今日 STI</div><div class="text-xl font-bold mono">54.7</div></div>
+          <div class="h-10 w-px bg-border/60"></div><div><div class="text-xs text-muted-fg">T-1 STI</div><div class="text-xl font-bold mono text-w-sunny">72.3</div></div>
+          <div class="h-10 w-px bg-border/60"></div><div><div class="text-xs text-muted-fg">变化</div><div class="text-xl font-bold mono text-danger">-17.6</div></div>
+        </div>
+        <div class="flex items-center gap-2"><span class="text-xs text-muted-fg">天气变化:</span><span class="chip chip-allow" style="border-color:hsla(38,92%,55%,0.30);background:hsla(38,92%,55%,0.10);color:hsl(38,92%,60%)">T-1 晴天</span><span class="text-muted-fg">→</span><span class="chip" style="background:hsla(215,16%,52%,0.15);color:hsl(215,16%,62%);border:1px solid hsla(215,16%,52%,0.30)">T 阴天</span><span class="text-xs text-danger ml-2">降级 · T+1 标准将切换</span></div>
+      </div>
+      <div class="text-right clickable" onclick="showDetail('sti_timeline','')"><div class="sl mb-1">STI 趋势</div><svg class="spark" viewBox="0 0 120 32"><polyline points="0,8 12,10 24,8 36,12 48,14 60,16 72,20 84,22 96,26 108,28 120,24" fill="none" stroke="hsl(215,16%,62%)" stroke-width="1.5"/><circle cx="120" cy="24" r="3" fill="hsl(215,16%,62%)"/></svg><div class="text-xs text-muted-fg mono mt-1">54.7 <span class="text-danger">-17.6</span></div></div>
+    </div>
+  </div>
+
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">盘中情绪轨迹回放</h3><span class="text-xs text-muted-fg">14 个 snapshot · 10:15 跌入黄色区</span></div>
+    <div class="relative h-32 rounded-lg overflow-hidden" style="background:hsla(222,40%,9%,0.50)">
+      <div class="absolute inset-x-0 top-0 h-1/4 zg"></div><div class="absolute inset-x-0 top-1/4 h-1/4 zy"></div><div class="absolute inset-x-0 top-2/4 h-2/4 zr"></div>
+      <div class="absolute inset-x-0 border-t border-dashed border-w-sunny/40" style="top:28%"></div><div class="absolute right-2 text-[10px] text-w-sunny/60" style="top:24%">T-1: 72</div>
+      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 400 128" preserveAspectRatio="none"><polyline points="0,30 30,28 55,35 80,42 110,48 140,52 170,60 200,58 230,68 260,75 290,80 320,88 350,92 380,86" fill="none" stroke="hsl(15,89%,56%)" stroke-width="2"/><circle cx="110" cy="48" r="3" fill="hsl(38,92%,55%)"/><circle cx="380" cy="86" r="4" fill="hsl(215,16%,62%)"/></svg>
+      <div class="absolute inset-x-0 bottom-0 flex justify-between px-2 text-[9px] text-muted-fg/50"><span>09:30</span><span>10:00</span><span>10:30</span><span>11:00</span><span>11:30</span><span>13:00</span><span>13:30</span><span>14:00</span><span>14:30</span></div>
+    </div>
+    <div class="flex items-center gap-2 mt-2 text-xs text-muted-fg"><span>关键拐点:</span><span class="chip clickable" style="background:hsla(38,92%,55%,0.10)" onclick="showDetail('snapshot','10:15')">10:15 跌入黄色区</span><span class="chip clickable" style="background:hsla(0,74%,60%,0.10)" onclick="showDetail('snapshot','10:45')">10:45 跌入红色区</span><span class="chip clickable" style="background:hsla(215,16%,52%,0.10)" onclick="showDetail('snapshot','14:30')">14:30 轻微回稳</span></div>
+  </div>
+
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">T+1 预判校准</h3><span class="text-xs text-muted-fg">14:30 投影 vs 收盘实测</span></div>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="text-center p-3 rounded-lg clickable" style="background:hsla(265,85%,65%,0.06)" onclick="showDetail('calibration','projection')"><div class="text-xs text-muted-fg">14:30 投影</div><div class="text-lg font-bold mono text-w-rebound">45-50</div><div class="text-[10px] text-muted-fg/60 mt-1">极端反弹/暴风雨</div></div>
+      <div class="text-center p-3 rounded-lg clickable" style="background:hsla(215,16%,52%,0.06)" onclick="showDetail('calibration','actual')"><div class="text-xs text-muted-fg">实际收盘</div><div class="text-lg font-bold mono text-w-cloudy">54.7</div><div class="text-[10px] text-muted-fg/60 mt-1">阴天</div></div>
+      <div class="text-center p-3 rounded-lg clickable" style="background:hsla(145,62%,47%,0.06)" onclick="showDetail('calibration','deviation')"><div class="text-xs text-muted-fg">偏差</div><div class="text-lg font-bold mono text-success">+4.7</div><div class="text-[10px] text-muted-fg/60 mt-1">尾盘回稳好于预期</div></div>
+    </div>
+    <div class="mt-3 p-3 rounded-lg text-xs text-muted-fg" style="background:hsla(222,40%,9%,0.60)"><span class="text-w-rebound">校准记录:</span> 第 1 次预判 | 投影偏低 4.7 分 | 原因: 尾盘涨停家数从 42 回升至 51 | 累计准确率: 1/1 = 100% <span class="opacity-40">(样本=1，无统计意义)</span></div>
+  </div>
+
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">持仓结算 · 状态机流转</h3><span class="text-xs text-muted-fg">holding → settled · settlement_recorder</span></div>
+    <table class="w-full border-collapse text-xs">
+      <thead><tr style="border-bottom:1px solid hsla(210,30%,22%,0.50)"><th class="text-left text-muted-fg" style="font-size:11px">持仓</th><th class="text-left text-muted-fg" style="font-size:11px">战法</th><th class="text-left text-muted-fg" style="font-size:11px">入场</th><th class="text-left text-muted-fg" style="font-size:11px">收盘</th><th class="text-left text-muted-fg" style="font-size:11px">盈亏</th><th class="text-left text-muted-fg" style="font-size:11px">状态流转</th><th class="text-left text-muted-fg" style="font-size:11px">情绪复盘</th></tr></thead>
+      <tbody>
+        <tr class="clickable" style="border-bottom:1px solid hsla(210,30%,22%,0.30)" onclick="showDetail('candidate','600001')"><td class="font-medium">A</td><td class="clickable" onclick="event.stopPropagation();showDetail('strategy','consecutive_relay')">连板接力</td><td class="mono">10.52</td><td class="mono">10.86</td><td class="mono text-success">+3.2%</td><td><span class="sm-node sm-holding text-[9px]">hold</span> → <span class="sm-node sm-settled text-[9px]">settled</span></td><td class="text-muted-fg text-[11px]">绿色区入场，全天维持</td></tr>
+        <tr class="clickable" style="border-bottom:1px solid hsla(210,30%,22%,0.30)" onclick="showDetail('candidate','600002')"><td class="font-medium">B</td><td class="clickable" onclick="event.stopPropagation();showDetail('strategy','consecutive_relay')">连板接力</td><td class="mono">9.10</td><td class="mono">9.00</td><td class="mono text-danger">-1.1%</td><td><span class="sm-node sm-holding text-[9px]">hold</span> → <span class="sm-node sm-settled text-[9px]">settled</span></td><td class="text-muted-fg text-[11px]">盘中炸板回封，尾盘走弱</td></tr>
+        <tr class="clickable" style="background:hsla(0,74%,60%,0.06);border-bottom:1px solid hsla(210,30%,22%,0.30)" onclick="showDetail('candidate','600003')"><td class="font-medium">C</td><td class="clickable" onclick="event.stopPropagation();showDetail('strategy','consecutive_relay')">连板接力</td><td class="mono">12.30</td><td class="mono">12.24</td><td class="mono text-danger">-0.5%</td><td><span class="sm-node sm-holding text-[9px]">hold</span> → <span class="sm-node sm-settled text-[9px]">settled</span></td><td class="text-danger text-[11px]">炸板未回封+红色区</td></tr>
+      </tbody>
+    </table>
+    <div class="mt-3 flex items-center gap-4 text-xs"><span class="text-muted-fg">胜率:</span><span class="mono font-bold text-success">1/3 = 33%</span><span class="text-muted-fg">T-1 适配战法表现:</span><span class="chip clickable" style="background:hsla(38,92%,55%,0.10)" onclick="showDetail('strategy','consecutive_relay')">连板接力 今日低于均值（72%→33%）</span></div>
+  </div>
+
+  <div class="glass p-5" style="border-color:hsla(215,16%,52%,0.25)">
+    <div class="flex items-center gap-2 mb-3"><span class="sl" style="color:hsl(215,16%,62%)">T+1 准备</span><h3 class="text-sm font-semibold">明日决策预览</h3></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="clickable sc" style="border-color:hsla(215,16%,52%,0.30)" onclick="showDetail('t1_plan','standard')"><div class="si mb-2" style="color:hsl(215,16%,62%)">T+1 硬标准</div><div class="text-xs text-muted-fg space-y-1"><div>天气: <span class="text-w-cloudy font-medium">阴天</span>（震荡轮动）</div><div>允许: <span class="chip" style="background:hsla(15,89%,56%,0.10)">低位首板</span> <span class="chip" style="background:hsla(15,89%,56%,0.10)">连板接力</span></div><div>禁用: <span class="chip chip-block">弱转强</span></div><div>阈值档位: 换手冷档 3%→5%（阴天收紧）</div></div></div>
+      <div class="clickable sc" style="border-color:hsla(0,74%,60%,0.30)" onclick="showDetail('t1_plan','action')"><div class="si mb-2" style="color:hsl(0,74%,65%)">持仓 T+1 行动</div><div class="text-xs text-muted-fg space-y-1"><div>C: <span class="text-danger font-medium">强制离场信号</span>（炸板未回封+T+1 阴天不适配）</div><div>B: 观察，阴天标准下连板接力降仓至 50%</div><div>A: 持有，阴天连板接力仍适配，可减半仓锁利</div></div></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- max-w-7xl -->
+
+<!-- ===================== 详情 Overlay ===================== -->
+<div id="detail-overlay" onclick="if(event.target===this)closeDetail()">
+  <div id="detail-panel" class="glass" style="padding:0">
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<script>
+const pageNames={'overview':'Pipeline 总览','pre':'盘前简报','intra':'盘中监控','post':'盘后复盘'};
+let currentPage='overview';
+let navStack=[];
+
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+  currentPage=id;
+}
+
+function showDetail(type,id){
+  navStack.push(currentPage);
+  const bc=buildBreadcrumb(type,id);
+  const content=buildDetailContent(type,id);
+  document.getElementById('detail-content').innerHTML=bc+content;
+  document.getElementById('detail-overlay').classList.add('active');
+}
+
+function closeDetail(){
+  document.getElementById('detail-overlay').classList.remove('active');
+  navStack.pop();
+}
+
+function buildBreadcrumb(type,id){
+  const page=pageNames[currentPage]||'';
+  let trail=[{label:'工作流',page:'overview'},{label:page,page:currentPage}];
+  let current='';
+  const labels={
+    factor:'涨停基因因子',strategy:'战法详情',candidate:'候选/持仓详情',fuse:'熔断规则',
+    sti_timeline:'STI 趋势',metric:'市场情绪指标',ladder:'连板梯队',funnel_layer:'漏斗层详情',
+    statelist:'状态列表',state:'状态机节点',dimension:'盘中维度',scenario:'场景推演',
+    t1_projection:'T+1 预判',snapshot:'快照详情',calibration:'校准记录',t1_plan:'T+1 计划',
+    pipeline_step:'Pipeline 步骤',datasource:'数据源'
+  };
+  current=labels[type]||type;
+  if(id&&id.length>0&&type==='strategy')current+=' · '+id;
+  if(id&&id.length>0&&type==='candidate')current+=' · '+id;
+  if(id&&id.length>0&&type==='funnel_layer')current+=' · '+id;
+  if(id&&id.length>0&&type==='statelist')current+=' · '+id;
+  if(id&&id.length>0&&type==='snapshot')current+=' · '+id;
+  
+  let html='<div class="sticky top-0 z-10 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-border/40" style="background:hsla(222,47%,6%,0.90)">';
+  html+='<div class="breadcrumb">';
+  trail.forEach(t=>{html+=`<a onclick="closeDetail();showPage('${t.page}',document.querySelector('.nav-btn:nth-child(${t.page==='overview'?1:t.page==='pre'?2:t.page==='intra'?3:4})'))">${t.label}</a><span class="sep">/</span>`;});
+  html+=`<span class="current">${current}</span></div>`;
+  html+='<button class="back-btn" onclick="closeDetail()"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>返回</button></div>';
+  return html;
+}
+
+function buildDetailContent(type,id){
+  const D={};
+  D.factor={
+    title:'涨停基因筛选因子',subtitle:'factor_id = limitup_screener',
+    rows:[['因子 ID','limitup_screener'],['因子名称','涨停基因筛选'],['数据源','astock.em_zt_topic_pool (涨停池) + gene_scores.db'],['采集方式','factor_registry.afetch_all(date)'],['命中规则','基因得分≥60 · 连板梯队 · 板块+资金确认'],['今日产出','158 → 62 → 28 → 12 (三步漏斗)']],
+    candidates:[{code:'600001',name:'示例A',score:78,boards:3,state:'holding'},{code:'600002',name:'示例B',score:72,boards:2,state:'holding'},{code:'600003',name:'示例C',score:68,boards:2,state:'holding'},{code:'600004',name:'示例D',score:65,boards:1,state:'monitoring'},{code:'600005',name:'示例E',score:62,boards:1,state:'watching'}]
+  };
+  D.strategy={
+    consecutive_relay:{title:'连板接力',rows:[['战法代码','consecutive_relay'],['入场类型','次日竞价/开盘确认后'],['止损','-3.0%'],['止盈','+8.0%'],['最大持仓','3日'],['入场条件','首次涨停+基因得分≥60+量比>1.5'],['止损条件','跌破前日收盘价-3%'],['止盈条件','涨至+5%~+10%后回落'],['天气适配','晴天'],['近30日胜率','72% (12次)'],['今日表现','1 WIN / 2 LOSS = 33%']]}
+  };
+  D.strategy.first_plate={title:'首板挖掘',rows:[['战法代码','first_plate'],['入场类型','次日竞价/开盘确认后'],['止损','-3.0%'],['止盈','+8.0%'],['天气适配','阴天'],['近30日胜率','65% (8次)']]};
+  D.strategy.weak_turn_strong={title:'弱转强',rows:[['战法代码','weak_turn_strong'],['天气适配','极端反弹'],['今日状态','禁用（T-1=晴天，不适配）'],['近30日胜率','48% (5次)']]};
+  D.strategy.emotional_rebound={title:'情绪反包',rows:[['战法代码','emotional_rebound'],['天气适配','晴天/极端反弹'],['今日状态','禁用（T-1=晴天但 weather_regimes 不含晴天）'],['近30日胜率','55% (4次)']]};
+  D.candidate={
+    '600001':{title:'示例A · 连板接力',rows:[['股票代码','600001'],['当前状态','holding（持仓）'],['战法','连板接力'],['入场价','10.52'],['当前价','10.86'],['盈亏','+3.2%'],['基因得分','78'],['连板数','3板'],['情绪色带','绿色区（与T-1同向）'],['封板状态','封住'],['weather_fit','适配（晴天+连板接力=适配）']],timeline:[{time:'09:35',from:'candidate',to:'watching',note:'基因78·进入观察'},{time:'09:42',from:'watching',to:'monitoring',note:'竞价高开3.2%·进入监控'},{time:'09:45',from:'monitoring',to:'holding',note:'封板·买入@10.52'}]},
+    '600002':{title:'示例B · 连板接力',rows:[['股票代码','600002'],['当前状态','holding'],['入场价','9.10'],['当前价','9.00'],['盈亏','-1.1%'],['封板状态','炸板回封'],['情绪色带','黄色区 ↓'],['weather_fit','适配']],timeline:[{time:'09:40',from:'candidate',to:'watching',note:'进入观察'},{time:'09:48',from:'watching',to:'monitoring',note:'进入监控'},{time:'09:52',from:'monitoring',to:'holding',note:'封板·买入@9.10'},{time:'10:20',from:'holding',to:'holding',note:'炸板·10:35回封'}]},
+    '600003':{title:'示例C · 连板接力',rows:[['股票代码','600003'],['当前状态','holding'],['入场价','12.30'],['当前价','12.24'],['盈亏','-0.5%'],['封板状态','炸板未回封'],['情绪色带','红色区 ↓'],['weather_fit','适配'],['决策上下文','双重压力（个股炸板+市场红色区）'],['T+1行动','强制离场信号']],timeline:[{time:'09:38',from:'candidate',to:'watching',note:'进入观察'},{time:'09:50',from:'watching',to:'monitoring',note:'进入监控'},{time:'09:55',from:'monitoring',to:'holding',note:'封板·买入@12.30'},{time:'10:15',from:'holding',to:'holding',note:'炸板未回封·红色区·双重压力'}]}
+  };
+  D.fuse={
+    position:{title:'仓位熔断',rows:[['规则','R1 仓位熔断'],['触发条件','天气=暴风雨'],['今日状态','正常（未触发）'],['天气','晴天（T-1）'],['系统动作','暴风雨时自动锁死买入权限'],['人工干预','仅可执行卖出/清仓']]},
+    cancel:{title:'撤单熔断',rows:[['规则','R2 撤单熔断（防钓鱼）'],['触发条件','封单<3000万 或 撤单/封单>20%'],['今日状态','正常'],['系统动作','触发时自动撤单，无需人工确认']]},
+    exit:{title:'次日强制离场',rows:[['规则','R3 次日强制离场'],['触发条件','竞价未高开(≤0%) 或 开盘5分钟未站稳均线'],['今日状态','正常'],['系统动作','生成离场信号+醒目提醒（软gate）']]}
+  };
+  D.metric={
+    zt_count:{title:'涨停家数',rows:[['指标','涨停家数 (zt_count)'],['今日值','68'],['T-1 值','75'],['变化','-7'],['数据源','em_zt_topic_pool(getTopicZTPool)'],['含义','市场热度直接指标'],['STI权重','0.40 (最高)']]},
+    seal_rate:{title:'封板率',rows:[['指标','封板率 (seal_rate)'],['今日值','85%'],['数据源','zt/(zt+zb)'],['含义','买盘力度'],['STI权重','维度2']]},
+    break_rate:{title:'炸板率',rows:[['指标','炸板率 (break_rate)'],['今日值','15%'],['含义','失败率/风险指标'],['阈值','>30%=危险']]},
+    promotion_rate:{title:'晋级率',rows:[['指标','晋级率 (promotion_rate)'],['今日值','42%'],['含义','连板/昨涨停比']]},
+    max_boards:{title:'最高连板',rows:[['指标','最高连板 (max_boards)'],['今日值','5板'],['含义','市场情绪高度']]},
+    dt_count:{title:'跌停家数',rows:[['指标','跌停家数 (dt_count)'],['今日值','12'],['数据源','em_zt_topic_pool(getTopicDTPool)'],['含义','市场压力指标']]}
+  };
+  D.funnel_layer={
+    R1:{title:'R1 宽源层',rows:[['层 ID','R1'],['名称','宽源'],['输入','涨停基因得分 + 连板梯队'],['输出','58 只'],['筛选条件','涨停基因得分≥60 + 连板梯队（含炸板/昨涨停今表现）'],['阈值','情绪档=晴天（自动收紧）'],['对应状态','candidate']],candidates:[{code:'600001',score:78},{code:'600002',score:72},{code:'600003',score:68}]},
+    R2:{title:'R2 精筛层',rows:[['层 ID','R2'],['名称','精筛'],['输入','R1 输出 58 只'],['输出','24 只'],['筛选条件','换手≥冷档(3%→2%晴天) + 量比>活跃线 + 成交额≥下限'],['对应状态','watching']],
+    candidates:[{code:'600001',score:78},{code:'600002',score:72}]},
+    R3:{title:'R3 定稿层',rows:[['层 ID','R3'],['名称','定稿'],['输入','R2 输出 24 只'],['输出','9 只'],['筛选条件','活跃度档位 + 企稳信号命中'],['对应状态','monitoring']],candidates:[{code:'600001',score:78}]},
+    holding:{title:'持仓层',rows:[['层 ID','holding'],['名称','持仓'],['输入','R3 输出 9 只中触发买入'],['输出','3 只'],['触发条件','战法匹配命中 + 仓位建议>0 + 用户确认'],['对应状态','holding']],candidates:[{code:'600001'},{code:'600002'},{code:'600003'}]}
+  };
+  D.statelist={
+    candidate:{title:'candidate 状态列表',count:36,note:'今日候选池中的股票，等待评分≥65进入观察'},
+    watching:{title:'watching 状态列表',count:10,note:'评分≥65，观察竞价表现'},
+    monitoring:{title:'monitoring 状态列表',count:4,note:'竞价确认，实时监控封板状态'},
+    holding:{title:'holding 状态列表',count:3,note:'已触发买入，持仓中'},
+    settled:{title:'settled 状态列表',count:3,note:'已结算（盈亏已记录）'},
+    filtered:{title:'filtered 状态列表',count:2,note:'被过滤淘汰，可重新进入候选池'}
+  };
+  D.snapshot={
+    '10:15':{title:'快照 10:15',rows:[['时间','10:15'],['综合分数','68'],['趋势','↓'],['色带','黄色区（偏离T-1 -4）'],['涨停家数','62'],['封板率','65%'],['炸板率','22%'],['涨跌比','1.2'],['T-1基线','72.3'],['采样源','em_zt_topic_pool'],['备注','分数从72跌至68，进入黄色区，开始走偏']]},
+    '10:45':{title:'快照 10:45',rows:[['时间','10:45'],['综合分数','55'],['趋势','↓'],['色带','红色区（偏离T-1 -17）'],['涨停家数','48'],['封板率','52%'],['炸板率','26%'],['涨跌比','0.9'],['备注','分数跌破55，进入红色区，显著背离']]},
+    '14:30':{title:'快照 14:30',rows:[['时间','14:30'],['综合分数','49'],['趋势','↓'],['色带','红色区（偏离T-1 -23）'],['涨停家数','42'],['封板率','48%'],['炸板率','28%'],['涨跌比','0.8'],['备注','T+1预判触发点，投影STI≈45-50']]}
+  };
+  D.dimension={
+    zt_count:{title:'涨停家数维度',rows:[['维度','涨停家数 (zt_count)'],['当前值','42'],['固定阈值','>80=100分 / 50-80=60分 / <30=20分'],['当前得分','20分（<30区）'],['权重','0.40'],['数据源','em_zt_topic_pool(getTopicZTPool)'],['T-1值','68'],['变化','-26（大幅下降）']]},
+    seal_rate:{title:'封板率维度',rows:[['维度','封板率 (seal_rate)'],['当前值','48%'],['固定阈值','>70%=100 / 50-70%=60 / <50%=20'],['当前得分','20分（<50%区）'],['权重','0.20']]},
+    break_rate:{title:'炸板率维度',rows:[['维度','炸板率 (break_rate)'],['当前值','28%'],['固定阈值','<15%=100 / 15-30%=60 / >30%=20'],['当前得分','60分（15-30%区）'],['权重','0.20']]},
+    ad_ratio:{title:'涨跌比维度',rows:[['维度','涨跌比 (ad_ratio)'],['当前值','0.8'],['固定阈值','>2=100 / 0.7-2=60 / <0.7=20'],['当前得分','60分（0.7-2区）'],['权重','0.10']]}
+  };
+  D.scenario={
+    decline:{title:'场景：分数维持走弱',rows:[['条件','分数维持 <55 持续 2 个 snapshot（到 10:45）'],['影响','T-1 晴天计划的边际优势在衰减'],['建议动作','收紧 B/C 止损，暂停新建连板仓位'],['历史参照','近 20 日类似走势 3 次出现，2 次继续走弱至收盘'],['样本量','3（不足，无统计意义）'],['可靠性','中等（样本小）']]},
+    rebound:{title:'场景：分数反弹回升',rows:[['条件','分数反弹回 60+'],['影响','T-1 计划维持有效'],['建议动作','继续执行，A 持有，B 观察封板回封'],['历史参照','反弹回 60+ 概率 35%'],['样本量','3'],['可靠性','中等']]}
+  };
+  D.t1_projection={
+    maintain:{title:'T+1 预判：收盘维持',rows:[['场景','IF 收盘维持当前水位'],['预计 STI','45-50'],['投影天气','极端反弹 或 暴风雨'],['T+1 标准变化','晴天 → 极端反弹/暴风雨'],['T+1 战法可能切换','连板接力 → 弱转强/空仓'],['建议','收盘前评估持仓是否需要减仓'],['可靠性','较高（STI公式确定，只差30分钟数据）'],['标注','投影，非最终判定']]},
+    rebound:{title:'T+1 预判：尾盘反弹',rows:[['场景','IF 尾盘反弹（涨停回升 60+）'],['预计 STI','55-60'],['投影天气','阴天'],['T+1 标准变化','晴天 → 阴天（小幅降级）'],['建议','维持持仓，T+1 可能切换为首板套利']]}
+  };
+  D.calibration={
+    projection:{title:'14:30 投影详情',rows:[['投影时间','14:30'],['投影 STI 范围','45-50'],['投影天气','极端反弹/暴风雨'],['投影依据','当前4维度：涨停42·封板48%·炸板28%·涨跌比0.8'],['投影方法','STI公式预推算（确定公式+实时输入）']]}
+  };
+  D.calibration.actual={title:'收盘实测详情',rows:[['收盘时间','15:00'],['实际 STI','54.7'],['实际天气','阴天'],['涨停家数(收盘)','51'],['封板率(收盘)','55%'],['与投影偏差','+4.7（尾盘回稳好于预期）'],['偏差原因','尾盘涨停家数从42回升至51（资金抢筹次日预期）']]};
+  D.calibration.deviation={title:'偏差分析',rows:[['偏差值','+4.7'],['偏差方向','投影偏低（实际好于投影）'],['原因','尾盘涨停回升'],['累计校准次数','1'],['累计准确率','1/1 = 100%'],['统计意义','无（样本=1）']]};
+  D.t1_plan={
+    standard:{title:'T+1 硬标准预览',rows:[['日期','2026-08-13 (T+1)'],['天气','阴天（震荡轮动）'],['允许战法','低位首板、连板接力'],['禁用战法','弱转强、情绪反包'],['阈值档位','换手冷档 3%→5%（阴天收紧）'],['仓位限制','正常（阴天无额外限制）'],['熔断状态','待 T+1 盘后计算']]},
+    action:{title:'持仓 T+1 行动计划',rows:[['A 连板接力','持有，阴天连板接力仍适配，可减半仓锁利'],['B 连板接力','观察，阴天标准下连板接力降仓至 50%'],['C 连板接力','强制离场信号（炸板未回封+T+1阴天不适配）']]}
+  };
+  D.pipeline_step={
+    sti_schedule:{title:'STI 盘后定时计算',rows:[['步骤','STI 盘后定时计算'],['时间','交易日 15:30'],['触发','scheduled_tasks 定时任务'],['数据源','market._emotion(T) + market._sentiment(T)'],['计算','engine.compute(emo, sentiment)'],['持久化','save_result() → sti_timeline DB'],['下游','SentimentContext.build_context(T+1)'],['状态','已完成（T-1）']]},
+    ctx_build:{title:'SentimentContext 构建',rows:[['步骤','SentimentContext 构建'],['时间','盘前 08:00（T）'],['输入','sti_timeline T-1 行'],['输出','weather_state + allowed_styles + fuse_state + sti_score'],['下游消费者','PreMarketBriefing / resolve_thresholds / StrategyMatcher / PositionAdvisor / Funnel / IntradayMonitor'],['状态','已完成']]},
+    factor_fetch:{title:'因子采集',rows:[['步骤','因子采集'],['方法','factor_registry.afetch_all(date)'],['已注册因子','limitup_screener + candidate_funnel'],['输出','FactorResult list（factor_id + candidates）'],['状态','已完成']]}
+  };
+  D.datasource={
+    t1_source:{title:'T-1 数据源',rows:[['数据源','market._emotion(T-1) + market._sentiment(T-1)'],['emotion 数据','em_zt_topic_pool(4池) → zt/zb/dt/yzt + 三率 + ladder'],['sentiment 数据','akshare.stock_market_activity_legu → 涨跌家数/活跃度'],['计算','STIEngine.compute(emo, sentiment)'],['持久化','sti_timeline 表'],['TTL 缓存','_ZTB_CACHE_TTL（防重复外调）']]},
+    intraday_source:{title:'盘中数据源',rows:[['数据源','em_zt_topic_pool(4池) + akshare'],['采样频率','按黄金窗口（9:25-9:45 每5min, 9:45-10:30 每15min...）'],['评分','4维度固定阈值（涨停/封板率/炸板率/涨跌比）'],['存储','sti_intraday 表（当日 snapshots）'],['TTL','盘中模式缩短至 <15min（绕过缓存）'],['限流','4池×14采样=56次/天，无 key 免费API']]}
+  };
+  D.sti_timeline={title:'STI 30 日趋势',rows:[['当前 STI','72.3（T-1）'],['昨日变化','+2.1'],['30日最高','78.5'],['30日最低','45.2'],['30日均值','62.1'],['趋势','上升中'],['数据源','sti_timeline 表（ORDER BY date DESC LIMIT 30）']],chart:'<div class="mt-4"><svg viewBox="0 0 300 80" class="w-full"><polyline points="0,60 10,55 20,58 30,50 40,52 50,45 60,48 70,40 80,42 90,35 100,38 110,30 120,32 130,28 140,30 150,25 160,28 170,20 180,22 190,18 200,20 210,15 220,18 230,12 240,15 250,10 260,12 270,8 280,10 290,6 300,5" fill="none" stroke="hsl(15,89%,56%)" stroke-width="2"/><circle cx="300" cy="5" r="4" fill="hsl(15,89%,56%)"/></svg></div>'};
+  D.ladder={title:'连板梯队 · '+id+'板',rows:[['连板高度',id+'板'],['今日数量',id==='2'?'18':id==='3'?'7':id==='4'?'3':'1'],['数据源','em_zt_topic_pool(lbc 字段)'],['含义','连板高度反映市场情绪延续性']]};
+  D.state={title:'状态机节点 · '+id,rows:[['状态',id],['允许流转',getStateTransitions(id)],['持久化','workflow_state_repo（SQLite WAL）'],['流转规则','WorkflowStateMachine._ALLOWED_TRANSITIONS']]};
+  D.t1_calibration={title:'T+1 校准数据源',rows:[['投影时间','14:30'],['投影数据','当前4维度 → STI公式预推算'],['实测时间','15:00 收盘后'],['实测数据','engine.compute(T收盘数据)'],['偏差计算','actual_score - projected_score'],['存储','sti_intraday 表 projected_t1_score + actual_score'],['累计','逐日积累，计算投影准确率']]};
+  
+  function getStateTransitions(s){const m={pending:'→ candidate, filtered',candidate:'→ watching, filtered',watching:'→ monitoring, filtered, candidate(回退)',monitoring:'→ holding, filtered',holding:'→ settled, filtered',settled:'→ candidate(下一轮)',filtered:'→ candidate(可重新入池)'};return m[s]||'N/A'}
+  
+  const data=D[type]&&(typeof D[type]==='object'&&!Array.isArray(D[type])?D[type][id]||D[type]:D[type]);
+  if(!data)return '<div class="p-6 text-muted-fg">详情内容待实现</div>';
+  
+  let html='<div class="p-6 space-y-4">';
+  html+=`<h2 class="text-lg font-bold">${data.title||''}</h2>`;
+  if(data.subtitle)html+=`<p class="text-xs text-muted-fg mono">${data.subtitle}</p>`;
+  
+  if(data.rows){
+    html+='<div class="space-y-0">';
+    data.rows.forEach(([k,v])=>{html+=`<div class="kv"><span class="kv-k">${k}</span><span class="kv-v">${v}</span></div>`;});
+    html+='</div>';
+  }
+  
+  if(data.chart)html+=data.chart;
+  
+  if(data.candidates){
+    html+='<div class="mt-4"><div class="sl mb-2">候选列表</div><table class="dt"><thead><tr><th>代码</th><th>名称</th><th>基因分</th><th>连板</th><th>状态</th></tr></thead><tbody>';
+    data.candidates.forEach(c=>{const sm={holding:'sm-holding',monitoring:'sm-monitoring',watching:'sm-watching',candidate:'sm-candidate'}[c.state||'candidate'];html+=`<tr class="clickable" onclick="showDetail('candidate','${c.code}')"><td class="mono">${c.code}</td><td>${c.name||''}</td><td class="mono">${c.score||'-'}</td><td>${c.boards||'-'}</td><td><span class="sm-node ${sm} text-[9px]">${c.state||'candidate'}</span></td></tr>`;});
+    html+='</tbody></table></div>';
+  }
+  
+  if(data.timeline){
+    html+='<div class="mt-4"><div class="sl mb-2">状态流转记录</div><div class="space-y-1">';
+    data.timeline.forEach(t=>{const sm={holding:'sm-holding',monitoring:'sm-monitoring',watching:'sm-watching',candidate:'sm-candidate'};html+=`<div class="flex items-center gap-2 text-xs"><span class="mono text-muted-fg">${t.time}</span><span class="sm-node ${sm[t.from]} text-[9px]">${t.from}</span><span class="text-muted-fg">→</span><span class="sm-node ${sm[t.to]} text-[9px]">${t.to}</span><span class="text-muted-fg ml-2">${t.note}</span></div>`;});
+    html+='</div></div>';
+  }
+  
+  if(data.count!==undefined){
+    html+=`<div class="mt-4"><div class="sl mb-2">${data.title}（${data.count} 只）</div>`;
+    html+=`<p class="text-xs text-muted-fg">${data.note||''}</p>`;
+    html+='<table class="dt mt-2"><thead><tr><th>代码</th><th>名称</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    for(let i=0;i<Math.min(data.count,5);i++)html+=`<tr class="clickable" onclick="showDetail('candidate','60000${i+1}')"><td class="mono">60000${i+1}</td><td>示例${String.fromCharCode(65+i)}</td><td><span class="sm-node sm-candidate text-[9px]">${id}</span></td><td class="text-muted-fg">查看详情 →</td></tr>`;
+    if(data.count>5)html+=`<tr><td colspan="4" class="text-center text-muted-fg text-xs">... 还有 ${data.count-5} 只</td></tr>`;
+    html+='</tbody></table></div>';
+  }
+  
+  html+='</div>';
+  return html;
+}
+</script>
+</body>
+</html>
