@@ -8,6 +8,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
+import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState } from "@/lib/query";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { TransitionRequest } from "@/lib/api";
@@ -273,6 +274,11 @@ export default function PostMarketReview() {
                 </li>
               ))}
             </ul>
+
+            {/* S060：当晚新生成的条件预览 */}
+            <div className="mt-3">
+              <VerificationCardBlock />
+            </div>
           </GlassCard>
 
           {/* 风险注记 */}

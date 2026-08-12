@@ -388,6 +388,79 @@ async def get_post_market_workflow() -> Dict[str, Any]:
     return _not_implemented("盘后复盘未实现")
 
 
+@router.get("/api/workflow/verification-card")
+async def get_verification_card(date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+    """S060：明日验证条件对账卡——返当日生成 + 对账结果。
+
+    缺数据条件 status=data_missing 诚实标注，不臆造。
+    """
+    try:
+        from workflow.verification_card import get_conditions
+        from vr_paths import last_trading_date_str
+        target = date or last_trading_date_str()
+        conditions = get_conditions(target)
+        status_counts = {
+            "pending": sum(1 for c in conditions if c.get("status") == "pending"),
+            "met_up": sum(1 for c in conditions if c.get("status") == "met_up"),
+            "met_down": sum(1 for c in conditions if c.get("status") == "met_down"),
+            "within": sum(1 for c in conditions if c.get("status") == "within"),
+            "data_missing": sum(1 for c in conditions if c.get("status") == "data_missing"),
+        }
+        return {
+            "data": {
+                "date": target,
+                "conditions": conditions,
+                "count": len(conditions),
+                "status_summary": status_counts,
+                "note": "验证条件属客观统计口径，条件句式为「若…则确认…」，无涨跌预测；历史统计特征，市场有风险",
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"验证对账卡查询异常：{e}") from e
+
+
+@router.post("/api/workflow/verification-card/generate")
+async def generate_verification_card(date: str = Query(None, description="生成日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+    """S060：手动触发条件生成（盘后调度自动跑，此端点供手动补跑）。"""
+    try:
+        from workflow.verification_card import generate_and_save
+        from vr_paths import last_trading_date_str
+        import market
+        target = date or last_trading_date_str()
+        emotion = market._emotion(target)
+        if not emotion:
+            return {"data": {"date": target, "generated": 0, "note": "情绪数据未取得，未生成条件"}}
+        conditions = generate_and_save(emotion, target)
+        return {
+            "data": {
+                "date": target,
+                "generated": len(conditions),
+                "conditions": [{"metric": c.metric, "baseline": c.baseline,
+                                "threshold_up": c.threshold_up, "threshold_down": c.threshold_down,
+                                "note": c.note} for c in conditions],
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"验证条件生成异常：{e}") from e
+
+
+@router.post("/api/workflow/verification-card/verify")
+async def verify_verification_card() -> Dict[str, Any]:
+    """S060：手动触发 T+1 对账（盘后调度自动跑，此端点供手动补跑）。"""
+    try:
+        from workflow.verification_card import verify_and_update
+        verified = verify_and_update()
+        return {
+            "data": {
+                "verified": len(verified),
+                "conditions": [{"date": c.date, "metric": c.metric, "actual": c.actual,
+                                "status": c.status, "note": c.note} for c in verified],
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"验证对账异常：{e}") from e
+
+
 @router.post("/api/workflow/refresh")
 async def refresh_workflow() -> Dict[str, Any]:
     """

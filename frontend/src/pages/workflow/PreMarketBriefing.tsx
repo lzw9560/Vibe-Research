@@ -17,6 +17,7 @@ import { useTransitionWorkflowState } from "@/lib/query";
 import type { TransitionRequest, FactorResult } from "@/lib/api";
 import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
 import { Link, useSearchParams } from "react-router-dom";
+import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 
 function formatRelativeTime(generatedAt: string): string {
   try {
@@ -225,6 +226,9 @@ export default function PreMarketBriefing() {
 
       {/* S054 R4：盘前行为干预卡（展开不收起）——三桶算账 + 研判 + 深看链接 */}
       {status === "done" && <PreMarketBehaviorBlock />}
+
+      {/* S060：昨日验证对账块（嵌市场情绪区下方） */}
+      {status === "done" && <VerificationCardBlock />}
 
       {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关（S033：传 date 供状态卡/徽标） */}
       <Sheet open={!!drawerCode} onClose={() => setDrawerCode(null)}>

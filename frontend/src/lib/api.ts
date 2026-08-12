@@ -18,6 +18,7 @@ import type {
   BoardLadderNode,
   GraphData,
   AdvisorySummary,
+  VerificationCardResult,
 } from "./api/types";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -235,4 +236,16 @@ export const api = {
   // S042 建议中心：三场景建议汇总（推荐/自选/持仓）
   advisorySummary: (limit?: number) =>
     get<AdvisorySummary>(`/advisory/summary${limit ? `?limit=${limit}` : ""}`),
+  // S055 炸板预警 + 封单时序
+  bombAlerts: (date?: string) =>
+    get<{ date: string; alerts: import("./api/types").BombAlertItem[]; count: number; note: string }>(`/risk/bomb-alerts${date ? `?date=${date}` : ""}`),
+  sealSnapshots: (code: string, date?: string) =>
+    get<{ code: string; date: string; snapshots: Record<string, unknown>[]; count: number; data_status: string }>(`/risk/seal-snapshots?code=${code}${date ? `&date=${date}` : ""}`),
+  // S060 验证对账卡
+  verificationCard: (date?: string) =>
+    get<VerificationCardResult>(`/workflow/verification-card${date ? `?date=${date}` : ""}`),
+  verificationCardGenerate: (date?: string) =>
+    request(`/workflow/verification-card/generate${date ? `?date=${date}` : ""}`, "POST", {}),
+  verificationCardVerify: () =>
+    request(`/workflow/verification-card/verify`, "POST", {}),
 };

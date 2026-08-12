@@ -1332,3 +1332,29 @@ export interface AdvisorySummary {
   holdings: AdvisoryItem[];
   disclaimer: string;
 }
+
+// S060：明日验证条件对账卡
+export type VerificationStatus = "pending" | "met_up" | "met_down" | "within" | "data_missing";
+
+export interface VerificationCondition {
+  id: number;
+  date: string;
+  metric: string;
+  subject: string | null;
+  baseline: number | null;
+  threshold_up: number | null;
+  threshold_down: number | null;
+  actual: number | null;
+  status: VerificationStatus;
+  note: string | null;
+  created_at: string;
+  verified_at: string | null;
+}
+
+export interface VerificationCardResult {
+  date: string;
+  conditions: VerificationCondition[];
+  count: number;
+  status_summary: Record<VerificationStatus, number>;
+  note: string;
+}
