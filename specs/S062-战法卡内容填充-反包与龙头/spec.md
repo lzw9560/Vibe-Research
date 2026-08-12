@@ -1,6 +1,6 @@
 # Spec: S062 — 战法卡内容填充：反包/龙头实盘参数
 
-> 状态：草案
+> 状态：已实现（2026-08-12，commit 896fc62；pytest 1077 passed / tsc 绿 / vitest 309 passed）
 > 作者：Codex（外部项目借鉴）  日期：2026-08-11
 > 级别：**small-medium**（注册表参数 + 2 张卡片 + 测试；单后端层为主）
 > 流程门：develop 直提；commit message 记摘要
