@@ -21,6 +21,7 @@ import {
   type PredictionEnvelope,
   type IntradayFrameworkEnvelope,
 } from "@/lib/prediction";
+import { PredictionLedgerTab } from "@/components/prediction/PredictionLedgerTab";
 
 const STAGES = [
   { key: "s1", label: "S1 收盘后", desc: "T-1 收盘后大部分特征解锁" },
@@ -171,6 +172,7 @@ function IntradayFramework({ data }: { data: IntradayFrameworkEnvelope | null })
 
 export function Prediction() {
   const [accepted, setAccepted] = useState(isDisclaimerAccepted());
+  const [tab, setTab] = useState<"forecast" | "ledger">("forecast");
   const [predictions, setPredictions] = useState<Record<string, PredictionEnvelope | null>>({
     s1: null, s2: null, s3: null,
   });
@@ -215,17 +217,46 @@ export function Prediction() {
   return (
     <div>
       <PageHeader title="预测工作台" subtitle="短线板块预测级联 + 盘中研判框架（教育研究性）" />
-      {error && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </div>
-      )}
-      <div className="space-y-4">
-        <StageTimeline predictions={predictions} />
-        <ProbabilityEvolution predictions={predictions} />
-        <IntradayFramework data={framework} />
+      {/* S061：预测账本 Tab */}
+      <div className="mb-4 flex gap-1 border-b border-border">
+        <button
+          onClick={() => setTab("forecast")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+            tab === "forecast"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          板块预测级联
+        </button>
+        <button
+          onClick={() => setTab("ledger")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+            tab === "ledger"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          预测账本
+        </button>
       </div>
+      {tab === "ledger" ? (
+        <PredictionLedgerTab />
+      ) : (
+        <>
+          {error && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {error}
+            </div>
+          )}
+          <div className="space-y-4">
+            <StageTimeline predictions={predictions} />
+            <ProbabilityEvolution predictions={predictions} />
+            <IntradayFramework data={framework} />
+          </div>
+        </>
+      )}
       <Disclaimer />
     </div>
   );
