@@ -553,15 +553,17 @@ STRATEGY_REGISTRY: list[dict] = [
     {
         "code": "reverse_package",
         "name": "反包战法",
-        "entry_type": "尾盘确认反包",
+        "entry_type": "次日竞价/开盘买入（前日反包确认）",
         "stop_loss_pct": -3.0,
         "take_profit_pct": 6.0,
-        "max_hold_days": 2,
-        "entry_condition": "前日跌停/大阴线+今日放量+游资席位出现",
+        "max_hold_days": 1,  # S062：严格 T+1 卖出纪律（fanbao_strategy 原则）
+        # S062 T1：entry_condition 吸收 fanbao_strategy 五条件（quantjuzi/fanbao_strategy）
+        # 保留 VR 游资席位为加分项；match 逻辑不改（spec §5：外部参数不进选股主链）
+        "entry_condition": "T-2/T-3 涨停（加分）+ T-1 未涨停（断板调整）+ T-1 成交额>15亿 + 均线多头（M7/M14>1.0）+ 实体涨跌幅>-3%（加分）；游资席位出现（VR 加分项）",
         "stop_loss_condition": "跌破前日最低价",
         "take_profit_condition": "涨至+5%~+8%后回落",
-        "exit_condition": "未出现反包或触发止损/止盈",
-        "note": "60日无信号：炸板后溢价因子疑似缺供（S053 查因中）",
+        "exit_condition": "T+1 卖出纪律（不扛票）或触发止损/止盈",
+        "note": "60日无信号：match 逻辑依赖「炸板后溢价」因子缺供（S053 对照结论见卡片）",
         "weather_regimes": ["极端反弹"],
         "aliases": ["反包", "地天板"],
     },
@@ -607,6 +609,22 @@ STRATEGY_REGISTRY: list[dict] = [
         "exit_condition": "未封板或触发止损/止盈",
         "weather_regimes": ["阴天"],
         "aliases": ["尾盘", "偷袭"],
+    },
+    {
+        # S062 T3：新增 dragon_head 条目（板块启动期龙头确认，非追高）
+        # 来源：ZhuLinsen/daily_stock_analysis dragon_head.yaml + attrib2004/a-share-dragon-strategy
+        "code": "dragon_head",
+        "name": "龙头战法",
+        "entry_type": "板块启动期龙头确认",
+        "stop_loss_pct": -5.0,
+        "take_profit_pct": 15.0,
+        "max_hold_days": 5,
+        "entry_condition": "板块领涨地位+相对强度跑赢板块2%+换手>5%+量比>1.5+板块级催化",
+        "stop_loss_condition": "跌破5日均线",
+        "take_profit_condition": "涨至+10%~+15%后回落",
+        "exit_condition": "板块退潮或触发止损/止盈",
+        "weather_regimes": ["晴天", "阴天"],
+        "aliases": ["龙头", "龙头股"],
     },
 ]
 

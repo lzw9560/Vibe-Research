@@ -34,7 +34,7 @@ def _bars_with_profit_on_day1():
 @patch("strategies.strategy_backtest.load_gene_scores")
 @patch("strategies.strategy_backtest._get_available_dates")
 def test_run_strategy_backtest_aggregates(mock_dates, mock_load, mock_kline_mapper, _mock_astock):
-    """8 战法各返结果；命中的 first_plate win_rate=1.0/avg_return=8.0；其余 sample_size=0。"""
+    """9 战法各返结果；命中的 first_plate win_rate=1.0/avg_return=8.0；其余 sample_size=0。"""
     from strategies.strategy_backtest import run_strategy_backtest, clear_cache
     clear_cache()
     mock_dates.return_value = ["2026-08-01"]
@@ -43,14 +43,14 @@ def test_run_strategy_backtest_aggregates(mock_dates, mock_load, mock_kline_mapp
 
     results = run_strategy_backtest(60)
 
-    assert len(results) == 8
+    assert len(results) == 9
     assert all(r.available_days == 1 for r in results)  # DB 实际可用天数
     first_plate = next(r for r in results if r.strategy_code == "first_plate")
     assert first_plate.sample_size == 1
     assert first_plate.win_rate == 1.0  # 1/1
     assert first_plate.avg_return == 8.0  # take_profit_pct=8
     others = [r for r in results if r.strategy_code != "first_plate"]
-    assert all(r.sample_size == 0 for r in others), "其余 7 战法不应命中"
+    assert all(r.sample_size == 0 for r in others), "其余 8 战法不应命中"
 
 
 @patch("strategies.strategy_backtest.astock")
@@ -72,7 +72,7 @@ def test_run_strategy_backtest_skips_missing_kline(mock_dates, mock_load, mock_k
 
 
 def test_backtest_endpoint_returns_8_strategies(monkeypatch):
-    """GET /api/strategy/backtest 返 8 战法 + available_days + disclaimer。"""
+    """GET /api/strategy/backtest 返 9 战法 + available_days + disclaimer。"""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -84,7 +84,7 @@ def test_backtest_endpoint_returns_8_strategies(monkeypatch):
             strategy_code=f"s{i}", strategy_name=f"战法{i}",
             win_rate=0.5, avg_return=1.0, sample_size=10, available_days=8,
         )
-        for i in range(8)
+        for i in range(9)
     ]
     monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lookback_days: fake)
 
@@ -95,7 +95,7 @@ def test_backtest_endpoint_returns_8_strategies(monkeypatch):
     resp = client.get("/api/strategy/backtest?lookback_days=60")
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert len(body["data"]) == 8
+    assert len(body["data"]) == 9
     assert body["available_days"] == 8
     assert "历史统计特征" in body["disclaimer"]
     assert body["data"][0]["strategy_code"] == "s0"

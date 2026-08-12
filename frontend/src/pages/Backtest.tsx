@@ -330,7 +330,7 @@ export default function Backtest() {
               <GlassCard>
                 <SectionHeader
                   title="战法胜率趋势"
-                  subtitle="strategy_backtest · 8 战法每日快照"
+                  subtitle="strategy_backtest · 9 战法每日快照"
                 />
                 <StrategyWinRateChart rows={trendRows} />
               </GlassCard>
