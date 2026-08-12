@@ -38,5 +38,9 @@
 
 ## S053 对照结论
 - VR `STRATEGY_REGISTRY` 旧条件「前日跌停/大阴线 + 今日放量 + 游资席位」与 fanbao 五条件不一致：VR 偏向「跌停后反包」（地天板），fanbao 偏向「涨停后断板反包」（强转弱再转强）。
-- 60 日无信号主因：match 逻辑依赖「炸板后溢价」因子，该因子近 60 日 2899 行全 0/NULL（数据管道疑 bug，S053 查因中）。
-- 本 spec 仅精化注册表 entry_condition 文本与卡片，不改 match 漏斗逻辑（spec §5：外部参数不进选股主链，避免未回测参数入主链）。
+- 60 日无信号根因（S053 已定位）：
+  1. 数据源 bug：`getYesterdayZTPool` 排序参数错（fbt:asc 返空），已修为 zs:desc
+  2. 计算逻辑错：旧公式分子取自 yzt、分母用 zb_total，语义不通；已重定义为 zb 池次日回封率
+  3. match 结构性限制：reverse_package 物理定义是"前日跌停/断板后反包"，候选应来自炸板池（zb），不是涨停池（zt）。`match_strategies` 输入是 gene_scores（涨停股），结构上不会命中真正的断板反包标的。
+- **match 待 S055 zb 池接线后激活**——S055 落地后从 zb 池取候选，才能让 reverse_package 真正产出信号。
+- S053 范围内：卡片 entry_condition 已精化（fanbao 五条件），但 match 条件保留不改（等 S055）。

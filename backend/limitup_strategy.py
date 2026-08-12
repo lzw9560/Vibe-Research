@@ -679,13 +679,15 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
                 confidence = min(gene.factors.get("封板率", 0) / 100, 1.0)
 
         elif strategy["code"] == "break_reseal":
-            if gene.factors.get("炸板后溢价", 0) > 0 and gene.factors.get("封板率", 0) >= 50:
+            # S053 R3：match 改 zt_count_250d 黄金区 [3,5] + 封板率>=80
+            # 数据证据：zt_count 3-5 区间 89.5% 命中率（19 条样本），6+ 衰减，11+ 反亏
+            if 3 <= gene.zt_count_250d <= 5 and gene.factors.get("封板率", 0) >= 80:
                 matches.append(ConditionMatch(
-                    condition="炸板后回封",
-                    value=f"炸板后溢价 {gene.factors.get('炸板后溢价', 0):.1f}%",
-                    description=f"策略逻辑上，该股历史统计显示炸板后存在回封概率",
+                    condition="炸板回封+历史封板能力",
+                    value=f"zt_count_250d={gene.zt_count_250d} 封板率{gene.factors.get('封板率', 0):.1f}%",
+                    description=f"策略逻辑上，该股 250 日涨停 {gene.zt_count_250d} 次（黄金区 3-5），历史封板能力强且未过劳",
                 ))
-                confidence = 0.6
+                confidence = 0.7
 
         elif strategy["code"] == "low_absorption":
             if gene.total_score >= 65 and gene.factors.get("次日溢价率", 0) > 50:

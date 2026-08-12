@@ -80,7 +80,7 @@ async def _fetch_zt_pool(date: str):
     try:
         zt, yzt, zb = await asyncio.gather(
             asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", date, "fbt:asc"),
-            asyncio.to_thread(astock.em_zt_topic_pool, "getYesterdayZTPool", date, "zs:desc"),
+            asyncio.to_thread(astock.em_zt_topic_pool, "getYesterdayZTPool", date, "zs:desc"),  # S053 R1：fbt:asc→zs:desc（fbt 对该端点返空）
             asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZBPool", date, "fbt:asc"),
         )
         return (
@@ -91,6 +91,46 @@ async def _fetch_zt_pool(date: str):
     except Exception as e:
         _logger.exception("获取涨停池失败: date=%s", date)
         return [], [], []
+
+
+def _compute_rebound_rate(zb_pool: list, zt_next_pool: list | None) -> tuple[float, list[str]]:
+    """S053 R2：炸板后溢价 = T 日 zb 池次日回封率（zb ∩ T+1 zt / zb）。
+
+    返回 (rebound_rate, missing_factors)。
+    - zb 空 → (0.0, [])（无炸板何来回封，非 missing）
+    - zt_next None/空 → (0.0, ["炸板后溢价"])（数据缺供，诚实标注 missing）
+    - 否则 wilson 下界修正
+    """
+    zb_total = len(zb_pool)
+    if zb_total == 0:
+        return 0.0, []
+    if not zt_next_pool:
+        return 0.0, ["炸板后溢价"]
+    zb_codes = {item.code for item in zb_pool if item.code}
+    zt_next_codes = {item.code for item in zt_next_pool if item.code}
+    resealed = zb_codes & zt_next_codes
+    return round(wilson_lower_bound(len(resealed), zb_total) * 100, 2), []
+
+
+def _fetch_zt_next_pool(target_date: str) -> list:
+    """S053 R2：拉 T+1 日涨停池（用于算 zb 次日回封率）。失败返空。"""
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        base = _dt.strptime(target_date, "%Y%m%d").date()
+    except ValueError:
+        return []
+    # 下一日（跨周末/节假日自然跳，东财返空即 missing）
+    next_d = base + _td(days=1)
+    for _ in range(7):  # 最多扫 7 日找下一交易日
+        d_str = next_d.strftime("%Y%m%d")
+        try:
+            pool = astock.em_zt_topic_pool("getTopicZTPool", d_str, "fbt:asc")
+            if pool:
+                return [zt_pool_item_from_dict(it) for it in pool]
+        except Exception:
+            pass
+        next_d += _td(days=1)
+    return []
 
 
 async def _collect_zt_history_batch(codes: set[str], date: str, lookback: int = 252) -> dict[str, list]:
@@ -149,6 +189,15 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
         _CACHE[cache_key] = (now, result)
         return result
 
+    # S053 R2：拉 T+1 日 zt 池算 zb 次日回封率（路径 C：service 层预算回填因子）
+    zt_next_pool = await asyncio.to_thread(_fetch_zt_next_pool, target_date)
+    rebound_rate, rebound_missing = _compute_rebound_rate(zb_pool, zt_next_pool)
+    if rebound_missing:
+        _logger.info("[screener] %s 炸板后溢价 missing（zt_next 拉取失败/空）", display_date)
+    else:
+        _logger.info("[screener] %s 炸板后溢价=%.2f（zb=%d zt_next=%d）",
+                     display_date, rebound_rate, len(zb_pool), len(zt_next_pool or []))
+
     seen: dict[str, ZTPoolItem] = {}
     for item in zt_pool:
         code = item.code
@@ -174,6 +223,19 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
     gene_tasks = [_compute_one(s) for s in scores]
     gene_results = await asyncio.gather(*gene_tasks, return_exceptions=True)
     gene_scores = [g for g in gene_results if not isinstance(g, Exception)]
+
+    # S053 R2 路径 C：service 层回填炸板后溢价因子（重定义 = zb 次日回封率）
+    # compute_factors 算的旧值（yzt 公式错）在这里覆盖；缺数据时标 missing 不臆造
+    from limitup_screener.models import calc_total_score
+    for g in gene_scores:
+        g.factors["炸板后溢价"] = rebound_rate
+        if rebound_missing:
+            if g.missing_factors is None:
+                g.missing_factors = []
+            if "炸板后溢价" not in g.missing_factors:
+                g.missing_factors.append("炸板后溢价")
+        # 权重为 0%（S047），重算 total_score 不受因子值影响，但保持一致性
+        g.total_score = calc_total_score(g.factors)
 
     gene_scores.sort(key=lambda g: g.total_score, reverse=True)
 
