@@ -1,6 +1,6 @@
 # Spec: S061 — 预测跟踪与自动验证（预测账本）
 
-> 状态：草案
+> 状态：已实现（2026-08-12，commit 5c15126；pytest 1087 passed / tsc 绿 / vitest 309 passed）
 > 作者：Codex（外部项目借鉴）  日期：2026-08-11
 > 级别：**medium**（跨层；无新外部数据源——验证用现有 K 线/行情）
 > 流程门：develop 直提 + 勤 commit；issue 级 review；简化验收
