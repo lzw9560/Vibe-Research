@@ -38,5 +38,5 @@
 ## S5 全量回归 + 冒烟
 
 - [x] T8 pytest 全量绿（对比开工基线无回归）
-- [ ] T9 dev server :8900 冒烟（用户走查）：回测页「战法胜率趋势」~60 个点；重启后端验证启动补跑无重复写入
-- [ ] T10 task.md 勾选 + 收尾 commit（feat(S052): ...）
+- [x] T9 dev server :8900 冒烟（用户走查）：回测页「战法胜率趋势」60 个点（GET /api/backtest/trend?days=90 返 119 行/60 unique dates，区间 2026-05-25→2026-08-11）；启动补跑幂等验证（_compute_backfill_gap 返空，重启不重复写入）
+- [x] T10 task.md 勾选 + 收尾 commit（feat(S052): ...）
