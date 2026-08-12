@@ -33,21 +33,29 @@ class StrategyMatcher:
             self._registry_cache = get_strategy_registry()
         return self._registry_cache
 
-    def match(self, gene: GeneScore) -> list[StrategySignal]:
+    def match(self, gene: GeneScore, weather_state: str | None = None) -> list[StrategySignal]:
         """
         对单只股票匹配所有适用战法。
 
         直接复用 limitup_strategy.match_strategies，保持策略逻辑单一事实来源。
+        S063 T7：传 weather_state 时，为每条 signal 调 calc_weather_fit 标注适配度。
         """
-        return match_strategies(gene.code, gene)
+        signals = match_strategies(gene.code, gene)
+        if weather_state is not None:
+            from limitup_strategy import calc_weather_fit  # noqa: PLC0415
+            for s in signals:
+                s.weather_fit = calc_weather_fit(s.strategy_code, weather_state)
+        return signals
 
-    def match_batch(self, genes: list[GeneScore]) -> dict[str, list[StrategySignal]]:
+    def match_batch(
+        self, genes: list[GeneScore], weather_state: str | None = None
+    ) -> dict[str, list[StrategySignal]]:
         """
         批量匹配，返回 {code: signals}。
         """
         results: dict[str, list[StrategySignal]] = {}
         for gene in genes:
-            results[gene.code] = self.match(gene)
+            results[gene.code] = self.match(gene, weather_state)
         return results
 
     def get_best_strategy(self, gene: GeneScore) -> StrategySignal | None:

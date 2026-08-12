@@ -9,7 +9,9 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
-import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState } from "@/lib/query";
+import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
+import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
+import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState, usePreMarketBriefing } from "@/lib/query";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { TransitionRequest } from "@/lib/api";
 
@@ -40,6 +42,8 @@ export default function PostMarketReview() {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   const { data: review, isLoading } = useDailyWinReview(date);
+  // S063 T27：读盘前简报取 sentiment_context（T+1 准备面板复用 T-1 天气）
+  const { data: briefing } = usePreMarketBriefing(date);
   // 研判用 shadow-comparison window=28（daily-review 无 shadow 数据时兜底）
   const { data: shadow } = useShadowComparison(28);
   const transition = useTransitionWorkflowState();
@@ -54,6 +58,21 @@ export default function PostMarketReview() {
 
   return (
     <WorkflowStage title="盘后复盘" subtitle="Post-Market Review" loading={isLoading}>
+      {/* S063 T27：Pipeline 进度条（盘后阶段高亮） */}
+      <div className="mb-4">
+        <PipelineProgressBar current="post" />
+      </div>
+
+      {/* S063 T27：当日 STI 结算条（T vs T-1 天气对比） */}
+      {briefing?.sentiment_context && (
+        <div className="mb-4">
+          <SectionHeader title="当日情绪结算" subtitle="T-1 天气硬标准（次日硬标准已生成）" />
+          <div className="mt-2">
+            <WeatherDecisionBar ctx={briefing.sentiment_context} />
+          </div>
+        </div>
+      )}
+
       {/* 日期选择器 */}
       <div className="mb-4 flex items-center gap-2">
         <label className="text-xs text-muted-foreground">日期</label>

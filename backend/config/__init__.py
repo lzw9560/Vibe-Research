@@ -129,6 +129,20 @@ class AssistantDefaultConfig(NotificationConfig):
     )
     STI_PERCENTILE_WINDOW: int = 252
 
+    # === 盘中情绪采样（S063）===
+    # 黄金窗口采样间隔（分钟）：9:25-9:45 高密度，9:45-10:30 中密度，
+    # 10:30-11:30 + 13:00-14:30 低密度，14:30-15:00 尾盘高密度。
+    INTRADAY_SAMPLE_INTERVALS: list[tuple[str, str, int]] = field(
+        default_factory=lambda: [
+            ("09:25", "09:45", 5),
+            ("09:45", "10:30", 15),
+            ("10:30", "11:30", 30),
+            ("13:00", "14:30", 30),
+            ("14:30", "15:00", 5),
+        ]
+    )
+    INTRADAY_RING_BUFFER_SIZE: int = 50  # 内存 ring buffer 容量（>1 日采样量）
+
     # === 推荐引擎 ===
     RECOMMEND_HIGH_THRESHOLD: float = 60.0
     RECOMMEND_MEDIUM_THRESHOLD: float = 50.0

@@ -24,9 +24,18 @@ def _reset_cache(monkeypatch, status="idle", run_id=None, factors=None):
             "data_date": "2026-08-03",
             "as_of": None,
             "market_emotion": None,
+            "sentiment_context": None,
             "error": None,
         },
     )
+
+
+def _empty_ctx(d):
+    """S063：测试用空 SentimentContext（避免碰真实 STI DB）。"""
+    from sentiment_context import SentimentContext
+    return SentimentContext(source_date=None, decision_date=d, weather_state=None,
+                            sti_score=None, sti_phase=None, fuse_state=None,
+                            data_status="missing")
 
 
 # ── B2: _collect 写缓存 ──────────────────────────────────────────────────
@@ -38,12 +47,13 @@ def test_collect_success_writes_done_cache(monkeypatch):
 
     monkeypatch.setattr(wf.factor_registry, "afetch_all", fake_afetch)
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
-    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d: {"sentiment": "neutral"})
+    monkeypatch.setattr(wf, "build_context", _empty_ctx)
+    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d, ctx=None: {"sentiment": "neutral"})
     # S048：funnel_layers 构建（真跑会碰外部源）与快照落盘均隔离
-    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [])
+    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [])
     monkeypatch.setattr(wf, "_save_snapshot", lambda payload: None)
     # S049 C4：final_candidates 诊断卡构建隔离（真跑会碰外部源）
-    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg: type("R", (), {"final_candidates": []})())
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: type("R", (), {"final_candidates": []})())
     monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     _reset_cache(monkeypatch, status="running", run_id="rid1")
 
@@ -62,8 +72,9 @@ def test_collect_failure_writes_error_cache(monkeypatch):
 
     monkeypatch.setattr(wf.factor_registry, "afetch_all", boom)
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
-    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d: {})
-    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [])
+    monkeypatch.setattr(wf, "build_context", _empty_ctx)
+    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d, ctx=None: {})
+    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [])
     monkeypatch.setattr(wf, "_save_snapshot", lambda payload: None)
     _reset_cache(monkeypatch, status="running", run_id="rid1")
 

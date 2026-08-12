@@ -183,3 +183,94 @@ def load_history_scores() -> list[float]:
         return [float(r["score"]) for r in rows][::-1]
     except Exception:
         return []
+
+
+# ============================================================================
+# S063 T1：sti_intraday 盘中采样表 CRUD
+# ============================================================================
+
+def save_intraday(snapshot: dict) -> None:
+    """持久化单条盘中 snapshot 到 sti_intraday 表。
+
+    snapshot 字段：date, time, zt_count, seal_rate, break_rate, ad_ratio,
+    score, trend, t1_baseline, projected_t1_score, projected_t1_weather,
+    actual_score（后三者可 None）。
+    """
+    try:
+        db = get_db()
+        db.execute(
+            """INSERT OR REPLACE INTO sti_intraday (
+                date, time, zt_count, seal_rate, break_rate, ad_ratio,
+                score, trend, t1_baseline,
+                projected_t1_score, projected_t1_weather, actual_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                snapshot.get("date"),
+                snapshot.get("time"),
+                snapshot.get("zt_count"),
+                snapshot.get("seal_rate"),
+                snapshot.get("break_rate"),
+                snapshot.get("ad_ratio"),
+                snapshot.get("score"),
+                snapshot.get("trend"),
+                snapshot.get("t1_baseline"),
+                snapshot.get("projected_t1_score"),
+                snapshot.get("projected_t1_weather"),
+                snapshot.get("actual_score"),
+            ),
+        )
+        db.commit()
+    except Exception:
+        pass
+
+
+def load_intraday_day(date: str) -> list[dict]:
+    """加载某日全部盘中 snapshot（按 time 升序）。"""
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT * FROM sti_intraday WHERE date = ? ORDER BY time ASC",
+            (date,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def prune_intraday(keep_days: int = 60) -> int:
+    """清理 keep_days 个交易日之前的盘中 snapshot。返回删除条数。"""
+    try:
+        db = get_db()
+        # 取 keep_days+1 个交易日的日期集合（STI 表 date DESC 即交易日期序列）
+        rows = db.execute(
+            "SELECT DISTINCT date FROM sti_intraday ORDER BY date DESC LIMIT ?",
+            (keep_days,),
+        ).fetchall()
+        if not rows:
+            return 0
+        cutoff_date = rows[-1]["date"]
+        cursor = db.execute(
+            "DELETE FROM sti_intraday WHERE date < ?",
+            (cutoff_date,),
+        )
+        db.commit()
+        return cursor.rowcount
+    except Exception:
+        return 0
+
+
+def load_recent_intraday_scores(days: int = 20) -> list[dict]:
+    """加载近 days 个交易日的盘中 snapshot（用于历史参照）。
+
+    返回 [{date, time, score, trend, ...}, ...]，按 date DESC, time ASC。
+    """
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT * FROM sti_intraday WHERE score IS NOT NULL "
+            "ORDER BY date DESC, time ASC LIMIT ?",
+            (days * 20,),  # 每日约 12-14 条，取 days*20 覆盖
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []

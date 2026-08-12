@@ -73,12 +73,26 @@ class PositionAdvisor:
         self.base_unit = base_unit
         self._matcher = StrategyMatcher()
 
-    def advise(self, signal: StrategySignal) -> PositionSuggestion | None:
+    def advise(
+        self, signal: StrategySignal, weather_state: str | None = None
+    ) -> PositionSuggestion | None:
         """
         基于单条策略信号生成仓位建议。
+
+        S063 T8：接 weather_state 做仓位上限熔断：
+        - 暴风雨 → 仓位上限=0（禁止开仓）
+        - 极端反弹 → 仓位上限降至 50%（半仓）
+        - 晴天/阴天/未知 → 正常计算
         """
         if not signal or signal.confidence <= 0:
             return None
+
+        # S063 T8：天气仓位熔断（硬上限）
+        weather_cap = 1.0  # 默认不限制
+        if weather_state == "暴风雨":
+            return None  # 禁止开仓：不生成建议
+        if weather_state == "极端反弹":
+            weather_cap = 0.5  # 仓位上限降至 50%
 
         # 置信度映射：high / medium / low
         if signal.confidence >= 0.7:
@@ -91,6 +105,9 @@ class PositionAdvisor:
             confidence = "low"
             suggested_pct = self.base_unit * 0.5
 
+        # 应用天气仓位上限
+        suggested_pct = min(suggested_pct, self.max_single_position * weather_cap)
+
         # 入场价区间：以 entry_price 为中心 ±1%
         entry_low = round(signal.entry_price * 0.99, 2)
         entry_high = round(signal.entry_price * 1.01, 2)
@@ -100,6 +117,8 @@ class PositionAdvisor:
             f"信号强度 {signal.signal_strength}%",
             f"历史胜率 {signal.historical_win_rate:.0%}",
         ]
+        if weather_state and weather_state != "晴天":
+            reasons.append(f"天气={weather_state}，仓位上限调整为 {int(weather_cap * 100)}%")
         if signal.matches:
             reasons.extend([m.description for m in signal.matches[:3]])
 
@@ -116,14 +135,14 @@ class PositionAdvisor:
         )
 
     def advise_batch(
-        self, signals: list[StrategySignal]
+        self, signals: list[StrategySignal], weather_state: str | None = None
     ) -> list[PositionSuggestion]:
         """
         批量生成仓位建议，并按 suggested_pct 降序排列。
         """
         suggestions: list[PositionSuggestion] = []
         for signal in signals:
-            suggestion = self.advise(signal)
+            suggestion = self.advise(signal, weather_state)
             if suggestion:
                 suggestions.append(suggestion)
         suggestions.sort(key=lambda s: s.suggested_pct, reverse=True)

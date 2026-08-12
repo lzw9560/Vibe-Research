@@ -129,7 +129,7 @@ const STAGE_CONFIG: Record<string, {
     links: [
       { to: "/workflow/intraday", label: "盘中监控" },
       { to: "/workflow/alerts", label: "炸板预警" },
-      { to: "/sentiment/weather", label: "情绪气象" },
+      { to: "/workflow/intraday", label: "情绪气象" },
       { to: "/limitup/seats", label: "席位引擎" },
     ],
   },

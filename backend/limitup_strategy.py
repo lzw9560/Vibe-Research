@@ -107,6 +107,8 @@ class StrategySignal(BaseModel):
     # 教育性说明
     reasoning: list[str] = []       # 推荐理由（教育性表述）
     risk_notes: list[str] = []      # 风险提示
+    # S063 T6：天气适配度（适配/不适配/中性）——calc_weather_fit 填充
+    weather_fit: str = "中性"       # 默认中性保证向后兼容（未传 weather_state 时行为不变）
 
 
 class StrategyLogicMatch(BaseModel):

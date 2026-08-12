@@ -131,8 +131,8 @@ def test_run_persists_candidate_and_filtered(isolated_market_db, monkeypatch):
 
     fake = _fake_screener_result()
     monkeypatch.setattr(pmw, "get_screener_result", _async_result(fake))
-    monkeypatch.setattr(pmw.StrategyMatcher, "match", lambda self, s: [])
-    monkeypatch.setattr(pmw.PositionAdvisor, "advise_batch", lambda self, sigs: [])
+    monkeypatch.setattr(pmw.StrategyMatcher, "match", lambda self, s, weather_state=None: [])
+    monkeypatch.setattr(pmw.PositionAdvisor, "advise_batch", lambda self, sigs, weather_state=None: [])
 
     report = asyncio.run(pmw.PreMarketWorkflow("2026-08-07").run())
     assert len(report.candidates) == 1
@@ -147,8 +147,8 @@ def test_run_survives_state_persistence_failure(isolated_market_db, monkeypatch,
 
     fake = _fake_screener_result()
     monkeypatch.setattr(pmw, "get_screener_result", _async_result(fake))
-    monkeypatch.setattr(pmw.StrategyMatcher, "match", lambda self, s: [])
-    monkeypatch.setattr(pmw.PositionAdvisor, "advise_batch", lambda self, sigs: [])
+    monkeypatch.setattr(pmw.StrategyMatcher, "match", lambda self, s, weather_state=None: [])
+    monkeypatch.setattr(pmw.PositionAdvisor, "advise_batch", lambda self, sigs, weather_state=None: [])
 
     def boom(*a, **kw):
         raise RuntimeError("db down")

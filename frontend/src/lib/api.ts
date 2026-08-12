@@ -248,4 +248,17 @@ export const api = {
     request(`/workflow/verification-card/generate${date ? `?date=${date}` : ""}`, "POST", {}),
   verificationCardVerify: () =>
     request(`/workflow/verification-card/verify`, "POST", {}),
+  // S063：盘中情绪辅助决策四层
+  intradaySentimentLatest: () =>
+    get<import("./api/types").IntradaySnapshot>("/intraday/sentiment/latest"),
+  intradaySentimentTimeline: () =>
+    get<{ date: string; snapshots: import("./api/types").IntradaySnapshot[] }>("/intraday/sentiment/timeline"),
+  intradaySentimentSnapshot: () =>
+    request<import("./api/types").IntradaySnapshot>("/intraday/sentiment/snapshot", "POST"),
+  intradaySentimentHoldings: () =>
+    get<{ holdings: import("./api/types").IntradayHolding[]; current_zone: string; dual_pressure_count: number; message?: string }>("/intraday/sentiment/holdings"),
+  intradaySentimentScenarios: () =>
+    get<{ current: { score: number; trend: string; zone: string }; scenarios: import("./api/types").IntradayScenario[]; history_reference: import("./api/types").IntradayHistoryReference }>("/intraday/sentiment/scenarios"),
+  intradaySentimentT1Projection: () =>
+    get<{ status: string; current_score?: number; scenarios?: import("./api/types").T1ProjectionScenario[]; disclaimer?: string; as_of?: string; message?: string }>("/intraday/sentiment/t1-projection"),
 };

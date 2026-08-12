@@ -30,6 +30,20 @@ _logger = logging.getLogger(__name__)
 try:
     from limitup_sti.data import run_initial_migrations
     run_initial_migrations()
+    # S063 T1：sti_intraday 盘中采样表迁移（幂等，已应用则跳过）
+    try:
+        from pathlib import Path as _Path
+        from migrations import MigrationManager as _MM
+        from config import STI_TIMELINE_DB_PATH as _STI_DB
+        _intraday_sql = (
+            _Path(__file__).resolve().parent.parent
+            / "migrations" / "sti" / "20260813-001_create_sti_intraday.sql"
+        ).read_text(encoding="utf-8")
+        _MM(db_path=_STI_DB).upgrade([
+            {"version": "20260813-001", "name": "create_sti_intraday", "sql": _intraday_sql},
+        ])
+    except Exception as _e:
+        _logger.warning("[limitup_sti] sti_intraday 迁移失败（不影响主流程）: %s", _e)
 except Exception as e:
     _logger.warning("[limitup_sti] 自动迁移失败（不影响主流程）: %s", e)
 

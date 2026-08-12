@@ -442,6 +442,7 @@ class TaskExecutor:
             "market_data_sync": self._execute_market_data_sync,
             "cleanup_old_runs": self._execute_cleanup_old_runs,
             "daily_backtest_run": self._execute_daily_backtest_run,  # S041：回测定时任务
+            "sti_post_market": self._execute_sti_post_market,  # S063 T3：STI 盘后定时计算
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -618,6 +619,48 @@ class TaskExecutor:
             results["status"] = "ok"
         except Exception as e:
             logger.warning("[limitup_precompute] 预计算失败: %s", e)
+            results["status"] = f"error: {e}"
+
+        return results
+
+    def _execute_sti_post_market(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S063 T3：STI 盘后定时计算——交易日 15:30 触发。
+
+        调 `market._emotion(T)` + `market._sentiment(T)` → `engine.compute()` →
+        `save_result()` 持久化到 sti_timeline → 成为 T+1 的硬标准（SentimentContext
+        读取 T-1 行的来源）。
+
+        payload 可选 `date`（YYYY-MM-DD）用于补算历史日；缺省=今天。
+        """
+        import market as _market
+        from limitup_sti.service import get_sti_engine
+        from vr_paths import last_trading_date_str
+
+        target = payload.get("date") or last_trading_date_str()
+        results: Dict[str, Any] = {"date": target}
+
+        try:
+            emotion_data = _market._emotion(target)
+            if not emotion_data:
+                results["status"] = "no_emotion_data"
+                logger.warning("[sti_post_market] %s 情绪数据未取得（非交易日或采集失败）", target)
+                return results
+
+            sentiment_data = _market._sentiment(target) or {}
+            engine = get_sti_engine()
+            sti_result = engine.compute(emotion_data, sentiment_data)
+
+            results["status"] = "ok" if sti_result.source_ok else "source_fail"
+            results["sti_score"] = sti_result.score
+            results["sti_phase"] = sti_result.phase.value if sti_result.phase else None
+            results["source_date"] = target
+            logger.info(
+                "[sti_post_market] %s STI 计算完成：score=%s phase=%s",
+                target, sti_result.score,
+                sti_result.phase.value if sti_result.phase else None,
+            )
+        except Exception as e:
+            logger.exception("[sti_post_market] STI 计算失败: %s", e)
             results["status"] = f"error: {e}"
 
         return results
@@ -956,6 +999,17 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 limitup_precompute 已创建（cron 30 15 * * 0-4）")
+
+    if "sti_post_market" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="sti_post_market",
+            description="S063 盘后 STI 定时计算（交易日 15:30，持久化成为 T+1 硬标准）",
+            task_type="sti_post_market",
+            cron_expr="35 15 * * 0-4",  # 15:35（晚 precompute 5min，避免并发抢 DB）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 sti_post_market 已创建（cron 35 15 * * 0-4）")
 
 
 async def stop_scheduler() -> None:

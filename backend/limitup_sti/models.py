@@ -98,9 +98,14 @@ class STIResult(BaseModel):
 
 
 def percentile_rank(value: float, lookback_series: list[float]) -> float:
-    """将 value 映射到 lookback_series 的百分位排名（0-100）。"""
+    """将 value 映射到 lookback_series 的百分位排名（0-100）。
+
+    warmup 期（<60 样本）不再硬返 50——否则 STI 在攒够 60 个交易日前恒为中
+    性，毫无信号。改为只要 n>=1 就算真实百分位（粗但有用），低样本置信度由
+    _compute_confidence 标注。n==0 才返 50 防除零。
+    """
     n = len(lookback_series)
-    if n < 60:  # 样本不足 60 → 中性值（PRD：百分位需 ≥60 样本才有统计意义）
+    if n == 0:
         return 50.0
     less = sum(1 for v in lookback_series if v < value)
     equal = sum(1 for v in lookback_series if v == value)

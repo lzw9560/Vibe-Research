@@ -130,9 +130,12 @@ class PreMarketWorkflow:
         self._persist_workflow_states(pool)
 
         # 3. 战法匹配（使用 StrategyMatcher）——匹配全部 qualified（S031 R15 去 [:20] 上限）
+        # S063 T2/T7：管线头部 SentimentContext 一次采集，下传 weather_state
+        from sentiment_context import build_context  # noqa: PLC0415
+        ctx = build_context(self.date)
         for stock in pool.candidates:
             try:
-                signals = self._strategy_matcher.match(stock)
+                signals = self._strategy_matcher.match(stock, ctx.weather_state)
                 if signals:
                     best = signals[0]
                     match = StrategyMatch(
@@ -151,9 +154,10 @@ class PreMarketWorkflow:
             except Exception as e:
                 logger.debug("个股策略分析跳过: %s %s", stock.code, e)
 
-        # 4. 仓位建议（使用 PositionAdvisor）
+        # 4. 仓位建议（使用 PositionAdvisor）—— S063 T8：传 weather_state
         suggestions = self._position_advisor.advise_batch(
-            [s for m in report.strategy_matches for s in m.matched_strategies]
+            [s for m in report.strategy_matches for s in m.matched_strategies],
+            ctx.weather_state,
         )
         report.position_suggestions = suggestions
         report.total_suggested_position = sum(p.suggested_pct for p in suggestions)

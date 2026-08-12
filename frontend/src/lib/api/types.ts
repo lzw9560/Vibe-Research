@@ -1052,6 +1052,8 @@ export interface PreMarketBriefing {
   as_of?: string;
   // S049 B：市场情绪区重写——STI 分数+阶段 + 三率 + ladder + 涨跌停家数
   market_emotion?: MarketEmotionBriefing;
+  // S063 T4：管线头部情绪上下文（T-1 硬标准）
+  sentiment_context?: SentimentContext;
   run_id?: string;
   msg?: string; // idle: 提示先 refresh；no_snapshot: 提示可补采
   // S049 C4：快照随带 final_candidates 诊断卡（抽屉查看历史快照日期时优先用）
@@ -1115,6 +1117,90 @@ export interface PreMarketRefreshResponse {
   run_id: string;
   status: "running";
   msg?: string; // "已有采集在跑"
+}
+
+// S063：管线头部情绪上下文（T-1 硬标准）
+export interface SentimentContext {
+  source_date: string | null;          // T-1 日期
+  decision_date: string;              // T 日期
+  weather_state: SentimentWeatherState;
+  sti_score: number | null;
+  sti_phase: string | null;
+  fuse_state: SentimentFuseState | null;
+  allowed_styles: string[];
+  forbidden_styles: string[];
+  composite_score: number | null;
+  factors: Record<string, { score: number; weight: number; name: string }> | null;
+  change_from_yesterday: number | null;
+  data_status: "ok" | "missing";
+}
+
+// S063：情绪天气状态字符串字面量联合（区别于既有的 WeatherState interface）
+export type SentimentWeatherState = "晴天" | "阴天" | "暴风雨" | "极端反弹" | "未知";
+
+export interface SentimentFuseState {
+  fuse_state: "triggered" | "normal";
+  weather_state: string;
+  rules: SentimentFuseRule[];
+}
+
+export interface SentimentFuseRule {
+  id: string;
+  name: string;
+  current_state: string;
+  weather_state?: string;
+  is_triggered: boolean;
+}
+
+// S063：盘中情绪采样 snapshot
+export interface IntradaySnapshot {
+  date: string;
+  time: string;
+  zt_count: number | null;
+  seal_rate: number | null;
+  break_rate: number | null;
+  ad_ratio: number | null;
+  score: number | null;
+  trend: "up" | "flat" | "down";
+  t1_baseline: number | null;
+  zone: "green" | "yellow" | "red";
+  projected_t1_score?: number | null;
+  projected_t1_weather?: SentimentWeatherState | null;
+  actual_score?: number | null;
+  status?: string;
+  message?: string;
+}
+
+export interface IntradayHolding {
+  code: string;
+  name: string;
+  status: string;
+  entry_price: number | null;
+  current_price: number | null;
+  pnl_pct: number | null;
+  seal_status: string;       // 封住/炸板回封/炸板未回封/未封板/数据未取得
+  current_zone: "green" | "yellow" | "red";
+  dual_pressure: boolean;   // 个股炸板未回封 + 红色区
+}
+
+export interface IntradayScenario {
+  condition: string;
+  impact: string;
+  suggestion: string;
+}
+
+export interface IntradayHistoryReference {
+  sample_size: number;
+  similar_count: number;
+  follow_up_distribution: { up: number; flat: number; down: number };
+  note: string;
+}
+
+export interface T1ProjectionScenario {
+  name: string;             // 维持/反弹
+  projected_t1_score: number;
+  projected_t1_weather: SentimentWeatherState;
+  assumption: string;
 }
 
 // IntradayMonitor

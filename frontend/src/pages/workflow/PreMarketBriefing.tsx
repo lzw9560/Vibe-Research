@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
+import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
 import { useStrategyBacktest } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -186,9 +187,14 @@ export default function PreMarketBriefing() {
         </GlassCard>
       )}
 
-      {/* S031 R23：done 纵向流——情绪 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉 */}
+      {/* S031 R23：done 纵向流——天气决策条 → 情绪 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉 */}
       {status === "done" && (
         <>
+          {/* ⓪ 天气决策条（S063：T-1 硬标准头部，全宽非卡片） */}
+          <div className="mb-6">
+            <WeatherDecisionBar ctx={briefing.sentiment_context} />
+          </div>
+
           {/* ① 市场情绪（S049 B 重写：STI+三率+ladder+涨跌停） */}
           <MarketEmotionBlock emotion={emotion} />
 
@@ -291,9 +297,15 @@ function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; 
     ...(r3?.passed ?? []).map((p) => p.code),
   ]));
   if (allCodes.length === 0) return null;
-  // 取最深一层 passed entry（R3>R2>R1）
-  const entryFor = (code: string): FunnelPassedEntry | undefined =>
-    r3?.passed?.find((p) => p.code === code) ?? r2?.passed?.find((p) => p.code === code) ?? r1?.passed?.find((p) => p.code === code);
+  // 合并三层 passed entry——R3>R2>R1 overlay，但各层独有字段（R2 的换手/量比/主力、
+  // R3 的竞价/催化）都保留。取最深会丢 R2 的 activity/fund 字段 → 矩阵多列空。
+  const entryFor = (code: string): FunnelPassedEntry | undefined => {
+    const e1 = r1?.passed?.find((p) => p.code === code);
+    const e2 = r2?.passed?.find((p) => p.code === code);
+    const e3 = r3?.passed?.find((p) => p.code === code);
+    if (!e1 && !e2 && !e3) return undefined;
+    return { ...e1, ...e2, ...e3 } as FunnelPassedEntry;
+  };
   // 排序：R3 通过优先 → R2 → R1 得分降序
   const inR3 = (c: string) => r3?.passed?.some((p) => p.code === c);
   const inR2 = (c: string) => r2?.passed?.some((p) => p.code === c);

@@ -26,6 +26,7 @@ from risk.bomb_alert_system import BombAlertSystem
 from risk.position_manager import PositionManager, PositionLimit
 from settlement.settlement_engine import SettlementEngine
 from win_rate_tracker import WinRateTracker, generate_strategy_adjustments
+from sentiment_context import SentimentContext, build_context  # S063 T2/T4：管线头部情绪上下文
 import workflow_state_repo as _wf_state_repo  # S032 R10：七态状态落库
 import settlement_recorder as _settlement_recorder  # S034：settled 流转即结算
 from market_price import fetch_current_price  # S038：settled 时自动拉市价填 exit_price
@@ -43,6 +44,7 @@ _cache: dict[str, Any] = {
     "data_date": None,
     "as_of": None,
     "market_emotion": None,
+    "sentiment_context": None,  # S063 T4：管线头部情绪上下文（T-1）
     "error": None,
 }
 
@@ -88,15 +90,17 @@ def _save_snapshot(payload: dict) -> None:
     tmp.replace(d / f"{date}.json")
 
 
-def _build_funnel_layers(date: str) -> list[dict]:
+def _build_funnel_layers(date: str, ctx: "SentimentContext | None" = None) -> list[dict]:
     """当日漏斗层（随快照落盘 → 历史视角纯读盘，零外部请求）。
 
     config 取 candidates 路由的 live config（用户调参后一致，同 topology
     _load_candidates 范式）；失败返空列表，不影响采集 done。
+
+    S063 T4：ctx 下传给 run_funnel（weather_state/source_date）。
     """
     try:
         from routers.candidates import _store  # noqa: PLC0415 — lazy import 防循环，运行时取 live config
-        result = funnel_mod.run_funnel("all", date, _store["config"])
+        result = funnel_mod.run_funnel("all", date, _store["config"], ctx)
         return [l.model_dump(mode="json") for l in result.layers]
     except Exception as exc:  # noqa: BLE001
         logger.warning("funnel_layers 构建失败 (%s): %s", date, exc)
@@ -111,12 +115,16 @@ async def _collect(run_id: str, target_date: str) -> None:
     """后台异步采集（S026）：to_thread 释放事件循环，afetch_all 并行两因子。
 
     S048 R4：done 后整体按日落盘快照（含漏斗层）；写盘失败不影响内存 done。
+    S063 T4：管线头部构造 SentimentContext（T-1 一次采集），下传给
+    _fetch_market_emotion / _build_funnel_layers / match_strategy / PositionAdvisor。
     """
     try:
         factor_registry.register_default_factors()
         results = await factor_registry.afetch_all(target_date)
-        me = await asyncio.to_thread(_fetch_market_emotion, target_date)
-        funnel_layers = await asyncio.to_thread(_build_funnel_layers, target_date)
+        # S063 T4：管线头部一次采集 SentimentContext（T-1 硬标准）
+        ctx = await asyncio.to_thread(build_context, target_date)
+        me = await asyncio.to_thread(_fetch_market_emotion, target_date, ctx)
+        funnel_layers = await asyncio.to_thread(_build_funnel_layers, target_date, ctx)
         as_of = _now_iso()
         factors = [_serialize_factor(r) for r in results]
         _cache.update(
@@ -125,6 +133,7 @@ async def _collect(run_id: str, target_date: str) -> None:
             factors=factors,
             data_date=target_date,
             market_emotion=me,
+            sentiment_context=ctx.to_dict(),
             as_of=as_of,
             error=None,
         )
@@ -135,7 +144,7 @@ async def _collect(run_id: str, target_date: str) -> None:
             final_cards: list[dict] = []
             try:
                 from routers.candidates import _store  # noqa: PLC0415
-                result = funnel_mod.run_funnel("all", target_date, _store["config"])
+                result = funnel_mod.run_funnel("all", target_date, _store["config"], ctx)
                 final_cards = [c.model_dump(mode="json") for c in result.final_candidates]
             except Exception as exc:  # noqa: BLE001 — 诊断卡构建失败不影响快照主态
                 logger.warning("final_candidates 诊断卡构建失败 %s: %s", target_date, exc)
@@ -145,6 +154,7 @@ async def _collect(run_id: str, target_date: str) -> None:
                 "as_of": as_of,
                 "run_id": run_id,
                 "market_emotion": me,
+                "sentiment_context": ctx.to_dict(),
                 "factors": factors,
                 "funnel_layers": funnel_layers,
                 "final_candidates": final_cards,
@@ -157,24 +167,36 @@ async def _collect(run_id: str, target_date: str) -> None:
         _cache.update(run_id=run_id, status="error", error=str(exc), as_of=_now_iso())
 
 
-def _fetch_market_emotion(date: str) -> dict[str, Any]:
+def _fetch_market_emotion(date: str, ctx: "SentimentContext | None" = None) -> dict[str, Any]:
     """取当日市场情绪（STI 分数+阶段 + 三率 + ladder + 涨跌停家数）。
 
-    S049 B：重写——旧实现 market.get_overview(date) 签名不匹配（get_overview 不接收 date）
-    抛 TypeError→恒 {}。现复用 board_ladder.get_market_emotion_raw（TTL 缓存，与 STI
-    compute 共用同一份 emotion 不重复外调）+ limitup_sti engine。
+    S063 T4：重写为 T-1 视角——盘前读 T-1 的 STI timeline 行（不调
+    get_market_emotion_raw(T) 盘前必空）。SentimentContext 已在管线头部构造，
+    这里从 ctx 取 weather/sti_score/sti_phase；三率/ladder/zt_count/dt_count 从
+    sti_timeline T-1 行的 dimension_* 字段映射（spec §10.1）。
+
+    ladder 无法从 sti_timeline 重建（需原始涨停池明细），降级为 ladder=[] +
+    标注"T-1 连板梯队未持久化"。
+
+    ctx=None 时降级到旧路径（调 get_market_emotion_raw + engine.compute，
+    供未接 ctx 的调用方/测试 mock）。
 
     返回 shape：
       {sti_score, sti_phase, seal_rate, break_rate, promotion_rate,
-       ladder, zt_count, dt_count}
+       ladder, zt_count, dt_count, weather_state, sentiment_source}
     任一数据源失败 → 对应字段 None，不崩。
     """
-    from candidate_funnel.sources.board_ladder import get_market_emotion_raw  # noqa: PLC0415
+    # S063 T4：ctx 优先（管线头部一次采集，逐级下传）
+    if ctx is not None:
+        return _market_emotion_from_ctx(date, ctx)
+
     out: dict[str, Any] = {
         "sti_score": None, "sti_phase": None,
         "seal_rate": None, "break_rate": None, "promotion_rate": None,
         "ladder": [], "zt_count": None, "dt_count": None,
+        "weather_state": None, "sentiment_source": None,
     }
+    from candidate_funnel.sources.board_ladder import get_market_emotion_raw  # noqa: PLC0415
     emo = get_market_emotion_raw(date)
     if emo:
         out["seal_rate"] = emo.get("seal_rate")
@@ -195,6 +217,61 @@ def _fetch_market_emotion(date: str) -> dict[str, Any]:
             out["sti_phase"] = sti.phase.value if sti.phase else None
     except Exception:
         pass
+    return out
+
+
+def _market_emotion_from_ctx(date: str, ctx: "SentimentContext") -> dict[str, Any]:
+    """从 SentimentContext（T-1 STI 行）映射为 _fetch_market_emotion 输出 shape。
+
+    S063 T4 + spec §10.1：sti_timeline 存 8 个 dimension_* 归一化值（0-100），
+    简报需要 seal_rate（0-1 比率）等 → dimension 值 /100 显示。
+    ladder 无法重建 → [] + 标注"T-1 连板梯队未持久化"。
+    """
+    out: dict[str, Any] = {
+        "sti_score": ctx.sti_score,
+        "sti_phase": ctx.sti_phase,
+        "seal_rate": None, "break_rate": None, "promotion_rate": None,
+        "ladder": [], "zt_count": None, "dt_count": None,
+        "weather_state": ctx.weather_state,
+        "sentiment_source": f"T-1({ctx.source_date})" if ctx.source_date else "T-1(missing)",
+    }
+    if ctx.data_status != "ok":
+        out["ladder_note"] = "情绪数据未取得（T-1 STI 缺失）"
+        return out
+
+    # 从 sti_timeline T-1 行映射三率/涨跌停家数
+    try:
+        from limitup_sti.data import get_db  # noqa: PLC0415
+        db = get_db()
+        row = db.execute(
+            "SELECT * FROM sti_timeline WHERE date = ?",
+            (ctx.source_date,),
+        ).fetchone()
+        if row is None:
+            out["ladder_note"] = "T-1 连板梯队未持久化"
+            return out
+
+        def _dim(name: str) -> float | None:
+            v = row[name] if name in row.keys() else None
+            return float(v) if v is not None else None
+
+        # dimension_* 是 0-100 归一化值；简报三率按 0-1 比率展示 → /100
+        seal = _dim("dimension_seal_rate")
+        promo = _dim("dimension_promotion_rate")
+        zt = _dim("dimension_limit_up_count")
+        dt = _dim("dimension_limit_down_count")
+
+        out["seal_rate"] = round(seal / 100, 3) if seal is not None else None
+        out["promotion_rate"] = round(promo / 100, 3) if promo is not None else None
+        out["zt_count"] = zt
+        out["dt_count"] = dt
+        # break_rate 不在 sti_timeline 直接存——dim 有 break_rate 列名前缀但
+        # 实际 schema 无 dimension_break_rate（旧迁移已移除）。降级 None 标注。
+        out["break_rate"] = None
+        out["break_rate_note"] = "T-1 炸板率未持久化（sti_timeline 无该列）"
+        out["ladder_note"] = "T-1 连板梯队未持久化"
+    except Exception as exc:  # noqa: BLE001
+        out["ladder_note"] = f"T-1 映射失败: {exc}"
     return out
 
 
@@ -291,19 +368,32 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             "data_date": _cache["data_date"],
             "as_of": _cache["as_of"],
             "market_emotion": _cache.get("market_emotion"),
+            "sentiment_context": _cache.get("sentiment_context"),  # S063 T4：管线头部情绪上下文
             "run_id": _cache["run_id"],
         }
         if status == "done":
             resp["factors"] = _cache["factors"]
             # S049 D4：live done 透出 funnel_layers（与快照路径对齐；_build_funnel_layers 命中 run_funnel 缓存不重复请求）
-            funnel_layers = await asyncio.to_thread(_build_funnel_layers, d)
+            # S063 T4：ctx 下传——live done 时重建 ctx（T-1 硬标准，幂等）
+            ctx = await asyncio.to_thread(build_context, d)
+            funnel_layers = await asyncio.to_thread(_build_funnel_layers, d, ctx)
             resp["funnel_layers"] = funnel_layers
+            # ctx 可能与采集时存的不完全一致（T-1 STI 被重算）→ 以最新 ctx 为准
+            resp["sentiment_context"] = ctx.to_dict()
         elif status == "error":
             resp["error"] = _cache.get("error")
         return resp
 
     snap = _load_snapshot(d)
     if snap is not None:
+        # S063 T4：快照无 sentiment_context 时（旧快照）降级重建
+        sent_ctx = snap.get("sentiment_context")
+        if sent_ctx is None:
+            try:
+                ctx = await asyncio.to_thread(build_context, d)
+                sent_ctx = ctx.to_dict()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("快照 sentiment_context 重建失败 %s: %s", d, exc)
         return {
             "status": "done",
             "from_snapshot": True,
@@ -311,6 +401,7 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             "as_of": snap.get("as_of"),
             "run_id": snap.get("run_id"),
             "market_emotion": snap.get("market_emotion"),
+            "sentiment_context": sent_ctx,
             "factors": snap.get("factors", []),
             "funnel_layers": snap.get("funnel_layers", []),
             "is_backfill": snap.get("is_backfill", False),
@@ -539,7 +630,9 @@ async def match_strategy(name: str, code: str = Query(..., description="股票�
                 }
             }
 
-        signals = _strategy_matcher.match(gene)
+        # S063 T7：传 ctx.weather_state 给 StrategyMatcher 标注 weather_fit
+        ctx = await asyncio.to_thread(build_context, last_trading_date_str())
+        signals = _strategy_matcher.match(gene, ctx.weather_state)
         matched = [s for s in signals if s.strategy_code == name]
 
         return {

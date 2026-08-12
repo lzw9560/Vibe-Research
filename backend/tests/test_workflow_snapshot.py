@@ -35,6 +35,7 @@ def _reset_cache(monkeypatch, status="idle", run_id=None, factors=None, data_dat
             "data_date": data_date,
             "as_of": None,
             "market_emotion": None,
+            "sentiment_context": None,
             "error": None,
         },
     )
@@ -59,11 +60,11 @@ def test_collect_done_writes_snapshot_file(monkeypatch):
 
     monkeypatch.setattr(wf.factor_registry, "afetch_all", fake_afetch)
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
-    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d: {"sentiment": "neutral"})
+    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d, ctx=None: {"sentiment": "neutral"})
     # S048：funnel_layers 构建（真跑会碰外部源）与快照落盘均隔离
-    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [{"layer_id": "R1"}])
+    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [{"layer_id": "R1"}])
     # S049 C4：final_candidates 诊断卡构建隔离（真跑会碰外部源）
-    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg: types.SimpleNamespace(final_candidates=[]))
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[]))
     monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
     _reset_cache(monkeypatch, status="running", run_id="rid1")
@@ -83,6 +84,7 @@ def test_collect_done_writes_snapshot_file(monkeypatch):
     assert payload["is_backfill"] is True  # 08-03 < 最近交易日 08-07
     assert payload["as_of"]
     assert payload["final_candidates"] == []  # S049 C4
+    assert "sentiment_context" in payload  # S063 T9
 
 
 def test_collect_today_not_backfill(monkeypatch):
@@ -92,9 +94,9 @@ def test_collect_today_not_backfill(monkeypatch):
 
     monkeypatch.setattr(wf.factor_registry, "afetch_all", fake_afetch)
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
-    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d: {})
-    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [])
-    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg: types.SimpleNamespace(final_candidates=[]))
+    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d, ctx=None: {})
+    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [])
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[]))
     monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
     _reset_cache(monkeypatch, status="running", run_id="rid2")
@@ -115,9 +117,9 @@ def test_collect_snapshot_write_failure_still_done(monkeypatch):
 
     monkeypatch.setattr(wf.factor_registry, "afetch_all", fake_afetch)
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
-    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d: {})
-    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d: [])
-    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg: types.SimpleNamespace(final_candidates=[]))
+    monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d, ctx=None: {})
+    monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [])
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[]))
     monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
     monkeypatch.setattr(wf, "_save_snapshot", boom)
@@ -142,7 +144,7 @@ def test_build_funnel_layers_uses_live_config(monkeypatch):
     class _Result:
         layers = [_Layer("R1"), _Layer("R2")]
 
-    def fake_run_funnel(scope, date, config):
+    def fake_run_funnel(scope, date, config, ctx=None):
         captured["args"] = (scope, date, config)
         return _Result()
 
@@ -159,7 +161,7 @@ def test_build_funnel_layers_uses_live_config(monkeypatch):
 
 def test_build_funnel_layers_failure_returns_empty(monkeypatch):
     """run_funnel 抛错 → 空 list（不阻塞采集主流程）。"""
-    def boom(scope, date, config):
+    def boom(scope, date, config, ctx=None):
         raise RuntimeError("外部源挂了")
 
     fake_cand = types.ModuleType("routers.candidates")

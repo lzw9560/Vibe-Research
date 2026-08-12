@@ -8,6 +8,7 @@ R2 按生效阈值过滤冷股；R3 按竞价/催化过滤。最终候选构建�
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from candidate_funnel import sources
 from candidate_funnel.diagnosis import build_diagnosis_card, build_indicator_set
@@ -22,14 +23,24 @@ from candidate_funnel.sources._filters import classify_exclusion
 from candidate_funnel.sources.catalyst import classify_announcement
 from candidate_funnel.thresholds import resolve_thresholds
 
+if TYPE_CHECKING:
+    from sentiment_context import SentimentContext
+
 
 # S044 R6：漏斗阶段 → 特征 stage 映射。look-ahead 防护——sources 在当前 stage 取数，
 # availability_offset=1 的北向/龙虎榜缺数据标 missing 保留不过滤（见 _filter_r2 北向 None 保留）。
 _STAGE_MAP: dict[str, str] = {"pre_market": "s1", "auction": "s3"}
 
 
-def _fetch_sentiment_phase(date: str) -> str | None:
-    """取当日情绪 phase（weather_state）。取不到返回 None（→ 阈值降级基数）。"""
+def _fetch_sentiment_phase(date: str, ctx: "SentimentContext | None" = None) -> str | None:
+    """取当日情绪 phase（weather_state）。取不到返回 None（→ 阈值降级基数）。
+
+    S063 T5：优先从管线头部下传的 SentimentContext 取（一次采集逐级下传）；
+    ctx=None 或 ctx.weather_state=None 时降级到旧路径（独立调 sentiment_weather）。
+    旧路径保留供未接 ctx 的调用方（topology、diagnose 独立诊断）。
+    """
+    if ctx is not None and ctx.weather_state:
+        return ctx.weather_state
     try:
         from routers import sentiment_weather as sw
         data = sw.get_weather_latest()
@@ -183,11 +194,17 @@ def _filter_r3(
     return kept, filtered
 
 
-def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
+def run_funnel(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
     """R1→R2→R3 + 自选并行；返回 FunnelResult。
+
+    S063 T5：可选 ctx 参数——管线头部 SentimentContext 一次采集逐级下传。
+    ctx 提供 weather_state（替代 _fetch_sentiment_phase 独立调）+ source_date。
 
     S049 D6：(date,config) TTL 缓存——_collect（因子）与 _build_funnel_layers（漏斗）
     各跑一遍会重复外部请求；命中缓存即复用。rerun 走 run_funnel_force（清缓存路径）。
+
+    注意：ctx 不参与缓存键——同日同 config 的 weather_state 应一致（T-1 硬标准），
+    若用户重算 STI 改了 T-1，应走 run_funnel_force 清缓存。
     """
     import time
     key = _funnel_cache_key(date, cfg)
@@ -195,17 +212,17 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
     hit = _FUNNEL_CACHE.get(key)
     if hit and now - hit[0] < _FUNNEL_CACHE_TTL:
         return hit[1]
-    result = _run_funnel_impl(stage, date, cfg)
+    result = _run_funnel_impl(stage, date, cfg, ctx)
     _FUNNEL_CACHE[key] = (now, result)
     return result
 
 
-def run_funnel_force(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
+def run_funnel_force(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
     """rerun 显式清缓存路径（不受 TTL 缓存影响）。"""
     import time
     key = _funnel_cache_key(date, cfg)
     _FUNNEL_CACHE.pop(key, None)
-    result = _run_funnel_impl(stage, date, cfg)
+    result = _run_funnel_impl(stage, date, cfg, ctx)
     _FUNNEL_CACHE[key] = (time.time(), result)
     return result
 
@@ -219,10 +236,13 @@ def clear_funnel_cache(date: str | None = None) -> None:
         _FUNNEL_CACHE.pop(k, None)
 
 
-def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResult:
-    """R1→R2→R3 + 自选并行实现（无缓存，由 run_funnel 包裹缓存）。"""
+def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
+    """R1→R2→R3 + 自选并行实现（无缓存，由 run_funnel 包裹缓存）。
+
+    S063 T5：ctx 优先——管线头部 SentimentContext 下传 weather_state + source_date。
+    """
     as_of = datetime.now()
-    phase = _fetch_sentiment_phase(date)
+    phase = _fetch_sentiment_phase(date, ctx)
     eff = resolve_thresholds(cfg, phase)
     # 情绪档位标注（conditions 复用）
     phase_note = f"情绪档位={phase or '未取得'}" if phase else "情绪档位未取得，沿用基数"
@@ -273,6 +293,16 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResul
         activity, fund = {}, {}
         r2_data_status = "未取得"
         r2_data_reason = f"R2 收敛采集失败: {exc}"
+    # R1 passed 补齐 activity 字段——矩阵展示 R1-only 候选换手率/量比/成交额/振幅。
+    # activity 已在 R2 采集（fetch_activity 输入=r1_kept 全量），回填 R1 passed 避免
+    # R1-only 行（未进 R2）在矩阵里这些列全空。任一缺失仍 None，不臆造。
+    if activity:
+        for _p in r1.passed:
+            _a = activity.get(_p.get("code"), {}) or {}
+            _p["turnover_pct"] = _a.get("turnover_pct")
+            _p["vol_ratio"] = _a.get("vol_ratio")
+            _p["amount_yi"] = _a.get("amount_yi")
+            _p["amplitude_pct"] = _a.get("amplitude_pct")
     r2_kept, r2_filtered = _filter_r2(r1_kept, activity, eff, fund)
     r2 = FunnelLayer(
         layer_id="R2", name="收敛", as_of=as_of,
@@ -358,13 +388,15 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig) -> FunnelResul
     )
 
 
-def diagnose(code: str, date: str, cfg: ThresholdConfig) -> DiagnosisCard:
+def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> DiagnosisCard:
     """构建单只股票诊断卡（E3 GET /candidates/{code}/diagnosis 用）。
+
+    S063 T5：可选 ctx 参数接管线头部 SentimentContext。
 
     S049 C1：as_of=数据源最早行日期（数据下限，比最晚保守——最晚会掩盖某源陈旧）；
     全无日期 fallback now()。
     """
-    phase = _fetch_sentiment_phase(date)
+    phase = _fetch_sentiment_phase(date, ctx)
     eff = resolve_thresholds(cfg, phase)
     genes = sources.gene.fetch_genes(date)
     board = sources.board_ladder.fetch_board_ladder(date)

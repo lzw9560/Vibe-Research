@@ -14,6 +14,7 @@ import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
 import { cn, pctColor } from "@/lib/utils";
 import { STICard } from "@/components/sti/StiCard";
 import { STIDetailView } from "@/components/sti/StiDetailView";
+import { STITimelineChart } from "@/components/sti/STITimelineChart";
 import {
   useIndices,
   useGlobalIndices,
@@ -234,6 +235,9 @@ export function DailyReview() {
         error={stiError}
         onClick={() => setShowStiDetail(true)}
       />
+
+      {/* 1d. STI 历史趋势——把每日 STI 分数连成折线，看情绪周期 */}
+      <STITimelineChart className="mb-3" />
 
       {/* 2. 关注股票（自选） */}
       <div className="mb-3 flex items-center justify-between">

@@ -42,6 +42,7 @@ import myreports as mr
 # Router imports
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
 from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
+from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import prediction_ledger_router as prediction_ledger_router_mod
 try:
     from routers import value_funnel as value_funnel_router
@@ -59,8 +60,11 @@ async def lifespan(_app: FastAPI):
     # S052 D4：启动缺口补跑——回测快照缺失日后台排队回填
     from backfill_snapshots import startup_backfill_gap_check  # noqa: PLC0415
     await startup_backfill_gap_check()
+    # S063：盘中情绪采样 task（仅交易日 09:25-15:00 运行）
+    await intraday_sentiment_router.start_sampler()
     yield
     # shutdown
+    await intraday_sentiment_router.stop_sampler()
     await _st.get_scheduler().stop()
     _pf_refresh_task.cancel()
     try:
@@ -175,6 +179,7 @@ app.include_router(prediction.router)
 app.include_router(prediction_ledger_router_mod.router)  # S061：预测账本
 app.include_router(kline_history.router)
 app.include_router(advisory.router)
+app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
 if value_funnel_router is not None:
     app.include_router(value_funnel_router.router)
 
