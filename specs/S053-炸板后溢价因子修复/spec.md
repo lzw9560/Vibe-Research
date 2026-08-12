@@ -1,6 +1,6 @@
 # Spec: S053 — 炸板后溢价因子修复 + match 条件解耦
 
-> 状态：草案
+> 状态：已实现（2026-08-12，commit 907b5d1；pytest 1102 passed / R4 回填待手动触发）
 > 作者：grill 会话  日期：2026-08-12
 > 级别：**medium**（数据源 bug 修复 + 因子重定义 + match 条件改写；跨层但无新外部数据源）
 > 流程门：develop 直提 + 勤 commit；issue 级 review；简化验收
