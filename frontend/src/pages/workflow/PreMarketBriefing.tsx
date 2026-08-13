@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { StrategyFilter } from "@/components/ui/StrategyFilter";
 import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import { useTransitionWorkflowState } from "@/lib/query";
@@ -120,8 +121,34 @@ export default function PreMarketBriefing() {
 
   const factors: FactorResult[] = briefing.factors ?? [];
   const emotion = briefing.market_emotion;
-  // S049 D4：done/snapshot 响应都携带 funnel_layers（live done 经 _build_funnel_layers 命中缓存）
   const funnelLayers = briefing.funnel_layers;
+
+  // 问 AI 上下文——注入盘前简报真实数据
+  const pmCtx = briefing.sentiment_context;
+  const pmEmotion = briefing.market_emotion;
+  const askAiContext = [
+    `当前页面：盘前简报`,
+    `日期：${briefing.data_date ?? date ?? "未取得"}`,
+    pmCtx
+      ? `情绪天气：${pmCtx.weather_state}，STI=${pmCtx.sti_score ?? "--"}（${pmCtx.sti_phase ?? "--"}）`
+      : `情绪天气：未取得`,
+    pmEmotion
+      ? `市场情绪：涨停${pmEmotion.zt_count ?? "--"}/跌停${pmEmotion.dt_count ?? "--"}/连板梯队${pmEmotion.ladder?.map(t => `${t.boards}板×${t.count}`).join(" ") || "--"}/封板率${pmEmotion.seal_rate != null ? pmEmotion.seal_rate.toFixed(0) : "--"}%/炸板率${pmEmotion.break_rate != null ? pmEmotion.break_rate.toFixed(0) : "--"}%/晋级率${pmEmotion.promotion_rate != null ? pmEmotion.promotion_rate.toFixed(0) : "--"}%`
+      : `市场情绪：未取得`,
+    pmCtx?.fuse_state
+      ? `熔断：${pmCtx.fuse_state.fuse_state}，允许战法：${(pmCtx.allowed_styles ?? []).join("、") || "无"}，禁用：${(pmCtx.forbidden_styles ?? []).join("、") || "无"}`
+      : `熔断：未取得`,
+    `因子漏斗：${factors.map(f => `${f.factor_id}:候选${(f.candidates ?? []).length}只`).join("，") || "无"}`,
+    funnelLayers && funnelLayers.length > 0
+      ? `漏斗层：${funnelLayers.map(l => `${l.layer_id}输入${l.input_count}/输出${l.output_count}`).join("，")}`
+      : `漏斗层：未取得`,
+    funnelLayers
+      ?.flatMap(l => (l.passed ?? []).map(p => (p as FunnelPassedEntry).matched_triggers).flat())
+      .filter(Boolean)
+      .length
+      ? `R3 触发：${[...new Set(funnelLayers.flatMap(l => (l.passed ?? []).flatMap(p => (p as FunnelPassedEntry).matched_triggers ?? [])))].join("、")}`
+      : `R3 触发：无`,
+  ].filter(Boolean).join("\n");
 
   return (
     <WorkflowStage
@@ -129,6 +156,7 @@ export default function PreMarketBriefing() {
       subtitle="Pre-Market Briefing"
       loading={isLoading}
       onRefresh={canRefresh ? handleRefresh : undefined}
+      actions={<AskAiButton context={askAiContext} />}
     >
       {/* 数据日期 */}
       {briefing.data_date && (

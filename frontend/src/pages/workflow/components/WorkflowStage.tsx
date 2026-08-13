@@ -12,6 +12,8 @@ interface Props {
   subtitle: string;
   loading?: boolean;
   onRefresh?: () => void;
+  /** 额外操作按钮（如 AskAiButton），渲染在刷新按钮左侧 */
+  actions?: React.ReactNode;
   notImplemented?: boolean;
   notImplementedMessage?: string;
   children?: React.ReactNode;
@@ -22,6 +24,7 @@ export function WorkflowStage({
   subtitle,
   loading,
   onRefresh,
+  actions,
   notImplemented,
   notImplementedMessage,
   children,
@@ -31,11 +34,16 @@ export function WorkflowStage({
       <PageHeader
         title={title}
         subtitle={subtitle}
-        actions={onRefresh ? (
-          <button onClick={onRefresh} className="text-muted-foreground hover:text-primary" title="刷新">
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-          </button>
-        ) : undefined}
+        actions={
+          <div className="flex items-center gap-2">
+            {actions}
+            {onRefresh ? (
+              <button onClick={onRefresh} className="text-muted-foreground hover:text-primary" title="刷新">
+                <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              </button>
+            ) : undefined}
+          </div>
+        }
       />
 
       {notImplemented ? (

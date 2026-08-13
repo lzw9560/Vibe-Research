@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { useWorkflowStatus, usePreMarketBriefing, usePreMarketDates, useWorkflowStates } from "@/lib/query";
@@ -370,6 +371,25 @@ export default function Workflow() {
   // 当前阶段
   const currentStage = status?.stageKey ?? "pre-market";
 
+  // S065 followup：问 AI 上下文——注入本页真实数据
+  const ctx = histBriefing?.sentiment_context;
+  const counts = histStates?.counts ?? {};
+  const askAiContext = [
+    `当前页面：Workflow 总览`,
+    `当前阶段：${STAGE_CONFIG[status?.stageKey ?? "pre-market"]?.label ?? ""}（${status?.marketStatus ?? ""}）`,
+    `候选数：${status?.candidateCount ?? 0}，活跃信号：${status?.signalCount ?? 0}，今日胜率：${status?.winRate ?? "--"}%`,
+    ctx
+      ? `情绪天气：${ctx.weather_state}，STI=${ctx.sti_score ?? "--"}（${ctx.sti_phase ?? "--"}）`
+      : `情绪天气：未取得`,
+    ctx?.fuse_state
+      ? `熔断：${ctx.fuse_state.fuse_state}，允许战法：${(ctx.allowed_styles ?? []).join("、") || "无"}，禁用：${(ctx.forbidden_styles ?? []).join("、") || "无"}`
+      : `熔断：未取得`,
+    `工作流状态计数：候选${counts.candidate ?? 0}/观察${counts.watching ?? 0}/监控${counts.monitoring ?? 0}/持仓${counts.holding ?? 0}/已结${counts.settled ?? 0}`,
+    status?.nextStageKey
+      ? `下一阶段：${STAGE_CONFIG[status.nextStageKey]?.label ?? ""}（${countDownToNext(status.nextStageKey)}）`
+      : "",
+  ].filter(Boolean).join("\n");
+
   // S048 R3：历史视角三卡数值（无数据 null → 渲染 "--"）
   const histValues: Record<string, number | null> = {
     "pre-market": histBriefing?.status === "done"
@@ -399,7 +419,7 @@ export default function Workflow() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <PageHeader title="打板工作流" subtitle="盘前 · 盘中 · 盘后 三阶段闭环" />
+        <PageHeader title="Workflow" subtitle="盘前 · 盘中 · 盘后 三阶段闭环" />
         <div className="space-y-4">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-56 w-full" />
@@ -413,10 +433,11 @@ export default function Workflow() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="打板工作流"
+        title="Workflow"
         subtitle="盘前 · 盘中 · 盘后 三阶段闭环"
         actions={
           <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
             <input
               type="date"
               value={selectedDate ?? ""}

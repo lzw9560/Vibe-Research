@@ -69,6 +69,7 @@ export const NAV_GROUPS: NavGroup[] = [
     name: "交易工作台",
     icon: TrendingUp,
     tabs: [
+      { to: "/workflow", label: "工作流" },
       { to: "/limitup", label: "打板策略" },
       { to: "/limitup/gene", label: "基因筛选" },
       { to: "/limitup/auction", label: "竞价选股" },
@@ -76,7 +77,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/candidates", label: "候选池" },
       { to: "/value-funnel", label: "价值漏斗" },
       { to: "/watchlist", label: "自选股" },
-      { to: "/workflow", label: "工作流" },
       { to: "/behavior-loop", label: "行为闭环" },
     ],
   },
