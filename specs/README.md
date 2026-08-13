@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S035。
+`SNNN` 三位递增。下一个新 spec 用 S065。
 
 ## 已有规范
 
@@ -66,7 +66,39 @@ specs/
 | [S032](S032-调度收口第二轮/spec.md) | 调度收口第二轮（S011b）：主循环收口 + portfolio 日志重试 + 状态机接线落库 | ✅已实现 2026-08-07 | spec · [tasks](S032-调度收口第二轮/tasks.md) | R6 ticker/持仓刷新挂主循环（废线程桥接+修跨循环锁）+ R8 日志重试 + R10 workflow_state 落库（盘前自动 candidate/filtered + 手动流转端点）+ 顺手修 timedelta NameError |
 | [S033](S033-状态机前端呈现/spec.md) | 状态机前端呈现（状态徽标+流转按钮+holding 价格采集） | ✅已实现 2026-08-07 | spec · [plan](S033-状态机前端呈现/plan.md) · [tasks](S033-状态机前端呈现/tasks.md) | workflow_state 扩列 entry_price/exit_price/strategy（COALESCE）+ 单股端点 + 列表徽标/抽屉状态卡/流转交互（watching 直连、holding/settled 表单），为 S034 SettlementEngine 铺路 |
 | [S034](S034-结算接线/spec.md) | SettlementEngine 接线（settled 流转即结算写 winrate.db） | ✅已实现 2026-08-07 | spec · [tasks](S034-结算接线/tasks.md) | settled 流转触发结算（engine settle + gene_score 基因 DB 回查）写 winrate_records 喂既有胜率页；settled_at 幂等锚点 + 重入清零；entry_date=trade_date 诚实近似 |
+| [S035](S035-ai-proxy-删除/spec.md) | ai_proxy 删除（死代码清理） | ✅已实现 2026-08-09 | spec · [plan](S035-ai-proxy-删除/plan.md) · [tasks](S035-ai-proxy-删除/tasks.md) | 删 ai_proxy 路由 + 死代码清理 |
+| [S036](S036-工作流标灰/spec.md) | 工作流标灰（S012 修订版：适配 S033/S034 后的前端结构） | ✅已实现 2026-08-09 | spec · [plan](S036-工作流标灰/plan.md) · [tasks](S036-工作流标灰/tasks.md) | 适配状态机/结算后的前端标灰，桩→NotImplementedError |
+| [S037](S037-gene-db-迁移/spec.md) | gene DB 路径迁移（三库 + winrate 统一到 .vibe-research/） | ✅已实现 | spec · [plan](S037-gene-db-迁移/plan.md) · [tasks](S037-gene-db-迁移/tasks.md) | gene_scores/winrate/market_data 三库统一 VR_DATA_DIR，迁移完整 |
+| [S038](S038-持仓市价自动结算/spec.md) | 持仓市价自动结算（holding 流转 settled 时自动拉价填 exit_price） | ✅已实现（`0681061`） | spec · [plan](S038-持仓市价自动结算/plan.md) · [tasks](S038-持仓市价自动结算/tasks.md) | settled 流转拉 tencent_quote 市价预填 exit_price；exit_price_source 标注 market/manual |
+| [S039](S039-StockDeep接线/spec.md) | StockDeep 个股深度页面接线（消费已有端点，第一批核心四块） | ✅已实现 2026-08-09 | spec · [plan](S039-StockDeep接线/plan.md) · [tasks](S039-StockDeep接线/tasks.md) | 个股深度页接已有端点，第一批核心四块 |
+| [S040](S040-历史数据回填90天/spec.md) | 历史涨停池数据 K 线重建 + 双轨累积（v2） | ✅已实现（90天回填完成） | spec · [plan](S040-历史数据回填90天/plan.md) · [tasks](S040-历史数据回填90天/tasks.md) | K 线重建 122 天 + eastmoney_live 27 天，DB 覆盖 149 交易日/5715 条 |
+| [S041](S041-回测定时任务与趋势看板/spec.md) | 回测定时任务 + 趋势看板 | ✅已实现（`26e7cb7`） | spec · [plan](S041-回测定时任务与趋势看板/plan.md) · [tasks](S041-回测定时任务与趋势看板/tasks.md) | daily_backtest_run task_type + backtest_daily_snapshots 表 + 趋势端点 + Backtest.tsx |
+| [S042](S042-统一持仓建议引擎/spec.md) | 统一持仓建议引擎（推荐标的 + 自选 + 持仓，三场景） | ✅已实现 2026-08-09 | spec · [plan](S042-统一持仓建议引擎/plan.md) · [tasks](S042-统一持仓建议引擎/tasks.md) | position_advisor_v2 + advisory 路由 + Advisory.tsx 三场景页 |
+| [S043](S043-次日溢价率单因子分析/spec.md) | 次日溢价率单因子分位分析 | ✅已实现 2026-08-10 | spec · [plan](S043-次日溢价率单因子分析/plan.md) · [tasks](S043-次日溢价率单因子分析/tasks.md) | 因子分位端点 + 前端因子分位 Tab |
+| [S044](S044-候选池漏斗数据源补全/spec.md) | 候选池漏斗数据源补全（北向 + 板块联动 + 龙虎榜游资频次 + 公告类型化） | ✅已实现（R2 live 收尾 2026-08-10） | spec · [plan](S044-候选池漏斗数据源补全/plan.md) · [tasks](S044-候选池漏斗数据源补全/tasks.md) · [验收说明](S044-候选池漏斗数据源补全/验收说明.md) | 四源补全 + 板块源 live 修复（push2delay+ut/分页 496/级别归一/TTL 防封） |
+| [S045](S045-漏斗层得分排序筛选/spec.md) | 漏斗层得分显示 + 得分排序 + 多选筛选 | ✅已实现 2026-08-10 | spec | FunnelLayerCard 得分显示 + 降序排序 + 战法/R3 触发类型多选筛选 |
+| [S046](S046-fallback空写防护/spec.md) | fallback 空写防护（限流返空不覆盖好缓存） | ✅已实现 2026-08-10 | spec | _is_empty + save_cache 空不写 + load_cache 损坏自愈删除 + 空 fetch 降级好缓存 |
+| [S047](S047-基因分权重回测校准/spec.md) | 基因分权重口径回测校准 | ✅已实现 2026-08-10 | spec · [证据报告](S047-基因分权重回测校准/证据报告.md) | full 权重改 40/25/25/0/10 + 历史 2023 行复算 |
+| [S048](S048-工作流打磨/spec.md) | 工作流打磨（固定阶段位 + 历史视角 + 缓存 + 拓扑精简） | ✅已实现 2026-08-10 | spec | 固定阶段位 + 历史视角 + 缓存 + 拓扑精简 |
+| [S049](S049-盘前简报漏斗重构与诊断修正/spec.md) | 盘前简报漏斗重构与诊断修正 | ✅已实现（离线全测绿） | spec · [HANDOFF-PROMPT](S049-盘前简报漏斗重构与诊断修正/HANDOFF-PROMPT.md) · [plan](S049-盘前简报漏斗重构与诊断修正/plan.md) · [task](S049-盘前简报漏斗重构与诊断修正/task.md) | 漏斗重构与诊断修正，子项 A/B/C/D 全落地 |
+| [S050](S050-W0-行动闭环/spec.md) | W0 行为闭环（票根 + 影子对照 + 独立性基线） | ✅已实现（离线全测绿） | spec · [HANDOFF-PROMPT](S050-W0-行动闭环/HANDOFF-PROMPT.md) · [plan](S050-W0-行动闭环/plan.md) · [task](S050-W0-行动闭环/task.md) | 票根 + 影子对照 + 独立性基线 |
+| [S051](S051-基因筛选体验批/spec.md) | 基因筛选体验批 | ✅已实现 2026-08-12 | spec · [HANDOFF-PROMPT](S051-基因筛选体验批/HANDOFF-PROMPT.md) · [plan](S051-基因筛选体验批/plan.md) · [task](S051-基因筛选体验批/task.md) | 阈值复位 50/60 + sanity 警告 + 分段视图 + 动态文案 + 零样本注记 |
+| [S052](S052-回测快照回填与缺口补跑/spec.md) | 回测快照回填与缺口补跑 | ✅已实现 2026-08-12 | spec · [HANDOFF-PROMPT](S052-回测快照回填与缺口补跑/HANDOFF-PROMPT.md) · [plan](S052-回测快照回填与缺口补跑/plan.md) · [task](S052-回测快照回填与缺口补跑/task.md) | as_of_date 参数化 + 60 交易日回填 + 启动缺口补跑（零 em_get） |
+| [S053](S053-炸板后溢价因子修复/spec.md) | 炸板后溢价因子修复 + match 条件解耦 | ✅已实现 2026-08-12 | spec | 数据源+计算重定义+match 解耦，pytest 1102 passed |
+| [S054](S054-W0-工作流闭环呈现/spec.md) | W0 工作流闭环呈现（盘后三问 + 简报行为卡） | ✅已实现 | spec · [HANDOFF-PROMPT](S054-W0-工作流闭环呈现/HANDOFF-PROMPT.md) · [plan](S054-W0-工作流闭环呈现/plan.md) · [task](S054-W0-工作流闭环呈现/task.md) | 盘后三问 + 简报行为卡，T1-T9 全落地 |
+| [S055](S055-盘中封单时序采集与炸板预警/spec.md) | 盘中封单时序采集与炸板预警规则引擎 | ✅已实现 | spec · [task](S055-盘中封单时序采集与炸板预警/task.md) · [tasks](S055-盘中封单时序采集与炸板预警/tasks.md) | 封单时序采集 + 炸板预警规则引擎，live 冒烟通过 |
+| [S056](S056-天气熔断三铁律补全/spec.md) | 天气熔断三铁律规则补全（软 gate） | ✅已实现 | spec · [task](S056-天气熔断三铁律补全/task.md) · [tasks](S056-天气熔断三铁律补全/tasks.md) | 三铁律软 gate（只提醒不锁死） |
+| [S057](S057-漏斗八项标准硬约束封顶/spec.md) | 漏斗八项标准硬约束封顶 | ✅已实现 | spec · [task](S057-漏斗八项标准硬约束封顶/task.md) · [tasks](S057-漏斗八项标准硬约束封顶/tasks.md) | 八项硬约束封顶，三态判定 missing 不臆造 |
+| [S058](S058-战法双层卡片层与天气适配过滤/spec.md) | 战法双层卡片层与天气适配软过滤 | ✅已实现 | spec · [task](S058-战法双层卡片层与天气适配过滤/task.md) · [tasks](S058-战法双层卡片层与天气适配过滤/tasks.md) | 战法双层卡片 + 天气适配软过滤 + query_strategy_card 三出口 |
+| [S059](S059-因子IC评估/spec.md) | 因子 IC 评估（backtest_lite 扩展） | ✅已实现 | spec · [task](S059-因子IC评估/task.md) · [tasks](S059-因子IC评估/tasks.md) | IC 评估扩展，样本<20 返 None 诚实标注 |
+| [S060](S060-明日验证条件对账卡/spec.md) | 明日验证条件对账卡 | ✅已实现 | spec · [tasks](S060-明日验证条件对账卡/tasks.md) | 纯规则模板客观可测，后端 19 + 前端 4 测试 |
+| [S061](S061-预测跟踪与自动验证/spec.md) | 预测跟踪与自动验证（预测账本） | ✅已实现 2026-08-12 | spec · [tasks](S061-预测跟踪与自动验证/tasks.md) | 预测账本——判断跟踪 + 到期自动验证 + 命中率统计 |
+| [S062](S062-战法卡内容填充-反包与龙头/spec.md) | 战法卡内容填充：反包/龙头实盘参数 | ✅已实现 2026-08-12 | spec · [tasks](S062-战法卡内容填充-反包与龙头/tasks.md) | 反包/龙头战法卡实盘参数填充 |
+| [S063](S063-情绪管线贯通与盘中辅助决策/spec.md) | 情绪管线贯通与盘中辅助决策 | ✅已实现 2026-08-13 | spec · [HANDOFF-PROMPT](S063-情绪管线贯通与盘中辅助决策/HANDOFF-PROMPT.md) · [plan](S063-情绪管线贯通与盘中辅助决策/plan.md) · [tasks](S063-情绪管线贯通与盘中辅助决策/tasks.md) | SentimentContext T-1 贯通 + 盘中 4 维评分 + T+1 投影 + 前端多页 |
+| [S064](S064-盯盘教练MVP/spec.md) | W-C 盯盘教练 MVP | ✅已实现 2026-08-13 | spec | 盘中时刻表 10 槽位 + 条件状态清单 + attention_mode A/B/C + 教学点 |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 
-> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。下一个新 spec 用 S035。
+> S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。
+
+> S027：跳过（编号预留未使用）。
