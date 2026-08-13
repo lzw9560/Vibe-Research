@@ -7,12 +7,14 @@ const qMock = vi.hoisted(() => ({
   useDailyWinReview: vi.fn(),
   useShadowComparison: vi.fn(),
   useTransitionWorkflowState: vi.fn(),
+  usePreMarketBriefing: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
   useDailyWinReview: qMock.useDailyWinReview,
   useShadowComparison: qMock.useShadowComparison,
   useTransitionWorkflowState: qMock.useTransitionWorkflowState,
+  usePreMarketBriefing: qMock.usePreMarketBriefing,
 }));
 
 import PostMarketReview from "../PostMarketReview";
@@ -30,6 +32,7 @@ describe("PostMarketReview S054", () => {
     vi.clearAllMocks();
     qMock.useShadowComparison.mockReturnValue({ data: null });
     qMock.useTransitionWorkflowState.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    qMock.usePreMarketBriefing.mockReturnValue({ data: null });
   });
 
   it("无快照 → no_snapshot 空态文案", () => {

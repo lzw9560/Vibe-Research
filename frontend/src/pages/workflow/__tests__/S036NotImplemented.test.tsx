@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { WorkflowStage } from "../components/WorkflowStage";
-import IntradayMonitor from "../IntradayMonitor";
 import BombAlertPanel from "../BombAlertPanel";
 
-// S036 工作流标灰——IntradayMonitor/BombAlertPanel 未实现态 + WorkflowStage notImplemented prop。
-// PostMarketReview S054 已去桩重写（三问区），不再属 S036 未实现态，其测试在 PostMarketReview.test.tsx。
+// S036 工作流标灰——WorkflowStage notImplemented prop + BombAlertPanel 未实现态。
+// IntradayMonitor 已由 S063 去桩重写（真实四层布局），不再属 S036 未实现态，
+// 其测试在 IntradayMonitor.test.tsx；PostMarketReview 已由 S054 去桩重写，
+// 其测试在 PostMarketReview.test.tsx。
 
 describe("S036 工作流标灰", () => {
   it("WorkflowStage notImplemented=true 渲染未实现横幅，不渲染 children", () => {
@@ -32,12 +33,6 @@ describe("S036 工作流标灰", () => {
     );
     expect(screen.getByTestId("child")).toBeInTheDocument();
     expect(screen.queryByText("未实现")).not.toBeInTheDocument();
-  });
-
-  it("IntradayMonitor 渲染未实现态（不调 hook）", () => {
-    render(<IntradayMonitor />);
-    expect(screen.getByText("未实现")).toBeInTheDocument();
-    expect(screen.getByText(/盘中实时监控/)).toBeInTheDocument();
   });
 
   it("BombAlertPanel 渲染未实现态（不调 hook）", () => {
