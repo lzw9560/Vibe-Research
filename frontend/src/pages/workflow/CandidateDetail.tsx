@@ -9,7 +9,26 @@ import { ArrowLeft } from "lucide-react";
 import { candidatesApi, type DiagnosisCard, type IndicatorSet } from "@/lib/candidates";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { WorkflowStateCard } from "@/components/workflow/WorkflowStateCard";
+
+/** 问 AI 上下文——注入候选诊断卡真实数据 */
+function buildCandidateContext(card: DiagnosisCard | null, code: string): string {
+  if (!card) return `当前页面：候选详情 - ${code}\n诊断卡：未取得`;
+  const ind = card.indicators;
+  const eight = card.eight_standards;
+  return [
+    `当前页面：候选详情 - ${card.code} ${card.name}`,
+    `活跃度：${card.activity?.tier ?? "--"}（命中规则：${card.activity?.rules_applied?.join("、") || "无"}）`,
+    ind ? `量价：现价${ind.price ?? "--"}/涨跌${ind.change_pct != null ? ind.change_pct.toFixed(2) : "--"}%/换手${ind.turnover_pct ?? "--"}%/量比${ind.vol_ratio ?? "--"}/成交额${ind.amount_yi ?? "--"}亿/振幅${ind.amplitude_pct ?? "--"}%` : `量价：未取得`,
+    ind ? `连板：${ind.consec_boards ?? "--"}板/封单额${ind.seal_amount != null ? (ind.seal_amount / 1e4).toFixed(0) + "万" : "--"}/竞价高开${ind.auction_open_pct ?? "--"}%` : `连板：未取得`,
+    ind ? `资金：主力净流入${ind.main_net_inflow ?? "--"}/5日${ind.main_net_5d ?? "--"}/北向${ind.northbound ?? "--"}/龙虎席${ind.dragon_tiger_inst_net ?? "--"}` : `资金：未取得`,
+    ind ? `均线：MA5=${ind.ma5 ?? "--"}/MA10=${ind.ma10 ?? "--"}/MA20=${ind.ma20 ?? "--"}` : `均线：未取得`,
+    `风险标记：${card.risk_flags?.length ? card.risk_flags.join("、") : "无"}`,
+    eight ? `八项标准：${eight.items.filter((i) => i.status === "pass").length}过/${eight.fail_count}fail/${eight.missing_count}missing${card.capped ? "（已封顶55）" : ""}` : `八项标准：未取得`,
+    `取数时点：${card.as_of}`,
+  ].join("\n");
+}
 
 export default function CandidateDetail() {
   const { code = "" } = useParams<{ code: string }>();
@@ -69,9 +88,12 @@ export function CandidateDetailPanel({ code, date }: { code: string; date?: stri
             <h2 className="text-xl font-bold">{card.name}</h2>
             <p className="text-xs text-muted-foreground">{card.code}</p>
           </div>
-          <span className="text-sm text-muted-foreground">
-            活跃度档位：<b className="text-foreground">{card.activity?.tier}</b>
-          </span>
+          <div className="flex items-center gap-3">
+            <AskAiButton context={buildCandidateContext(card, code)} />
+            <span className="text-sm text-muted-foreground">
+              活跃度档位：<b className="text-foreground">{card.activity?.tier}</b>
+            </span>
+          </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">取数时点：{card.as_of}</p>
       </GlassCard>

@@ -6,6 +6,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { TabBar } from "@/components/ui/TabBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Lightbulb, AlertTriangle, Clock, Activity, Shield } from "lucide-react";
 import { useCoachStatus, useCoachTimetable, useCoachAttentionMode, useSetCoachAttentionMode } from "@/lib/query";
 import type { CoachTimetableSlot, CoachChecklistItem } from "@/lib/api";
@@ -31,12 +32,29 @@ export default function IntradayCoach() {
   const modeRules = modeQ.data?.rules ?? { label: "", desc: "" };
   const slot = slots.find((s) => s.slot_id === currentSlotId) ?? null;
 
+  // 问 AI 上下文——注入盯盘教练真实数据
+  const askAiContext = [
+    `当前页面：盯盘教练`,
+    `当前时间：${state?.current_time ?? "--:--"}`,
+    `当前环节：${slot?.label ?? "无"}`,
+    `关注模式：${mode}（${modeRules.label}）`,
+    slots.length > 0
+      ? `时刻表：${slots.map((s) => `${s.start}-${s.end} ${s.label}`).join("，")}`
+      : `时刻表：未取得`,
+    checklist.length > 0
+      ? `候选条件清单：${checklist.map((c) =>
+          `${c.code}(${c.name}/${c.status}/${c.strategy_name || "无战法"}/封单${c.seal_amount != null ? (c.seal_amount / 1e4).toFixed(0) + "万" : "未取得"}/${c.bomb_alerts.length > 0 ? c.bomb_alerts.map((b) => b.rule_id).join("+") : "无预警"}${c.max_hold_warning ? "/" + c.max_hold_warning : ""})`,
+        ).join("，")}`
+      : `候选条件清单：无`,
+  ].join("\n");
+
   return (
     <WorkflowStage
       title="盯盘教练"
       subtitle="W-C Coach · 高价值时刻表 + 条件状态 + 教学点"
       loading={statusQ.isLoading || modeQ.isLoading || timetableQ.isLoading}
       onRefresh={() => { statusQ.refetch(); modeQ.refetch(); timetableQ.refetch(); }}
+      actions={<AskAiButton context={askAiContext} />}
     >
       {/* 降级模式选择 */}
       <section className="mb-6">

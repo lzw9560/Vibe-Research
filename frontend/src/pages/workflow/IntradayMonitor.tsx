@@ -1,5 +1,6 @@
 // S063 T29：盘中监控主页面重写——PipelineProgressBar → 状态机看板 → Layer1-4 纵向布局。
 // 四层辅助决策（spec §3）：分数+色带 / 持仓×情绪联动 / 条件场景推演 / T+1 预判。
+// AskAi：注入四层真实数据（latest/holdings/scenarios/t1）作上下文。
 import { WorkflowStage } from "./components/WorkflowStage";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { StateMachineDashboard } from "@/components/intraday/StateMachineDashboard";
@@ -9,10 +10,73 @@ import { ScenarioCards } from "@/components/intraday/ScenarioCards";
 import { T1ProjectionPanel } from "@/components/intraday/T1ProjectionPanel";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { AskAiButton } from "@/components/ui/AskAiButton";
+import {
+  useIntradayLatest,
+  useIntradayHoldings,
+  useIntradayScenarios,
+  useIntradayT1Projection,
+} from "@/lib/query";
+
+function buildIntradayContext(
+  latest: ReturnType<typeof useIntradayLatest>["data"],
+  holdings: ReturnType<typeof useIntradayHoldings>["data"],
+  scenarios: ReturnType<typeof useIntradayScenarios>["data"],
+  t1: ReturnType<typeof useIntradayT1Projection>["data"],
+): string {
+  const lines: string[] = ["当前页面：盘中监控"];
+  if (latest) {
+    lines.push(
+      `Layer1 情绪：分数=${latest.score ?? "--"}，趋势=${latest.trend}，色带=${latest.zone}，` +
+        `涨停${latest.zt_count ?? "--"}/封板率${latest.seal_rate != null ? latest.seal_rate.toFixed(0) : "--"}%/` +
+        `炸板率${latest.break_rate != null ? latest.break_rate.toFixed(0) : "--"}%/涨跌比${latest.ad_ratio != null ? latest.ad_ratio.toFixed(2) : "--"}，` +
+        `T-1基线=${latest.t1_baseline ?? "--"}`,
+    );
+  } else {
+    lines.push("Layer1 情绪：未取得");
+  }
+  if (holdings && holdings.holdings.length > 0) {
+    const held = holdings.holdings
+      .map((h) => `${h.code}(${h.name}/${h.status}/${h.seal_status}/${h.current_zone}${h.dual_pressure ? "/双重压力" : ""})`)
+      .join("，");
+    lines.push(`Layer2 持仓情绪：${held}，双重压力数=${holdings.dual_pressure_count}`);
+  } else if (holdings) {
+    lines.push("Layer2 持仓情绪：无持仓");
+  } else {
+    lines.push("Layer2 持仓情绪：未取得");
+  }
+  if (scenarios && scenarios.scenarios.length > 0) {
+    const sc = scenarios.scenarios
+      .map((s) => `${s.condition}→${s.impact}（${s.suggestion}）`)
+      .join("；");
+    lines.push(`Layer3 场景推演：${sc}`);
+  } else {
+    lines.push("Layer3 场景推演：无");
+  }
+  if (t1 && t1.scenarios && t1.scenarios.length > 0) {
+    const proj = t1.scenarios
+      .map((s) => `${s.name}:投影分=${s.projected_t1_score}/${s.projected_t1_weather}（${s.assumption}）`)
+      .join("，");
+    lines.push(`Layer4 T+1预判：${proj}`);
+  } else {
+    lines.push("Layer4 T+1预判：未到时间或未取得");
+  }
+  return lines.join("\n");
+}
 
 export default function IntradayMonitor() {
+  const latestQ = useIntradayLatest();
+  const holdingsQ = useIntradayHoldings();
+  const scenariosQ = useIntradayScenarios();
+  const t1Q = useIntradayT1Projection();
+  const askAiContext = buildIntradayContext(latestQ.data, holdingsQ.data, scenariosQ.data, t1Q.data);
+
   return (
-    <WorkflowStage title="盘中监控" subtitle="Intraday Monitor">
+    <WorkflowStage
+      title="盘中监控"
+      subtitle="Intraday Monitor"
+      actions={<AskAiButton context={askAiContext} />}
+    >
       <div className="mb-4">
         <PipelineProgressBar current="intraday" />
       </div>

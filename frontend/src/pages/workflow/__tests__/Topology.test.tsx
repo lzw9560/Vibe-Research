@@ -22,6 +22,22 @@ vi.mock("@/components/topology/BoardLadder", () => ({
   BoardLadder: componentMocks.BoardLadder,
 }));
 
+// S065 followup：Topology 加了 AskAiButton（调 useTopologyRelation/useFunnelLayers/useBoardLadder）
+const queryMocks = vi.hoisted(() => ({
+  useTopologyRelation: vi.fn(() => ({ data: null })),
+  useFunnelLayers: vi.fn(() => ({ data: null })),
+  useBoardLadder: vi.fn(() => ({ data: null })),
+}));
+vi.mock("@/lib/query", () => ({
+  useTopologyRelation: queryMocks.useTopologyRelation,
+  useFunnelLayers: queryMocks.useFunnelLayers,
+  useBoardLadder: queryMocks.useBoardLadder,
+}));
+// AskAiButton 内部调 hasLlm/chatStream，mock 掉避免真实 LLM 调用
+vi.mock("@/components/ui/AskAiButton", () => ({
+  AskAiButton: () => <div data-testid="ask-ai-stub">问 AI</div>,
+}));
+
 import { Topology } from "@/pages/workflow/Topology";
 
 describe("Topology 拓扑视图入口 (S024-E1)", () => {

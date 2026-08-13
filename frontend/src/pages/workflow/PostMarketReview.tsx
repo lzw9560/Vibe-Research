@@ -9,6 +9,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState, usePreMarketBriefing } from "@/lib/query";
@@ -56,8 +57,27 @@ export default function PostMarketReview() {
     setEntryCode(null);
   };
 
+  // 问 AI 上下文——注入盘后复盘真实数据
+  const pmrCtx = briefing?.sentiment_context;
+  const askAiContext = [
+    `当前页面：盘后复盘`,
+    `日期：${review?.date ?? date ?? "未取得"}`,
+    review?.no_snapshot
+      ? `三问：无盘前快照`
+      : `三问：推了${review?.pushed.length ?? 0}只（${(review?.pushed ?? []).map((p) => p.code).join("、") || "无"}）/买了${review?.bought.length ?? 0}只（${(review?.bought ?? []).map((b) => b.code).join("、") || "无"}）/漏了${review?.missed.length ?? 0}只（${(review?.missed ?? []).map((m) => m.code).join("、") || "无"}）`,
+    review?.prev_day_missed
+      ? `昨日漏单：${review.prev_day_missed.items.length}只${review.prev_day_missed.summary ? `（胜率${review.prev_day_missed.summary.win_rate}%/均收益${review.prev_day_missed.summary.avg_return}）` : ""}`
+      : `昨日漏单：未取得`,
+    pmrCtx
+      ? `情绪天气：${pmrCtx.weather_state}，STI=${pmrCtx.sti_score ?? "--"}（${pmrCtx.sti_phase ?? "--"}）`
+      : `情绪天气：未取得`,
+    shadow
+      ? `影子对照（${shadow.window_days}日）：跟随${shadow.follow.n}笔胜率${shadow.follow.win_rate ?? "--"}%/感觉${shadow.feeling.n}笔/漏单${shadow.missed.n}笔，独立一致率${shadow.independence.agreement_rate ?? "--"}%`
+      : `影子对照：未取得`,
+  ].join("\n");
+
   return (
-    <WorkflowStage title="盘后复盘" subtitle="Post-Market Review" loading={isLoading}>
+    <WorkflowStage title="盘后复盘" subtitle="Post-Market Review" loading={isLoading} actions={<AskAiButton context={askAiContext} />}>
       {/* S063 T27：Pipeline 进度条（盘后阶段高亮） */}
       <div className="mb-4">
         <PipelineProgressBar current="post" />
