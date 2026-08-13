@@ -1,6 +1,6 @@
 # Spec: S056 — 天气熔断三铁律规则补全（软 gate）
 
-> 状态：已实现（R1/R3 落地 + R2 置桩待 S055；后端 7 passed；软 gate 只提醒不锁死）
+> 状态：已实现（R1/R2/R3 全落地——R2 解桩完成，接 S055 seal_intraday_snapshots 真实封单额判定，撤单比口径不可得仅用封单额阈值显式标注；后端 10 passed；软 gate 只提醒不锁死）
 > 作者：Codex（DSA 借鉴 grill 会话）  日期：2026-08-11
 > 级别：**medium**（跨层，>50 行；无新外部数据源——复用 sentiment_weather + S055 时序）
 > 流程门：develop 直提 + 勤 commit；issue 级 review（.scratch 单轮）；简化验收（后端冒烟 + 关键路由）

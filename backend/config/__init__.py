@@ -201,6 +201,8 @@ class AssistantDefaultConfig(NotificationConfig):
     SEAL_INTRADAY_ENABLE: bool = False          # 采集开关（默认关，避免非交易时段空跑）
     BOMB_ALERT_COOLDOWN_MINUTES: int = 10       # 同股同规则冷却去重
     BOMB_ALERT_NOTIFY_ENABLE: bool = False       # 通知开关（默认关）
+    # S056 R2 撤单熔断：封单额阈值（元）；盘中封单 < 此值 → 触发提醒
+    SEAL_CANCEL_FUSE_AMOUNT: float = 30_000_000.0  # 3000 万
 
     # === 回测 ===
     BACKTEST_INITIAL_CAPITAL: float = 1_000_000.0
@@ -302,6 +304,12 @@ def load_config() -> AssistantDefaultConfig:
         cfg.CANDIDATE_FUNNEL_CACHE_TTL = _parse_int(
             "VR_CANDIDATE_FUNNEL_CACHE_TTL", os.getenv("VR_CANDIDATE_FUNNEL_CACHE_TTL"),
             cfg.CANDIDATE_FUNNEL_CACHE_TTL,
+        )
+
+    if os.getenv("VR_SEAL_CANCEL_FUSE_AMOUNT"):
+        cfg.SEAL_CANCEL_FUSE_AMOUNT = _parse_float(
+            "VR_SEAL_CANCEL_FUSE_AMOUNT", os.getenv("VR_SEAL_CANCEL_FUSE_AMOUNT"),
+            cfg.SEAL_CANCEL_FUSE_AMOUNT,
         )
 
     return cfg

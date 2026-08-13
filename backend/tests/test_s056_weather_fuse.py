@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """S056：天气熔断三铁律补全测试。
 
-R1 仓位熔断（暴风雨→triggered）+ R2 撤单熔断置桩（待S055）+ R3 次日强制离场信号。
-软 gate：只提醒不锁死。
+R1 仓位熔断（暴风雨→triggered）+ R2 撤单熔断（接 S055 封单时序，封单额<阈值→triggered）
++ R3 次日强制离场信号。软 gate：只提醒不锁死。
 """
 
 import pytest
@@ -57,15 +57,131 @@ class TestFuseEndpoint:
         assert pos["current_state"] == "normal"
         assert data["fuse_state"] == "normal"
 
-    def test_cancel_fuse_is_stub_pending_s055(self, isolated_market_db):
-        """R2 撤单熔断置桩——data_status=待S055。"""
+    def test_cancel_fuse_not_triggered_when_no_snapshots(self, isolated_market_db, monkeypatch):
+        """R2 撤单熔断：非交易时段/无快照 → data_status=missing，不臆造。"""
         import app as appmod
+        import routers.sentiment_weather as sw
+
+        # 非交易时段（周末）→ is_trading_day False → missing
+        from datetime import date as date_cls
+        import config as cfgmod
+        monkeypatch.setattr(sw, "datetime", _FakeDateTime(weekday_sat=True))
+        monkeypatch.setattr(
+            "vr_paths.is_trading_day",
+            lambda d: False,
+        )
         client = TestClient(appmod.app)
         r = client.get("/api/sentiment/weather/fuse")
         data = r.json()["data"]
         cancel = next(rule for rule in data["rules"] if rule["id"] == "cancel_fuse")
-        assert cancel["data_status"] == "待S055"
+        assert cancel["data_status"] == "missing"
         assert cancel["is_triggered"] is False
+
+    def test_cancel_fuse_triggered_when_seal_below_threshold(self, isolated_market_db, monkeypatch):
+        """R2 撤单熔断：封单额 < 阈值 → triggered + 触发 code 列表。"""
+        import app as appmod
+        import routers.sentiment_weather as sw
+
+        # 交易时段 + 有快照（1 只低于阈值）
+        monkeypatch.setattr(
+            "vr_paths.is_trading_day",
+            lambda d: True,
+        )
+        monkeypatch.setattr(
+            "vr_paths.last_trading_date_str",
+            lambda: "2026-08-13",
+        )
+        monkeypatch.setattr(
+            "risk.seal_intraday_collector.get_latest_snapshots",
+            lambda date: [
+                {"code": "600001", "seal_amount": 20_000_000.0},   # 低于阈值 → 触发
+                {"code": "600002", "seal_amount": 50_000_000.0},   # 高于阈值 → 不触发
+                {"code": "600003", "seal_amount": None},           # 缺数据 → 不触发
+            ],
+            raising=False,
+        )
+        client = TestClient(appmod.app)
+        r = client.get("/api/sentiment/weather/fuse")
+        data = r.json()["data"]
+        cancel = next(rule for rule in data["rules"] if rule["id"] == "cancel_fuse")
+        assert cancel["data_status"] == "ok"
+        assert cancel["is_triggered"] is True
+        assert cancel["current_state"] == "triggered"
+        assert "600001" in cancel["triggered_codes"]
+        assert "600002" not in cancel["triggered_codes"]
+        assert cancel["checked_count"] == 3
+        # 阈值字段透出
+        assert cancel["trigger_condition"]
+
+    def test_cancel_fuse_normal_when_all_above_threshold(self, isolated_market_db, monkeypatch):
+        """R2 撤单熔断：全部封单额 ≥ 阈值 → normal。"""
+        import app as appmod
+        import routers.sentiment_weather as sw
+
+        monkeypatch.setattr(
+            "vr_paths.is_trading_day",
+            lambda d: True,
+        )
+        monkeypatch.setattr(
+            "vr_paths.last_trading_date_str",
+            lambda: "2026-08-13",
+        )
+        monkeypatch.setattr(
+            "risk.seal_intraday_collector.get_latest_snapshots",
+            lambda date: [
+                {"code": "600001", "seal_amount": 80_000_000.0},
+                {"code": "600002", "seal_amount": 100_000_000.0},
+            ],
+            raising=False,
+        )
+        client = TestClient(appmod.app)
+        r = client.get("/api/sentiment/weather/fuse")
+        data = r.json()["data"]
+        cancel = next(rule for rule in data["rules"] if rule["id"] == "cancel_fuse")
+        assert cancel["data_status"] == "ok"
+        assert cancel["is_triggered"] is False
+        assert cancel["current_state"] == "normal"
+        assert cancel["triggered_codes"] == []
+
+    def test_cancel_fuse_degraded_when_collector_exception(self, isolated_market_db, monkeypatch):
+        """R2 撤单熔断：采集异常 → data_status=degraded，不臆造。"""
+        import app as appmod
+
+        monkeypatch.setattr(
+            "vr_paths.is_trading_day",
+            lambda d: True,
+        )
+        monkeypatch.setattr(
+            "vr_paths.last_trading_date_str",
+            lambda: "2026-08-13",
+        )
+        monkeypatch.setattr(
+            "risk.seal_intraday_collector.get_latest_snapshots",
+            lambda date: (_ for _ in ()).throw(RuntimeError("boom")),
+            raising=False,
+        )
+        client = TestClient(appmod.app)
+        r = client.get("/api/sentiment/weather/fuse")
+        data = r.json()["data"]
+        cancel = next(rule for rule in data["rules"] if rule["id"] == "cancel_fuse")
+        assert cancel["data_status"] == "degraded"
+        assert cancel["is_triggered"] is False
+
+
+class _FakeDateTime:
+    """datetime 替身，让 datetime.now() 返周末。"""
+
+    def __init__(self, weekday_sat: bool = False):
+        self._weekday_sat = weekday_sat
+
+    @staticmethod
+    def now(tz=None):
+        from datetime import datetime as real_dt
+        # 2026-08-15 是周六
+        return real_dt(2026, 8, 15, 10, 0)
+
+    def __getattr__(self, name):
+        return getattr(__import__("datetime").datetime, name)
 
 
 class TestExitSignalsEndpoint:

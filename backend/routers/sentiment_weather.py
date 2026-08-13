@@ -465,7 +465,10 @@ def get_weather_fuse() -> Dict[str, Any]:
     """获取熔断规则状态（S056：三铁律补全——软 gate，只提醒不锁死）。
 
     R1 仓位熔断：天气=暴风雨 → fuse_state=triggered
-    R2 撤单熔断：依赖 S055 封单时序 → 置桩（data_status=待S055）
+    R2 撤单熔断：读 S055 seal_intraday_snapshots 当日最新快照，
+       封单额 < 阈值（config.SEAL_CANCEL_FUSE_AMOUNT，默认 3000 万）→ triggered。
+       撤单比（撤单量/封单量）依赖盘口分笔数据，mootdx 不可得 → 仅用封单额阈值，
+       显式标注口径（spec §3：不可得则仅用封单额阈值并显式标注）。
     R3 次日强制离场：竞价未高开/破均线 → 独立端点 /api/sentiment/weather/exit-signals
     """
     try:
@@ -479,6 +482,9 @@ def get_weather_fuse() -> Dict[str, Any]:
         # R1 仓位熔断：暴风雨 → triggered
         r1_triggered = weather_state == "暴风雨"
         r1_state = "triggered" if r1_triggered else "normal"
+
+        # R2 撤单熔断：读 S055 当日最新封单快照（解桩）
+        r2 = _evaluate_cancel_fuse()
 
         rules = [
             {
@@ -495,11 +501,13 @@ def get_weather_fuse() -> Dict[str, Any]:
                 "id": "cancel_fuse",
                 "name": "撤单熔断",
                 "status": "enabled",
-                "trigger_condition": "封单<3000万 或 撤单/封单>20%",
-                "current_state": "待S055",
-                "data_status": "待S055",
-                "description": "排板时封单额跌破3000万或撤单比>20%触发提醒。依赖 S055 盘中封单时序采集，未合并前置桩",
-                "is_triggered": False,
+                "trigger_condition": f"封单额 < {r2['threshold']:,.0f} 元（撤单比口径不可得，仅用封单额阈值，spec §3）",
+                "current_state": r2["state"],
+                "data_status": r2["data_status"],
+                "triggered_codes": r2["triggered_codes"],
+                "checked_count": r2["checked_count"],
+                "description": "排板时封单额跌破阈值触发提醒。撤单比依赖盘口分笔数据，mootdx 不可得，仅用封单额阈值（显式标注口径）",
+                "is_triggered": r2["is_triggered"],
             },
             {
                 "id": "next_day_exit",
@@ -526,6 +534,74 @@ def get_weather_fuse() -> Dict[str, Any]:
         }
     except Exception as e:
         raise HTTPException(502, f"熔断规则查询异常：{e}") from e
+
+
+def _evaluate_cancel_fuse() -> dict:
+    """R2 撤单熔断评估：读当日最新封单快照，封单额 < 阈值 → triggered。
+
+    撤单比口径不可得（mootdx 无分笔），仅用封单额阈值，显式标注。
+    非交易时段/无快照 → data_status=missing，不臆造。
+    """
+    from config import default_config  # noqa: PLC0415
+    threshold = getattr(default_config, "SEAL_CANCEL_FUSE_AMOUNT", 30_000_000.0)
+    try:
+        from risk.seal_intraday_collector import get_latest_snapshots  # noqa: PLC0415
+        from vr_paths import is_trading_day, last_trading_date_str  # noqa: PLC0415
+    except Exception:
+        return {
+            "state": "degraded",
+            "data_status": "degraded",
+            "is_triggered": False,
+            "triggered_codes": [],
+            "checked_count": 0,
+            "threshold": threshold,
+        }
+    # 非交易时段不评估（无盘中数据意义）
+    if not is_trading_day(datetime.now().date()):
+        return {
+            "state": "normal",
+            "data_status": "missing",
+            "is_triggered": False,
+            "triggered_codes": [],
+            "checked_count": 0,
+            "threshold": threshold,
+        }
+    try:
+        date = last_trading_date_str()
+        snapshots = get_latest_snapshots(date)
+    except Exception:
+        return {
+            "state": "degraded",
+            "data_status": "degraded",
+            "is_triggered": False,
+            "triggered_codes": [],
+            "checked_count": 0,
+            "threshold": threshold,
+        }
+    if not snapshots:
+        return {
+            "state": "normal",
+            "data_status": "missing",
+            "is_triggered": False,
+            "triggered_codes": [],
+            "checked_count": 0,
+            "threshold": threshold,
+        }
+    triggered_codes: list[str] = []
+    for snap in snapshots:
+        seal = snap.get("seal_amount")
+        code = snap.get("code", "")
+        if seal is not None and code and seal < threshold:
+            triggered_codes.append(code)
+    is_triggered = len(triggered_codes) > 0
+    return {
+        "state": "triggered" if is_triggered else "normal",
+        "data_status": "ok",
+        "is_triggered": is_triggered,
+        "triggered_codes": triggered_codes,
+        "checked_count": len(snapshots),
+        "threshold": threshold,
+    }
 
 
 @router.get("/api/sentiment/weather/timeline")
