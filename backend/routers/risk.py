@@ -186,4 +186,58 @@ async def stock_risk(code: str) -> Dict[str, Any]:
         raise HTTPException(502, f"个股风险查询异常：{e}") from e
 
 
+# =============================================================================
+# S055：炸板预警 + 封单时序端点
+# =============================================================================
+
+@router.get("/api/risk/bomb-alerts")
+async def bomb_alerts(date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+    """获取当日炸板预警列表（历史表）。
+
+    缺数据诚实标注 data_status，不臆造封单值。
+    """
+    try:
+        from risk.bomb_alert_dispatcher import get_active_alerts
+        from vr_paths import last_trading_date_str
+        target = date or last_trading_date_str()
+        alerts = get_active_alerts(target)
+        return {
+            "data": {
+                "date": target,
+                "alerts": alerts,
+                "count": len(alerts),
+                "note": "炸板预警属风险标注，历史统计特征，市场有风险，不构成交易指令",
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"炸板预警查询异常：{e}") from e
+
+
+@router.get("/api/risk/seal-snapshots")
+async def seal_snapshots(
+    code: str = Query(..., description="6 位股票代码"),
+    date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日"),
+) -> Dict[str, Any]:
+    """获取个股封单时序快照（sparkline 用）。
+
+    缺快照返空数组 + data_status=missing，不臆造。
+    """
+    try:
+        from risk.seal_intraday_collector import get_snapshots_by_code
+        from vr_paths import last_trading_date_str
+        target = date or last_trading_date_str()
+        rows = get_snapshots_by_code(code, target)
+        return {
+            "data": {
+                "code": code,
+                "date": target,
+                "snapshots": rows,
+                "count": len(rows),
+                "data_status": "ok" if rows else "missing",
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"封单时序查询异常：{e}") from e
+
+
 __all__ = ["router"]

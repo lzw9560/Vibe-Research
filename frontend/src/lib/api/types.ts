@@ -1444,3 +1444,42 @@ export interface VerificationCardResult {
   status_summary: Record<VerificationStatus, number>;
   note: string;
 }
+
+// S055：炸板预警 + 封单时序
+export interface BombAlertItem {
+  id: number;
+  rule_id: string;  // C1/C2/C3/C4/C5/C6
+  alert_level: "red" | "yellow" | "orange" | "blue";
+  condition: string;
+  code: string;
+  name: string;
+  ts: string;
+  data_status: "ok" | "missing" | "degraded";
+}
+
+export interface BombAlertsResult {
+  date: string;
+  alerts: BombAlertItem[];
+  count: number;
+  note: string;
+}
+
+export interface SealSnapshot {
+  ts: string;
+  date: string;
+  code: string;
+  name?: string | null;
+  seal_amount?: number | null;
+  open_count?: number | null;
+  price?: number | null;
+  float_market_cap?: number | null;
+  index_5min_change?: number | null;
+}
+
+export interface SealSnapshotsResult {
+  code: string;
+  date: string;
+  snapshots: SealSnapshot[];
+  count: number;
+  data_status: "ok" | "missing";
+}

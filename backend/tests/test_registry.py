@@ -163,7 +163,10 @@ def test_system_prompt_no_tools_single_assignment():
 
 
 def test_registry_only_objective_and_research_tools():
-    """§1.2：注册表只挂客观取数 + 研究性判断工具，无越权工具。"""
+    """§1.2：注册表只挂客观取数 + 研究性判断工具，无越权工具。
+
+    S058 新增 query_strategy_card（战法卡查询，客观文本返回）。
+    """
     names = set(registry.tool_names())
     assert names == {
         "query_quote", "query_valuation", "query_reports", "query_news",

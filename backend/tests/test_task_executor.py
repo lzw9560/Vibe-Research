@@ -25,6 +25,7 @@ def _run(coro):
 # 内置任务类型（须与 TaskExecutor._executors 保持一致）。
 # S041 新增 daily_backtest_run（每日回测快照）。
 # S063 新增 sti_post_market（盘后 STI 定时计算）。
+# S055 新增 seal_intraday_collect（盘中封单时序采集）。
 _EXPECTED_TASK_TYPES = {
     "daily_data_refresh",
     "daily_review_notify",
@@ -34,6 +35,7 @@ _EXPECTED_TASK_TYPES = {
     "cleanup_old_runs",
     "daily_backtest_run",
     "sti_post_market",
+    "seal_intraday_collect",
 }
 
 

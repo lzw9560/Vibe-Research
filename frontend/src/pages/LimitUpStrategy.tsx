@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { BombAlertBanner } from "@/components/risk/BombAlertBanner";
 import { api } from "@/lib/api";
 import { ExpandableTable } from "./limitup/components/ExpandableTable";
 import { AuctionScreenerSection } from "./limitup/components/AuctionScreenerSection";
@@ -85,6 +86,9 @@ export function LimitUpStrategy() {
           </div>
         }
       />
+
+      {/* S055：炸板预警横幅 */}
+      <BombAlertBanner />
 
       {/* 统计摘要 */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2">

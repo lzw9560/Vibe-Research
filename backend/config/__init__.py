@@ -44,11 +44,13 @@ PRIVATE_DATA_DIR: str = str(_resolve_data_dir())
 GENE_SCORES_DB = "gene_scores.db"
 STI_TIMELINE_DB = "sti_timeline.db"
 WINRATE_DB = "winrate.db"
+SEAL_INTRADAY_DB = "seal_intraday.db"  # S055：盘中封单时序快照
 
 # 全路径便捷常量
 GENE_SCORES_DB_PATH = os.path.join(PRIVATE_DATA_DIR, GENE_SCORES_DB)
 STI_TIMELINE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, STI_TIMELINE_DB)
 WINRATE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, WINRATE_DB)
+SEAL_INTRADAY_DB_PATH = os.path.join(PRIVATE_DATA_DIR, SEAL_INTRADAY_DB)
 
 os.makedirs(PRIVATE_DATA_DIR, exist_ok=True)
 
@@ -191,6 +193,13 @@ class AssistantDefaultConfig(NotificationConfig):
     AI_RETRAIN_DAYS: int = 1
     AI_OOS_THRESHOLD: float = 0.6
     AI_AUTO_ROLLBACK_DAYS: int = 5
+
+    # === S055 盘中封单时序采集 + 炸板预警 ===
+    SEAL_INTRADAY_COLLECT_INTERVAL: int = 60   # 采集间隔秒（下限 30）
+    SEAL_INTRADAY_RETENTION_DAYS: int = 30     # 快照保留天数
+    SEAL_INTRADAY_ENABLE: bool = False          # 采集开关（默认关，避免非交易时段空跑）
+    BOMB_ALERT_COOLDOWN_MINUTES: int = 10       # 同股同规则冷却去重
+    BOMB_ALERT_NOTIFY_ENABLE: bool = False       # 通知开关（默认关）
 
     # === 回测 ===
     BACKTEST_INITIAL_CAPITAL: float = 1_000_000.0

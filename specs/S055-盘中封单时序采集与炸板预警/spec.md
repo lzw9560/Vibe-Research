@@ -1,6 +1,6 @@
 # Spec: S055 — 盘中封单时序采集与炸板预警规则引擎
 
-> 状态：草案
+> 状态：已实现（T1-T5 全落地，后端 41 passed + 前端 7 passed；T6 live 冒烟待用户在交易时段验证）
 > 作者：Codex（DSA 借鉴 grill 会话）  日期：2026-08-11
 > 级别：**large**（新增外部数据源盘中轮询 → AGENTS.md 自动 large）
 > 流程门：`feature/S055-seal-intraday-alert` off develop；`git merge --squash` 一 spec 一 commit；**live 冒烟通过前不合**；合并后删分支

@@ -19,6 +19,8 @@ import type {
   GraphData,
   AdvisorySummary,
   VerificationCardResult,
+  BombAlertsResult,
+  SealSnapshotsResult,
 } from "./api/types";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -238,9 +240,9 @@ export const api = {
     get<AdvisorySummary>(`/advisory/summary${limit ? `?limit=${limit}` : ""}`),
   // S055 炸板预警 + 封单时序
   bombAlerts: (date?: string) =>
-    get<{ date: string; alerts: import("./api/types").BombAlertItem[]; count: number; note: string }>(`/risk/bomb-alerts${date ? `?date=${date}` : ""}`),
+    get<BombAlertsResult>(`/risk/bomb-alerts${date ? `?date=${date}` : ""}`),
   sealSnapshots: (code: string, date?: string) =>
-    get<{ code: string; date: string; snapshots: Record<string, unknown>[]; count: number; data_status: string }>(`/risk/seal-snapshots?code=${code}${date ? `&date=${date}` : ""}`),
+    get<SealSnapshotsResult>(`/risk/seal-snapshots?code=${code}${date ? `&date=${date}` : ""}`),
   // S060 验证对账卡
   verificationCard: (date?: string) =>
     get<VerificationCardResult>(`/workflow/verification-card${date ? `?date=${date}` : ""}`),

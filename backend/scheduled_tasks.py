@@ -443,6 +443,7 @@ class TaskExecutor:
             "cleanup_old_runs": self._execute_cleanup_old_runs,
             "daily_backtest_run": self._execute_daily_backtest_run,  # S041：回测定时任务
             "sti_post_market": self._execute_sti_post_market,  # S063 T3：STI 盘后定时计算
+            "seal_intraday_collect": self._execute_seal_intraday_collect,  # S055：盘中封单时序采集
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -791,6 +792,57 @@ class TaskExecutor:
         return results
 
 
+# ============================================================================
+# S055：盘中封单时序采集
+# ============================================================================
+
+def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S055：盘中封单时序采集——交易时段每 60s 轮询 em_zt_topic_pool 写快照。
+
+    采集后对每只票跑规则引擎（C1-C6）→ 去重落库 bomb_alert_history。
+    非交易时段不落库、不请求东财（门控）。采集前先 prune 旧数据（保留期外）。
+    缺数据诚实标注，不臆造。
+    """
+    from risk.seal_intraday_collector import collect_once, prune_old_snapshots, get_latest_snapshots
+    from risk.bomb_alert_rules import check_all_rules
+    from risk.bomb_alert_dispatcher import process_alerts
+
+    # 每日首调 prune（payload 带 prune=True 触发，默认只采集）
+    if payload.get("prune"):
+        retention = int(payload.get("retention_days", 30))
+        pruned = prune_old_snapshots(retention)
+    else:
+        pruned = 0
+
+    result = collect_once()
+    result["pruned"] = pruned
+
+    # 采集成功后跑规则引擎（仅对本次采集的票）
+    if result.get("written", 0) > 0:
+        from datetime import datetime
+        now = datetime.now()
+        latest_snaps = get_latest_snapshots(result.get("date") or now.strftime("%Y-%m-%d"))
+        triggered_total = 0
+        for snap in latest_snaps:
+            code = snap.get("code")
+            name = snap.get("name") or code
+            if not code:
+                continue
+            # 取该 code 全部时序（规则需窗口）
+            from risk.seal_intraday_collector import get_snapshots_by_code
+            snaps = get_snapshots_by_code(code, result.get("date") or now.strftime("%Y-%m-%d"))
+            results = check_all_rules(snaps, code, name, now=now)
+            active = process_alerts(code, name, results, now=now)
+            triggered_total += len(active)
+        result["alerts_triggered"] = triggered_total
+
+    return result
+
+
+# 绑定到 TaskExecutor 类（方法定义在类后，用 setattr 绑定）
+TaskExecutor._execute_seal_intraday_collect = _execute_seal_intraday_collect
+
+
 _manager = ScheduledTaskManager()
 
 
@@ -1010,6 +1062,20 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 sti_post_market 已创建（cron 35 15 * * 0-4）")
+
+    # S055：盘中封单时序采集——交易时段每分钟 tick。
+    # cron `* 9-14 * * 0-4` 覆盖 09:00-14:59，加上 15:00-15:05 的 5 分钟。
+    # 实际门控由 is_intraday_trading_time（09:25-15:05）在 collect_once 内兜底。
+    if "seal_intraday_collect" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="seal_intraday_collect",
+            description="S055 盘中封单时序采集（交易时段 09:25-15:05 每 60s 轮询 em_zt_topic_pool）",
+            task_type="seal_intraday_collect",
+            cron_expr="* 9-14 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 seal_intraday_collect 已创建（cron * 9-14 * * 0-4）")
 
 
 async def stop_scheduler() -> None:
