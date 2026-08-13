@@ -157,11 +157,23 @@ class _IntradaySampler:
         return None
 
     def _t1_baseline(self) -> float | None:
-        """T-1 STI 分数（色带基线）—— 从 SentimentContext 取。"""
+        """T-1 STI 分数（色带基线）—— 从 SentimentContext 取。
+
+        build_context 是模块级函数，但本方法在子线程（asyncio.to_thread）中
+        调用时，_sample_once 里 `from sentiment_context import build_context`
+        的局部 import 作用域不覆盖 _t1_baseline——需在此独立 import。
+        """
         try:
+            from sentiment_context import build_context  # noqa: PLC0415
             ctx = build_context(self.today)
+            if ctx.sti_score is None:
+                logger.warning(
+                    "[intraday] T-1 baseline 为 None（data_status=%s source_date=%s）",
+                    ctx.data_status, ctx.source_date,
+                )
             return ctx.sti_score
-        except Exception:
+        except Exception as exc:
+            logger.warning("[intraday] _t1_baseline 异常: %s", exc)
             return None
 
     def latest(self) -> dict[str, Any] | None:

@@ -193,17 +193,17 @@ def save_intraday(snapshot: dict) -> None:
     """持久化单条盘中 snapshot 到 sti_intraday 表。
 
     snapshot 字段：date, time, zt_count, seal_rate, break_rate, ad_ratio,
-    score, trend, t1_baseline, projected_t1_score, projected_t1_weather,
-    actual_score（后三者可 None）。
+    score, trend, t1_baseline, zone, projected_t1_score, projected_t1_weather,
+    actual_score（后四者可 None）。
     """
     try:
         db = get_db()
         db.execute(
             """INSERT OR REPLACE INTO sti_intraday (
                 date, time, zt_count, seal_rate, break_rate, ad_ratio,
-                score, trend, t1_baseline,
+                score, trend, t1_baseline, zone,
                 projected_t1_score, projected_t1_weather, actual_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 snapshot.get("date"),
                 snapshot.get("time"),
@@ -214,6 +214,7 @@ def save_intraday(snapshot: dict) -> None:
                 snapshot.get("score"),
                 snapshot.get("trend"),
                 snapshot.get("t1_baseline"),
+                snapshot.get("zone"),
                 snapshot.get("projected_t1_score"),
                 snapshot.get("projected_t1_weather"),
                 snapshot.get("actual_score"),
