@@ -1,6 +1,7 @@
 /** 情绪详情页 - 下沉子页 */
 import { useEmotion } from "@/lib/query";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { cn } from "@/lib/utils";
 import { Gauge } from "lucide-react";
 
@@ -8,13 +9,31 @@ const yi = (v: number | null) => (v == null ? "—" : `${(v / 1e8).toFixed(1)} �
 
 export function EmotionDetail() {
   const { data: sentiment, isLoading, error } = useEmotion();
-  
+
+  const emo = sentiment?.emotion;
+  const askAiContext = [
+    `当前页面：市场情绪详情`,
+    `日期：${sentiment?.date ?? "未取得"}`,
+    emo
+      ? `涨停${emo.limit_up_count ?? "--"}/跌停${emo.limit_down_count ?? "--"}/封板率${emo.seal_rate ?? "--"}%/炸板率${emo.broken_rate ?? "--"}%/晋级率${emo.advance_rate ?? "--"}%`
+      : `情绪指标：未取得`,
+    sentiment?.lianban_stocks && sentiment.lianban_stocks.length > 0
+      ? `连板梯队：${sentiment.lianban_stocks.map((s) => `${s.boards}板×${s.code}`).join(" ")}`
+      : `连板梯队：无`,
+    sentiment?.lianban_count != null
+      ? `连板数${sentiment.lianban_count}/炸板${sentiment.zb_count ?? "--"}/昨涨停${sentiment.yzt_count ?? "--"}`
+      : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
-        <Gauge className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">市场情绪详情</h2>
-        {sentiment?.date && <span className="text-sm text-muted-foreground/50">{sentiment.date}</span>}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Gauge className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">市场情绪详情</h2>
+          {sentiment?.date && <span className="text-sm text-muted-foreground/50">{sentiment.date}</span>}
+        </div>
+        <AskAiButton context={askAiContext} />
       </div>
       
       {isLoading && (

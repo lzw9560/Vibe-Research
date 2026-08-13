@@ -1,6 +1,7 @@
 /** 板块资金详情页 - 下沉子页 */
 import { useMarketOverview } from "@/lib/query";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { pctColor, cn } from "@/lib/utils";
 import { TrendingUp } from "lucide-react";
 
@@ -9,12 +10,28 @@ const fmt = (v: number) => v.toLocaleString("zh-CN", { maximumFractionDigits: 2 
 export function SectorDetail() {
   const { data: overview, isLoading } = useMarketOverview();
   const sectors = overview?.sectors || [];
-  
+
+  const inflowTop = [...sectors].sort((a, b) => b.net - a.net).slice(0, 10);
+  const outflowTop = [...sectors].sort((a, b) => a.net - b.net).slice(0, 5);
+  const askAiContext = [
+    `当前页面：板块资金详情`,
+    `板块总数：${sectors.length}`,
+    inflowTop.length > 0
+      ? `资金流入 Top：${inflowTop.map((s) => `${s.name}(+${s.net.toFixed(1)}亿/${s.pct.toFixed(2)}%)`).join("，")}`
+      : `资金流入：未取得`,
+    outflowTop.length > 0
+      ? `资金流出 Top：${outflowTop.map((s) => `${s.name}(${s.net.toFixed(1)}亿/${s.pct.toFixed(2)}%)`).join("，")}`
+      : `资金流出：未取得`,
+  ].join("\n");
+
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
-        <TrendingUp className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">板块资金详情</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">板块资金详情</h2>
+        </div>
+        <AskAiButton context={askAiContext} />
       </div>
       
       {isLoading && (

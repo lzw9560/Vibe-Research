@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { useIndustry } from "@/lib/query";
 import { cn, pctColor } from "@/lib/utils";
 
@@ -29,6 +30,17 @@ export function Industry() {
       })
     : [];
 
+  const askAiContext = [
+    `当前页面：行业排行`,
+    `TOP${topN}行业（共${data?.total ?? 0}个）`,
+    data && allRows.length > 0
+      ? `涨跌幅榜：${allRows.slice(0, 10).map((r) => `${r.name}(${r.change_pct.toFixed(2)}%/涨${r.up_count}/跌${r.down_count})`).join("，")}`
+      : `涨跌幅榜：未取得`,
+    data && data.bottom.length > 0
+      ? `跌幅榜：${data.bottom.slice(0, 5).map((r) => `${r.name}(${r.change_pct.toFixed(2)}%)`).join("，")}`
+      : `跌幅榜：未取得`,
+  ].join("\n");
+
   return (
     <div>
       <PageHeader
@@ -36,6 +48,7 @@ export function Industry() {
         subtitle="全市场行业涨跌幅、上涨/下跌家数一览，按板块维度快速定位强弱"
         actions={
           <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
             <select
               value={topN}
               onChange={(e) => setTopN(Number(e.target.value))}

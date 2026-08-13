@@ -3,17 +3,24 @@ import { Flame, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import sectorsData from "@/data/sectors.json";
 
 export function Sectors() {
   const sectors = sectorsData.sectors;
   const hotCount = sectors.filter((s) => s.hot).length;
+  const askAiContext = [
+    `当前页面：板块中心`,
+    `板块清单：${sectors.length}个赛道（热门${hotCount}个）`,
+    `各板块：${sectors.map((s) => `${s.label}(${s.nodes.length}环节${s.verified ? "/已核实" : "/梳理中"}${s.hot ? "/热门" : ""})`).join("，")}`,
+  ].join("\n");
 
   return (
     <div>
       <PageHeader
         title="板块中心"
         subtitle={`${sectors.length} 个热门赛道的产业链骨架 · 只有环节，不含标的`}
+        actions={<AskAiButton context={askAiContext} />}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -7,9 +7,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { api, ApiError, type RadarData, type Industry, type Announcement, type NewsItem } from "@/lib/api";
 import { loadWatch } from "@/lib/watchlist";
 import { hasLlm, chatStream } from "@/lib/llm";
+import { useRadar } from "@/lib/query";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -301,9 +303,23 @@ export function Intel() {
   const [tab, setTab] = useState("investment-news");
   const cur = TABS.find((t) => t.key === tab)!;
 
+  // 问 AI 上下文——复用投资新闻面板数据（TanStack 缓存命中零成本）
+  const radarQ = useRadar();
+  const rd = radarQ.data;
+  const askAiContext = [
+    `当前页面：资讯雷达`,
+    `当前 Tab：${cur.label}`,
+    rd
+      ? `投资新闻：${rd.stats.total_sources}源/近${rd.recent_days}天/${rd.industries.length}赛道（更新于${rd.generated_at ?? "--"}）`
+      : `投资新闻：未取得`,
+    rd && rd.industries.length > 0
+      ? `各赛道：${rd.industries.map((ind) => `${ind.name}(${ind.items.length}条${ind.items.length > 0 ? "，最近：" + (ind.items[0].title?.slice(0, 30) ?? "") : ""})`).join("；")}`
+      : `各赛道：无`,
+  ].join("\n");
+
   return (
     <div>
-      <PageHeader title="资讯雷达" subtitle="多来源资讯中心：AI 帮你跨源捞资讯、提炼要点" />
+      <PageHeader title="资讯雷达" subtitle="多来源资讯中心：AI 帮你跨源捞资讯、提炼要点" actions={<AskAiButton context={askAiContext} />} />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {TABS.map(({ key, label, icon: Icon, integrated }) => (

@@ -59,23 +59,23 @@ describe("Workflow 首页 (S048)", () => {
   });
 
   it("R3: 历史视角卡片——盘前=快照候选数、盘中=monitoring、盘后=settled", () => {
-    // 注：候选数用 5/6/7 避开 StageCard 步骤序号 1-4（getByText 精确匹配会撞）
+    // 注：候选数用 15/16/17 避开 StageCard 步骤序号 1-4 + PipelineProgressBar 5 节点（getByText 精确匹配会撞）
     qMocks.usePreMarketBriefing.mockReturnValue({
       data: {
         status: "done",
         from_snapshot: true,
         factors: [
-          { factor_id: "f1", candidates: [{ code: "1" }, { code: "2" }, { code: "3" }, { code: "4" }, { code: "5" }] },
+          { factor_id: "f1", candidates: Array.from({ length: 15 }, (_, i) => ({ code: String(i + 1) })) },
         ],
       },
     });
     qMocks.useWorkflowStates.mockReturnValue({
-      data: { date: "2026-07-01", states: [], counts: { monitoring: 6, settled: 7 } },
+      data: { date: "2026-07-01", states: [], counts: { monitoring: 16, settled: 17 } },
     });
     renderAt("/workflow?date=2026-07-01");
-    expect(screen.getByText("5")).toBeInTheDocument();  // 5 快照候选
-    expect(screen.getByText("6")).toBeInTheDocument();  // monitoring
-    expect(screen.getByText("7")).toBeInTheDocument();  // settled
+    expect(screen.getByText("15")).toBeInTheDocument();  // 15 快照候选
+    expect(screen.getByText("16")).toBeInTheDocument();  // monitoring
+    expect(screen.getByText("17")).toBeInTheDocument();  // settled
   });
 
   it("R3: 历史视角无数据 → 显示 --", () => {

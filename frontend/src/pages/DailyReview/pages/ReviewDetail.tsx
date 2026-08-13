@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useDailyReview } from "@/lib/query";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { pctColor, cn } from "@/lib/utils";
 import { Loader2, RefreshCw } from "lucide-react";
 import { ApiError } from "@/lib/api";
@@ -12,12 +13,30 @@ export function ReviewDetail() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [tab, setTab] = useState<"sector" | "zt" | "auction">("sector");
   const { data: report, isLoading, error, refetch } = useDailyReview(date);
-  
+
+  const askAiContext = [
+    `当前页面：复盘报告详情`,
+    `日期：${report?.date ?? date}`,
+    report
+      ? `STI=${report.sti_score ?? "--"}（${report.sti_phase ?? "--"}，变化${report.sti_change ?? "--"}）/涨停${report.zt_total}/跌停${report.dt_total}/炸板${report.zb_total}/上涨${report.advance_count}/下跌${report.decline_count}`
+      : `STI/涨跌停：未取得`,
+    report && report.sector_heat.length > 0
+      ? `板块热度 Top：${report.sector_heat.slice(0, 5).map((s) => s.sector).join("，")}`
+      : `板块热度：无`,
+    report && report.zt_stocks.length > 0
+      ? `涨停股：${report.zt_stocks.slice(0, 10).map((z) => `${z.code}(${z.name})`).join("，")}`
+      : `涨停股：无`,
+    report && report.auction_top.length > 0
+      ? `竞价 Top：${report.auction_top.slice(0, 5).map((a) => a.code).join("，")}`
+      : `竞价 Top：无`,
+  ].join("\n");
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">复盘报告详情</h2>
         <div className="flex items-center gap-2">
+          <AskAiButton context={askAiContext} />
           <input 
             type="date" 
             value={date} 
