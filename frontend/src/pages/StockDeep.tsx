@@ -7,6 +7,7 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { ErrorState, PageSkeleton } from "@/components/ui/State";
 import { KLineChart } from "@/components/charts/KLineChart";
 import { EarningsSnapshot } from "@/components/ui/EarningsSnapshot";
@@ -154,20 +155,65 @@ export function StockDeep() {
   const quote = data.quote;
   const name = quote?.name ?? "";
 
+  // 问 AI 上下文——注入个股深度 12 源聚合真实数据
+  const val = data.valuation;
+  const fin = data.financials;
+  const pctl = data.percentile;
+  const ff = data.fund_flow;
+  const dt = data.dragon_tiger;
+  const lu = data.limitup;
+  const blocks = data.blocks;
+  const askAiContext = [
+    `当前页面：个股深度 - ${code ?? ""} ${name}`,
+    quote
+      ? `行情：现价${quote.price}/涨跌${quote.change_pct.toFixed(2)}%/昨收${quote.last_close}/PE_TTM${quote.pe_ttm}/PB${quote.pb}/换手${quote.turnover_rate}%/涨停价${quote.limit_up_price}/跌停价${quote.limit_down_price}`
+      : `行情：未取得`,
+    val
+      ? `估值：市值${val.mcap_yi}亿/PE_TTM${val.pe_ttm}/PB${val.pb}/EPS26E${val.eps_26e ?? "--"}/EPS27E${val.eps_27e ?? "--"}/PE26E${val.pe_26e ?? "--"}/CAGR${val.cagr_pct ?? "--"}%/PEG${val.peg ?? "--"}/研报数${val.analyst_count}`
+      : `估值：未取得`,
+    pctl
+      ? `估值分位：PE${pctl.metrics.pe_ttm?.current ?? "--"}（${pctl.metrics.pe_ttm?.min ?? "--"}-${pctl.metrics.pe_ttm?.max ?? "--"}区间，当前分位${pctl.metrics.pe_ttm?.percentile ?? "--"}%）`
+      : `估值分位：未取得`,
+    fin
+      ? `财务：营收${fin.revenue ?? "--"}（同比${fin.revenue_yoy ?? "--"}）/净利${fin.net_profit ?? "--"}（同比${fin.net_profit_yoy ?? "--"}）/ROE${fin.roe ?? "--"}/毛利率${fin.gross_margin ?? "--"}%`
+      : `财务：未取得`,
+    ff && ff.length > 0
+      ? `资金流（近${ff.length}日）：${ff.slice(-5).map((r) => `${r.date}主力${(r.main_net / 1e4).toFixed(0)}万`).join("，")}`
+      : `资金流：未取得`,
+    dt && dt.records.length > 0
+      ? `龙虎榜：${dt.records.length}次上榜，最近净买${dt.records[0].net_buy}万（${dt.records[0].date}），机构净${dt.institution.net_amt}万`
+      : `龙虎榜：无`,
+    lu
+      ? `涨停：基因得分${lu.gene_score?.total_score ?? "--"}/250日涨停${lu.gene_score?.zt_count_250d ?? "--"}次`
+      : `涨停：无`,
+    blocks
+      ? `板块：${blocks.boards.length}个（${blocks.boards.slice(0, 3).map((b) => b.name).join("、")}）+概念${blocks.concept_tags.length}个`
+      : `板块：未取得`,
+    data.announcements && data.announcements.length > 0
+      ? `公告：${data.announcements.length}条（最近：${data.announcements[0].title?.slice(0, 20) ?? ""}）`
+      : `公告：无`,
+    data.reports && data.reports.length > 0
+      ? `研报：${data.reports.length}篇（最近：${data.reports[0].title?.slice(0, 20) ?? ""}）`
+      : `研报：无`,
+  ].join("\n");
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={`${code ?? ""} ${name}`}
         subtitle="个股深度"
         actions={
-          quote ? (
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold font-mono">{fmtPrice(quote.price)}</span>
-              <span className={`text-sm font-mono ${pctColor(quote.change_pct)}`}>
-                {fmtPct(quote.change_pct)}
-              </span>
-            </div>
-          ) : undefined
+          <div className="flex items-center gap-3">
+            <AskAiButton context={askAiContext} />
+            {quote ? (
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono">{fmtPrice(quote.price)}</span>
+                <span className={`text-sm font-mono ${pctColor(quote.change_pct)}`}>
+                  {fmtPct(quote.change_pct)}
+                </span>
+              </div>
+            ) : undefined}
+          </div>
         }
       />
 
