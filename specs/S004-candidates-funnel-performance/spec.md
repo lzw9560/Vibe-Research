@@ -1,6 +1,6 @@
 # Spec: S004 — 候选池漏斗 run_funnel 性能优化
 
-> 状态：草案
+> 状态：部分实现（R4 TTL 缓存已落地，S049 D6 收口）——2026-08-13 归档补录。`backend/candidate_funnel/funnel.py:56` `_FUNNEL_CACHE`（TTL 300s）+ `_funnel_cache_key` + `clear_funnel_cache` 已落地。残余：R2 并行化（asyncio.gather）/ R3 top-N 限界 / R5 盘后预计算任务 三项待补；验收 A1/A3/A5 未满足。
 > 作者：Claude ｜日期：2026-07-29
 > 关联：`../S002-打板工作流重构/spec.md`（候选池漏斗 S002）、`../S003-api-bugfix-batch/spec.md`（candidates 事件循环阻塞已修）
 > 技术方案见 `plan.md`；任务拆分见 `tasks.md`。

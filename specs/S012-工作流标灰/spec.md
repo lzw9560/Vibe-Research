@@ -1,6 +1,6 @@
 # Spec: S012 — 工作流标灰（realtime/post_market 桩 + pre_market 清理）
 
-> 状态：草案
+> 状态：已废弃（被 S036 替代实现，commit `041051a`）——S033/S034 落地后桩不再被调用，S036 改方案为端点 early return `not_implemented` 结构化降级（非抛异常）。`backend/routers/workflow.py:320` `_not_implemented()` + 5 端点 early return 已落地；前端三页未实现态。R3 pre_market 死代码清理：grep 零命中，免做。
 > 作者：Claude  日期：2026-07-29
 > 关联：`../S006-系统重写纲领/spec.md`（§5 第 6 步）、`../S011`（状态机接线在本 spec 之前）、`../../ARCHITECTURE.md`（打板工作流）
 

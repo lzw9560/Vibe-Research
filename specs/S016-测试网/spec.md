@@ -1,6 +1,6 @@
 # Spec: S016 — 测试网（后端覆盖率 + IO 录制回放 + 前端 vitest + CI）
 
-> 状态：草案
+> 状态：部分实现（基建已搭，四项缺口待补）——2026-08-13 归档补录。已落地：`backend/pyproject.toml` pytest+coverage 配置（R1/R2）、`backend/conftest.py` DB 隔离 fixture（R1/R2）、`frontend/vitest.config.ts` + 20+ 组件测试（R6 部分）。缺口：R4 IO 录制回放夹具（`backend/tests/contract/baseline/` 仅有 README）、R3 80% 覆盖率门槛（pyproject 注释待定）、R7 回归专项测试、R8 CI 流水线（无 `.github/workflows/`）。
 > 作者：Claude  日期：2026-07-29
 > 关联：`../S006-系统重写纲领/spec.md`（§5 第 10 步）、`../S007`（契约基线夹具）、`../S011`（scheduler/状态机单测）、`../../CLAUDE.md` §2（测试命令）
 
