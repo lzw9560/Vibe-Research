@@ -1483,3 +1483,36 @@ export interface SealSnapshotsResult {
   count: number;
   data_status: "ok" | "missing";
 }
+
+// S064：盯盘教练
+export interface CoachTimetableSlot {
+  slot_id: string;
+  label: string;
+  start: string;
+  end: string;
+  watch: string;
+  judge: string;
+  teaching: string;
+  mode_note: Record<"A" | "B" | "C", string>;
+}
+
+export interface CoachModeRules {
+  label: string;
+  desc: string;
+}
+
+export interface CoachChecklistItem {
+  code: string;
+  name: string;
+  status: string;
+  strategy: string | null;
+  strategy_name: string;
+  entry_condition: string;
+  stop_loss_condition: string;
+  matched_triggers: string[];
+  seal_amount: number | null;
+  bomb_alerts: { rule_id: string; reason: string }[];
+  data_status: "ok" | "missing" | "degraded";
+  max_hold_warning: string | null;
+  attention_mode: string;
+}

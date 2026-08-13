@@ -263,4 +263,13 @@ export const api = {
     get<{ current: { score: number; trend: string; zone: string }; scenarios: import("./api/types").IntradayScenario[]; history_reference: import("./api/types").IntradayHistoryReference }>("/intraday/sentiment/scenarios"),
   intradaySentimentT1Projection: () =>
     get<{ status: string; current_score?: number; scenarios?: import("./api/types").T1ProjectionScenario[]; disclaimer?: string; as_of?: string; message?: string }>("/intraday/sentiment/t1-projection"),
+  // S064：盯盘教练
+  coachTimetable: () =>
+    get<{ slots: import("./api/types").CoachTimetableSlot[]; current_slot_id: string | null; current_time: string; status: string }>("/coach/timetable"),
+  coachStatus: (date?: string) =>
+    get<{ date: string; current_time: string; current_slot: import("./api/types").CoachTimetableSlot | null; slot_status: string; attention_mode: string; mode_rules: import("./api/types").CoachModeRules; checklist: import("./api/types").CoachChecklistItem[]; is_trading_day: boolean }>(`/coach/status${date ? `?date=${date}` : ""}`),
+  coachAttentionModeGet: (date?: string) =>
+    get<{ date: string; attention_mode: string; rules: import("./api/types").CoachModeRules }>(`/coach/attention-mode${date ? `?date=${date}` : ""}`),
+  coachAttentionModeSet: (mode: string) =>
+    request<{ date: string; attention_mode: string }>("/coach/attention-mode", "POST", { mode }),
 };
