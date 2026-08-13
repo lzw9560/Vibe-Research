@@ -35,7 +35,12 @@ class TestCandidateFunnelDefaults(unittest.TestCase):
 
     def test_cache_ttl(self):
         cfg = AssistantDefaultConfig()
-        self.assertEqual(cfg.CANDIDATE_FUNNEL_CACHE_TTL, 60)
+        # S004 R5：TTL 默认 3600s（盘后预计算长 TTL，收盘数据已定无 stale 风险）
+        self.assertEqual(cfg.CANDIDATE_FUNNEL_CACHE_TTL, 3600)
+
+    def test_max_r2(self):
+        cfg = AssistantDefaultConfig()
+        self.assertEqual(cfg.CANDIDATE_FUNNEL_MAX_R2, 80)
 
 
 if __name__ == "__main__":

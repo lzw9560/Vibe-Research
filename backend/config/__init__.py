@@ -185,7 +185,8 @@ class AssistantDefaultConfig(NotificationConfig):
             "watchlist_in": True,
         }
     )
-    CANDIDATE_FUNNEL_CACHE_TTL: int = 60
+    CANDIDATE_FUNNEL_CACHE_TTL: int = 3600  # S004 R5：盘后预计算后长 TTL（收盘数据已定，无 stale 风险）
+    CANDIDATE_FUNNEL_MAX_R2: int = 80  # S004 R3：R2 收敛前 top-N 限界（按 gene_score 降序）
 
     # === ML过滤（未来实验方向，当前默认关闭） ===
     # 以下字段为未来 ML 实验预留，当前未使用
@@ -289,6 +290,18 @@ def load_config() -> AssistantDefaultConfig:
     if os.getenv("VR_BATCH_SIZE"):
         cfg.BATCH_SIZE = _parse_int(
             "VR_BATCH_SIZE", os.getenv("VR_BATCH_SIZE"), cfg.BATCH_SIZE,
+        )
+
+    # S004：候选池漏斗性能
+    if os.getenv("VR_CANDIDATE_FUNNEL_MAX_R2"):
+        cfg.CANDIDATE_FUNNEL_MAX_R2 = _parse_int(
+            "VR_CANDIDATE_FUNNEL_MAX_R2", os.getenv("VR_CANDIDATE_FUNNEL_MAX_R2"),
+            cfg.CANDIDATE_FUNNEL_MAX_R2,
+        )
+    if os.getenv("VR_CANDIDATE_FUNNEL_CACHE_TTL"):
+        cfg.CANDIDATE_FUNNEL_CACHE_TTL = _parse_int(
+            "VR_CANDIDATE_FUNNEL_CACHE_TTL", os.getenv("VR_CANDIDATE_FUNNEL_CACHE_TTL"),
+            cfg.CANDIDATE_FUNNEL_CACHE_TTL,
         )
 
     return cfg

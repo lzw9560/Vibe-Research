@@ -53,8 +53,17 @@ def _fetch_sentiment_phase(date: str, ctx: "SentimentContext | None" = None) -> 
 
 # S049 D6：run_funnel (date,config) TTL 缓存——_collect（因子）与 _build_funnel_layers（漏斗）
 # 各跑一遍会重复外部请求；缓存命中即复用。rerun 不受影响（done 即清）。
+# S004 R5：TTL 接线 config.CANDIDATE_FUNNEL_CACHE_TTL（默认 3600s，盘后预计算长 TTL）。
 _FUNNEL_CACHE: dict[str, tuple[float, "FunnelResult"]] = {}
-_FUNNEL_CACHE_TTL = 300  # 5 分钟
+
+
+def _funnel_cache_ttl() -> int:
+    """从 config 读 TTL（惰性，避免模块导入时 config 未就绪）。"""
+    try:
+        from config import default_config
+        return int(getattr(default_config, "CANDIDATE_FUNNEL_CACHE_TTL", 3600))
+    except Exception:
+        return 3600
 
 
 def _funnel_cache_key(date: str, cfg: ThresholdConfig) -> str:
@@ -75,6 +84,21 @@ def _filter_r1(codes: list[str], genes: dict[str, dict]) -> tuple[list[str], lis
         else:
             kept.append(c)
     return kept, filtered
+
+
+def _top_n_by_gene_score(codes: list[str], genes: dict[str, dict], n: int) -> list[str]:
+    """S004 R3：按 gene_score 降序取前 N 候选（top-N 限界，不引入新排序口径）。
+
+    gene_score 缺失/None 按 0 处理；同分按 code 字典序稳定排序。
+    n<=0 或 codes 不足 n 时返 codes 全量（不截断）。
+    """
+    if n <= 0 or len(codes) <= n:
+        return list(codes)
+    def _score(c: str) -> float:
+        g = genes.get(c, {})
+        s = g.get("gene_score")
+        return float(s) if s is not None else 0.0
+    return sorted(codes, key=lambda c: (-_score(c), c))[:n]
 
 
 def _filter_r2(
@@ -210,7 +234,7 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentConte
     key = _funnel_cache_key(date, cfg)
     now = time.time()
     hit = _FUNNEL_CACHE.get(key)
-    if hit and now - hit[0] < _FUNNEL_CACHE_TTL:
+    if hit and now - hit[0] < _funnel_cache_ttl():
         return hit[1]
     result = _run_funnel_impl(stage, date, cfg, ctx)
     _FUNNEL_CACHE[key] = (now, result)
@@ -228,7 +252,6 @@ def run_funnel_force(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
 
 
 def clear_funnel_cache(date: str | None = None) -> None:
-    """清缓存（done 即清，或按 date 清）。"""
     if date is None:
         _FUNNEL_CACHE.clear()
         return
@@ -240,34 +263,54 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     """R1→R2→R3 + 自选并行实现（无缓存，由 run_funnel 包裹缓存）。
 
     S063 T5：ctx 优先——管线头部 SentimentContext 下传 weather_state + source_date。
+    S004 R3：R2 采集前按 gene_score 降序取 top-N 限界（config.CANDIDATE_FUNNEL_MAX_R2）。
+    S004 R2：三组独立外部源用 ThreadPoolExecutor(max_workers=2) 并行采集
+    （R1 genes∥board、R2 activity∥fund、R3 auction∥catalyst）。
     """
+    from concurrent.futures import ThreadPoolExecutor
+    from config import default_config
     as_of = datetime.now()
     phase = _fetch_sentiment_phase(date, ctx)
     eff = resolve_thresholds(cfg, phase)
     # 情绪档位标注（conditions 复用）
     phase_note = f"情绪档位={phase or '未取得'}" if phase else "情绪档位未取得，沿用基数"
     current_stage = _STAGE_MAP.get(stage, "s1")
+    max_r2 = int(getattr(default_config, "CANDIDATE_FUNNEL_MAX_R2", 80))
     base_conditions = [
         f"换手冷档={eff.turnover_cold}%",
         f"换手热档={eff.turnover_hot}%",
         f"量比活跃线={eff.vol_ratio_active}",
         f"成交额下限={eff.amount_yi_min}亿",
         f"数据阶段={current_stage}（offset=1 北向/龙虎榜缺数据标 missing 保留）",
+        f"R2 top-N 限界：取前 {max_r2} 候选（按 gene_score 降序）",
         phase_note,
     ]
 
-    # ---- R1 宽源 ----
+    def _fetch_pair(fn_a, fn_b):
+        """并行采集两个独立源，任一失败返空 dict 不阻断另一个。"""
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            fu_a = ex.submit(fn_a)
+            fu_b = ex.submit(fn_b)
+            a = fu_a.result()
+            b = fu_b.result()
+        return a, b
+
+    # ---- R1 宽源（并行）----
     r1_data_status: str | None = None
     r1_data_reason: str | None = None
     try:
-        genes = sources.gene.fetch_genes(date)
-        board = sources.board_ladder.fetch_board_ladder(date)
+        genes, board = _fetch_pair(
+            lambda: sources.gene.fetch_genes(date),
+            lambda: sources.board_ladder.fetch_board_ladder(date),
+        )
     except Exception as exc:  # noqa: BLE001 — 采集失败标记层，不静默返空（S023 C2）
         genes, board = {}, {}
         r1_data_status = "未取得"
         r1_data_reason = f"R1 宽源采集失败: {exc}"
     r1_input = list(genes.keys())
     r1_kept, r1_filtered = _filter_r1(r1_input, genes)
+    # S004 R3：top-N 限界——R2 采集前按 gene_score 降序取前 max_r2（R1 全量保留展示）
+    r2_input_codes = _top_n_by_gene_score(r1_kept, genes, max_r2)
     r1 = FunnelLayer(
         layer_id="R1", name="宽源", as_of=as_of,
         input_count=len(r1_input), output_count=len(r1_kept),
@@ -283,12 +326,14 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     )
     layers: list[FunnelLayer] = [r1]
 
-    # ---- R2 收敛 ----
+    # ---- R2 收敛（并行）----
     r2_data_status: str | None = None
     r2_data_reason: str | None = None
     try:
-        activity = sources.activity.fetch_activity(r1_kept, date)
-        fund = sources.fund_flow.fetch_fund_flow(r1_kept, date)
+        activity, fund = _fetch_pair(
+            lambda: sources.activity.fetch_activity(r2_input_codes, date),
+            lambda: sources.fund_flow.fetch_fund_flow(r2_input_codes, date),
+        )
     except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
         activity, fund = {}, {}
         r2_data_status = "未取得"
@@ -326,12 +371,14 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     )
     layers.append(r2)
 
-    # ---- R3 定稿 ----
+    # ---- R3 定稿（并行）----
     r3_data_status: str | None = None
     r3_data_reason: str | None = None
     try:
-        auction = sources.auction.fetch_auction(date)
-        catalyst = sources.catalyst.fetch_catalyst(r2_kept, date)
+        auction, catalyst = _fetch_pair(
+            lambda: sources.auction.fetch_auction(date),
+            lambda: sources.catalyst.fetch_catalyst(r2_kept, date),
+        )
     except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
         auction, catalyst = {}, {}
         r3_data_status = "未取得"

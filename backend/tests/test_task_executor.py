@@ -26,6 +26,7 @@ def _run(coro):
 # S041 新增 daily_backtest_run（每日回测快照）。
 # S063 新增 sti_post_market（盘后 STI 定时计算）。
 # S055 新增 seal_intraday_collect（盘中封单时序采集）。
+# S004 新增 candidate_funnel_precompute（盘后漏斗预计算）。
 _EXPECTED_TASK_TYPES = {
     "daily_data_refresh",
     "daily_review_notify",
@@ -36,6 +37,7 @@ _EXPECTED_TASK_TYPES = {
     "daily_backtest_run",
     "sti_post_market",
     "seal_intraday_collect",
+    "candidate_funnel_precompute",
 }
 
 

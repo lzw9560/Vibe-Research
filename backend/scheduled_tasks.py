@@ -444,6 +444,7 @@ class TaskExecutor:
             "daily_backtest_run": self._execute_daily_backtest_run,  # S041：回测定时任务
             "sti_post_market": self._execute_sti_post_market,  # S063 T3：STI 盘后定时计算
             "seal_intraday_collect": self._execute_seal_intraday_collect,  # S055：盘中封单时序采集
+            "candidate_funnel_precompute": self._execute_candidate_funnel_precompute,  # S004 R5：盘后漏斗预计算
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -843,6 +844,37 @@ def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, A
 TaskExecutor._execute_seal_intraday_collect = _execute_seal_intraday_collect
 
 
+def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S004 R5：盘后漏斗预计算——预热 _FUNNEL_CACHE，盘后复盘页即时读缓存。
+
+    取 date（默认最近交易日）→ run_funnel("all", date, live_config) →
+    结果落 _FUNNEL_CACHE（TTL 由 config.CANDIDATE_FUNNEL_CACHE_TTL 控制，默认 3600s）。
+    失败 catch 不抛，返 status=error（预计算是增强，不阻塞主流程）。
+    """
+    try:
+        from candidate_funnel import funnel as funnel_mod
+        from candidate_funnel.models import ThresholdConfig
+        from vr_paths import last_trading_date_str
+        target = payload.get("date") or last_trading_date_str()
+        # 复用 candidates 路由的 live config（用户调参后一致）
+        try:
+            from routers.candidates import _store
+            cfg = _store["config"]
+            if not isinstance(cfg, ThresholdConfig):
+                cfg = ThresholdConfig(**cfg) if isinstance(cfg, dict) else ThresholdConfig()
+        except Exception:
+            cfg = ThresholdConfig()
+        funnel_mod.run_funnel("all", target, cfg)
+        logger.info("[candidate_funnel_precompute] %s 漏斗预计算完成（缓存已预热）", target)
+        return {"date": target, "status": "ok"}
+    except Exception as e:
+        logger.warning("[candidate_funnel_precompute] 预计算失败: %s", e)
+        return {"status": f"error: {e}"}
+
+
+TaskExecutor._execute_candidate_funnel_precompute = _execute_candidate_funnel_precompute
+
+
 _manager = ScheduledTaskManager()
 
 
@@ -1076,6 +1108,18 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 seal_intraday_collect 已创建（cron * 9-14 * * 0-4）")
+
+    # S004 R5：盘后漏斗预计算——晚 STI 30 分钟避抢 DB。
+    if "candidate_funnel_precompute" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="candidate_funnel_precompute",
+            description="S004 盘后漏斗预计算（预热 _FUNNEL_CACHE，盘后复盘页即时读缓存）",
+            task_type="candidate_funnel_precompute",
+            cron_expr="5 16 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 candidate_funnel_precompute 已创建（cron 5 16 * * 0-4）")
 
 
 async def stop_scheduler() -> None:
