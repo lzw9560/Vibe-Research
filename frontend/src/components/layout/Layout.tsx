@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
   LineChart, Menu, Sun, Moon, ChevronsLeft, ChevronsRight,
@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useDarkMode";
-import { NAV_GROUPS, APP_VERSION, REPO_URL } from "./navigation";
+import { NAV_GROUPS, APP_VERSION, REPO_URL, SUB_TABS } from "./navigation";
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -38,6 +38,16 @@ export function Layout() {
   useEffect(() => {
     const active = getActiveGroup();
     if (active !== expandedGroup) setExpandedGroup(active);
+  }, [pathname]);
+
+  // 二级 sub tabs：匹配 SUB_TABS 前缀，有则渲染横向 TabBar（无则隐藏）
+  const subTabs = useMemo(() => {
+    const matched = Object.keys(SUB_TABS)
+      .filter(prefix => pathname.startsWith(prefix))
+      .sort((a, b) => b.length - a.length); // 最长前缀优先（/sentiment/weather 优先于 /sentiment）
+    if (matched.length === 0) return null;
+    const key = matched[0];
+    return { tabs: SUB_TABS[key], prefix: key };
   }, [pathname]);
 
   return (
@@ -234,6 +244,46 @@ export function Layout() {
         )}
 
         <div className="mx-auto max-w-6xl px-6 py-6">
+          {subTabs && (
+            <nav className="mb-4 flex flex-wrap items-center gap-1 rounded-lg bg-muted/20 p-1" aria-label="二级导航">
+              {subTabs.tabs.map((tab) => {
+                const tabTo = tab.to ?? `${subTabs.prefix === "/stock/" ? pathname : subTabs.prefix}${tab.key ? `?tab=${tab.key}` : ""}`;
+                const isActive = tab.to
+                  ? pathname === tab.to
+                  : (new URLSearchParams(window.location.search).get("tab") ?? subTabs.tabs[0]?.key) === tab.key;
+                if (tab.to) {
+                  return (
+                    <Link
+                      key={tab.key}
+                      to={tab.to}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                        isActive
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/30",
+                      )}
+                    >
+                      {tab.label}
+                    </Link>
+                  );
+                }
+                return (
+                  <Link
+                    key={tab.key}
+                    to={tabTo}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/30",
+                    )}
+                  >
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
           <Outlet />
         </div>
       </main>

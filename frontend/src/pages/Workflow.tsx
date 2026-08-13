@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
+import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { useWorkflowStatus, usePreMarketBriefing, usePreMarketDates, useWorkflowStates } from "@/lib/query";
 
 // ---- 类型定义 ----
@@ -63,6 +65,13 @@ function getAStockTimeInfo(): {
   } else { // 22:00 - 07:59 非交易时段
     return { hours: h, minutes: m, stageKey: "pre-market", marketStatus: "休市中", nextStageKey: "pre-market", nextStageTime: "08:00" };
   }
+}
+
+/** stageKey → PipelineProgressBar current 映射 */
+function stageToPipeline(stageKey: string): "t1" | "ctx" | "pre" | "intraday" | "post" {
+  if (stageKey === "pre-market") return "pre";
+  if (stageKey === "intraday") return "intraday";
+  return "post";
 }
 
 /** 计算距离下一个阶段的分钟数 */
@@ -151,77 +160,6 @@ const STAGE_CONFIG: Record<string, {
 };
 
 const STAGE_ORDER = ["pre-market", "intraday", "post-market"];
-
-// ---- Session Map 组件 ----
-function SessionMap({ currentStage }: { currentStage: string }) {
-  return (
-    <GlassCard className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">今日交易时段</h4>
-        <span className="text-xs text-muted-foreground/60">实时更新</span>
-      </div>
-
-      {/* 时间线 */}
-      <div className="relative">
-        {/* 背景轨道 */}
-        <div className="absolute inset-x-0 top-5 h-1 rounded-full bg-muted/30" />
-
-        {/* 进度填充（根据当前时间动态） */}
-        <div
-          className="absolute inset-y-0 left-0 h-1 rounded-full bg-primary/40 transition-all duration-1000"
-          style={{
-            width: currentStage === "pre-market" ? "33%" : currentStage === "intraday" ? "66%" : "100%",
-          }}
-        />
-
-        {/* 时段节点 */}
-        <div className="relative flex justify-between">
-          {STAGE_ORDER.map((key, i) => {
-            const config = STAGE_CONFIG[key];
-            const isCurrent = key === currentStage;
-            const isPast = STAGE_ORDER.indexOf(currentStage) > i;
-            const Icon = config.icon;
-
-            return (
-              <div key={key} className="flex flex-col items-center gap-2">
-                {/* 节点圆 */}
-                <div
-                  className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all",
-                    isCurrent
-                      ? cn("border-primary bg-primary/20", "animate-pulse")
-                      : isPast
-                        ? cn("border-emerald-500/60 bg-emerald-500/10")
-                        : "border-muted/40 bg-muted/10",
-                  )}
-                >
-                  <Icon className={cn("h-5 w-5", isCurrent ? config.color : isPast ? "text-emerald-400" : "text-muted-foreground/40")} />
-                </div>
-
-                {/* 标签 */}
-                <div className="text-center">
-                  <p className={cn(
-                    "text-xs font-medium",
-                    isCurrent ? "text-primary" : isPast ? "text-emerald-400/70" : "text-muted-foreground/50",
-                  )}>
-                    {config.label}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/40">{config.timeRange}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 当前时间标记 */}
-      <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground/50">
-        <Activity className="h-3 w-3 animate-pulse text-primary" />
-        <span>当前: {getAStockTimeInfo().marketStatus}</span>
-      </div>
-    </GlassCard>
-  );
-}
 
 // ---- 阶段步骤项 ----
 function StepItem({ label, index, isActive, isPast }: { label: string; index: number; isActive: boolean; isPast: boolean }) {
@@ -496,8 +434,11 @@ export default function Workflow() {
         }
       />
 
-      {/* Session Map — 横向时间线 */}
-      <SessionMap currentStage={currentStage} />
+      {/* S063 风格顶部条：天气决策条 + 流水线进度（替代旧 SessionMap） */}
+      <WeatherDecisionBar ctx={histBriefing?.sentiment_context} />
+      <div className="mb-2">
+        <PipelineProgressBar current={stageToPipeline(status?.stageKey ?? "pre-market")} />
+      </div>
 
       {/* I1：历史快照日期 chips（有快照的日期可点击跳转；当前选中高亮） */}
       {datesData?.dates && datesData.dates.length > 0 && (

@@ -328,7 +328,7 @@ def _not_implemented(message: str, spec: str = "S036") -> Dict[str, Any]:
 
 
 @router.get("/api/workflow/status")
-async def get_workflow_status() -> Dict[str, Any]:
+def get_workflow_status() -> Dict[str, Any]:
     """
     Get current workflow status based on market time.
 
@@ -358,11 +358,22 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
     if _cache["data_date"] == d:
         status = _cache["status"]
         if status == "idle":
-            return {
-                "status": "idle",
-                "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
-                "data_date": None,
-            }
+            # 闭环降级：idle 也降级 build_context 返天气条数据，避免前端"未取得"
+            try:
+                ctx = await asyncio.to_thread(build_context, d)
+                return {
+                    "status": "idle",
+                    "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
+                    "data_date": None,
+                    "sentiment_context": ctx.to_dict(),
+                }
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("idle 降级 build_context 失败 %s: %s", d, exc)
+                return {
+                    "status": "idle",
+                    "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
+                    "data_date": None,
+                }
         resp: dict[str, Any] = {
             "status": status,
             "data_date": _cache["data_date"],
@@ -408,11 +419,22 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
         }
 
     if d == last_trading_date_str():
-        return {
-            "status": "idle",
-            "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
-            "data_date": None,
-        }
+        # 闭环降级：当日 idle 也降级 build_context 返天气条数据，避免前端"未取得"
+        try:
+            ctx = await asyncio.to_thread(build_context, d)
+            return {
+                "status": "idle",
+                "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
+                "data_date": None,
+                "sentiment_context": ctx.to_dict(),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("当日 idle 降级 build_context 失败 %s: %s", d, exc)
+            return {
+                "status": "idle",
+                "msg": "未采集，请先 POST /api/workflow/pre-market/refresh",
+                "data_date": None,
+            }
 
     return {
         "status": "no_snapshot",
@@ -422,13 +444,13 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
 
 
 @router.get("/api/workflow/pre-market/dates")
-async def get_pre_market_dates() -> Dict[str, Any]:
+def get_pre_market_dates() -> Dict[str, Any]:
     """S048 R5：有快照的日期降序列表（供日期选择器标注）。"""
     return {"dates": _list_snapshot_dates()}
 
 
 @router.post("/api/workflow/pre-market/refresh")
-async def refresh_pre_market(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+def refresh_pre_market(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
     """触发后台异步采集（S026）：立即返回 run_id+status=running，不阻塞。
 
     并发守卫：status==running 时返"已有采集在跑"+现有 run_id
@@ -461,7 +483,7 @@ async def run_pre_market_workflow(date: Optional[str] = Query(None, description=
 
 
 @router.get("/api/workflow/realtime")
-async def get_realtime_workflow() -> Dict[str, Any]:
+def get_realtime_workflow() -> Dict[str, Any]:
     """盘中监控未实现（S036 标灰）——不跑 run_intraday 桩，返回结构化降级。"""
     return _not_implemented("盘中监控未实现")
 
@@ -474,13 +496,13 @@ async def get_intraday_workflow_alias() -> Dict[str, Any]:
 
 
 @router.get("/api/workflow/post-market")
-async def get_post_market_workflow() -> Dict[str, Any]:
+def get_post_market_workflow() -> Dict[str, Any]:
     """盘后复盘未实现（S036 标灰）——不跑 run_post_market 桩，返回结构化降级。"""
     return _not_implemented("盘后复盘未实现")
 
 
 @router.get("/api/workflow/verification-card")
-async def get_verification_card(date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+def get_verification_card(date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
     """S060：明日验证条件对账卡——返当日生成 + 对账结果。
 
     缺数据条件 status=data_missing 诚实标注，不臆造。
@@ -511,7 +533,7 @@ async def get_verification_card(date: str = Query(None, description="交易日 Y
 
 
 @router.post("/api/workflow/verification-card/generate")
-async def generate_verification_card(date: str = Query(None, description="生成日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+def generate_verification_card(date: str = Query(None, description="生成日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
     """S060：手动触发条件生成（盘后调度自动跑，此端点供手动补跑）。"""
     try:
         from workflow.verification_card import generate_and_save
@@ -536,7 +558,7 @@ async def generate_verification_card(date: str = Query(None, description="生成
 
 
 @router.post("/api/workflow/verification-card/verify")
-async def verify_verification_card() -> Dict[str, Any]:
+def verify_verification_card() -> Dict[str, Any]:
     """S060：手动触发 T+1 对账（盘后调度自动跑，此端点供手动补跑）。"""
     try:
         from workflow.verification_card import verify_and_update
@@ -553,7 +575,7 @@ async def verify_verification_card() -> Dict[str, Any]:
 
 
 @router.post("/api/workflow/refresh")
-async def refresh_workflow() -> Dict[str, Any]:
+def refresh_workflow() -> Dict[str, Any]:
     """
     Manually trigger workflow refresh.
     """
@@ -569,25 +591,25 @@ async def refresh_workflow() -> Dict[str, Any]:
 
 
 @router.get("/api/workflow/signals")
-async def get_realtime_signals() -> Dict[str, Any]:
+def get_realtime_signals() -> Dict[str, Any]:
     """盘中信号未实现（S036 标灰）——不读 intraday.signals 桩，返回结构化降级。"""
     return _not_implemented("盘中信号未实现")
 
 
 @router.get("/api/workflow/alerts")
-async def get_bomb_alerts() -> Dict[str, Any]:
+def get_bomb_alerts() -> Dict[str, Any]:
     """炸板预警未实现（S036 标灰）——不读 active_alerts 桩，返回结构化降级。"""
     return _not_implemented("炸板预警未实现")
 
 
 @router.post("/api/workflow/settle")
-async def settle_position() -> Dict[str, Any]:
+def settle_position() -> Dict[str, Any]:
     """盘后批量结算未实现（S036 标灰）——用状态机流转 settled 触发结算（见 S034）。"""
     return _not_implemented("盘后批量结算未实现，请用状态机流转 settled 触发结算（S034）")
 
 
 @router.get("/api/workflow/strategies")
-async def get_strategies() -> Dict[str, Any]:
+def get_strategies() -> Dict[str, Any]:
     """
     Get list of 8 limit-up strategies.
     """
@@ -650,7 +672,7 @@ async def match_strategy(name: str, code: str = Query(..., description="股票�
 
 
 @router.get("/api/workflow/win-rate")
-async def get_win_rate() -> Dict[str, Any]:
+def get_win_rate() -> Dict[str, Any]:
     """
     Get win rate statistics.
     """
@@ -669,7 +691,7 @@ async def get_win_rate() -> Dict[str, Any]:
 
 
 @router.get("/api/workflow/adjustments")
-async def get_adjustments() -> Dict[str, Any]:
+def get_adjustments() -> Dict[str, Any]:
     """
     Get strategy adjustment suggestions.
     """
@@ -702,7 +724,7 @@ class _TransitionRequest(BaseModel):
 
 
 @router.get("/api/workflow/state")
-async def get_workflow_states(date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
+def get_workflow_states(date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
     """S032 R10：查询某日全部 (code) 的工作流状态 + 按态计数。"""
     try:
         d = date or last_trading_date_str()
@@ -716,7 +738,7 @@ async def get_workflow_states(date: Optional[str] = Query(None, description="日
 
 
 @router.post("/api/workflow/state/transition")
-async def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
+def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
     """S032 R10：手动流转（candidate→watching→monitoring→holding→settled）。
 
     盘中自动推进/盘后自动结算未实现（S012 桩范围），故除盘前自动落
@@ -793,7 +815,7 @@ def _settle_on_transition(
 
 
 @router.get("/api/workflow/state/{code}")
-async def get_single_workflow_state(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
+def get_single_workflow_state(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
     """S033 R3：单股工作流状态 + 当前态允许的目标态（无记录 404）。
 
     路由顺序注意：本端点须先于 /state/{code}/history 注册（FastAPI 按注册序匹配）。
@@ -821,7 +843,7 @@ async def get_single_workflow_state(code: str, date: Optional[str] = Query(None,
 
 
 @router.get("/api/workflow/state/{code}/history")
-async def get_workflow_state_history(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；不传则全部")) -> Dict[str, Any]:
+def get_workflow_state_history(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；不传则全部")) -> Dict[str, Any]:
     """S032 R10：某股流转历史（可按日期过滤）。"""
     try:
         history = _wf_state_repo.get_history(code, date)
