@@ -661,6 +661,19 @@ class TaskExecutor:
                 target, sti_result.score,
                 sti_result.phase.value if sti_result.phase else None,
             )
+            # S065：STI 成功后落 weather_history 快照（失败不阻断主流程）
+            try:
+                from routers.sentiment_weather import compute_weather_snapshot
+                from weather_history import save_weather_snapshot
+                snapshot = compute_weather_snapshot(target)
+                if snapshot.get("data_status") == "ok":
+                    save_weather_snapshot(snapshot)
+                    logger.info(
+                        "[sti_post_market] %s weather_history 快照已落库：%s",
+                        target, snapshot.get("weather_state"),
+                    )
+            except Exception as we:
+                logger.warning("[sti_post_market] weather_history 落库失败（不阻断）: %s", we)
         except Exception as e:
             logger.exception("[sti_post_market] STI 计算失败: %s", e)
             results["status"] = f"error: {e}"

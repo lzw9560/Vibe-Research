@@ -761,6 +761,78 @@ def get_weather_events(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
 
 
 # =============================================================================
+# S065：weather_history 持久化——compute + 查询端点
+# =============================================================================
+
+def compute_weather_snapshot(date: str) -> Dict[str, Any]:
+    """计算某日 weather 快照（纯函数，复用 _calculate_*_for_date）。
+
+    sti_timeline 无该日行 → data_status=missing，不臆造。
+    """
+    sti = _get_latest_sti_for_date(date)
+    sti_score = sti.get("score")
+    if sti_score is None:
+        return {
+            "date": date,
+            "weather_state": "未知",
+            "data_status": "missing",
+            "sti_score": None,
+        }
+    risk_score = _calculate_risk_score_for_date(date)
+    sector_continuity = _calculate_sector_continuity_for_date(date)
+    capital_momentum = _calculate_capital_momentum_for_date(date)
+    public_sentiment = _calculate_public_sentiment_for_date(date)
+    weather = _calculate_weather_state(
+        sti_score, risk_score, sector_continuity,
+        capital_momentum, public_sentiment,
+    )
+    return {
+        "date": date,
+        "weather_state": weather["weather_state"],
+        "composite_score": weather["composite_score"],
+        "sti_score": sti_score,
+        "risk_score": round(risk_score, 1),
+        "sector_continuity": round(sector_continuity, 1),
+        "capital_momentum": round(capital_momentum, 1),
+        "public_sentiment": round(public_sentiment, 1),
+        "phase": sti.get("phase"),
+        "confidence": weather.get("confidence"),
+        "data_status": "ok",
+    }
+
+
+def _get_latest_sti_for_date(date: str) -> Dict[str, Any]:
+    """读 sti_timeline 某日行（不取 latest，按 date 精确查）。"""
+    try:
+        db = _get_db()
+        row = db.execute(
+            "SELECT * FROM sti_timeline WHERE date = ?", (date,)
+        ).fetchone()
+        if row is None:
+            return {"score": None, "phase": None, "date": date}
+        return {
+            "score": float(row["score"]) if row["score"] is not None else None,
+            "phase": row["phase"],
+            "date": row["date"],
+        }
+    except Exception:
+        return {"score": None, "phase": None, "date": date}
+    finally:
+        db.close()
+
+
+@router.get("/api/sentiment/weather/history")
+def get_weather_history_endpoint(days: int = Query(90, ge=1, le=365)) -> Dict[str, Any]:
+    """获取持久化的 weather_history 快照（S065，W1 证据层前置）。"""
+    try:
+        from weather_history import get_weather_history as _get_hist  # noqa: PLC0415
+        rows = _get_hist(days)
+        return {"data": {"history": rows, "count": len(rows)}}
+    except Exception as e:
+        raise HTTPException(502, f"weather_history 查询异常：{e}") from e
+
+
+# =============================================================================
 # V2.0.3 新增：竞价阶段指标
 # =============================================================================
 
