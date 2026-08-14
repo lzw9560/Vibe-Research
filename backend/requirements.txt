@@ -2,6 +2,7 @@ akshare==1.18.81
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.14.2
+baostock==0.9.30
 beautifulsoup4==4.15.0
 Boruta==0.4.3
 catboost==1.2.10
