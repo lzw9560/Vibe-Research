@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "description": "资讯雷达赛道 -> 东财行业分类映射表。一个雷达赛道可映射到多个东财行业。手动维护，赛道增减时更新。",
+    "radar_tracks": "12 赛道来自 backend/news_sources.json 的 industries[].key/name",
+    "eastmoney_industries": "东财行业板块分类（~100 个，来自 industry_comparison f14 name）",
+    "updated": "2026-08-14",
+    "note": "映射用于资讯雷达三层接入（§10）：板块资讯热度、催化上下文、风险雷达关键词命中。"
+  },
+  "mappings": {
+    "ai": {
+      "radar_name": "AI / 大模型",
+      "eastmoney_industries": ["计算机", "软件服务", "通信", "互联网", "云服务", "人工智能"]
+    },
+    "semi": {
+      "radar_name": "半导体 / 芯片",
+      "eastmoney_industries": ["电子", "半导体", "芯片", "集成电路", "光电子"]
+    },
+    "robot": {
+      "radar_name": "机器人 / 自动化",
+      "eastmoney_industries": ["机械设备", "自动化", "工业母机", "机器人"]
+    },
+    "auto": {
+      "radar_name": "汽车 / 新能源车",
+      "eastmoney_industries": ["汽车", "新能源", "电池", "零部件", "汽车整车"]
+    },
+    "energy": {
+      "radar_name": "能源 / 新能源",
+      "eastmoney_industries": ["电力", "新能源", "光伏", "风电", "储能", "煤炭", "石油"]
+    },
+    "bio": {
+      "radar_name": "生物医药 / 健康",
+      "eastmoney_industries": ["医药", "医疗器械", "生物制品", "中药", "医疗服务"]
+    },
+    "space": {
+      "radar_name": "航天 / 太空",
+      "eastmoney_industries": ["航天", "航空", "国防", "军工"]
+    },
+    "security": {
+      "radar_name": "网络安全",
+      "eastmoney_industries": ["计算机", "网络安全", "通信"]
+    },
+    "tech": {
+      "radar_name": "科技 / 互联网",
+      "eastmoney_industries": ["计算机", "互联网", "通信", "电子", "软件服务"]
+    },
+    "consumer": {
+      "radar_name": "消费电子 / 数码",
+      "eastmoney_industries": ["电子", "消费电子", "家电", "元器件"]
+    },
+    "macro": {
+      "radar_name": "财经 / 宏观",
+      "eastmoney_industries": [],
+      "note": "宏观赛道不映射到具体行业，用于整体市场情绪参考"
+    },
+    "science": {
+      "radar_name": "科学 / 前沿",
+      "eastmoney_industries": [],
+      "note": "科学前沿不映射到具体行业，用于主题催化参考"
+    }
+  }
+}

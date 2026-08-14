@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S066 UI Mockup · 策略特定漏斗架构</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{
+bg:'hsl(222 47% 6%)',card:'hsl(222 40% 9%)',primary:'hsl(15 89% 56%)',accent:'hsl(25 95% 58%)',
+muted:'hsl(220 28% 15%)','muted-fg':'hsl(215 18% 62%)',border:'hsl(210 30% 22%)',
+success:'hsl(145 62% 47%)',danger:'hsl(0 74% 60%)',warning:'hsl(38 92% 55%)',
+'w-sunny':'hsl(38 92% 55%)','w-cloudy':'hsl(215 16% 52%)','w-storm':'hsl(0 74% 60%)','w-rebound':'hsl(265 85% 65%)'
+}}}}
+</script>
+<style>
+body{background:hsl(222 47% 6%);color:hsl(210 30% 92%);font-family:-apple-system,'SF Pro','PingFang SC',sans-serif;margin:0}
+.glass{background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.012));border:1px solid rgba(255,232,214,0.10);box-shadow:0 4px 6px -1px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);border-radius:0.75rem}
+.mono{font-family:'SF Mono','JetBrains Mono',monospace}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:9999px;font-size:11px;font-weight:500}
+.chip-ok{background:hsla(145,62%,47%,0.12);color:hsl(145,62%,60%);border:1px solid hsla(145,62%,47%,0.30)}
+.chip-warn{background:hsla(38,92%,55%,0.12);color:hsl(38,92%,60%);border:1px solid hsla(38,92%,55%,0.30)}
+.chip-danger{background:hsla(0,74%,60%,0.12);color:hsl(0,74%,66%);border:1px solid hsla(0,74%,60%,0.30)}
+.chip-muted{background:hsla(220,28%,15%,0.50);color:hsl(215,18%,52%);border:1px solid hsla(210,30%,22%,0.50)}
+.sl{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:hsl(215,18% 52%)}
+.page{display:none}.page.active{display:block}
+.nav-btn{padding:6px 16px;border-radius:0.5rem;font-size:12px;font-weight:500;border:1px solid transparent;cursor:pointer;transition:all 0.15s}
+.nav-btn.active{background:hsla(15,89%,56%,0.15);color:hsl(15,89%,66%);border-color:hsla(15,89%,56%,0.30)}
+.nav-btn:not(.active){color:hsl(215,18%,52%);border-color:hsla(210,30%,22%,0.50)}
+.nav-btn:not(.active):hover{color:hsl(210,30%,82%);border-color:hsla(210,30%,22%,0.80)}
+.clickable{cursor:pointer;transition:all 0.15s;border-radius:0.25rem}
+.clickable:hover{background:hsla(15,89%,56%,0.08)!important;box-shadow:0 0 0 1px hsla(15,89%,56%,0.30)}
+.clickable:active{transform:scale(0.98)}
+.breadcrumb{display:flex;align-items:center;gap:4px;font-size:12px;color:hsl(215,18%,52%)}
+.breadcrumb a{cursor:pointer;color:hsl(215,18%,72%);text-decoration:none}
+.breadcrumb a:hover{color:hsl(15,89%,66%)}
+.breadcrumb .sep{color:hsl(215,18%,32%)}.breadcrumb .current{color:hsl(210,30%,92%);font-weight:500}
+.back-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:0.5rem;font-size:12px;border:1px solid hsla(210,30%,22%,0.50);color:hsl(215,18%,72%);cursor:pointer;transition:all 0.15s}
+.back-btn:hover{border-color:hsla(15,89%,56%,0.30);color:hsl(15,89%,66%);background:hsla(15,89%,56%,0.08)}
+.l1,.l2{display:none;margin-top:4px;padding-top:8px;border-top:1px solid hsla(210,30%,22%,0.40)}
+.l1.open,.l2.open{display:block}
+.tl-slot{padding:3px 10px;border-radius:6px;font-size:10px;font-weight:500;border:1px solid hsla(210,30%,22%,0.50);color:hsl(215,18%,52%)}
+.tl-slot.active{background:hsla(15,89%,56%,0.20);color:hsl(15,89%,66%);border-color:hsla(15,89%,56%,0.40)}
+/* Ask AI */
+.ask-ai-btn{position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,hsl(15,89%,56%),hsl(25,95%,58%));color:hsl(0,0%,100%);border:none;cursor:pointer;font-size:11px;font-weight:600;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+.ask-ai-modal{display:none;position:fixed;bottom:80px;right:20px;width:380px;max-height:420px;background:hsl(222,40%,9%);border:1px solid hsl(210,30%,22%);border-radius:0.75rem;z-index:1001;flex-direction:column;box-shadow:0 8px 24px rgba(0,0,0,0.5)}
+.ask-ai-modal.open{display:flex}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- 顶部导航 -->
+<div class="sticky top-0 z-50 backdrop-blur-md border-b border-border/40" style="background:hsla(222,47%,6%,0.85)">
+<div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+<div class="flex items-center gap-3"><span class="text-sm font-bold">策略特定漏斗</span><span class="text-xs text-muted-fg">S066</span></div>
+<div class="flex items-center gap-2">
+<span class="chip chip-warn">晴天 STI:72.5</span>
+<span class="text-xs text-muted-fg">策略: 连板接力/龙头/平台突破</span>
+<span class="chip chip-ok">日历: 正常</span>
+</div>
+</div>
+</div>
+
+<!-- 页面导航 -->
+<div class="max-w-7xl mx-auto px-6 pt-4 flex gap-2">
+<button class="nav-btn active" onclick="showPage('premarket',this)">盘前</button>
+<button class="nav-btn" onclick="showPage('intraday',this)">盘中</button>
+<button class="nav-btn" onclick="showPage('postmarket',this)">盘后</button>
+</div>
+
+<!-- ============ 盘前页面 ============ -->
+<div class="page active" id="premarket">
+<div class="max-w-7xl mx-auto px-6 py-4">
+<!-- 时段时间线 -->
+<div class="flex gap-1 mb-4">
+<span class="tl-slot">15:00 复盘</span><span class="tl-slot">18:00 深研</span>
+<span class="tl-slot">07:00 确认</span><span class="tl-slot active">09:15 竞价</span>
+<span class="tl-slot">09:30 锁定</span>
+</div>
+
+<!-- 策略分组 Tab -->
+<div class="flex gap-2 mb-4">
+<div class="nav-btn active" onclick="switchStrategyTab(this)">连板接力 <span class="chip chip-muted ml-1">3</span></div>
+<div class="nav-btn" onclick="switchStrategyTab(this)">龙头战法 <span class="chip chip-muted ml-1">2</span></div>
+<div class="nav-btn" onclick="switchStrategyTab(this)">平台突破 <span class="chip chip-muted ml-1">1</span></div>
+<div class="nav-btn" onclick="switchStrategyTab(this)">低吸(备选) <span class="chip chip-muted ml-1">0</span></div>
+</div>
+
+<!-- L0 候选列表 -->
+<div class="space-y-2">
+<!-- 候选 1 -->
+<div class="glass p-3">
+<div class="clickable p-2" onclick="toggleL1(this)">
+<div class="flex items-center gap-3">
+<span class="mono text-sm font-bold" style="color:hsl(15,89%,66%)">003032</span>
+<span class="text-sm">传智教育</span>
+<span class="chip chip-ok">分85</span>
+<span class="text-xs text-muted-fg flex-1">连板接力+封板强+板块发酵</span>
+<span class="text-xs font-semibold" style="color:hsl(38,92%,60%)">4.5%</span>
+<span class="chip chip-warn">游资中</span>
+</div>
+</div>
+<!-- L1 摘要 -->
+<div class="l1">
+<div class="text-xs space-y-1 mt-2">
+<div><span class="sl mr-2">板块</span><span class="chip chip-ok">发酵期</span> 排名TOP3 动量+2</div>
+<div><span class="sl mr-2">日历</span> x1.0 正常</div>
+<div><span class="sl mr-2">游资</span> 一日游35% 接力型2席 机构1席(净买)</div>
+<div><span class="sl mr-2">资讯</span> 板块资讯多 催化:风险提示公告</div>
+<div class="clickable text-xs mt-1" style="color:hsl(15,89%,66%)" onclick="toggleL2(this)">展开完整因子</div>
+</div>
+</div>
+<!-- L2 详情 -->
+<div class="l2">
+<table class="w-full text-xs mt-2"><tbody>
+<tr style="border-bottom:1px solid hsla(210,30%,22%,0.30)">
+<td class="py-1"><span class="clickable" style="color:hsl(15,89%,66%)" onclick="goFactor('封板率')">封板率</span></td><td>97.92</td><td>权重40%</td><td class="chip chip-ok">r=+0.18 ✓</td>
+</tr>
+<tr style="border-bottom:1px solid hsla(210,30%,22%,0.30)">
+<td class="py-1"><span class="clickable" style="color:hsl(15,89%,66%)" onclick="goFactor('涨停频次')">涨停频次(反向)</span></td><td>82.0(18.0)</td><td>权重25%</td><td class="chip chip-danger">r=-0.26 反向</td>
+</tr>
+<tr style="border-bottom:1px solid hsla(210,30%,22%,0.30)">
+<td class="py-1"><span class="clickable" style="color:hsl(15,89%,66%)" onclick="goFactor('zt_count')">zt_count黄金区</span></td><td>9(过劳0.2)</td><td>权重20%</td><td class="chip chip-warn">[2,5]=1.0</td>
+</tr>
+<tr style="border-bottom:1px solid hsla(210,30%,22%,0.30)">
+<td class="py-1"><span class="clickable" style="color:hsl(15,89%,66%)" onclick="goFactor('连板率')">连板率(反向)</span></td><td>54.7(45.3)</td><td>权重15%</td><td class="chip chip-muted">r=+0.06 待验</td>
+</tr>
+<tr><td class="py-1">质量标准</td><td colspan="3">开板0次 ✓ | 封板率98% | 市值52亿 | 板块广度85%</td></tr>
+</tbody></table>
+</div>
+</div>
+
+<!-- 候选 2 -->
+<div class="glass p-3">
+<div class="clickable p-2" onclick="toggleL1(this)">
+<div class="flex items-center gap-3">
+<span class="mono text-sm font-bold" style="color:hsl(15,89%,66%)">600721</span>
+<span class="text-sm">百花医药</span>
+<span class="chip chip-ok">分82</span>
+<span class="text-xs text-muted-fg flex-1">连板接力+板块发酵+逆势</span>
+<span class="text-xs font-semibold" style="color:hsl(38,92%,60%)">3.2%</span>
+<span class="chip chip-ok">游资低</span>
+</div>
+</div>
+</div>
+
+<!-- 候选 3 -->
+<div class="glass p-3">
+<div class="clickable p-2" onclick="toggleL1(this)">
+<div class="flex items-center gap-3">
+<span class="mono text-sm font-bold" style="color:hsl(15,89%,66%)">605179</span>
+<span class="text-sm">一鸣食品</span>
+<span class="chip chip-warn">分78</span>
+<span class="text-xs text-muted-fg flex-1">连板接力+板块高潮注意</span>
+<span class="text-xs font-semibold" style="color:hsl(38,92%,60%)">2.0%</span>
+<span class="chip chip-danger">游资高</span>
+</div>
+</div>
+<div class="l1 open" style="margin-top:4px;padding-top:8px;border-top:1px solid hsla(210,30%,22%,0.40)">
+<div class="text-xs"><span class="sl mr-2">板块</span><span class="chip chip-danger">高潮期 退潮风险</span></div>
+</div>
+</div>
+</div>
+
+<!-- 板块周期面板 -->
+<div class="glass mt-4 p-4">
+<div class="sl mb-3">板块周期</div>
+<div class="space-y-1 text-xs">
+<div class="flex items-center gap-3"><span class="w-20">教育</span><span class="chip chip-ok">发酵</span><span class="text-muted-fg">涨停3 动量+2 广度85%</span></div>
+<div class="flex items-center gap-3"><span class="w-20">医药</span><span class="chip chip-ok">发酵</span><span class="text-muted-fg">涨停2 动量+1 广度70%</span></div>
+<div class="flex items-center gap-3"><span class="w-20">半导体</span><span class="chip chip-danger">退潮</span><span class="text-muted-fg">涨停1 动量-3 广度30%</span></div>
+<div class="flex items-center gap-3"><span class="w-20 text-muted-fg">轮动信号</span><span class="text-muted-fg">半导体 -> 教育（资金转移）</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ 盘中页面 ============ -->
+<div class="page" id="intraday">
+<div class="max-w-7xl mx-auto px-6 py-4 space-y-3">
+<div class="glass p-4">
+<div class="flex items-center justify-between">
+<span class="sl">情绪</span><span class="chip chip-warn">72.5 启动期</span>
+</div>
+<div class="text-xs text-muted-fg mt-2">T-1基线: 70 | 当前: 72.5 | 趋势: <span style="color:hsl(145,62%,60%)">↗</span> | 色带: <span class="chip chip-ok">正常</span></div>
+</div>
+<div class="glass p-4">
+<div class="sl mb-2">持仓</div>
+<div class="flex items-center gap-3 text-sm">
+<span class="mono font-bold" style="color:hsl(15,89%,66%)">003032</span>
+<span>传智教育</span>
+<span class="chip chip-ok">+2.3%</span>
+<span class="text-xs text-muted-fg">仓位4.5% | 止损-3% | 止盈+12% | 第1日</span>
+</div>
+</div>
+<div class="glass p-4">
+<div class="sl mb-2">条件场景</div>
+<div class="text-xs space-y-1 text-muted-fg">
+<div>if 情绪跌破60 -> <span style="color:hsl(38,92%,60%)">减仓50%</span></div>
+<div>if 指数跌幅>3% -> <span style="color:hsl(0,74%,66%)">不加仓</span></div>
+<div>if 暴风雨天气 -> <span style="color:hsl(0,74%,66%)">仓位=0</span></div>
+</div>
+</div>
+<div class="glass p-4">
+<div class="sl mb-2">黄金窗口采样</div>
+<div class="text-xs text-muted-fg">09:25 ✓ | 09:30 ✓ | 09:45 ✓ | 10:00 ... | 10:30 ...</div>
+</div>
+</div>
+</div>
+
+<!-- ============ 盘后页面 ============ -->
+<div class="page" id="postmarket">
+<div class="max-w-7xl mx-auto px-6 py-4 space-y-3">
+<div class="glass p-4">
+<div class="sl mb-2">今日命中率</div>
+<div class="flex items-center gap-3">
+<span class="text-2xl font-bold" style="color:hsl(145,62%,60%)">66.7%</span>
+<span class="text-xs text-muted-fg">2/3 命中</span>
+</div>
+<div class="text-xs mt-2 space-y-1">
+<div><span class="mono" style="color:hsl(145,62%,60%)">003032</span> +2.3% <span class="chip chip-ok">✓</span></div>
+<div><span class="mono" style="color:hsl(145,62%,60%)">600721</span> +5.1% <span class="chip chip-ok">✓</span></div>
+<div><span class="mono" style="color:hsl(0,74%,66%)">605179</span> -3.2% <span class="chip chip-danger">✗</span></div>
+</div>
+</div>
+<div class="glass p-4">
+<div class="sl mb-2">策略分有效性</div>
+<div class="text-xs">高分(85): 命中 | 中分(78): 未命中 | <span class="text-muted-fg">待积累</span></div>
+</div>
+<div class="glass p-4">
+<div class="sl mb-2">因子贡献(beta)</div>
+<div class="text-xs space-y-1">
+<div>封板率 <span style="color:hsl(145,62%,60%)">+0.15</span> | 频次 <span style="color:hsl(0,74%,66%)">-0.08</span> | zt_count <span style="color:hsl(145,62%,60%)">+0.03</span></div>
+</div>
+</div>
+<div class="glass p-4">
+<div class="sl mb-2">策略衰减监控</div>
+<div class="text-xs">4周滚动胜率: <span class="chip chip-ok">71%</span> vs 基准73% | <span class="text-muted-fg">正常</span></div>
+</div>
+</div>
+</div>
+
+<!-- ============ 因子详情子页 ============ -->
+<div class="page" id="factor-detail">
+<div class="max-w-7xl mx-auto px-6 py-4">
+<div class="breadcrumb mb-4">
+<a onclick="showPageById('premarket')">盘前</a>
+<span class="sep">/</span><a>连板接力</a>
+<span class="sep">/</span><span class="current" id="factor-name">封板率</span>
+</div>
+<button class="back-btn mb-4" onclick="showPageById('premarket')">← 返回</button>
+
+<div class="glass p-4">
+<h3 class="text-sm font-bold mb-3" id="factor-title" style="color:hsl(15,89%,66%)">封板率 (seal_rate)</h3>
+<div class="space-y-3 text-xs">
+<div><div class="sl mb-1">定义</div><div>封板时间越早越强。9:25封板=100分，14:50封板=0分，线性插值。</div></div>
+<div><div class="sl mb-1">统计</div>
+<div>r=+0.18 | 95% CI=[+0.05,+0.31] | p<0.01 | n=6537</div>
+<div class="chip chip-ok">CI 排除 0 -> 显著，进入策略分</div>
+</div>
+<div><div class="sl mb-1">分位胜率</div>
+<div>Q1(0-50): 64% | Q3(50-98): 71% | Q5(98-100): 100%</div>
+<div class="chip chip-ok">单调递增 -> 正向因子确认</div>
+</div>
+<div><div class="sl mb-1">交互关系</div><div class="text-muted-fg">与连板率 |r|=0.3（低相关，独立维度）。与涨停频次 |r|=0.5（中等相关）。</div></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ 问 AI ============ -->
+<button class="ask-ai-btn" onclick="toggleAskAI()">问<br>AI</button>
+<div class="ask-ai-modal" id="ask-ai-modal">
+<div class="px-3 py-2 border-b" style="border-color:hsl(210,30%,22%)">
+<span class="text-xs font-semibold" style="color:hsl(15,89%,66%)">问 AI — 当前上下文已附带</span>
+<button class="float-right text-muted-fg" onclick="toggleAskAI()">x</button>
+</div>
+<div class="px-3 py-1 text-xs text-muted-fg" id="ask-ai-context" style="max-height:60px;overflow-y:auto;border-bottom:1px solid hsla(210,30%,22%,0.40)">
+<span>天气:晴天 | 策略:连板接力 | 候选:003032(分85) 600721(分82) 605179(分78) | 板块:教育发酵 | 日历:正常</span>
+</div>
+<div class="px-3 py-2 flex gap-2" style="border-bottom:1px solid hsla(210,30%,22%,0.40)">
+<input type="text" id="ask-ai-q" class="flex-1 rounded px-2 py-1 text-xs" style="background:hsl(222,47%,6%);border:1px solid hsl(210,30%,22%);color:hsl(210,30%,92%)" placeholder="问任何问题，如：003032值得买吗？" onkeydown="if(event.key==='Enter')askAI()">
+<button class="rounded px-3 py-1 text-xs font-medium" style="background:hsl(15,89%,56%);color:#fff" onclick="askAI()">发送</button>
+</div>
+<div class="p-3 overflow-y-auto text-xs" id="ask-ai-response" style="max-height:200px">
+<div class="text-muted-fg">AI 会基于当前页面数据回答。</div>
+</div>
+</div>
+
+<script>
+function showPage(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active')}
+function showPageById(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav-btn').forEach((b,i)=>b.classList.toggle('active',i===0))}
+function switchStrategyTab(el){el.parentElement.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active')}
+function toggleL1(el){const l1=el.parentElement.querySelector('.l1');if(l1)l1.classList.toggle('open')}
+function toggleL2(el){const l2=el.parentElement.parentElement.querySelector('.l2');if(l2)l2.classList.toggle('open')}
+function goFactor(name){document.getElementById('factor-name').textContent=name;document.getElementById('factor-title').textContent=name;showPageById('factor-detail')}
+function toggleAskAI(){const m=document.getElementById('ask-ai-modal');m.classList.toggle('open');const p=document.querySelector('.page.active')?.id||'premarket';const ctxs={'premarket':'天气:晴天 | 策略:连板接力 | 候选:003032(分85) 600721(分82) 605179(分78) | 板块:教育发酵 | 日历:正常','intraday':'持仓:003032 仓位4.5% 盈亏+2.3% | 情绪:72.5 | 色带:正常','postmarket':'命中率:2/3=66.7% | 003032+2.3% 600721+5.1% 605179-3.2% | beta:封板率+0.15','factor-detail':'因子:封板率 | r=+0.18 | CI[+0.05,+0.31] | Q5胜率100%'};document.getElementById('ask-ai-context').innerHTML='<span>'+(ctxs[p]||'').split('|').join('</span> | <span>')+'</span>'}
+function askAI(){const q=document.getElementById('ask-ai-q').value;if(!q)return;const r=document.getElementById('ask-ai-response');r.innerHTML='<div class="text-muted-fg">思考中...</div>';setTimeout(()=>{r.innerHTML='<div>基于当前上下文：003032策略分85，封板率98%(r=+0.18显著)。板块发酵期有支撑。但游资一日游35%有抛压风险。建议可建仓4.5%，关注明日开盘。</div><div class="text-xs mt-2 pt-1" style="color:hsl(215,18%,42%);border-top:1px solid hsla(210,30%,22%,0.30)">AI辅助分析，不构成投资建议</div>'},800)}
+</script>
+</body>
+</html>

@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S066。
+`SNNN` 三位递增。下一个新 spec 用 S068。
 
 ## 已有规范
 
@@ -97,6 +97,8 @@ specs/
 | [S063](S063-情绪管线贯通与盘中辅助决策/spec.md) | 情绪管线贯通与盘中辅助决策 | ✅已实现 2026-08-13 | spec · [HANDOFF-PROMPT](S063-情绪管线贯通与盘中辅助决策/HANDOFF-PROMPT.md) · [plan](S063-情绪管线贯通与盘中辅助决策/plan.md) · [tasks](S063-情绪管线贯通与盘中辅助决策/tasks.md) | SentimentContext T-1 贯通 + 盘中 4 维评分 + T+1 投影 + 前端多页 |
 | [S064](S064-盯盘教练MVP/spec.md) | W-C 盯盘教练 MVP | ✅已实现 2026-08-13 | spec | 盘中时刻表 10 槽位 + 条件状态清单 + attention_mode A/B/C + 教学点 |
 | [S065](S065-weather-history持久化/spec.md) | weather_history 持久化 | ✅已实现 2026-08-13 | spec | 盘后落 weather_state 快照 + 五因子明细（W1 证据层前置，零 em_get） |
+| [S066](S066-策略特定漏斗架构重构/spec.md) | 策略特定漏斗架构重构 | 🟡Phase 0 完成 2026-08-14 | spec · [plan](S066-策略特定漏斗架构重构/plan.md) · [tasks](S066-策略特定漏斗架构重构/tasks.md) · [HANDOFF-PROMPT](S066-策略特定漏斗架构重构/HANDOFF-PROMPT.md) | 3 套权重漏斗 + 天气硬开关 + 板块周期 + 日历因子 + 前端三页统一 |
+| [S067](S067-advisory-perf/spec.md) | advisory 端点性能优化 | 🟡草案 2026-08-14 | spec | advisory 死锁已修，端点本身架构性慢（>40s 首次）待优化 |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 
