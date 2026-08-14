@@ -196,3 +196,135 @@ class TestKlineCacheClearRemoved:
         asyncio.run(adv.advise_holdings())
         # holdings 为空早返，但即使非空也不应清缓存——验证 preexisting 仍在
         assert "preexisting" in adv._kline_cache
+
+
+class TestBatchLookupStrategies:
+    """P2-2：批量 IN 查询消除 N+1。"""
+
+    def test_batch_returns_map_for_all_codes(self, monkeypatch):
+        """批量查询返回所有 code 的匹配结果 map。"""
+        monkeypatch.setattr(adv, "run_strategy_backtest", lambda n=90: [
+            SimpleNamespace(strategy_code="SB", win_rate=0.6, sample_size=30, strategy_name="首板")
+        ])
+        monkeypatch.setattr(adv, "match_strategies", lambda code, gene: [
+            SimpleNamespace(strategy_code="SB", strategy_name="首板")
+        ])
+        # mock get_db 返回批量历史日
+        from limitup_screener import data as ldata
+
+        class _FakeCursor:
+            def fetchall(self): return [{"code": "000002", "d": "2026-08-01"}]
+        class _FakeConn:
+            def execute(self, *a, **kw): return _FakeCursor()
+            def close(self): pass
+        monkeypatch.setattr(ldata, "get_db", lambda: _FakeConn())
+        # 000001 当日命中（层1），000002 走历史（层2），000003 落层3
+        gene_map = {"000001": SimpleNamespace(code="000001", total_score=70, factors={})}
+        monkeypatch.setattr(adv, "load_gene_scores", lambda d: [
+            SimpleNamespace(code="000002", total_score=70, factors={})
+        ] if d == "2026-08-01" else [])
+        wr_map = adv._win_rate_map()
+
+        result = adv._lookup_holding_strategies_batch(
+            ["000001", "000002", "000003"], gene_map, wr_map
+        )
+        assert len(result) == 3
+        assert result["000001"][5] == 1  # 层 1
+        assert result["000002"][5] == 2  # 层 2
+        assert result["000003"][5] == 3  # 层 3
+
+    def test_batch_empty_codes_returns_empty(self):
+        result = adv._lookup_holding_strategies_batch([], {}, {})
+        assert result == {}
+
+    def test_batch_all_layer1_no_db_query(self, monkeypatch):
+        """全在当日命中 → 不查 DB。"""
+        monkeypatch.setattr(adv, "run_strategy_backtest", lambda n=90: [
+            SimpleNamespace(strategy_code="SB", win_rate=0.6, sample_size=30, strategy_name="首板")
+        ])
+        monkeypatch.setattr(adv, "match_strategies", lambda code, gene: [
+            SimpleNamespace(strategy_code="SB", strategy_name="首板")
+        ])
+        # get_db 不应被调用
+        from limitup_screener import data as ldata
+        monkeypatch.setattr(ldata, "get_db", lambda: pytest.fail("不应查 DB"))
+        gene_map = {"000001": SimpleNamespace(code="000001", total_score=70, factors={})}
+        wr_map = adv._win_rate_map()
+        result = adv._lookup_holding_strategies_batch(["000001"], gene_map, wr_map)
+        assert result["000001"][5] == 1
+
+
+class TestPrefetchKlinesConcurrent:
+    """P1-1：并发预取 kline。"""
+
+    def test_prefetch_populates_cache(self, monkeypatch):
+        """预取后 _kline_cache 有值。"""
+        monkeypatch.setattr(adv, "_atr_trailing_stop", lambda code, cost, sfp=None: (None, None, False))
+        # _atr_trailing_stop mock 不会填 cache，需手动验证调用
+        call_log = {"codes": []}
+
+        def _tracking_atr(code, cost, sfp=None):
+            call_log["codes"].append(code)
+            adv._kline_cache[code] = []
+            return (None, None, False)
+        monkeypatch.setattr(adv, "_atr_trailing_stop", _tracking_atr)
+        adv._prefetch_klines_concurrent(["000001", "000002", "000003"])
+        # 三个 code 都被预取
+        assert set(call_log["codes"]) == {"000001", "000002", "000003"}
+
+    def test_prefetch_skips_cached(self, monkeypatch):
+        """已缓存的 code 不重新预取。"""
+        adv._kline_cache["cached_code"] = []
+        called = {"n": 0}
+
+        def _tracking_atr(code, cost, sfp=None):
+            called["n"] += 1
+            return (None, None, False)
+        monkeypatch.setattr(adv, "_atr_trailing_stop", _tracking_atr)
+        adv._prefetch_klines_concurrent(["cached_code", "new_code"])
+        # 只 new_code 被调（cached_code 已在 _kline_cache）
+        assert called["n"] == 1
+
+    def test_prefetch_empty_list_noop(self):
+        adv._prefetch_klines_concurrent([])
+
+
+class TestEndpointTimeout:
+    """P3：端点 15s 超时降级。"""
+
+    def test_normal_path_returns_full(self, monkeypatch):
+        """正常路径（<15s）返回三场景 + 无 partial。"""
+        from routers import advisory as adv_router
+        monkeypatch.setattr(adv, "load_gene_scores", lambda d: [])
+        monkeypatch.setattr(adv, "run_strategy_backtest", lambda n=90: [])
+        # mock advise_recommendations/watchlist 返空（避免真跑）
+        monkeypatch.setattr(adv, "advise_recommendations", lambda limit=20: [])
+        monkeypatch.setattr(adv, "advise_watchlist", lambda: [])
+
+        async def _empty_holdings():
+            return []
+        monkeypatch.setattr(adv, "advise_holdings", _empty_holdings)
+
+        import asyncio
+        result = asyncio.run(adv_router.advisory_summary_endpoint(limit=5))
+        assert result.get("partial") is not True
+        assert "recommendations" in result
+
+    def test_timeout_returns_partial_empty(self, monkeypatch):
+        """超时 → 返空 + partial=true + timed_out（不重算）。"""
+        from routers import advisory as adv_router
+        # mock advisory_summary 永不完成（sleep > timeout）
+        import asyncio
+
+        async def _hanging_summary(limit):
+            await asyncio.sleep(100)
+            return {}
+        monkeypatch.setattr(adv_router, "advisory_summary", _hanging_summary)
+        # 缩短 timeout 加速测试
+        monkeypatch.setattr(adv_router, "_ENDPOINT_TIMEOUT", 0.1)
+
+        result = asyncio.run(adv_router.advisory_summary_endpoint(limit=5))
+        assert result["partial"] is True
+        assert result["timed_out"] is True
+        assert result["recommendations"] == []
+        assert "超时" in result["note"]

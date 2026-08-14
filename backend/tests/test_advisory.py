@@ -211,10 +211,12 @@ class TestAdviseHoldings:
             return [_sig(code, "SB")]
         monkeypatch.setattr(adv, "match_strategies", _match)
 
-        # mock get_db：返回历史日期 row（fetchone 模拟）
+        # mock get_db：批量版 _lookup_holding_strategies_batch 用 fetchall + GROUP BY
+        # 返回 [{code, d}] 列表（S067 P2-2 批量 IN 查询）
         from limitup_screener import data as ldata
         class _FakeCursor:
             def fetchone(self): return {"date": "2026-08-01"}
+            def fetchall(self): return [{"code": "600519", "d": "2026-08-01"}]
         class _FakeConn:
             def execute(self, *a, **kw): return _FakeCursor()
             def close(self): pass

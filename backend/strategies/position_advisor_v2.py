@@ -93,6 +93,37 @@ def _win_rate_map() -> dict[str, tuple[float, int, str]]:
     return _WIN_RATE_CACHE
 
 
+def _prefetch_klines_concurrent(codes: list[str], max_workers: int = 5) -> None:
+    """S067 P1-1：并发预取多持仓 kline——消除 holdings 循环串行 mootdx 网络。
+
+    ThreadPoolExecutor max_workers=5 限流（mootdx 并发承载有限）。
+    预填 _kline_cache + _KLINE_CACHE，循环内 _atr_trailing_stop 全命中缓存。
+    任一 code 拉取失败不影响其他（catch 单条）。
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # 只预取缓存未命中的
+    need = [c for c in codes if c and c not in _kline_cache]
+    if not need:
+        return
+
+    def _fetch_one(code: str) -> str:
+        # 复用 _atr_trailing_stop 的拉取逻辑（填 _kline_cache + _KLINE_CACHE）
+        try:
+            _atr_trailing_stop(code, 0.0)  # cost=0 触发拉取但不影响 trailing 计算
+        except Exception:  # noqa: BLE001
+            pass
+        return code
+
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(need))) as ex:
+        futures = [ex.submit(_fetch_one, c) for c in need]
+        for fu in as_completed(futures):
+            try:
+                fu.result()
+            except Exception:  # noqa: BLE001
+                continue
+
+
 def clear_caches() -> None:
     """清空 winrate/kline 缓存（测试隔离 + 强制重算入口）。
 
@@ -356,6 +387,80 @@ def _lookup_holding_strategy(
     return None, "", None, 0, "none", 3
 
 
+def _lookup_holding_strategies_batch(
+    codes: list[str], today_gene_map: dict[str, Any], wr_map: dict[str, tuple[float, int, str]]
+) -> dict[str, tuple[str | None, str, float | None, int, str, int]]:
+    """S067 P2-2：批量持仓战法匹配——消除 layer2 N+1 DB 查询。
+
+    一次 IN 查询取所有持仓的 30 天内历史涨停日，再按 distinct date 批量 load_gene_scores。
+    返回 {code: (sc, sn, wr, ss, src, layer)}。
+    """
+    result: dict[str, tuple[str | None, str, float | None, int, str, int]] = {}
+    if not codes:
+        return result
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # 层 1：当日 gene_scores（内存 map，无 DB）
+    need_hist: list[str] = []
+    for code in codes:
+        g = today_gene_map.get(code)
+        if g is not None:
+            sc, sn, wr, ss, src = _lookup_strategy(code, g, wr_map)
+            if sc:
+                result[code] = (sc, sn, wr, ss, "backtest_90d", 1)
+                continue
+        need_hist.append(code)
+
+    if not need_hist:
+        # 全在层 1 命中或落层 3
+        for code in codes:
+            if code not in result:
+                result[code] = (None, "", None, 0, "none", 3)
+        return result
+
+    # 层 2：一次 IN 查询所有 need_hist 的历史涨停日（消除 N+1）
+    placeholders = ",".join("?" * len(need_hist))
+    code_to_hist_date: dict[str, str] = {}
+    try:
+        from limitup_screener.data import get_db
+
+        conn = get_db()
+        try:
+            rows = conn.execute(
+                f"SELECT code, MAX(date) AS d FROM gene_scores "
+                f"WHERE code IN ({placeholders}) AND date < ? AND date >= date(?, '-30 days') "
+                f"GROUP BY code",
+                (*need_hist, today, today),
+            ).fetchall()
+            for r in rows:
+                code_to_hist_date[r["code"]] = r["d"]
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        code_to_hist_date = {}
+
+    # 按 distinct 历史日批量 load_gene_scores（同日多股复用）
+    hist_gene_cache: dict[str, dict[str, Any]] = {}
+    for code in need_hist:
+        hist_date = code_to_hist_date.get(code)
+        if not hist_date:
+            result[code] = (None, "", None, 0, "none", 3)
+            continue
+        if hist_date not in hist_gene_cache:
+            scores = load_gene_scores(hist_date) or []
+            hist_gene_cache[hist_date] = {g.code: g for g in scores}
+        hist_gene = hist_gene_cache[hist_date].get(code)
+        if hist_gene:
+            sc, sn, wr, ss, src = _lookup_strategy(code, hist_gene, wr_map)
+            if sc:
+                result[code] = (sc, sn, wr, ss, "backtest_90d_historical", 2)
+                continue
+        result[code] = (None, "", None, 0, "none", 3)
+
+    return result
+
+
 def advise_recommendations(limit: int = 20) -> list[AdvisoryItem]:
     """R2：推荐标的入场建议——top gene_scores + 战法 90 天回测 win_rate。
 
@@ -460,6 +565,11 @@ async def advise_holdings() -> list[AdvisoryItem]:
     # kline 日内有效（_KLINE_CACHE TTL 1h + _kline_cache 复用），无需每次清。
     gene_map = _latest_gene_map()
     wr_map = _win_rate_map()
+    # S067 P2-2：批量持仓战法匹配——一次 IN 查询消除 N+1 DB
+    holding_codes = [h.get("code") for h in holdings if h.get("code")]
+    strat_map = _lookup_holding_strategies_batch(holding_codes, gene_map, wr_map)
+    # S067 P1-1：并发预取 kline（layer2/3 需 ATR trailing，预取让循环全命中缓存）
+    _prefetch_klines_concurrent(holding_codes)
     items: list[AdvisoryItem] = []
     for h in holdings:
         code = h.get("code")
@@ -468,7 +578,7 @@ async def advise_holdings() -> list[AdvisoryItem]:
         price = h.get("price") or 0.0
         name = h.get("name") or code
 
-        sc, sn, wr, ss, src, layer = _lookup_holding_strategy(code, gene_map, wr_map)
+        sc, sn, wr, ss, src, layer = strat_map.get(code, (None, "", None, 0, "none", 3))
         params = _strat_params(sc)
         stop_pct = params.get("stop_loss_pct", _DEFAULT_STOP_PCT)
         take_profit_pct = params.get("take_profit_pct", 8.0)

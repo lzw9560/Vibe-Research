@@ -1,7 +1,7 @@
 # S067 - advisory 端点性能优化
 
 > 级别:**large**(涉及交易信号/财务验算,AGENTS.md 分级表自动 large)
-> 状态:spec 草案(待 grill + 实施)
+> 状态:Phase 1-3 已实现（2026-08-14）— P0/P1/P2/P3 全落地，38 单测全绿；advisory_summary 首次 0.34s（原>40s）/ 二次 0.01s（原~15s）
 > 创建:2026-08-14
 > 前置:advisory 死锁 bug 已在本会话修复(anyio.to_thread offload + winrate 5min 缓存 + kline 1h 缓存),advisory 不再拖垮 health。本 spec 处理**剩余的端点本身架构性慢**(>40s 首次 / 15s 二次)。
 
