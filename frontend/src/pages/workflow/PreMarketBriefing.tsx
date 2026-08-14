@@ -2,6 +2,9 @@ import { useEffect, useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
+import { StrategyGroupTabs } from "@/components/workflow/StrategyGroupTabs";
+import { CalendarFactorHint } from "@/components/workflow/CalendarFactorHint";
+import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
 import { usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
 import { useStrategyBacktest } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -219,8 +222,21 @@ export default function PreMarketBriefing() {
       {status === "done" && (
         <>
           {/* ⓪ 天气决策条（S063：T-1 硬标准头部，全宽非卡片） */}
-          <div className="mb-6">
+          <div className="mb-6 space-y-3">
             <WeatherDecisionBar ctx={briefing.sentiment_context} />
+            {/* S066 §16.4 市场级熔断横幅（触发时才渲染） */}
+            <MarketKillSwitchBanner />
+            {/* S066 §6 日历因子提示（周五×0.7/节前×0.3） */}
+            <CalendarFactorHint date={briefing.data_date ?? ""} />
+          </div>
+
+          {/* S066 §3.3 策略组 Tab——按天气硬开关激活的策略分 tab */}
+          <div className="mb-6">
+            <StrategyGroupTabs
+              weatherState={briefing.sentiment_context?.weather_state}
+              activeStrategy={null}
+              onSelect={() => {}}
+            />
           </div>
 
           {/* ① 市场情绪（S049 B 重写：STI+三率+ladder+涨跌停） */}

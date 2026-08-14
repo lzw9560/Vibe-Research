@@ -3,6 +3,7 @@
 // AskAi：注入四层真实数据（latest/holdings/scenarios/t1）作上下文。
 import { WorkflowStage } from "./components/WorkflowStage";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
+import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
 import { StateMachineDashboard } from "@/components/intraday/StateMachineDashboard";
 import { EmotionTrendChart } from "@/components/intraday/EmotionTrendChart";
 import { HoldingsEmotionTable } from "@/components/intraday/HoldingsEmotionTable";
@@ -79,6 +80,11 @@ export default function IntradayMonitor() {
     >
       <div className="mb-4">
         <PipelineProgressBar current="intraday" />
+      </div>
+
+      {/* S066 §16.4 盘中市场级熔断横幅（指数跌>3% → 不开新仓） */}
+      <div className="mb-4">
+        <MarketKillSwitchBanner />
       </div>
 
       {/* 状态机看板 */}

@@ -11,6 +11,10 @@ const qMocks = vi.hoisted(() => ({
   useStrategyBacktest: vi.fn(),
   useShadowComparison: vi.fn(),
   useTransitionWorkflowState: vi.fn(),
+  useWeatherStrategyMap: vi.fn(),
+  useFunnelStrategies: vi.fn(),
+  useCalendarFactor: vi.fn(),
+  useMarketKillSwitch: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
@@ -23,6 +27,11 @@ vi.mock("@/lib/query/topology", () => ({ useFunnelLayers: qMocks.useFunnelLayers
 vi.mock("@/lib/query/strategy", () => ({
   useStrategyBacktest: qMocks.useStrategyBacktest,
   syntheticWinRate: (c: number) => Math.min(c * 0.8 + 0.2, 0.95),
+  useWeatherStrategyMap: () => ({ data: { weather_strategy_map: { 晴天: ["consecutive_relay"], 未知: ["first_plate"] }, fallback_strategies: {} } }),
+  useFunnelStrategies: () => ({ data: [] }),
+  useCalendarFactor: () => ({ data: undefined }),
+  useMarketKillSwitch: () => ({ data: undefined }),
+  useSectorCycle: () => ({ data: undefined }),
 }));
 vi.mock("@/pages/workflow/CandidateDetail", () => ({ CandidateDetailPanel: () => null }));
 vi.mock("@/components/candidate/FunnelLayers", () => ({

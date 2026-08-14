@@ -22,6 +22,11 @@ vi.mock("@/lib/query", () => ({
   useWorkflowStates: qMocks.useWorkflowStates,
 }));
 
+// S066 MarketKillSwitchBanner 的 hook mock（返 undefined → 不渲染横幅）
+vi.mock("@/lib/query/strategy", () => ({
+  useMarketKillSwitch: () => ({ data: undefined }),
+}));
+
 // mock echarts（不渲染真实图表）
 vi.mock("@/hooks/useECharts", () => ({
   useECharts: () => {},
