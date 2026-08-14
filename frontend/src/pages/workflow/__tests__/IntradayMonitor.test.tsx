@@ -22,9 +22,10 @@ vi.mock("@/lib/query", () => ({
   useWorkflowStates: qMocks.useWorkflowStates,
 }));
 
-// S066 MarketKillSwitchBanner 的 hook mock（返 undefined → 不渲染横幅）
+// S066 MarketKillSwitchBanner + CalendarFactorHint 的 hook mock（返 undefined → 不渲染）
 vi.mock("@/lib/query/strategy", () => ({
   useMarketKillSwitch: () => ({ data: undefined }),
+  useCalendarFactor: () => ({ data: undefined }),
 }));
 
 // mock echarts（不渲染真实图表）

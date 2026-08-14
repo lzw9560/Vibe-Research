@@ -4,6 +4,7 @@
 import { WorkflowStage } from "./components/WorkflowStage";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
+import { CalendarFactorHint } from "@/components/workflow/CalendarFactorHint";
 import { StateMachineDashboard } from "@/components/intraday/StateMachineDashboard";
 import { EmotionTrendChart } from "@/components/intraday/EmotionTrendChart";
 import { HoldingsEmotionTable } from "@/components/intraday/HoldingsEmotionTable";
@@ -85,6 +86,11 @@ export default function IntradayMonitor() {
       {/* S066 §16.4 盘中市场级熔断横幅（指数跌>3% → 不开新仓） */}
       <div className="mb-4">
         <MarketKillSwitchBanner />
+      </div>
+
+      {/* S066 §6 盘中日历因子标注（周五/节前降仓提示） */}
+      <div className="mb-4">
+        <CalendarFactorHint date={new Date().toISOString().slice(0, 10)} />
       </div>
 
       {/* 状态机看板 */}
