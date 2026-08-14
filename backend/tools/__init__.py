@@ -17,25 +17,13 @@ from __future__ import annotations
 from ai.tools import registry  # noqa: F401
 
 TOOLS = registry.get_openai_tools()
-# main 兼容：派发结构（test_agents 校验「每工具有 handler」+ 异常包装 + monkeypatch）
-# 从 registry._REGISTRY 派生 name→handler 字典
+# exec_tool = chat._exec_tool（develop wrapper，动态查 registry.execute），
+# 使 `chat._exec_tool is tools.exec_tool`（身份）+ monkeypatch registry.execute 生效。
+# chat 已 import 在前（app 导入链），无循环。
+from chat import _exec_tool as exec_tool  # noqa: E402
+# main 兼容：派发结构（test_every_tool_has_handler 校验「TOOL_NAMES == _HANDLERS.keys」）
 TOOL_NAMES = list(registry._REGISTRY.keys())
 _HANDLERS = {name: td.func for name, td in registry._REGISTRY.items()}
-
-
-def exec_tool(name: str, args: dict | None = None) -> Any:
-    """派发工具，失败返 ``{"error": ...}`` 不抛（喂回 LLM 不中断循环）。
-
-    经 ``_HANDLERS`` 派发（main 兼容：测试可 monkeypatch _HANDLERS 替换 handler）。
-    异常格式与 ``registry.execute`` 一致（``f"{name} 执行失败：{e}"``）。
-    """
-    h = _HANDLERS.get(name)
-    if h is None:
-        return {"error": f"未知工具：{name}"}
-    try:
-        return h(args or {})
-    except Exception as e:  # noqa: BLE001 — 异常转 error dict 喂回 LLM
-        return {"error": f"{name} 执行失败：{e}"}
 
 
 # —— schema 简写 helper（main tools.py 遗留，test_agents 校验裁剪逻辑时引用）——

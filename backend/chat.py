@@ -96,9 +96,10 @@ TOOLS = registry.get_openai_tools()
 
 # S010 后为 registry.execute 的薄壳：保留模块级属性名 `_exec_tool`
 # 以兼容（1）mcp_server / routers 的 `chat._exec_tool(...)` 调用，
-# （2）测试 `monkeypatch chat._exec_tool` 拦截 run_chat 工具调用。
-# 派发与异常语义集中在 `tools.exec_tool`（经 _HANDLERS，支持 monkeypatch 兼容）。
-from tools import exec_tool as _exec_tool  # noqa: E402 — 别名，使 chat._exec_tool is tools.exec_tool
+# （2）测试 `monkeypatch chat._exec_tool` / `monkeypatch registry.execute` 拦截。
+# wrapper 动态查 registry.execute（call-time lookup），使 monkeypatch registry.execute 生效。
+def _exec_tool(name: str, args: dict):
+    return registry.execute(name, args)
 
 
 # —— 防 SSRF：用户可自带 OpenAI 兼容端点，但后端替其发请求前要挡住指向云元数据/内网的地址 ——
