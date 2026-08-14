@@ -69,6 +69,7 @@ export const router = createBrowserRouter([
       { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
       { path: "/workflow/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },
       { path: "/workflow/candidates/:code", element: lazyEl(() => import("@/pages/workflow/CandidateDetail")) },
+      { path: "/workflow/factor/:factorId", element: lazyEl(() => import("@/pages/workflow/FactorDetailPage"), "FactorDetailPage") },
       { path: "/sector-divergence", element: lazyEl(() => import("@/pages/SectorDivergence")) },
       { path: "/prediction", element: lazyEl(() => import("@/pages/Prediction")) },
       { path: "/metrics", element: lazyEl(() => import("@/pages/Metrics"), "Metrics") },
