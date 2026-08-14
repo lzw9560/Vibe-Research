@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { SeatProfileModal } from "@/components/layout/SeatProfileModal";
 import { api, type SeatProfile } from "@/lib/api";
 import { useSeatProfiles } from "@/lib/query";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { cn } from "@/lib/utils";
 
 // ── 主页面：席位引擎 ────────────────────────────────────────
@@ -57,6 +58,19 @@ export function SeatEngine() {
     "inactive": "text-muted-foreground/40",
   };
 
+  // S066 AskAi：注入席位画像统计
+  const allProfiles = profilesRaw?.profiles ?? [];
+  const askAiContext = [
+    `当前页面：席位引擎（SeatEngine）`,
+    `画像总数：${profilesRaw?.total ?? 0} 个席位`,
+    groups.length > 0
+      ? `分类分布：${groups.map(([type, list]) => `${type}×${list.length}`).join("，")}`
+      : `分类：未取得（未构建或空）`,
+    allProfiles.length > 0
+      ? `Top 活跃席位：${allProfiles.slice(0, 8).map((p) => `${p.seat_name.slice(0, 12)}(净${(p.net_amt / 1e8).toFixed(1)}亿/${p.seat_type})`).join("，")}`
+      : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -64,6 +78,7 @@ export function SeatEngine() {
         subtitle="龙虎榜席位统计特征 · 游资/量化/机构行为画像"
         actions={
           <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
             <button
               onClick={handleBuild}
               disabled={building}

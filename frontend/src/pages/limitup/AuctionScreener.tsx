@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TabBar } from "@/components/ui/TabBar";
 import { useAuctionTop } from "@/lib/query";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Monitor925 } from "@/components/auction/Monitor925";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +38,19 @@ export function AuctionScreener() {
   const { data: result, isLoading: loading, error, refetch } = useAuctionTop(selectedDate);
   const errMsg = error instanceof Error ? error.message : error ? String(error) : null;
 
+  // S066 AskAi：注入竞价候选 + STI + 分析数
+  const candidates = result?.candidates ?? [];
+  const askAiContext = [
+    `当前页面：竞价选股（AuctionScreener）`,
+    `日期：${selectedDate}`,
+    result?.sti_score != null
+      ? `STI=${result.sti_score?.toFixed(1)}（${result.sti_phase ?? "--"}），分析 ${result.total_analyzed ?? "--"} 只`
+      : `STI/情绪：未取得`,
+    candidates.length > 0
+      ? `竞价候选：${candidates.slice(0, 10).map((c) => `${c.code}(${c.name})评分${c.score}/基因${c.gene_score}/封板率${(c.seal_rate * 100).toFixed(0)}%`).join("，")}`
+      : `竞价候选：未取得`,
+  ].join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -45,6 +59,7 @@ export function AuctionScreener() {
         actions={
           activeTab === "auction" ? (
             <div className="flex items-center gap-2">
+              <AskAiButton context={askAiContext} />
               <input
                 type="date"
                 value={selectedDate}

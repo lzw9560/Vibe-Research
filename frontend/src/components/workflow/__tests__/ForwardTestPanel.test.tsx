@@ -2,7 +2,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { ForwardTestPanel } from "@/components/workflow/ForwardTestPanel";
 
 const mockSummary = vi.hoisted(() => ({ useForwardTestSummary: vi.fn() }));
 
@@ -23,7 +22,7 @@ function renderPanel() {
 describe("ForwardTestPanel (S066)", () => {
   it("loading 态显示 Skeleton", () => {
     mockSummary.useForwardTestSummary.mockReturnValue({ isLoading: true, data: undefined });
-    const { container } = renderPanel();
+    renderPanel();
     // Skeleton 渲染（无文案）
     expect(screen.queryByText("前向测试（Paper Trading）")).not.toBeInTheDocument();
   });

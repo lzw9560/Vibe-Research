@@ -6,6 +6,7 @@ import {
   type ValueFunnelResult, type QualityAssessment, type DeepAnalysisSkeleton,
 } from "@/lib/value_funnel";
 import { ApiError } from "@/lib/api";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 export function ValueFunnel() {
   const [direction, setDirection] = useState("");
@@ -25,13 +26,32 @@ export function ValueFunnel() {
     } finally { setLoading(false); }
   }
 
+  // S066 AskAi：注入价值漏斗各层 + 去劣/分析/深度
+  const askAiContext = [
+    `当前页面：中长线价值选股漏斗（ValueFunnel）`,
+    `方向：${direction || "未输入"} · 阶段：${stage}`,
+    result ? `run_id ${result.run_id} · ${result.direction}` : `漏斗：未运行`,
+    result && result.layers.length > 0
+      ? `漏斗层：${result.layers.map((l) => `${l.name}(${l.input_count}→${l.output_count})`).join("，")}`
+      : ``,
+    result && Object.keys(result.l2_assessments).length > 0
+      ? `L2 去劣评估 ${Object.keys(result.l2_assessments).length} 只：${Object.entries(result.l2_assessments).slice(0, 5).map(([c, q]) => `${c}(通过${q.pass_count}/${q.metrics.length}率${(q.pass_rate_absolute * 100).toFixed(0)}%)`).join("，")}`
+      : ``,
+    result && result.l4_finals.length > 0
+      ? `L4 深度分析 ${result.l4_finals.length} 只：${result.l4_finals.slice(0, 5).map((d) => `${d.code}(${d.name})`).join("，")}`
+      : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold">中长线价值选股漏斗</h1>
-        <p className="text-sm text-gray-500">
-          输入行业/主题/指数 → L1 全市场扫描 → L2 去劣7条 → L3 精细分析 → L4 四大师深度（文字交 AI）
-        </p>
+      <header className="space-y-1 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">中长线价值选股漏斗</h1>
+          <p className="text-sm text-gray-500">
+            输入行业/主题/指数 → L1 全市场扫描 → L2 去劣7条 → L3 精细分析 → L4 四大师深度（文字交 AI）
+          </p>
+        </div>
+        <AskAiButton context={askAiContext} />
       </header>
 
       {/* 输入 */}

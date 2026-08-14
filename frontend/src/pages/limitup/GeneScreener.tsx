@@ -7,6 +7,7 @@ import { GeneFilterForm, type GeneFilterParams, type ViewMode } from "./componen
 import { GeneResultTable } from "./components/GeneResultTable";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import {
   getGeneScreener,
   saveGeneParams,
@@ -95,9 +96,28 @@ export function GeneScreener() {
     setExpandedCode((prev) => (prev === code ? null : code));
   };
 
+  // S066 AskAi：注入页面真实数据（扫描/合格/高基因 + top 候选五因子 + 回测）
+  const topGenes = [...data].sort((a, b) => b.total_score - a.total_score).slice(0, 10);
+  const askAiContext = [
+    `当前页面：涨停基因筛选（GeneScreener）`,
+    `数据新鲜度：${freshness || "未取得"}`,
+    `扫描 ${allCount} 只 / 合格 ${qualifiedCount} 只 / 高基因 ${highCount} 只（视图：${viewMode}）`,
+    topGenes.length > 0
+      ? `Top 候选：${topGenes.map((g) => `${g.code}(${g.name})分${g.total_score}[qualify=${g.qualify}]`).join("，")}`
+      : `候选：无（未检索或空池）`,
+    topGenes.length > 0
+      ? `五因子示例（${topGenes[0].code}）：${Object.entries(topGenes[0].factors).map(([k, v]) => `${k}=${(v as number).toFixed(1)}`).join("/")}，zt_count_250d=${topGenes[0].zt_count_250d}`
+      : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div>
-      <PageHeader title="基因筛选" subtitle="Gene Screener（盘前简报的配置伴随页）" actions={<Link to="/workflow/pre-market" className="text-sm text-muted-foreground transition-colors hover:text-primary">← 回盘前简报</Link>} />
+      <PageHeader title="基因筛选" subtitle="Gene Screener（盘前简报的配置伴随页）" actions={
+        <div className="flex items-center gap-2">
+          <AskAiButton context={askAiContext} />
+          <Link to="/workflow/pre-market" className="text-sm text-muted-foreground transition-colors hover:text-primary">← 回盘前简报</Link>
+        </div>
+      } />
 
       <GeneFilterForm onSearch={doSearch} onSwitchView={switchView} viewMode={viewMode} onRecompute={handleRecompute} recomputeBusy={recomputeBusy} />
 
