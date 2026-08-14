@@ -129,3 +129,56 @@ export function useMarketKillSwitch(options?: Opts<MarketKillSwitchResult>) {
     ...options,
   });
 }
+
+// ===========================================================================
+// S066 Phase 0e 前向测试（paper trading）
+// ===========================================================================
+
+export interface ForwardTestSummary {
+  total_days: number;
+  total_recommendations: number;
+  settled_count: number;
+  win_count: number;
+  win_rate: number;
+  avg_return: number;
+  benchmark_win_rate: number;
+  pass_threshold: number;
+  passed: boolean;
+  consecutive_loss: number;
+  note: string;
+}
+
+export interface ForwardTestRecord {
+  signal_date: string;
+  code: string;
+  name: string;
+  strategy_code: string;
+  strategy_score: number;
+  weather_state: string | null;
+  position_multiplier: number;
+  recommended_position: number;
+  return_open2close: number | null;
+  return_close2close: number | null;
+  next_pctChg: number | null;
+  is_win: number;
+}
+
+/** S066 §0e 前向测试汇总（通过/不通过判定）。 */
+export function useForwardTestSummary(options?: Opts<ForwardTestSummary>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "forward-test", "summary"] as const,
+    queryFn: () => request<ForwardTestSummary>("/strategy/funnel/forward-test"),
+    staleTime: 300_000,  // 5min（日级数据，无需高频刷新）
+    ...options,
+  });
+}
+
+/** S066 §0e 某信号日前向测试推荐明细。 */
+export function useForwardTestDaily(signalDate: string, options?: Opts<ForwardTestRecord[]>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "forward-test", "daily", signalDate] as const,
+    queryFn: () => request<ForwardTestRecord[]>(`/strategy/funnel/forward-test/${signalDate}`),
+    staleTime: 300_000,
+    ...options,
+  });
+}

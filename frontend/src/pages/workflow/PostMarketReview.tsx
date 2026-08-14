@@ -12,6 +12,7 @@ import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlo
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
+import { ForwardTestPanel } from "@/components/workflow/ForwardTestPanel";
 import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState, usePreMarketBriefing } from "@/lib/query";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { TransitionRequest } from "@/lib/api";
@@ -92,6 +93,11 @@ export default function PostMarketReview() {
           </div>
         </div>
       )}
+
+      {/* S066 §0e 前向测试命中率 + 衰减监控（盘后追踪推荐 vs 实际） */}
+      <div className="mb-6">
+        <ForwardTestPanel />
+      </div>
 
       {/* 日期选择器 */}
       <div className="mb-4 flex items-center gap-2">

@@ -17,6 +17,11 @@ vi.mock("@/lib/query", () => ({
   usePreMarketBriefing: qMock.usePreMarketBriefing,
 }));
 
+// S066 ForwardTestPanel 的 hook mock（返 undefined → 不渲染面板数据）
+vi.mock("@/lib/query/strategy", () => ({
+  useForwardTestSummary: () => ({ data: undefined }),
+}));
+
 import PostMarketReview from "../PostMarketReview";
 
 function renderPage() {
