@@ -229,4 +229,51 @@ async def get_market_kill_switch() -> Dict[str, Any]:
     }
 
 
+@router.get("/api/strategy/funnel/forward-test")
+async def get_forward_test_summary_endpoint(
+    benchmark_win_rate: float = Query(60.57, description="Phase 0b 基准胜率"),
+    min_days: int = Query(20, ge=1, le=60, description="最少交易日数"),
+) -> Dict[str, Any]:
+    """S066 Phase 0e 前向测试汇总（paper trading 结果）。
+
+    通过标准（spec §0e）：
+    - total_days >= min_days（20 交易日）
+    - win_rate >= benchmark × 0.8
+    - 无崩溃（consecutive_loss < 8，kill criteria 未触发）
+
+    前向测试期间不投真金。20 天运行需日历时间积累。
+    """
+    from strategies.forward_test import get_forward_test_summary
+    result = get_forward_test_summary(benchmark_win_rate, min_days)
+    return {
+        "data": {
+            "total_days": result.total_days,
+            "total_recommendations": result.total_recommendations,
+            "settled_count": result.settled_count,
+            "win_count": result.win_count,
+            "win_rate": result.win_rate,
+            "avg_return": result.avg_return,
+            "benchmark_win_rate": result.benchmark_win_rate,
+            "pass_threshold": result.pass_threshold,
+            "passed": result.passed,
+            "consecutive_loss": result.consecutive_loss,
+            "note": result.note,
+        },
+        "disclaimer": "前向测试（paper trading），不投真金。历史统计特征，市场有风险。",
+    }
+
+
+@router.get("/api/strategy/funnel/forward-test/{signal_date}")
+async def get_forward_test_daily(
+    signal_date: str,
+) -> Dict[str, Any]:
+    """S066 Phase 0e 某信号日前向测试推荐明细。"""
+    from strategies.forward_test import get_daily_recommendations
+    records = get_daily_recommendations(signal_date)
+    return {
+        "data": records,
+        "count": len(records),
+    }
+
+
 __all__ = ["router"]
