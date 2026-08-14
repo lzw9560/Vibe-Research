@@ -5,6 +5,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, type StockRecommendation, type RecommendationLevel } from "@/lib/api";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 const LEVEL_META: Record<RecommendationLevel, { color: string; bg: string; label: string }> = {
   "高质量关注": { color: "text-emerald-600", bg: "bg-emerald-50", label: "HIGH" },
@@ -35,20 +36,32 @@ export default function Recommendation() {
     load();
   }, []);
 
+  // S066 AskAi：注入推荐关注清单
+  const askAiContext = [
+    `当前页面：推荐关注（Recommendation）`,
+    `共 ${items.length} 只`,
+    items.length > 0
+      ? `推荐：${items.slice(0, 10).map((i) => `${i.code}(${i.name})${i.level}/基因${i.gene_score}/仓位${i.position_suggestion}`).join("，")}`
+      : `推荐：未取得`,
+  ].join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="推荐关注"
         subtitle="基于基因得分的教育研究式关注清单（非交易建议）"
         actions={
-          <button
-            onClick={load}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
+            <button
+              onClick={load}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              刷新
+            </button>
+          </div>
         }
       />
 

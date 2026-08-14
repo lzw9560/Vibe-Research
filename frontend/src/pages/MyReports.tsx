@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, ApiError, downloadReport, type MyReport } from "@/lib/api";
 import { useMyReports } from "@/lib/query";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 import { cn } from "@/lib/utils";
 
 const fmtSize = (b: number) =>
@@ -81,11 +82,21 @@ export function MyReports() {
     );
   }, [reports]);
 
+  // S066 AskAi：注入研报归档统计
+  const askAiContext = [
+    `当前页面：我的研报（MyReports）`,
+    `共 ${reports?.length ?? 0} 份研报，${grouped.length} 个行业`,
+    grouped.length > 0
+      ? `行业分布：${grouped.slice(0, 8).map(([ind, items]) => `${ind}×${items.length}`).join("，")}`
+      : `研报：无`,
+  ].join("\n");
+
   return (
     <div>
       <PageHeader
         title="我的研报"
         subtitle="把自己的研报拖进来归档，自动按行业分类。文件只存在本地部署目录、不上传、不进任何仓库。"
+        actions={<AskAiButton context={askAiContext} />}
       />
 
       {/* 上传区 */}

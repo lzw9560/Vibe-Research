@@ -1417,6 +1417,11 @@ export interface AdvisorySummary {
   watchlist: AdvisoryItem[];
   holdings: AdvisoryItem[];
   disclaimer: string;
+  // S067 P3：端点超时降级标记（partial=true 时三场景未全返回）
+  partial?: boolean;
+  timed_out?: boolean;
+  timeout_seconds?: number;
+  note?: string;
 }
 
 // S060：明日验证条件对账卡

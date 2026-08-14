@@ -7,6 +7,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { loadNotes, deleteNote, clearNotes, type Note } from "@/lib/notes";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 const KIND_COLOR: Record<string, string> = {
   复盘: "bg-primary/15 text-primary",
@@ -20,17 +21,31 @@ export function Notes() {
 
   const fmt = (ts: number) => new Date(ts).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+  // S066 AskAi：注入研究记录统计
+  const askAiContext = [
+    `当前页面：研究记录（Notes）`,
+    `共 ${notes.length} 条记录`,
+    notes.length > 0
+      ? `记录：${notes.slice(0, 8).map((n) => `${n.kind}·${n.title}`).join("，")}`
+      : `记录：空`,
+  ].join("\n");
+
   return (
     <div>
       <PageHeader
         title="研究记录"
         subtitle="把 AI 复盘 / 要点 / 问答沉淀在本地，随时回看。数据只存本地、不上传。"
-        actions={notes.length > 0 && (
-          <button onClick={() => { if (confirm("清空所有研究记录？")) { clearNotes(); setNotes([]); } }}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-destructive">
-            <Trash2 className="h-4 w-4" /> 清空
-          </button>
-        )}
+        actions={
+          <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
+            {notes.length > 0 && (
+              <button onClick={() => { if (confirm("清空所有研究记录？")) { clearNotes(); setNotes([]); } }}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-destructive">
+                <Trash2 className="h-4 w-4" /> 清空
+              </button>
+            )}
+          </div>
+        }
       />
 
       {notes.length === 0 ? (

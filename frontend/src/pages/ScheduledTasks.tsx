@@ -13,6 +13,7 @@ import {
   type ScheduledTask,
 } from "@/lib/api";
 import { useScheduledTasks, useScheduledTaskRuns } from "@/lib/query";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   daily_data_refresh: "每日数据刷新",
@@ -146,9 +147,18 @@ export function ScheduledTasks() {
   const taskList = tasks ?? [];
   const runList = runs ?? [];
 
+  // S066 AskAi：注入定时任务清单
+  const askAiContext = [
+    `当前页面：定时任务（ScheduledTasks）`,
+    `共 ${taskList.length} 个任务，${taskList.filter((t) => t.enabled).length} 个已启用`,
+    taskList.length > 0
+      ? `任务：${taskList.slice(0, 10).map((t) => `${t.name}(${t.task_type}/${t.enabled ? "开" : "关"}${t.last_run_at ? "/最近" + t.last_run_at.slice(5, 10) : ""})`).join("，")}`
+      : `任务：无`,
+  ].join("\n");
+
   return (
     <div>
-      <PageHeader title="定时任务" subtitle="管理每日数据刷新、复盘通知等自动化任务" />
+      <PageHeader title="定时任务" subtitle="管理每日数据刷新、复盘通知等自动化任务" actions={<AskAiButton context={askAiContext} />} />
 
       <div className="mb-4 flex items-center justify-between">
         <div className="text-xs text-muted-foreground">

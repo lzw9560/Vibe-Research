@@ -5,6 +5,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, type AdvisoryItem, type AdvisorySummary } from "@/lib/api";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 // S042 建议中心：三场景（推荐/自选/持仓）建议，教育研究式口吻，非交易指令。
 // win_rate_source 标注来源（backtest_90d / synthetic / none），透明可审计。
@@ -129,20 +130,36 @@ export default function Advisory() {
     load();
   }, [load]);
 
+  // S066 AskAi：注入三场景建议汇总
+  const askAiContext = [
+    `当前页面：建议中心（Advisory）`,
+    summary ? `推荐${summary.recommendations.length}只/自选${summary.watchlist.length}只/持仓${summary.holdings.length}只` : `建议：未取得`,
+    summary && summary.recommendations.length > 0
+      ? `推荐入场：${summary.recommendations.slice(0, 8).map((r) => `${r.code}(${r.name})${r.action}[胜率${r.win_rate != null ? (r.win_rate * 100).toFixed(0) + "%" : "无"}/${r.matched_strategy ?? "未匹配"}]`).join("，")}`
+      : ``,
+    summary && summary.holdings.length > 0
+      ? `持仓建议：${summary.holdings.slice(0, 5).map((h) => `${h.code}(${h.name})${h.action}盈${(h as any).pnl_pct?.toFixed(1) ?? "?"}%`).join("，")}`
+      : ``,
+    summary?.partial ? `⚠ 端点超时降级（partial=true），部分场景未返回` : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="建议中心"
         subtitle="推荐 / 自选 / 持仓三场景建议（基于 90 天回测胜率，教育研究式，非交易指令）"
         actions={
-          <button
-            onClick={load}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
+            <button
+              onClick={load}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              刷新
+            </button>
+          </div>
         }
       />
 

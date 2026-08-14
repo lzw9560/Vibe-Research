@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 interface TierMetrics {
   tier: string;
@@ -87,11 +88,21 @@ export function Metrics() {
     { key: "api_response", label: "API 响应层", icon: "📤", color: "text-green-400" },
   ] as const;
 
+  // S066 AskAi：注入性能拆分
+  const askAiContext = [
+    `当前页面：性能监控（Metrics）`,
+    breakdown ? `总目标 ${breakdown.summary.total_target}${breakdown.summary.unit} · 状态${breakdown.status}` : `性能：未取得`,
+    breakdown ? `数据获取层：${breakdown.tiers.data_fetch.status}（目标${breakdown.tiers.data_fetch.target}${breakdown.summary.unit}）` : ``,
+    breakdown ? `计算层：${breakdown.tiers.compute.status}（目标${breakdown.tiers.compute.target}${breakdown.summary.unit}）` : ``,
+    breakdown ? `API响应层：${breakdown.tiers.api_response.status}（目标${breakdown.tiers.api_response.target}${breakdown.summary.unit}）` : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="性能监控"
         subtitle="系统三层性能拆分指标（目标值参考）"
+        actions={<AskAiButton context={askAiContext} />}
       />
 
       <div className="grid gap-4 md:grid-cols-3">

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api } from "@/lib/api";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 interface StrategySignalItem {
   code: string;
@@ -69,20 +70,32 @@ export default function StrategySignals() {
     load();
   }, []);
 
+  // S066 AskAi：注入战法信号清单
+  const askAiContext = [
+    `当前页面：战法信号（StrategySignals）`,
+    `共 ${items.length} 条信号`,
+    items.length > 0
+      ? `信号：${items.slice(0, 10).map((i) => `${i.code}(${i.name})${i.strategy_name}/分${i.score}/强度${i.signal_strength}/置信${i.confidence.toFixed(2)}`).join("，")}`
+      : `信号：未取得`,
+  ].join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="战法信号"
         subtitle="八大战法匹配与风控规则知识（教育性展示，非行动建议）"
         actions={
-          <button
-            onClick={load}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
+            <button
+              onClick={load}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              刷新
+            </button>
+          </div>
         }
       />
 
