@@ -1,0 +1,241 @@
+# -*- coding: utf-8 -*-
+"""S066 §3-4 策略注册表 + 天气硬开关 + 3 套权重策略分测试。"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+backend_dir = Path(__file__).resolve().parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+from strategies.strategy_funnel_registry import (
+    STRATEGY_FUNNEL_REGISTRY,
+    WEATHER_STRATEGY_MAP,
+    FALLBACK_STRATEGIES,
+    StrategyFunnelConfig,
+    get_strategies_for_weather,
+    get_strategy_config,
+    compute_strategy_score,
+    score_candidates,
+    check_quality_standards,
+    passes_hard_standards,
+)
+
+
+class TestWeatherHardSwitch:
+    """天气-策略硬开关（spec §3.3）。"""
+
+    def test_sunny_day_strategies(self):
+        """晴天 → 连板接力/龙头/平台突破。"""
+        primary, fallback = get_strategies_for_weather("晴天")
+        assert "consecutive_relay" in primary
+        assert "dragon_head" in primary
+        assert "platform_breakout" in primary
+        assert "low_absorption" in fallback
+
+    def test_storm_only_runs_storm_reversal(self):
+        """暴风雨 → 只跑 storm_reversal，无 fallback。"""
+        primary, fallback = get_strategies_for_weather("暴风雨")
+        assert primary == ["storm_reversal"]
+        assert fallback == []
+
+    def test_unknown_falls_back_conservative(self):
+        """未知/None → 保守降级（首板+连板）。"""
+        primary, _ = get_strategies_for_weather(None)
+        assert "first_plate" in primary
+        assert "consecutive_relay" in primary
+
+        primary, _ = get_strategies_for_weather("未知")
+        assert "first_plate" in primary
+
+    def test_extreme_rebound_strategies(self):
+        """极端反弹 → 反包/炸板回封/N字反击。"""
+        primary, fallback = get_strategies_for_weather("极端反弹")
+        assert "reverse_package" in primary
+        assert "break_reseal" in primary
+        assert "n_shape_counterattack" in primary
+        assert fallback == []
+
+
+class TestStrategyRegistry:
+    """策略注册表完整性。"""
+
+    def test_registry_has_10_strategies(self):
+        """10 个策略（9 常规 + 1 storm_reversal）。"""
+        assert len(STRATEGY_FUNNEL_REGISTRY) == 10
+
+    def test_all_codes_unique(self):
+        codes = [s.code for s in STRATEGY_FUNNEL_REGISTRY]
+        assert len(codes) == len(set(codes))
+
+    def test_storm_reversal_has_position_scale(self):
+        """storm_reversal 仓位 x0.3。"""
+        cfg = get_strategy_config("storm_reversal")
+        assert cfg is not None
+        assert cfg.position_params.position_scale == 0.3
+
+    def test_storm_reversal_only_in_storm(self):
+        """storm_reversal 只在暴风雨天主跑。"""
+        cfg = get_strategy_config("storm_reversal")
+        assert cfg.weather_regimes == ["暴风雨"]
+        assert cfg.is_primary is True
+
+    def test_limitup_strategies_use_limitup_weights(self):
+        """涨停类策略 weight_set=limitup。"""
+        limitup_codes = {"first_plate", "consecutive_relay", "break_reseal",
+                         "end_of_day_sneak", "n_shape_counterattack"}
+        for code in limitup_codes:
+            cfg = get_strategy_config(code)
+            assert cfg.weight_set == "limitup", f"{code} should use limitup weights"
+
+    def test_non_limitup_strategies_use_non_limitup_weights(self):
+        """非涨停类策略 weight_set=non_limitup。"""
+        non_limitup_codes = {"low_absorption", "reverse_package",
+                             "platform_breakout", "dragon_head"}
+        for code in non_limitup_codes:
+            cfg = get_strategy_config(code)
+            assert cfg.weight_set == "non_limitup", f"{code} should use non_limitup weights"
+
+    def test_all_weather_regimes_valid(self):
+        """所有 weather_regimes 必须在 WEATHER_STRATEGY_MAP keys 中。"""
+        valid_regimes = set(WEATHER_STRATEGY_MAP.keys())
+        for s in STRATEGY_FUNNEL_REGISTRY:
+            for r in s.weather_regimes:
+                assert r in valid_regimes, f"{s.code} has invalid regime {r}"
+
+
+class TestComputeStrategyScore:
+    """3 套权重策略分计算。
+
+    注意：conftest 把 VR_DATA_DIR 指向临时目录，strategy_weights.json 不存在 → 等权兜底。
+    需要真实权重的测试用 monkeypatch 注入。
+    """
+
+    def test_limitup_score_uses_3_significant_factors(self, monkeypatch):
+        """涨停类用 seal/rebound/red 三因子（Phase 0d 显著因子）。"""
+        from strategies import strategy_funnel_registry as sfr
+        monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
+        monkeypatch.setattr(sfr, "_WEIGHTS_PATH", Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json")
+        factors = {"factor_seal_rate": 90, "factor_rebound_rate": 80, "factor_red_rate": 70}
+        score, breakdown = compute_strategy_score(factors, "limitup")
+        assert score > 0
+        assert "factor_seal_rate" in breakdown
+        assert "factor_rebound_rate" in breakdown
+        assert "factor_red_rate" in breakdown
+
+    def test_storm_reversal_uses_seal_and_freq(self, monkeypatch):
+        """暴风暴固定 seal 0.60 + (100-freq) 0.40。"""
+        from strategies import strategy_funnel_registry as sfr
+        # 指向真实 weights 文件
+        real_weights = Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json"
+        monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
+        monkeypatch.setattr(sfr, "_WEIGHTS_PATH", real_weights)
+        factors = {"factor_seal_rate": 90, "factor_freq_score": 20}
+        score, breakdown = compute_strategy_score(factors, "storm_reversal")
+        # seal 90×0.6=54, (100-20)×0.4=32, total=86
+        assert score == 86.0
+        assert breakdown["factor_seal_rate"] == 54.0
+
+    def test_reverse_factor_uses_100_minus_value(self, monkeypatch):
+        """反向因子（freq）用 (100-value) 反转。"""
+        from strategies import strategy_funnel_registry as sfr
+        real_weights = Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json"
+        monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
+        monkeypatch.setattr(sfr, "_WEIGHTS_PATH", real_weights)
+        factors = {"factor_seal_rate": 90, "factor_freq_score": 20}
+        _, breakdown = compute_strategy_score(factors, "storm_reversal")
+        # freq 反向：100-20=80, 80×0.4=32
+        assert breakdown["factor_freq_score"] == 32.0
+
+    def test_missing_weights_fallback_equal(self):
+        """权重加载失败 → 等权兜底（不崩）。"""
+        factors = {"a": 60, "b": 40}
+        score, breakdown = compute_strategy_score(factors, "nonexistent_weight_set")
+        # 等权：(60+40)/2=50
+        assert score == 50.0
+
+    def test_empty_factors_returns_zero(self):
+        score, breakdown = compute_strategy_score({}, "limitup")
+        assert score == 0.0
+        assert breakdown == {}
+
+
+class TestScoreCandidates:
+    """候选评分排序。"""
+
+    def test_sunny_day_scores_and_sorts(self):
+        """晴天候选按策略分降序排序。"""
+        cands = [
+            {"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_rebound_rate": 80, "factor_red_rate": 70}},
+            {"code": "B", "name": "B", "factors": {"factor_seal_rate": 60, "factor_rebound_rate": 50, "factor_red_rate": 40}},
+        ]
+        scored = score_candidates(cands, "晴天")
+        assert len(scored) > 0
+        # 第一个应该是高分候选
+        assert scored[0]["code"] == "A"
+        assert scored[0]["strategy_score"] > scored[-1]["strategy_score"]
+
+    def test_storm_reversal_only_in_storm_weather(self):
+        """storm_reversal 只在暴风雨日评分。"""
+        cands = [{"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_freq_score": 20}}]
+        # 晴天不应出现 storm_reversal
+        scored = score_candidates(cands, "晴天")
+        for s in scored:
+            assert s["strategy_code"] != "storm_reversal"
+
+        # 暴风雨应出现 storm_reversal
+        scored_storm = score_candidates(cands, "暴风雨")
+        assert any(s["strategy_code"] == "storm_reversal" for s in scored_storm)
+
+    def test_unknown_weather_uses_conservative(self):
+        """未知天气 → 保守降级（首板+连板）。"""
+        cands = [{"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_rebound_rate": 80, "factor_red_rate": 70}}]
+        scored = score_candidates(cands, None)
+        strategy_codes = {s["strategy_code"] for s in scored}
+        assert "first_plate" in strategy_codes or "consecutive_relay" in strategy_codes
+
+
+class TestQualityStandards:
+    """策略特定质量标准（spec §7）。"""
+
+    def test_consecutive_relay_passes_with_2plus_boards(self):
+        """连板接力：连板≥2 + 封板率≥80 → 通过。"""
+        md = {"consecutive_boards": 3, "seal_rate": 85}
+        results = check_quality_standards({}, "consecutive_relay", md)
+        assert passes_hard_standards(results) is True
+
+    def test_consecutive_relay_fails_with_1_board(self):
+        """连板接力：连板=1 → 不通过硬标准。"""
+        md = {"consecutive_boards": 1, "seal_rate": 85}
+        results = check_quality_standards({}, "consecutive_relay", md)
+        assert passes_hard_standards(results) is False
+
+    def test_missing_data_does_not_block(self):
+        """missing 数据不作为硬标准（spec §7.1）。"""
+        md = {}  # 无任何数据
+        results = check_quality_standards({}, "consecutive_relay", md)
+        # 所有标准 missing → 不阻断
+        assert passes_hard_standards(results) is True
+
+    def test_break_reseal_needs_open_count(self):
+        """炸板回封需要开板次数≥1。"""
+        md = {"open_count": 2, "seal_rate": 65}
+        results = check_quality_standards({}, "break_reseal", md)
+        assert passes_hard_standards(results) is True
+
+        md_fail = {"open_count": 0, "seal_rate": 65}
+        results_fail = check_quality_standards({}, "break_reseal", md_fail)
+        assert passes_hard_standards(results_fail) is False
+
+    def test_reverse_package_needs_no_t1_limit_up(self):
+        """反包战法需要 T-1 未涨停。"""
+        md = {"t1_limit_up": False, "amount_yi": 20, "ma5": 10, "ma10": 9, "ma20": 8}
+        results = check_quality_standards({}, "reverse_package", md)
+        assert passes_hard_standards(results) is True
+
+        md_fail = {"t1_limit_up": True, "amount_yi": 20, "ma5": 10, "ma10": 9, "ma20": 8}
+        results_fail = check_quality_standards({}, "reverse_package", md_fail)
+        assert passes_hard_standards(results_fail) is False
