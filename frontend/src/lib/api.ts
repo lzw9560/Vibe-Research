@@ -3,7 +3,7 @@
 // 本文件留 client re-export + downloadReport + api 端点对象。import 路径 @/lib/api 不变（零行为变更）。
 import { ApiError, authHeaders, request, get } from "./api/client";
 import type {
-  IndexQuote, MarketOverview, ShortTermEmotion, TurnoverTop, GlobalIndex, GlobalStock,
+  IndexQuote, MarketOverview, ShortTermEmotion, TurnoverTop, GlobalIndex, GlobalStock, HkCashflow,
   RadarData, PortfolioData, Valuation, ValPercentile, Financials, Announcement, Quote,
   Report, NewsItem, MarginRow, BlockTradeRow, HolderRow, DividendRow, FundFlowRow,
   DragonTiger, Lockup, Blocks, HotConcept, QaRow, IndustryData, MyReport, ScreenerResult,
@@ -55,6 +55,7 @@ export const api = {
   turnoverTop: () => get<TurnoverTop>("/market/turnover-top"),
   globalIndices: () => get<GlobalIndex[]>("/global/indices"),
   globalStock: (symbol: string) => get<GlobalStock>(`/global/stock?symbol=${encodeURIComponent(symbol)}`),
+  hkCashflow: (symbol: string) => get<HkCashflow>(`/global/hk/cashflow?symbol=${encodeURIComponent(symbol)}`),
   radar: () => get<RadarData>("/radar"),
   radarRefresh: () => request<RadarData>("/radar/refresh", "POST"),
   portfolio: () => get<PortfolioData>("/portfolio"),

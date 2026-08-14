@@ -1,6 +1,7 @@
 // S057：DiagnosisCard 八项标准三态判定 + 封顶标记前端测试
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import type { DiagnosisCard } from "@/lib/candidates";
 import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
 
@@ -26,7 +27,7 @@ describe("DiagnosisCard 八项标准 (S057)", () => {
         missing_count: 1,
       },
     } as unknown as DiagnosisCard;
-    render(<DiagnosisCardView card={card} />);
+    render(<MemoryRouter><DiagnosisCardView card={card} /></MemoryRouter>);
     expect(screen.getByText("八项标准：")).toBeInTheDocument();
     expect(screen.getByText(/80.00亿/)).toBeInTheDocument();
     // 通过 + 未过态正确渲染
@@ -54,7 +55,7 @@ describe("DiagnosisCard 八项标准 (S057)", () => {
       capped: true,
       cap_reason: "八项标准未过3项，得分封顶55",
     } as unknown as DiagnosisCard;
-    render(<DiagnosisCardView card={card} />);
+    render(<MemoryRouter><DiagnosisCardView card={card} /></MemoryRouter>);
     expect(screen.getByText(/封顶标记：/)).toBeInTheDocument();
     expect(screen.getByText(/得分封顶55/)).toBeInTheDocument();
   });
@@ -73,12 +74,12 @@ describe("DiagnosisCard 八项标准 (S057)", () => {
       capped: false,
       cap_reason: null,
     } as unknown as DiagnosisCard;
-    render(<DiagnosisCardView card={card} />);
+    render(<MemoryRouter><DiagnosisCardView card={card} /></MemoryRouter>);
     expect(screen.queryByText(/封顶标记/)).not.toBeInTheDocument();
   });
 
   it("无 eight_standards → 不渲染八项标准区", () => {
-    render(<DiagnosisCardView card={baseCard} />);
+    render(<MemoryRouter><DiagnosisCardView card={baseCard} /></MemoryRouter>);
     expect(screen.queryByText("八项标准：")).not.toBeInTheDocument();
   });
 });

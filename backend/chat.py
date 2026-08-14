@@ -48,9 +48,18 @@ ANALYSIS_FRAMEWORK = """【投研分析框架】当用户要你分析个股、�
 （简单的事实性问题——如"现价多少"——直接答，不必套用整个框架。）"""
 
 # 用 f-string 先把框架焊进去，只留 {{context}} 给运行时 .format() 填——4 处调用点无需改。
-SYSTEM_PROMPT = f"""你是 Vibe-Research 里的投研助理。你可以调用工具获取客观数据来支撑回答：
-A 股用 query_quote / query_valuation / query_reports / query_news（传 6 位代码）；
-美股 / 港股 / 韩股用 query_global_stock（美股用字母代码如 AAPL / NVDA，港股用数字如 00700，韩股用 6 位数字加 .KS 如三星 005930.KS）。
+SYSTEM_PROMPT = f"""你是 Vibe-Research 里的投研助理。你可以调用工具获取客观数据来支撑回答，A 股工具一律传 6 位代码：
+
+- 行情估值：query_quote（批量行情）/ query_valuation（前向 PE、PEG）/ query_valuation_percentile（估值历史分位）/ query_kline（K 线与区间涨跌）
+- 基本面：query_financials（营收净利 ROE 毛利率）/ query_company_info / query_reports（研报）/ query_news
+- 资金筹码：query_fund_flow（主力净流入）/ query_margin（两融）/ query_holders（股东户数）/ query_block_trade / query_dragon_tiger / query_dividend
+- 事件风险：query_announcements（公告）/ query_lockup（解禁）/ query_investor_qa（互动易）
+- 行业板块：query_concepts（板块归属与热门概念）/ query_industry_comparison（行业强弱）/ query_industry_reports
+- 市场层：query_market（scope=indices/global/emotion/turnover/overview）/ query_news_radar（赛道资讯）
+- 海外：query_global_stock（美股 AAPL / 港股 00700 / 韩股 005930.KS）/ query_hk_cashflow（港股现金流量表，仅港股）
+
+用工具的方式：**先想清楚要回答什么，再挑最相关的 2-5 个工具**，不要一次把所有工具都调一遍。
+估值贵贱看 query_valuation_percentile，资金动向看 query_fund_flow，风险排查看 query_announcements + query_lockup。
 
 规则（按 §1 弱合规，私人投研助理定位）：
 - 可给方向性研判、买卖时机研判、收益预期（三情景测算）、模式识别、战法匹配、风险标注、明确操作建议——你是半自动化助手，给建议，用户是最终决策者。
@@ -153,7 +162,7 @@ def _check_base_url(url: str) -> None:
 def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
     _check_base_url(cfg.get("baseURL", ""))
     base = cfg["baseURL"].rstrip("/")
-    if not base.endswith(("/v1", "/v3", "/api/v3")):
+    if not base.endswith(("/v1", "/v3", "/api/v3", "/v4")):
         # 多数 OpenAI 兼容端点需要 /v1；已带版本段则不动。
         base = base + "/v1"
     payload = {"model": cfg["model"], "messages": messages, "temperature": 0.3}
@@ -238,7 +247,7 @@ def run_chat_cli(cfg: dict, user_messages: list, context: str = "") -> dict:
 
 def _resolve_base(cfg: dict) -> str:
     base = cfg["baseURL"].rstrip("/")
-    if not base.endswith(("/v1", "/v3", "/api/v3")):
+    if not base.endswith(("/v1", "/v3", "/api/v3", "/v4")):
         base = base + "/v1"
     return base
 

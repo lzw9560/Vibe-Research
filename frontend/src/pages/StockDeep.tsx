@@ -66,7 +66,7 @@ function QuoteSummary({ quote }: { quote: Quote | null }) {
         <Metric label="市净率" value={fmtPrice(quote.pb)} />
         <Metric
           label="换手率"
-          value={quote.turnover_rate != null ? `${quote.turnover_rate.toFixed(2)}%` : "—"}
+          value={quote.turnover_pct != null ? `${quote.turnover_pct.toFixed(2)}%` : "—"}
         />
         <Metric label="涨停价" value={fmtPrice(quote.limit_up_price)} />
         <Metric label="跌停价" value={fmtPrice(quote.limit_down_price)} />
@@ -166,7 +166,7 @@ export function StockDeep() {
   const askAiContext = [
     `当前页面：个股深度 - ${code ?? ""} ${name}`,
     quote
-      ? `行情：现价${quote.price}/涨跌${quote.change_pct.toFixed(2)}%/昨收${quote.last_close}/PE_TTM${quote.pe_ttm}/PB${quote.pb}/换手${quote.turnover_rate}%/涨停价${quote.limit_up_price}/跌停价${quote.limit_down_price}`
+      ? `行情：现价${quote.price}/涨跌${quote.change_pct.toFixed(2)}%/昨收${quote.last_close}/PE_TTM${quote.pe_ttm}/PB${quote.pb}/换手${quote.turnover_pct}%/涨停价${quote.limit_up_price}/跌停价${quote.limit_down_price}`
       : `行情：未取得`,
     val
       ? `估值：市值${val.mcap_yi}亿/PE_TTM${val.pe_ttm}/PB${val.pb}/EPS26E${val.eps_26e ?? "--"}/EPS27E${val.eps_27e ?? "--"}/PE26E${val.pe_26e ?? "--"}/CAGR${val.cagr_pct ?? "--"}%/PEG${val.peg ?? "--"}/研报数${val.analyst_count}`

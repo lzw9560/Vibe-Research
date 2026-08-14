@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import StockDeep from "../StockDeep";
 
 // S039：StockDeep 消费 /stock/{code}/deep。mock useStockDeep 不经真实网络，
@@ -81,7 +82,7 @@ describe("S039 StockDeep", () => {
       error: null,
       refetch: vi.fn(),
     });
-    render(<StockDeep />);
+    render(<MemoryRouter><StockDeep /></MemoryRouter>);
     expect(screen.getByText(/贵州茅台/)).toBeInTheDocument();
     expect(screen.getByText("行情摘要")).toBeInTheDocument();
     expect(screen.getByText("K 线图")).toBeInTheDocument();
@@ -96,7 +97,7 @@ describe("S039 StockDeep", () => {
       error: null,
       refetch: vi.fn(),
     });
-    render(<StockDeep />);
+    render(<MemoryRouter><StockDeep /></MemoryRouter>);
     expect(screen.getAllByText(/暂无/).length).toBeGreaterThanOrEqual(1);
     // K 线空数据：KLineChart 显示「暂无K线数据」
     expect(screen.getByText("暂无K线数据")).toBeInTheDocument();
@@ -104,7 +105,7 @@ describe("S039 StockDeep", () => {
 
   it("loading 态显示 PageSkeleton（不渲染四块）", () => {
     qm.useStockDeep.mockReturnValue({ data: undefined, isLoading: true, error: null, refetch: vi.fn() });
-    render(<StockDeep />);
+    render(<MemoryRouter><StockDeep /></MemoryRouter>);
     expect(screen.queryByText("行情摘要")).not.toBeInTheDocument();
     expect(screen.queryByText("K 线图")).not.toBeInTheDocument();
   });
@@ -117,7 +118,7 @@ describe("S039 StockDeep", () => {
       error: new Error("连接不到后端"),
       refetch,
     });
-    render(<StockDeep />);
+    render(<MemoryRouter><StockDeep /></MemoryRouter>);
     expect(screen.getByText(/加载失败/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("重试"));
     expect(refetch).toHaveBeenCalled();

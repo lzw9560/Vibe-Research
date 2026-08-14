@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 import astock
 import chat as chat_layer
 import cli_runtime
+import debate as debate_layer
 import gstock
 import newsradar
 import portfolio as pf
@@ -38,6 +39,7 @@ from auction_screener import AUCTION_TOP_N
 import daily_review as dr
 import market
 import myreports as mr
+import reflection as reflect_layer
 
 # Router imports
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
@@ -50,6 +52,11 @@ try:
 except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 quality.py 时不挡 app 启动
     logging.warning("value_funnel 路由不可用，已跳过: %s", _vf_err)
     value_funnel_router = None
+
+# 版本号从 package.json 单一来源读取（S020/main：不再三处硬编码）
+from version import read_version
+
+__version__ = read_version()
 
 # S032 R6：两个后台周期任务（CronScheduler ticker + 持仓刷新）统一挂 FastAPI 主循环，
 # 废除 daemon 线程 + 线程内 asyncio.run 桥接；shutdown 依次 stop/cancel。
@@ -93,14 +100,14 @@ async def lifespan(_app: FastAPI):
         pass
 
 
-app = FastAPI(title="Vibe-Research API", version="0.1.4", lifespan=lifespan)
+app = FastAPI(title="Vibe-Research API", version=__version__, lifespan=lifespan)
 
 @app.get("/")
 async def root():
     """API 根路径：返回基本信息，避免 404。"""
     return {
         "name": "Vibe-Research API",
-        "version": "0.1.3",
+        "version": __version__,
         "docs": "/docs",
         "health": "/api/health",
     }

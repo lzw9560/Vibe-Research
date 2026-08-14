@@ -3,6 +3,7 @@
 // 验证：默认 tab1 → 候选标的渲染；切 tab2 → Monitor925 渲染（9:25 盘中监控）；切回 tab1 → 候选标的复现。
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { AuctionScreenerResult, AuctionSignal, AuctionCandidate } from "@/lib/api";
@@ -28,7 +29,9 @@ function newClient() {
 
 function withClient(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

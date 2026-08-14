@@ -76,6 +76,7 @@ export const router = createBrowserRouter([
       { path: "/health", element: lazyEl(() => import("@/pages/Health"), "HealthPage") },
       { path: "/scheduled-tasks", element: lazyEl(() => import("@/pages/ScheduledTasks"), "ScheduledTasks") },
       { path: "/industry", element: lazyEl(() => import("@/pages/Industry"), "Industry") },
+      { path: "/debate", element: lazyEl(() => import("@/pages/Debate"), "Debate") },
     ],
   },
 ]);

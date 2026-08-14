@@ -5,6 +5,7 @@
 // 切「胜率趋势」→ WinRateView 概览出现、回测查询条件隐藏。
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 // echarts mock：ScatterChart 在 tab1 挂载时 init。
 const echartsMocks = vi.hoisted(() => {
@@ -88,7 +89,7 @@ describe("Backtest 页内 TabBar (D2)", () => {
   });
 
   it("默认 tab=回测结果：渲染查询条件 + 散点图（echarts.init，非纯文本列表）", async () => {
-    render(<Backtest />);
+    render(<MemoryRouter><Backtest /></MemoryRouter>);
     await waitFor(() => expect(echartsMocks.init).toHaveBeenCalled());
     expect(screen.getByText("查询条件")).toBeInTheDocument();
     // 散点用 ScatterChart：旧的"散点数据"纯文本标题不再出现
@@ -96,7 +97,7 @@ describe("Backtest 页内 TabBar (D2)", () => {
   });
 
   it("点「胜率趋势」→ 切到 tab2，WinRateView 渲染（概览），回测内容隐藏", async () => {
-    render(<Backtest />);
+    render(<MemoryRouter><Backtest /></MemoryRouter>);
     await waitFor(() => expect(echartsMocks.init).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: "胜率趋势" }));
@@ -106,7 +107,7 @@ describe("Backtest 页内 TabBar (D2)", () => {
   });
 
   it("从胜率趋势切回回测结果 → 查询条件复现", async () => {
-    render(<Backtest />);
+    render(<MemoryRouter><Backtest /></MemoryRouter>);
     await waitFor(() => expect(echartsMocks.init).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "胜率趋势" }));
     await waitFor(() => expect(screen.getByText("概览")).toBeInTheDocument());
@@ -118,7 +119,7 @@ describe("Backtest 页内 TabBar (D2)", () => {
   // S025 review fix 补测：防假绿——scatter 空态 EmptyState 从未覆盖
   it("scatter 空 → 渲染「暂无回测数据」空态", async () => {
     mockApi.backtestScatter.mockResolvedValue([]);
-    render(<Backtest />);
+    render(<MemoryRouter><Backtest /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText("暂无回测数据")).toBeInTheDocument());
   });
 
@@ -136,7 +137,7 @@ describe("Backtest 页内 TabBar (D2)", () => {
       },
       ic_analysis: { ic: 0.1234, rank_ic: 0.2345, n: 30 },
     });
-    render(<Backtest />);
+    render(<MemoryRouter><Backtest /></MemoryRouter>);
     await waitFor(() => expect(echartsMocks.init).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "因子分位" }));
     await waitFor(() => expect(screen.getByText("因子整体预测力（IC）")).toBeInTheDocument());
@@ -157,7 +158,7 @@ describe("Backtest 页内 TabBar (D2)", () => {
       },
       ic_analysis: null,
     });
-    render(<Backtest />);
+    render(<MemoryRouter><Backtest /></MemoryRouter>);
     await waitFor(() => expect(echartsMocks.init).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "因子分位" }));
     await waitFor(() => expect(screen.getByText(/样本不足 20 对/)).toBeInTheDocument());

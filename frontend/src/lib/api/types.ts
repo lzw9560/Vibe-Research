@@ -13,7 +13,7 @@ export interface MyReport {
 // mcap_yi 不在 Quote 序列化字段（展示用 Valuation.mcap_yi）。
 export interface Quote {
   name: string; price: number; last_close: number; change_pct: number;
-  pe_ttm: number; pb: number; turnover_rate: number;
+  pe_ttm: number; pb: number; turnover_pct: number;
   limit_up_price: number; limit_down_price: number;
 }
 
@@ -164,9 +164,26 @@ export interface GlobalMetrics {
   eps: number | null; roe: number | null; gross_margin: number | null;
   net_margin: number | null; debt_ratio: number | null;
 }
+// S020/main：global-stock-data 的行情（含 mcap/amount/open/high/low，区别于 A 股 Quote）
+export interface GlobalQuote {
+  code: string; name: string;
+  price: number | null; open: number | null; high: number | null; low: number | null;
+  prev_close: number | null; amount: number | null; mcap: number | null; change_pct: number | null;
+}
 export interface GlobalStock {
-  code: string; name: string | null; market: string | null;
-  quote: Quote; metrics: GlobalMetrics | null;
+  code: string; name: string; market: string;
+  quote: GlobalQuote; metrics: GlobalMetrics | null;
+}
+// 港股现金流量表（global-stock-data，仅港股）
+export interface HkCashflowItem { amount: number | null; yoy: number | null }
+export interface HkCashflowPeriod {
+  report_date: string; report: string | null;
+  currency: string | null; account_standard: string | null;
+  items: Record<string, HkCashflowItem>;
+}
+export interface HkCashflow {
+  code: string; name: string; market: string;
+  currency: string | null; item_order: string[]; periods: HkCashflowPeriod[];
 }
 
 // STI 情绪温度
