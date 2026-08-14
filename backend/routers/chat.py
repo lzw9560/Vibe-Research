@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 import chat as chat_layer
 import cli_runtime
+import llm_presets
 
 router = APIRouter(tags=["chat"])
 
@@ -18,6 +19,7 @@ class LLMConfig(BaseModel):
     baseURL: str = ""        # 订阅接入时留空
     apiKey: str = ""         # 订阅接入时留空
     model: str
+    presetId: str = ""       # 选了预设时非空，后端按 id 从 env 查 key 补全
 
 
 class ChatReq(BaseModel):
@@ -37,6 +39,14 @@ def get_llm_env_status() -> Dict[str, Any]:
     }
 
 
+@router.get("/api/llm/presets")
+def get_llm_presets() -> Dict[str, Any]:
+    """返回后端已配置的 LLM 预设清单（不含 apiKey，只报 hasKey）。
+    前端 Settings 页用它渲染预设下拉，用户选预设后 chat 传 presetId，
+    后端按 id 从 .env 查 key 补全，key 不进前端。"""
+    return {"presets": llm_presets.list_presets()}
+
+
 @router.post("/api/chat")
 def chat(req: ChatReq) -> StreamingResponse:
     """系统 AI 对话，**流式** NDJSON（每行一个事件 {type: tool|delta|done|error}）。
@@ -49,6 +59,17 @@ def chat(req: ChatReq) -> StreamingResponse:
         raise HTTPException(400, "messages 不能为空")
 
     cfg = req.llm.model_dump()
+    # 预设接入：前端传 presetId，后端从 .env 查 key 补全（key 不进前端 bundle）
+    preset_id = cfg.get("presetId", "")
+    if preset_id:
+        resolved = llm_presets.resolve_preset(preset_id)
+        if not resolved:
+            raise HTTPException(400, f"预设「{preset_id}」未配置或缺少 API key，请检查后端 .env 的 VR_LLM_PRESET_{preset_id.upper().replace('-', '_')}__API_KEY")
+        # 预设补全：baseURL/apiKey 用预设的，model 允许前端覆盖（默认用预设 defaultModel）
+        cfg["baseURL"] = resolved["baseURL"]
+        cfg["apiKey"] = resolved["apiKey"]
+        if not cfg.get("model"):
+            cfg["model"] = resolved["defaultModel"]
     is_cli = cfg.get("provider", "").startswith("cli-")
     if is_cli:
         kind = cfg["provider"][4:]

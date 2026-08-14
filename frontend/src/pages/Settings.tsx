@@ -3,7 +3,7 @@ import { KeyRound, Sparkles, ShieldCheck, Check, Trash2, Terminal, Flame } from 
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { toast } from "sonner";
-import { loadLlm, saveLlm, clearLlm } from "@/lib/llm";
+import { loadLlm, saveLlm, clearLlm, fetchLlmPresets, type LlmPreset } from "@/lib/llm";
 import { loadAccessKey, saveAccessKey, saveLimitUpScreenerParams, saveAuctionParams, saveReviewParams, type LimitUpParams, type AuctionParams, type ReviewParams } from "@/lib/api";
 import { subscriptionModels, apiModels, PROVIDER_BASE, isCliProvider, aiModels, type ProviderId } from "@/lib/ai-models";
 import { useLimitUpScreenerParams, useAuctionParams, useReviewParams } from "@/lib/query";
@@ -21,6 +21,9 @@ export function Settings() {
   const [baseURL, setBaseURL] = useState(existing && !existingIsCli ? existing.baseURL : (PROVIDER_BASE[firstApi.provider] || ""));
   const [modelName, setModelName] = useState(existing && !existingIsCli ? existing.model : firstApi.id);
   const [apiKey, setApiKey] = useState(existing && !existingIsCli ? existing.apiKey : "");
+  // 后端预设接入：选了 presetId 就自动填 baseURL/model，apiKey 留空（key 在后端 .env）
+  const [presetId, setPresetId] = useState(existing?.presetId || "");
+  const [presets, setPresets] = useState<LlmPreset[]>([]);
   // 后端访问密钥（对应部署时的 VR_API_KEY）；本机自用不设鉴权时留空
   const [accessKey, setAccessKey] = useState(loadAccessKey());
 
@@ -62,6 +65,11 @@ export function Settings() {
   useEffect(() => {
     if (reviewData) setReviewParams(reviewData);
   }, [reviewData]);
+
+  // mount 时拉一次后端预设清单（key 在后端，前端只拿 id/name/models）
+  useEffect(() => {
+    fetchLlmPresets().then(setPresets);
+  }, []);
 
   const handleSaveParams = async () => {
     setParamsLoading(true);
@@ -113,6 +121,13 @@ export function Settings() {
   };
 
   const saveApi = () => {
+    if (presetId) {
+      // 预设模式：key 在后端，前端只传 presetId + model
+      if (!modelName.trim()) { toast.error("请选择模型"); return; }
+      saveLlm({ provider: "openai-compatible", baseURL: baseURL.trim(), apiKey: "", model: modelName.trim(), presetId });
+      toast.success("已保存预设，全站「问 AI / 复盘」现在可用");
+      return;
+    }
     if (!baseURL.trim() || !apiKey.trim() || !modelName.trim()) {
       toast.error("请填完 Base URL、API Key、Model");
       return;
@@ -222,6 +237,39 @@ export function Settings() {
           </div>
         ) : (
           <div className="space-y-4 text-sm">
+            {presets.length > 0 && (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">后端预设（免填 key）</label>
+                <select
+                  value={presetId}
+                  onChange={(e) => {
+                    const p = presets.find(x => x.id === e.target.value);
+                    if (!p) { setPresetId(""); return; }
+                    setPresetId(p.id);
+                    setBaseURL(p.baseURL);
+                    setModelName(p.defaultModel);
+                    setApiKey(""); // 预设模式不需要 key
+                  }}
+                  className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+                >
+                  <option value="">— 不使用预设（手动填 key）—</option>
+                  {presets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                {presetId && (
+                  <div className="mt-1.5">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">模型</label>
+                    <select
+                      value={modelName}
+                      onChange={(e) => setModelName(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+                    >
+                      {presets.find(p => p.id === presetId)?.models.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">选择模型</label>
               <select value={apiId} onChange={(e) => pickApiModel(e.target.value)}

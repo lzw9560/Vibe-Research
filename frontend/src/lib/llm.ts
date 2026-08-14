@@ -5,9 +5,10 @@ import { isCliProvider, type ProviderId } from "./ai-models";
 
 export interface LlmConfig {
   provider: ProviderId;
-  baseURL: string; // CLI 订阅时留空
-  apiKey: string;  // CLI 订阅时留空
+  baseURL: string; // CLI 订阅 / 预设接入时留空
+  apiKey: string;  // CLI 订阅 / 预设接入时留空
   model: string;
+  presetId?: string; // 选了后端预设时非空，后端按 id 从 .env 查 key 补全
 }
 
 export interface ChatMsg {
@@ -28,8 +29,8 @@ export function loadLlm(): LlmConfig | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const c = JSON.parse(raw) as LlmConfig;
-    // 订阅(CLI)：有 model 即可，免 key；API：需 baseURL + key + model。
-    const ok = c.model && (isCliProvider(c.provider) || (c.baseURL && c.apiKey));
+    // 订阅(CLI)：有 model 即可，免 key；预设：presetId 即可；API：需 baseURL + key + model。
+    const ok = c.model && (isCliProvider(c.provider) || c.presetId || (c.baseURL && c.apiKey));
     return ok ? c : null;
   } catch {
     return null;
@@ -115,4 +116,25 @@ export async function chatStream(messages: ChatMsg[], context: string, handlers:
 // 非流式便捷包装（不需要逐字 UI 的调用方用它）。
 export function chat(messages: ChatMsg[], context: string): Promise<ChatResult> {
   return chatStream(messages, context);
+}
+
+// 后端已配的 LLM 预设（key 存后端 .env，前端只拿清单不含 key）。
+export interface LlmPreset {
+  id: string;
+  name: string;
+  baseURL: string;
+  models: string[];
+  defaultModel: string;
+  hasKey: boolean;
+}
+
+export async function fetchLlmPresets(): Promise<LlmPreset[]> {
+  try {
+    const resp = await fetch("/api/llm/presets", { headers: { ...authHeaders() } });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.presets || []).filter((p: LlmPreset) => p.hasKey);
+  } catch {
+    return [];
+  }
 }
