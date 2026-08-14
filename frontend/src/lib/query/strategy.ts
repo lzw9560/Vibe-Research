@@ -29,3 +29,103 @@ export function useStrategyBacktest(lookback_days = 60, options?: Opts<StrategyB
 export function syntheticWinRate(confidence: number): number {
   return Math.min(confidence * 0.8 + 0.2, 0.95);
 }
+
+// ===========================================================================
+// S066 §3 策略特定漏斗前端 hooks
+// ===========================================================================
+
+export interface WeatherStrategyMap {
+  weather_strategy_map: Record<string, string[]>;
+  fallback_strategies: Record<string, string[]>;
+}
+
+export interface FunnelStrategyConfig {
+  code: string;
+  name: string;
+  funnel_type: "limitup" | "market_scan";
+  weight_set: "limitup" | "non_limitup" | "storm_reversal";
+  weather_regimes: string[];
+  is_primary: boolean;
+  fallback: boolean;
+  position_params: {
+    stop_loss_pct: number;
+    take_profit_pct: number;
+    max_hold_days: number;
+    position_scale: number;
+  };
+  quality_standards: { name: string; required: boolean; description: string }[];
+  note: string;
+}
+
+export interface CalendarFactorResult {
+  date: string;
+  position_multiplier: number;
+  reason: string;
+}
+
+export interface SectorCycleResult {
+  industry: string;
+  count_today: number;
+  count_avg_3d: number;
+  momentum: number;
+  phase: string;  // 启动/发酵/高潮/退潮/冷门/无历史
+  modifier: number;
+  phase_note: string;
+}
+
+export interface MarketKillSwitchResult {
+  triggered: boolean;
+  reason: string;
+  sh_change_pct: number | null;
+  gem_change_pct: number | null;
+}
+
+/** S066 §3.3 天气-策略硬开关映射表。 */
+export function useWeatherStrategyMap(options?: Opts<WeatherStrategyMap>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "weather-map"] as const,
+    queryFn: () => request<WeatherStrategyMap>("/strategy/funnel/weather-map"),
+    staleTime: 300_000,  // 5min（映射表静态）
+    ...options,
+  });
+}
+
+/** S066 §3.2 策略特定漏斗注册表（10 策略）。 */
+export function useFunnelStrategies(options?: Opts<FunnelStrategyConfig[]>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "strategies"] as const,
+    queryFn: () => request<FunnelStrategyConfig[]>("/strategy/funnel/strategies"),
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
+/** S066 §6 日历因子仓位乘数。 */
+export function useCalendarFactor(date: string, options?: Opts<CalendarFactorResult>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "calendar-factor", date] as const,
+    queryFn: () => request<CalendarFactorResult>(`/strategy/funnel/calendar-factor?date=${date}`),
+    staleTime: 600_000,  // 10min（日历因子日内不变）
+    ...options,
+  });
+}
+
+/** S066 §5 板块周期分析。 */
+export function useSectorCycle(date: string, industry: string, options?: Opts<SectorCycleResult | null>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "sector-cycle", date, industry] as const,
+    queryFn: () => request<SectorCycleResult | null>(`/strategy/funnel/sector-cycle?date=${date}&industry=${encodeURIComponent(industry)}`),
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
+/** S066 §16.4 市场级熔断检查。 */
+export function useMarketKillSwitch(options?: Opts<MarketKillSwitchResult>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "market-kill-switch"] as const,
+    queryFn: () => request<MarketKillSwitchResult>("/strategy/funnel/market-kill-switch"),
+    refetchInterval: 300_000,  // 5min 轮询（盘中同步情绪采样）
+    ...options,
+  });
+}
