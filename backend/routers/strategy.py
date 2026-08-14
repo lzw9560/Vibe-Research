@@ -109,4 +109,124 @@ async def strategy_backtest_trades(
     }
 
 
+# ===========================================================================
+# S066 §3 策略特定漏斗（天气硬开关 + 3 套权重 + 质量标准）
+# ===========================================================================
+
+@router.get("/api/strategy/funnel/weather-map")
+async def get_weather_strategy_map() -> Dict[str, Any]:
+    """S066 §3.3 天气-策略硬开关映射表。
+
+    返回各天气状态对应的主跑策略 + fallback 策略。
+    """
+    from strategies.strategy_funnel_registry import WEATHER_STRATEGY_MAP, FALLBACK_STRATEGIES
+    return {
+        "data": {
+            "weather_strategy_map": WEATHER_STRATEGY_MAP,
+            "fallback_strategies": FALLBACK_STRATEGIES,
+        }
+    }
+
+
+@router.get("/api/strategy/funnel/strategies")
+async def get_funnel_strategies() -> Dict[str, Any]:
+    """S066 §3.2 策略特定漏斗注册表（10 策略 + storm_reversal）。
+
+    返回每个策略的完整配置：funnel_type / weight_set / weather_regimes /
+    position_params / quality_standards。
+    """
+    from strategies.strategy_funnel_registry import STRATEGY_FUNNEL_REGISTRY
+    return {
+        "data": [
+            {
+                "code": s.code,
+                "name": s.name,
+                "funnel_type": s.funnel_type,
+                "weight_set": s.weight_set,
+                "weather_regimes": s.weather_regimes,
+                "is_primary": s.is_primary,
+                "fallback": s.fallback,
+                "position_params": {
+                    "stop_loss_pct": s.position_params.stop_loss_pct,
+                    "take_profit_pct": s.position_params.take_profit_pct,
+                    "max_hold_days": s.position_params.max_hold_days,
+                    "position_scale": s.position_params.position_scale,
+                },
+                "quality_standards": [
+                    {"name": q.name, "required": q.required, "description": q.description}
+                    for q in s.quality_standards
+                ],
+                "note": s.note,
+            }
+            for s in STRATEGY_FUNNEL_REGISTRY
+        ]
+    }
+
+
+@router.get("/api/strategy/funnel/calendar-factor")
+async def get_calendar_factor(
+    date: str = Query(..., description="信号日期 YYYY-MM-DD"),
+) -> Dict[str, Any]:
+    """S066 §6 日历因子仓位乘数。
+
+    返回 (仓位乘数, 原因)：周五×0.7 / 节前末日×0.3 / 节前3日×0.5 / 周四×1.0。
+    """
+    from strategies.calendar_factor import calendar_factor
+    mult, reason = calendar_factor(date)
+    return {
+        "data": {
+            "date": date,
+            "position_multiplier": mult,
+            "reason": reason,
+        }
+    }
+
+
+@router.get("/api/strategy/funnel/sector-cycle")
+async def get_sector_cycle(
+    date: str = Query(..., description="交易日 YYYY-MM-DD"),
+    industry: str = Query(..., description="板块/行业名"),
+) -> Dict[str, Any]:
+    """S066 §5 板块周期分析（3 日时序阶段分类）。
+
+    返回板块在周期中的位置：启动/发酵/高潮/退潮/冷门/无历史 + 修饰系数。
+    """
+    from strategies.sector_cycle import analyze_sector_phase
+    result = analyze_sector_phase(date, industry)
+    if result is None:
+        return {"data": None, "note": "板块无历史数据"}
+    return {
+        "data": {
+            "industry": result.industry,
+            "count_today": result.count_today,
+            "count_avg_3d": result.count_avg_3d,
+            "momentum": result.momentum,
+            "phase": result.phase,
+            "modifier": result.modifier,
+            "phase_note": result.phase_note,
+        }
+    }
+
+
+@router.get("/api/strategy/funnel/market-kill-switch")
+async def get_market_kill_switch() -> Dict[str, Any]:
+    """S066 §16.4 市场级熔断检查。
+
+    上证跌幅 > 3% / 创业板跌幅 > 4% → 不开新仓。
+    无指数数据不触发（不臆造）。
+    """
+    from strategies.execution_model import check_market_kill_switch
+    import astock
+    indices = astock.index_quote()
+    result = check_market_kill_switch(indices)
+    return {
+        "data": {
+            "triggered": result.triggered,
+            "reason": result.reason,
+            "sh_change_pct": result.sh_change_pct,
+            "gem_change_pct": result.gem_change_pct,
+        }
+    }
+
+
 __all__ = ["router"]
