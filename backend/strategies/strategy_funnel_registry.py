@@ -484,7 +484,7 @@ def check_quality_standards(
                 missing = True
             else:
                 passed = consolidation >= 5
-            detail = f"横盘{consolidation_days}日" if consolidation is not None else "数据不足"
+            detail = f"横盘{consolidation}日" if consolidation is not None else "数据不足"
 
         elif std.name == "成交额放大2倍":
             vol_breakout = md.get("vol_breakout_ratio")
