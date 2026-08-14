@@ -7,7 +7,17 @@ watchlist，验证三场景建议逻辑 + D2 持仓规则各分支。离线（-m
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from strategies import position_advisor_v2 as adv
+
+
+# S067：模块级 TTL 缓存（winrate/kline）跨测试串数据，autouse 清缓存隔离。
+@pytest.fixture(autouse=True)
+def _clear_advisory_caches():
+    adv.clear_caches()
+    yield
+    adv.clear_caches()
 
 
 def _gene(code: str, score: float = 70, name: str = "X") -> SimpleNamespace:

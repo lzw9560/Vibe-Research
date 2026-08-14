@@ -12,10 +12,13 @@ win_rate 来自客观回测统计，不臆造；无回测数据时标 synthetic 
 """
 from __future__ import annotations
 
+import asyncio
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+import anyio
 from limitup_screener.data import load_gene_scores
 from limitup_strategy import match_strategies, STRATEGY_REGISTRY
 from strategies.strategy_backtest import run_strategy_backtest
@@ -30,6 +33,12 @@ _ATR_MULT_TIGHT = 1.5      # 浮盈>15% 时收紧 trailing
 _HISTORY_LOOKBACK_DAYS = 30  # 层 2 查历史涨停的天数
 _TIGHT_PROFIT_PCT = 15.0  # 浮盈超此值收紧 trailing
 _kline_cache: dict[str, list[Any]] = {}  # code -> bars（复用 strategy_backtest 模式）
+# S067 P0：winrate / kline TTL 缓存——advisory 端点避免每次重算回测
+_WIN_RATE_CACHE: dict[str, tuple[float, int, str]] = {}  # _win_rate_map 结果
+_WIN_RATE_CACHE_TS: float = 0.0
+_WIN_RATE_CACHE_TTL: int = 300  # 5 分钟，90 天回测结果日内变化小
+_KLINE_CACHE: dict[tuple, Any] = {}  # (code, category, offset) -> (raw, ts)；日内 kline TTL 缓存
+_KLINE_CACHE_TTL: int = 3600  # 1 小时；日内 kline 到收盘不变
 
 
 @dataclass
@@ -67,12 +76,34 @@ def _win_rate_map() -> dict[str, tuple[float, int, str]]:
     """run_strategy_backtest(90) → {strategy_code: (win_rate, sample_size, strategy_name)}。
 
     异常/空 → {}（下游 _lookup_strategy 落到 synthetic）。
+    TTL 缓存（``_WIN_RATE_CACHE_TTL``，默认 5 分钟）：90 天回测结果日内变化小，
+    会话内复用避免每次请求重算。回测失败不缓存（下次自动重试）。
     """
+    global _WIN_RATE_CACHE, _WIN_RATE_CACHE_TS
+    now = time.time()
+    if _WIN_RATE_CACHE and (now - _WIN_RATE_CACHE_TS) < _WIN_RATE_CACHE_TTL:
+        return _WIN_RATE_CACHE
     try:
         results = run_strategy_backtest(_LOOKBACK_DAYS)
-    except Exception:  # noqa: BLE001 — 回测失败不阻断建议，落 synthetic
+    except Exception:  # noqa: BLE001 — 回测失败不阻断建议，落 synthetic（不缓存失败结果）
         return {}
-    return {r.strategy_code: (r.win_rate, r.sample_size, r.strategy_name) for r in results}
+    m = {r.strategy_code: (r.win_rate, r.sample_size, r.strategy_name) for r in results}
+    _WIN_RATE_CACHE = m
+    _WIN_RATE_CACHE_TS = now
+    return _WIN_RATE_CACHE
+
+
+def clear_caches() -> None:
+    """清空 winrate/kline 缓存（测试隔离 + 强制重算入口）。
+
+    S067：模块级 TTL 缓存跨测试串数据，测试 autouse fixture 调本函数隔离。
+    生产环境盘后可手动调强制重算（TTL 过期前）。
+    """
+    global _WIN_RATE_CACHE, _WIN_RATE_CACHE_TS
+    _WIN_RATE_CACHE = {}
+    _WIN_RATE_CACHE_TS = 0.0
+    _kline_cache.clear()
+    _KLINE_CACHE.clear()
 
 
 def _latest_gene_map() -> dict[str, Any]:
@@ -156,15 +187,29 @@ def _atr_trailing_stop(code: str, cost: float, stop_floor_pct: float | None = No
     """
     bars = _kline_cache.get(code)
     if bars is None:
-        try:
-            import astock
-            from data.mappers import kline_from_mootdx
-            raw = astock.kline(code, category=4, offset=_ATR_PERIOD + 15)
-            bars = list(kline_from_mootdx(code, raw).bars)
-            _kline_cache[code] = bars
-        except Exception:  # noqa: BLE001
+        # S067 P0：_KLINE_CACHE TTL 缓存（1h，日内 kline 不变）
+        key = (code, 4, _ATR_PERIOD + 15)
+        now = time.time()
+        cached = _KLINE_CACHE.get(key)
+        if cached and (now - cached[1]) < _KLINE_CACHE_TTL:
+            raw = cached[0]
+        else:
+            try:
+                import astock
+                from data.mappers import kline_from_mootdx
+                raw = astock.kline(code, category=4, offset=_ATR_PERIOD + 15)
+                _KLINE_CACHE[key] = (raw, now)
+            except Exception:  # noqa: BLE001
+                raw = None
+                _KLINE_CACHE[key] = (None, now)
+        if raw is None:
             bars = []
-            _kline_cache[code] = bars
+        else:
+            try:
+                bars = list(kline_from_mootdx(code, raw).bars)
+            except Exception:  # noqa: BLE001
+                bars = []
+        _kline_cache[code] = bars
     if len(bars) < _ATR_PERIOD + 1:
         return None, None, False
     # True Range
@@ -411,7 +456,8 @@ async def advise_holdings() -> list[AdvisoryItem]:
     holdings = pf_data.get("holdings") or []
     if not holdings:
         return []
-    _kline_cache.clear()  # 每次刷新清缓存（行情更新）
+    # S067 P1-2：移除 _kline_cache.clear()——自毁解析缓存导致 holdings 场景每次重解析。
+    # kline 日内有效（_KLINE_CACHE TTL 1h + _kline_cache 复用），无需每次清。
     gene_map = _latest_gene_map()
     wr_map = _win_rate_map()
     items: list[AdvisoryItem] = []
@@ -458,10 +504,19 @@ async def advise_holdings() -> list[AdvisoryItem]:
 
 
 async def advisory_summary(limit: int = 20) -> dict[str, Any]:
-    """R5：三场景建议汇总（recommendations + watchlist + holdings）。"""
+    """R5：三场景建议汇总（recommendations + watchlist + holdings）。
+
+    S067 P2-1：三场景 asyncio.gather 并行——recommendations/watchlist 是 sync CPU-bound，
+    用 anyio.to_thread.run_sync offload 到线程池避免阻塞事件循环（消除死锁）。
+    """
+    recs, watch, hold = await asyncio.gather(
+        anyio.to_thread.run_sync(lambda: advise_recommendations(limit)),
+        anyio.to_thread.run_sync(advise_watchlist),
+        advise_holdings(),
+    )
     return {
-        "recommendations": [i.to_dict() for i in advise_recommendations(limit)],
-        "watchlist": [i.to_dict() for i in advise_watchlist()],
-        "holdings": [i.to_dict() for i in await advise_holdings()],
+        "recommendations": [i.to_dict() for i in recs],
+        "watchlist": [i.to_dict() for i in watch],
+        "holdings": [i.to_dict() for i in hold],
         "disclaimer": _DISCLAIMER,
     }

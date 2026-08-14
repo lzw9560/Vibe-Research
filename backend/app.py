@@ -53,6 +53,22 @@ except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 qual
 
 # S032 R6：两个后台周期任务（CronScheduler ticker + 持仓刷新）统一挂 FastAPI 主循环，
 # 废除 daemon 线程 + 线程内 asyncio.run 桥接；shutdown 依次 stop/cancel。
+
+async def _warmup_advisory_backtest() -> None:
+    """S067 P0-1：advisory 回测预热。
+
+    后台预跑 run_strategy_backtest(90) → 写 _WIN_RATE_CACHE（5min TTL）+ 回测 12h 缓存。
+    首冷请求 >40s → ~0s（缓存命中）。失败不影响服务（catch + warning）。
+    """
+    try:
+        import anyio
+        from strategies.position_advisor_v2 import _win_rate_map
+        await anyio.to_thread.run_sync(_win_rate_map)
+        logging.info("[S067] advisory 回测预热完成")
+    except Exception as _we:  # noqa: BLE001 — 预热失败不阻断启动
+        logging.warning("[S067] advisory 回测预热失败（不影响服务）: %s", _we)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # startup
@@ -63,6 +79,9 @@ async def lifespan(_app: FastAPI):
     await startup_backfill_gap_check()
     # S063：盘中情绪采样 task（仅交易日 09:25-15:00 运行）
     await intraday_sentiment_router.start_sampler()
+    # S067 P0-1：advisory 回测预热——后台预跑 run_strategy_backtest(90) 写 12h 缓存，
+    # 避免首冷请求 >40s。失败不影响服务（catch + warning）。
+    await _warmup_advisory_backtest()
     yield
     # shutdown
     await intraday_sentiment_router.stop_sampler()

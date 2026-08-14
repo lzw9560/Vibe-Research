@@ -15,9 +15,15 @@
 
 from __future__ import annotations
 
+import time
 import urllib.request
 
 from ._common import UA
+
+# S067 P0-2：tencent_quote 日内缓存——get_portfolio 每次走网络，行情日内变化小。
+# 模块级 dict[(frozenset_codes, ), (result, ts)]，TTL=60s（盘中行情分钟级变化，短 TTL 保时效）。
+_TENCENT_CACHE: dict[frozenset, tuple[dict, float]] = {}
+_TENCENT_CACHE_TTL: int = 60  # 60s（盘中行情需相对新鲜，不能长缓存）
 
 
 def get_prefix(code: str) -> str:
@@ -82,9 +88,21 @@ def fetch_raw(codes: list[str]) -> dict[str, dict]:
 
     返全字段 raw dict（单一事实源）。``astock.tencent_quote`` 门面直接返本结果，
     28 个消费者不改；``mappers.quote_from_tencent`` 从本结果投影 ``Quote`` 模型。
+
+    S067 P0-2：60s TTL 缓存——盘中行情分钟级变化，短 TTL 保时效同时避免高频重复请求。
+    缓存键用 frozenset（顺序无关），同组 codes 复用。
     """
+    if not codes:
+        return {}
+    key = frozenset(codes)
+    now = time.time()
+    cached = _TENCENT_CACHE.get(key)
+    if cached and (now - cached[1]) < _TENCENT_CACHE_TTL:
+        return cached[0]
     prefixed = [f"{get_prefix(c)}{c}" for c in codes]
-    return _parse_gtimg(_fetch_gtimg(prefixed))
+    result = _parse_gtimg(_fetch_gtimg(prefixed))
+    _TENCENT_CACHE[key] = (result, now)
+    return result
 
 
 # A股大盘指数（前缀规则与个股不同，固定带前缀代码）
