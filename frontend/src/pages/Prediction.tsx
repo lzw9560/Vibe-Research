@@ -22,6 +22,7 @@ import {
   type IntradayFrameworkEnvelope,
 } from "@/lib/prediction";
 import { PredictionLedgerTab } from "@/components/prediction/PredictionLedgerTab";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 const STAGES = [
   { key: "s1", label: "S1 收盘后", desc: "T-1 收盘后大部分特征解锁" },
@@ -214,9 +215,22 @@ export function Prediction() {
     );
   }
 
+  // S066 AskAi：注入三阶段预测概率 + SHAP + 分位数
+  const askAiContext = [
+    `当前页面：预测工作台（Prediction）`,
+    `Tab：${tab === "forecast" ? "预测级联" : "预测账本"}`,
+    ...(["s1", "s2", "s3"] as const).map((s) => {
+      const env = predictions[s];
+      const label = STAGES.find((x) => x.key === s)?.label ?? s;
+      if (!env || !env.data) return `${label}：未取得`;
+      const shapTop = env.data.shap_topk.slice(0, 3).map(([f, v]) => `${f}(${v.toFixed(2)})`).join("/");
+      return `${label}：概率${(env.data.prob * 100).toFixed(1)}%/分位[${env.data.quantiles.map((q) => q.toFixed(2)).join(",")}]/SHAP:${shapTop}`;
+    }),
+  ].join("\n");
+
   return (
     <div>
-      <PageHeader title="预测工作台" subtitle="短线板块预测级联 + 盘中研判框架（教育研究性）" />
+      <PageHeader title="预测工作台" subtitle="短线板块预测级联 + 盘中研判框架（教育研究性）" actions={<AskAiButton context={askAiContext} />} />
       {/* S061：预测账本 Tab */}
       <div className="mb-4 flex gap-1 border-b border-border">
         <button

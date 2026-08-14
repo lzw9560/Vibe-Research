@@ -15,6 +15,7 @@ import {
 import { WinRateView } from "@/components/winrate/WinRateView";
 import { Loader2, RefreshCw, AlertCircle, TrendingUp } from "lucide-react";
 import { api, type BacktestResult, type BacktestScatterPoint, type BacktestSnapshotRow, type FactorAnalysisResult } from "@/lib/api";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 // 页内 Tab key 对齐 nav SUB_TABS["/backtest"]（result / winrate / trend / factor）。
 type BacktestTab = "result" | "winrate" | "trend" | "factor";
@@ -110,22 +111,34 @@ export default function Backtest() {
     }
   }, [activeTab]);
 
+  // S066 AskAi：注入回测结果 + 散点/因子分析状态
+  const askAiContext = [
+    `当前页面：简化回测（Backtest）`,
+    `区间：${startDate} ~ ${endDate} · Tab：${activeTab}`,
+    result ? `信号${result.total_signals}次/命中${result.hit_count}次/胜率${(result.hit_rate * 100).toFixed(1)}%/平均收益${result.avg_return.toFixed(2)}%/最大回撤${(result.max_drawdown * 100).toFixed(1)}%/夏普${result.sharpe_ratio.toFixed(2)}` : `回测：未取得`,
+    scatter.length > 0 ? `散点样本${scatter.length}条（gene_score 范围 ${Math.min(...scatter.map((s) => s.gene_score)).toFixed(1)}~${Math.max(...scatter.map((s) => s.gene_score)).toFixed(1)}）` : ``,
+    factorData ? `因子分位分析：${Object.keys(factorData).length} 项` : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="简化回测"
         subtitle="基因得分 vs 次日表现（教育性统计，非收益保证）"
         actions={
-          <button
-            onClick={() => (activeTab === "trend" ? loadTrend() : activeTab === "factor" ? loadFactor() : load())}
-            disabled={activeTab === "trend" ? trendLoading : activeTab === "factor" ? factorLoading : loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
-          >
-            {((activeTab === "trend" ? trendLoading : activeTab === "factor" ? factorLoading : loading))
-              ? <Loader2 className="h-4 w-4 animate-spin" />
-              : <RefreshCw className="h-4 w-4" />}
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
+            <button
+              onClick={() => (activeTab === "trend" ? loadTrend() : activeTab === "factor" ? loadFactor() : load())}
+              disabled={activeTab === "trend" ? trendLoading : activeTab === "factor" ? factorLoading : loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
+            >
+              {((activeTab === "trend" ? trendLoading : activeTab === "factor" ? factorLoading : loading))
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <RefreshCw className="h-4 w-4" />}
+              刷新
+            </button>
+          </div>
         }
       />
 

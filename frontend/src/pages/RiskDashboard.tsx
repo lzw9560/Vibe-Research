@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api } from "@/lib/api";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 interface RiskDashboardData {
   date: string;
@@ -95,20 +96,32 @@ export default function RiskDashboard() {
     }
   };
 
+  // S066 AskAi：注入风险分布 + 高风险股
+  const askAiContext = [
+    `当前页面：风险仪表盘（RiskDashboard）`,
+    data ? `日期${data.date}：扫描${data.total_stocks}只/高${data.high_risk_count}/中${data.medium_risk_count}/低${data.low_risk_count}` : `风险分布：未取得`,
+    highRiskList.length > 0
+      ? `高风险股：${highRiskList.slice(0, 8).map((s) => `${s.code}(${s.name})分${s.risk_score}/[${s.factors.slice(0, 2).join("/")}]`).join("，")}`
+      : `高风险股：无`,
+  ].join("\n");
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="风险仪表盘"
         subtitle="个股风险量化 + 板块风险分布（客观数据，非行动建议）"
         actions={
-          <button
-            onClick={load}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <AskAiButton context={askAiContext} />
+            <button
+              onClick={load}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-3 py-2 text-sm text-primary-foreground hover:bg-primary disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              刷新
+            </button>
+          </div>
         }
       />
 

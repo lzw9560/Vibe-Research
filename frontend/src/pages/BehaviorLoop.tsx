@@ -11,6 +11,7 @@ import { Disclaimer } from "@/components/ui/Disclaimer";
 import { useShadowComparison } from "@/lib/query";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { ShadowComparison, ShadowBucket } from "@/lib/api/types";
+import { AskAiButton } from "@/components/ui/AskAiButton";
 
 const WINDOW_OPTIONS = [14, 28, 60] as const;
 
@@ -18,11 +19,22 @@ export default function BehaviorLoop() {
   const [windowDays, setWindowDays] = useState(28);
   const { data, isLoading, error, refetch } = useShadowComparison(windowDays);
 
+  // S066 AskAi：注入影子对照三桶 + 独立性
+  const askAiContext = [
+    `当前页面：行为闭环（BehaviorLoop）`,
+    `观察窗口：${windowDays} 天`,
+    data ? `跟随单：${data.follow.n}笔/胜率${data.follow.win_rate != null ? (data.follow.win_rate * 100).toFixed(1) + "%" : "未取得"}/平均收益${data.follow.avg_return != null ? data.follow.avg_return.toFixed(2) + "%" : "未取得"}` : `影子对照：未取得`,
+    data ? `感觉单：${data.feeling.n}笔/胜率${data.feeling.win_rate != null ? (data.feeling.win_rate * 100).toFixed(1) + "%" : "未取得"}` : ``,
+    data ? `漏掉单：${data.missed.n}笔/胜率${data.missed.win_rate != null ? (data.missed.win_rate * 100).toFixed(1) + "%" : "未取得"}${data.missed.missing_kline ? `(缺K线${data.missed.missing_kline})` : ""}` : ``,
+    data?.independence ? `独立性：一致率${data.independence.agreement_rate != null ? (data.independence.agreement_rate * 100).toFixed(1) + "%" : "未取得"}/感觉单胜率${data.independence.feeling_win_rate != null ? (data.independence.feeling_win_rate * 100).toFixed(1) + "%" : "未取得"}` : ``,
+  ].filter(Boolean).join("\n");
+
   return (
     <div>
       <PageHeader
         title="行为闭环"
         subtitle="Behavior Loop · W0 票根 + 影子对照 + 独立性基线"
+        actions={<AskAiButton context={askAiContext} />}
       />
 
       {/* 观察期说明 */}
