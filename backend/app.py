@@ -46,6 +46,7 @@ from routers import health, chat, portfolio, watchlist, myreports as myreports_r
 from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import coach as coach_router  # S064：盯盘教练
+from routers import debate as debate_router  # main：多空辩论 + 反思审计
 from routers import prediction_ledger_router as prediction_ledger_router_mod
 try:
     from routers import value_funnel as value_funnel_router
@@ -208,6 +209,7 @@ app.include_router(kline_history.router)
 app.include_router(advisory.router)
 app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
 app.include_router(coach_router.router)  # S064：盯盘教练
+app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
 if value_funnel_router is not None:
     app.include_router(value_funnel_router.router)
 

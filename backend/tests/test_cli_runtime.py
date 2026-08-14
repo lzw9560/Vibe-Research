@@ -25,6 +25,7 @@ class _FakeProc:
     returncode = 0
     stdin = _FakeStdin()
     stdout = iter(["hello\n"])
+    stderr = iter([])  # main cli_runtime 用 stderr=PIPE 排空，mock 需提供
 
     def wait(self, timeout=None): return 0
     def kill(self): pass

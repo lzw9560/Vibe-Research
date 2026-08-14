@@ -146,9 +146,19 @@ def register_tool(
     return deco
 
 
+_OPENAI_TOOLS_CACHE: "list[dict] | None" = None
+
+
 def get_openai_tools() -> list[dict]:
-    """导出 OpenAI function-calling 格式（chat.TOOLS 替代品）。"""
-    return [
+    """导出 OpenAI function-calling 格式（chat.TOOLS 替代品）。
+
+    缓存：工具注册在 import 时完成（静态），首次调用后 memoize，
+    使 `chat.TOOLS is tools.TOOLS` 等身份断言成立（main 测试兼容）。
+    """
+    global _OPENAI_TOOLS_CACHE
+    if _OPENAI_TOOLS_CACHE is not None:
+        return _OPENAI_TOOLS_CACHE
+    _OPENAI_TOOLS_CACHE = [
         {
             "type": "function",
             "function": {
@@ -159,6 +169,7 @@ def get_openai_tools() -> list[dict]:
         }
         for td in _REGISTRY.values()
     ]
+    return _OPENAI_TOOLS_CACHE
 
 
 def get_mcp_tools() -> list[dict]:

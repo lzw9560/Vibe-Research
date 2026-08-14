@@ -492,7 +492,8 @@ def get_realtime_workflow() -> Dict[str, Any]:
 @router.get("/api/workflow/intraday")
 async def get_intraday_workflow_alias() -> Dict[str, Any]:
     """Alias for /api/workflow/realtime (backward compatibility)."""
-    return await get_realtime_workflow()
+    # get_realtime_workflow 是 sync（返 _not_implemented 降级），不能 await
+    return get_realtime_workflow()
 
 
 @router.get("/api/workflow/post-market")
