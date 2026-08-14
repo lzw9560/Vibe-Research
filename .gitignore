@@ -27,6 +27,7 @@ backend/vibe_research.db
 # ── 密钥 / 环境（绝不进仓库） ──────────────────────────────────────
 .env
 .env.*
+.envsitter/
 !.env.example
 *.pem
 *.key
