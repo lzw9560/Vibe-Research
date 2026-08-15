@@ -35,13 +35,23 @@ def test_mcp_server_reports_the_same_version():
 
 
 def test_turnover_projection_keeps_every_documented_field():
-    """注释里列了 float_cap 却没放进取值清单——自相矛盾（codex 第四轮指出）。"""
-    import inspect
+    """turnover 投影须保留 float_cap（流通市值）——codex 第四轮指出的丢字段隐患。
 
-    import tools
+    原测试锁 tools._market 源码文本，已随 data/sources/mappers 重构失效
+    （turnover 投影迁至 data.mappers.quote_from_turnover_rank）；改行为断言：
+    喂含 float_cap 的 raw，断 Quote.float_market_cap 非空（比源码文本稳健）。
+    注：industry 是源字段但 Quote 无此属性，新架构合法不投影，故不断言。
+    """
+    from data.mappers import quote_from_turnover_rank
 
-    src = inspect.getsource(tools._market)
-    idx = src.find('scope == "turnover"')
-    block = src[idx:idx + 600]
-    for field in ("price", "pct", "amount", "mcap", "float_cap", "industry"):
-        assert f'"{field}"' in block, f"turnover 投影漏了 {field}"
+    raw = {
+        "code": "600519", "name": "贵州茅台",
+        "price": 100.0, "pct": 1.5, "amount": 1000000,
+        "mcap": 2000000000, "float_cap": 1500000000, "industry": "白酒",
+    }
+    q = quote_from_turnover_rank(raw)
+    assert q.price == 100.0
+    assert q.change_pct == 1.5
+    assert q.turnover == 1000000
+    assert q.market_cap == 2000000000
+    assert q.float_market_cap == 1500000000  # float_cap 不得丢（codex 第四轮）

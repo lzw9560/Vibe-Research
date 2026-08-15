@@ -42,7 +42,11 @@ class TestBombAlertsEndpoint:
         from realtime_workflow import BombAlert
         from vr_paths import last_trading_date_str
 
-        now = datetime.now()
+        # save_alert 用 now.strftime 落 date 列，端点用 last_trading_date_str() 查——
+        # 非交易日（周末/节假日）跑时 now(今日) != last_trading_date_str() 致存写/查询日期错位。
+        # 对齐：now 取最近交易日，使 save 的 date == 端点查询 date（模拟交易日存写）。
+        target = last_trading_date_str()
+        now = datetime.fromisoformat(target)
         result = RuleCheckResult(
             rule_id="C1", triggered=True,
             alert=BombAlert(

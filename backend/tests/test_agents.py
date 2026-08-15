@@ -59,7 +59,13 @@ def test_exec_tool_never_raises():
 
 
 def test_exec_tool_wraps_handler_exception(monkeypatch):
-    monkeypatch.setitem(tools._HANDLERS, "query_quote", lambda a: 1 / 0)
+    # 750472b 后 exec_tool=chat._exec_tool→registry.execute 动态查 registry._REGISTRY，
+    # 不读 tools._HANDLERS 快照；mock 须打 _REGISTRY[name].func（原 mock _HANDLERS
+    # 失效→真 query_quote 跑了实盘→拿到成功报价而非 error）
+    from ai.tools import registry
+
+    td = registry._REGISTRY["query_quote"]
+    monkeypatch.setattr(td, "func", lambda **a: 1 / 0)  # execute 调 td.func(**args)
     out = tools.exec_tool("query_quote", {"codes": ["600519"]})
     assert "error" in out and "query_quote" in out["error"]
 

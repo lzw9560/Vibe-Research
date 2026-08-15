@@ -27,6 +27,7 @@ def _gtimg_full() -> str:
 
 
 def test_fetch_raw_returns_full_fields(monkeypatch):
+    monkeypatch.setattr(tencent, "_TENCENT_CACHE", {})  # S067 缓存隔离：清缓存防先前测试的实盘值短路 _fetch_gtimg mock
     monkeypatch.setattr(tencent, "_fetch_gtimg", lambda codes: _gtimg_full())
     out = tencent.fetch_raw(["600519"])
     q = out["600519"]
