@@ -44,38 +44,38 @@ def _assert_not_implemented(r: dict, *, message_contains: str = ""):
 
 def test_realtime_returns_not_implemented(monkeypatch):
     _guard_workflow(monkeypatch)
-    r = asyncio.run(wf.get_realtime_workflow())
+    r = wf.get_realtime_workflow()  # sync 端点直接调（原 asyncio.run 调 sync 返 dict 致 TypeError）
     _assert_not_implemented(r, message_contains="盘中监控")
 
 
 def test_intraday_alias_returns_not_implemented(monkeypatch):
     """向后兼容别名 /intraday 与 /realtime 同走 early return。"""
     _guard_workflow(monkeypatch)
-    r = asyncio.run(wf.get_intraday_workflow_alias())
+    r = asyncio.run(wf.get_intraday_workflow_alias())  # alias 是 async def，保留 asyncio.run
     _assert_not_implemented(r, message_contains="盘中监控")
 
 
 def test_post_market_returns_not_implemented(monkeypatch):
     _guard_workflow(monkeypatch)
-    r = asyncio.run(wf.get_post_market_workflow())
+    r = wf.get_post_market_workflow()
     _assert_not_implemented(r, message_contains="盘后复盘")
 
 
 def test_signals_returns_not_implemented(monkeypatch):
     _guard_workflow(monkeypatch)
-    r = asyncio.run(wf.get_realtime_signals())
+    r = wf.get_realtime_signals()
     _assert_not_implemented(r, message_contains="盘中信号")
 
 
 def test_alerts_returns_not_implemented(monkeypatch):
     _guard_workflow(monkeypatch)
-    r = asyncio.run(wf.get_bomb_alerts())
+    r = wf.get_bomb_alerts()
     _assert_not_implemented(r, message_contains="炸板预警")
 
 
 def test_settle_returns_not_implemented(monkeypatch):
     _guard_workflow(monkeypatch)
-    r = asyncio.run(wf.settle_position())
+    r = wf.settle_position()
     _assert_not_implemented(r)
     # 指引用状态机流转结算（S034），不跑批量结算桩
     assert "状态机" in r["message"] or "S034" in r["message"], r["message"]
@@ -84,6 +84,6 @@ def test_settle_returns_not_implemented(monkeypatch):
 def test_refresh_unaffected(monkeypatch):
     """refresh 端点不涉及桩（S036 R6 保留），正常返回时间戳。"""
     _guard_workflow(monkeypatch)
-    r = asyncio.run(wf.refresh_workflow())
+    r = wf.refresh_workflow()
     assert r["data"]["status"] == "success"
     assert "refreshed_at" in r["data"]
