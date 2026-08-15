@@ -48,6 +48,10 @@ _cache: dict[str, Any] = {
     "error": None,
 }
 
+# S068 R2：保留后台采集 task 的强引用，防 CPython GC 在 task 挂起（await/to_thread）时回收。
+# done 回调从 set 中移除，避免无限增长。对照 intraday_sentiment._task 的正确范式。
+_pending_collections: set[asyncio.Task] = set()
+
 # ============ S048 R4：盘前快照持久化（历史不可变，纯读盘零请求） ============
 # S050：读侧（_load_snapshot/_list_snapshot_dates）抽至 snapshot_store.py 共用；
 # _save_snapshot 仍留此处（写盘是采集链路职责，settlement 只读不写）。
@@ -450,7 +454,7 @@ def get_pre_market_dates() -> Dict[str, Any]:
 
 
 @router.post("/api/workflow/pre-market/refresh")
-def refresh_pre_market(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def refresh_pre_market(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
     """触发后台异步采集（S026）：立即返回 run_id+status=running，不阻塞。
 
     并发守卫：status==running 时返"已有采集在跑"+现有 run_id
@@ -465,7 +469,11 @@ def refresh_pre_market(date: Optional[str] = Query(None, description="日期，�
         return {"run_id": _cache["run_id"], "status": "running", "msg": "已有采集在跑"}
     run_id = uuid.uuid4().hex[:8]
     _cache.update(run_id=run_id, status="running", data_date=target_date, error=None, as_of=_now_iso())
-    asyncio.create_task(_collect(run_id, target_date))  # 后台跑，不 await
+    # S068 R2：保留强引用防 CPython GC 在 task 挂起（await/to_thread）时回收；
+    # done 回调从 set 移除，避免无限增长。
+    task = asyncio.create_task(_collect(run_id, target_date))
+    _pending_collections.add(task)
+    task.add_done_callback(_pending_collections.discard)
     return {"run_id": run_id, "status": "running"}
 
 
@@ -802,6 +810,11 @@ def _settle_on_transition(
 
     S038：exit_price_source 由端点层标注并透传——"market"（拉价预填）/
     "manual"（用户手填）/ None（未结算/缺价跳过）。未结算分支也回填该字段。
+
+    S068 R3：R3 的 transition() 已保证同一 (code,date,round) 仅 1 个请求能走到结算
+    （并发 holding→settled 在 UPDATE WHERE status=? 处被挡、返 400、到不了此处），
+    故维持 S034 原顺序 record→mark_settled——record 抛异常时 settled_at 未落、可重试恢复
+    （可恢复优于"先抢占 settled_at 后 record"的不可恢复漏记，见 spec §5 取舍）。
     """
     if state.get("entry_price") is None or state.get("exit_price") is None:
         return {"recorded": False, "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程", "exit_price_source": None}, None

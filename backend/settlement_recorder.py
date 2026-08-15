@@ -47,7 +47,9 @@ def settlement_summary(
     不再用 trade_date 近似（原口径把 watching/monitoring 时长也算进去，系统性高估）。
     entry_at/settle_at 缺失 → 0（历史不全的旧行兜底）。
     """
-    if entry_price and exit_price is not None:
+    # S068 R4：显式守卫 entry 非空/非零（原 `entry_price and exit_price is not None` 运算符优先级
+    # 实为 `entry_price and (exit_price is not None)`，对正常价偶合正确，entry=0 靠短路侥幸绕过除零）。
+    if entry_price not in (None, 0) and exit_price is not None:
         return_pct = round(((exit_price - entry_price) / entry_price) * 100, 2)
     else:
         return_pct = 0.0

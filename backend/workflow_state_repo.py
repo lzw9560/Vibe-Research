@@ -287,13 +287,17 @@ def transition(
     strategy: Optional[str] = None,
     attention_mode: Optional[str] = None,
 ) -> tuple[bool, str]:
-    """手动流转：读当前态 → 状态机规则校验 → UPDATE + history。
+    """手动流转：单连接事务内 读当前态 → 状态机规则校验 → UPDATE + history。
 
     规则单一事实源：复用 WorkflowStateMachine.transition（_ALLOWED_TRANSITIONS）。
     S033 R2：entry_price/exit_price/strategy 为用户自填操作记录（holding 买入价/
     settled 卖出价/战法），COALESCE 语义——传 None 不覆盖已有值。
     S050 R3：attention_mode 用户自填关注模式 A/B/C（COALESCE，缺省不覆盖）。
     返回 (ok, detail)：非法/未知/无记录时 ok=False，detail 说明当前态与允许目标。
+
+    S068 R3：读-校验-写收敛到单连接单事务，UPDATE 带 WHERE status=<期望当前态>
+    按 rowcount 原子抢占——并发流转时后到者 rowcount=0 失败，杜绝基于陈旧读的双写
+    （原实现读用独立连接、写在后开连接，校验与写分离有 TOCTOU 窗口）。
     """
     try:
         target_status = WorkflowStatus(target)
@@ -301,23 +305,28 @@ def transition(
         allowed = [s.value for s in WorkflowStatus]
         return False, f"未知目标状态: {target}（合法值: {', '.join(allowed)}）"
 
-    current = get_state(code, trade_date)
-    if current is None:
-        return False, f"该日无此股的工作流状态记录: code={code} date={trade_date}"
-
-    machine = WorkflowStateMachine(WorkflowStatus(current["status"]))
-    if not machine.transition(target_status, reason):
-        allowed_targets = [s.value for s in machine.allowed_targets()]
-        return (
-            False,
-            f"当前状态 {current['status']} 不允许流转到 {target}"
-            f"（允许: {', '.join(allowed_targets) or '无'}）",
-        )
-
-    now = _now_iso()
     conn = _get_connection()
     try:
-        conn.execute(
+        row = conn.execute(
+            "SELECT status FROM workflow_state WHERE code = ? AND trade_date = ?",
+            (code, trade_date),
+        ).fetchone()
+        if row is None:
+            return False, f"该日无此股的工作流状态记录: code={code} date={trade_date}"
+        current_status = WorkflowStatus(row["status"])
+
+        machine = WorkflowStateMachine(current_status)
+        if not machine.transition(target_status, reason):
+            allowed_targets = [s.value for s in machine.allowed_targets()]
+            return (
+                False,
+                f"当前状态 {current_status.value} 不允许流转到 {target}"
+                f"（允许: {', '.join(allowed_targets) or '无'}）",
+            )
+
+        now = _now_iso()
+        # 原子抢占：仅当 status 仍为校验时的 current_status 才更新（并发改了状态则 rowcount=0）
+        cur = conn.execute(
             """
             UPDATE workflow_state
             SET status = ?, reason = ?, updated_at = ?,
@@ -325,20 +334,22 @@ def transition(
                 exit_price = COALESCE(?, exit_price),
                 strategy = COALESCE(?, strategy),
                 attention_mode = COALESCE(?, attention_mode)
-            WHERE code = ? AND trade_date = ?
+            WHERE code = ? AND trade_date = ? AND status = ?
             """,
             (
                 target_status.value, reason, now,
                 entry_price, exit_price, strategy, attention_mode,
-                code, trade_date,
+                code, trade_date, current_status.value,
             ),
         )
+        if cur.rowcount == 0:
+            return False, "状态已被并发流转改变，请重试"
         conn.execute(
             """
             INSERT INTO workflow_state_history (code, trade_date, from_status, to_status, reason, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (code, trade_date, current["status"], target_status.value, reason, now),
+            (code, trade_date, current_status.value, target_status.value, reason, now),
         )
         # S034 R4：流转到 candidate = 新一轮（settled/filtered 重入）——清结算锚点，新轮可再结算
         if target_status == WorkflowStatus.CANDIDATE:
