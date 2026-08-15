@@ -1,27 +1,14 @@
 # -*- coding: utf-8 -*-
-"""两套因子适配层单测（S023 B4）。
+"""因子适配层单测（limitup_screener）。
 
 用 mock 验证适配结构，不依赖真实数据采集（live 测试另跑）。
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from unittest.mock import patch, MagicMock
 
-from candidate_funnel.models import (
-    ActivityAssessment,
-    ActivityTier,
-    DiagnosisCard,
-    FilterRecord,
-    FunnelLayer,
-    FunnelResult,
-    IndicatorSet,
-    StabilizationSignals,
-    ThresholdConfig,
-)
 from factors import registry
-from factors.candidate_funnel_factor import CandidateFunnelFactor, FACTOR_ID as CF_ID
 from factors.limitup_screener_factor import LimitupScreenerFactor, FACTOR_ID as LS_ID
 
 
@@ -29,74 +16,6 @@ def setup_function():
     registry._registry.clear()
     import factors.registry as _reg_mod
     _reg_mod._defaults_registered = False
-
-
-# ---------- CandidateFunnelFactor ----------
-
-
-def _fake_diagnosis_card(code="600519", name="贵州茅台") -> DiagnosisCard:
-    return DiagnosisCard(
-        code=code,
-        name=name,
-        indicators=IndicatorSet(code=code, name=name),
-        activity=ActivityAssessment(
-            tier=ActivityTier.ACTIVE,
-            rules_applied=["换手>=8.0%", "量比>=2.0"],
-        ),
-        stabilization=StabilizationSignals(),
-        risk_flags=[],
-        as_of=datetime.now(),
-    )
-
-
-def _fake_funnel_result(candidates=None) -> FunnelResult:
-    return FunnelResult(
-        run_id="test",
-        date="2026-08-01",
-        layers=[
-            FunnelLayer(
-                layer_id="R1", name="宽源", as_of=datetime.now(),
-                input_count=99, output_count=50, filtered_out=[], output_codes=[],
-            )
-        ],
-        final_candidates=candidates or [],
-        threshold_config=ThresholdConfig(),
-        sentiment_phase="阴天",
-        as_of=datetime.now(),
-    )
-
-
-def test_candidate_funnel_factor_fetch_with_candidates():
-    card = _fake_diagnosis_card()
-    with patch("factors.candidate_funnel_factor.funnel_mod.run_funnel", return_value=_fake_funnel_result([card])):
-        f = CandidateFunnelFactor()
-        r = f.fetch("2026-08-03")
-    assert r.factor_id == CF_ID
-    assert len(r.candidates) == 1
-    c = r.candidates[0]
-    assert c.code == "600519"
-    assert c.source_factor_id == CF_ID
-    assert c.source_layer == "final"
-    assert "换手>=8.0%" in c.hit_rules
-    assert c.detail["activity_tier"] == "ActivityTier.ACTIVE"
-    assert len(r.layers) == 1
-    assert r.data_date == "2026-08-03"
-    assert r.data_status == "ok"
-
-
-def test_candidate_funnel_factor_empty_candidates_marks_ok():
-    with patch("factors.candidate_funnel_factor.funnel_mod.run_funnel", return_value=_fake_funnel_result([])):
-        f = CandidateFunnelFactor()
-        r = f.fetch("2026-08-03")
-    assert r.candidates == []
-    assert r.data_status == "ok"
-    assert "非采集失败" in r.config["reason"]
-
-
-def test_candidate_funnel_factor_describe():
-    d = CandidateFunnelFactor().describe()
-    assert d["name"]
-    assert len(d["维度"]) >= 5
 
 
 # ---------- LimitupScreenerFactor ----------
@@ -169,8 +88,13 @@ def test_register_default_factors_idempotent():
     n1 = len(registry.get_all_factors())
     registry.register_default_factors()
     n2 = len(registry.get_all_factors())
-    assert n1 == 2
-    assert n2 == 2  # 幂等
+    # α（grill）：candidate_funnel 因子冗余——漏斗层由 _build_funnel_layers 单一产出
+    # （routers/workflow.py），前端 PreMarketBriefing.tsx:246 跳过其因子卡，故从默认注册
+    # 移除；漏斗数据不丢（final_candidates/funnel_layers 不变），仅去重复表示。
+    assert n1 == 1
+    assert n2 == 1  # 幂等
+    assert {f.factor_id for f in registry.get_all_factors()} == {"limitup_screener"}
+    assert registry.get_factor("candidate_funnel") is None  # 不再注册
 
 
 def _async_return(val):

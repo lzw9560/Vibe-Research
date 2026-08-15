@@ -85,18 +85,18 @@ _defaults_registered = False
 
 
 def register_default_factors() -> None:
-    """注册内置默认因子（两套选股标准）。
+    """注册内置默认因子。
 
-    工作流/盘前简报调用前需先 register_default_factors()。
-    幂等：重复调用不重复注册。
+    默认仅 limitup_screener：candidate_funnel 漏斗层由 _build_funnel_layers
+    单一产出（routers/workflow.py），前端 PreMarketBriefing.tsx:246 跳过其因子卡，
+    故其因子注册为冗余（grill α，2026-08-16）——漏斗数据不丢（final_candidates/
+    funnel_layers 不变），仅去重复表示。详见 memory: quant-mindset-solid-foundation。
     """
     global _defaults_registered
     if _defaults_registered:
         return
     # 延迟导入避免循环依赖
-    from factors.candidate_funnel_factor import CandidateFunnelFactor
     from factors.limitup_screener_factor import LimitupScreenerFactor
 
-    register(CandidateFunnelFactor())
     register(LimitupScreenerFactor())
     _defaults_registered = True
