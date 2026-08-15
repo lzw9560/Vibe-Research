@@ -2,7 +2,7 @@
 
 > 状态：Phase 0-3 全闭合（2026-08-14）— 后端 10 模块 217 单测 + 7 API + 前端 §11.2/11.3/11.4/11.5 全落地（331 测试全绿）；0e 框架就绪，20 天运行需日历积累。
 > **grill 2026-08-16（Q9-Q15）决议已落 spec**：Phase 0b 双轨分层 + 独立 CLI 脚本 + verdict 降级 + 行动计划，见 §13 Phase 0b/0c/0d 段落与 §14.1 交叉引用。
-> **Phase 0b 回归结果（2026-08-16）**：verdict=B→降级为"时间窗口效应，待验证"。rebound_rate 是唯一强信号（r=+0.179, p=6e-13），升主因子；red_rate/freq_score/total_score 弱信号或无预测力；spec §4.4"反向因子"理论删除。Phase 1 用等权 placeholder 不阻塞推进，权重后期热替换。
+> **Phase 0b 回归结果（2026-08-16，二轮验证后修订）**：初判 verdict=B→降级为"时间窗口效应，待验证"。**二轮验证（日内/日间分解 + day-cluster bootstrap）证伪了 rebound_rate 强信号**：它是日级市场变量（75% 交易日全市场单值），pooled r=+0.179 全部由日间变异撑起（within-day r=-0.010，方差 78.8% 在日间；bootstrap pooled CI=[-0.019,+0.296] 含 0，p=6e-13 是 IID 假设假象）。**全部 6 个因子 within-day r≈0（CI 全含 0）——eastmoney_live 24 天数据里没有任何可用的横截面选股因子。** §4.4"反向因子"理论删除不变。Phase 1 等权 placeholder 不阻塞推进（理由从"待验证"更新为"无已验证信号，等权是唯一诚实起点"）。
 > **目标**：一切为了提高胜率。拆分单漏斗为策略特定漏斗，重算策略分，
 > 天气硬开关选策略，板块热度过滤一日游，日历因子调仓位。
 > 前端盘前/盘中/盘后统一风格，因子可点击跳详情，面包屑导航闭环。
@@ -165,17 +165,26 @@ FALLBACK_STRATEGIES: dict[str, list[str]] = {
 > **grill 2026-08-16（Q14-Q15）改写**：Phase 0b 回归结果显示原权重体系失效——
 > seal_rate r=+0.046 不显著（spec §1.1 的 r=+0.18 未在 1587 样本复现），
 > red_rate/freq_score/total_score 方向不稳定（122 天无信号 vs 27 天弱正相关，无法定方向）。
-> **唯一强信号**：rebound_rate r=+0.179（p=6e-13, CI=[0.131, 0.227]）——升主因子。
-> §4.4"反向因子"理论删除（大样本下 freq/red 不是负相关，反转无意义）。
+> ~~**唯一强信号**：rebound_rate r=+0.179（p=6e-13, CI=[0.131, 0.227]）——升主因子。~~
+> **二轮验证收回（2026-08-16）**：rebound_rate 是日级市场变量——`limitup_screener/service.py:_compute_rebound_rate`
+> 算的是 T 日炸板池次日回封率，天然市场级，广播给当日每只票（24 天中 75% 交易日全市场单值，
+> 日均 distinct=1.25）。日内/日间分解：pooled r=+0.179 → within-day r=-0.010（横截面零选股力），
+> between-day r=+0.587（行情制度效应），方差 78.8% 在日间。day-cluster bootstrap（按日整日重抽，
+> B=800）：pooled r CI=[-0.019,+0.296] 含 0，within CI=[-0.133,+0.048] 含 0——p=6e-13 是 IID 假设假象，
+> 有效样本实为 24 天不是 1587 条。**全部 6 个因子 within-day r≈0 且 bootstrap CI 全含 0**
+> （premium +0.040 / red +0.027 / seal +0.010 / rebound -0.010 / freq +0.027 / total +0.024），
+> eastmoney_live 24 天里没有任何已验证的横截面选股因子。
+> §4.4"反向因子"理论删除不变（大样本下 freq/red 不是负相关，反转无意义）。
 
 ```
 score = rebound_rate x W1 + seal_rate x W2 + premium x W3 + freq x W4 + zt_count_golden x W5
 ```
 
 设计逻辑（Phase 0b 回归后）：
-- rebound_rate：唯一跨样本一致强信号（r=+0.179），升主因子
-- seal_rate：方向一致但弱（r=+0.046，CI 边际排除 0），保留观察
-- premium/freq：方向不稳定，等权 placeholder，待 60 天 eastmoney_live 积累后重判
+- rebound_rate：pooled r=+0.179 已证伪为日级伪信号（见上方收回说明），**降回普通因子**，等权 placeholder 保留观察；
+  另注意其为市场级变量，横截面排序中不产生区分度，实际近似常数项
+- seal_rate：within-day r=+0.010（CI 含 0），无已验证信号，等权 placeholder
+- premium/red/freq：within-day r≈0（CI 含 0），等权 placeholder，待 60 天 eastmoney_live 积累后重判
 - zt_count_golden：黄金区[2,5]=1.0, [6,8]=0.5, 9+=0.1, 1=0.0（未回归，保留）
 
 候选初始值（等权 placeholder，Phase 0d 后热替换）：
@@ -184,7 +193,8 @@ W1 = W2 = W3 = W4 = W5 = 0.20
 ```
 
 Phase 1 用等权推进基础设施，不阻塞。权重后期热替换（策略注册表设计时支持权重 JSON 热加载）。
-Phase 0d 后：rebound_rate 按 r 值加权，其余降为等权或权重 0。
+Phase 0d 后：按 **within-day r**（不是 pooled r）的 bootstrap CI 定权重——CI 排除 0 的因子按 r 值加权，
+其余等权或权重 0。当前 6 因子 within-day CI 全含 0，故等权是唯一有数据支撑的起点。
 
 ### 4.2 非涨停类候选权重（低吸/反包/平台突破/龙头 共用）
 
@@ -211,9 +221,11 @@ Phase 2 有数据后单独估参。
 score = rebound_rate x 0.50 + seal_rate x 0.50
 ```
 
-> **grill 2026-08-16 改写**：原 `seal_rate x 0.60 + (100 - freq) x 0.40` 的 freq 反向已删除（§4.4）。
-> rebound_rate 是唯一强信号，与 seal_rate 等权。暴风雨逆势涨停只看封板强度 + 炸板后溢价。
-> 样本极少，不做回归，固定权重。
+> **grill 2026-08-16 改写（二轮验证后修订）**：原 `seal_rate x 0.60 + (100 - freq) x 0.40` 的 freq 反向已删除（§4.4）。
+> 一轮结论"rebound_rate 唯一强信号"已证伪（日级市场变量，见 §4.1 收回说明）——但等权公式本身不受影响：
+> 两个因子都没有已验证的横截面信号，等权仍是诚实起点。暴风雨逆势涨停看封板强度 + 炸板后回封率。
+> 样本极少，不做回归，固定权重；rebound_rate 的市场级属性意味着此公式实际退化为"当日回封率 x 0.5 + 个股封板率 x 0.5"，
+> 区分度全靠 seal_rate。
 
 ### 4.4 ~~反向因子说明~~（已删除，grill 2026-08-16）
 
@@ -932,6 +944,8 @@ factor_name: r=+0.XX, 95% CI=[+0.XX, +0.XX], p=0.XXX, n=6537
   - `verdict=B`：某因子方向反转且 CI 排除 0 → 暂停 Phase 1，回头改 §4 权重方向，spec §4.4"反向因子"理论推翻重写
   - `verdict=C`：全部因子 r 趋近 0、CI 包含 0 → 因子无预测力，spec §13 依赖链前置 Phase 2（非涨停类新因子体系），涨停类基因分整体废弃
   - 脚本自动判 verdict + spec_impact，不靠人读 JSON 再判断
+  - **注（二轮验证后）**：verdict 判定基于 pooled r，日级聚类下会高估显著性；读 verdict 时必须结合
+    `decomposition` 段的 within-day r 与 bootstrap CI 一起看（脚本输出已含这两段）
 
   **实测结果（2026-08-16 跑完，`factor_significance.json`）**：
   - 脚本判 `verdict=B`（red_rate/freq_score/total_score 方向反转）
@@ -939,8 +953,24 @@ factor_name: r=+0.XX, 95% CI=[+0.XX, +0.XX], p=0.XXX, n=6537
     - kline_rebuild 3760 样本（122 天）全部 r≈0 不显著——大样本无信号更可信
     - eastmoney_live 1587 样本（27 天）弱正相关（r=0.07 刚好 CI 排除 0）——短窗口 regime 偏差风险高
     - 两组时间窗口零重叠，无法区分是"因子方向变了"还是"27 天恰好是普涨 regime"
-  - **唯一强信号**：rebound_rate r=+0.179（p=6e-13, CI=[0.131, 0.227]）——跨样本一致正向，升主因子
-  - **结论**：spec §4.4"反向因子"理论删除（大样本下 freq/red 不是负相关）；§4.1 权重体系用等权 placeholder；rebound_rate 单因子值得单独回测验证
+  - ~~**唯一强信号**：rebound_rate r=+0.179——升主因子~~（已收回，见下）
+
+  **二轮验证（2026-08-16 同日，脚本加 `intraday_decomposition` + `day_cluster_bootstrap`）**：
+  - **rebound_rate 证伪为日级伪信号**：gene_scores.db 中 75% 交易日全市场单值（日均 distinct=1.25），
+    根因是 `limitup_screener/service.py:_compute_rebound_rate` 算的是 T 日炸板池（zb_pool）次日回封率，
+    天然市场级变量却广播给当日每只票。分解：pooled r=+0.179 → within-day r=-0.010（零选股力）/
+    between-day r=+0.587（行情制度效应），方差 78.8% 在日间。day-cluster bootstrap（B=800）：
+    pooled CI=[-0.019,+0.296]、within CI=[-0.133,+0.048]，均含 0。p=6e-13 是 IID 假设假象，
+    有效独立样本实为 24 天而非 1587 条。
+  - **全 6 因子 within-day r≈0**：premium +0.040 / red +0.027 / seal +0.010 / rebound -0.010 /
+    freq +0.027 / total +0.024，bootstrap within CI 全含 0。pooled r 的"弱显著"（red/freq p≈0.003）
+    同样由日间变异与聚类结构撑起，不构成选股证据。
+  - **五分位 U 型（Q1/Q2≈58% → Q3/Q4≈40-42% → Q5≈72%）是日级聚类伪影**：U 型由"低回封日整体差、
+    高回封日整体好"的日间差异生成，不是横截面排序能力。
+  - **结论（修订）**：spec §4.4"反向因子"理论删除不变；§4.1 等权 placeholder 保留，但理由更新——
+    不是"方向未定待验证"，而是"24 天数据内不存在任何已验证的横截面信号，等权是唯一诚实起点"。
+  - **方法论沉淀（进脚本默认流程）**：凡 pooled 回归显著者，必须过日内/日间分解 + day-cluster bootstrap
+    双检；日级聚合变量（全市场同日同值）禁止作为个股选股因子。
 
 **Phase 0c：qualify 阈值优化**
 - 对不同总分区间（30-40, 40-50, 50-60, 60-70, 70+）分别算胜率
@@ -951,10 +981,11 @@ factor_name: r=+0.XX, 95% CI=[+0.XX, +0.XX], p=0.XXX, n=6537
 **Phase 0d：策略分权重定稿**
 - 基于 0b 显著因子 + 0c 最优阈值，确定每个策略的因子权重
 - 不显著的因子 -> 等权 0.25 或权重 0
-- 显著因子 -> 按 r 值大小分配权重
+- 显著因子 -> 按 within-day r 值大小分配权重（pooled r 显著但 within-day 不显著的按日级伪信号处理，
+  不分配超额权重——二轮验证修订）
 - 9 个策略的权重此时有统计支撑，不再拍脑袋
 - 输出 strategy_weights.json：每个策略的 {factor: weight}
-- **双轨分层（grill 2026-08-16）**：涨停类权重（§4.1）仅在 eastmoney_live 子集上定稿（seal_rate 是唯一已验证正向因子，kline_rebuild 缺此因子）。kline_rebuild 3760 条只用于验证 premium/red/freq 三因子方向性（Phase 0b），不参与权重定稿。spec §4.1 公式 `seal_rate x 0.40` 在 eastmoney_live 31 天（n=2836）上验证后定稿。
+- **双轨分层（grill 2026-08-16）**：涨停类权重（§4.1）仅在 eastmoney_live 子集上定稿（kline_rebuild 缺 seal_rate/rebound_rate）。kline_rebuild 3760 条只用于验证 premium/red/freq 三因子方向性（Phase 0b），不参与权重定稿。当前 eastmoney_live 24 天全因子 within-day bootstrap CI 含 0（含 seal_rate +0.010，二轮验证修订）→ 定稿结果即等权，与 Phase 1 placeholder 一致；60 天积累后重跑再热替换。
 
 **Phase 0e：前向测试（paper trading，不投真金）**
 - 用 0d 的权重跑系统，不少于 20 个交易日
@@ -1046,7 +1077,7 @@ Phase 0b 全样本回归将直接验证四个假设：
 
 Phase 0b 的结论决定权重方向。不跳过这步。
 
-> **grill 2026-08-16 决议（Q9-Q15）见 Phase 0b/0c/0d 段落 + §4.1/4.3/4.4**：双轨并存 + 查询层分层 + kline_rebuild 仅验证 3 因子方向 + 独立 CLI 脚本 + verdict 降级（B→时间窗口效应待验证）+ rebound_rate 升主因子 + §4.4 反向因子理论删除 + Phase 1 等权 placeholder 不阻塞。
+> **grill 2026-08-16 决议（Q9-Q15 + 二轮验证）见 Phase 0b/0c/0d 段落 + §4.1/4.3/4.4**：双轨并存 + 查询层分层 + kline_rebuild 仅验证 3 因子方向 + 独立 CLI 脚本 + verdict 降级（B→时间窗口效应待验证）+ ~~rebound_rate 升主因子~~（二轮验证证伪：日级市场变量，within-day r=-0.010，见 Phase 0b 段）+ §4.4 反向因子理论删除 + Phase 1 等权 placeholder 不阻塞（理由：24 天内无已验证横截面信号）。
 
 ### 14.2 Regime 失效自动检测
 

@@ -6,6 +6,11 @@
 
 - 每个因子 vs 次日收益的 Pearson r + 95% CI（Fisher z 变换）+ p 值
 - 每个因子五分位（Q1-Q5）胜率 + Wilson 95% CI
+- 日内/日间分解（2026-08-16 续 grill 新增）：pooled r 拆成 within-day（日内
+  去均值，横截面选股力）与 between-day（日均值相关，行情制度效应），外加
+  日间方差占比与日级因子检测——防止日级聚合变量伪装成选股信号
+- day-cluster bootstrap：按交易日整日重抽样，给 pooled/within r 一个尊重
+  聚类结构的 95% CI（pooled p 值的 IID 假设在日级相关下失效，必须补这一刀）
 - verdict 判定：A=方向不变且显著；B=某因子方向反转；C=全部不显著
 
 输出：
@@ -14,6 +19,7 @@
 
 用法：
     python3 backend/tools/factor_regression.py [--return-metric return_open2close|return_close2close]
+        [--bootstrap-iters 2000] [--no-bootstrap]
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import sqlite3
 import sys
 from datetime import datetime
@@ -165,6 +172,136 @@ def quintile_winrates(x: np.ndarray, y: np.ndarray) -> list[dict]:
 
 
 # =====================================================================
+# 日内/日间分解 + day-cluster bootstrap（2026-08-16 续 grill）
+# =====================================================================
+# 背景：pooled Pearson r 假设样本 IID。涨停股样本天然按日聚类——同一天的票
+# 共享当日行情制度，因子值与收益都相关。日级聚合因子（如 rebound_rate，全市场
+# 同日同值）会让 pooled r 全部由日间变异撑起，p 值极小但横截面选股力为零。
+# 分解方法：
+#   within-day r  = 因子与收益各自减去当日均值后的 pooled r（纯横截面）
+#   between-day r = 当日均值因子 vs 当日均值收益（n=天数，行情制度效应）
+#   var_between%  = 因子总平方和中"日均值偏离全局均值"的占比
+# day-cluster bootstrap：按日有放回重抽整日样本重算 r，CI 尊重聚类结构。
+
+
+def _safe_pearson(x: np.ndarray, y: np.ndarray) -> float:
+    if len(x) < 4 or x.std() == 0 or y.std() == 0:
+        return float("nan")
+    return float(stats.pearsonr(x, y)[0])
+
+
+def intraday_decomposition(
+    samples: list[dict], factor: str, return_metric: str
+) -> dict:
+    """按交易日分解因子与收益的关联。
+
+    调用方保证 samples 已过滤（同 filter_for_factor 的口径），且每条带 date。
+    """
+    if not samples:
+        return {"n_days": 0}
+    x = np.array([float(s[factor]) for s in samples])
+    y = np.array([float(s[return_metric]) for s in samples])
+    dates = [s["date"] for s in samples]
+    udays = sorted(set(dates))
+    mask_by_day = {d: np.array([dt == d for dt in dates]) for d in udays}
+
+    pooled_r = _safe_pearson(x, y)
+
+    # within-day：各自减去当日均值
+    xw = x.copy()
+    yw = y.copy()
+    for d in udays:
+        m = mask_by_day[d]
+        xw[m] -= x[m].mean()
+        yw[m] -= y[m].mean()
+    within_r = _safe_pearson(xw, yw)
+
+    # between-day：日均值序列
+    dmx = np.array([x[mask_by_day[d]].mean() for d in udays])
+    dmy = np.array([y[mask_by_day[d]].mean() for d in udays])
+    between_r = _safe_pearson(dmx, dmy)
+
+    # 方差分解
+    ss_total = float(np.sum((x - x.mean()) ** 2))
+    ss_between = float(sum(
+        mask_by_day[d].sum() * (x[mask_by_day[d]].mean() - x.mean()) ** 2
+        for d in udays
+    ))
+    var_between_pct = (ss_between / ss_total * 100.0) if ss_total > 0 else float("nan")
+
+    # 日级因子检测：日内 distinct 值个数
+    daily_distinct = [len(set(np.round(x[mask_by_day[d]], 6))) for d in udays]
+    mean_daily_distinct = float(np.mean(daily_distinct))
+    pct_days_single_value = (
+        sum(1 for c in daily_distinct if c == 1) / len(daily_distinct) * 100.0
+    )
+    is_day_level = pct_days_single_value >= 50.0 or (
+        mean_daily_distinct <= 2.0 and var_between_pct >= 60.0
+    )
+
+    return {
+        "pooled_r": pooled_r,
+        "within_day_r": within_r,
+        "between_day_r": between_r,
+        "var_between_pct": var_between_pct,
+        "n_days": len(udays),
+        "mean_daily_distinct": mean_daily_distinct,
+        "pct_days_single_value": pct_days_single_value,
+        "is_day_level": is_day_level,
+    }
+
+
+def day_cluster_bootstrap(
+    samples: list[dict],
+    factor: str,
+    return_metric: str,
+    iters: int = 2000,
+    seed: int = 42,
+) -> dict:
+    """按交易日整日有放回重抽样，重算 pooled/within r 的 95% CI。"""
+    if not samples or iters <= 0:
+        return {"iters": 0}
+    by_day: dict[str, list[dict]] = {}
+    for s in samples:
+        by_day.setdefault(s["date"], []).append(s)
+    days = sorted(by_day)
+    if len(days) < 4:
+        return {"iters": 0, "note": f"天数 {len(days)} < 4，bootstrap 不适用"}
+    rng = random.Random(seed)
+
+    def draw() -> list[dict]:
+        out: list[dict] = []
+        for _ in range(len(days)):
+            out.extend(by_day[rng.choice(days)])
+        return out
+
+    pooled_rs: list[float] = []
+    within_rs: list[float] = []
+    for _ in range(iters):
+        smp = draw()
+        dec = intraday_decomposition(smp, factor, return_metric)
+        if math.isfinite(dec["pooled_r"]):
+            pooled_rs.append(dec["pooled_r"])
+        if math.isfinite(dec["within_day_r"]):
+            within_rs.append(dec["within_day_r"])
+
+    def ci(rs: list[float]) -> list[float]:
+        if len(rs) < 20:
+            return [float("nan"), float("nan")]
+        lo, hi = np.percentile(np.array(rs), [2.5, 97.5])
+        return [float(lo), float(hi)]
+
+    return {
+        "iters": iters,
+        "n_days": len(days),
+        "pooled_r_ci95": ci(pooled_rs),
+        "within_day_r_ci95": ci(within_rs),
+        "pooled_r_samples": len(pooled_rs),
+        "within_r_samples": len(within_rs),
+    }
+
+
+# =====================================================================
 # 过滤
 # =====================================================================
 # 各组"可用因子"集合（用于判定废样本：全可用因子皆 0 => 缺失填充的废样本）
@@ -221,6 +358,24 @@ def filter_for_factor(
         xs.append(float(fv))
         ys.append(float(rv))
     return np.array(xs, dtype=float), np.array(ys, dtype=float)
+
+
+def _filter_samples(samples: list[dict], factor: str, return_metric: str, group: str) -> list[dict]:
+    """与 filter_for_factor 同口径，但返回样本对象（带 date，供日内分解用）。"""
+    out = []
+    for s in samples:
+        if s.get("missing_next_bar"):
+            continue
+        if is_garbage_sample(s, group):
+            continue
+        fv = s.get(factor)
+        if fv is None or not math.isfinite(fv):
+            continue
+        rv = s.get(return_metric)
+        if rv is None or not math.isfinite(rv):
+            continue
+        out.append(s)
+    return out
 
 
 # =====================================================================
@@ -356,7 +511,7 @@ def analyze_group(
     return out
 
 
-def main(return_metric: str) -> int:
+def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
     data, samples = load_samples()
     src_map = load_src_map()
     annotate_sources(samples, src_map)
@@ -374,6 +529,30 @@ def main(return_metric: str) -> int:
             g_east, GROUP_FACTORS["eastmoney_live"], return_metric, "eastmoney_live"
         ),
     }
+
+    # ---- 日内/日间分解 + day-cluster bootstrap ----
+    # 只对 eastmoney_live 组做（kline_rebuild 只有 3 因子且全是日级聚合口径的话
+    # 分解同样适用，但当前优先审涨停类权重主体）。
+    decomposition: dict[str, dict] = {}
+    filtered_cache: dict[str, list[dict]] = {}
+    for factor in GROUP_FACTORS["eastmoney_live"]:
+        # 复用 filter_for_factor 的口径取样本子集（带 date 供分解用）
+        xs, _ = filter_for_factor(g_east, factor, return_metric, "eastmoney_live")
+        if len(xs) == 0:
+            decomposition[factor] = {"n_days": 0}
+            continue
+        # 重新取样本对象（与 filter 同序）
+        sub = _filter_samples(g_east, factor, return_metric, "eastmoney_live")
+        filtered_cache[factor] = sub
+        decomposition[factor] = intraday_decomposition(sub, factor, return_metric)
+    decomposition["_bootstrap"] = {
+        factor: day_cluster_bootstrap(
+            filtered_cache.get(factor, []), factor, return_metric, iters=bootstrap_iters
+        )
+        for factor in GROUP_FACTORS["eastmoney_live"]
+        if factor in filtered_cache
+    }
+    decomposition["_bootstrap"]["_iters"] = bootstrap_iters
 
     verdict = compute_verdict(groups)
 
@@ -393,6 +572,7 @@ def main(return_metric: str) -> int:
         "meta": meta,
         "kline_rebuild": groups["kline_rebuild"],
         "eastmoney_live": groups["eastmoney_live"],
+        "decomposition": decomposition,
         "verdict": verdict,
     }
 
@@ -430,6 +610,28 @@ def main(return_metric: str) -> int:
                       f"{base_str}  {ci_excl}")
         print()
 
+    print("--- eastmoney_live 日内/日间分解（2026-08-16 续 grill）---")
+    print(f"{'factor':28s} {'pooled r':>9s} {'within-day':>11s} {'between-day':>12s} {'var%bet':>8s} {'日级':>5s}")
+    for f in GROUP_FACTORS["eastmoney_live"]:
+        dec = decomposition.get(f, {})
+        if dec.get("n_days", 0) == 0:
+            print(f"  {f:26s}  无样本"); continue
+        print(f"  {f:26s} {dec['pooled_r']:+9.4f} {dec['within_day_r']:+11.4f} "
+              f"{dec['between_day_r']:+12.4f} {dec['var_between_pct']:7.1f}% "
+              f"{'是' if dec['is_day_level'] else '否':>4s}")
+    print()
+    print("day-cluster bootstrap（按日整日重抽样，尊重聚类结构）:")
+    bs = decomposition.get("_bootstrap", {})
+    for f in GROUP_FACTORS["eastmoney_live"]:
+        b = bs.get(f)
+        if not b or b.get("iters", 0) == 0:
+            continue
+        plo, phi = b["pooled_r_ci95"]
+        wlo, whi = b["within_day_r_ci95"]
+        print(f"  {f:26s} pooled CI=[{plo:+.4f},{phi:+.4f}]  "
+              f"within CI=[{wlo:+.4f},{whi:+.4f}]")
+    print()
+
     print("verdict:")
     print(f"  grade        = {verdict['grade']}")
     print(f"  rationale    = {verdict['rationale']}")
@@ -456,5 +658,11 @@ if __name__ == "__main__":
         default="return_open2close",
         help="次日收益度量（默认 return_open2close）",
     )
+    parser.add_argument(
+        "--bootstrap-iters",
+        type=int,
+        default=2000,
+        help="day-cluster bootstrap 重抽样次数（默认 2000；0 关闭）",
+    )
     args = parser.parse_args()
-    sys.exit(main(args.return_metric))
+    sys.exit(main(args.return_metric, bootstrap_iters=args.bootstrap_iters))
