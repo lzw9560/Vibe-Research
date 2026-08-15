@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pre_market_workflow import PreMarketWorkflow, PreMarketReport
@@ -18,39 +18,43 @@ from factors.base import FactorResult
 from realtime_workflow import RealtimeWorkflow
 from post_market_workflow import PostMarketWorkflow, PostMarketReport
 from workflow_state_machine import WorkflowStatus
+from vr_paths import last_trading_date_str
 
 logger = logging.getLogger(__name__)
+
+# A 股按北京时间运作；阶段判定须用北京时区，否则 Docker/云（非北京时区）会报错阶段。
+_BEIJING = timezone(timedelta(hours=8))
 
 
 class TradingWorkflow:
     """打板工作流编排器。"""
 
     def __init__(self, date: str | None = None):
-        self.date = date or datetime.now().strftime("%Y-%m-%d")
+        self.date = date or last_trading_date_str()
         self.pre_market = PreMarketWorkflow(self.date)
         self.intraday = RealtimeWorkflow()
         self.post_market = PostMarketWorkflow(self.date)
 
-    def get_current_stage(self) -> dict[str, Any]:
-        """根据当前时间判断所处阶段。"""
-        now = datetime.now()
+    def get_current_stage(self, now: datetime | None = None) -> dict[str, Any]:
+        """根据北京时间判断所处阶段。now 可注入供测试。
+
+        边界（A 股北京时间）：08:00 盘前 → 09:30 开盘 → 15:00 收盘 → 22:00 盘后。
+        09:00-09:30 竞价归盘前（原实现误归 intraday 上午盘）。
+        """
+        now = now or datetime.now(_BEIJING)
         hour = now.hour
         minute = now.minute
         time_str = f"{hour:02d}:{minute:02d}"
 
-        if hour >= 8 and hour < 9:
+        if hour >= 8 and (hour < 9 or (hour == 9 and minute < 30)):
+            # 08:00-09:30 盘前（含 09:15-09:30 竞价与竞价确认）
             stage = "pre-market"
             market_status = "盘前准备中"
             next_stage = "intraday"
             next_stage_time = "09:30"
         elif hour >= 9 and hour < 15:
             stage = "intraday"
-            if hour < 12:
-                market_status = "上午盘"
-            elif hour < 15:
-                market_status = "下午盘"
-            else:
-                market_status = "收盘"
+            market_status = "上午盘" if hour < 12 else "下午盘"
             next_stage = "post-market"
             next_stage_time = "15:00"
         elif hour >= 15 and hour < 22:

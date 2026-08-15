@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from limitup_screener.models import (
@@ -28,6 +28,7 @@ from limitup_screener.service import get_screener_result
 from limitup_strategy import StrategySignal
 from strategies.strategy_matcher import StrategyMatcher
 from strategies.position_advisor import PositionAdvisor
+from vr_paths import last_trading_date_str
 
 logger = logging.getLogger(__name__)
 
@@ -91,18 +92,9 @@ class PreMarketWorkflow:
     """盘前工作流引擎。"""
 
     def __init__(self, date: str | None = None):
-        self.date = date or self._resolve_date()
+        self.date = date or last_trading_date_str()
         self._strategy_matcher = StrategyMatcher()
         self._position_advisor = PositionAdvisor()
-
-    def _resolve_date(self) -> str:
-        """解析日期，回推到最近交易日。"""
-        today = datetime.now().strftime("%Y-%m-%d")
-        for back in range(5):
-            d = (datetime.now() - timedelta(days=back)).strftime("%Y-%m-%d")
-            # TODO: 接入交易日历
-            return d
-        return today
 
     async def run(self) -> PreMarketReport:
         """执行盘前工作流。"""
