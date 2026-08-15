@@ -275,8 +275,13 @@ def test_refresh_allows_today_even_with_snapshot(monkeypatch):
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
 
     # 守卫不触发；进 running 后 asyncio.create_task 挂后台不 await，直接返 running
-    async def _noop_create_task(*_a, **_kw):
-        pass
+    def _noop_create_task(*_a, **_kw):
+        # S068 R2 后 create_task 返的 Task 须支持 add_done_callback；原 async def 返 coroutine 无此方法致 AttributeError
+        if _a and hasattr(_a[0], "close"):
+            _a[0].close()  # 测试不真跑 _collect；关闭传入协程防 "never awaited" warning
+        class _FakeTask:
+            def add_done_callback(self, _cb) -> None: pass
+        return _FakeTask()
 
     monkeypatch.setattr(wf.asyncio, "create_task", _noop_create_task)
     r = asyncio.run(wf.refresh_pre_market(date="2026-08-07"))
@@ -289,8 +294,13 @@ def test_refresh_allows_backfill_for_missing_history(monkeypatch):
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
     assert wf._load_snapshot("2026-06-01") is None
 
-    async def _noop_create_task(*_a, **_kw):
-        pass
+    def _noop_create_task(*_a, **_kw):
+        # S068 R2 后 create_task 返的 Task 须支持 add_done_callback；原 async def 返 coroutine 无此方法致 AttributeError
+        if _a and hasattr(_a[0], "close"):
+            _a[0].close()  # 测试不真跑 _collect；关闭传入协程防 "never awaited" warning
+        class _FakeTask:
+            def add_done_callback(self, _cb) -> None: pass
+        return _FakeTask()
 
     monkeypatch.setattr(wf.asyncio, "create_task", _noop_create_task)
     r = asyncio.run(wf.refresh_pre_market(date="2026-06-01"))
@@ -328,7 +338,7 @@ def test_get_invalid_date_400(monkeypatch):
 
 def test_dates_empty_dir(monkeypatch):
     _reset_cache(monkeypatch)
-    r = asyncio.run(wf.get_pre_market_dates())
+    r = wf.get_pre_market_dates()  # sync 函数直接调（原 asyncio.run 调 sync 返 dict 致 TypeError）
     assert r == {"dates": []}
 
 
@@ -341,5 +351,5 @@ def test_dates_lists_snapshot_dates_desc(monkeypatch):
     # 干扰文件：非日期名
     (wf._snapshot_dir() / "not-a-date.json").write_text("{}", encoding="utf-8")
 
-    r = asyncio.run(wf.get_pre_market_dates())
+    r = wf.get_pre_market_dates()  # sync 函数直接调（原 asyncio.run 调 sync 返 dict 致 TypeError）
     assert r["dates"] == ["2026-08-03", "2026-07-15", "2026-07-01"]
