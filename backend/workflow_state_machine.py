@@ -71,9 +71,18 @@ class WorkflowStateMachine:
         return list(self._history)
 
     def is_terminal(self) -> bool:
-        """是否为终态。"""
+        """是否本轮终态（settled=已结算 / filtered=已过滤）。
+
+        注意：终态非永久——settled/filtered 均可经 candidate 重入下一轮
+        （见 _ALLOWED_TRANSITIONS）。状态机设计为循环复用，不设永久终态；
+        若需判断「彻底结束、可清理」目前无此语义。
+        """
         return self._current in {WorkflowStatus.SETTLED, WorkflowStatus.FILTERED}
 
     def is_active(self) -> bool:
-        """是否为活跃状态（非终态）。"""
+        """是否在 live round 中（pending/candidate/watching/monitoring/holding）。
+
+        本轮终态（settled/filtered）返 False——但记录仍持久化、可经 candidate 重入，
+        故「非活跃」≠「可清理」。
+        """
         return not self.is_terminal()

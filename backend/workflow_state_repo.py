@@ -243,8 +243,7 @@ def _insert_initial(
             (code, name, trade_date, target.value, reason, now, now),
         )
         if cursor.rowcount == 0:
-            conn.commit()
-            return False
+            return False  # DO NOTHING 未写入；空事务由 finally conn.close() 回滚，无需 commit
         conn.execute(
             """
             INSERT INTO workflow_state_history (code, trade_date, from_status, to_status, reason, created_at)
