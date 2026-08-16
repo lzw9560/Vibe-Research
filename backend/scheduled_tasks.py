@@ -448,6 +448,7 @@ class TaskExecutor:
             "seal_intraday_collect": self._execute_seal_intraday_collect,  # S055：盘中封单时序采集
             "candidate_funnel_precompute": self._execute_candidate_funnel_precompute,  # S004 R5：盘后漏斗预计算
             "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,  # §44 60 天复验检查点（提醒任务）
+            "forward_test_daily": self._execute_forward_test_daily,  # S069 R1：每日记 forward_test picks+universe
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -933,6 +934,31 @@ def _execute_s066_validation_checkpoint(self, payload: Dict[str, Any]) -> Dict[s
 TaskExecutor._execute_s066_validation_checkpoint = _execute_s066_validation_checkpoint
 
 
+def _execute_forward_test_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S069 R1：每日 post-market 记当日 forward_test picks + universe codes（收益 NULL，R2 次日回填）。
+
+    晚 limitup_precompute（gene_scores 已写 15:30）。weather 用 build_context（完整架构非退化）。
+    信号日 = last_trading_date_str（当日交易日；周末跑记最近交易日，幂等）。
+    """
+    from vr_paths import last_trading_date_str
+    from sentiment_context import build_context
+    from strategies.forward_test import run_daily_forward_test
+
+    signal_date = last_trading_date_str()
+    try:
+        weather = build_context(signal_date).weather_state
+    except Exception:
+        weather = None
+    r = run_daily_forward_test(signal_date, weather_state=weather)
+    logger.info("[forward_test_daily] %s picks=%s universe=%s weather=%s",
+               signal_date, r.get("recommendations", 0), r.get("universe_codes", 0), weather)
+    return {"signal_date": signal_date, "weather": weather,
+            "picks": r.get("recommendations", 0), "universe_codes": r.get("universe_codes", 0)}
+
+
+TaskExecutor._execute_forward_test_daily = _execute_forward_test_daily
+
+
 _manager = ScheduledTaskManager()
 
 
@@ -1193,6 +1219,19 @@ def _ensure_seed_tasks() -> None:
             notify_on_success=True,
         ))
         logger.info("[scheduler] seed 默认任务 s066_validation_checkpoint 已创建（cron 0 18 * * 1，§44 60 天复验提醒）")
+
+    # S069 R1：每日 post-market 记当日 forward_test picks + universe（晚 limitup_precompute 15min）。
+    # weather 用 build_context（完整架构）；T+1 收益由 R2 次日回填（待接）。
+    if "forward_test_daily" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="forward_test_daily",
+            description="S069 R1：每日 post-market 记当日 forward_test picks+universe（§44 数据日积）",
+            task_type="forward_test_daily",
+            cron_expr="45 15 * * 0-4",  # 15:45（晚 precompute 15:30 + sti 15:35）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 forward_test_daily 已创建（cron 45 15 * * 0-4）")
 
 
 async def stop_scheduler() -> None:

@@ -39,6 +39,7 @@ _EXPECTED_TASK_TYPES = {
     "seal_intraday_collect",
     "candidate_funnel_precompute",
     "s066_validation_checkpoint",
+    "forward_test_daily",
 }
 
 
@@ -361,3 +362,40 @@ class TestS066ValidationCheckpoint:
         assert r["eastmoney_live_days"] == 65
         assert "backfill" in r["action"]
         assert (tmp_path / "s066_60day_due.json").exists()
+
+
+class TestForwardTestDaily:
+    """S069 R1：每日 forward_test picks+universe 记录 executor。"""
+
+    def test_wires_weather_and_shape(self, monkeypatch):
+        """executor 接 build_context weather + run_daily_forward_test，返 picks/universe 形状；weather 透传。"""
+        monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-14")
+        monkeypatch.setattr("sentiment_context.build_context",
+                            lambda d: type("Ctx", (), {"weather_state": "晴天"})())
+        calls = {}
+
+        def fake_run(date, weather_state=None):
+            calls["date"] = date
+            calls["weather"] = weather_state
+            return {"recommendations": 20, "universe_codes": 59}
+
+        monkeypatch.setattr("strategies.forward_test.run_daily_forward_test", fake_run)
+        r = st._execute_forward_test_daily(None, {})
+        assert r["signal_date"] == "2026-08-14"
+        assert r["weather"] == "晴天"
+        assert r["picks"] == 20 and r["universe_codes"] == 59
+        assert calls["weather"] == "晴天"  # weather 透传给 run_daily_forward_test
+
+    def test_build_context_failure_falls_back_to_none_weather(self, monkeypatch):
+        """build_context 异常 → weather=None（不阻断 picks 记录）。"""
+        monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-14")
+
+        def boom(d):
+            raise RuntimeError("sti unavailable")
+
+        monkeypatch.setattr("sentiment_context.build_context", boom)
+        monkeypatch.setattr("strategies.forward_test.run_daily_forward_test",
+                            lambda date, weather_state=None: {"recommendations": 5, "universe_codes": 10})
+        r = st._execute_forward_test_daily(None, {})
+        assert r["weather"] is None
+        assert r["picks"] == 5  # 仍记 picks（weather=None 退化下界）

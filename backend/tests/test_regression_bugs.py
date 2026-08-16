@@ -60,6 +60,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "seal_intraday_collect",
             "candidate_funnel_precompute",
             "s066_validation_checkpoint",
+            "forward_test_daily",
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")
