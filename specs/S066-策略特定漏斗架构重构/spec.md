@@ -1037,6 +1037,16 @@ factor_name: r=+0.XX, 95% CI=[+0.XX, +0.XX], p=0.XXX, n=6537
 - 不通过 -> 修 bug 再跑 20 天
 - 前向测试期间不投真金
 
+> **Phase 0e 历史回填验证（2026-08-16，`tools/forward_test_backfill.py` 3df24ec，§44 bar）**：
+> runner `run_daily_forward_test` 此前未接线（forward_test_records 0 行、§13.0 门没跑过）。
+> retroactive 回填 31 天 eastmoney_live（weather=None 退化版）+ §44 对照随机基准：
+> - 策略胜率 240/488=49.2% CI[44.8,53.6]% vs 随机基准（全体涨停股次日 open2close>0）1165/2319=50.2% CI[48.2,52.3]%
+> - **lift=0.98x <2x → §44 判噪声**（且 <1 略劣于随机；两 CI 重叠不显著优于随机）→ §44 bar 下**无验证 alpha**。
+> - 三方一致：与 §1.1 grill Q1（total_score 无验证 edge）+ Phase 0b（within-day r≈0）一致——S066 信号在 §44 bar 下均无次日收益 edge。
+> - **框架 pass-logic 不合规**：`pass_threshold=48`（=回测 60×0.8，上方"degradation ≥80%"弱 bar）≠ §13.0 绝对 60%；且无随机基准 → `passed=True`（49.2%>48%）在 §44 下不合规（50% 随机策略也过 48%）。
+> - caveat：weather=None（非天气适配退化版，下界）；31 天<30 探索性 + 488 样本跨 31 天日聚类（effective n≈31，CI 偏窄）。
+> **路径**：① 修框架 pass-logic 到 §44 合规（加随机基准+lift、门槛对齐 §13.0 绝对 60）；② weather-adapted 重跑（接历史天气，测完整架构非退化版）；③ 60 天积累复验。
+
 ### 依赖链
 
 ```
