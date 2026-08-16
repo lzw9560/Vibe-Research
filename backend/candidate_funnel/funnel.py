@@ -383,7 +383,18 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         auction, catalyst = {}, {}
         r3_data_status = "未取得"
         r3_data_reason = f"R3 定稿采集失败: {exc}"
-    r3_kept, r3_filtered = _filter_r3(r2_kept, auction, catalyst, genes, activity)
+    # exp-3 降级：auction/catalyst 均为空时（采集异常 OR 正常返空），
+    # _filter_r3 的 has_auction or has_catalyst 全 False 会把所有候选过滤掉，
+    # R3 输出 0 候选。降级保留 R2 输出，_filter_r3 保持单一职责仅在有数据时调。
+    # 诚实标注：未被 except 标注 data_status 时补标降级原因，不掩盖。
+    if not auction and not catalyst:
+        r3_kept = list(r2_kept)
+        r3_filtered = []
+        if r3_data_status is None:
+            r3_data_status = "降级"
+            r3_data_reason = "R3 数据缺失（auction/catalyst 均空），降级保留 R2 输出"
+    else:
+        r3_kept, r3_filtered = _filter_r3(r2_kept, auction, catalyst, genes, activity)
     r3 = FunnelLayer(
         layer_id="R3", name="定稿", as_of=as_of,
         input_count=len(r2_kept), output_count=len(r3_kept),

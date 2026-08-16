@@ -435,12 +435,15 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
         {
             "code": g.code,
             "name": getattr(g, "name", ""),
+            # factors dict 键名为中文（models.py:39 GeneScore.factors），
+            # weight_set 用英文 factor_* 键名（strategy_weights.json），
+            # 此处做中文取值→英文键名映射，与 backtest_lite.py:118 范式一致。
             "factors": {
-                "factor_seal_rate": getattr(g, "factor_seal_rate", 0) or 0,
-                "factor_rebound_rate": getattr(g, "factor_rebound_rate", 0) or 0,
-                "factor_red_rate": getattr(g, "factor_red_rate", 0) or 0,
-                "factor_premium_rate": getattr(g, "factor_premium_rate", 0) or 0,
-                "factor_freq_score": getattr(g, "factor_freq_score", 0) or 0,
+                "factor_seal_rate": (g.factors or {}).get("封板率", 0) or 0,
+                "factor_rebound_rate": (g.factors or {}).get("炸板后溢价", 0) or 0,
+                "factor_red_rate": (g.factors or {}).get("红盘率", 0) or 0,
+                "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0) or 0,
+                "factor_freq_score": (g.factors or {}).get("涨停频次", 0) or 0,
             },
         }
         for g in genes
