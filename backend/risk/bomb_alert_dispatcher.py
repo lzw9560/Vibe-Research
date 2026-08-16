@@ -18,6 +18,7 @@ from typing import Any
 
 from config import default_config, SEAL_INTRADAY_DB_PATH
 from risk.bomb_alert_rules import RuleCheckResult
+from vr_paths import last_trading_date_str
 
 _logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ def save_alert(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     now.isoformat(),
-                    now.strftime("%Y-%m-%d"),
+                    last_trading_date_str(now.date()),  # task 120：按交易日历落 date（非 now.strftime 日历今日，否则非交易日存写/查询错位）
                     code,
                     name,
                     result.rule_id,

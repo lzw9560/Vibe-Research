@@ -193,7 +193,7 @@
 - [F] 117: 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源；非交易日 fix 见 591f536，节假日待重构补）
 - [B] 118: 036 板块停留天数（sector_cycle 缺，需先定义"在榜"口径）
 - [B] 119: ✅ classify_phase 边缘 case（today=0 + avg∈(0,3) 落"无历史"默认，应退潮-ish）——修正：`has_history=True` 无子句命中 → 退潮默认（"无历史"专用 has_history=False 数据缺失，不混用）；退潮子句 avg>=3 不动；+3 测试（today=0+avg∈(0,1)/(1,3)/温和走弱）；18 测试过
-- [B] 120: save_alert 日期分歧（calendar-today vs last_trading-day，非交易日错位）——prod 改让 save_alert 按交易日历落 date
+- [B] 120: ✅ save_alert 日期分歧（calendar-today vs last_trading-day，非交易日错位）——prod 改 `last_trading_date_str(now.date())` 落 date 列（非 now.strftime），对齐端点查询；+1 非交易日测试（周六存→端点按交易日查能命中）；8 测试过
 - [T] 121: spec→plan/tasks stale lint（`tools/spec_plan_stale_lint.py`）纳入回归/CI，防跨会话 drift
 
 ## 统计

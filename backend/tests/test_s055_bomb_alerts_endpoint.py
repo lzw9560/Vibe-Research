@@ -69,6 +69,38 @@ class TestBombAlertsEndpoint:
         assert data["alerts"][0]["rule_id"] == "C1"
         assert data["alerts"][0]["alert_level"] == "yellow"
 
+    def test_save_on_non_trading_day_aligns_to_trading_date(self, isolated_seal_db, monkeypatch):
+        """task 120：非交易日 save_alert → date 列按交易日历落（last_trading_date_str(now.date)），
+        非 now.strftime 日历今日。原实现非交易日存周六、端点查 last_trading_date=周五 → 错位 count=0。"""
+        from datetime import date
+        from risk.bomb_alert_dispatcher import save_alert
+        from risk.bomb_alert_rules import RuleCheckResult
+        from realtime_workflow import BombAlert
+        from vr_paths import last_trading_date_str
+
+        sat = datetime(2026, 8, 15, 10, 0)  # 周六（非交易日，见 test_workflow_stage_tz）
+        target = last_trading_date_str(sat.date())  # 周六 → 最近交易日
+        assert target != sat.strftime("%Y-%m-%d")  # 确认周六非交易日（否则测试无意义）
+        result = RuleCheckResult(
+            rule_id="C1", triggered=True,
+            alert=BombAlert(
+                timestamp=sat.isoformat(), code="000001", name="测试",
+                alert_level="yellow", condition="封单减 40%",
+                current_seal_amount=0.6e8, seal_amount_change_5min=0.4e8,
+                recommendation="减仓或止盈",
+            ),
+            data_status="ok", reason="5 分钟降幅 40%",
+        )
+        save_alert("000001", "测试", result, sat)
+
+        import app as appmod
+        client = TestClient(appmod.app)
+        r = client.get("/api/risk/bomb-alerts", params={"date": target})
+        assert r.status_code == 200
+        data = r.json()["data"]
+        assert data["count"] == 1  # 非交易日存的 alert 按交易日历落 → 端点能查到
+        assert data["alerts"][0]["code"] == "000001"
+
 
 class TestSealSnapshotsEndpoint:
     def test_returns_snapshots_when_exists(self, isolated_seal_db, monkeypatch):
