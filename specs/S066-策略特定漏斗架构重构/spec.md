@@ -329,6 +329,14 @@ momentum = count_today - count_avg_3d
 > 板块时序口径不可比，不参与板块阶段回归）。当前 eastmoney_live 仅 31 天，样本不足，
 > 此刻回归只会得到高方差不可信系数——60 天前系数冻结为候选初始值。
 > 若 60 天回归显示某阶段胜率差异不显著（CI 含 0），该阶段系数回退 1.0（纯标注）。
+>
+> **grill Q2 验证（2026-08-16，sector_phase_regression.py 实测）**：25 天 eastmoney_live
+> （2319 样本）——修饰方向单调=False，且 winrate 方向与 §5.4 **相反**（退潮 62.7% >
+> 启动 55.7%；CI 重叠未显著，但方向被驳）。avg_return 偏高（疑 return_close2close
+> 非单日/连板累计拉高），winrate（二元）为主据。**决议**：§5.4 修饰系数**不接策略分**
+> （即便 placeholder 也会反向 mis-rank：boost 表现差的启动、penalize 表现好的退潮）。
+> 039 降级为**纯 LABEL**（sector_phase 标注候选卡，用户自判，不改策略分/排序）。
+> 60 天回归后若方向翻转或显著，再议接修饰。
 
 ### 5.4.1 板块强度排名
 
