@@ -14,12 +14,16 @@
   stock_fund_flow_120d / dragon_tiger_board / lockup_expiry / concept_blocks / industry_comparison）
 - 直 requests 系：``eastmoney_reports`` / ``eastmoney_industry_reports`` / ``pdf_url``
   / ``announcements`` / ``hot_concepts``
+- 同花顺交叉验证源：``ths_limit_up_pool``（涨停揭秘，dataapi 域，非东财防封域，
+  直 requests；仅供 market._emotion 交叉验证/降级备用，不进主取数路径）
 """
 
 from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta
+
+import requests
 
 from data.transport import eastmoney_get as em_get  # 防封底线：走限流/熔断/代理
 from ._common import UA
@@ -159,6 +163,55 @@ def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[di
 def _numf(v):
     """东财数值字段可能是 '-'（停牌/无数据）→ 归一成 float 或 None。"""
     return v if isinstance(v, (int, float)) else None
+
+
+# ---------------------------------------------------------------------------
+# 同花顺涨停揭秘（dataapi.10jqka，非东财防封域，直 requests）
+# S049 新增：仅供 market._emotion 交叉验证 + 降级备用，不进主取数路径。
+# 不走 em_get 限流（不同域），但请求频率受 _emotion 5min TTL 缓存约束（同缓存
+# 内只发一次）。请求失败返 []，不崩主流程。
+# ---------------------------------------------------------------------------
+def ths_limit_up_pool(date: str) -> list[dict]:
+    """同花顺涨停揭秘（涨停原因 + 封板质量增强源）。date=YYYYMMDD。
+
+    返回每只: code/name/price/pct/reason(涨停原因题材)/board_type(换手板/一字板/T字板)/
+    seal_rate(封板成功率,0~1)/break_times(炸板次数)/seal_amount(封单额,元)/
+    high_days(几天几板,字符串如"3天3板")/first_time(首次涨停时间 HH:MM:SS)/is_again(是否回封 0/1)。
+
+    用途：东财涨停池为空时降级补 zt_count/max_boards；主源正常时做 zt_count 交叉验证。
+    ⚠️ 不臆造：zb/dt/yzt 无法从此源重建，调用方保持 None。
+    """
+    url = "https://data.10jqka.com.cn/dataapi/limit_up/limit_up_pool"
+    params = {
+        "page": 1, "limit": 200,
+        "field": "199112,10,9001,330323,330324,330325,9002,330329,133971,133970,1968584,3475914,9003,9004",
+        "filter": "HS,GEM2STAR", "order_field": "330324", "order_type": "0",
+        "date": date,
+    }
+    try:
+        r = requests.get(url, params=params, headers={"User-Agent": UA}, timeout=10)
+        info = (r.json().get("data") or {}).get("info", [])
+    except Exception as e:
+        # 不崩主流程：降级返空，主源数据正常返回
+        import logging
+        logging.getLogger(__name__).warning("同花顺涨停揭秘请求失败: %s", e)
+        return []
+    out = []
+    for it in info:
+        ft = it.get("first_limit_up_time")
+        out.append({
+            "code": it.get("code"), "name": it.get("name"),
+            "price": it.get("latest"), "pct": it.get("change_rate"),
+            "reason": it.get("reason_type", ""),
+            "board_type": it.get("limit_up_type", ""),
+            "seal_rate": it.get("limit_up_suc_rate"),
+            "break_times": it.get("open_num") or 0,
+            "seal_amount": it.get("order_amount"),
+            "high_days": it.get("high_days", ""),
+            "first_time": datetime.fromtimestamp(int(ft)).strftime("%H:%M:%S") if ft else "",
+            "is_again": it.get("is_again_limit"),
+        })
+    return out
 
 
 def market_turnover_rank(n: int = 20) -> list[dict]:

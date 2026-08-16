@@ -331,6 +331,7 @@ def emotion_response_from_dict(raw: dict) -> EmotionResponse:
 
     Emotion 子对象走 ``emotion_from_dict``（零个股名、ladder 无 plus）；
     lianban_stocks 同层暴露客观榜单。date/lianban_count/zb_count/yzt_count 透传。
+    S049：cross_source/data_source 透传（同花顺交叉验证 / 降级源标识）。
     """
     stocks_raw = raw.get("lianban_stocks") or []
     stocks = tuple(
@@ -343,6 +344,8 @@ def emotion_response_from_dict(raw: dict) -> EmotionResponse:
         lianban_count=int(_numf(raw.get("lianban_count"))) if _numf(raw.get("lianban_count")) is not None else None,
         zb_count=int(_numf(raw.get("zb_count"))) if _numf(raw.get("zb_count")) is not None else None,
         yzt_count=int(_numf(raw.get("yzt_count"))) if _numf(raw.get("yzt_count")) is not None else None,
+        cross_source=raw.get("cross_source"),
+        data_source=raw.get("data_source"),
     )
 
 

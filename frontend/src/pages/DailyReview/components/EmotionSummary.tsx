@@ -57,6 +57,17 @@ export function EmotionSummary({ sentiment, emoDone, turnover, toDone }: Props) 
                 </div>
               ))}
             </div>
+            {/* S049 数据源徽标：同花顺交叉验证 / 降级 */}
+            {sentiment.cross_source?.divergent === true && (
+              <p className="mt-2 rounded-md bg-warning/15 px-2 py-1 text-[11px] text-warning">
+                ⚠️ 涨停家数分歧 {sentiment.cross_source.diff_pct}%（东财 {sentiment.emotion.limit_up_count} vs 同花顺 {sentiment.cross_source.ths_zt_count}）
+              </p>
+            )}
+            {sentiment.data_source === "ths_fallback" && (
+              <p className="mt-2 rounded-md bg-yellow-500/15 px-2 py-1 text-[11px] text-yellow-600 dark:text-yellow-500">
+                同花顺降级源（东财涨停池空，已用同花顺重建 zt_count/max_boards）
+              </p>
+            )}
             {sentiment.lianban_stocks.length > 0 && (
               <div className="mt-3">
                 <p className="mb-1.5 text-[11px] text-muted-foreground">连板股（2 板以上）· 客观公开榜单</p>

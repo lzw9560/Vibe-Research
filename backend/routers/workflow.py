@@ -131,6 +131,33 @@ async def _collect(run_id: str, target_date: str) -> None:
         funnel_layers = await asyncio.to_thread(_build_funnel_layers, target_date, ctx)
         as_of = _now_iso()
         factors = [_serialize_factor(r) for r in results]
+        # B-lite：战法打分接入 briefing 响应供前端 tab 过滤。
+        # score_candidates 入参需 {code, name, factors(中文键名 dict), total_score, zt_count_250d}。
+        # 数据源选 load_gene_scores（sync DB 读，快；与 funnel.fetch_genes 同源，不重复外部请求）。
+        # forward_test.py:435-447 用 getattr(g,"factor_seal_rate",0) 映射是脏数据（GeneScore 无此属性），
+        # 这里直接透传 g.factors（中文键名 dict，score_candidates/test_strategy_funnel_registry 同款口径）。
+        scored_candidates: list[dict] = []
+        try:
+            from limitup_screener.data import load_gene_scores
+            from strategies.strategy_funnel_registry import score_candidates
+            genes = await asyncio.to_thread(load_gene_scores, target_date)
+            if genes:
+                cand_input = [
+                    {
+                        "code": g.code,
+                        "name": getattr(g, "name", ""),
+                        "factors": getattr(g, "factors", {}) or {},
+                        "total_score": getattr(g, "total_score", 0) or 0,
+                        "zt_count_250d": getattr(g, "zt_count_250d", 0) or 0,
+                    }
+                    for g in genes
+                ]
+                weather_state = ctx.weather_state if ctx else None
+                scored = await asyncio.to_thread(score_candidates, cand_input, weather_state)
+                # 过滤"无符合条件标的"占位项（strategy_code="none"）
+                scored_candidates = [s for s in scored if s.get("strategy_code") != "none"]
+        except Exception as exc:  # noqa: BLE001 — 打分失败不影响 briefing 主态
+            logger.warning("scored_candidates 构建失败 %s: %s", target_date, exc)
         _cache.update(
             run_id=run_id,
             status="done",
@@ -140,6 +167,7 @@ async def _collect(run_id: str, target_date: str) -> None:
             sentiment_context=ctx.to_dict(),
             as_of=as_of,
             error=None,
+            scored_candidates=scored_candidates,
         )
         # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _build_funnel_layers 重建）
         funnel_mod.clear_funnel_cache(target_date)
@@ -162,6 +190,7 @@ async def _collect(run_id: str, target_date: str) -> None:
                 "factors": factors,
                 "funnel_layers": funnel_layers,
                 "final_candidates": final_cards,
+                "scored_candidates": scored_candidates,
                 # 补采标记：采集时刻 target_date 早于最近交易日
                 "is_backfill": target_date < last_trading_date_str(),
             })
@@ -389,6 +418,8 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
         }
         if status == "done":
             resp["factors"] = _cache["factors"]
+            # B-lite：透传 scored_candidates 供前端战法 tab 过滤
+            resp["scored_candidates"] = _cache.get("scored_candidates", [])
             # S049 D4：live done 透出 funnel_layers（与快照路径对齐；_build_funnel_layers 命中 run_funnel 缓存不重复请求）
             # S063 T4：ctx 下传——live done 时重建 ctx（T-1 硬标准，幂等）
             ctx = await asyncio.to_thread(build_context, d)
@@ -420,6 +451,7 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             "sentiment_context": sent_ctx,
             "factors": snap.get("factors", []),
             "funnel_layers": snap.get("funnel_layers", []),
+            "scored_candidates": snap.get("scored_candidates", []),
             "is_backfill": snap.get("is_backfill", False),
         }
 

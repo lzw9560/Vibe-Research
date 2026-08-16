@@ -86,6 +86,12 @@ export interface EmotionMetrics {
   broken_rate: number | null;
   advance_rate: number | null;
 }
+// 交叉验证源（同花顺涨停揭秘，S049）
+export interface EmotionCrossSource {
+  ths_zt_count: number;      // 同花顺涨停家数
+  diff_pct: number;          // 与东财涨停家数差异百分比
+  divergent: boolean;        // 差异>5% 标注分歧
+}
 export interface ShortTermEmotion {
   emotion: EmotionMetrics;
   lianban_stocks: LianbanStock[];
@@ -93,6 +99,9 @@ export interface ShortTermEmotion {
   lianban_count: number | null;
   zb_count: number | null;
   yzt_count: number | null;
+  // S049 同花顺交叉验证 / 降级源（可选，主源正常且无交叉验证时为 null）
+  cross_source?: EmotionCrossSource | null;
+  data_source?: string | null;  // "eastmoney" / "ths_fallback"
 }
 
 // 全市场成交额榜（客观公开榜单）
@@ -1075,10 +1084,28 @@ export interface PreMarketBriefing {
   msg?: string; // idle: 提示先 refresh；no_snapshot: 提示可补采
   // S049 C4：快照随带 final_candidates 诊断卡（抽屉查看历史快照日期时优先用）
   final_candidates?: import("@/lib/candidates").DiagnosisCard[];
+  // B-lite：战法打分候选（score_candidates 产出，供前端战法 tab 过滤）
+  scored_candidates?: ScoredCandidate[];
   // 旧路径 fallback
   data?: PreMarketReport;
   fallback?: boolean;
   error?: string;
+}
+
+/** B-lite：score_candidates 返回项（对齐 backend/strategies/strategy_funnel_registry.py:439-448）。 */
+export interface ScoredCandidate {
+  code: string;
+  name: string;
+  strategy_code: string;
+  strategy_name: string;
+  strategy_score: number;
+  score_breakdown?: Record<string, number>;
+  funnel_type?: string;
+  weather_recommended?: boolean;
+  position_params?: { stop_loss_pct: number; take_profit_pct: number; max_hold_days: number; position_scale: number };
+  note?: string;
+  // 保留候选原有字段（factors/total_score/zt_count_250d 等）
+  [key: string]: unknown;
 }
 
 /** S049 B：盘前简报市场情绪区 shape（_fetch_market_emotion 重写后）。 */

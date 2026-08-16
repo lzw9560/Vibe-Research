@@ -19,7 +19,7 @@ import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import { useTransitionWorkflowState } from "@/lib/query";
-import type { TransitionRequest, FactorResult } from "@/lib/api";
+import type { TransitionRequest, FactorResult, ScoredCandidate } from "@/lib/api";
 import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
 import { Link, useSearchParams } from "react-router-dom";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
@@ -92,6 +92,8 @@ export default function PreMarketBriefing() {
   const refresh = usePreMarketRefresh();
   // S031 R18：候选诊断抽屉（点候选不整页跳，弹侧边抽屉）
   const [drawerCode, setDrawerCode] = useState<string | null>(null);
+  // B-lite：当前选中战法 tab（null=显示全量漏斗矩阵；非空=按战法过滤 scored_candidates）
+  const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
   // S054：盘前录入建仓入口（候选矩阵「买入」按钮 → 弹 TransitionForm）
   const [buyEntry, setBuyEntry] = useState<{ code: string; name: string } | null>(null);
   const transition = useTransitionWorkflowState();
@@ -247,8 +249,8 @@ export default function PreMarketBriefing() {
           <div className="mb-6">
             <StrategyGroupTabs
               weatherState={briefing.sentiment_context?.weather_state}
-              activeStrategy={null}
-              onSelect={() => {}}
+              activeStrategy={activeStrategy}
+              onSelect={setActiveStrategy}
             />
           </div>
 
@@ -270,12 +272,15 @@ export default function PreMarketBriefing() {
           )}
 
           {/* ③ 候选池 R1/R2/R3 漏斗矩阵（S049 D2：FunnelMatrix 三列+全参数列替 FunnelLayers；
-              D4：优先读 briefing.funnel_layers，不发额外 GET） */}
+              D4：优先读 briefing.funnel_layers，不发额外 GET）
+              B-lite：activeStrategy 非空且有 scored_candidates 时切到战法过滤视图 */}
           <CandidateFunnelEmbed
             date={briefing.data_date}
             onPick={setDrawerCode}
             onBuy={handleBuy}
             snapshotLayers={briefing.from_snapshot ? funnelLayers : funnelLayers}
+            scoredCandidates={briefing.scored_candidates}
+            activeStrategy={activeStrategy}
           />
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
@@ -319,17 +324,45 @@ export default function PreMarketBriefing() {
 }
 
 /** S049 D2/D4：候选池漏斗矩阵嵌入——优先读 briefing.funnel_layers（done/snapshot 均携带），
- * 不发额外 GET（消重复请求）。无 funnel_layers 时降级 live 查询。 */
+ * 不发额外 GET（消重复请求）。无 funnel_layers 时降级 live 查询。
+ * B-lite：activeStrategy 非空且有 scored_candidates 时切到战法过滤视图。 */
 function CandidateFunnelEmbed({
   onPick,
   onBuy,
   snapshotLayers,
+  scoredCandidates,
+  activeStrategy,
 }: {
   date?: string;
   onPick: (code: string) => void;
   onBuy?: (entry: { code: string; name: string }) => void;
   snapshotLayers?: FunnelLayer[];
+  scoredCandidates?: ScoredCandidate[];
+  activeStrategy?: string | null;
 }) {
+  // B-lite：战法 tab 选中且有打分候选 → 按战法过滤渲染
+  if (activeStrategy && scoredCandidates && scoredCandidates.length > 0) {
+    const filtered = scoredCandidates.filter((c) => c.strategy_code === activeStrategy);
+    if (filtered.length === 0) {
+      return (
+        <GlassCard className="mb-6 p-4">
+          <p className="text-sm text-muted-foreground">
+            战法「{activeStrategy}」无符合条件标的（候选池{scoredCandidates.length}只，命中该战法0只）
+          </p>
+        </GlassCard>
+      );
+    }
+    return (
+      <div className="mb-6 space-y-3">
+        <SectionHeader
+          title={`候选池 · ${activeStrategy}`}
+          subtitle={`${filtered.length}只命中（共${scoredCandidates.length}只打分候选）`}
+        />
+        <ScoredCandidateTable candidates={filtered} onPick={onPick} onBuy={onBuy} />
+      </div>
+    );
+  }
+  // 无战法选中或无打分候选 → 原 FunnelMatrixSimple（不破坏既有渲染）
   // S049 D4：done/snapshot 响应都带 funnel_layers → 直用，不发 GET
   if (snapshotLayers && snapshotLayers.length > 0) {
     return (
@@ -340,6 +373,65 @@ function CandidateFunnelEmbed({
     );
   }
   return null;
+}
+
+/** B-lite：战法过滤候选表（复用 FunnelMatrixSimple 的表格样式，列聚焦战法分/推荐/止损止盈）。 */
+function ScoredCandidateTable({ candidates, onPick, onBuy }: {
+  candidates: ScoredCandidate[];
+  onPick: (code: string) => void;
+  onBuy?: (entry: { code: string; name: string }) => void;
+}) {
+  return (
+    <GlassCard className="p-2">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-muted-foreground">
+              <th className="px-2 py-1 text-left">代码</th>
+              <th className="px-2 py-1 text-left">名称</th>
+              <th className="px-2 py-1">战法分</th>
+              <th className="px-2 py-1">推荐</th>
+              <th className="px-2 py-1">止损%</th>
+              <th className="px-2 py-1">止盈%</th>
+              <th className="px-2 py-1">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {candidates.map((c) => (
+              <tr
+                key={c.code + c.strategy_code}
+                className="cursor-pointer border-t border-border/30 hover:bg-accent/30"
+                onClick={() => onPick(c.code)}
+              >
+                <td className="px-2 py-1 font-mono">{c.code ?? "—"}</td>
+                <td className="px-2 py-1">{c.name ?? "—"}</td>
+                <td className="px-2 py-1 text-center font-mono">
+                  {typeof c.strategy_score === "number" ? c.strategy_score.toFixed(1) : "—"}
+                </td>
+                <td className="px-2 py-1 text-center">{c.weather_recommended ? "★" : ""}</td>
+                <td className="px-2 py-1 text-center">{c.position_params?.stop_loss_pct ?? "—"}</td>
+                <td className="px-2 py-1 text-center">{c.position_params?.take_profit_pct ?? "—"}</td>
+                <td className="px-2 py-1 text-center">
+                  {onBuy && (
+                    <button
+                      type="button"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onBuy({ code: c.code, name: c.name });
+                      }}
+                      className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/25"
+                    >
+                      买入
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </GlassCard>
+  );
 }
 
 /** S049 D2：简易矩阵渲染（完整 FunnelMatrix 组件在 S7 任务建；此处先占位用 FunnelLayers 兜底） */

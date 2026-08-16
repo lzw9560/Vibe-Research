@@ -86,6 +86,10 @@ class EmotionResponse(BaseModel):
 
     T10：``/api/market/emotion`` 返本模型。Emotion 子对象零个股名（聚合干净），
     lianban_stocks 同层暴露连板榜单（前端 DailyReview 消费）。
+
+    S049：新增 ``cross_source`` / ``data_source`` —— 同花顺涨停揭秘作为东财主源的
+    交叉验证 + 降级备用源。``cross_source`` 主源正常时为交叉验证结果（None=未验证），
+    ``data_source`` 标识本次响应的实际数据源（eastmoney / ths_fallback）。
     """
 
     model_config = ConfigDict(frozen=True)
@@ -96,6 +100,9 @@ class EmotionResponse(BaseModel):
     lianban_count: int | None = None  # 2板+家数
     zb_count: int | None = None  # 炸板数
     yzt_count: int | None = None  # 昨涨停数
+    # S049 同花顺交叉验证 / 降级源标识
+    cross_source: dict | None = None  # {ths_zt_count, diff_pct, divergent} 或 None=未验证
+    data_source: str | None = None  # "eastmoney" / "ths_fallback"
 
 
 class ZTPoolItem(BaseModel):

@@ -104,15 +104,33 @@ def get_overview() -> dict:
     return _cached("overview", build, valid=lambda v: bool(v.get("sentiment") or v.get("sectors")))
 
 
+def _parse_high_days(s) -> int:
+    """解析同花顺 high_days '3天3板' → 3（取板数）。缺省/无法解析返 1。"""
+    if not s:
+        return 1
+    import re
+    m = re.search(r'(\d+)板', str(s))
+    return int(m.group(1)) if m else 1
+
+
 def _emotion(date: str | None = None) -> dict:
     """短线情绪（聚合口径，**零个股名**）：连板梯队 / 最高连板 / 炸板率 / 封板率 / 晋级率 / 涨跌停家数。
 
     数据源＝东财涨停板四池（push2ex）。只把池子聚合成计数与比率，
     **不输出任何个股 code/name**——守产品「零标的」红线（个股清单是甩名单，不做）。
 
+    S049：引入同花顺涨停揭秘作为交叉验证 + 降级备用源：
+    - 降级：东财 zt 为空时，用同花顺重建 zt_count/max_boards（zb/dt/yzt 保持 None，不臆造）
+    - 交叉验证：东财正常时，用同花顺 zt_count 做交叉验证，差异>5% 标注「数据源分歧」
+
     Args:
         date: 可选日期字符串 YYYY-MM-DD。不传则自动定位最近交易日。
     """
+    # S049 同花顺交叉验证 / 降级源标识（默认主源正常、未交叉验证）
+    cross_source = None
+    data_source = "eastmoney"
+    ths = None  # 懒拉取：降级与交叉验证共用，只请求一次
+
     if date is not None:
         # 直接使用指定日期
         resolved = date.replace("-", "")
@@ -132,11 +150,52 @@ def _emotion(date: str | None = None) -> dict:
                 resolved = d
                 break
         if not resolved:
-            return {}
+            # 东财连续 8 日空（长假/数据源故障）→ 尝试同花顺降级定位最近交易日
+            for back in range(8):
+                d = (today - timedelta(days=back)).strftime("%Y%m%d")
+                try:
+                    ths_try = astock.ths_limit_up_pool(d) if hasattr(astock, "ths_limit_up_pool") else []
+                except Exception:
+                    ths_try = []
+                if ths_try:
+                    resolved = d
+                    ths = ths_try  # 复用：后续不再重复请求
+                    break
+            if not resolved:
+                return {}
 
     zt = astock.em_zt_topic_pool("getTopicZTPool", resolved, "fbt:asc")
     if not zt and date is None:
-        return {}
+        # 主源空 → 同花顺降级（若 ths 已在定位阶段取到则复用，否则现取）
+        if ths is None:
+            try:
+                ths = astock.ths_limit_up_pool(resolved) if hasattr(astock, "ths_limit_up_pool") else []
+            except Exception:
+                ths = []
+        if not ths:
+            return {}
+        # 东财涨停池为空 → 同花顺降级重建 zt_count / max_boards（最小降级）
+        zt_count = len(ths)
+        boards = [_parse_high_days(s.get("high_days")) for s in ths]
+        max_boards = max(boards) if boards else 0
+        data_source = "ths_fallback"
+        # zb/dt/yzt 无法从同花顺重建，保持空（不臆造）
+        return {
+            "date": f"{resolved[:4]}-{resolved[4:6]}-{resolved[6:]}",
+            "zt_count": zt_count,
+            "dt_count": None,
+            "zb_count": None,
+            "max_boards": max_boards,
+            "lianban_count": sum(1 for b in boards if b >= 2),
+            "ladder": [],
+            "lianban_stocks": [],  # 同花顺降级不重建个股榜（避免与东财口径混淆）
+            "seal_rate": None,
+            "break_rate": None,
+            "promotion_rate": None,
+            "yzt_count": None,
+            "cross_source": None,  # 降级源无交叉验证对象
+            "data_source": data_source,
+        }
 
     # 如果指定日期但无数据，返回空
     if not zt:
@@ -174,6 +233,21 @@ def _emotion(date: str | None = None) -> dict:
     # 晋级率＝今日 2 板+（＝昨涨停今又停）÷ 昨日涨停家数
     promotion_rate = round(len(lianban) / yzt_count, 3) if yzt_count else None
 
+    # S049 交叉验证：同花顺涨停家数 vs 东财（主源正常时）
+    try:
+        ths = astock.ths_limit_up_pool(resolved) if hasattr(astock, "ths_limit_up_pool") else []
+        if ths:
+            ths_count = len(ths)
+            diff_pct = abs(ths_count - zt_count) / max(zt_count, 1) * 100
+            cross_source = {
+                "ths_zt_count": ths_count,
+                "diff_pct": round(diff_pct, 1),
+                "divergent": diff_pct > 5,  # 差异>5% 标注分歧
+            }
+            data_source = "eastmoney+ths_cross"
+    except Exception:
+        cross_source = None  # 同花顺请求失败不影响主源数据返回
+
     return {
         "date": f"{resolved[:4]}-{resolved[4:6]}-{resolved[6:]}",
         "zt_count": zt_count,
@@ -187,6 +261,8 @@ def _emotion(date: str | None = None) -> dict:
         "break_rate": break_rate,
         "promotion_rate": promotion_rate,
         "yzt_count": yzt_count,
+        "cross_source": cross_source,
+        "data_source": data_source,
     }
 
 
