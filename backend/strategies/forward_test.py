@@ -345,6 +345,9 @@ def get_forward_test_summary(
         note_parts.append(f"样本不足：{days}/{min_days} 交易日")
     if s_settled == 0:
         note_parts.append("无已结算 picks（需次日回填收益）")
+    elif total > 0 and s_settled < 0.8 * total:
+        # 116 诚实层：picks 收益覆盖低（如 live 日 backtest_samples 未含收益）→ verdict 基于部分样本
+        note_parts.append(f"picks 收益覆盖低（{s_settled}/{total} settled）→ verdict 基于部分样本（待 live 日收益回填）")
     if u_settled == 0:
         note_parts.append("无随机基准（universe_returns 未回填 → 无法 §44 验证 lift）")
     if u_settled > 0 and s_settled > 0:

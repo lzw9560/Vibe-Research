@@ -281,3 +281,27 @@ class TestGetForwardTestSummary:
 
         result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=5)
         assert result.consecutive_loss == 10  # 最近 10 笔全亏
+
+    def test_low_coverage_flags_partial_sample(self, fresh_db):
+        """116 诚实层：picks 收益覆盖低（settled<<total）→ note 标'部分样本'。"""
+        for day in range(25):
+            date = f"2026-08-{day+1:02d}"
+            recs = [
+                DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0),
+                DailyRecommendation(date, f"00{day}02", "B", "first_plate", 75.0),
+            ]
+            record_daily_recommendations(date, recs)
+            if day < 5:  # 仅前 5 日回填（10/50 settled）
+                record_actual_returns(date, {
+                    f"00{day}01": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0},
+                    f"00{day}02": {"return_open2close": 1.0, "return_close2close": 1.0, "next_pctChg": 1.0},
+                })
+            # universe 全覆盖（排除无基准 note 干扰）
+            uni = {f"1{day}0{i}": {"return_open2close": 1.0, "return_close2close": 1.0, "next_pctChg": 1.0}
+                   for i in range(5)}
+            record_universe_returns(date, uni)
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        assert result.settled_count == 10
+        assert result.total_recommendations == 50
+        assert "覆盖低" in result.note
