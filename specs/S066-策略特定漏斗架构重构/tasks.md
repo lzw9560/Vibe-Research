@@ -194,7 +194,7 @@
 - [B] 118: 036 板块停留天数（sector_cycle 缺，需先定义"在榜"口径）
 - [B] 119: ✅ classify_phase 边缘 case（today=0 + avg∈(0,3) 落"无历史"默认，应退潮-ish）——修正：`has_history=True` 无子句命中 → 退潮默认（"无历史"专用 has_history=False 数据缺失，不混用）；退潮子句 avg>=3 不动；+3 测试（today=0+avg∈(0,1)/(1,3)/温和走弱）；18 测试过
 - [B] 120: ✅ save_alert 日期分歧（calendar-today vs last_trading-day，非交易日错位）——prod 改 `last_trading_date_str(now.date())` 落 date 列（非 now.strftime），对齐端点查询；+1 非交易日测试（周六存→端点按交易日查能命中）；8 测试过
-- [T] 121: spec→plan/tasks stale lint（`tools/spec_plan_stale_lint.py`）纳入回归/CI，防跨会话 drift
+- [T] 121: ✅ spec→plan/tasks stale lint（`tools/spec_plan_stale_lint.py`）纳入回归/CI，防跨会话 drift——落地：`backend/tests/test_spec_consistency.py` subprocess 跑 lint 断言 exit 0（随 pytest 跑）；RED 核验过（注入 bare stale → 测试变红 → 还原后绿）
 
 ## 统计
 
