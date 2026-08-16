@@ -77,8 +77,10 @@ def classify_phase(count_today: int, count_avg_3d: float, has_history: bool = Tr
         mod, note = _PHASE_MODIFIERS["冷门"]
         return "冷门", mod, note
 
-    mod, note = _PHASE_MODIFIERS["无历史"]
-    return "无历史", mod, note
+    # has_history=True 但无子句命中（今日相对 3 日基线走弱/持平，如 today=0 + avg∈(0,3)）：
+    # 走弱 → 退潮默认（task 119）。"无历史"专指 has_history=False 数据缺失，不混用。
+    mod, note = _PHASE_MODIFIERS["退潮"]
+    return "退潮", mod, note
 
 
 def analyze_sector_phase(date: str, industry: str) -> SectorPhase | None:

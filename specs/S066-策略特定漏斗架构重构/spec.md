@@ -290,6 +290,8 @@ momentum = count_today - count_avg_3d
 | 冷门 | count_avg_3d = 0 且 count_today <= 1 | 板块无持续性，可能一日游 | 标注"冷门" |
 | 无历史 | T-1/T-2/T-3 数据缺失 | 新板块或数据不全 | 中性标注 |
 
+> **task 119 边缘 case 修正（2026-08-16）**：`has_history=True` 但无子句命中（如 `today=0 + avg∈(0,3)`：不命中退潮 avg<3、不命中冷门 avg≠0）原 fallthrough 误返"无历史"——违反 spec（无历史=数据缺失，非"无子句命中"）。修正：`has_history=True` 无命中 → **退潮默认**（今日相对 3 日基线走弱/持平）。"无历史"专用 `has_history=False`。退潮子句 avg>=3（强退潮"追入即套"）不动；温和走弱走 fallthrough→退潮（modifier §5.4 已 label-only，无策略分影响）。
+
 ### 5.3 数据来源（grill Q16 验证后修订，2026-08-16）
 
 > **grill Q16（2026-08-16，实测验证）**：原 SQL 引用 `industry_code` 列不存在——

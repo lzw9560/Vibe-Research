@@ -68,6 +68,19 @@ class TestClassifyPhase:
         phase, _, _ = classify_phase(1, 0.5, has_history=True)
         assert phase == "启动"
 
+    def test_today_zero_mild_decline_is_receding_not_no_history(self):
+        """task 119：today=0 + avg∈(0,3) 不命中退潮(avg<3)/冷门(avg≠0)，has_history=True
+        却原 fallthrough 返"无历史"（违反 spec：无历史=数据缺失）。应退潮默认。"""
+        # avg∈[1,3)：走弱到零
+        phase, _, _ = classify_phase(0, 2.0, has_history=True)
+        assert phase == "退潮"
+        # avg∈(0,1)：从微活跃跌到零（仍非冷门，冷门需 avg==0）
+        phase, _, _ = classify_phase(0, 0.5, has_history=True)
+        assert phase == "退潮"
+        # 今日=2 < avg=2.5（温和走弱，avg<3 不命中退潮子句）→ 退潮默认
+        phase, _, _ = classify_phase(2, 2.5, has_history=True)
+        assert phase == "退潮"
+
 
 class TestSectorBreadth:
     """板块广度。"""
