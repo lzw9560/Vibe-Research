@@ -38,6 +38,7 @@ _EXPECTED_TASK_TYPES = {
     "sti_post_market",
     "seal_intraday_collect",
     "candidate_funnel_precompute",
+    "s066_validation_checkpoint",
 }
 
 
@@ -322,3 +323,41 @@ class TestLoopLifecycle:
 
         runs = st._manager.list_runs(task.id)
         assert len(runs) == 1 and runs[0].status == "success"
+
+
+# ---------------------------------------------------------------------------
+# §44 60 天复验检查点（提醒任务）
+# ---------------------------------------------------------------------------
+class _FakeConn:
+    """假 conn：execute 返预设 count。"""
+    def __init__(self, count):
+        self._count = count
+
+    def execute(self, q, *a):
+        class _R:
+            def fetchone(_self):
+                return (self._count,)
+        return _R()
+
+    def close(self):
+        pass
+
+
+class TestS066ValidationCheckpoint:
+    """§44 60 天复验检查点 executor（spec §13 ①/§44）。"""
+
+    def test_not_due(self, monkeypatch):
+        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn(31))
+        r = st._execute_s066_validation_checkpoint(None, {"threshold": 60})
+        assert r["status"] == "not_due"
+        assert r["eastmoney_live_days"] == 31
+        assert r["target"] == 60
+
+    def test_due_writes_checkpoint(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn(65))
+        monkeypatch.setattr("vr_paths.resolve_data_dir", lambda: str(tmp_path), raising=False)
+        r = st._execute_s066_validation_checkpoint(None, {"threshold": 60})
+        assert r["status"] == "due"
+        assert r["eastmoney_live_days"] == 65
+        assert "backfill" in r["action"]
+        assert (tmp_path / "s066_60day_due.json").exists()

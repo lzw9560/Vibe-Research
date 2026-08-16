@@ -10,6 +10,7 @@ import os
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("vibe-research")
@@ -445,6 +446,7 @@ class TaskExecutor:
             "sti_post_market": self._execute_sti_post_market,  # S063 T3：STI 盘后定时计算
             "seal_intraday_collect": self._execute_seal_intraday_collect,  # S055：盘中封单时序采集
             "candidate_funnel_precompute": self._execute_candidate_funnel_precompute,  # S004 R5：盘后漏斗预计算
+            "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,  # §44 60 天复验检查点（提醒任务）
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -888,6 +890,48 @@ def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[
 TaskExecutor._execute_candidate_funnel_precompute = _execute_candidate_funnel_precompute
 
 
+def _execute_s066_validation_checkpoint(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """§44 60 天复验检查点（提醒任务，spec §13 ①/§44）。
+
+    数 eastmoney_live 信号日；达 threshold（默认 60）→ 写 checkpoint 文件 + WARNING 日志
+    + 返 DUE+操作指引（notify_on_success 兜底推送，若通道已配）；未到期 → 返进度（静默）。
+    到点由人/会话跑 `tools/forward_test_backfill.py --weather` 查 lift——本任务只提醒不自动验证。
+    """
+    from config import GENE_SCORES_DB_PATH
+    from vr_paths import resolve_data_dir
+
+    threshold = int(payload.get("threshold", 60))
+    conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+    try:
+        days = conn.execute(
+            "SELECT COUNT(DISTINCT date) FROM gene_scores WHERE data_source='eastmoney_live'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    if days < threshold:
+        return {"status": "not_due", "eastmoney_live_days": days, "target": threshold,
+                "note": f"积累中 {days}/{threshold} 日，到点自动提醒 §44 复验"}
+
+    # 到期：写 checkpoint + WARNING + 返操作指引
+    ckpt = {"status": "due", "eastmoney_live_days": days, "target": threshold,
+            "action": "cd backend && .venv/bin/python tools/forward_test_backfill.py --weather "
+                      "→ 查 get_forward_test_summary 的 lift：破 2x + within-day r 显著 → alpha 成立；"
+                      "否则确认无 edge（spec §13 ①/§44）",
+            "checked_at": datetime.now().isoformat()}
+    try:
+        ckpt_path = Path(resolve_data_dir()) / "s066_60day_due.json"
+        ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    logger.warning(
+        "[s066_checkpoint] §44 60 天复验 DUE：eastmoney_live=%d 日 → 跑 backfill --weather 查 lift", days)
+    return ckpt
+
+
+TaskExecutor._execute_s066_validation_checkpoint = _execute_s066_validation_checkpoint
+
+
 _manager = ScheduledTaskManager()
 
 
@@ -1133,6 +1177,21 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 candidate_funnel_precompute 已创建（cron 5 16 * * 0-4）")
+
+    # §44 60 天复验检查点（提醒任务）：周一 18:00 数 eastmoney_live 日数，达 60 →
+    # 写 s066_60day_due.json + WARNING + notify_on_success 推送（通道未配则静默）。
+    # 到点由人/会话跑 backfill --weather 查 lift；本任务只提醒不自动验证。
+    if "s066_validation_checkpoint" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="s066_validation_checkpoint",
+            description="§44 60 天复验检查点：eastmoney_live 达 60 日提醒重跑 Phase 0b/0e（spec §13 ①）",
+            task_type="s066_validation_checkpoint",
+            cron_expr="0 18 * * 1",  # 周一 18:00（每周检查一次，到点提醒）
+            payload={"threshold": 60},
+            enabled=True,
+            notify_on_success=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 s066_validation_checkpoint 已创建（cron 0 18 * * 1，§44 60 天复验提醒）")
 
 
 async def stop_scheduler() -> None:
