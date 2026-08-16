@@ -2,6 +2,12 @@
 
 > 按 plan.md 的 Phase 分组。每个任务标注 [B]=后端 [F]=前端 [T]=测试 [D]=数据
 
+## §44 验证后状态（2026-08-16）
+
+> **Phase 0a-0e + Phase 1-3 已实现**（Phase 0-3 全闭合），但建在 placeholder/null-验证信号上（Phase 0b within-day r≈0 + Phase 0e 胜率 49.2% vs 随机 50.2% lift 0.98x 噪声 → §44 bar 下无 validated alpha）。详见 plan.md §44 修订段 + spec §1.1/§13。
+> **HOLD 新复杂度**（Phase 4+/新层）至 alpha 验证（§13.0"不提升的不加"）。
+> **下方原任务（001-113）保留作参考**（已建但建在 placeholder）；新增 §44 修订路径任务见文末。
+
 ## Phase 0a：kline 回填
 
 - [D][B] 001: 从 gene_scores.db 取全部 6537 条 (date, code) 对，去重得到 1104 个独立 code
@@ -15,7 +21,7 @@
 
 ## Phase 0b：全样本因子回归
 
-- [B] 009: 对 5 因子 + zt_count 计算 Pearson r + 95% CI + p 值（n=6537）
+- [B] 009: 对 5 因子 + zt_count 计算 Pearson r + 95% CI + p 值（§44：双轨分层 kline3760/eastmoney2836；within-day r≈0、CI 含 0 → 无显著因子）
 - [B] 010: 每个因子做五分位胜率（全样本）
 - [B] 011: 2-way ANOVA 因子交互（seal_rate x freq, premium x seal_rate 等）
 - [B] 012: 因子相关矩阵（5x5 Pearson）+ PCA 降维（主成分解释方差比）
@@ -32,16 +38,16 @@
 
 ## Phase 0d：策略分权重定稿
 
-- [B] 020: 基于 0b 显著因子确定涨停类权重（CI 排除 0 的因子进入，其余等权或 0）
-- [B] 021: 确定暴风暴权重（seal_rate + freq 反向，固定）
-- [B] 022: 非涨停类权重标注"等权起步，Phase 2 后调"
-- [B] 023: 输出 strategy_weights.json
+- [B] 020: 涨停类权重（§44：0b within-day r≈0 无显著因子 → 等权 placeholder W1-W5=0.20，rebound 收回）
+- [B] 021: 暴风暴权重（§44：等权 placeholder，原 seal 60%+freq反向 已废止）
+- [B] 022: 非涨停类权重（等权 placeholder 起步，Phase 2 后调）
+- [B] 023: 输出 strategy_weights.json（等权 placeholder）
 
 ## Phase 0e：前向测试
 
 - [B] 024: 搭建 paper trading 框架（每日记录推荐 vs 实际，无真金）
 - [B] 025: 跑 20 交易日，每日日志
-- [T] 026: 验证通过标准（无崩溃 + 胜率 >= 回测 x 0.8）
+- [T] 026: 验证通过标准（§44：原"胜率>=回测×0.8"=48 弱 bar ≠ §13.0 绝对60 + 无随机基准 → 不合规；实测 49.2% vs 随机 50.2% lift 0.98x 噪声。须改：对齐 60 + 加随机基准+lift）
 
 ## Phase 1：涨停类策略实现
 
@@ -60,7 +66,7 @@
 - [B] 036: 板块停留天数追踪
 - [B] 037: 跨板块轮动检测（排名变化 >= 5 位）
 - [B] 038: 板块广度（up_count / (up_count + down_count)）
-- [B] 039: 板块阶段 -> 策略分修饰系数接入
+- [B] 039: 板块阶段标注（§5.4 Q2：修饰不接策略分——验证驳了方向，改纯 LABEL 标候选卡；60 天后回归再议）
 
 ### P1-3 日历因子 + PositionAdvisor
 - [B] 040: calendar_factor 函数（周五 x0.7/节前 x0.3/周四 x1.0）
@@ -176,6 +182,19 @@
 - [T] 111: 双层 kill criteria 单元测试（策略级/组合级/恢复协议）
 - [T] 112: 动态滑点模型单元测试（小/中/大资金场景）
 - [T] 113: 优雅降级矩阵集成测试（各数据源不可用时的降级行为）
+
+## §44 修订路径任务（新增，2026-08-16）
+
+> §13.0 违反 + 无 validated alpha 后的修订路径（不回退 Phase 1-3，但验证优先 + 诚实标注）。
+
+- [B] 114: 修 Phase 0e 框架 pass-logic 到 §44 合规（加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）
+- [B] 115: Phase 0e weather-adapted 重跑（接历史 sentiment_context 天气，测完整架构非退化版；当前 weather=None 是下界）
+- [B] 116: 60 天 eastmoney_live 积累后复验 Phase 0b（within-day r）+ 0e（胜率 lift）——lift 破 2x + r 显著 → alpha 成立；否则确认无 edge
+- [F] 117: 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源；非交易日 fix 见 591f536，节假日待重构补）
+- [B] 118: 036 板块停留天数（sector_cycle 缺，需先定义"在榜"口径）
+- [B] 119: classify_phase 边缘 case（today=0 + avg∈(0,3) 落"无历史"默认，应退潮-ish）
+- [B] 120: save_alert 日期分歧（calendar-today vs last_trading-day，非交易日错位）——prod 改让 save_alert 按交易日历落 date
+- [T] 121: spec→plan/tasks stale lint（`tools/spec_plan_stale_lint.py`）纳入回归/CI，防跨会话 drift
 
 ## 统计
 
