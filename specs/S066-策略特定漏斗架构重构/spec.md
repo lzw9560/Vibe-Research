@@ -2,6 +2,7 @@
 
 > 状态：Phase 0-3 全闭合（2026-08-14）— 后端 10 模块 217 单测 + 7 API + 前端 §11.2/11.3/11.4/11.5 全落地（331 测试全绿）；0e 框架就绪，20 天运行需日历积累。
 > **grill 2026-08-16（Q9-Q15）决议已落 spec**：Phase 0b 双轨分层 + 独立 CLI 脚本 + verdict 降级 + 行动计划，见 §13 Phase 0b/0c/0d 段落与 §14.1 交叉引用。
+> **grill 2026-08-16（Q16-Q17）决议已落 spec §5.3/§5.4**：Q16 实测验证板块数据来源——gene_scores 无 industry 列（原 §5.3 SQL 引用不存在的 industry_code），改 clist f100 静态映射回填（新 code_industry 表 + gene_scores.industry 列，§5.3 实现路径；**回填脚本待实现**——tasks P1-2/032 前置）；Q17 板块阶段修饰系数 placeholder 至 eastmoney_live 满 60 天后回归热替换（§5.4，当前 31 天样本不足，此刻回归高方差不可信）。
 > **Phase 0b 回归结果（2026-08-16，二轮验证后修订）**：初判 verdict=B→降级为"时间窗口效应，待验证"。**二轮验证（日内/日间分解 + day-cluster bootstrap）证伪了 rebound_rate 强信号**：它是日级市场变量（75% 交易日全市场单值），pooled r=+0.179 全部由日间变异撑起（within-day r=-0.010，方差 78.8% 在日间；bootstrap pooled CI=[-0.019,+0.296] 含 0，p=6e-13 是 IID 假设假象）。**全部 6 个因子 within-day r≈0（CI 全含 0）——eastmoney_live 24 天数据里没有任何可用的横截面选股因子。** §4.4"反向因子"理论删除不变。Phase 1 等权 placeholder 不阻塞推进（理由从"待验证"更新为"无已验证信号，等权是唯一诚实起点"）。
 > **目标**：一切为了提高胜率。拆分单漏斗为策略特定漏斗，重算策略分，
 > 天气硬开关选策略，板块热度过滤一日游，日历因子调仓位。
@@ -276,21 +277,35 @@ momentum = count_today - count_avg_3d
 | 冷门 | count_avg_3d = 0 且 count_today <= 1 | 板块无持续性，可能一日游 | 标注"冷门" |
 | 无历史 | T-1/T-2/T-3 数据缺失 | 新板块或数据不全 | 中性标注 |
 
-### 5.3 数据来源
+### 5.3 数据来源（grill Q16 验证后修订，2026-08-16）
 
-gene_scores.db 已有 152 天涨停历史。对每个 (date, industry) 计算 3 日滚动涨停数：
+> **grill Q16（2026-08-16，实测验证）**：原 SQL 引用 `industry_code` 列不存在——
+> `gene_scores` 表无 industry 列（PRAGMA table_info 确认），`backtest_samples.json`
+> 6596 条也无任何行业字段，所有 `.vibe-research/*.db` 无板块表。原设计无法落地。
+> 实测结论：
+> 1. **code→industry 静态映射可一次性拉全**：东财 clist（push2delay 回退可用）
+>    `f100` 字段，5896 只全市场 100% 覆盖，gene_scores 1121 个 code 100% 命中、
+>    行业全非空（样本涉及 115 个行业）。约 12 次分页请求，0.15s 间隔。
+> 2. **push2ex 涨停池历史回溯窗口极短**：昨日 59 条正常（hybk 全带），
+>    5 个月前返回 0——**不能靠池接口回填历史板块涨停数**。
+> 3. **gene_scores 本身即涨停股打分表**，回填 industry 列后按 (date, industry)
+>    GROUP BY 即得每日板块涨停数，板块周期模拟跑通（153 天、日均 24 板块，
+>    启动/发酵/高潮/退潮分类与行情实际演变吻合）。
+> **口径警告**：kline_rebuild 时代日均 6.2 条 vs eastmoney_live 36.2 条/日（差 5.8x）——
+> kline_rebuild 板块时序是**系统性低计数**，两段的板块周期不可跨段比较；
+> 板块阶段回归验证只在 eastmoney_live 段（31 天起，持续积累）做，
+> kline_rebuild 段板块字段仅供展示。
 
-```sql
--- 对每个交易日和板块，统计涨停股数
-SELECT date, industry_code, COUNT(DISTINCT code) as zt_count
-FROM gene_scores
-GROUP BY date, industry_code
-ORDER BY date DESC
-```
+实现路径：
 
-然后 join 当日候选股的 industry，匹配 3 日时序。
+1. **回填**：独立脚本拉 clist f100 建 `code→industry` 映射表（新表 `code_industry`），
+   UPDATE 回填 `gene_scores.industry` + `backtest_samples.json` 补 `industry` 字段。
+2. **增量**：eastmoney_live 写入路径（limitup_screener）落库时直接带 hybk（池接口自带），
+   不依赖静态映射；静态映射只兜底池接口缺字段的票。
+3. **计算**：回填后按 (date, industry) GROUP BY 得每日板块涨停数，
+   3 日滚动动量按 §5.2 判定阶段。
 
-零额外 API 调用——全部从已有 gene_scores.db 计算。
+一次性 API 成本约 12 次请求（限流友好），之后增量零成本。
 
 ### 5.4 接入方式
 
@@ -305,7 +320,15 @@ ORDER BY date DESC
 无历史 → 策略分 x 1.0（中性）
 ```
 
-修饰系数为候选初始值。Phase 0b 在 6537 样本上验证各阶段的胜率差异后调整。
+修饰系数为候选初始值（**未经数据验证**）。
+
+> **grill Q17（2026-08-16）决议**：与因子权重同构处理——
+> 修饰系数暂用上述候选初始值做 placeholder，板块阶段以**信息标注 + 弱修饰**接入排序；
+> eastmoney_live 积累到 60 天后跑"各板块阶段次日胜率"回归，按数据热替换系数。
+> 回归口径继承 §5.3 警告：**只在 eastmoney_live 段**（kline_rebuild 日均 6.2 条系统性低计数，
+> 板块时序口径不可比，不参与板块阶段回归）。当前 eastmoney_live 仅 31 天，样本不足，
+> 此刻回归只会得到高方差不可信系数——60 天前系数冻结为候选初始值。
+> 若 60 天回归显示某阶段胜率差异不显著（CI 含 0），该阶段系数回退 1.0（纯标注）。
 
 ### 5.4.1 板块强度排名
 
@@ -1077,7 +1100,7 @@ Phase 0b 全样本回归将直接验证四个假设：
 
 Phase 0b 的结论决定权重方向。不跳过这步。
 
-> **grill 2026-08-16 决议（Q9-Q15 + 二轮验证）见 Phase 0b/0c/0d 段落 + §4.1/4.3/4.4**：双轨并存 + 查询层分层 + kline_rebuild 仅验证 3 因子方向 + 独立 CLI 脚本 + verdict 降级（B→时间窗口效应待验证）+ ~~rebound_rate 升主因子~~（二轮验证证伪：日级市场变量，within-day r=-0.010，见 Phase 0b 段）+ §4.4 反向因子理论删除 + Phase 1 等权 placeholder 不阻塞（理由：24 天内无已验证横截面信号）。
+> **grill 2026-08-16 决议（Q9-Q15 + 二轮验证）见 Phase 0b/0c/0d 段落 + §4.1/4.3/4.4**：双轨并存 + 查询层分层 + kline_rebuild 仅验证 3 因子方向 + 独立 CLI 脚本 + verdict 降级（B→时间窗口效应待验证）+ ~~rebound_rate 升主因子~~（二轮验证证伪：日级市场变量，within-day r=-0.010，见 Phase 0b 段）+ §4.4 反向因子理论删除 + Phase 1 等权 placeholder 不阻塞（理由：24 天内无已验证横截面信号）+ §5.3/§5.4 Q16-Q17：板块数据来源实测修正（gene_scores 无 industry 列→clist f100 静态映射回填，§5.3 实现路径待实现、tasks 032 前置）+ 板块阶段修饰系数 placeholder 至 60 天回归热替换。
 
 ### 14.2 Regime 失效自动检测
 
