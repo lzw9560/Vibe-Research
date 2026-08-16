@@ -48,6 +48,7 @@ from routers import intraday_sentiment as intraday_sentiment_router  # S063：�
 from routers import coach as coach_router  # S064：盯盘教练
 from routers import debate as debate_router  # main：多空辩论 + 反思审计
 from routers import prediction_ledger_router as prediction_ledger_router_mod
+from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
 try:
     from routers import value_funnel as value_funnel_router
 except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 quality.py 时不挡 app 启动
@@ -197,6 +198,7 @@ app.include_router(feishu.router)
 app.include_router(backtest.router)
 app.include_router(bidding.router)
 app.include_router(strategy_router.router)
+app.include_router(premarket_router.router)  # S071：盘前选股
 app.include_router(sector_divergence.router)
 app.include_router(risk_router.router)
 app.include_router(extreme_market.router)

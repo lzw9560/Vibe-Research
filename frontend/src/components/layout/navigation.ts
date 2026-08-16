@@ -74,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/limitup/gene", label: "基因筛选" },
       { to: "/limitup/auction", label: "竞价选股" },
       { to: "/limitup/seats", label: "席位引擎" },
+      { to: "/limitup/premarket", label: "盘前选股" },
       { to: "/candidates", label: "候选池" },
       { to: "/value-funnel", label: "价值漏斗" },
       { to: "/watchlist", label: "自选股" },

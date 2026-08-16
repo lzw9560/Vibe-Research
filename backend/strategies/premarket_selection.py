@@ -21,10 +21,10 @@ sys.path.insert(0, str(ROOT))
 
 KLINE_CACHE = ROOT.parent / ".vibe-research" / "baostock_kline_cache.json"
 
-# 诚实标签（不改不撒谎）
+# 诚实标签（不改不撒谎）——数值随 §44 重验更新（2026-08-16 cache 08-14 重验）
 HONEST_LABEL = (
-    "弱信号（§44 day-cluster lift=1.67x <2x 非 validated edge，"
-    "但 robust>1 + PnL spread +0.523%正）。谨慎排序参考，非预测保证。"
+    "弱信号（§44 day-cluster lift=1.72x <2x 非 validated edge，"
+    "但 robust>1 + PnL spread +0.486%正）。谨慎排序参考，非预测保证。"
     "edge 主要来自风控非对称，breakout 是 weak ranking。"
 )
 
@@ -98,6 +98,99 @@ def _find_t1_idx(bars: list[dict], target_date: str) -> int | None:
             break
         t1_idx = i
     return t1_idx
+
+
+# ===========================================================================
+# S071 (b) 风控层：弱信号靠风控非对称补（edge 主来自风控，非 breakout 信号本身）
+# ===========================================================================
+
+@dataclass(frozen=True)
+class PreMarketRiskParams:
+    """盘前选股风控参数（弱信号→小仓+紧止损+非对称 R:R+短持）。"""
+    position_pct: float        # 单票仓位 %（× 日历因子后）
+    max_positions: int         # 最大持仓数（集中度上限）
+    stop_loss_pct: float       # 止损 %（负值，相对入场参考价）
+    take_profit_pct: float     # 止盈 %（正值，R:R≈1:2 非对称）
+    max_hold_days: int         # 最大持有日（短线，breakout 衰减快）
+
+
+# 弱信号保守默认（breakout §44 day-cluster 1.72x <2x 非 validated → 小仓紧止损）
+_PREMARKET_RISK_BASE = PreMarketRiskParams(
+    position_pct=3.0,
+    max_positions=3,
+    stop_loss_pct=-4.0,
+    take_profit_pct=8.0,
+    max_hold_days=3,
+)
+
+
+@dataclass(frozen=True)
+class PreMarketCandidateRisk:
+    """候选 + 风控具体价（止损/止盈/仓位）。"""
+    code: str
+    name: str
+    breakout_score: float
+    breakout_binary: int
+    t1_close: float
+    t1_date: str
+    entry_ref: float           # 入场参考价（= T-1 close；实盘以开盘竞价为准）
+    stop_loss: float           # 止损价（entry_ref × (1+stop_loss_pct/100)）
+    take_profit: float         # 止盈价（entry_ref × (1+take_profit_pct/100)）
+    position_pct: float        # 仓位 %（已 × 日历因子）
+
+
+@dataclass(frozen=True)
+class PreMarketSelection:
+    """盘前选股完整结果（候选+风控+诚实标签+日历+元信息）。"""
+    target_date: str
+    honest_label: str
+    risk_params: PreMarketRiskParams
+    calendar_multiplier: float
+    calendar_reason: str
+    candidates: list[PreMarketCandidateRisk]
+    market_note: str
+
+
+def select_premarket_with_risk(
+    target_date: str, top_n: int = 20, min_score: float = 0.90,
+) -> PreMarketSelection:
+    """盘前选股 + 风控层（endpoint 入口）。
+
+    breakout 排序 → top-N → 附加风控具体价（止损/止盈/仓位×日历）。
+    诚实：honest_label 标弱信号；market_note 标盘前无法判 kill_switch（需盘中指数）。
+    """
+    from strategies.calendar_factor import calendar_factor
+
+    raw = select_premarket_candidates(target_date, top_n=top_n, min_score=min_score)
+    mult, reason = calendar_factor(target_date)
+    pos_pct = round(_PREMARKET_RISK_BASE.position_pct * mult, 2)
+
+    candidates = [
+        PreMarketCandidateRisk(
+            code=c.code, name=c.name, breakout_score=c.breakout_score,
+            breakout_binary=c.breakout_binary, t1_close=c.t1_close, t1_date=c.t1_date,
+            entry_ref=c.t1_close,
+            stop_loss=round(c.t1_close * (1 + _PREMARKET_RISK_BASE.stop_loss_pct / 100), 2),
+            take_profit=round(c.t1_close * (1 + _PREMARKET_RISK_BASE.take_profit_pct / 100), 2),
+            position_pct=pos_pct,
+        )
+        for c in raw
+    ]
+    return PreMarketSelection(
+        target_date=target_date,
+        honest_label=HONEST_LABEL,
+        risk_params=PreMarketRiskParams(
+            position_pct=pos_pct,
+            max_positions=_PREMARKET_RISK_BASE.max_positions,
+            stop_loss_pct=_PREMARKET_RISK_BASE.stop_loss_pct,
+            take_profit_pct=_PREMARKET_RISK_BASE.take_profit_pct,
+            max_hold_days=_PREMARKET_RISK_BASE.max_hold_days,
+        ),
+        calendar_multiplier=mult,
+        calendar_reason=reason,
+        candidates=candidates,
+        market_note="盘前选股：market_kill_switch 需盘中指数，盘前不判（开盘后实时核）",
+    )
 
 
 if __name__ == "__main__":
