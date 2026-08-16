@@ -62,7 +62,7 @@ def load_returns_by_date() -> dict[str, dict[str, dict]]:
     return by_date
 
 
-def main() -> int:
+def main(use_weather: bool = False) -> int:
     ret_map = load_returns_map()
     by_date = load_returns_by_date()
     conn = sqlite3.connect(str(DB))
@@ -74,12 +74,33 @@ def main() -> int:
     if not dates:
         return 1
 
+    # §44 幂等：清空 picks（forward_test_records）后全量重派——避免跨 weather 模式重跑
+    # 累积 picks（UNIQUE 含 strategy_code，天气变策略→新行不替换→污染 verdict）。
+    # universe_returns 不清（天气无关的同宇宙基准，共享）。
+    conn = sqlite3.connect(str(DB))
+    conn.execute("DELETE FROM forward_test_records")
+    conn.commit(); conn.close()
+    print("已清空 forward_test_records（picks 全量重派；universe_returns 保留）")
+
+    # task 115：weather-adapted 模式按日取历史天气（build_context from sti_timeline.db）；
+    # 早期日期无 STI 数据 → weather=None（退化），诚实混用。
+    if use_weather:
+        from sentiment_context import build_context  # noqa: E402
+
     total_recs = 0
     total_settled = 0
     total_universe = 0
+    weather_seen: dict[str, int] = {}
     for d in dates:
+        ws = None
+        if use_weather:
+            try:
+                ws = build_context(d).weather_state
+            except Exception:
+                ws = None
+        weather_seen[ws or "None"] = weather_seen.get(ws or "None", 0) + 1
         # run_daily_forward_test 记录 picks + universe codes（收益 NULL）
-        r = run_daily_forward_test(d, weather_state=None)  # caveat: 未接历史天气适配
+        r = run_daily_forward_test(d, weather_state=ws)
         n = r.get("recommendations", 0)
         if not n:
             continue
@@ -91,14 +112,20 @@ def main() -> int:
         # §44 universe 收益回填（同日全体涨停股 → 零选股基准率）
         total_universe += record_universe_returns(d, by_date.get(d, {}))
     print(f"回填 {len(dates)} 信号日：picks {total_recs} 条（回填 {total_settled}），universe {total_universe} 条")
+    print(f"weather 分布: {weather_seen}")
 
     print("\n=== Phase 0e §44 汇总（framework get_forward_test_summary）===")
     print(get_forward_test_summary(benchmark_win_rate=60.0, min_days=10))
-    print("caveat: weather=None（非天气适配退化版，下界）；31 天<30 探索性 + 日聚类（CI 偏窄）")
+    mode = "weather-adapted（完整架构，task 115）" if use_weather else "weather=None（退化下界，task 114）"
+    print(f"caveat: {mode}；早期日无 STI → weather=None 混入；31 天<30 探索性 + 日聚类（CI 偏窄）")
     print("caveat: universe=当日全体涨停股（load_gene_scores 全源，非仅 eastmoney_live）；"
           "若与原手算 eastmoney-only 50.2% 略异，因 pool 口径不同，§44 verdict（lift<2x）稳健不变")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import argparse
+    ap = argparse.ArgumentParser(description="S066 Phase 0e 前向测试历史回填（§44 验证）")
+    ap.add_argument("--weather", action="store_true",
+                   help="task 115：按日 build_context 取历史天气（weather-adapted 完整架构；默认 weather=None 退化下界）")
+    raise SystemExit(main(use_weather=ap.parse_args().weather))

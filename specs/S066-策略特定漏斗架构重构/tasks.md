@@ -187,8 +187,8 @@
 
 > §13.0 违反 + 无 validated alpha 后的修订路径（不回退 Phase 1-3，但验证优先 + 诚实标注）。
 
-- [B] 114: ✅ 修 Phase 0e 框架 pass-logic 到 §44 合规（加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）——落地：新表 `universe_returns`（§44 随机基准源，UNIQUE signal_date,code）+ `record_universe_returns` + `run_daily_forward_test` 主动记 universe codes + gate `winrate>=60 AND lift>=2.0 AND random_settled>0` + Wilson CI + is_exploratory；forward_test_records 不动（避免 dup）；18 测试过（含 §44 三关键测试：no_edge/no_universe/pass）。**真实数据 verdict 待 Windows 重跑 backfill 填 universe_returns**（spec §13 ① 设计口径已落）
-- [B] 115: Phase 0e weather-adapted 重跑（接历史 sentiment_context 天气，测完整架构非退化版；当前 weather=None 是下界）
+- [B] 114: ✅ 修 Phase 0e 框架 pass-logic 到 §44 合规（加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）——落地：新表 `universe_returns`（§44 随机基准源，UNIQUE signal_date,code）+ `record_universe_returns` + `run_daily_forward_test` 主动记 universe codes + gate `winrate>=60 AND lift>=2.0 AND random_settled>0` + Wilson CI + is_exploratory；forward_test_records 不动（避免 dup）；18 测试过（含 §44 三关键测试：no_edge/no_universe/pass）。**本机真实数据已验证**：framework 内部产出 verdict = 49.18% vs 50.24% lift 0.979x 噪声（与手算 49.2%/50.2% 一致 ✓）；universe_returns 2319/2836（spec §13 ①）
+- [B] 115: ✅ Phase 0e weather-adapted 重跑（backfill `--weather` 按日 build_context 取历史天气）——完整架构 verdict = 48.05% vs 50.24% lift **0.956x** 噪声。**§13.0 发现：天气路由无统计显著提升**（48.05% vs 退化版 49.18%，差 1.1pp 在 CI 重叠噪声内，非显著降解但确无提升）→ 按"不提升的不加"天气硬开关无验证收益；两版均 lift<2 → §44"无 alpha"对完整架构也成立。caveat：9/31 早期日无 STI→weather=None 混入（spec §13 ①）
 - [B] 116: 60 天 eastmoney_live 积累后复验 Phase 0b（within-day r）+ 0e（胜率 lift）——lift 破 2x + r 显著 → alpha 成立；否则确认无 edge
 - [F] 117: ✅ 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源）——落地：删 `getAStockTimeInfo`（43 行本地 tz/仅周末/无节假日），useMemo 直接取 `backend.stage/market_status/next_stage/next_stage_time/current_time`（零新增请求，复用既有 60s 轮询）；backend null → "加载中"降级（不本地重算，避免 drift 复现）；+2 测试（backend→UI 流 + fallback）+13 测试过 + tsc 干净。**countDownToNext（line 86）仍用浏览器 new Date() 算倒计时，非-CN 用户 tz 漂移——cosmetic drift，登记 task 122 follow-up**
 - [B] 118: 036 板块停留天数（sector_cycle 缺，需先定义"在榜"口径）

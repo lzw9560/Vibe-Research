@@ -1055,7 +1055,11 @@ factor_name: r=+0.XX, 95% CI=[+0.XX, +0.XX], p=0.XXX, n=6537
 > - **run_daily_forward_test 记录 universe codes**（universe_returns 收益 NULL，次日 record_universe_returns 回填）——框架主动记录"它看到的全体"，coverage=(已回填/已记录) 透明。
 > - **§44 gate**：`passed = days>=min_days AND strategy_settled>0 AND strategy_winrate>=60（§13.0 绝对，非 benchmark×0.8）AND random_settled>0 AND lift>=2.0（§44）AND consecutive_loss<8`。无 universe_returns → passed=False + note「无随机基准」（诚实：不能伪造 lift）。
 > - **新字段**：random_baseline_win_rate / random_settled / lift / strategy_ci / random_ci（Wilson）/ is_exploratory(n<30) / universe_coverage。pass_threshold 改 =60（§13.0 绝对）；benchmark_win_rate 降为信息字段（非门）。
-> - **回填需重跑**：现有 488 picks 行无 universe_returns 配对 → 重跑 forward_test_backfill 填 universe 后 framework 内部产出 §44 verdict（数据在 Windows，重跑待进行）。
+> - **已验证（2026-08-16，本机数据）**：回填跑通（数据在本机 macOS 项目 `.vibe-research/`，非 Windows——CLAUDE.md env 段 stale）。framework `get_forward_test_summary` 内部产出 §44 verdict：
+>   - **task 114（weather=None 退化下界）**：策略 49.18% CI[44.77,53.61] vs 随机 50.24% CI[48.2,52.27]，lift **0.979x** <2x 噪声（与 3df24ec 手算 49.2%/50.2% 一致 ✓ 交叉验证）；universe_returns 2319/2836 settled。
+>   - **task 115（weather-adapted 完整架构）**：策略 48.05% CI[43.64,52.48] vs 随机 50.24%，lift **0.956x** <2x 噪声。
+>   - **§13.0 发现**：天气路由（WEATHER_STRATEGY_MAP）**无统计显著提升**（115 48.05% vs 114 49.18%，差 1.1pp 在两 CI 重叠噪声内——非显著降解，但确无提升）→ 按"不提升的不加"，天气硬开关层**无验证收益**。两版均 lift<2 且<1（劣于随机），策略 CI 与随机 CI 重叠——**§44"无 alpha"结论对完整架构也成立**（比仅退化版更强）。
+>   - caveat：31 天<30 探索性 + 日聚类（effective n≈31，CI 偏窄）；9/31 早期日无 STI→weather=None 混入；weather 分布 None9/晴天19/阴天2/极端反弹1。
 
 ### 依赖链
 
