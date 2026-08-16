@@ -110,7 +110,7 @@ const STAGE_CONFIG: Record<string, {
     links: [
       { to: "/workflow/intraday", label: "盘中监控" },
       { to: "/workflow/alerts", label: "炸板预警" },
-      { to: "/workflow/intraday", label: "情绪气象" },
+      { to: "/sentiment/weather", label: "情绪气象" },
       { to: "/limitup/seats", label: "席位引擎" },
     ],
   },
@@ -274,8 +274,8 @@ function StageCard({
 
       {/* 快捷链接 */}
       <div className="flex flex-wrap gap-2">
-        {config.links.map((link) => (
-          <Link key={link.to} to={selectedDate ? `${link.to}?date=${selectedDate}` : link.to}>
+        {config.links.map((link, i) => (
+          <Link key={`${link.to}-${i}`} to={selectedDate ? `${link.to}?date=${selectedDate}` : link.to}>
             <Button variant="ghost" size="sm" className={cn(
               "text-xs",
               isActive ? config.color : "text-muted-foreground/60",
