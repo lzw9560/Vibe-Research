@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
@@ -509,7 +510,7 @@ class TaskExecutor:
             return run
 
         try:
-            if asyncio.iscoroutinefunction(handler):
+            if inspect.iscoroutinefunction(handler):  # py3.16: asyncio.iscoroutinefunction 已移除，用 inspect
                 result = await handler(task.payload)
             else:
                 result = await asyncio.to_thread(handler, task.payload)
