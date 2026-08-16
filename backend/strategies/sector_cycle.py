@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from pathlib import Path
 
 from vr_paths import resolve_data_dir
 
@@ -42,18 +40,13 @@ _PHASE_MODIFIERS: dict[str, tuple[float, str]] = {
 
 
 def _get_zt_count_by_date_industry(date: str, industry: str) -> int:
-    """某日某板块涨停股数。"""
+    """某日某板块涨停股数（S066 Q16 回填 industry 列后直查；原 stub 因无此列恒返 0）。"""
     conn = sqlite3.connect(str(_DB))
     try:
-        row = conn.execute(
-            "SELECT COUNT(DISTINCT code) FROM gene_scores WHERE date = ? AND code IN "
-            "(SELECT code FROM gene_scores WHERE date = ?)",
-            (date, date),
-        ).fetchone()
-        # gene_scores 无 industry 字段直接分组——需从概念块关联
-        # 此处简化：用 code 前缀粗分组或外接 concept_blocks
-        # 实际实现需 gene_scores 有 industry 列或 join concept_blocks
-        return 0
+        return conn.execute(
+            "SELECT COUNT(DISTINCT code) FROM gene_scores WHERE date = ? AND industry = ?",
+            (date, industry),
+        ).fetchone()[0] or 0
     except Exception:
         return 0
     finally:
@@ -116,18 +109,19 @@ def analyze_sector_phase(date: str, industry: str) -> SectorPhase | None:
 
 
 def _get_prev_trading_dates(date: str, n: int) -> list[str]:
-    """获取 date 前 n 个交易日（简化：跳过周末，不查节假日表）。"""
+    """date 前 n 个有涨停数据的交易日（查 gene_scores 的 distinct date，自带节假日过滤；
+    原简化版仅跳周末会误算节假日）。"""
+    conn = sqlite3.connect(str(_DB))
     try:
-        dt = datetime.strptime(date, "%Y-%m-%d")
-    except ValueError:
+        rows = conn.execute(
+            "SELECT DISTINCT date FROM gene_scores WHERE date < ? ORDER BY date DESC LIMIT ?",
+            (date, n),
+        ).fetchall()
+        return [r[0] for r in rows]
+    except Exception:
         return []
-    dates = []
-    cursor = dt - timedelta(days=1)
-    while len(dates) < n:
-        if cursor.weekday() < 5:  # 周一~周五
-            dates.append(cursor.strftime("%Y-%m-%d"))
-        cursor -= timedelta(days=1)
-    return dates
+    finally:
+        conn.close()
 
 
 def sector_strength_rank(date: str, sectors: list[dict]) -> list[dict]:

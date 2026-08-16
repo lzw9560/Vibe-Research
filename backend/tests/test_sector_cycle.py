@@ -132,3 +132,40 @@ class TestDetectRotation:
         sectors = [{"industry": f"S{i}", "zt_count_today": 10 - i} for i in range(6)]
         rotations = detect_rotation("2026-08-13", "2026-08-14", sectors, sectors)
         assert len(rotations) == 0  # 无变化
+
+
+class TestAnalyzeSectorPhase:
+    """DB 路径 analyze_sector_phase（S066 Q16 回填 industry 列后解封；原 stub 恒返 0）。"""
+
+    @staticmethod
+    def _seed(db_path: Path) -> None:
+        import sqlite3
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE gene_scores (date TEXT, code TEXT, name TEXT, industry TEXT)")
+        rows = []
+        for c in ("000001", "000002", "000003", "000004"):
+            rows.append(("2026-08-14", c, f"n{c}", "电力"))  # today=4
+        for c in ("000001", "000002", "000003"):
+            rows.append(("2026-08-13", c, f"n{c}", "电力"))  # prev
+        for c in ("000001", "000002", "000003", "000004"):
+            rows.append(("2026-08-12", c, f"n{c}", "电力"))
+            rows.append(("2026-08-11", c, f"n{c}", "电力"))
+        for c in ("600001", "600002", "600003", "600004", "600005"):
+            rows.append(("2026-08-14", c, f"n{c}", "半导体"))  # 干扰：不被电力计数
+        conn.executemany("INSERT INTO gene_scores VALUES (?,?,?,?)", rows)
+        conn.commit()
+        conn.close()
+
+    def test_real_data_fermentation_phase(self, tmp_path, monkeypatch):
+        """真实 DB 数据 → 发酵期（today=4 > avg3d≈3.67），industry 过滤生效。"""
+        import strategies.sector_cycle as sc
+        db = tmp_path / "gene_scores.db"
+        self._seed(db)
+        monkeypatch.setattr(sc, "_DB", db)
+        r = sc.analyze_sector_phase("2026-08-14", "电力")
+        assert r is not None
+        assert r.count_today == 4       # industry 过滤生效（不含半导体干扰 5 只）
+        assert r.count_avg_3d > 3        # (3+4+4)/3 ≈ 3.67
+        assert r.momentum > 0            # today(4) > avg → 升温
+        assert r.phase == "发酵"
+        assert r.modifier == 1.0
