@@ -44,6 +44,13 @@ function getAStockTimeInfo(): {
   const m = now.getMinutes();
   const totalMin = h * 60 + m;
 
+  // 非交易日（周末）整日不随时间推进——固定"非交易日"（节假日需交易日历，
+  // 后端 is_trading_day 有；本地仅周末，节假日待前端改用后端源时补）
+  const dow = now.getDay(); // 0=Sun 6=Sat
+  if (dow === 0 || dow === 6) {
+    return { hours: h, minutes: m, stageKey: "pre-market", marketStatus: "非交易日", nextStageKey: "pre-market", nextStageTime: "下一交易日 08:00" };
+  }
+
   // A股交易时段精确划分
   // 盘前: 08:00 - 09:25 (集合竞价 09:15-09:25)
   // 集合竞价: 09:15 - 09:25

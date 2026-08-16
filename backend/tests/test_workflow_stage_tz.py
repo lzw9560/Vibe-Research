@@ -46,3 +46,20 @@ def test_init_uses_last_trading_date(monkeypatch):
     assert w.date == "2026-08-14"
     # 显式 date 不被覆盖
     assert tw.TradingWorkflow(date="2026-08-03").date == "2026-08-03"
+
+
+def test_non_trading_day_does_not_advance():
+    """非交易日（周末/节假日）整日不随时间推进——固定"非交易日"（原实现周六 10:00 误显 intraday）。"""
+    from trading_workflow import TradingWorkflow
+    w = TradingWorkflow()
+    # 2026-08-15 周六 10:00——若只看时分会显 intraday 上午盘，但周六非交易日→固定非交易日
+    sat_am = datetime(2026, 8, 15, 10, 0, tzinfo=_BEI)
+    s = w.get_current_stage(sat_am)
+    assert s["market_status"] == "非交易日"
+    assert s["stage"] == "pre-market"  # 不推进到 intraday
+    # 周六 15:00 也固定非交易日（不推进到 post-market）
+    sat_pm = datetime(2026, 8, 15, 15, 0, tzinfo=_BEI)
+    assert w.get_current_stage(sat_pm)["market_status"] == "非交易日"
+    # 对照：交易日（周一 2026-08-17 10:00）正常推进 intraday
+    mon_am = datetime(2026, 8, 17, 10, 0, tzinfo=_BEI)
+    assert w.get_current_stage(mon_am)["stage"] == "intraday"

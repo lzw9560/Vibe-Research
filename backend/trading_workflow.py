@@ -18,7 +18,7 @@ from factors.base import FactorResult
 from realtime_workflow import RealtimeWorkflow
 from post_market_workflow import PostMarketWorkflow, PostMarketReport
 from workflow_state_machine import WorkflowStatus
-from vr_paths import last_trading_date_str
+from vr_paths import last_trading_date_str, is_trading_day
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,17 @@ class TradingWorkflow:
         hour = now.hour
         minute = now.minute
         time_str = f"{hour:02d}:{minute:02d}"
+
+        # 非交易日（周末/法定节假日）整日不随时间推进阶段——固定"非交易日"
+        # （is_trading_day 含节假日表；原实现只看时分，周六 10:00 误显 intraday）
+        if not is_trading_day(now.date()):
+            return {
+                "stage": "pre-market",
+                "current_time": time_str,
+                "market_status": "非交易日",
+                "next_stage": "pre-market",
+                "next_stage_time": "下一交易日 08:00",
+            }
 
         if hour >= 8 and (hour < 9 or (hour == 9 and minute < 30)):
             # 08:00-09:30 盘前（含 09:15-09:30 竞价与竞价确认）
