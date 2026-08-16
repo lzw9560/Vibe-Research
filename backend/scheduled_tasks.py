@@ -449,6 +449,7 @@ class TaskExecutor:
             "candidate_funnel_precompute": self._execute_candidate_funnel_precompute,  # S004 R5：盘后漏斗预计算
             "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,  # §44 60 天复验检查点（提醒任务）
             "forward_test_daily": self._execute_forward_test_daily,  # S069 R1：每日记 forward_test picks+universe
+            "forward_test_t1_settle": self._execute_forward_test_t1_settle,  # S069 R2：T+1 收益回填
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -959,6 +960,64 @@ def _execute_forward_test_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]
 TaskExecutor._execute_forward_test_daily = _execute_forward_test_daily
 
 
+def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S069 R2：回填最近未结算 signal_date 的 T+1 收益（baostock kline→return_open2close）。
+
+    每日 post-market 跑。找最新 signal_date < 今日 且 return_open2close IS NULL 的（其 next_bar
+    今日收盘后可得）→ compute_returns_for_codes → record_actual_returns（picks）+
+    record_universe_returns（universe）。缺 next_bar 的 code 留 NULL（下次重试，不臆造/不算 loss）。
+    """
+    import sqlite3
+    from config import GENE_SCORES_DB_PATH
+    from vr_paths import last_trading_date_str
+    from strategies.forward_test import record_actual_returns, record_universe_returns
+    from strategies.kline_returns import compute_returns_for_codes
+
+    today = last_trading_date_str()
+    conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+    try:
+        # 最新未结算 signal_date（< 今日：next_bar 今日收盘后可得）
+        row = conn.execute(
+            "SELECT signal_date FROM forward_test_records "
+            "WHERE return_open2close IS NULL AND signal_date < ? "
+            "ORDER BY signal_date DESC LIMIT 1", (today,)
+        ).fetchone()
+        if not row:
+            return {"status": "nothing_to_settle", "today": today}
+        signal_date = row[0]
+        pick_codes = [r[0] for r in conn.execute(
+            "SELECT DISTINCT code FROM forward_test_records "
+            "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+        uni_codes = [r[0] for r in conn.execute(
+            "SELECT DISTINCT code FROM universe_returns "
+            "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+    finally:
+        conn.close()
+
+    all_codes = list(dict.fromkeys(pick_codes + uni_codes))
+    if not all_codes:
+        return {"status": "no_codes", "signal_date": signal_date}
+
+    returns_map = compute_returns_for_codes(signal_date, all_codes)
+    if not returns_map:
+        return {"status": "baostock_unavailable", "signal_date": signal_date, "codes": len(all_codes)}
+
+    # 仅记有 next_bar 的（缺 bar 留 NULL 下次重试，不标 loss）
+    picks_returns = {c: returns_map[c] for c in pick_codes
+                     if c in returns_map and returns_map[c]["return_open2close"] is not None}
+    uni_returns = {c: returns_map[c] for c in uni_codes
+                   if c in returns_map and returns_map[c]["return_open2close"] is not None}
+    n_picks = record_actual_returns(signal_date, picks_returns)
+    n_uni = record_universe_returns(signal_date, uni_returns)
+    logger.info("[forward_test_t1_settle] %s settled picks=%s/%s universe=%s/%s",
+               signal_date, n_picks, len(pick_codes), n_uni, len(uni_codes))
+    return {"signal_date": signal_date, "settled_picks": n_picks, "settled_universe": n_uni,
+            "picks_total": len(pick_codes), "universe_total": len(uni_codes)}
+
+
+TaskExecutor._execute_forward_test_t1_settle = _execute_forward_test_t1_settle
+
+
 _manager = ScheduledTaskManager()
 
 
@@ -1232,6 +1291,18 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 forward_test_daily 已创建（cron 45 15 * * 0-4）")
+
+    # S069 R2：每日 post-market 回填昨日 forward_test T+1 收益（baostock kline 次日 bar）。
+    if "forward_test_t1_settle" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="forward_test_t1_settle",
+            description="S069 R2：每日 post-market 回填昨日 forward_test picks+universe 的 T+1 收益",
+            task_type="forward_test_t1_settle",
+            cron_expr="50 15 * * 0-4",  # 15:50（晚 R1 15:45，next_bar 今日收盘后可得）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 forward_test_t1_settle 已创建（cron 50 15 * * 0-4）")
 
 
 async def stop_scheduler() -> None:

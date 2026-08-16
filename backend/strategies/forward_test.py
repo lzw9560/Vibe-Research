@@ -160,7 +160,7 @@ def record_daily_recommendations(
         for rec in recommendations:
             try:
                 conn.execute(
-                    """INSERT OR REPLACE INTO forward_test_records
+                    """INSERT OR IGNORE INTO forward_test_records
                     (signal_date, code, name, strategy_code, strategy_score,
                      weather_state, position_multiplier, recommended_position)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
