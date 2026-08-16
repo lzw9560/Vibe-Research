@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useMemo } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
@@ -6,7 +6,7 @@ import { StrategyGroupTabs } from "@/components/workflow/StrategyGroupTabs";
 import { CalendarFactorHint } from "@/components/workflow/CalendarFactorHint";
 import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
 import { usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
-import { useStrategyBacktest } from "@/lib/query/strategy";
+import { useStrategyBacktest, useWeatherStrategyMap } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -279,7 +279,7 @@ export default function PreMarketBriefing() {
           />
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
-          <WinRateCompareSection factors={factors} onPick={setDrawerCode} />
+          <WinRateCompareSection factors={factors} onPick={setDrawerCode} weatherState={briefing.sentiment_context?.weather_state} />
         </>
       )}
 
@@ -371,7 +371,7 @@ function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; 
     if (ra !== rb) return rb - ra;
     return (entryFor(b)?.gene_score ?? 0) - (entryFor(a)?.gene_score ?? 0);
   });
-  const display = sorted.slice(0, 15);
+  const display = sorted.slice(0, 15).filter((code) => code != null && code !== "");
   const v = (x: number | null | undefined) => x != null ? String(x) : "—";
   return (
     <GlassCard className="p-2">
@@ -399,10 +399,12 @@ function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; 
           <tbody>
             {display.map((code) => {
               const e = entryFor(code);
-              const name = e?.name ?? code;
+              // Bug 问题9 修复：name 缺失 → fallback code；code 也缺失（理论上 display 已过滤）
+              // 不臆造 name（守"不降级工程底线"——数据缺失就标注缺失，不编造）。
+              const name = e?.name ?? code ?? "—";
               return (
                 <tr key={code} className="cursor-pointer border-t border-border/30 hover:bg-accent/30" onClick={() => onPick(code)}>
-                  <td className="px-2 py-1 font-mono">{code}</td>
+                  <td className="px-2 py-1 font-mono">{code ?? "—"}</td>
                   <td className="px-2 py-1">{name}</td>
                   <td className="px-2 py-1 text-center">{r1?.passed?.some((p) => p.code === code) ? "✓" : "—"}</td>
                   <td className="px-2 py-1 text-center">{r2?.passed?.some((p) => p.code === code) ? "✓" : "—"}</td>
@@ -441,9 +443,27 @@ function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; 
   );
 }
 
-/** S031 R22：战法胜率对比——useStrategyBacktest 真实回测 + 各因子 L2 passed 合成估算。 */
-function WinRateCompareSection({ factors, onPick }: { factors: FactorResult[]; onPick: (code: string) => void }) {
+/** S031 R22：战法胜率对比——useStrategyBacktest 真实回测 + 各因子 L2 passed 合成估算。
+ * grill Q7：从 weather-map 端点取天气推荐集合，按当前天气 weather_state 取推荐战法，
+ * 传给 WinRateComparePanel 在战法行标「推荐」（软标注，不过滤）。 */
+function WinRateCompareSection({
+  factors,
+  onPick,
+  weatherState,
+}: {
+  factors: FactorResult[];
+  onPick: (code: string) => void;
+  weatherState?: string;
+}) {
   const { data: backtest, isLoading } = useStrategyBacktest(60);
+  // grill Q7：天气-策略推荐映射表（5min 缓存，复用已有 hook，不发额外请求）
+  const { data: weatherMap } = useWeatherStrategyMap();
+  // weatherMap 已被 request() 解包 .data → { weather_strategy_map, weather_recommendation, fallback_strategies }
+  const weatherRecommended = useMemo(() => {
+    if (!weatherState) return undefined;
+    const recs = weatherMap?.weather_recommendation?.[weatherState];
+    return recs && recs.length > 0 ? new Set(recs) : undefined;
+  }, [weatherState, weatherMap]);
   // 取所有因子 L2 战法层 passed（携 best_strategy + confidence_value）
   const l2Passed = factors
     .flatMap((f) => f.layers ?? [])
@@ -452,7 +472,13 @@ function WinRateCompareSection({ factors, onPick }: { factors: FactorResult[]; o
   if (!factors.length) return null;
   return (
     <div className="mb-6">
-      <WinRateComparePanel backtest={backtest} l2Passed={l2Passed} loading={isLoading} onPickCandidate={onPick} />
+      <WinRateComparePanel
+        backtest={backtest}
+        l2Passed={l2Passed}
+        loading={isLoading}
+        onPickCandidate={onPick}
+        weatherRecommended={weatherRecommended}
+      />
     </div>
   );
 }

@@ -36,6 +36,7 @@ export function syntheticWinRate(confidence: number): number {
 
 export interface WeatherStrategyMap {
   weather_strategy_map: Record<string, string[]>;
+  weather_recommendation: Record<string, string[]>;
   fallback_strategies: Record<string, string[]>;
 }
 
@@ -55,6 +56,7 @@ export interface FunnelStrategyConfig {
   };
   quality_standards: { name: string; required: boolean; description: string }[];
   note: string;
+  activation_note?: string;  // 激活状态注记，非空表示该战法当前不可用（如"待 S055 激活"）
 }
 
 export interface CalendarFactorResult {
