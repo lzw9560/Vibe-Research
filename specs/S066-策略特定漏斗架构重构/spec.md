@@ -31,6 +31,19 @@
 
 **Phase 0a 回填计划**：gene_scores.db 有 6537 条记录（1104 只独立股票），当前仅用了 74 条。Phase 0a 将回填全部 6537 样本的 kline 次日收益，届时所有因子回归在 6537 样本上重新计算。n=6537 时可检测 r=0.024 级别的效应。
 
+**grill Q1 验证（2026-08-16，`tools/screener_edge_validation.py` a7fad90，按 AGENTS.md §44 bar）**：
+screener 按 total_score 选同日 top-N（横截面排名）。补全验证区分 (a) 收益预测器 / (b) 质量筛 / (c) 功效：
+- within-day r(total_score, 次日收益)≈0.027，CI [-0.013, 0.068] 含 0 → 不预测次日收益（a 否）。
+- 连板概率（next_pctChg≥9.8）per 五分位：Q5(高分 30-70) 27.6% [23.76, 31.85] vs Q1(0 分) 17.1% [13.91, 20.76]，
+  CI 不重叠统计显著——但 lift = 27.6 / 17.25（全体连板率）= **1.60x < 2x**，按 §44 判**噪声**；
+  且 25 天 eastmoney_live < 30 → **探索性**。→ §44 bar 下**非 validated edge**。
+- **数据决定（§44 bar）：inconclusive**——连板信号是探索性噪声，不达"validated edge" bar。
+  total_score 在项目 bar 下无验证 edge（次日收益 r≈0 + 连板 1.6x 噪声 + 25 天探索性）。
+  不 pivot 选股基础（无验证依据）、不宣称 edge（sub-bar）。**defer 60 天复验**：
+  lift 破 2x + 窗口>30 + within-day r 显著 → (b) 质量筛成立；否则无 edge。
+- caveat：9.8% 涨停阈值 board-blind（创业/科创 20% 限的 9.8-19.8% 非涨停被计入，ST 5% 漏）——
+  绝对率有偏、Q5>Q1 差 10pp 方向稳健；within-day r 对 return_close2close/next_pctChg 同值(0.0274) 待查。
+
 ### 1.2 架构冲突
 
 当前单漏斗 R1→R2→R3 服务 9 个战法，但：
