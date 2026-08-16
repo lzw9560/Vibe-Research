@@ -1,8 +1,16 @@
 # Spec: S069 — 每日 forward_test 管道 + T+1 收益回填（流程框架打通）
 
-> 状态：草案
+> 状态：实现中（R1+R2 已落地 96f8778/9ff9ec1；待 prod baostock 验证 live 日积）
 > 作者：lzw  日期：2026-08-16
 > 关联：S066 §44 修订路径（114/115/116/123）、S041 回测定时任务、S055 盘中封单采集、S008 数据层
+>
+> **落地（2026-08-16）**：R1（每日 picks+universe 记录，executor forward_test_daily cron 15:45）+
+> R2（T+1 收益回填，executor forward_test_t1_settle cron 15:50，baostock kline→return_open2close）。
+> kline_returns.py 抽公共 helper（baostock 未装→{} 降级；prod requirements 有）。
+> R1 record 改 INSERT OR IGNORE（重跑保 settled 不擦；08-14 NULL 实为 backtest_samples 缺最近日，
+> 非 R1 wipe——prod 由 R2 baostock 回填 live 日）。41 测试过。
+> **待 prod 验证**：baostock 装上后，R1+R2 日积 → forward_test_records/universe_returns 随 N 增长 →
+> §44 verdict 覆盖 live N 日（非 stale 31）。dev 无 baostock，R2 降级 baostock_unavailable（不崩）。
 >
 > grill 决议（2026-08-16）：pre/post = 离线分析引擎、intraday = 执行层；盘后→盘前选股依据→盘中决策。
 > 架构确认后，承重缺口 = §44 forward_test 数据**不日积**（仅 retroactive backfill 的 31 日）→ 116 复验无法用 live 累积数据。
