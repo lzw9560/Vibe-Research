@@ -231,14 +231,16 @@ async def get_market_kill_switch() -> Dict[str, Any]:
 
 @router.get("/api/strategy/funnel/forward-test")
 async def get_forward_test_summary_endpoint(
-    benchmark_win_rate: float = Query(60.57, description="Phase 0b 基准胜率"),
+    benchmark_win_rate: float = Query(60.0, description="Phase 0b benchmark_A（信息字段，非门）"),
     min_days: int = Query(20, ge=1, le=60, description="最少交易日数"),
 ) -> Dict[str, Any]:
-    """S066 Phase 0e 前向测试汇总（paper trading 结果）。
+    """S066 Phase 0e 前向测试汇总（paper trading 结果，§44 合规）。
 
-    通过标准（spec §0e）：
+    通过标准（spec §13 ① / §44 数据支撑优先）：
     - total_days >= min_days（20 交易日）
-    - win_rate >= benchmark × 0.8
+    - win_rate >= §13.0 绝对 60%（非 benchmark×0.8 弱 degradation）
+    - lift = strategy_winrate / random_baseline_winrate >= 2.0（§44：lift<2x=噪声）
+    - random_baseline 已回填（universe_returns 非空，否则无法算 lift → 不通过）
     - 无崩溃（consecutive_loss < 8，kill criteria 未触发）
 
     前向测试期间不投真金。20 天运行需日历时间积累。
@@ -253,10 +255,17 @@ async def get_forward_test_summary_endpoint(
             "win_count": result.win_count,
             "win_rate": result.win_rate,
             "avg_return": result.avg_return,
-            "benchmark_win_rate": result.benchmark_win_rate,
             "pass_threshold": result.pass_threshold,
             "passed": result.passed,
             "consecutive_loss": result.consecutive_loss,
+            "random_baseline_win_rate": result.random_baseline_win_rate,
+            "random_settled": result.random_settled,
+            "lift": result.lift,
+            "strategy_ci": list(result.strategy_ci),
+            "random_ci": list(result.random_ci),
+            "is_exploratory": result.is_exploratory,
+            "universe_coverage": list(result.universe_coverage),
+            "benchmark_win_rate": result.benchmark_win_rate,
             "note": result.note,
         },
         "disclaimer": "前向测试（paper trading），不投真金。历史统计特征，市场有风险。",

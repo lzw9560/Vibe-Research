@@ -4,28 +4,32 @@
 spec §13.0/§0e：
 - 用 0d 权重跑系统：涨停股 × 策略分排序 × 板块周期 × 日历因子
 - 每日记录推荐 vs 实际表现
-- 通过标准：系统无崩溃 + 推荐胜率 >= 回测 × 0.8
+- 通过标准（§44 合规，task 114 落地）：系统无崩溃 + 推荐胜率 >= §13.0 绝对 60% + lift>=2x
 - 不通过 → 修 bug 再跑 20 天
 - 前向测试期间不投真金
 
-本模块建框架（task 024），20 天运行（task 025）需日历时间积累。
-每日盘后调用 record_daily_recommendations → 次日 record_actual_returns 回填。
-诚实边界：无 next_bar 收益的推荐标 missing，不臆造。
+§44 合规设计（spec §13 ①）：
+- 随机基准 = 新表 universe_returns（同信号日全体涨停股次日 winrate = 零选股基准率）。
+- forward_test_records（picks，code×strategy 多行）不动；strategy winrate 从此表、random winrate 从 universe_returns。
+- run_daily_forward_test 主动记录 universe codes（收益 NULL，次日回填）→ lift 不可被调用方伪造。
+- gate：winrate>=60（§13.0 绝对）AND lift>=2.0（§44）AND random_settled>0 AND consecutive_loss<8。
+
+每日盘后调用 record_daily_recommendations → 次日 record_actual_returns（picks）+ record_universe_returns（universe）回填。
+诚实边界：无 next_bar 收益的标 missing，不臆造；无 universe_returns → passed=False + note（不能伪造 lift）。
 """
 from __future__ import annotations
 
-import json
-import os
 import sqlite3
-from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass
 
 from config import GENE_SCORES_DB_PATH
 from vr_paths import resolve_data_dir
 
 _DB = GENE_SCORES_DB_PATH
+
+# §44 / §13.0 通过门槛（绝对，非 benchmark×0.8 弱 degradation）
+PASS_WINRATE_FLOOR: float = 60.0   # §13.0：alpha>60% 才加复杂度
+PASS_LIFT_FLOOR: float = 2.0       # §44：lift<2x = 噪声，不得作设计依据
 
 
 # ===========================================================================
@@ -52,6 +56,21 @@ CREATE TABLE IF NOT EXISTS forward_test_records (
 );
 CREATE INDEX IF NOT EXISTS idx_forward_test_date ON forward_test_records(signal_date);
 CREATE INDEX IF NOT EXISTS idx_forward_test_code ON forward_test_records(code);
+
+-- §44 随机基准源：同信号日全体涨停股次日收益（零选股基准率）。
+-- 每 code 一行（UNIQUE signal_date,code）；收益由 record_universe_returns 次日回填。
+CREATE TABLE IF NOT EXISTS universe_returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal_date TEXT NOT NULL,              -- 信号日
+    code TEXT NOT NULL,                     -- 涨停股代码
+    return_open2close REAL,                -- 次日 open2close %
+    return_close2close REAL,               -- 收盘到收盘 %
+    next_pctChg REAL,                       -- 次日涨跌幅 %
+    is_win INTEGER DEFAULT 0,              -- return_open2close > 0
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(signal_date, code)
+);
+CREATE INDEX IF NOT EXISTS idx_universe_returns_date ON universe_returns(signal_date);
 """
 
 
@@ -64,6 +83,17 @@ def _ensure_table() -> None:
         conn.close()
     except Exception:
         pass
+
+
+def _wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score 95% CI（分数 [lo, hi]，0-1）。n=0 返 (0,0)。"""
+    if n == 0:
+        return 0.0, 0.0
+    p = wins / n
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    h = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / d
+    return c - h, c + h
 
 
 # ===========================================================================
@@ -85,18 +115,27 @@ class DailyRecommendation:
 
 @dataclass(frozen=True)
 class ForwardTestResult:
-    """前向测试汇总结果。"""
+    """前向测试汇总结果（§44 合规：含随机基准 + lift + Wilson CI）。"""
     total_days: int
     total_recommendations: int
-    settled_count: int            # 有 next_bar 收益的记录数
-    win_count: int
-    win_rate: float               # 0-100
-    avg_return: float             # 平均 open2close 收益 %
-    benchmark_win_rate: float     # 回测基准胜率（Phase 0b）
-    pass_threshold: float         = 0.0  # 基准 × 0.8
-    passed: bool                  = False
-    consecutive_loss: int         = 0
-    note: str                     = ""
+    settled_count: int            # picks 有 next_bar 收益的记录数
+    win_count: int               # picks wins
+    win_rate: float               # picks 胜率 0-100
+    avg_return: float             # picks 平均 open2close %
+    # §44 随机基准 + lift
+    random_settled: int = 0        # universe 有收益的记录数
+    random_win_count: int = 0
+    random_baseline_win_rate: float = 0.0  # universe winrate %（零选股基准率）
+    lift: float = 0.0             # strategy / random（<2x = §44 噪声）
+    strategy_ci: tuple[float, float] = (0.0, 0.0)   # Wilson [lo,hi] %
+    random_ci: tuple[float, float] = (0.0, 0.0)
+    is_exploratory: bool = False  # §44(2)：n<30 探索性非定论
+    universe_coverage: tuple[int, int] = (0, 0)  # (已回填收益, 已记录 codes)
+    benchmark_win_rate: float = 0.0     # Phase 0b benchmark_A（信息字段，非门）
+    pass_threshold: float = PASS_WINRATE_FLOOR  # §13.0 绝对 60（非 benchmark×0.8）
+    passed: bool = False
+    consecutive_loss: int = 0
+    note: str = ""
 
 
 # ===========================================================================
@@ -146,12 +185,12 @@ def record_actual_returns(
     signal_date: str,
     returns_data: dict[str, dict[str, float | None]],
 ) -> int:
-    """回填某信号日推荐的次日实际收益。
+    """回填某信号日 picks 的次日实际收益（forward_test_records）。
 
     signal_date: 信号日（推荐日），不是次日
     returns_data: {code: {return_open2close, return_close2close, next_pctChg}}
 
-    次日盘后调用：拉 kline → 算次日收益 → 回填。
+    次日盘后调用：拉 kline → 算次日收益 → 回填 picks。
     缺 next_bar 的标 None（不臆造）。
     返回更新条数。
     """
@@ -184,45 +223,83 @@ def record_actual_returns(
     return updated
 
 
+def record_universe_returns(
+    signal_date: str,
+    returns_data: dict[str, dict[str, float | None]],
+) -> int:
+    """回填某信号日 universe（全体涨停股）的次日收益（universe_returns 表）。
+
+    universe = 同信号日全体涨停股（零选股基准率），§44 随机基准源。
+    与 record_actual_returns（picks）独立：picks→forward_test_records，universe→universe_returns。
+    幂等（UNIQUE(signal_date,code)，INSERT OR REPLACE）。
+    缺 next_bar 的标 None（不臆造）。返回 upsert 条数。
+    """
+    _ensure_table()
+    if not returns_data:
+        return 0
+    conn = sqlite3.connect(_DB, timeout=10)
+    upserted = 0
+    try:
+        for code, returns in returns_data.items():
+            o2c = returns.get("return_open2close")
+            c2c = returns.get("return_close2close")
+            pct = returns.get("next_pctChg")
+            is_win = 1 if (o2c is not None and o2c > 0) else 0
+            try:
+                conn.execute(
+                    """INSERT OR REPLACE INTO universe_returns
+                    (signal_date, code, return_open2close, return_close2close,
+                     next_pctChg, is_win)
+                    VALUES (?, ?, ?, ?, ?, ?)""",
+                    (signal_date, code, o2c, c2c, pct, is_win),
+                )
+                upserted += 1
+            except Exception:
+                continue
+        conn.commit()
+    finally:
+        conn.close()
+    return upserted
+
+
 # ===========================================================================
-# 汇总：前向测试结果
+# 汇总：前向测试结果（§44 合规通过判定）
 # ===========================================================================
 
 def get_forward_test_summary(
-    benchmark_win_rate: float = 60.57,  # Phase 0b benchmark_A
+    benchmark_win_rate: float = 60.0,  # Phase 0b benchmark_A（信息字段，非门）
     min_days: int = 20,
 ) -> ForwardTestResult:
-    """汇总前向测试结果（spec §0e 通过标准）。
+    """汇总前向测试结果（§13.0 + §44 合规通过标准）。
 
-    通过标准：
+    §44 通过标准（结论前必过的诚实门）：
     - total_days >= min_days（20 交易日）
-    - win_rate >= benchmark × 0.8
+    - strategy_win_rate >= PASS_WINRATE_FLOOR（§13.0 绝对 60%，非 benchmark×0.8 弱 bar）
+    - lift = strategy_winrate / random_baseline_winrate >= PASS_LIFT_FLOOR（2.0；§44：lift<2x=噪声）
+    - random_settled > 0（universe_returns 有回填，否则无法算 lift → 不通过）
     - 无崩溃（consecutive_loss < 8，kill criteria 未触发）
+
+    random_baseline = 同信号日全体涨停股次日 winrate（universe_returns）= 零选股基准率。
+    无 universe_returns → passed=False + note（诚实：不能伪造 lift）。
     """
     _ensure_table()
     conn = sqlite3.connect(_DB, timeout=10)
     try:
-        # 总记录数 + 已结算数
+        # —— 策略 picks（forward_test_records）——
         total = conn.execute("SELECT COUNT(*) FROM forward_test_records").fetchone()[0]
-        settled = conn.execute(
+        s_settled = conn.execute(
             "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL"
         ).fetchone()[0]
-        wins = conn.execute(
+        s_wins = conn.execute(
             "SELECT COUNT(*) FROM forward_test_records WHERE is_win = 1"
         ).fetchone()[0]
-
-        # 独立信号日数
         days = conn.execute(
             "SELECT COUNT(DISTINCT signal_date) FROM forward_test_records"
         ).fetchone()[0]
-
-        # 平均收益
         avg_row = conn.execute(
             "SELECT AVG(return_open2close) FROM forward_test_records WHERE return_open2close IS NOT NULL"
         ).fetchone()
         avg_return = float(avg_row[0]) if avg_row and avg_row[0] is not None else 0.0
-
-        # 连续亏损笔数（最近 N 笔）
         recent = conn.execute(
             """SELECT is_win FROM forward_test_records
             WHERE return_open2close IS NOT NULL
@@ -234,41 +311,73 @@ def get_forward_test_summary(
                 consecutive_loss += 1
             else:
                 break
+
+        # —— 随机基准 universe（universe_returns）——
+        u_total = conn.execute("SELECT COUNT(*) FROM universe_returns").fetchone()[0]
+        u_settled = conn.execute(
+            "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL"
+        ).fetchone()[0]
+        u_wins = conn.execute(
+            "SELECT COUNT(*) FROM universe_returns WHERE is_win = 1"
+        ).fetchone()[0]
     finally:
         conn.close()
 
-    win_rate = round(wins / settled * 100, 2) if settled > 0 else 0.0
-    pass_threshold = round(benchmark_win_rate * 0.8, 2)
+    s_winrate = round(s_wins / s_settled * 100, 2) if s_settled > 0 else 0.0
+    u_winrate = round(u_wins / u_settled * 100, 2) if u_settled > 0 else 0.0
+    lift = round(s_winrate / u_winrate, 3) if u_winrate > 0 else 0.0
+    s_lo, s_hi = _wilson(s_wins, s_settled)
+    u_lo, u_hi = _wilson(u_wins, u_settled)
+    is_exploratory = s_settled < 30  # §44(2)：n<30 探索性非定论
 
-    # 通过判定
+    # §44 通过判定
     passed = (
         days >= min_days
-        and settled > 0
-        and win_rate >= pass_threshold
+        and s_settled > 0
+        and s_winrate >= PASS_WINRATE_FLOOR
+        and u_settled > 0
+        and lift >= PASS_LIFT_FLOOR
         and consecutive_loss < 8
     )
 
-    note_parts = []
+    note_parts: list[str] = []
     if days < min_days:
         note_parts.append(f"样本不足：{days}/{min_days} 交易日")
-    if settled == 0:
-        note_parts.append("无已结算记录（需次日回填收益）")
-    if win_rate < pass_threshold and settled > 0:
-        note_parts.append(f"胜率 {win_rate}% < 阈值 {pass_threshold}%")
+    if s_settled == 0:
+        note_parts.append("无已结算 picks（需次日回填收益）")
+    if u_settled == 0:
+        note_parts.append("无随机基准（universe_returns 未回填 → 无法 §44 验证 lift）")
+    if u_settled > 0 and s_settled > 0:
+        if lift < PASS_LIFT_FLOOR:
+            note_parts.append(f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（不优于随机）")
+        if s_lo <= u_hi:  # 策略 CI 与随机 CI 重叠 = 不显著优于随机
+            note_parts.append("策略 CI 与随机 CI 重叠（不显著优于随机）")
+    if s_settled > 0 and s_winrate < PASS_WINRATE_FLOOR:
+        note_parts.append(f"胜率 {s_winrate}% < §13.0 门槛 {PASS_WINRATE_FLOOR}%")
+    if is_exploratory and s_settled > 0:
+        note_parts.append(f"n={s_settled}<30 探索性（非定论）")
     if consecutive_loss >= 8:
         note_parts.append(f"连续亏损 {consecutive_loss} 笔（kill criteria 触发）")
     if not note_parts:
-        note_parts.append("前向测试通过")
+        note_parts.append("§44 前向测试通过（胜率>=60% + lift>=2x）")
 
     return ForwardTestResult(
         total_days=days,
         total_recommendations=total,
-        settled_count=settled,
-        win_count=wins,
-        win_rate=win_rate,
+        settled_count=s_settled,
+        win_count=s_wins,
+        win_rate=s_winrate,
         avg_return=round(avg_return, 4),
+        random_settled=u_settled,
+        random_win_count=u_wins,
+        random_baseline_win_rate=u_winrate,
+        lift=lift,
+        strategy_ci=(round(s_lo * 100, 2), round(s_hi * 100, 2)),
+        random_ci=(round(u_lo * 100, 2), round(u_hi * 100, 2)),
+        is_exploratory=is_exploratory,
+        universe_coverage=(u_settled, u_total),
         benchmark_win_rate=benchmark_win_rate,
-        pass_threshold=pass_threshold,
+        pass_threshold=PASS_WINRATE_FLOOR,
         passed=passed,
         consecutive_loss=consecutive_loss,
         note="；".join(note_parts),
@@ -302,11 +411,12 @@ def get_daily_recommendations(signal_date: str) -> list[dict]:
 def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -> dict:
     """每日盘后前向测试入口。
 
-    1. 跑策略系统（天气 → 策略组 → 策略分排序）→ 记录推荐
-    2. 次日盘后回填收益（由调用方拉 kline 后调 record_actual_returns）
-    3. 返回当日推荐数
+    1. 跑策略系统（天气 → 策略组 → 策略分排序）→ 记录 picks
+    2. 记录当日 universe codes（universe_returns，收益 NULL，次日 record_universe_returns 回填）
+    3. 次日盘后回填收益（picks 由 record_actual_returns，universe 由 record_universe_returns）
+    4. 返回当日推荐数
 
-    本函数只做第 1 步（记录推荐），收益回填需次日数据可用后单独调。
+    §44：主动记录 universe codes 让框架持有"它看到的全体"，lift 不可被调用方伪造。
     """
     from limitup_screener.data import load_gene_scores
     from strategies.strategy_funnel_registry import score_candidates
@@ -347,13 +457,43 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
             position_multiplier=mult,
             recommended_position=round(5.0 * mult, 2),  # base 5% × 日历因子
         )
-        for s in scored[:20]  # top-20 推荐
+        for s in scored[:20]  # top-20 推荐（picks）
     ]
 
     count = record_daily_recommendations(signal_date, recommendations)
+
+    # §44：记录当日全体涨停股 universe codes（收益 NULL，次日 record_universe_returns 回填）
+    _record_universe_codes(signal_date, genes)
+
     return {
         "signal_date": signal_date,
         "recommendations": count,
+        "universe_codes": len(genes),
         "weather_state": weather_state,
         "position_multiplier": mult,
     }
+
+
+def _record_universe_codes(signal_date: str, genes: list) -> int:
+    """记录当日全体涨停股 codes 到 universe_returns（收益 NULL，待次日回填）。
+
+    INSERT OR IGNORE（UNIQUE signal_date,code）——仅记 code，不覆盖已回填收益的行。
+    """
+    _ensure_table()
+    conn = sqlite3.connect(_DB, timeout=10)
+    inserted = 0
+    try:
+        for g in genes:
+            try:
+                cur = conn.execute(
+                    """INSERT OR IGNORE INTO universe_returns (signal_date, code) VALUES (?, ?)""",
+                    (signal_date, g.code),
+                )
+                if cur.rowcount > 0:
+                    inserted += 1
+            except Exception:
+                continue
+        conn.commit()
+    finally:
+        conn.close()
+    return inserted

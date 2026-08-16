@@ -1046,6 +1046,14 @@ factor_name: r=+0.XX, 95% CI=[+0.XX, +0.XX], p=0.XXX, n=6537
 > - **框架 pass-logic 不合规**：`pass_threshold=48`（=回测 60×0.8，上方"degradation ≥80%"弱 bar）≠ §13.0 绝对 60%；且无随机基准 → `passed=True`（49.2%>48%）在 §44 下不合规（50% 随机策略也过 48%）。
 > - caveat：weather=None（非天气适配退化版，下界）；31 天<30 探索性 + 488 样本跨 31 天日聚类（effective n≈31，CI 偏窄）。
 > **路径**：① 修框架 pass-logic 到 §44 合规（加随机基准+lift、门槛对齐 §13.0 绝对 60）；② weather-adapted 重跑（接历史天气，测完整架构非退化版）；③ 60 天积累复验。
+>
+> **① 设计口径（task 114，2026-08-16 落地）**：
+> - **随机基准源 = 新表 `universe_returns`**（UNIQUE(signal_date,code)，每 code 一行），存同信号日**全体涨停股**次日 open2close/close2close/next_pctChg/is_win。= 零选股基准率（与 backfill 手算的"全体 eastmoney_live 涨停股次日 winrate"同口径）。
+> - **forward_test_records 不动**（picks，code×strategy 多行，UNIQUE 不变）——strategy winrate 从此表取；random winrate 从 universe_returns 取。两表分离避免在 picks 表加 is_strategy_pick 撞 dup（weather 主跑组 2-3 策略致每 code 多行）。
+> - **run_daily_forward_test 记录 universe codes**（universe_returns 收益 NULL，次日 record_universe_returns 回填）——框架主动记录"它看到的全体"，coverage=(已回填/已记录) 透明。
+> - **§44 gate**：`passed = days>=min_days AND strategy_settled>0 AND strategy_winrate>=60（§13.0 绝对，非 benchmark×0.8）AND random_settled>0 AND lift>=2.0（§44）AND consecutive_loss<8`。无 universe_returns → passed=False + note「无随机基准」（诚实：不能伪造 lift）。
+> - **新字段**：random_baseline_win_rate / random_settled / lift / strategy_ci / random_ci（Wilson）/ is_exploratory(n<30) / universe_coverage。pass_threshold 改 =60（§13.0 绝对）；benchmark_win_rate 降为信息字段（非门）。
+> - **回填需重跑**：现有 488 picks 行无 universe_returns 配对 → 重跑 forward_test_backfill 填 universe 后 framework 内部产出 §44 verdict（数据在 Windows，重跑待进行）。
 
 ### 依赖链
 

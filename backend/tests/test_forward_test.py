@@ -17,6 +17,7 @@ from strategies.forward_test import (
     ForwardTestResult,
     record_daily_recommendations,
     record_actual_returns,
+    record_universe_returns,
     get_forward_test_summary,
     get_daily_recommendations,
     _ensure_table,
@@ -153,7 +154,7 @@ class TestRecordActualReturns:
 
 
 class TestGetForwardTestSummary:
-    """前向测试汇总。"""
+    """前向测试汇总（§44 合规：胜率>=60% + lift>=2x + random_baseline 已记录）。"""
 
     def test_empty_summary(self, fresh_db):
         """空表 → 未通过（样本不足）。"""
@@ -163,38 +164,90 @@ class TestGetForwardTestSummary:
         assert "样本不足" in result.note or "无已结算" in result.note
 
     def test_pass_criteria_met(self, fresh_db):
-        """胜率 >= 基准×0.8 + 样本充足 → 通过。"""
-        # 造 25 天数据，每天 2 推荐，80% 胜率
+        """§44 通过：picks 胜率>=60% + universe 胜率低 → lift>=2x。"""
         for day in range(25):
             date = f"2026-08-{day+1:02d}"
+            # picks：2/天，80% 胜率（pick1 全赢，pick2 day>=15 输）
             recs = [
-                DailyRecommendation(date, f"00000{day}1", "A", "first_plate", 70.0),
-                DailyRecommendation(date, f"00000{day}2", "B", "first_plate", 75.0),
+                DailyRecommendation(date, f"00{day}01", "A", "first_plate", 80.0),
+                DailyRecommendation(date, f"00{day}02", "B", "consecutive_relay", 70.0),
             ]
             record_daily_recommendations(date, recs)
-            # 80% 胜率：4 赢 1 输
-            returns = {
-                f"00000{day}1": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0},
-                f"00000{day}2": {"return_open2close": -1.0 if day % 5 == 0 else 1.5,
-                                 "return_close2close": -1.0, "next_pctChg": -1.0},
-            }
-            record_actual_returns(date, returns)
+            pick2_ret = 2.0 if day < 15 else -1.0
+            record_actual_returns(date, {
+                f"00{day}01": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0},
+                f"00{day}02": {"return_open2close": pick2_ret, "return_close2close": pick2_ret, "next_pctChg": pick2_ret},
+            })
+            # universe：10/天，30% 胜率（3 赢 7 输）
+            uni = {}
+            for i in range(10):
+                win = i < 3
+                r = 2.0 if win else -1.0
+                uni[f"1{day}0{i}"] = {"return_open2close": r, "return_close2close": r, "next_pctChg": r}
+            record_universe_returns(date, uni)
 
         result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
         assert result.total_days >= 20
-        assert result.win_rate >= 48.0  # 60% × 0.8
+        assert result.win_rate == 80.0  # 40/50
+        assert result.random_baseline_win_rate == 30.0  # 75/250
+        assert result.lift >= 2.0  # 2.67
         assert result.passed is True
 
-    def test_fail_low_winrate(self, fresh_db):
-        """胜率 < 阈值 → 不通过。"""
+    def test_fail_no_edge(self, fresh_db):
+        """§44 核心：picks 高胜率但 universe 同样高 → lift<2x → 不通过（不优于随机）。"""
         for day in range(25):
             date = f"2026-08-{day+1:02d}"
-            recs = [DailyRecommendation(date, f"00000{day}1", "A", "first_plate", 70.0)]
+            recs = [DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0)]
             record_daily_recommendations(date, recs)
-            # 全亏
+            # picks 80% 胜率（day%5==0 输）
+            r = 2.0 if day % 5 != 0 else -1.0
             record_actual_returns(date, {
-                f"00000{day}1": {"return_open2close": -2.0, "return_close2close": -2.0, "next_pctChg": -2.0},
+                f"00{day}01": {"return_open2close": r, "return_close2close": r, "next_pctChg": r},
             })
+            # universe 也 80%（4/5 赢）→ lift 1.0x 噪声
+            uni = {}
+            for i in range(5):
+                win = i != 0
+                rr = 2.0 if win else -1.0
+                uni[f"1{day}0{i}"] = {"return_open2close": rr, "return_close2close": rr, "next_pctChg": rr}
+            record_universe_returns(date, uni)
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        assert result.win_rate >= 60.0  # 胜率够高
+        assert result.lift < 2.0  # 但 lift<2x
+        assert result.passed is False
+        assert "噪声" in result.note or "重叠" in result.note
+
+    def test_fail_no_universe(self, fresh_db):
+        """无 universe_returns → 无法算 lift → 不通过（诚实：不能伪造 lift）。"""
+        for day in range(25):
+            date = f"2026-08-{day+1:02d}"
+            recs = [DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0)]
+            record_daily_recommendations(date, recs)
+            record_actual_returns(date, {
+                f"00{day}01": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0},
+            })
+            # 不回填 universe
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        assert result.random_settled == 0
+        assert result.lift == 0.0
+        assert result.passed is False
+        assert "无随机基准" in result.note
+
+    def test_fail_low_winrate(self, fresh_db):
+        """胜率 < §13.0 门槛 60% → 不通过。"""
+        for day in range(25):
+            date = f"2026-08-{day+1:02d}"
+            recs = [DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0)]
+            record_daily_recommendations(date, recs)
+            record_actual_returns(date, {
+                f"00{day}01": {"return_open2close": -2.0, "return_close2close": -2.0, "next_pctChg": -2.0},
+            })
+            # universe 也全亏（排除 lift 干扰，专注 winrate<60）
+            uni = {f"1{day}0{i}": {"return_open2close": -1.0, "return_close2close": -1.0, "next_pctChg": -1.0}
+                   for i in range(5)}
+            record_universe_returns(date, uni)
 
         result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
         assert result.win_rate == 0.0
@@ -205,10 +258,10 @@ class TestGetForwardTestSummary:
         """样本不足 20 天 → 不通过。"""
         for day in range(10):  # 只 10 天
             date = f"2026-08-{day+1:02d}"
-            recs = [DailyRecommendation(date, f"00000{day}1", "A", "first_plate", 70.0)]
+            recs = [DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0)]
             record_daily_recommendations(date, recs)
             record_actual_returns(date, {
-                f"00000{day}1": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0},
+                f"00{day}01": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0},
             })
 
         result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
@@ -220,10 +273,10 @@ class TestGetForwardTestSummary:
         """连续亏损笔数追踪。"""
         for day in range(10):
             date = f"2026-08-{day+1:02d}"
-            recs = [DailyRecommendation(date, f"00000{day}1", "A", "first_plate", 70.0)]
+            recs = [DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0)]
             record_daily_recommendations(date, recs)
             record_actual_returns(date, {
-                f"00000{day}1": {"return_open2close": -1.0, "return_close2close": -1.0, "next_pctChg": -1.0},
+                f"00{day}01": {"return_open2close": -1.0, "return_close2close": -1.0, "next_pctChg": -1.0},
             })
 
         result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=5)

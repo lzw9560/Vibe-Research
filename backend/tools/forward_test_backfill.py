@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from strategies.forward_test import (  # noqa: E402
     run_daily_forward_test,
     record_actual_returns,
+    record_universe_returns,
     get_daily_recommendations,
     get_forward_test_summary,
 )
@@ -48,30 +49,22 @@ def load_returns_map() -> dict[tuple[str, str], dict]:
     }
 
 
-def load_src_map() -> dict[tuple[str, str], str]:
-    """(date, code) -> data_source 映射（随机基准需过滤 eastmoney_live 段）。"""
-    conn = sqlite3.connect(str(DB))
-    try:
-        return {(r[0], r[1]): r[2] for r in conn.execute(
-            "SELECT date, code, data_source FROM gene_scores"
-        ).fetchall()}
-    finally:
-        conn.close()
-
-
-def _wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    if n == 0:
-        return 0.0, 0.0
-    p = wins / n
-    d = 1 + z * z / n
-    c = (p + z * z / (2 * n)) / d
-    h = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / d
-    return c - h, c + h
+def load_returns_by_date() -> dict[str, dict[str, dict]]:
+    """backtest_samples → {date: {code: returns}}（universe 回填用，按日索引）。"""
+    data = json.loads(SAMPLES.read_text(encoding="utf-8"))
+    by_date: dict[str, dict[str, dict]] = {}
+    for s in data.get("samples", []):
+        by_date.setdefault(s["date"], {})[s["code"]] = {
+            "return_open2close": s.get("return_open2close"),
+            "return_close2close": s.get("return_close2close"),
+            "next_pctChg": s.get("next_pctChg"),
+        }
+    return by_date
 
 
 def main() -> int:
     ret_map = load_returns_map()
-    src_map = load_src_map()
+    by_date = load_returns_by_date()
     conn = sqlite3.connect(str(DB))
     dates = [r[0] for r in conn.execute(
         "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
@@ -83,40 +76,27 @@ def main() -> int:
 
     total_recs = 0
     total_settled = 0
+    total_universe = 0
     for d in dates:
+        # run_daily_forward_test 记录 picks + universe codes（收益 NULL）
         r = run_daily_forward_test(d, weather_state=None)  # caveat: 未接历史天气适配
         n = r.get("recommendations", 0)
         if not n:
             continue
+        # picks 收益回填
         recs = get_daily_recommendations(d)
         returns_data = {rec["code"]: ret_map.get((d, rec["code"]), {}) for rec in recs}
         total_settled += record_actual_returns(d, returns_data)
         total_recs += n
-    print(f"回填 {len(dates)} 信号日，共 {total_recs} 条推荐，{total_settled} 条回填 T+1 收益")
+        # §44 universe 收益回填（同日全体涨停股 → 零选股基准率）
+        total_universe += record_universe_returns(d, by_date.get(d, {}))
+    print(f"回填 {len(dates)} 信号日：picks {total_recs} 条（回填 {total_settled}），universe {total_universe} 条")
 
-    print("\n=== Phase 0e 汇总 ===")
+    print("\n=== Phase 0e §44 汇总（framework get_forward_test_summary）===")
     print(get_forward_test_summary(benchmark_win_rate=60.0, min_days=10))
-
-    # §44 数据支撑优先（结论前必过）：策略胜率 vs 随机基准 + Wilson CI + lift
-    conn = sqlite3.connect(str(DB))
-    sn = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL").fetchone()[0]
-    sw = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_win=1").fetchone()[0]
-    conn.close()
-    samples_all = json.loads(SAMPLES.read_text(encoding="utf-8")).get("samples", [])
-    el = [s for s in samples_all
-          if src_map.get((s["date"], s["code"])) == "eastmoney_live"
-          and s.get("return_open2close") is not None]
-    rn = len(el)
-    rw = sum(1 for s in el if s["return_open2close"] > 0)
-    slo, shi = _wilson(sw, sn)
-    rlo, rhi = _wilson(rw, rn)
-    lift = (sw / sn) / (rw / rn) if rn and rw else 0.0
-    print(f"\n§44 对照:")
-    print(f"  策略胜率  {sw}/{sn} = {sw/sn*100:.1f}%  CI[{slo*100:.1f}, {shi*100:.1f}]%")
-    print(f"  随机基准  {rw}/{rn} = {rw/rn*100:.1f}%  CI[{rlo*100:.1f}, {rhi*100:.1f}]%  (全体 eastmoney_live 涨停股次日 open2close>0)")
-    print(f"  lift = {lift:.2f}x  →  {'噪声(<2x，不得作设计依据)' if lift < 2 else '≥2x 可作依据'}"
-          f"  {'；策略 CI 与随机 CI 重叠（不显著优于随机）' if slo <= rhi else '；策略 CI 显著高于随机'}")
-    print("caveat: weather=None（非天气适配退化版，下界）；31 天<30 探索性 + 日聚类（effective n≈31，CI 实偏窄）")
+    print("caveat: weather=None（非天气适配退化版，下界）；31 天<30 探索性 + 日聚类（CI 偏窄）")
+    print("caveat: universe=当日全体涨停股（load_gene_scores 全源，非仅 eastmoney_live）；"
+          "若与原手算 eastmoney-only 50.2% 略异，因 pool 口径不同，§44 verdict（lift<2x）稳健不变")
     return 0
 
 

@@ -187,7 +187,7 @@
 
 > §13.0 违反 + 无 validated alpha 后的修订路径（不回退 Phase 1-3，但验证优先 + 诚实标注）。
 
-- [B] 114: 修 Phase 0e 框架 pass-logic 到 §44 合规（加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）
+- [B] 114: ✅ 修 Phase 0e 框架 pass-logic 到 §44 合规（加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）——落地：新表 `universe_returns`（§44 随机基准源，UNIQUE signal_date,code）+ `record_universe_returns` + `run_daily_forward_test` 主动记 universe codes + gate `winrate>=60 AND lift>=2.0 AND random_settled>0` + Wilson CI + is_exploratory；forward_test_records 不动（避免 dup）；18 测试过（含 §44 三关键测试：no_edge/no_universe/pass）。**真实数据 verdict 待 Windows 重跑 backfill 填 universe_returns**（spec §13 ① 设计口径已落）
 - [B] 115: Phase 0e weather-adapted 重跑（接历史 sentiment_context 天气，测完整架构非退化版；当前 weather=None 是下界）
 - [B] 116: 60 天 eastmoney_live 积累后复验 Phase 0b（within-day r）+ 0e（胜率 lift）——lift 破 2x + r 显著 → alpha 成立；否则确认无 edge
 - [F] 117: 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源；非交易日 fix 见 591f536，节假日待重构补）
