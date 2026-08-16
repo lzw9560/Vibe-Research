@@ -298,14 +298,13 @@ momentum = count_today - count_avg_3d
 
 实现路径：
 
-1. **回填**：独立脚本拉 clist f100 建 `code→industry` 映射表（新表 `code_industry`），
-   UPDATE 回填 `gene_scores.industry` + `backtest_samples.json` 补 `industry` 字段。
-2. **增量**：eastmoney_live 写入路径（limitup_screener）落库时直接带 hybk（池接口自带），
-   不依赖静态映射；静态映射只兜底池接口缺字段的票。
-3. **计算**：回填后按 (date, industry) GROUP BY 得每日板块涨停数，
-   3 日滚动动量按 §5.2 判定阶段。
+1. ✅ **回填**（aaca053）：独立脚本 `tools/backfill_industry.py` 拉 clist f100 建 `code_industry` 表，
+   UPDATE 回填 `gene_scores.industry` + `backtest_samples.json` 补 `industry`。实测 5896 只 100% 覆盖（115 行业）。
+2. ✅ **增量**（2945035）：limitup_screener 落库带 industry（pool hybk 主、code_industry 兜底）。
+3. ⏸️ **计算**：sector_cycle.py 已解封（20c4605：stub→真查 + prev-dates 修正），`analyze_sector_phase` 返真实阶段（实测 2026-08-14 电力=发酵）。
+   **剩**：039 纯 LABEL 接线（§5.4 Q2 决议=不接策略分，验证驳了方向）、036 停留天数（缺）、classify_phase 边缘 case（today=0 avg∈(0,3) 落无历史默认）。
 
-一次性 API 成本约 12 次请求（限流友好），之后增量零成本。
+一次性 API 成本：实测 push2 当前断连、push2delay 每页封顶 100 → 约 59 页（原估"约 12 次"系 push2 大页，已证伪），0.15s/页限流友好，之后增量零成本。
 
 ### 5.4 接入方式
 
