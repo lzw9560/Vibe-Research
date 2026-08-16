@@ -85,12 +85,18 @@ async def lifespan(_app: FastAPI):
     _pf_refresh_task = await pf.start_scheduler(1800)  # 持仓后台刷新 task
     # S052 D4：启动缺口补跑——回测快照缺失日后台排队回填
     from backfill_snapshots import startup_backfill_gap_check  # noqa: PLC0415
-    await startup_backfill_gap_check()
     # S063：盘中情绪采样 task（仅交易日 09:25-15:00 运行）
     await intraday_sentiment_router.start_sampler()
-    # S067 P0-1：advisory 回测预热——后台预跑 run_strategy_backtest(90) 写 12h 缓存，
-    # 避免首冷请求 >40s。失败不影响服务（catch + warning）。
-    await _warmup_advisory_backtest()
+    # grill：缺口补跑 + advisory 预热改为后台 fire-and-forget，不阻塞 startup
+    # 保存引用防 GC 回收 + 加异常回调防静默崩溃
+    _bg_tasks: set[asyncio.Task] = set()
+    def _spawn(coro):
+        t = asyncio.create_task(coro)
+        _bg_tasks.add(t)
+        t.add_done_callback(_bg_tasks.discard)
+        return t
+    _spawn(startup_backfill_gap_check())
+    _spawn(_warmup_advisory_backtest())
     yield
     # shutdown
     await intraday_sentiment_router.stop_sampler()
