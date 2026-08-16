@@ -4,6 +4,8 @@
 > **grill 2026-08-16（Q9-Q15）决议已落 spec**：Phase 0b 双轨分层 + 独立 CLI 脚本 + verdict 降级 + 行动计划，见 §13 Phase 0b/0c/0d 段落与 §14.1 交叉引用。
 > **grill 2026-08-16（Q16-Q17）决议已落 spec §5.3/§5.4**：Q16 实测验证板块数据来源——gene_scores 无 industry 列（原 §5.3 SQL 引用不存在的 industry_code），改 clist f100 静态映射回填（新 code_industry 表 + gene_scores.industry 列，§5.3 实现路径；**回填脚本待实现**——tasks P1-2/032 前置）；Q17 板块阶段修饰系数 placeholder 至 eastmoney_live 满 60 天后回归热替换（§5.4，当前 31 天样本不足，此刻回归高方差不可信）。
 > **Phase 0b 回归结果（2026-08-16，二轮验证后修订）**：初判 verdict=B→降级为"时间窗口效应，待验证"。**二轮验证（日内/日间分解 + day-cluster bootstrap）证伪了 rebound_rate 强信号**：它是日级市场变量（75% 交易日全市场单值），pooled r=+0.179 全部由日间变异撑起（within-day r=-0.010，方差 78.8% 在日间；bootstrap pooled CI=[-0.019,+0.296] 含 0，p=6e-13 是 IID 假设假象）。**全部 6 个因子 within-day r≈0（CI 全含 0）——eastmoney_live 24 天数据里没有任何可用的横截面选股因子。** §4.4"反向因子"理论删除不变。Phase 1 等权 placeholder 不阻塞推进（理由从"待验证"更新为"无已验证信号，等权是唯一诚实起点"）。
+> **grill 2026-08-16（Q1-Q6）策略漏斗审计修复已落 spec §3.3**：极端反弹只剩 reverse_package（移除 break_reseal 物理定义不匹配 + n_shape_counterattack 条件自相矛盾）；reverse_package 接线 S055 炸板池（open_count>=2）；score_candidates 加 match 过滤闭环 + 0 输出标注（strategy_code=none）；P0 后端闭环已落地，P1 前端战法 chip 点击展开候选待做。
+> **grill 2026-08-16（Q7）天气硬开关降级为软标注**：T-1 天气不代表 T 日天气（前提不成立）+ §13.0 验证无统计显著提升 + 强约束导致 0 候选比无约束更有害。WEATHER_STRATEGY_MAP → WEATHER_RECOMMENDATION（软标注，所有战法可用，天气匹配的标注"推荐"）；暴风雨唯一保留硬约束（仓位=0）。score_candidates 不再用天气过滤 primary_codes。
 > **目标**：一切为了提高胜率。拆分单漏斗为策略特定漏斗，重算策略分，
 > 天气硬开关选策略，板块热度过滤一日游，日历因子调仓位。
 > 前端盘前/盘中/盘后统一风格，因子可点击跳详情，面包屑导航闭环。
@@ -93,7 +95,7 @@ S066 不改动 S063 的实现，只在其之上构建策略特定漏斗层。S06
   │
   ├─ 晴天 → consecutive_relay, dragon_head, platform_breakout (+ low_absorption 备选)
   ├─ 阴天 → first_plate, break_reseal, end_of_day_sneak (+ low_absorption 备选)
-  ├─ 极端反弹 → reverse_package, break_reseal, n_shape_counterattack
+  ├─ 极端反弹 → reverse_package（grill Q3/Q4：移除 break_reseal + n_shape_counterattack）
   ├─ 暴风雨 → 不开仓
   └─ 未知 → first_plate, consecutive_relay（保守）
         │
@@ -134,26 +136,34 @@ class StrategyFunnelConfig:
 - is_primary: True（暴风雨天唯一主跑策略）
 - 仓位 x 0.3（环境极端）
 
-### 3.3 天气-策略硬开关
+### 3.3 天气-策略推荐标注（~~硬开关~~，grill Q7 降级为软标注）
+
+> **grill 2026-08-16 Q7 决议**：天气硬开关降级为软标注。
+> 理由：(1) T-1 天气不代表 T 日天气——前提不成立；(2) §13.0 验证天气路由无统计显著提升；
+> (3) 强约束导致 0 候选比无约束更有害。暴风雨是唯一例外（仓位=0 硬约束保留）。
 
 ```python
-WEATHER_STRATEGY_MAP: dict[str, list[str]] = {
-    "晴天":   ["consecutive_relay", "dragon_head", "platform_breakout"],
-    "阴天":   ["first_plate", "break_reseal", "end_of_day_sneak"],
-    "极端反弹": ["reverse_package", "break_reseal", "n_shape_counterattack"],
-    "暴风雨": ["storm_reversal"],  # 逆势涨停子策略，仓位 x 0.3
-    "未知":   ["first_plate", "consecutive_relay"],
-}
-
-FALLBACK_STRATEGIES: dict[str, list[str]] = {
-    "晴天":   ["low_absorption"],
-    "阴天":   ["low_absorption"],
-    "极端反弹": [],
-    "未知":   [],
+# 旧：WEATHER_STRATEGY_MAP（强约束——不允许的战法直接过滤）
+# 新：WEATHER_RECOMMENDATION（软标注——所有战法都可用，天气匹配的标注"推荐"）
+WEATHER_RECOMMENDATION: dict[str, set[str]] = {
+    "晴天":   {"consecutive_relay", "dragon_head", "platform_breakout"},
+    "阴天":   {"first_plate", "break_reseal", "end_of_day_sneak"},
+    "极端反弹": {"reverse_package"},
+    "暴风雨": {"storm_reversal"},  # 唯一硬约束：仓位=0，不开常规仓
+    "未知":   set(),
 }
 ```
 
 暴风雨不开常规策略，但开"逆势涨停子策略"（storm_reversal）：暴风雨天涨停的票 = 极端逆势，背后资金推动力极强（参见日历效应：周四逆势涨停胜率 88.9%）。按封板率排序，仓位 x 0.3（环境极端，即使逆势也保守）。空仓也是策略——如果暴风雨天无涨停股，则空仓。
+
+> **grill 2026-08-16 决议（Q1-Q6）— 策略漏斗审计修复**：
+>
+> - **Q1 reverse_package 接线炸板池**：从 S055 `seal_intraday_snapshots` 查"昨日 `open_count >= 2` 的票"作为候选池，替代 gene_scores 输入。S055 已实现（16615 行数据），只是没接线。
+> - **Q2 reverse_package match 条件**：`open_count >= 2`（反复开板的真炸板，反包价值高）。
+> - **Q3 n_shape_counterattack 禁用**：条件自相矛盾（`freq_score = zt_count * 2`，max=22，`>30` 永不可达）。第一步从 WEATHER_STRATEGY_MAP 移除；第二步 Phase 1 新增 `pullback_pct` 因子重定义（`zt_count >= 2 and pullback_pct ∈ [-8, -3]`），需 Phase 0b 回归验证有 alpha 才启用。
+> - **Q4 break_reseal 从极端反弹移除**：物理定义不匹配——极端反弹天尾盘弱封板，无"炸板后回封"强信号。break_reseal 仍可用于阴天。
+> - **Q5 SELF 层 0 输出标注**：`score_candidates` 0 输出时返回 `{"strategy_code": "none", "note": "具体原因"}`，前端展示"无符合条件标的"。
+> - **Q6 score_candidates 加 match 过滤**：不满足入场条件的候选不打分不返回。先做后端 match 过滤闭环（P0），再做前端战法 chip 点击展开候选（P1）。
 
 ## 4. 策略特定因子权重
 

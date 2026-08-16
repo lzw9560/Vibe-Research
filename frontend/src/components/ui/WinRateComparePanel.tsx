@@ -1,7 +1,7 @@
 import type { StrategyBacktestItem } from "@/lib/query/strategy";
 import { syntheticWinRate } from "@/lib/query/strategy";
 import type { PassedItem } from "@/lib/candidates";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -13,13 +13,16 @@ interface Props {
   loading?: boolean;
   /** S049 D8：战法行展开——当日命中（未持仓标的）点击回调。 */
   onPickCandidate?: (code: string) => void;
+  /** grill Q7：天气推荐战法集合——传了则在战法行标注「推荐」（软标注，不过滤）。 */
+  weatherRecommended?: Set<string>;
 }
 
 /** S031 R22：战法胜率对比——左列真实回测（R20）/ 右列合成 historical_win_rate（标注"估算"）。
  * 合成公式 min(confidence_value*0.8+0.2, 0.95)（limitup_strategy.py:685），按战法取均值，
  * 与真实回测并列对比，让用户看清合成 vs 真实差异。
- * S049 D8：战法行可展开——当日命中（l2Passed 按 best_strategy 分组，限未持仓态=建仓语义）。 */
-export function WinRateComparePanel({ backtest, l2Passed, loading, onPickCandidate }: Props) {
+ * S049 D8：战法行可展开——当日命中（l2Passed 按 best_strategy 分组，限未持仓态=建仓语义）。
+ * grill Q7：weatherRecommended 传入时，战法行名后挂绿色「推荐」徽标（所有战法仍可用）。 */
+export function WinRateComparePanel({ backtest, l2Passed, loading, onPickCandidate, weatherRecommended }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   // 合成胜率按战法聚合（当日命中各股的 confidence_value → 公式 → 均值）
   const synth: Record<string, { sum: number; n: number }> = {};
@@ -64,14 +67,20 @@ export function WinRateComparePanel({ backtest, l2Passed, loading, onPickCandida
               const hits = hitsByStrategy[b.strategy] ?? [];
               const isOpen = expanded === b.strategy_code;
               return (
-                <>
+                <Fragment key={b.strategy_code}>
                   <tr
-                    key={b.strategy_code}
                     className="border-t border-border/30 cursor-pointer hover:bg-accent/30"
                     onClick={() => hits.length > 0 && setExpanded(isOpen ? null : b.strategy_code)}
                   >
                     <td className="py-1 pr-3">
-                      <div>{b.strategy}{hits.length > 0 && (isOpen ? " ▼" : " ▶")}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span>{b.strategy}{hits.length > 0 && (isOpen ? " ▼" : " ▶")}</span>
+                        {weatherRecommended?.has(b.strategy_code) && (
+                          <span className="rounded bg-emerald-500/10 px-1 text-[10px] font-medium text-emerald-500">
+                            推荐
+                          </span>
+                        )}
+                      </div>
                       {b.sample_size === 0 && b.note && (
                         <div className="text-xs text-muted-foreground/70">{b.note}</div>
                       )}
@@ -119,7 +128,7 @@ export function WinRateComparePanel({ backtest, l2Passed, loading, onPickCandida
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

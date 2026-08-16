@@ -7,12 +7,15 @@ interface Props {
   className?: string;
   // S058：天气适配度软过滤——传入则每战法 chip 后挂适配/不适配/中性标签
   weatherFit?: Record<string, "适配" | "不适配" | "中性">;
+  /** grill Q7：天气推荐战法集合——推荐战法 chip 加绿色「★」徽标（软标注，不过滤）。 */
+  weatherRecommended?: Set<string>;
 }
 
 /** S031 R19：战法多选 chips（8 大战法 + "全部"）——反筛纯前端，不请求后端。
  * 选"全部"清空 selected 恢复；点已选战法移除、未选加入。
- * S058：weatherFit 传入时，不适配战法降权（chip 淡化 + 标注「不适配」）。 */
-export function StrategyFilter({ strategies, selected, onChange, className, weatherFit }: Props) {
+ * S058：weatherFit 传入时，不适配战法降权（chip 淡化 + 标注「不适配」）。
+ * grill Q7：weatherRecommended 传入时，推荐战法 chip 加绿色「★」（所有战法仍可选）。 */
+export function StrategyFilter({ strategies, selected, onChange, className, weatherFit, weatherRecommended }: Props) {
   const toggle = (s: string) => {
     const next = new Set(selected);
     if (next.has(s)) next.delete(s);
@@ -54,6 +57,9 @@ export function StrategyFilter({ strategies, selected, onChange, className, weat
             )}
           >
             {s}
+            {weatherRecommended?.has(s) && (
+              <span className="text-[10px] text-emerald-500" aria-label="天气推荐">★</span>
+            )}
             {fit && fit !== "中性" && (
               <span className={cn(
                 "text-[10px]",
