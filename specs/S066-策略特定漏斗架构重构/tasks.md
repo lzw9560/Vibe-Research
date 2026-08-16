@@ -190,11 +190,12 @@
 - [B] 114: ✅ 修 Phase 0e 框架 pass-logic 到 §44 合规（加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）——落地：新表 `universe_returns`（§44 随机基准源，UNIQUE signal_date,code）+ `record_universe_returns` + `run_daily_forward_test` 主动记 universe codes + gate `winrate>=60 AND lift>=2.0 AND random_settled>0` + Wilson CI + is_exploratory；forward_test_records 不动（避免 dup）；18 测试过（含 §44 三关键测试：no_edge/no_universe/pass）。**真实数据 verdict 待 Windows 重跑 backfill 填 universe_returns**（spec §13 ① 设计口径已落）
 - [B] 115: Phase 0e weather-adapted 重跑（接历史 sentiment_context 天气，测完整架构非退化版；当前 weather=None 是下界）
 - [B] 116: 60 天 eastmoney_live 积累后复验 Phase 0b（within-day r）+ 0e（胜率 lift）——lift 破 2x + r 显著 → alpha 成立；否则确认无 edge
-- [F] 117: 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源；非交易日 fix 见 591f536，节假日待重构补）
+- [F] 117: ✅ 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源）——落地：删 `getAStockTimeInfo`（43 行本地 tz/仅周末/无节假日），useMemo 直接取 `backend.stage/market_status/next_stage/next_stage_time/current_time`（零新增请求，复用既有 60s 轮询）；backend null → "加载中"降级（不本地重算，避免 drift 复现）；+2 测试（backend→UI 流 + fallback）+13 测试过 + tsc 干净。**countDownToNext（line 86）仍用浏览器 new Date() 算倒计时，非-CN 用户 tz 漂移——cosmetic drift，登记 task 122 follow-up**
 - [B] 118: 036 板块停留天数（sector_cycle 缺，需先定义"在榜"口径）
 - [B] 119: ✅ classify_phase 边缘 case（today=0 + avg∈(0,3) 落"无历史"默认，应退潮-ish）——修正：`has_history=True` 无子句命中 → 退潮默认（"无历史"专用 has_history=False 数据缺失，不混用）；退潮子句 avg>=3 不动；+3 测试（today=0+avg∈(0,1)/(1,3)/温和走弱）；18 测试过
 - [B] 120: ✅ save_alert 日期分歧（calendar-today vs last_trading-day，非交易日错位）——prod 改 `last_trading_date_str(now.date())` 落 date 列（非 now.strftime），对齐端点查询；+1 非交易日测试（周六存→端点按交易日查能命中）；8 测试过
 - [T] 121: ✅ spec→plan/tasks stale lint（`tools/spec_plan_stale_lint.py`）纳入回归/CI，防跨会话 drift——落地：`backend/tests/test_spec_consistency.py` subprocess 跑 lint 断言 exit 0（随 pytest 跑）；RED 核验过（注入 bare stale → 测试变红 → 还原后绿）
+- [F] 122: countDownToNext（Workflow.tsx:86）仍用浏览器 `new Date()` 算倒计时——非-CN 用户 tz 漂移（stage 已单源后端，倒计时是 cosmetic drift，117 follow-up）；改用 backend current_time + next_stage_time 推算（next_stage_time 是相对串"次日 08:00"，解析需稳健）
 
 ## 统计
 

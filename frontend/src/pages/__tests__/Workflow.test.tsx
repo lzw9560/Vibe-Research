@@ -28,7 +28,12 @@ describe("Workflow 首页 (S048)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     qMocks.useWorkflowStatus.mockReturnValue({
-      data: { candidate_count: 12, signal_count: 3, alert_count: 0, win_rate: 55 },
+      // task 117：stage/market_status/next_stage/next_stage_time/current_time 来自后端 /api/workflow/status
+      data: {
+        candidate_count: 12, signal_count: 3, alert_count: 0, win_rate: 55,
+        stage: "intraday", market_status: "上午盘", next_stage: "post-market",
+        next_stage_time: "15:00", current_time: "10:30",
+      },
       isLoading: false,
       isFetching: false,
       refetch: vi.fn(),
@@ -42,6 +47,20 @@ describe("Workflow 首页 (S048)", () => {
     renderAt();
     const h3s = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
     expect(h3s.slice(0, 3)).toEqual(["盘前简报", "盘中监控", "盘后复盘"]);
+  });
+
+  it("task 117: 阶段/时间来自后端 /api/workflow/status（原本地 getAStockTimeInfo 已移除）", () => {
+    renderAt();
+    // marketStatus + currentTime 从 backend 字段流入 UI（非本地浏览器 tz 重算）
+    expect(screen.getByText("上午盘")).toBeInTheDocument();
+    expect(screen.getByText("10:30")).toBeInTheDocument();
+  });
+
+  it("task 117: backend 为空 → 降级'加载中'（fetch 失败/null，不本地重算 drift）", () => {
+    // isLoading:false（非首次加载）→ 过 loading 守卫；data:undefined（fetch 失败/null）→ fallback
+    qMocks.useWorkflowStatus.mockReturnValue({ data: undefined, isLoading: false, isFetching: false, refetch: vi.fn() });
+    renderAt();
+    expect(screen.getByText("加载中")).toBeInTheDocument();
   });
 
   it("R2: URL ?date= → 日期选择器回显 + briefing/states hooks 收到该 date", () => {

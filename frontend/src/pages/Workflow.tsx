@@ -31,49 +31,9 @@ interface WorkflowStatus {
 }
 
 // ---- 工具函数 ----
-function getAStockTimeInfo(): {
-  hours: number;
-  minutes: number;
-  stageKey: string;
-  marketStatus: string;
-  nextStageKey: string | null;
-  nextStageTime: string | null;
-} {
-  const now = new Date();
-  const h = now.getHours();
-  const m = now.getMinutes();
-  const totalMin = h * 60 + m;
-
-  // 非交易日（周末）整日不随时间推进——固定"非交易日"（节假日需交易日历，
-  // 后端 is_trading_day 有；本地仅周末，节假日待前端改用后端源时补）
-  const dow = now.getDay(); // 0=Sun 6=Sat
-  if (dow === 0 || dow === 6) {
-    return { hours: h, minutes: m, stageKey: "pre-market", marketStatus: "非交易日", nextStageKey: "pre-market", nextStageTime: "下一交易日 08:00" };
-  }
-
-  // A股交易时段精确划分
-  // 盘前: 08:00 - 09:25 (集合竞价 09:15-09:25)
-  // 集合竞价: 09:15 - 09:25
-  // 早盘: 09:30 - 11:30
-  // 午盘: 13:00 - 15:00
-  // 盘后: 15:00 - 22:00
-
-  if (totalMin >= 480 && totalMin < 555) { // 08:00 - 09:14
-    return { hours: h, minutes: m, stageKey: "pre-market", marketStatus: "盘前准备", nextStageKey: "intraday", nextStageTime: "09:30" };
-  } else if (totalMin >= 555 && totalMin < 570) { // 09:15 - 09:24 集合竞价
-    return { hours: h, minutes: m, stageKey: "pre-market", marketStatus: "集合竞价中", nextStageKey: "intraday", nextStageTime: "09:30" };
-  } else if (totalMin >= 570 && totalMin < 750) { // 09:30 - 11:29 上午盘
-    return { hours: h, minutes: m, stageKey: "intraday", marketStatus: "上午盘", nextStageKey: "post-market", nextStageTime: "15:00" };
-  } else if (totalMin >= 750 && totalMin < 780) { // 11:30 - 12:59 午休
-    return { hours: h, minutes: m, stageKey: "intraday", marketStatus: "午休时段", nextStageKey: "post-market", nextStageTime: "15:00" };
-  } else if (totalMin >= 780 && totalMin < 900) { // 13:00 - 14:59 下午盘
-    return { hours: h, minutes: m, stageKey: "intraday", marketStatus: "下午盘", nextStageKey: "post-market", nextStageTime: "15:00" };
-  } else if (totalMin >= 900 && totalMin < 1320) { // 15:00 - 21:59 盘后
-    return { hours: h, minutes: m, stageKey: "post-market", marketStatus: "盘后复盘", nextStageKey: "pre-market", nextStageTime: "次日 08:00" };
-  } else { // 22:00 - 07:59 非交易时段
-    return { hours: h, minutes: m, stageKey: "pre-market", marketStatus: "休市中", nextStageKey: "pre-market", nextStageTime: "08:00" };
-  }
-}
+// 阶段/时间唯一源 = 后端 /api/workflow/status（get_current_stage：北京 tz + is_trading_day 节假日）。
+// 原本地 getAStockTimeInfo（浏览器 tz、仅周末、无节假日）是 drift 源，task 117 移除——
+// useMemo 直接取 backend.stage/market_status/next_stage/next_stage_time/current_time。
 
 /** stageKey → PipelineProgressBar current 映射 */
 function stageToPipeline(stageKey: string): "t1" | "ctx" | "pre" | "intraday" | "post" {
@@ -341,29 +301,37 @@ export default function Workflow() {
 
   // T9：原 useState/useEffect + setInterval(60s) + getWorkflowStatus() → useWorkflowStatus + refetchInterval。
   // 注：getWorkflowStatus() 返 T | null（null 为失败/空信号，不 throw），故无 error UI——null 时各计数回落 0。
-  // 时间信息由 getAStockTimeInfo() 就地计算；useMemo 依赖 backend，每次 60s 重取时连同时间一并刷新（保留原行为）。
+  // 阶段/时间来自后端 /api/workflow/status（get_current_stage：北京 tz + is_trading_day 节假日）——
+  // 单源，原本地 getAStockTimeInfo 已移除（task 117）。backend null（首次加载/硬失败）→
+  // "加载中"降级（不本地重算，避免 drift 复现；RTK Query refetch 期保留前值，null 仅首次/硬失败）。
   // hook data 已类型化（api WorkflowStatus 含 [key: string]: unknown 索引签名），
-  // 各字段经 `as number` 取值即可，不再需要 as unknown as Record<string, unknown> 放宽 cast。
+  // 各字段经 `as number`/`as string` 取值即可，不再需要 as unknown as Record<string, unknown> 放宽 cast。
   const { data: backend, isLoading: loading, isFetching, refetch } = useWorkflowStatus({
     refetchInterval: isHistorical ? false : 60_000,
   });
   const refreshing = isFetching && !loading;
 
   const status = useMemo<WorkflowStatus | null>(() => {
-    const timeInfo = getAStockTimeInfo();
     // 后端字段名容错（candidate_count / candidate_pool_count 等多别名）
     const candidateCount = (backend?.candidate_count as number) ?? (backend?.candidate_pool_count as number) ?? 0;
     const signalCount = (backend?.signal_count as number) ?? (backend?.active_signals as number) ?? 0;
     const alertCount = (backend?.alert_count as number) ?? 0;
     const winRate = (backend?.win_rate as number) ?? (backend?.today_win_rate as number) ?? 0;
 
+    // 阶段/时间从后端取（北京 tz + 节假日，唯一源）；null → 加载中降级
+    const stageKey = (backend?.stage as string) ?? "pre-market";
+    const marketStatus = (backend?.market_status as string) ?? "加载中";
+    const nextStageKey = (backend?.next_stage as string | null) ?? null;
+    const nextStageTime = (backend?.next_stage_time as string | null) ?? null;
+    const currentTime = (backend?.current_time as string) ?? "";
+
     return {
-      stageKey: timeInfo.stageKey,
-      stageLabel: STAGE_CONFIG[timeInfo.stageKey]?.label ?? "",
-      currentTime: `${timeInfo.hours.toString().padStart(2, '0')}:${timeInfo.minutes.toString().padStart(2, '0')}`,
-      marketStatus: timeInfo.marketStatus,
-      nextStageKey: timeInfo.nextStageKey,
-      nextStageTime: timeInfo.nextStageTime ?? "",
+      stageKey,
+      stageLabel: STAGE_CONFIG[stageKey]?.label ?? "",
+      currentTime,
+      marketStatus,
+      nextStageKey,
+      nextStageTime,
       candidateCount,
       signalCount,
       alertCount,
