@@ -109,6 +109,14 @@ export default function PreMarketBriefing() {
     }
   }, [briefing?.status, isHistorical, refresh]);
 
+  // S066 grill：running 态显已耗时（从 briefing.as_of 派生，去原"并行两因子，约1分钟"stale 硬编码）
+  const [elapsedNow, setElapsedNow] = useState(Date.now());
+  useEffect(() => {
+    if (briefing?.status !== "running") return;
+    const id = setInterval(() => setElapsedNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [briefing?.status]);
+
   const status = briefing?.status ?? "idle";
   // S048 R7：历史日期 done 后不可变——刷新入口整体移除（UI + staleTime Infinity 双保险）
   const isHistoryDone = isHistorical && status === "done";
@@ -183,7 +191,12 @@ export default function PreMarketBriefing() {
         <GlassCard className="p-6">
           <div className="flex items-center gap-3">
             <Skeleton className="h-4 w-4 rounded-full" />
-            <span className="text-sm text-muted-foreground">盘前因子采集中（并行两因子，约 1 分钟）…</span>
+            <span className="text-sm text-muted-foreground">
+              盘前因子采集中…
+              {briefing.as_of && (
+                <span className="tabular-nums"> 已 {Math.max(0, Math.floor((elapsedNow - Date.parse(briefing.as_of)) / 1000))}s</span>
+              )}
+            </span>
           </div>
         </GlassCard>
       )}
