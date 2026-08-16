@@ -34,10 +34,11 @@
 - 合并策略：独立脚本，直接 develop 提交
 
 ### 0b 全样本因子回归（1 天）
-- 对 5 因子 + zt_count 计算 Pearson r + 95% CI + p 值（n=6537）
-- 每个因子做五分位胜率（全样本，不是 qualify=1 子集）
-- 2-way ANOVA 因子交互（seal_rate x freq 等）
-- 验证 alpha 来源假设（§14.1）：低频次票是否系统性更小盘？Wilson 下界是否过度惩罚？
+> **§44 修订（2026-08-16）**：双轨分层（kline_rebuild 3760 / eastmoney_live 2836，零重叠，spec §13 Phase 0b grill 决议）；二轮验证（日内/日间分解 + day-cluster bootstrap）证伪 rebound_rate 强信号 + 全 6 因子 within-day r≈0、CI 含 0 → **无已验证横截面选股因子**，权重改等权 placeholder（见 0d）。原"n=6537 单组"已废止。
+- 对 5 因子 + zt_count 计算 Pearson r + 95% CI + p 值（**双轨分层**：kline 3760 / eastmoney 2836）
+- 每个因子做五分位胜率（按 data_source 分组，非 qualify=1 子集）
+- 2-way ANOVA 因子交互（仅 eastmoney_live 子集）
+- 验证 alpha 来源假设（§14.1）
 - 因子相关矩阵 + PCA 降维
 - 输出 factor_significance.json
 - 合并策略：独立脚本 + 分析报告，develop 提交
@@ -49,17 +50,19 @@
 - 合并策略：并入 0b 报告
 
 ### 0d 策略分权重定稿（0.5 天）
-- 基于 0b 显著因子 + 0c 阈值，确定 3 套权重
-- 涨停类：seal_rate/premium(反向)/freq(反向)/zt_count_golden
+> **§44 修订（2026-08-16）**：Phase 0b 二轮验证收回 rebound_rate 强信号（日级伪信号）+ 全 6 因子 within-day r≈0 → **3 套权重均改等权 placeholder（W1-W5=0.20）**。下方原具体权重（seal 60%/premium反向/freq反向）已废止，见 spec §4.1/§4.3。60 天 eastmoney_live 积累后重判热替换。
+- ~~基于 0b 显著因子 + 0c 阈值，确定 3 套权重~~ → 等权 placeholder（无已验证信号，等权是唯一诚实起点）
+- ~~涨停类：seal_rate/premium(反向)/freq(反向)/zt_count_golden~~ → 等权 0.20
 - 非涨停类：等权起步（Phase 2 有数据后调）
-- 暴风暴：seal_rate 60% + freq 反向 40%
-- 输出 strategy_weights.json
+- ~~暴风暴：seal_rate 60% + freq 反向 40%~~ → 等权 placeholder
+- 输出 strategy_weights.json（等权 placeholder）
 - 合并策略：并入 0b 报告
 
 ### 0e 前向测试（20 交易日，不投真金）
 - 用 0d 权重跑系统：涨停股 x 策略分排序 x 板块周期 x 日历因子
 - 每日记录推荐 vs 实际表现
 - 通过标准：系统无崩溃 + 推荐胜率 >= 回测 x 0.8
+  > **§44 修订**：此"×0.8 degradation"弱 bar（=48）≠ §13.0 绝对 60，且无随机基准 → §44-non-compliant（50% 随机策略也过 48）。实测策略 49.2% vs 随机 50.2% lift 0.98x 噪声（见 spec §13 + plan §44 修订路径第 2 条：修框架 pass-logic 对齐 60 + 加随机基准）。
 - 不通过 -> 修 bug 再跑 20 天
 - 合并策略：develop 分支跑，通过后 squash 合并
 
