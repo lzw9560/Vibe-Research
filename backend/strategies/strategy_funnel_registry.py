@@ -21,7 +21,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 # spec §3: weights 由 Phase 0d 全样本回归定稿（.vibe-research/strategy_weights.json）
 # 测试时 VR_DATA_DIR 指向临时目录（conftest），weights 不存在 → 等权兜底
@@ -64,19 +64,28 @@ class StrategyFunnelConfig:
     position_params: PositionParams
     quality_standards: list[QualityCheck] = field(default_factory=list)
     note: str = ""
+    activation_note: Optional[str] = None  # 激活状态注记，非空表示该战法当前不可用（如"待 S055 激活"）
 
 
 # ===========================================================================
-# 天气-策略硬开关（spec §3.3）
+# 天气-策略推荐（spec §3.3，grill Q7 降级为软标注）
 # ===========================================================================
 
-WEATHER_STRATEGY_MAP: dict[str, list[str]] = {
-    "晴天":   ["consecutive_relay", "dragon_head", "platform_breakout"],
-    "阴天":   ["first_plate", "break_reseal", "end_of_day_sneak"],
-    "极端反弹": ["reverse_package", "break_reseal", "n_shape_counterattack"],
-    "暴风雨": ["storm_reversal"],   # 逆势涨停子策略，仓位 x0.3
-    "未知":   ["first_plate", "consecutive_relay"],  # 保守降级
+# grill Q7：天气硬开关降级为软标注（暴风雨除外）
+# 旧 WEATHER_STRATEGY_MAP 是强约束（不允许的战法直接过滤）
+# 新 WEATHER_RECOMMENDATION 是软标注（所有战法可用，天气匹配的标注"推荐"）
+# 理由：(1) T-1 天气不代表 T 日天气；(2) §13.0 验证天气路由无统计显著提升；
+#       (3) 强约束导致 0 候选比无约束更有害。暴风雨是唯一例外——保留硬约束（仓位=0）。
+WEATHER_RECOMMENDATION: dict[str, set[str]] = {
+    "晴天":   {"consecutive_relay", "dragon_head", "platform_breakout"},
+    "阴天":   {"first_plate", "break_reseal", "end_of_day_sneak"},
+    "极端反弹": {"reverse_package"},
+    "暴风雨": {"storm_reversal"},  # 唯一硬约束：仓位=0
+    "未知":   set(),
 }
+
+# 向后兼容 alias（grill Q7 后应改用 WEATHER_RECOMMENDATION）
+WEATHER_STRATEGY_MAP = {k: list(v) for k, v in WEATHER_RECOMMENDATION.items()}
 
 FALLBACK_STRATEGIES: dict[str, list[str]] = {
     "晴天":   ["low_absorption"],
@@ -87,16 +96,31 @@ FALLBACK_STRATEGIES: dict[str, list[str]] = {
 }
 
 
-def get_strategies_for_weather(weather_state: str | None) -> tuple[list[str], list[str]]:
-    """天气硬开关：返回 (主跑策略 codes, fallback 策略 codes)。
+def get_weather_recommendation(weather_state: str | None) -> set[str]:
+    """grill Q7：天气推荐战法集合（软标注）。暴风雨仍硬约束。
 
-    weather_state 为 None/未知 → 保守降级（首板+连板）。
+    返回的集合仅用于在候选上标注 weather_recommended=True/False，
+    不用于过滤候选（所有战法对所有非暴风雨天气可用）。
     """
-    if not weather_state or weather_state not in WEATHER_STRATEGY_MAP:
-        weather_state = "未知"
-    primary = WEATHER_STRATEGY_MAP.get(weather_state, [])
-    fallback = FALLBACK_STRATEGIES.get(weather_state, [])
-    return primary, fallback
+    if not weather_state:
+        return set()
+    return WEATHER_RECOMMENDATION.get(weather_state, set())
+
+
+def get_strategies_for_weather(weather_state: str | None) -> tuple[list[str], list[str]]:
+    """天气 → (主跑策略 codes, fallback 策略 codes)。
+
+    grill Q7：暴风雨仍硬约束（只 storm_reversal）；其他天气返回所有战法
+    （不强过滤）。天气推荐集合用 get_weather_recommendation() 查。
+
+    返回的 primary_codes 对非暴风雨天气恒为所有已注册战法（非空），
+    fallback 恒为 []。暴风雨返回 (["storm_reversal"], [])。
+    """
+    if weather_state == "暴风雨":
+        return (["storm_reversal"], [])
+    # 其他天气：所有战法都可用（不强过滤）
+    all_codes = [s.code for s in STRATEGY_FUNNEL_REGISTRY]
+    return (all_codes, [])
 
 
 # ===========================================================================
@@ -144,9 +168,9 @@ STRATEGY_FUNNEL_REGISTRY: list[StrategyFunnelConfig] = [
         position_params=PositionParams(-3.0, 6.0, 1),
         quality_standards=[
             QualityCheck("开板次数≥1", True, "炸板回封定义需要至少一次开板"),
-            QualityCheck("封板率≥60%", True, "回封后封板强度"),
+            QualityCheck("封板率≥80%", True, "回封后封板强度（S053 数据证据统一到 80%）"),
         ],
-        note="60日无信号：炸板后溢价因子疑似缺供（S053 查因中）",
+        note="S053 R3：match 门槛与注册表统一为封板率≥80%（zt_count 3-5 黄金区 89.5% 命中率，19 样本）",
     ),
     StrategyFunnelConfig(
         code="end_of_day_sneak",
@@ -204,6 +228,7 @@ STRATEGY_FUNNEL_REGISTRY: list[StrategyFunnelConfig] = [
             QualityCheck("成交额>15亿", True, "反包需流动性"),
             QualityCheck("均线多头", False, "加分项"),
         ],
+        activation_note="待 S055 激活（seal_intraday.db 无 open_count>=2 数据）",
     ),
     StrategyFunnelConfig(
         code="platform_breakout",
@@ -322,6 +347,33 @@ def compute_strategy_score(
     return round(total, 4), breakdown
 
 
+def _cand_to_gene(cand: dict):
+    """dict 候选 → GeneScore 适配（grill Q6：match_strategies 需要 GeneScore）。
+
+    字段映射经 limitup_screener/models.py:33 GeneScore 定义核实。
+    factors 优先取 cand["factors"]；total_score/zt_count_250d 同时回退到 factors 内同名键。
+    wilson_adjusted/qualify/high_gene/last_zt_dates 用安全默认值——
+    match_strategies 只读 total_score/factors/zt_count_250d/code，不读这几项。
+    """
+    from limitup_screener.models import GeneScore
+
+    factors = cand.get("factors", {}) or {}
+    total = cand.get("total_score", factors.get("total_score", 0)) or 0
+    zt_count = cand.get("zt_count_250d", factors.get("zt_count_250d", 0)) or 0
+    return GeneScore(
+        code=cand.get("code", ""),
+        name=cand.get("name", ""),
+        total_score=float(total),
+        factors=factors,
+        wilson_adjusted=float(total),
+        qualify=total >= 50,
+        high_gene=total >= 60,
+        last_zt_dates=[],
+        zt_count_250d=int(zt_count),
+        data_source=cand.get("data_source", "eastmoney_live"),
+    )
+
+
 def score_candidates(
     candidates: list[dict],
     weather_state: str | None,
@@ -336,20 +388,52 @@ def score_candidates(
     2. 每个主跑策略用其 weight_set 计算策略分
     3. 按策略分降序排序
     4. fallback 策略仅在主跑无候选时尝试（本函数返回主跑结果，fallback 由调用方决定）
+
+    grill Q6（match 过滤闭环）：对每个候选×策略，先调
+    limitup_strategy.match_strategies 检查是否满足入场条件；不满足则该策略
+    不打分、不返回。避免前端看到"算分了但不满足入场条件"的脏数据。
     """
     primary_codes, _ = get_strategies_for_weather(weather_state)
-    if not primary_codes:
-        primary_codes = WEATHER_STRATEGY_MAP["未知"]
+    # grill Q7：非暴风雨天气 primary_codes 恒为所有已注册战法（非空），
+    # 暴风雨恒为 ["storm_reversal"]；不再需要未知降级 fallback。
+    # 天气推荐集合（软标注）——用于在候选上标 weather_recommended=True/False，
+    # 不用于过滤候选。
+    recommendation = get_weather_recommendation(weather_state)
 
     scored: list[dict] = []
+    # match_strategies 实际处理入场条件的策略 code 集合（取自 limitup_strategy.STRATEGY_REGISTRY
+    # 的 if/elif 分支覆盖）。dragon_head 在 registry 但无 match 分支；storm_reversal
+    # 不在 registry。这两个策略无入场条件可过滤，按"无条件"处理（不阻断），避免
+    # 晴天(dragon_head 主跑)/暴风雨(storm_reversal 独跑)被 match 闭环误杀成永远空集。
+    _MATCHED_STRATEGY_CODES = {
+        "first_plate", "consecutive_relay", "break_reseal", "low_absorption",
+        "reverse_package", "n_shape_counterattack", "platform_breakout",
+        "end_of_day_sneak",
+    }
     for cand in candidates:
         factors = cand.get("factors", {})
+        # grill Q6：dict → GeneScore 适配（match_strategies 的入参类型）
+        gene = _cand_to_gene(cand)
+        # 延迟 import：limitup_strategy 顶层 import astock，避免本模块加载时
+        # 强制拉起 astock 依赖链（测试/conftest 与 forward_test 已含 backend 于 sys.path）
+        from limitup_strategy import match_strategies
+        # 对每只候选一次性算出所有命中的战法 signals，内循环按 strat_code 查表
+        try:
+            signals = match_strategies(cand.get("code", ""), gene)
+            matched_codes = {s.strategy_code for s in signals}
+        except Exception:
+            matched_codes = set()  # match 失败按"不命中"处理，不阻断整体打分
         for strat_code in primary_codes:
             cfg = get_strategy_config(strat_code)
             if cfg is None:
                 continue
             # 暴风雨逆势只取暴风雨日涨停股（spec §3.2）
             if cfg.code == "storm_reversal" and weather_state != "暴风雨":
+                continue
+            # grill Q6：match 过滤——不满足入场条件的候选×策略不打分、不返回。
+            # 仅对 match_strategies 有入场条件分支的策略过滤；无分支的策略
+            # （dragon_head/storm_reversal）按"无条件"放行，避免误杀。
+            if strat_code in _MATCHED_STRATEGY_CODES and strat_code not in matched_codes:
                 continue
             score, breakdown = compute_strategy_score(factors, cfg.weight_set)
             scored.append({
@@ -360,9 +444,25 @@ def score_candidates(
                 "score_breakdown": breakdown,
                 "funnel_type": cfg.funnel_type,
                 "position_params": cfg.position_params,
+                "weather_recommended": strat_code in recommendation,  # grill Q7：天气推荐标注（软标注）
             })
 
     scored.sort(key=lambda x: x.get("strategy_score", 0), reverse=True)
+    if not scored:
+        # grill Q5：诚实标注 0 输出原因（不掩盖数据缺失）
+        if not candidates:
+            note = "当日涨停池无数据"
+        elif weather_state == "极端反弹":
+            note = "炸板池数据缺失（S055 采集未完成）或昨日无 open_count>=2 的票"
+        else:
+            note = f"候选股因子值不满足 {', '.join(primary_codes)} 的入场条件"
+        return [{
+            "strategy_code": "none",
+            "note": note,
+            "strategy_score": 0,
+            "strategy": "无符合条件标的",
+            "factors": {},
+        }]
     return scored
 
 

@@ -271,6 +271,7 @@ def update_verified(conditions: list[VerificationCondition]) -> int:
 
 def get_conditions(date_str: str | None = None) -> list[dict[str, Any]]:
     """查指定日的条件（含对账结果）。date 缺省取最近交易日。"""
+    run_migrations()
     date_str = date_str or last_trading_date_str()
     conn = _get_conn()
     try:
@@ -300,6 +301,7 @@ def get_pending_conditions() -> list[dict[str, Any]]:
 
 def generate_and_save(emotion_data: dict, date_str: str | None = None) -> list[VerificationCondition]:
     """盘后生成条件并落库。返回生成的条件列表。"""
+    run_migrations()
     conditions = generate_conditions(emotion_data, date_str)
     save_conditions(conditions)
     _logger.info("[verification_card] 生成 %d 条条件（date=%s）", len(conditions), conditions[0].date if conditions else "?")
@@ -311,6 +313,7 @@ def verify_and_update() -> list[VerificationCondition]:
 
     返回对账后的条件列表（含 verified status）。
     """
+    run_migrations()
     import market
 
     pending_rows = get_pending_conditions()

@@ -58,6 +58,17 @@ try:
             ])
         except Exception as _we:
             _logger.warning("[limitup_sti] weather_history 迁移失败（不影响主流程）: %s", _we)
+        # S063 T4 补齐：sti_timeline 加 raw_break_rate 列（盘前简报 T-1 炸板率直读）
+        try:
+            _raw_br_sql = (
+                _Path(__file__).resolve().parent.parent
+                / "migrations" / "sti" / "20260817-001_add_raw_break_rate.sql"
+            ).read_text(encoding="utf-8")
+            _MM(db_path=_STI_DB).upgrade([
+                {"version": "20260817-001", "name": "add_raw_break_rate", "sql": _raw_br_sql},
+            ])
+        except Exception as _re:
+            _logger.warning("[limitup_sti] raw_break_rate 迁移失败（不影响主流程）: %s", _re)
     except Exception as _e:
         _logger.warning("[limitup_sti] sti_intraday 迁移失败（不影响主流程）: %s", _e)
 except Exception as e:

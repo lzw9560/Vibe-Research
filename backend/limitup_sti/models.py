@@ -95,6 +95,7 @@ class STIResult(BaseModel):
     disclaimer: str = DISCLAIMER
     data_freshness: str = "fresh"  # fresh | stale | expired
     data_age_seconds: float = 0.0  # 数据年龄（秒）
+    raw_break_rate: Optional[float] = None  # S063 T4 补齐：原始炸板率（0-1），盘前简报 T-1 直读
 
 
 def percentile_rank(value: float, lookback_series: list[float]) -> float:

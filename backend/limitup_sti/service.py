@@ -140,6 +140,11 @@ class STIEngine:
         dims.limit_up_count = _safe_float(emotion_data.get("zt_count"))
         dims.limit_down_count = _safe_float(emotion_data.get("dt_count"))
         dims.seal_rate = _safe_float(emotion_data.get("seal_rate")) * 100
+        # S063 T4 补齐：保留原始炸板率（0-1），盘前简报 T-1 直读。
+        # 显式区分 None（数据缺失→DB NULL→简报 "--"）vs 0.0（valid: 无炸板），
+        # 不能用 _safe_float（默认 0.0 会把 None 误存为 0.0 → 简报误显 "0.000"）。
+        _br_raw = emotion_data.get("break_rate")
+        raw_break_rate = float(_br_raw) if _br_raw is not None else None
         up = _safe_float(sentiment_data.get("up"))
         down = _safe_float(sentiment_data.get("down"))
         dims.advance_decline_ratio = up / max(down, 1)
@@ -218,6 +223,7 @@ class STIEngine:
             phase_explanation=PHASE_EXPLANATIONS.get(phase.value, ""),
             data_freshness="fresh",
             data_age_seconds=0.0,
+            raw_break_rate=raw_break_rate,
         )
 
         self._save_result(result)

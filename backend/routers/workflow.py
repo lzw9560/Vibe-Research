@@ -269,10 +269,11 @@ def _market_emotion_from_ctx(date: str, ctx: "SentimentContext") -> dict[str, An
         out["promotion_rate"] = round(promo / 100, 3) if promo is not None else None
         out["zt_count"] = zt
         out["dt_count"] = dt
-        # break_rate 不在 sti_timeline 直接存——dim 有 break_rate 列名前缀但
-        # 实际 schema 无 dimension_break_rate（旧迁移已移除）。降级 None 标注。
-        out["break_rate"] = None
-        out["break_rate_note"] = "T-1 炸板率未持久化（sti_timeline 无该列）"
+        # S063 T4 补齐：raw_break_rate 由 compute 落库（market._emotion 算出的原始 0-1 比率），
+        # 历史行无此列 → _dim 返 None → 简报显示 "--"（诚实标注而非臆造 0）。
+        raw_br = _dim("raw_break_rate")
+        out["break_rate"] = round(raw_br, 3) if raw_br is not None else None
+        out["break_rate_note"] = None if raw_br is not None else "T-1 炸板率未持久化（历史行无 raw_break_rate 列）"
         out["ladder_note"] = "T-1 连板梯队未持久化"
     except Exception as exc:  # noqa: BLE001
         out["ladder_note"] = f"T-1 映射失败: {exc}"

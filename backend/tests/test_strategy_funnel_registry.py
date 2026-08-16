@@ -14,9 +14,11 @@ if str(backend_dir) not in sys.path:
 from strategies.strategy_funnel_registry import (
     STRATEGY_FUNNEL_REGISTRY,
     WEATHER_STRATEGY_MAP,
+    WEATHER_RECOMMENDATION,
     FALLBACK_STRATEGIES,
     StrategyFunnelConfig,
     get_strategies_for_weather,
+    get_weather_recommendation,
     get_strategy_config,
     compute_strategy_score,
     score_candidates,
@@ -26,37 +28,57 @@ from strategies.strategy_funnel_registry import (
 
 
 class TestWeatherHardSwitch:
-    """天气-策略硬开关（spec §3.3）。"""
+    """天气-策略推荐（spec §3.3，grill Q7 降级为软标注）。
+
+    grill Q7：暴风雨仍硬约束（仓位=0）；其他天气所有战法可用，
+    天气匹配的战法用 get_weather_recommendation() 返回推荐集合。
+    """
 
     def test_sunny_day_strategies(self):
-        """晴天 → 连板接力/龙头/平台突破。"""
+        """grill Q7：晴天 → 所有战法可用（不强过滤），fallback 恒空。
+
+        旧：primary=[连板/龙头/平台]，fallback=[low_absorption]
+        新：primary=所有战法，fallback=[]；推荐集合={连板/龙头/平台}
+        """
         primary, fallback = get_strategies_for_weather("晴天")
-        assert "consecutive_relay" in primary
+        assert "consecutive_relay" in primary  # 推荐的在
         assert "dragon_head" in primary
         assert "platform_breakout" in primary
-        assert "low_absorption" in fallback
+        assert "first_plate" in primary  # 不推荐的也在（不强过滤）
+        assert fallback == []
+        rec = get_weather_recommendation("晴天")
+        assert rec == {"consecutive_relay", "dragon_head", "platform_breakout"}
 
     def test_storm_only_runs_storm_reversal(self):
-        """暴风雨 → 只跑 storm_reversal，无 fallback。"""
+        """暴风雨 → 只跑 storm_reversal（唯一保留的硬约束），无 fallback。"""
         primary, fallback = get_strategies_for_weather("暴风雨")
         assert primary == ["storm_reversal"]
         assert fallback == []
 
-    def test_unknown_falls_back_conservative(self):
-        """未知/None → 保守降级（首板+连板）。"""
-        primary, _ = get_strategies_for_weather(None)
+    def test_unknown_returns_all_strategies(self):
+        """grill Q7：未知/None → 所有战法可用，推荐集合为空。
+
+        旧：保守降级到首板+连板；新：不强过滤，推荐集合空。
+        """
+        primary, fallback = get_strategies_for_weather(None)
         assert "first_plate" in primary
         assert "consecutive_relay" in primary
+        assert "reverse_package" in primary  # 所有战法都在
+        assert len(primary) == len(STRATEGY_FUNNEL_REGISTRY)
+        assert fallback == []
+        assert get_weather_recommendation(None) == set()
 
-        primary, _ = get_strategies_for_weather("未知")
-        assert "first_plate" in primary
+        primary_u, _ = get_strategies_for_weather("未知")
+        assert "first_plate" in primary_u
+        assert get_weather_recommendation("未知") == set()
 
     def test_extreme_rebound_strategies(self):
-        """极端反弹 → 反包/炸板回封/N字反击。"""
+        """grill Q7：极端反弹不再硬过滤——所有战法可用，推荐集合只有 reverse_package。"""
         primary, fallback = get_strategies_for_weather("极端反弹")
-        assert "reverse_package" in primary
-        assert "break_reseal" in primary
-        assert "n_shape_counterattack" in primary
+        assert "reverse_package" in primary  # 推荐的在里面
+        assert "consecutive_relay" in primary  # 不推荐的也在（不强过滤）
+        rec = get_weather_recommendation("极端反弹")
+        assert rec == {"reverse_package"}
         assert fallback == []
 
 
@@ -100,8 +122,8 @@ class TestStrategyRegistry:
             assert cfg.weight_set == "non_limitup", f"{code} should use non_limitup weights"
 
     def test_all_weather_regimes_valid(self):
-        """所有 weather_regimes 必须在 WEATHER_STRATEGY_MAP keys 中。"""
-        valid_regimes = set(WEATHER_STRATEGY_MAP.keys())
+        """所有 weather_regimes 必须在 WEATHER_RECOMMENDATION keys 中。"""
+        valid_regimes = set(WEATHER_RECOMMENDATION.keys())
         for s in STRATEGY_FUNNEL_REGISTRY:
             for r in s.weather_regimes:
                 assert r in valid_regimes, f"{s.code} has invalid regime {r}"
@@ -191,11 +213,43 @@ class TestScoreCandidates:
         assert any(s["strategy_code"] == "storm_reversal" for s in scored_storm)
 
     def test_unknown_weather_uses_conservative(self):
-        """未知天气 → 保守降级（首板+连板）。"""
-        cands = [{"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_rebound_rate": 80, "factor_red_rate": 70}}]
+        """未知天气 → 保守降级（首板+连板）。
+
+        grill Q6：score_candidates 现加 match 过滤，候选必须满足入场条件才返回。
+        给一个满足 first_plate（total_score>=60 且 涨停频次>20）的候选，验证降级
+        路径仍能产出结果。
+        """
+        cands = [{
+            "code": "A", "name": "A",
+            "factors": {"涨停频次": 40, "封板率": 90},
+            "total_score": 70,
+            "zt_count_250d": 3,
+        }]
         scored = score_candidates(cands, None)
         strategy_codes = {s["strategy_code"] for s in scored}
         assert "first_plate" in strategy_codes or "consecutive_relay" in strategy_codes
+
+    def test_grill_q6_match_filter_rejects_unqualified_candidate(self):
+        """grill Q6：候选不满足入场条件 → 该策略不打分、不返回。
+
+        break_reseal match 条件（limitup_strategy:683）：3<=zt_count_250d<=5
+        且 封板率>=80。给 zt_count=3 但封板率=10 的候选 → break_reseal 应被
+        过滤掉。
+
+        grill Q7 注：阴天不再硬过滤 primary_codes（所有战法可用），所以
+        dragon_head（无 match 条件）会放行产出结果——不再断言 =={"none"}，
+        只断言 grill Q6 的核心验收点：break_reseal 被过滤。
+        """
+        cands = [{
+            "code": "000001", "name": "X",
+            "factors": {"封板率": 10, "涨停频次": 5, "次日溢价率": 10},
+            "total_score": 30,
+            "zt_count_250d": 3,
+        }]
+        scored = score_candidates(cands, "阴天")
+        strategy_codes = {s["strategy_code"] for s in scored}
+        # grill Q6 核心验收点：break_reseal 因封板率不满足被过滤
+        assert "break_reseal" not in strategy_codes
 
 
 class TestQualityStandards:
@@ -221,12 +275,16 @@ class TestQualityStandards:
         assert passes_hard_standards(results) is True
 
     def test_break_reseal_needs_open_count(self):
-        """炸板回封需要开板次数≥1。"""
-        md = {"open_count": 2, "seal_rate": 65}
+        """炸板回封需要开板次数≥1。
+
+        注：封板率门槛已统一为 ≥80%（S053），seal_rate 用 85 让封板率标准
+        通过，聚焦验证 open_count 这条硬标准。
+        """
+        md = {"open_count": 2, "seal_rate": 85}
         results = check_quality_standards({}, "break_reseal", md)
         assert passes_hard_standards(results) is True
 
-        md_fail = {"open_count": 0, "seal_rate": 65}
+        md_fail = {"open_count": 0, "seal_rate": 85}
         results_fail = check_quality_standards({}, "break_reseal", md_fail)
         assert passes_hard_standards(results_fail) is False
 

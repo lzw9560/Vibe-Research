@@ -701,20 +701,39 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
                 confidence = 0.5
 
         elif strategy["code"] == "reverse_package":
-            if gene.factors.get("炸板后溢价", 0) < 0 and gene.total_score >= 55:
+            # grill Q1-Q2：候选池从涨停池改为 S055 炸板池（open_count >= 2 = 反复开板的真炸板）
+            # 数据来源：seal_intraday_snapshots 最近交易日 open_count >= 2 的票
+            # 数据缺失时空集，不命中任何票（诚实降级，不臆造候选）
+            import sqlite3
+            from config import PRIVATE_DATA_DIR
+            from pathlib import Path
+            zb_db = str(Path(PRIVATE_DATA_DIR) / "seal_intraday.db")
+            try:
+                zb_conn = sqlite3.connect(zb_db, timeout=5)
+                zb_stocks = {r[0] for r in zb_conn.execute(
+                    "SELECT DISTINCT code FROM seal_intraday_snapshots "
+                    "WHERE open_count >= 2 "
+                    "AND date = (SELECT MAX(date) FROM seal_intraday_snapshots)"
+                ).fetchall()}
+                zb_conn.close()
+            except Exception:
+                zb_stocks = set()  # 数据缺失时空集，不命中任何票
+            if gene.code in zb_stocks:
                 matches.append(ConditionMatch(
-                    condition="前日弱势+今日反转",
-                    value=f"炸板后溢价 {gene.factors.get('炸板后溢价', 0):.1f}%",
-                    description=f"策略逻辑上，该股短期超跌后存在反包概率",
+                    condition="前日炸板≥2次+今日反包",
+                    value=f"open_count >= 2（S055 炸板池）",
+                    description=f"策略逻辑上，该股前日反复开板（真炸板），今日反包概率较高",
                 ))
                 confidence = 0.4
 
         elif strategy["code"] == "n_shape_counterattack":
-            if 2 <= gene.zt_count_250d <= 10 and gene.factors.get("涨停频次", 0) > 30:
+            # S053 修复：移除矛盾的"涨停频次>30"门槛（与 zt_count_250d<=10 互斥，
+            # 导致 60 日无信号）。N字反击核心是"有过涨停历史但未过频"，保留单边约束。
+            if 2 <= gene.zt_count_250d <= 10:
                 matches.append(ConditionMatch(
                     condition="N字形态+放量",
-                    value=f"涨停频次 {gene.factors.get('涨停频次', 0):.1f}",
-                    description=f"策略逻辑上，该股呈现N字反击的历史统计特征",
+                    value=f"zt_count_250d={gene.zt_count_250d}",
+                    description=f"策略逻辑上，该股 250 日涨停 {gene.zt_count_250d} 次（[2,10] 区间，有过涨停历史但未过频），呈现 N 字反击的历史统计特征",
                 ))
                 confidence = 0.5
 

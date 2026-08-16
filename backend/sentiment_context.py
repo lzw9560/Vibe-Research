@@ -209,30 +209,25 @@ def _compute_weather_from_row(
 
 
 def _compute_allowed_styles(weather_state: str | None) -> tuple[list[str], list[str]]:
-    """遍历 8 战法，用 calc_weather_fit 标注允许/禁用。
+    """遍历 8 战法，标注允许/禁用。
 
-    适配/中性 → allowed；不适配 → forbidden。
-    weather_state 为 None/未知 → 全 allowed（不降权，spec 决策：T-1 缺失阈值降级基数，
-    战法不硬禁）。
+    grill Q7：天气硬开关降级为软标注——所有战法都 allowed（不强禁），暴风雨唯一例外。
+    天气推荐集合通过 WEATHER_RECOMMENDATION 查（前端用 weather_recommended 标注）。
+    weather_state 为 None/未知 → 全 allowed。
     """
     try:
-        from limitup_strategy import STRATEGY_REGISTRY, calc_weather_fit
+        from limitup_strategy import STRATEGY_REGISTRY
     except Exception:
         return [], []
 
-    if not weather_state or weather_state == "未知":
-        return [s["code"] for s in STRATEGY_REGISTRY], []
+    all_codes = [s["code"] for s in STRATEGY_REGISTRY]
 
-    allowed: list[str] = []
-    forbidden: list[str] = []
-    for s in STRATEGY_REGISTRY:
-        code = s["code"]
-        fit = calc_weather_fit(code, weather_state)
-        if fit == "不适配":
-            forbidden.append(code)
-        else:
-            allowed.append(code)
-    return allowed, forbidden
+    # grill Q7：暴风雨仍硬约束——只允许 storm_reversal，其余 forbidden
+    if weather_state == "暴风雨":
+        return ["storm_reversal"], [c for c in all_codes if c != "storm_reversal"]
+
+    # 其他天气：全 allowed，不强禁（天气推荐用 WEATHER_RECOMMENDATION 软标注）
+    return all_codes, []
 
 
 def _compute_fuse_state(weather_state: str | None) -> dict[str, Any]:

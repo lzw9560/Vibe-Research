@@ -115,14 +115,21 @@ async def strategy_backtest_trades(
 
 @router.get("/api/strategy/funnel/weather-map")
 async def get_weather_strategy_map() -> Dict[str, Any]:
-    """S066 §3.3 天气-策略硬开关映射表。
+    """S066 §3.3 天气-策略推荐映射表（grill Q7：降级为软标注）。
 
-    返回各天气状态对应的主跑策略 + fallback 策略。
+    返回各天气状态对应的推荐策略 + fallback 策略。
+    grill Q7 后所有非暴风雨战法对所有天气可用，此处返回的映射仅作
+    "推荐标注"用途（weather_recommended），不再过滤候选。暴风雨仍硬约束。
     """
-    from strategies.strategy_funnel_registry import WEATHER_STRATEGY_MAP, FALLBACK_STRATEGIES
+    from strategies.strategy_funnel_registry import (
+        WEATHER_STRATEGY_MAP,
+        WEATHER_RECOMMENDATION,
+        FALLBACK_STRATEGIES,
+    )
     return {
         "data": {
-            "weather_strategy_map": WEATHER_STRATEGY_MAP,
+            "weather_strategy_map": WEATHER_STRATEGY_MAP,  # 向后兼容字段
+            "weather_recommendation": {k: sorted(v) for k, v in WEATHER_RECOMMENDATION.items()},
             "fallback_strategies": FALLBACK_STRATEGIES,
         }
     }
@@ -157,6 +164,7 @@ async def get_funnel_strategies() -> Dict[str, Any]:
                     for q in s.quality_standards
                 ],
                 "note": s.note,
+                "activation_note": s.activation_note,
             }
             for s in STRATEGY_FUNNEL_REGISTRY
         ]
