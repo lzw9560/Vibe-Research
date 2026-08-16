@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, X, Settings, Send, Loader2, Wrench, AlertCircle, Trash2 } from "lucide-react";
+import { Sparkles, X, Settings, Send, Loader2, Wrench, AlertCircle, Trash2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,12 @@ const CHAT_KEY_PREFIX = "vr-askai-chat:";
 // 单页对话上限。localStorage 总配额约 5MB，而一轮研报级回答可能上万字；
 // 不设上限迟早写爆，届时 storageSet 静默失败、用户以为存上了。
 const MAX_PERSISTED_MSGS = 40;
+
+// 面板宽度持久化——用户拖宽了就记住，下次打开还是那个宽度。
+const WIDTH_KEY = "vr-askai-width";
+const DEFAULT_WIDTH = 760;       // 宽幅默认，比原 max-w-2xl(672) 更阔
+const MIN_WIDTH = 360;
+const MAX_WIDTH_RATIO = 0.85;    // 不超过视口 85%，留余地
 
 type StoredMsg = ChatMsg & {
   tools?: ToolUse[];
@@ -110,6 +116,14 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
 
   const [open, setOpen] = useState(false);
   const [configured, setConfigured] = useState(false);
+  // 面板宽度：懒读 localStorage，读不到用默认宽幅。
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    const saved = storageGet(WIDTH_KEY);
+    const w = saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+    return Number.isNaN(w) ? DEFAULT_WIDTH : w;
+  });
+  // 折叠态：面板缩成窄条不挡视线，弹开恢复全宽。
+  const [collapsed, setCollapsed] = useState(false);
   // key 与消息放在**同一个 state 里原子更新**——这是正确性的关键，不是风格问题。
   // 若分成 msgs + 一个记录归属的 ref，key 变化那一帧 ref 已指向新 key 而 msgs 仍是旧的
   // （setState 下一帧才生效），落盘守卫会误放行，把来源页对话写进目标 key、
@@ -158,6 +172,31 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
   }, [chatKey, chat]);
 
   useEffect(() => () => abortRef.current?.abort(), []); // 组件卸载兜底
+
+  // 宽度持久化
+  useEffect(() => { storageSet(WIDTH_KEY, String(panelWidth)); }, [panelWidth]);
+
+  // 拖拽左边框调宽：鼠标左移 → 面板变宽（右侧抽屉语义）。
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const move = (ev: MouseEvent) => {
+      const delta = startX - ev.clientX;
+      const maxW = Math.floor(window.innerWidth * MAX_WIDTH_RATIO);
+      setPanelWidth(Math.min(Math.max(startW + delta, MIN_WIDTH), maxW));
+    };
+    const up = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+  };
 
   const clearChat = () => {
     abortRef.current?.abort();
@@ -260,7 +299,33 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/50" onClick={close} />
-          <aside className="glass relative m-3 flex w-full max-w-2xl flex-col rounded-2xl">
+          <aside
+            className="glass relative m-3 flex flex-col rounded-2xl transition-[width] duration-200"
+            style={{ width: collapsed ? 48 : panelWidth, maxWidth: "85vw" }}
+          >
+            {/* 左边框拖拽条——鼠标拖拽调宽 */}
+            {!collapsed && (
+              <div
+                onMouseDown={startResize}
+                className="absolute left-0 top-0 -ml-1 h-full w-2 cursor-col-resize rounded-l-lg hover:bg-primary/30 transition-colors"
+                title="拖拽调节宽度"
+                aria-label="拖拽调节宽度"
+              />
+            )}
+            {collapsed ? (
+              // 折叠态：窄条，点击弹开
+              <button
+                onClick={() => setCollapsed(false)}
+                className="flex h-full w-full flex-col items-center gap-3 pt-4 text-muted-foreground hover:text-primary"
+                title="展开面板"
+                aria-label="展开面板"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-[10px] [writing-mode:vertical-lr] tracking-widest">问 AI</span>
+              </button>
+            ) : (
+              <>
             <div className="flex items-center justify-between border-b border-border/60 p-4">
               <span className="flex items-center gap-2 font-semibold text-glow">
                 <Sparkles className="h-4 w-4 text-primary" /> 问 AI · 本页上下文
@@ -277,6 +342,14 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
                     <Trash2 className="h-4 w-4" />
                   </button>
                 )}
+                <button
+                  onClick={() => setCollapsed(true)}
+                  className="text-muted-foreground hover:text-foreground"
+                  title="折叠面板"
+                  aria-label="折叠面板"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </button>
                 <button onClick={close} className="text-muted-foreground hover:text-foreground" aria-label="关闭">
                   <X className="h-4 w-4" />
                 </button>
@@ -378,8 +451,10 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
                 </div>
               </>
             )}
-          </aside>
-        </div>
+          </>
+        )}
+        </aside>
+      </div>
       )}
     </>
   );
