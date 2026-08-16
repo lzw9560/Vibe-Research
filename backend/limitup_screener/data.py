@@ -35,6 +35,10 @@ def run_migrations() -> None:
         Path(__file__).resolve().parent.parent
         / "migrations" / "limitup_screener" / "20260809-001_add_data_source.sql"
     ).read_text(encoding="utf-8")
+    migration_v5 = (
+        Path(__file__).resolve().parent.parent
+        / "migrations" / "limitup_screener" / "20260816-001_add_industry.sql"
+    ).read_text(encoding="utf-8")
     migrations = [
         {
             "version": "20250613-001",
@@ -55,6 +59,11 @@ def run_migrations() -> None:
             "version": "20260809-001",
             "name": "add_data_source",
             "sql": migration_v4,
+        },
+        {
+            "version": "20260816-001",
+            "name": "add_industry",
+            "sql": migration_v5,
         },
     ]
     manager.upgrade(migrations)
