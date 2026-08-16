@@ -42,27 +42,31 @@ function stageToPipeline(stageKey: string): "t1" | "ctx" | "pre" | "intraday" | 
   return "post";
 }
 
-/** 计算距离下一个阶段的分钟数 */
-function countDownToNext(stageKey: string): string {
-  const now = new Date();
-  let target = new Date(now);
+/** 计算距离下一个阶段的分钟数（task 122：用后端 current_time 北京 tz，非浏览器 new Date） */
+function countDownToNext(stageKey: string, currentTime: string): string {
+  // currentTime="HH:MM"（后端北京 tz）；缺 backend 时间 → 无法算，返 "--"（不回退浏览器 tz）。
+  const parts = (currentTime || "").split(":");
+  if (parts.length < 2) return "--";
+  const nowMin = Number(parts[0]) * 60 + Number(parts[1]);
+  if (Number.isNaN(nowMin)) return "--";
 
+  let targetMin: number;
   if (stageKey === "pre-market") {
-    // 到 09:30
-    target.setHours(9, 30, 0, 0);
+    targetMin = 9 * 60 + 30;        // 09:30（盘前结束→盘中开始）
   } else if (stageKey === "intraday") {
-    // 到 15:00
-    target.setHours(15, 0, 0, 0);
+    targetMin = 15 * 60;            // 15:00（盘中结束→盘后开始）
   } else {
-    // 到次日 08:00
-    target.setDate(target.getDate() + 1);
-    target.setHours(8, 0, 0, 0);
+    targetMin = 8 * 60 + 24 * 60;   // 次日 08:00（盘后结束→次日盘前）
   }
 
-  const diff = target.getTime() - now.getTime();
-  if (diff <= 0) return "即将开始";
-  const hours = Math.floor(diff / 3600000);
-  const mins = Math.floor((diff % 3600000) / 60000);
+  let diff = targetMin - nowMin;
+  if (stageKey === "post-market") {
+    if (diff <= 0) diff += 24 * 60;  // 兜底（盘后当前 <22:00 < 次日 08:00，diff>0）
+  } else if (diff <= 0) {
+    return "即将开始";
+  }
+  const hours = Math.floor(diff / 60);
+  const mins = diff % 60;
   if (hours > 0) return `${hours}小时${mins}分`;
   return `${mins}分钟`;
 }
@@ -173,7 +177,7 @@ function StageCard({
 }) {
   const config = STAGE_CONFIG[stageKey];
   const Icon = config.icon;
-  const countdown = !isPast ? countDownToNext(stageKey) : null;
+  const countdown = !isPast ? countDownToNext(stageKey, status?.currentTime ?? "") : null;
 
   // 该阶段的统计数据
   const stats: Record<string, { label: string; value: string | number; icon: React.ComponentType<{ className?: string }> }> = {
@@ -361,7 +365,7 @@ export default function Workflow() {
       : `熔断：未取得`,
     `工作流状态计数：候选${counts.candidate ?? 0}/观察${counts.watching ?? 0}/监控${counts.monitoring ?? 0}/持仓${counts.holding ?? 0}/已结${counts.settled ?? 0}`,
     status?.nextStageKey
-      ? `下一阶段：${STAGE_CONFIG[status.nextStageKey]?.label ?? ""}（${countDownToNext(status.nextStageKey)}）`
+      ? `下一阶段：${STAGE_CONFIG[status.nextStageKey]?.label ?? ""}（${countDownToNext(status.nextStageKey, status.currentTime ?? "")}）`
       : "",
   ].filter(Boolean).join("\n");
 
@@ -483,7 +487,7 @@ export default function Workflow() {
                 <div className="flex items-center gap-2">
                   <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
                   <span className="text-muted-foreground/70">下一: {STAGE_CONFIG[status.nextStageKey]?.label}</span>
-                  <span className="text-xs text-muted-foreground/50">· {countDownToNext(status.nextStageKey)}</span>
+                  <span className="text-xs text-muted-foreground/50">· {countDownToNext(status.nextStageKey, status.currentTime ?? "")}</span>
                 </div>
               </>
             )}

@@ -292,6 +292,8 @@ momentum = count_today - count_avg_3d
 
 > **task 119 边缘 case 修正（2026-08-16）**：`has_history=True` 但无子句命中（如 `today=0 + avg∈(0,3)`：不命中退潮 avg<3、不命中冷门 avg≠0）原 fallthrough 误返"无历史"——违反 spec（无历史=数据缺失，非"无子句命中"）。修正：`has_history=True` 无命中 → **退潮默认**（今日相对 3 日基线走弱/持平）。"无历史"专用 `has_history=False`。退潮子句 avg>=3（强退潮"追入即套"）不动；温和走弱走 fallthrough→退潮（modifier §5.4 已 label-only，无策略分影响）。
 
+> **task 118 板块停留天数（2026-08-16）**：`SectorPhase.stay_days` = 从 date 起向前**连续在榜**交易日数（遇不在榜即断，0=今日不在榜）。"在榜"口径=当日该板块 ≥1 涨停（出现在涨停榜）——§13.0 最简定义，不引入 top-N 阈值参数（避免调参复杂度）。2 查询实现：今日 count + 前 30 日在榜日期集。纯 label（不改策略分/排序，同 §5.4）。
+
 ### 5.3 数据来源（grill Q16 验证后修订，2026-08-16）
 
 > **grill Q16（2026-08-16，实测验证）**：原 SQL 引用 `industry_code` 列不存在——

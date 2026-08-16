@@ -192,11 +192,11 @@
 - [B] 116: 60 天 eastmoney_live 积累后复验 Phase 0b（within-day r）+ 0e（胜率 lift）——lift 破 2x + r 显著 → alpha 成立；否则确认无 edge。**本机仅 31 日（到 2026-08-14），需 ~29 未来交易日 LIVE 积累（~2026-09-20 到点）——真·时间阻塞，非环境**
 - [B] 123: ✅ §44 60 天复验提醒任务（`s066_validation_checkpoint` scheduled task）——周一 18:00 数 eastmoney_live 日数，达 60 → 写 `.vibe-research/s066_60day_due.json` + WARNING + notify_on_success 推送；到点由人/会话跑 backfill --weather 查 lift（只提醒不自动验证）。executor `_execute_s066_validation_checkpoint` + seed 默认任务（cron `0 18 * * 1`，notify_on_success=True）；2 测试（not_due/due+checkpoint）+ 注册测试过
 - [F] 117: ✅ 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源）——落地：删 `getAStockTimeInfo`（43 行本地 tz/仅周末/无节假日），useMemo 直接取 `backend.stage/market_status/next_stage/next_stage_time/current_time`（零新增请求，复用既有 60s 轮询）；backend null → "加载中"降级（不本地重算，避免 drift 复现）；+2 测试（backend→UI 流 + fallback）+13 测试过 + tsc 干净。**countDownToNext（line 86）仍用浏览器 new Date() 算倒计时，非-CN 用户 tz 漂移——cosmetic drift，登记 task 122 follow-up**
-- [B] 118: 036 板块停留天数（sector_cycle 缺，需先定义"在榜"口径）
+- [B] 118: ✅ 036 板块停留天数——"在榜"口径=当日该板块 ≥1 涨停（涨停榜在榜，§13.0 最简定义无需调 N 阈值）；`_sector_stay_days(date,industry)` = 从 date 起向前连续在榜交易日数（遇不在榜断，0=今日不在榜，2 查询：今日 count + 前 30 日在榜日期集）；接入 `analyze_sector_phase` → `SectorPhase.stay_days`；+2 测试（fermentation 加 stay_days==4 断言 + streak-break 连榜4/今日在榜昨断=1/今日不在榜=0），19 过
 - [B] 119: ✅ classify_phase 边缘 case（today=0 + avg∈(0,3) 落"无历史"默认，应退潮-ish）——修正：`has_history=True` 无子句命中 → 退潮默认（"无历史"专用 has_history=False 数据缺失，不混用）；退潮子句 avg>=3 不动；+3 测试（today=0+avg∈(0,1)/(1,3)/温和走弱）；18 测试过
 - [B] 120: ✅ save_alert 日期分歧（calendar-today vs last_trading-day，非交易日错位）——prod 改 `last_trading_date_str(now.date())` 落 date 列（非 now.strftime），对齐端点查询；+1 非交易日测试（周六存→端点按交易日查能命中）；8 测试过
 - [T] 121: ✅ spec→plan/tasks stale lint（`tools/spec_plan_stale_lint.py`）纳入回归/CI，防跨会话 drift——落地：`backend/tests/test_spec_consistency.py` subprocess 跑 lint 断言 exit 0（随 pytest 跑）；RED 核验过（注入 bare stale → 测试变红 → 还原后绿）
-- [F] 122: countDownToNext（Workflow.tsx:86）仍用浏览器 `new Date()` 算倒计时——非-CN 用户 tz 漂移（stage 已单源后端，倒计时是 cosmetic drift，117 follow-up）；改用 backend current_time + next_stage_time 推算（next_stage_time 是相对串"次日 08:00"，解析需稳健）
+- [F] 122: ✅ countDownToNext（Workflow.tsx）改用后端 `currentTime`（北京 tz）——原 `new Date()` 浏览器 tz 对非-CN 用户倒计时错；`countDownToNext(stageKey, currentTime)` 解析 "HH:MM" → 按阶段 target(09:30/15:00/次日08:00) 算分差；缺 backend 时间→"--"（不回退浏览器 tz）；3 调用点传 `status.currentTime`；tsc 干净 + 13 测试过。117 残桋收尾
 
 ## 统计
 

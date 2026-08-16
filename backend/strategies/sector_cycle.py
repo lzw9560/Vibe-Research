@@ -26,6 +26,7 @@ class SectorPhase:
     phase: str  # 启动/发酵/高潮/退潮/冷门/无历史
     modifier: float  # 策略分修饰系数
     phase_note: str
+    stay_days: int = 0  # task 118：连续在榜（≥1 涨停）交易日数（含 date）；0=今日不在榜
 
 
 # 阶段 → 修饰系数（spec §5.4）
@@ -103,10 +104,12 @@ def analyze_sector_phase(date: str, industry: str) -> SectorPhase | None:
     momentum = count_today - count_avg_3d
 
     phase, modifier, note = classify_phase(count_today, count_avg_3d, has_history)
+    stay_days = _sector_stay_days(date, industry)
 
     return SectorPhase(
         industry=industry, count_today=count_today, count_avg_3d=round(count_avg_3d, 2),
         momentum=round(momentum, 2), phase=phase, modifier=modifier, phase_note=note,
+        stay_days=stay_days,
     )
 
 
@@ -124,6 +127,39 @@ def _get_prev_trading_dates(date: str, n: int) -> list[str]:
         return []
     finally:
         conn.close()
+
+
+def _sector_stay_days(date: str, industry: str, max_lookback: int = 30) -> int:
+    """task 118：连续在榜（≥1 涨停）交易日数（含 date）。
+
+    "在榜"=当日该板块有 ≥1 涨停（出现在涨停榜）。停留天数=从 date 起向前连续在榜的交易日数；
+    遇不在榜日即断。0=今日不在榜。2 查询：今日 count + 前 max_lookback 日在榜日期集。
+    """
+    if _get_zt_count_by_date_industry(date, industry) < 1:
+        return 0  # 今日不在榜
+    prev = _get_prev_trading_dates(date, max_lookback)
+    if not prev:
+        return 1  # 今日在榜但无历史日前置
+    conn = sqlite3.connect(str(_DB))
+    try:
+        placeholders = ",".join("?" * len(prev))
+        on_board = {
+            r[0] for r in conn.execute(
+                f"SELECT DISTINCT date FROM gene_scores WHERE industry=? AND date IN ({placeholders})",
+                [industry, *prev],
+            ).fetchall()
+        }
+    except Exception:
+        on_board = set()
+    finally:
+        conn.close()
+    streak = 1  # 今日
+    for d in prev:  # 降序（最近在前）
+        if d in on_board:
+            streak += 1
+        else:
+            break
+    return streak
 
 
 def sector_strength_rank(date: str, sectors: list[dict]) -> list[dict]:

@@ -182,3 +182,25 @@ class TestAnalyzeSectorPhase:
         assert r.momentum > 0            # today(4) > avg → 升温
         assert r.phase == "发酵"
         assert r.modifier == 1.0
+        assert r.stay_days == 4  # task 118：电力 14/13/12/11 连榜 4 日
+
+    def test_stay_days_streak(self, tmp_path, monkeypatch):
+        """task 118：连续在榜天数——连榜 4 日=4；今日在榜但昨日断=1；今日不在榜=0。"""
+        import sqlite3
+        import strategies.sector_cycle as sc
+        db = tmp_path / "gs_stay.db"
+        conn = sqlite3.connect(str(db))
+        conn.execute("CREATE TABLE gene_scores (date TEXT, code TEXT, name TEXT, industry TEXT)")
+        rows = []
+        for d in ("2026-08-14", "2026-08-13", "2026-08-12", "2026-08-11"):
+            rows.append((d, "000001", "n", "电力"))  # 连榜 4 日
+        rows.append(("2026-08-14", "600001", "n", "煤炭"))   # 今日在榜
+        rows.append(("2026-08-12", "600002", "n", "煤炭"))   # 13 断 → 煤炭 stay=1
+        rows.append(("2026-08-13", "000002", "n", "钢铁"))   # 14 不在榜 → 钢铁 stay=0
+        conn.executemany("INSERT INTO gene_scores VALUES (?,?,?,?)", rows)
+        conn.commit()
+        conn.close()
+        monkeypatch.setattr(sc, "_DB", db)
+        assert sc.analyze_sector_phase("2026-08-14", "电力").stay_days == 4
+        assert sc.analyze_sector_phase("2026-08-14", "煤炭").stay_days == 1
+        assert sc.analyze_sector_phase("2026-08-14", "钢铁").stay_days == 0
