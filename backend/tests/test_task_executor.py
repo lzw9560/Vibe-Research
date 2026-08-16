@@ -403,62 +403,68 @@ class TestForwardTestDaily:
 
 
 class TestForwardTestT1Settle:
-    """S069 R2：T+1 收益回填 executor。"""
+    """S069 R2：T+1 收益回填 executor（temp DB + mock compute_returns）。"""
 
-    def test_finds_null_signal_date_and_records_non_none_returns(self, monkeypatch):
-        """找最新 NULL signal_date<今日 → compute_returns → 仅记非 None 的（缺 next_bar 留 NULL）。"""
+    def test_settles_non_none_leaves_none_and_stuck_marks_zero(self, tmp_path, monkeypatch):
+        """seed NULL 日期 → compute(mock 混合有/无 next_bar) → 记非 None、留 None；
+        全 None 的日期标 stuck（不重试）。"""
         import scheduled_tasks as st
+        import strategies.forward_test as ft
+        from strategies.forward_test import (
+            record_daily_recommendations, record_universe_returns, _ensure_table, DailyRecommendation,
+        )
+        import sqlite3
 
-        # 假 conn：signal_date 查询 + codes 查询
-        class _FakeConn:
-            def execute(self, q, *a):
-                class _R:
-                    def fetchone(_s):
-                        return ("2026-08-13",)  # 最新 NULL signal_date
-                    def fetchall(_s):
-                        return [("000001",), ("000002",), ("000003",)]  # 3 codes
-                return _R()
-            def close(self): pass
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn())
+        db = tmp_path / "ft.db"
+        monkeypatch.setattr(ft, "_DB", str(db))
+        monkeypatch.setattr("config.GENE_SCORES_DB_PATH", str(db))
+        monkeypatch.setattr("vr_paths.resolve_data_dir", lambda: str(tmp_path))
         monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-14")
+        _ensure_table()
+        # 08-13：000001 有 next_bar、000002 缺；08-12：全 None（→ stuck-mark）
+        record_daily_recommendations("2026-08-13", [
+            DailyRecommendation("2026-08-13", "000001", "A", "first_plate", 70.0),
+            DailyRecommendation("2026-08-13", "000002", "B", "first_plate", 75.0),
+        ])
+        record_daily_recommendations("2026-08-12", [
+            DailyRecommendation("2026-08-12", "000003", "C", "first_plate", 70.0),
+        ])
+        record_universe_returns("2026-08-13", {"000001": {}, "000002": {}})
 
-        # compute_returns：000001 有 next_bar，000002 缺（None），000003 有
-        monkeypatch.setattr("strategies.kline_returns.compute_returns_for_codes",
-                            lambda sd, codes: {
-                                "000001": {"return_open2close": 2.5, "return_close2close": 2.0, "next_pctChg": 2.0},
-                                "000002": {"return_open2close": None, "return_close2close": None, "next_pctChg": None},
-                                "000003": {"return_open2close": -1.0, "return_close2close": -0.5, "next_pctChg": -0.5},
-                            })
-        recorded_picks = {}
-        recorded_uni = {}
-        monkeypatch.setattr("strategies.forward_test.record_actual_returns",
-                            lambda sd, r: recorded_picks.update(r) or len(r))
-        monkeypatch.setattr("strategies.forward_test.record_universe_returns",
-                            lambda sd, r: recorded_uni.update(r) or len(r))
+        def fake_compute(sd, codes):
+            if sd == "2026-08-13":
+                return {"000001": {"return_open2close": 2.5, "return_close2close": 2.0, "next_pctChg": 2.0},
+                        "000002": {"return_open2close": None, "return_close2close": None, "next_pctChg": None}}
+            return {"000003": {"return_open2close": None, "return_close2close": None, "next_pctChg": None}}
+        monkeypatch.setattr("strategies.kline_returns.compute_returns_for_codes", fake_compute)
 
         r = st._execute_forward_test_t1_settle(None, {})
-        assert r["signal_date"] == "2026-08-13"
-        # 仅非 None 的被记（000001 + 000003），000002 缺 next_bar 留 NULL 不记
-        assert set(recorded_picks.keys()) == {"000001", "000003"}
-        assert set(recorded_uni.keys()) == {"000001", "000003"}
+        conn = sqlite3.connect(str(db))
+        n_settled = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE signal_date='2026-08-13' AND return_open2close IS NOT NULL"
+        ).fetchone()[0]
+        n_null = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE signal_date='2026-08-13' AND return_open2close IS NULL"
+        ).fetchone()[0]
+        conn.close()
+        assert n_settled >= 1 and n_null >= 1  # 000001 settled、000002 留 NULL
+        # 08-12 全 None → stuck-mark
+        assert r["stuck"] >= 1
+        assert any(d["signal_date"] == "2026-08-12" and d["total"] == 0 for d in r["dates_processed"])
 
-    def test_nothing_to_settle_when_no_null(self, monkeypatch):
-        """无 NULL signal_date<今日 → nothing_to_settle（不调 compute）。"""
+    def test_nothing_to_settle(self, monkeypatch, tmp_path):
+        """无 NULL<今日 → nothing_to_settle（不调 compute）。"""
         import scheduled_tasks as st
-
-        class _FakeConn:
-            def execute(self, q, *a):
-                class _R:
-                    def fetchone(_s):
-                        return None  # 无 NULL signal_date
-                return _R()
-            def close(self): pass
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn())
+        monkeypatch.setattr("config.GENE_SCORES_DB_PATH", str(tmp_path / "empty.db"))
+        monkeypatch.setattr("vr_paths.resolve_data_dir", lambda: str(tmp_path))
         monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-14")
+        # 建空表（无 NULL 行）
+        import strategies.forward_test as ft
+        monkeypatch.setattr(ft, "_DB", str(tmp_path / "empty.db"))
+        ft._ensure_table()
         called = {"n": 0}
         monkeypatch.setattr("strategies.kline_returns.compute_returns_for_codes",
                             lambda *a, **k: called.__setitem__("n", called["n"] + 1) or {})
-
         r = st._execute_forward_test_t1_settle(None, {})
         assert r["status"] == "nothing_to_settle"
-        assert called["n"] == 0  # 未调 compute
+        assert called["n"] == 0

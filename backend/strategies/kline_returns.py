@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 def _bs_code(code: str) -> str:
-    """A 股 6 位代码 → baostock sh/sz 前缀。"""
+    """A 股 6 位代码 → baostock 9 位代码（sh./sz. 前缀，6 开头 sh 否则 sz）。"""
     if not code or len(code) != 6:
         return ""
-    return ("sh" if code.startswith(("6", "5")) else "sz") + code
+    return f"sh.{code}" if code.startswith("6") else f"sz.{code}"
 
 
 def fetch_klines(bs_code: str, start_date: str, end_date: str) -> list[dict]:

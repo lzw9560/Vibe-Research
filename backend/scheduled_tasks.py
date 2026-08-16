@@ -963,56 +963,84 @@ TaskExecutor._execute_forward_test_daily = _execute_forward_test_daily
 def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     """S069 R2：回填最近未结算 signal_date 的 T+1 收益（baostock kline→return_open2close）。
 
-    每日 post-market 跑。找最新 signal_date < 今日 且 return_open2close IS NULL 的（其 next_bar
-    今日收盘后可得）→ compute_returns_for_codes → record_actual_returns（picks）+
-    record_universe_returns（universe）。缺 next_bar 的 code 留 NULL（下次重试，不臆造/不算 loss）。
+    每日 post-market 跑。处理 newest 3 个 signal_date<今日 且 return_open2close IS NULL 的
+    （其 next_bar 今日收盘后可得）→ compute_returns_for_codes → record_actual_returns（picks）+
+    record_universe_returns（universe）。缺 next_bar 的 code 留 NULL（下次重试）。
+    **stuck-date 处理**：0-settle 的日期（如调休补班 baostock 无 bar）标 no_bar（JSON，7 日后重试），
+    避免每日卡死循环在同一 stuck date。
     """
+    import json as _json
     import sqlite3
     from config import GENE_SCORES_DB_PATH
-    from vr_paths import last_trading_date_str
+    from datetime import datetime, timedelta
+    from vr_paths import last_trading_date_str, resolve_data_dir
     from strategies.forward_test import record_actual_returns, record_universe_returns
     from strategies.kline_returns import compute_returns_for_codes
 
     today = last_trading_date_str()
+    # stuck-mark：7 日内 0-settle 的日期不重试（避免卡死；7 日后重试，防 baostock 暂态）
+    stuck_path = Path(resolve_data_dir()) / "t1_stuck_dates.json"
+    stuck: dict[str, str] = {}
+    try:
+        stuck = _json.loads(stuck_path.read_text(encoding="utf-8"))
+    except Exception:
+        stuck = {}
+    cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+    stuck = {d: t for d, t in stuck.items() if t >= cutoff}  # 清 7 日前的 stuck（重试）
+
     conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
     try:
-        # 最新未结算 signal_date（< 今日：next_bar 今日收盘后可得）
-        row = conn.execute(
-            "SELECT signal_date FROM forward_test_records "
+        rows = conn.execute(
+            "SELECT DISTINCT signal_date FROM forward_test_records "
             "WHERE return_open2close IS NULL AND signal_date < ? "
-            "ORDER BY signal_date DESC LIMIT 1", (today,)
-        ).fetchone()
-        if not row:
-            return {"status": "nothing_to_settle", "today": today}
-        signal_date = row[0]
-        pick_codes = [r[0] for r in conn.execute(
-            "SELECT DISTINCT code FROM forward_test_records "
-            "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
-        uni_codes = [r[0] for r in conn.execute(
-            "SELECT DISTINCT code FROM universe_returns "
-            "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+            "ORDER BY signal_date DESC LIMIT 3", (today,)
+        ).fetchall()
+        dates = [r[0] for r in rows if r[0] not in stuck]
     finally:
         conn.close()
+    if not dates:
+        return {"status": "nothing_to_settle", "today": today, "stuck": len(stuck)}
 
-    all_codes = list(dict.fromkeys(pick_codes + uni_codes))
-    if not all_codes:
-        return {"status": "no_codes", "signal_date": signal_date}
+    summary = []
+    for signal_date in dates:
+        conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+        try:
+            pick_codes = [r[0] for r in conn.execute(
+                "SELECT DISTINCT code FROM forward_test_records "
+                "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+            uni_codes = [r[0] for r in conn.execute(
+                "SELECT DISTINCT code FROM universe_returns "
+                "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+        finally:
+            conn.close()
+        all_codes = list(dict.fromkeys(pick_codes + uni_codes))
+        if not all_codes:
+            continue
+        returns_map = compute_returns_for_codes(signal_date, all_codes)
+        if not returns_map:
+            summary.append({"signal_date": signal_date, "status": "baostock_unavailable"})
+            break  # baostock 不可用，后续日也跑不了
+        picks_returns = {c: returns_map[c] for c in pick_codes
+                         if c in returns_map and returns_map[c]["return_open2close"] is not None}
+        uni_returns = {c: returns_map[c] for c in uni_codes
+                       if c in returns_map and returns_map[c]["return_open2close"] is not None}
+        n_picks = record_actual_returns(signal_date, picks_returns)
+        n_uni = record_universe_returns(signal_date, uni_returns)
+        settled = n_picks + n_uni
+        # 0-settle → 标 stuck（如调休补班 baostock 无 bar），7 日内不重试
+        if settled == 0:
+            stuck[signal_date] = datetime.now().isoformat()
+        logger.info("[forward_test_t1_settle] %s settled picks=%s/%s universe=%s/%s%s",
+                   signal_date, n_picks, len(pick_codes), n_uni, len(uni_codes),
+                   " [stuck-mark]" if settled == 0 else "")
+        summary.append({"signal_date": signal_date, "settled_picks": n_picks,
+                        "settled_universe": n_uni, "total": settled})
 
-    returns_map = compute_returns_for_codes(signal_date, all_codes)
-    if not returns_map:
-        return {"status": "baostock_unavailable", "signal_date": signal_date, "codes": len(all_codes)}
-
-    # 仅记有 next_bar 的（缺 bar 留 NULL 下次重试，不标 loss）
-    picks_returns = {c: returns_map[c] for c in pick_codes
-                     if c in returns_map and returns_map[c]["return_open2close"] is not None}
-    uni_returns = {c: returns_map[c] for c in uni_codes
-                   if c in returns_map and returns_map[c]["return_open2close"] is not None}
-    n_picks = record_actual_returns(signal_date, picks_returns)
-    n_uni = record_universe_returns(signal_date, uni_returns)
-    logger.info("[forward_test_t1_settle] %s settled picks=%s/%s universe=%s/%s",
-               signal_date, n_picks, len(pick_codes), n_uni, len(uni_codes))
-    return {"signal_date": signal_date, "settled_picks": n_picks, "settled_universe": n_uni,
-            "picks_total": len(pick_codes), "universe_total": len(uni_codes)}
+    try:
+        stuck_path.write_text(_json.dumps(stuck, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    return {"today": today, "dates_processed": summary, "stuck": len(stuck)}
 
 
 TaskExecutor._execute_forward_test_t1_settle = _execute_forward_test_t1_settle
