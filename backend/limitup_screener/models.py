@@ -52,6 +52,7 @@ class GeneScore(BaseModel):
     limit_down_price: float = 0.0
     # S040 v2: 数据源标注（eastmoney_live=完整5因子 / kline_rebuild=3因子重建）
     data_source: str = "eastmoney_live"
+    industry: str = ""  # S066 Q16 step2：板块行业（pool hybk 主、code_industry 兜底），供 (date,industry) 聚合
     missing_factors: list[str] = []  # K线重建缺失的因子名（如 ["封板率","炸板后溢价"]）
 
 
@@ -260,4 +261,5 @@ def compute_gene_score(
         seal_to_float_ratio=seal_to_float_ratio,
         limit_up_price=limit_up_price,
         limit_down_price=limit_down_price,
+        industry=((pool_item.industry or "") if pool_item else ""),
     )

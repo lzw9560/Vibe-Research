@@ -84,6 +84,10 @@ def save_gene_scores(date: str, scores: list) -> None:
     conn = get_db()
     with _DB_LOCK:
         try:
+            # S066 Q16 step2：industry 主源 = GeneScore.industry（pool hybk），池缺时兜底 code_industry
+            code2ind: dict[str, str] = dict(conn.execute(
+                "SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''"
+            ).fetchall())
             rows = [
                 (
                     date, s.code, s.name, s.total_score,
@@ -98,6 +102,7 @@ def save_gene_scores(date: str, scores: list) -> None:
                     s.zt_count_250d,
                     getattr(s, "data_source", "eastmoney_live"),
                     _json.dumps(getattr(s, "missing_factors", []), ensure_ascii=False),
+                    getattr(s, "industry", "") or code2ind.get(s.code, ""),
                 )
                 for s in scores
             ]
@@ -106,8 +111,8 @@ def save_gene_scores(date: str, scores: list) -> None:
                 (date, code, name, total_score, factor_premium_rate, factor_red_rate,
                  factor_seal_rate, factor_rebound_rate, factor_freq_score,
                  wilson_adjusted, qualify, high_gene, zt_count_250d,
-                 data_source, missing_factors)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 data_source, missing_factors, industry)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, rows)
             conn.commit()
         except Exception:
@@ -148,6 +153,7 @@ def load_gene_scores(date: str) -> list | None:
         except Exception:
             missing = []
         ds = row["data_source"] if "data_source" in row.keys() else "eastmoney_live"
+        ind = row["industry"] if "industry" in row.keys() else ""
         scores.append(GeneScore(
             code=row["code"],
             name=row["name"] or "",
@@ -160,6 +166,7 @@ def load_gene_scores(date: str) -> list | None:
             zt_count_250d=row["zt_count_250d"] or 0,
             data_source=ds,
             missing_factors=missing,
+            industry=ind or "",
         ))
     return scores
 
