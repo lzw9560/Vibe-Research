@@ -224,6 +224,15 @@ async def get_sector_rotation(date: str = Query(..., description="交易日 YYYY
     return {"data": sector_rotation(date)}
 
 
+@router.get("/api/strategy/funnel/concept-rotation")
+async def get_concept_rotation(date: str = Query(..., description="交易日 YYYY-MM-DD")) -> Dict[str, Any]:
+    """S066 §5.4 概念题材板块强度（纯 label，§44 未验证概念 edge）。
+    概念聚合跨 f100 行业（国产芯片=半导体+元件+其他电子+...），concept_blocks per 涨停股。
+    concept_blocks 走东财 slist（非 push2his，不 IP 限流）。"""
+    from strategies.sector_cycle import concept_rotation
+    return {"data": concept_rotation(date)}
+
+
 @router.get("/api/strategy/non-limitup-funnel")
 async def get_non_limitup_funnel(
     date: str = Query(..., description="交易日 YYYY-MM-DD"),

@@ -77,6 +77,8 @@ export function SelectionPipeline({
             ) : (
               <ScoredDegraded />
             )}
+            <ArrowDown label="风控" />
+            <RiskNode />
           </div>
         )}
         {showNonLimitup && <NonLimitupLane date={date} />}
@@ -122,7 +124,7 @@ function SectorRotationNode({ date }: { date: string }) {
   const { data: rot, isLoading } = useSectorRotation(date);
   if (isLoading) return <div className={`${NODE} text-xs text-muted-foreground`}>板块轮动加载中…</div>;
   if (!rot) return null;
-  const top3 = rot.strength_rank.slice(0, 3);
+  const top10 = rot.strength_rank.slice(0, 10);
   return (
     <div className={NODE}>
       <div className="flex items-center justify-between">
@@ -130,7 +132,7 @@ function SectorRotationNode({ date }: { date: string }) {
         <span className="text-[10px] text-muted-foreground">§5.4 纯 label</span>
       </div>
       <div className="mt-0.5 text-xs text-muted-foreground">
-        TOP3：{top3.length ? top3.map((s) => `${s.industry}(${s.zt_count_today})`).join(" · ") : "—"}
+        TOP10：{top10.length ? top10.map((s) => `${s.industry}(${s.zt_count_today})`).join(" · ") : "—"}
       </div>
       {rot.rotation.length > 0 && (
         <div className="mt-0.5 flex flex-wrap gap-1 text-[11px]">
@@ -161,6 +163,29 @@ function ScoredBranch({ count }: { count: number }) {
 
 function ScoredDegraded() {
   return <div className={`${NODE_DASHED} border-muted/40 bg-muted/5 text-xs text-muted-foreground`}>战法分：未取得（仅盘前简报）</div>;
+}
+
+// 风控非对称节点（S071 参数，§44 无 validated edge → 风控是当前唯一盈利 lever：亏小赚大）
+function RiskNode() {
+  return (
+    <div className={`${NODE} border-amber-500/40 bg-amber-500/5`}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-amber-300">风控非对称</span>
+        <span className="rounded bg-amber-500/20 px-1 text-[10px] text-amber-300">唯一 lever</span>
+      </div>
+      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground sm:grid-cols-3">
+        <span>仓位 3% × 日历</span>
+        <span>止损 −4%</span>
+        <span>止盈 +8%</span>
+        <span>max 3 仓</span>
+        <span>max 持 3 日</span>
+        <span>R:R ≈ 1:2</span>
+      </div>
+      <div className="mt-1 text-[10px] text-amber-200/70">
+        §44 信号全无 validated edge → 盈利靠风控非对称（小仓+紧止损+非对称 R:R+短持），非信号
+      </div>
+    </div>
+  );
 }
 
 function FunnelShrinkBar({ input, output }: { input: number; output: number }) {

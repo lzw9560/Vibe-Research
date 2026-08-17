@@ -172,7 +172,13 @@ def sector_strength_rank(date: str, sectors: list[dict]) -> list[dict]:
         zt = s.get("zt_count_today", 0)
         mom = s.get("zt_momentum", 0)
         flow = s.get("fund_flow", 0)
-        return zt * 0.40 + mom * 0.30 + (1 if flow > 0 else -1 if flow < 0 else 0) * 0.30
+        flow_sign = 1 if flow > 0 else -1 if flow < 0 else 0
+        raw = zt * 0.40 + mom * 0.30 + flow_sign * 0.30
+        # fund_flow 阻断（=0 无方向）→ 归一化到 zt+mom 权重（/0.7），
+        # 避免 30% 权重凭空消失致 strength 偏低误排序
+        if flow_sign == 0:
+            return raw / 0.70
+        return raw
 
     ranked = sorted(sectors, key=strength, reverse=True)
     result = []
@@ -269,4 +275,46 @@ def sector_rotation(date: str) -> dict:
         "rotation": rotation,
         "fund_flow_blocked": True,
         "note": "§5.4 纯 label 不接策略分（Q2 方向被驳）；fund_flow 阻断降级 0（§44）",
+    }
+
+
+def aggregate_concepts(date: str) -> list[dict]:
+    """聚合当日涨停股的概念题材（ths_limit_up_pool reason 题材聚合，106 全市场）。
+    §44 概念题材未验证（行业已证伪但概念不同维度，资金接力题材轮动）。
+    ths reason 如"PCB概念+磷系阻燃剂+泰国基地" → split + 聚合题材涨停数。"""
+    try:
+        from astock import ths_limit_up_pool
+    except Exception:
+        return []
+    date_compact = date.replace("-", "")  # ths 要 YYYYMMDD
+    try:
+        pool = ths_limit_up_pool(date_compact)
+    except Exception:
+        return []
+    if not pool:
+        return []
+    concept_count: dict[str, int] = {}
+    for item in pool:
+        reason = (item.get("reason") or "").strip()
+        if not reason:
+            continue
+        # split 题材（+ / 、 / ; 等分隔）
+        for sep in ("+", "、", ";", "，", "/"):
+            reason = reason.replace(sep, "+")
+        tags = [t.strip() for t in reason.split("+") if t.strip()]
+        for tag in tags:
+            concept_count[tag] = concept_count.get(tag, 0) + 1
+    return [{"concept": k, "zt_count_today": v} for k, v in sorted(concept_count.items(), key=lambda x: -x[1])]
+
+
+def concept_rotation(date: str) -> dict:
+    """§5.4 概念题材板块强度（纯 label，§44 未验证概念 edge）。
+    ths_limit_up_pool reason 题材聚合（106 全市场涨停，非 gene_scores 历史 63）。"""
+    concepts = aggregate_concepts(date)
+    return {
+        "date": date,
+        "concept_rank": concepts[:20],
+        "pool_size": sum(c["zt_count_today"] for c in concepts) if concepts else 0,
+        "count": len(concepts),
+        "note": "§5.4 概念题材纯 label（行业已证伪但概念未验证）；ths_limit_up_pool reason 聚合（106 全市场）",
     }

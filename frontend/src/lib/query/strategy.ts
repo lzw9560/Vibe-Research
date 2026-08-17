@@ -141,6 +141,24 @@ export function useSectorRotation(date: string | undefined, options?: Opts<Secto
   });
 }
 
+/** S066 §5.4 概念题材板块强度（纯 label，聚合跨 f100 行业）。 */
+export interface ConceptRotationResult {
+  date: string;
+  concept_rank: { concept: string; zt_count_today: number }[];
+  count: number;
+  note: string;
+}
+
+export function useConceptRotation(date: string | undefined, options?: Opts<ConceptRotationResult>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "concept-rotation", date ?? ""] as const,
+    queryFn: () => request<ConceptRotationResult>(`/strategy/funnel/concept-rotation?date=${date}`),
+    enabled: !!date,
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
 export function useNonLimitupFunnel(date: string | undefined, options?: Opts<NonLimitupFunnelResult>) {
   return useQuery({
     queryKey: ["strategy", "non-limitup-funnel", date ?? ""] as const,
