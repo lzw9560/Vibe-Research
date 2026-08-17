@@ -168,5 +168,104 @@ class TestPrecomputeExecutor(unittest.TestCase):
         self.assertIn("boom", result["status"])
 
 
+class TestR3DegradationContract(unittest.TestCase):
+    """S004 R3 降级契约——auction/catalyst 双空时 R3 = R2 输出（非 0）。
+
+    固化 funnel.py:390-395 修复：双空场景原 _filter_r3 全过滤致 R3=0 候选，
+    修复后降级保留 R2 输出，标注 data_status="降级"。
+    现有 test_parallel_collects_all_sources 用 auction={}+catalyst={} 但 activity 也空
+    致 R2 output=0，掩盖 R3 全过滤问题；本组用合格 activity 让 R2 output=3 暴露 R3 行为。
+    """
+
+    def _patch_sources(self, genes, activity, auction, catalyst):
+        return (
+            mock.patch.object(funnel_mod.sources.gene, "fetch_genes", return_value=genes),
+            mock.patch.object(funnel_mod.sources.board_ladder, "fetch_board_ladder", return_value={"lianban_stocks": []}),
+            mock.patch.object(funnel_mod.sources.activity, "fetch_activity", return_value=activity),
+            mock.patch.object(funnel_mod.sources.fund_flow, "fetch_fund_flow", return_value={}),
+            mock.patch.object(funnel_mod.sources.auction, "fetch_auction", return_value=auction),
+            mock.patch.object(funnel_mod.sources.catalyst, "fetch_catalyst", return_value=catalyst),
+            mock.patch.object(funnel_mod.sources.watchlist_in, "get_watchlist_codes", return_value=[]),
+            mock.patch.object(funnel_mod, "_fetch_sentiment_phase", return_value="晴天"),
+        )
+
+    @staticmethod
+    def _three_genes() -> dict:
+        """3 只合成基因，code 避开 ST/退市段（600001 系安全）。"""
+        return {
+            "600001": {"name": "股票A", "gene_score": 90.0, "high_gene": True, "qualify": True},
+            "600002": {"name": "股票B", "gene_score": 80.0, "high_gene": True, "qualify": True},
+            "600003": {"name": "股票C", "gene_score": 70.0, "high_gene": False, "qualify": True},
+        }
+
+    @staticmethod
+    def _three_activity(genes: dict) -> dict:
+        """3 只 activity 全合格——turnover_pct=10.0 > turnover_cold=8.0（manual 默认），
+        northbound 留空（_filter_r2: nb is None 保留不过滤）。"""
+        return {c: {"name": g["name"], "turnover_pct": 10.0} for c, g in genes.items()}
+
+    def _run(self, genes, activity, auction, catalyst):
+        patches = self._patch_sources(genes, activity, auction, catalyst)
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        funnel_mod.clear_funnel_cache()
+        cfg = ThresholdConfig(mode="manual")
+        return run_funnel(stage="all", date="2026-08-13", cfg=cfg)
+
+    def test_r3_degradation_when_auction_catalyst_both_empty(self):
+        """auction={}+catalyst={} → R3 = R2 输出（3 只），data_status="降级"。
+
+        修复前：_filter_r3 的 has_auction/has_catalyst 全 False → 3 只全被过滤 → R3=0。
+        修复后：双空跳过 _filter_r3，r3_kept=list(r2_kept)，标注降级原因。
+        """
+        genes = self._three_genes()
+        activity = self._three_activity(genes)
+        result = self._run(genes, activity, auction={}, catalyst={})
+
+        layers_by_id = {l.layer_id: l for l in result.layers}
+        r2, r3 = layers_by_id["R2"], layers_by_id["R3"]
+
+        # 前提：R2 确实保留 3 只（否则测试本身失效，掩盖问题未暴露）
+        self.assertEqual(r2.output_count, 3, "R2 应保留 3 只（activity 全合格），否则测试场景失效")
+        self.assertEqual(sorted(r2.output_codes), ["600001", "600002", "600003"])
+
+        # 契约 1：R3 output_count == R2 output_count（降级保留，非 0）
+        self.assertEqual(r3.output_count, 3)
+        # 契约 2：R3 passed 的 code 集合 == R2 passed 的 code 集合
+        self.assertEqual(
+            sorted(p["code"] for p in r3.passed),
+            sorted(p["code"] for p in r2.passed),
+        )
+        # 契约 3：data_status="降级"，reason 含降级保留说明
+        self.assertEqual(r3.data_status, "降级")
+        self.assertIn("降级保留", r3.data_reason or "")
+        # 契约 4：final_candidates 含全部 3 只（下游自动正确）
+        final_codes = {c.code for c in result.final_candidates}
+        self.assertEqual(final_codes, {"600001", "600002", "600003"})
+
+    def test_r3_normal_filter_when_auction_present(self):
+        """auction 有数据时 R3 走 _filter_r3 正常过滤，只保留有 auction_open_pct 的票。
+
+        对照组：证明降级分支只在双空时触发，有数据时 R3 严格过滤。
+        """
+        genes = self._three_genes()
+        activity = self._three_activity(genes)
+        auction = {"600001": {"auction_open_pct": 5.0}}  # 仅 600001 有竞价异动
+        result = self._run(genes, activity, auction=auction, catalyst={})
+
+        layers_by_id = {l.layer_id: l for l in result.layers}
+        r3 = layers_by_id["R3"]
+
+        # 契约 1：R3 output_count == 1（只保留有 auction_open_pct 的）
+        self.assertEqual(r3.output_count, 1)
+        # 契约 2：R3 passed = ["600001"]
+        self.assertEqual([p["code"] for p in r3.passed], ["600001"])
+        # 契约 3：data_status 非"降级"（正常过滤路径不标降级）
+        self.assertNotEqual(r3.data_status, "降级")
+        # 契约 4：final_candidates 仅含 600001
+        self.assertEqual({c.code for c in result.final_candidates}, {"600001"})
+
+
 if __name__ == "__main__":
     unittest.main()
