@@ -28,27 +28,23 @@
 
 ### 2.1 market_phase 统一判定（核心）
 
-**当前**：`get_current_stage()` 返回 `stage` 字段（pre-market/intraday/post-market），三段分裂。22:00-08:00 非交易时段归 pre-market 是错位。
+**当前**：`get_current_stage()` 三段（pre-market/intraday/post-market），但 22:00-08:00 非交易时段归 pre-market 是错位——这段既不是盘前准备也不是盘中。
 
-**目标**：改为**两段制**——intraday（交易时段）+ off_market（非交易时段，盘后总结+盘前准备统一）。时间段定义：
+**目标**：仍是三段，但时间段边界修正——除了盘中（09:30-15:00），剩下的时间要么盘前要么盘后：
 
 ```
-intraday   = T 日 09:30 ~ T 日 15:00（交易时段）
-off_market = T 日 15:00 ~ T+1 日 09:30（含盘后总结+夜间+盘前准备，用户主张的"当日收盘到次日开盘"）
-非交易日   = 固定 off_market（不推进到 intraday）
+pre_market   = T 日 08:00 ~ T 日 09:30（竞价准备）
+intraday     = T 日 09:30 ~ T 日 15:00（交易时段）
+post_market  = T 日 15:00 ~ T+1 日 08:00（盘后总结+夜间+次日开盘前）
+非交易日     = 固定 post_market（不推进到 intraday）
 ```
 
-off_market 内部子阶段（纯展示用，不影响路由判定）：
-- `post_market`：15:00-22:00 盘后总结（结算/复盘/对账）
-- `overnight`：22:00-08:00 夜间（调度任务跑，无用户交互）
-- `pre_market`：08:00-09:30 盘前准备（候选筛选/战法匹配/仓位建议）
+**唯一改动**：22:00-08:00 从"非交易时段归 pre-market"改为"归 post-market"——盘后从收盘到次日开盘是一个连续时段。
 
 **关键决策点（待 grill）**：
-- **Q1**：off_market 内部子阶段用 `sub_phase` 字段标注，还是保持前端 STAGE_ORDER 三段对齐展示？
-  - 方案A：后端两段（intraday/off_market）+ `sub_phase`（post_market/overnight/pre_market），前端展示子阶段
-  - 方案B：后端两段，前端 STAGE_ORDER 也改两段（off_market 用时间线展示子阶段）
-- **Q2**：`market_phase` 函数放哪？`trading_workflow.py` 提取为独立模块，还是保持 `trading_workflow.get_current_stage()`？
-- **Q3**：子阶段边界（22:00 overnight 切换）是否需精确，还是模糊（如 22:00 后自动从 post_market 切 overnight）？
+- **Q1**：`market_phase` 函数放哪？`trading_workflow.py` 提取为独立模块，还是保持 `trading_workflow.get_current_stage()` 原地改？
+- **Q2**：前端 STAGE_ORDER 保持三段不变（只改后端判定），还是同步调整？
+- **Q3**：post_market 内部是否需子阶段标注（15:00-22:00 总结 / 22:00-08:00 夜间 / 08:00-09:30 盘前准备）？还是统一标 post_market？
 
 ### 2.2 盘后桩方法对接
 
