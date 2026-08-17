@@ -59,6 +59,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "sti_post_market",
             "seal_intraday_collect",
             "candidate_funnel_precompute",
+            "first_board_filter",
             "s066_validation_checkpoint",
             "forward_test_daily",
             "forward_test_t1_settle",        }

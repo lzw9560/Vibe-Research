@@ -27,6 +27,7 @@ def _run(coro):
 # S063 新增 sti_post_market（盘后 STI 定时计算）。
 # S055 新增 seal_intraday_collect（盘中封单时序采集）。
 # S004 新增 candidate_funnel_precompute（盘后漏斗预计算）。
+# S075 新增 first_board_filter（盘后首板流筛选+评分）。
 _EXPECTED_TASK_TYPES = {
     "daily_data_refresh",
     "daily_review_notify",
@@ -38,6 +39,7 @@ _EXPECTED_TASK_TYPES = {
     "sti_post_market",
     "seal_intraday_collect",
     "candidate_funnel_precompute",
+    "first_board_filter",
     "s066_validation_checkpoint",
     "forward_test_daily",
     "forward_test_t1_settle",

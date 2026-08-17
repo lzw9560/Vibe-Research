@@ -910,4 +910,33 @@ def get_workflow_state_history(code: str, date: Optional[str] = Query(None, desc
         raise HTTPException(500, f"获取流转历史失败：{e}") from e
 
 
+@router.get("/api/workflow/first-board/candidates")
+def get_first_board_candidates(date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+    """S075：首板流候选池——返回候选+剔除原因+9维度评分，供前端pipeline展示。
+
+    数据来自 run_first_board_filter（首板过滤+三层剔除+9维度评分+落盘）。
+    诚实标注：9维度评分§44未validated仅参考；阈值/权重待回测校准。
+    """
+    try:
+        from strategies.first_board_filter import run_first_board_filter
+        from vr_paths import last_trading_date_str
+        target = date or last_trading_date_str()
+        # date 参数可能是 YYYY-MM-DD，转 YYYYMMDD（em_zt_topic_pool 要 YYYYMMDD）
+        compact = target.replace("-", "") if "-" in target else target
+        result = run_first_board_filter(compact)
+        return {
+            "data": {
+                "date": target,
+                "zt_pool_count": result["zt_pool_count"],
+                "first_board_count": result["first_board_count"],
+                "candidates": result.get("scored_candidates", result["candidates"]),
+                "excluded": result["excluded"],
+                "env_flags": result.get("env_flags", {}),
+                "note": "9维度评分§44未validated仅参考；阈值/权重待回测校准",
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"首板流候选查询异常：{e}") from e
+
+
 __all__ = ["router"]

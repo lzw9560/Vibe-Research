@@ -447,6 +447,7 @@ class TaskExecutor:
             "sti_post_market": self._execute_sti_post_market,  # S063 T3：STI 盘后定时计算
             "seal_intraday_collect": self._execute_seal_intraday_collect,  # S055：盘中封单时序采集
             "candidate_funnel_precompute": self._execute_candidate_funnel_precompute,  # S004 R5：盘后漏斗预计算
+            "first_board_filter": self._execute_first_board_filter,  # S075：盘后首板流筛选+评分
             "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,  # §44 60 天复验检查点（提醒任务）
             "forward_test_daily": self._execute_forward_test_daily,  # S069 R1：每日记 forward_test picks+universe
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,  # S069 R2：T+1 收益回填
@@ -893,6 +894,35 @@ def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[
 TaskExecutor._execute_candidate_funnel_precompute = _execute_candidate_funnel_precompute
 
 
+def _execute_first_board_filter(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S075 盘后首板流筛选——首板过滤+三层剔除+9维度评分+落盘。
+
+    取 date（默认最近交易日）→ run_first_board_filter → 候选池+评分存快照。
+    失败 catch 不抛，返 status=error（筛选是增强，不阻塞主流程）。
+    """
+    try:
+        from strategies.first_board_filter import run_first_board_filter
+        from vr_paths import last_trading_date_str
+        target = payload.get("date") or last_trading_date_str()
+        result = run_first_board_filter(target)
+        logger.info("[first_board_filter] %s 首板流筛选完成：涨停%s/首板%s/候选%s",
+                    target, result["zt_pool_count"], result["first_board_count"],
+                    len(result["candidates"]))
+        return {
+            "date": target,
+            "status": "ok",
+            "zt_pool_count": result["zt_pool_count"],
+            "first_board_count": result["first_board_count"],
+            "candidate_count": len(result["candidates"]),
+        }
+    except Exception as e:
+        logger.warning("[first_board_filter] 筛选失败: %s", e)
+        return {"status": f"error: {e}"}
+
+
+TaskExecutor._execute_first_board_filter = _execute_first_board_filter
+
+
 def _execute_s066_validation_checkpoint(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     """§44 60 天复验检查点（提醒任务，spec §13 ①/§44）。
 
@@ -1291,6 +1321,18 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 candidate_funnel_precompute 已创建（cron 5 16 * * 0-4）")
+
+    # S075：盘后首板流筛选——晚 candidate_funnel_precompute 10min 避抢 DB。
+    if "first_board_filter" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="first_board_filter",
+            description="S075 盘后首板流筛选（首板过滤+三层剔除+9维度评分，15:30后跑）",
+            task_type="first_board_filter",
+            cron_expr="15 16 * * 0-4",  # 16:15（晚 precompute 10min）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 first_board_filter 已创建（cron 15 16 * * 0-4）")
 
     # §44 60 天复验检查点（提醒任务）：周一 18:00 数 eastmoney_live 日数，达 60 →
     # 写 s066_60day_due.json + WARNING + notify_on_success 推送（通道未配则静默）。

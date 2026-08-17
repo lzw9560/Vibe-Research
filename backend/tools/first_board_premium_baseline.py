@@ -43,6 +43,61 @@ COST_PCT = 0.4
 # baostock 每 N 股 re-login（防长会话超时返空）
 RELOGIN_BATCH = 50
 
+# 市场状态分层阈值（基于 zt_count，待回测校准）
+# 依据：涨停股策略首层信号＝涨停家数，zt_count 直接关联市场情绪强度
+# 阈值待回测校准：当前 30/60/100 为粗分档，需基于更长样本分位数确定
+#   - 冰点（zt<30）：市场情绪极弱，连板梯队断层
+#   - 普通（30-60）：常态震荡
+#   - 活跃（60-100）：题材活跃，连板梯队成形
+#   - 亢奋（zt≥100）：情绪过热，警惕高位分歧
+MARKET_CONDITION_THRESHOLDS = [
+    ("冰点", -1, 30),        # zt_count < 30
+    ("普通", 30, 60),         # 30 ≤ zt < 60
+    ("活跃", 60, 100),        # 60 ≤ zt < 100
+    ("亢奋", 100, 10**9),    # zt ≥ 100
+]
+EXPLORATORY_N = 30  # 分层样本量<此值标"探索性"（AGENTS.md 数据支撑优先）
+
+
+def _market_condition(zt_count: int | None) -> str:
+    """zt_count → 市场状态分层标签。None/未知返"未知"。"""
+    if zt_count is None:
+        return "未知"
+    for name, lo, hi in MARKET_CONDITION_THRESHOLDS:
+        if lo <= zt_count < hi:
+            return name
+    return "未知"
+
+
+def _stats_block(arr_slice) -> dict:
+    """统一统计口径（N/mean/median/pos_ratio/net_mean/net_pos_ratio）。
+    空切片返回零值占位，调用方据此标"探索性"。"""
+    import numpy as np
+    n = len(arr_slice)
+    if n == 0:
+        return {"N": 0, "mean_pct": 0.0, "median_pct": 0.0, "pos_ratio": 0.0,
+                "net_mean_pct": 0.0, "net_pos_ratio": 0.0}
+    pos = int((arr_slice > 0).sum())
+    net_arr = arr_slice - COST_PCT
+    net_pos = int((net_arr > 0).sum())
+    return {
+        "N": n,
+        "mean_pct": round(float(arr_slice.mean()), 4),
+        "median_pct": round(float(np.median(arr_slice)), 4),
+        "pos_ratio": round(pos / n, 4),
+        "net_mean_pct": round(float(net_arr.mean()), 4),
+        "net_pos_ratio": round(net_pos / n, 4),
+    }
+
+
+def _condition_label(name: str, lo: int, hi: int) -> str:
+    """分层标签（控制台用）。"""
+    if lo < 0:
+        return f"{name} (zt<{hi})"
+    if hi >= 10**9:
+        return f"{name} (zt>={lo})"
+    return f"{name} ({lo}-{hi})"
+
 
 def _bs_code(code: str) -> str:
     """6 位代码 → baostock sh./sz. 前缀。"""
@@ -127,7 +182,7 @@ def _em_date(date_iso: str) -> str:
     return date_iso.replace("-", "")
 
 
-def main(days_back: int = 120) -> int:
+def main(days_back: int = 120):
     import astock
 
     # ---------- 交易日列表 ----------
@@ -162,12 +217,28 @@ def main(days_back: int = 120) -> int:
     print(f"[baseline] 交易日：{len(dates)}（{dates[0]} ~ {dates[-1]}），"
           f"cache max_date={max_cache_date}")
 
+    # ---------- 市场状态分层：每 T 取 _emotion(date) ----------
+    # market._emotion(date) 失败降级：标"未知"/zt_count=None，不崩
+    import market as market_mod  # 局部 import，避免 sys.path 未就绪时报错
+
     # ---------- 遍历 T，取首板池 ----------
     first_boards: list[dict] = []  # {date, code, name, t_close, t1_open, premium}
     miss_codes: set[str] = set()  # 缓存无此股，需 baostock 实时补
 
     for di, t_date in enumerate(dates):
         t_compact = _em_date(t_date)
+        # 取当日市场情绪（用于分层）
+        zt_count_t: int | None = None
+        market_cond_t = "未知"
+        try:
+            emo = market_mod._emotion(date=t_date) or {}
+            zc = emo.get("zt_count")
+            if isinstance(zc, int) and zc >= 0:
+                zt_count_t = zc
+                market_cond_t = _market_condition(zt_count_t)
+        except Exception as e:
+            print(f"[baseline] T={t_date} market._emotion 失败: {e} → 标未知")
+
         try:
             pool = astock.em_zt_topic_pool("getTopicZTPool", t_compact, "fbt:asc") or []
         except Exception as e:
@@ -198,25 +269,32 @@ def main(days_back: int = 120) -> int:
             bars = cache.get(code, [])
             t1_open = _t1_open_from_cache(bars, t_date) if bars else None
 
+            sample_common = {
+                "date": t_date, "code": code, "name": it.get("n", ""),
+                "t_close": t_close,
+                "zt_count": zt_count_t,
+                "market_condition": market_cond_t,
+            }
             if t1_open is None:
                 # 缓存无此股或无 T+1，标记需 baostock 补
                 miss_codes.add(code)
                 # 先记录，T+1 留 None
                 first_boards.append({
-                    "date": t_date, "code": code, "name": it.get("n", ""),
-                    "t_close": t_close, "t1_open": None,
+                    **sample_common,
+                    "t1_open": None,
                     "source": "cache_miss",
                 })
             else:
                 # 口径校验（弱）：T 日缓存 close vs 涨停池 p÷1000
                 ok = _t1_close_check(bars, t_date, t_close)
                 first_boards.append({
-                    "date": t_date, "code": code, "name": it.get("n", ""),
-                    "t_close": t_close, "t1_open": t1_open,
+                    **sample_common,
+                    "t1_open": t1_open,
                     "source": "cache" if ok else "cache_mismatch",
                 })
             n_fb += 1
         print(f"[baseline] T={t_date} 涨停池={len(pool)} 首板={n_fb} "
+              f"zt_count={zt_count_t} 档={market_cond_t} "
               f"累计首板={len(first_boards)}", flush=True)
 
     # ---------- baostock 补 cache_miss ----------
@@ -322,6 +400,31 @@ def main(days_back: int = 120) -> int:
     net_pos_count = int((net_arr > 0).sum())
     net_pos_ratio = net_pos_count / N
 
+    # ---------- 分层统计（by zt_count） ----------
+    # 同口径：N/mean/median/pos_ratio/net_mean/net_pos_ratio
+    # 依据（AGENTS.md 数据支撑优先）：阈值 <30 标"探索性"，
+    #   探索性结论不作为定稿依据，仅记录观察值
+    by_market_condition: dict[str, dict] = {}
+    for name, lo, hi in MARKET_CONDITION_THRESHOLDS:
+        slice_idx = [
+            i for i, fb in enumerate(valid_boards)
+            if fb.get("market_condition") == name
+        ]
+        sub_arr = arr[slice_idx] if slice_idx else np.array([], dtype=float)
+        blk = _stats_block(sub_arr)
+        blk["exploratory"] = blk["N"] < EXPLORATORY_N
+        by_market_condition[name] = blk
+    # "未知"层（_emotion 失败降级）
+    unk_idx = [
+        i for i, fb in enumerate(valid_boards)
+        if fb.get("market_condition") == "未知"
+    ]
+    if unk_idx:
+        unk_arr = arr[unk_idx]
+        unk_blk = _stats_block(unk_arr)
+        unk_blk["exploratory"] = unk_blk["N"] < EXPLORATORY_N
+        by_market_condition["未知"] = unk_blk
+
     # ---------- 报告 ----------
     date_min = min(fb["date"] for fb in valid_boards)
     date_max = max(fb["date"] for fb in valid_boards)
@@ -370,6 +473,27 @@ def main(days_back: int = 120) -> int:
         src_counts[s] = src_counts.get(s, 0) + 1
     print(f"[数据来源] {src_counts}")
 
+    # ---------- 分层统计打印 ----------
+    # 阈值"待回测校准"，样本量<30 标"探索性"（AGENTS.md 数据支撑优先）
+    print("\n[分层统计 by zt_count]")
+    for name, lo, hi in MARKET_CONDITION_THRESHOLDS:
+        s = by_market_condition.get(name, {})
+        n = s.get("N", 0)
+        m = s.get("mean_pct", 0.0)
+        pr = s.get("pos_ratio", 0.0)
+        nm = s.get("net_mean_pct", 0.0)
+        tag = "  （探索性，N<30）" if s.get("exploratory") else ""
+        print(f"  {_condition_label(name, lo, hi):<16} "
+              f"N={n:<4d} mean={m:+.2f}%  正占比={pr*100:.1f}%  "
+              f"成本后净={nm:+.2f}%{tag}")
+    if "未知" in by_market_condition:
+        s = by_market_condition["未知"]
+        tag = "  （探索性，N<30）" if s.get("exploratory") else ""
+        print(f"  {'未知':<16} "
+              f"N={s['N']:<4d} mean={s['mean_pct']:+.2f}%  "
+              f"正占比={s['pos_ratio']*100:.1f}%  "
+              f"成本后净={s['net_mean_pct']:+.2f}%{tag}")
+
     # ---------- 存 JSON ----------
     out = {
         "generated_at": datetime.now().isoformat(),
@@ -378,6 +502,15 @@ def main(days_back: int = 120) -> int:
             "cost_pct": COST_PCT,
             "date_range": [date_min, date_max],
             "n_days": n_days,
+            "market_condition_groups": {
+                "dimension": "zt_count",
+                "thresholds": [
+                    {"name": n, "range": [lo, hi] if hi < 10**9 else [lo, None]}
+                    for n, lo, hi in MARKET_CONDITION_THRESHOLDS
+                ],
+                "exploratory_n": EXPLORATORY_N,
+                "calibration": "待回测校准",
+            },
         },
         "stats": {
             "N": N,
@@ -391,6 +524,7 @@ def main(days_back: int = 120) -> int:
             "net_mean_pct": round(net_mean, 4),
             "net_pos_ratio": round(net_pos_ratio, 4),
             "net_pos_count": net_pos_count,
+            "by_market_condition": by_market_condition,
         },
         "distribution": {
             "P0": round(float(q_lo), 4), "P25": round(float(q_25), 4),
@@ -402,7 +536,9 @@ def main(days_back: int = 120) -> int:
         "samples": [{"date": fb["date"], "code": fb["code"], "name": fb.get("name", ""),
                       "t_close": round(fb["t_close"], 4),
                       "t1_open": round(fb["t1_open"], 4) if fb["t1_open"] else None,
-                      "premium": round(fb["premium"], 4)}
+                      "premium": round(fb["premium"], 4),
+                      "zt_count": fb.get("zt_count"),
+                      "market_condition": fb.get("market_condition", "未知")}
                      for fb in valid_boards],
     }
     try:
@@ -414,7 +550,8 @@ def main(days_back: int = 120) -> int:
     except Exception as e:
         print(f"[baseline] 存 JSON 失败: {e}")
 
-    return 0
+    # 成功返回 out dict（供调用方读取 stats/samples；__main__ 据此判断退出码）
+    return out
 
 
 if __name__ == "__main__":
@@ -422,4 +559,6 @@ if __name__ == "__main__":
     for i, a in enumerate(sys.argv[1:]):
         if a == "--days" and i + 2 < len(sys.argv):
             days = int(sys.argv[1:][i + 1])
-    raise SystemExit(main(days))
+    rc = main(days)
+    # main 返回 dict（成功）或 int（早退失败码）
+    raise SystemExit(0 if isinstance(rc, dict) else rc)
