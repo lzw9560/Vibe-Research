@@ -233,6 +233,15 @@ async def get_concept_rotation(date: str = Query(..., description="交易日 YYY
     return {"data": concept_rotation(date)}
 
 
+@router.get("/api/strategy/funnel/multi-rotation")
+async def get_multi_rotation(date: str = Query(..., description="交易日 YYYY-MM-DD")) -> Dict[str, Any]:
+    """S066 §5.4 多维度融合板块强度（纯 label，§44 未验证）。
+    不定义单一板块——行业 f100 + ths reason 题材融合，标签平等聚合（106 全市场）。
+    多维度标签（dims=[行业,题材]）更可信。"""
+    from strategies.sector_cycle import multi_rotation
+    return {"data": multi_rotation(date)}
+
+
 @router.get("/api/strategy/non-limitup-funnel")
 async def get_non_limitup_funnel(
     date: str = Query(..., description="交易日 YYYY-MM-DD"),

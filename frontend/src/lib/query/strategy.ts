@@ -159,6 +159,26 @@ export function useConceptRotation(date: string | undefined, options?: Opts<Conc
   });
 }
 
+/** S066 §5.4 多维度融合板块强度（行业+题材+概念，纯 label）。 */
+export interface MultiRotationResult {
+  date: string;
+  multi_rank: { label: string; zt_count_today: number; dims: string[] }[];
+  multi_dim_rank: { label: string; zt_count_today: number; dims: string[] }[];
+  pool_size: number;
+  count: number;
+  note: string;
+}
+
+export function useMultiRotation(date: string | undefined, options?: Opts<MultiRotationResult>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "multi-rotation", date ?? ""] as const,
+    queryFn: () => request<MultiRotationResult>(`/strategy/funnel/multi-rotation?date=${date}`),
+    enabled: !!date,
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
 export function useNonLimitupFunnel(date: string | undefined, options?: Opts<NonLimitupFunnelResult>) {
   return useQuery({
     queryKey: ["strategy", "non-limitup-funnel", date ?? ""] as const,

@@ -318,3 +318,109 @@ def concept_rotation(date: str) -> dict:
         "count": len(concepts),
         "note": "§5.4 概念题材纯 label（行业已证伪但概念未验证）；ths_limit_up_pool reason 聚合（106 全市场）",
     }
+
+
+def aggregate_multi(date: str) -> list[dict]:
+    """多维度融合聚合（不定义单一板块维度）：每股涨停带多标签（行业 f100 + ths reason 题材），
+    所有标签平等聚合涨停数 → 多维度标签强度。106 全市场（ths），非 gene_scores 历史 63。"""
+    try:
+        from astock import ths_limit_up_pool
+    except Exception:
+        return []
+    date_compact = date.replace("-", "")
+    try:
+        pool = ths_limit_up_pool(date_compact)
+    except Exception:
+        return []
+    if not pool:
+        return []
+
+    # 行业维度（code → code_industry 查）
+    industry_map: dict[str, str] = {}
+    try:
+        conn = sqlite3.connect(str(_DB))
+        rows = conn.execute("SELECT code, industry FROM code_industry").fetchall()
+        industry_map = {r[0]: r[1] for r in rows if r[1]}
+        conn.close()
+    except Exception:
+        pass
+
+    label_count: dict[str, dict] = {}  # label → {count, dims: set}
+    # concept_blocks/hot_concepts per 股太慢（106×2 slist），用预构建 concept_map 缓存（不阻塞）
+    concept_cache: dict[str, list[str]] = {}
+    try:
+        _cc_path = _DB.parent / "concept_map_cache.json"
+        if _cc_path.exists():
+            import json as _json
+            concept_cache = _json.loads(_cc_path.read_bytes())
+    except Exception:
+        concept_cache = {}
+
+    # 市场分类噪声过滤（concept_blocks 返回含这些非题材标签：融资融券/沪深股通/振幅/盘大小/重仓/地域/指数/热股）
+    _NOISE_CONCEPTS = {
+        "融资融券", "深股通", "沪股通", "昨日高振幅", "小盘股", "中盘股", "大盘股",
+        "QFII重仓", "机构重仓", "最近多板", "昨日涨停", "昨日触板", "昨日炸板",
+        "央视50", "MSCI中国", "富时罗素", "中证500", "沪深300", "上证50",
+        "创业板指", "科创50", "注册制次新股", "次新股", "老风口",
+        "标准普尔", "东方财富热股", "侃股网利好", "同花顺F10",
+    }
+
+    def _is_noise(label: str) -> bool:
+        if label in _NOISE_CONCEPTS:
+            return True
+        # 通用噪声：含"股通/融资/重仓/振幅/盘/指数/MSCI/富时/板块/热股"等市场分类词
+        for kw in ("股通", "融资", "重仓", "振幅", "盘股", "指数", "MSCI", "富时", "热股", "F10"):
+            if kw in label:
+                return True
+        # 地域板块（xx板块/xx股）
+        if label.endswith("板块") or label.endswith("股"):
+            return True
+        return False
+
+    for item in pool:
+        code = item.get("code", "")
+        labels: list[tuple[str, str]] = []  # (label, dim)
+        # 维度1 行业 f100
+        ind = industry_map.get(code)
+        if ind:
+            labels.append((ind, "行业"))
+        # 维度2 ths reason 题材
+        reason = (item.get("reason") or "").strip()
+        if reason:
+            for sep in ("+", "、", ";", "，", "/"):
+                reason = reason.replace(sep, "+")
+            for tag in reason.split("+"):
+                tag = tag.strip()
+                if tag:
+                    labels.append((tag, "题材"))
+        # 维度3 概念板块（concept_map 缓存，非 per 股 slist；过滤市场分类噪声）
+        for tag in concept_cache.get(code, []):
+            if not _is_noise(tag):
+                labels.append((tag, "概念"))
+        for label, dim in labels:
+            if label not in label_count:
+                label_count[label] = {"count": 0, "dims": set()}
+            label_count[label]["count"] += 1
+            label_count[label]["dims"].add(dim)
+
+    return [
+        {"label": k, "zt_count_today": v["count"], "dims": sorted(v["dims"])}
+        for k, v in sorted(label_count.items(), key=lambda x: -x[1]["count"])
+    ]
+
+
+def multi_rotation(date: str) -> dict:
+    """§5.4 多维度融合板块强度（纯 label，§44 未验证）。
+    不定义单一板块维度——行业 f100 + ths reason 题材融合，标签平等聚合。
+    多维度标签（如"半导体"在行业+题材都出现 → dims=[行业,题材]）更可信。"""
+    labels = aggregate_multi(date)
+    # 多维度标签（行业+题材都出现）优先
+    multi_dim = [l for l in labels if len(l["dims"]) > 1]
+    return {
+        "date": date,
+        "multi_rank": labels[:20],
+        "multi_dim_rank": multi_dim[:10],
+        "pool_size": len(labels),
+        "count": len(labels),
+        "note": "§5.4 多维度融合纯 label（行业+题材不定义单一）；多维度标签（dims>1）更可信",
+    }

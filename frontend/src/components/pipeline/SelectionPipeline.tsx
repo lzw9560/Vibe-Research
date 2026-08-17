@@ -3,7 +3,7 @@
 // §44 诚实：scored 不接 R3 → 虚线漂移；非涨停 Phase 2 → placeholder；STI/天气去噪不展示
 import { useState } from "react";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
-import { useSectorRotation } from "@/lib/query/strategy";
+import { useMultiRotation } from "@/lib/query/strategy";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { NonLimitupLane } from "./NonLimitupPlaceholder";
 import type { FunnelLayer, FunnelResult, DiagnosisCard } from "@/lib/candidates";
@@ -121,28 +121,28 @@ function LaneHeader({ title, sub, tone }: { title: string; sub?: string; tone?: 
 }
 
 function SectorRotationNode({ date }: { date: string }) {
-  const { data: rot, isLoading } = useSectorRotation(date);
+  const { data: rot, isLoading } = useMultiRotation(date);
   if (isLoading) return <div className={`${NODE} text-xs text-muted-foreground`}>板块轮动加载中…</div>;
   if (!rot) return null;
-  const top10 = rot.strength_rank.slice(0, 10);
+  const dim = rot.multi_dim_rank.slice(0, 5);
+  const top = rot.multi_rank.slice(0, 10);
   return (
     <div className={NODE}>
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">板块轮动</span>
-        <span className="text-[10px] text-muted-foreground">§5.4 纯 label</span>
+        <span className="text-sm font-medium">板块轮动（多维度融合）</span>
+        <span className="text-[10px] text-muted-foreground">§5.4 纯 label · 行业+题材+概念</span>
       </div>
-      <div className="mt-0.5 text-xs text-muted-foreground">
-        TOP10：{top10.length ? top10.map((s) => `${s.industry}(${s.zt_count_today})`).join(" · ") : "—"}
-      </div>
-      {rot.rotation.length > 0 && (
-        <div className="mt-0.5 flex flex-wrap gap-1 text-[11px]">
-          {rot.rotation.map((r) => (
-            <span key={r.industry} className={r.signal === "启动候选" ? "text-success" : "text-warning"}>
-              {r.industry} {r.signal}
-            </span>
-          ))}
+      {dim.length > 0 && (
+        <div className="mt-0.5 text-xs text-muted-foreground">
+          共振 TOP5：{dim.map((s) => `${s.label}(${s.zt_count_today},${s.dims.length}维)`).join(" · ")}
         </div>
       )}
+      <div className="mt-0.5 text-[11px] text-muted-foreground/80">
+        全标签 TOP10：{top.map((s) => `${s.label}(${s.zt_count_today})`).join(" · ")}
+      </div>
+      <div className="mt-1 text-[10px] text-muted-foreground/60">
+        多维度共振（dims≥2）更可信；ths 106 全市场 + concept_map 缓存
+      </div>
     </div>
   );
 }
