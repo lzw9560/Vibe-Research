@@ -147,6 +147,10 @@ export interface ForwardTestSummary {
   pass_threshold: number;
   passed: boolean;
   consecutive_loss: number;
+  random_baseline_win_rate: number;
+  random_settled: number;
+  lift: number;
+  is_exploratory: boolean;
   note: string;
 }
 

@@ -271,9 +271,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     from config import default_config
     as_of = datetime.now()
     phase = _fetch_sentiment_phase(date, ctx)
-    eff = resolve_thresholds(cfg, phase)
-    # 情绪档位标注（conditions 复用）
-    phase_note = f"情绪档位={phase or '未取得'}" if phase else "情绪档位未取得，沿用基数"
+    eff = resolve_thresholds(cfg, phase)  # S072 STI 去噪：phase 不再调阈值（固定基数），仅记录
     current_stage = _STAGE_MAP.get(stage, "s1")
     max_r2 = int(getattr(default_config, "CANDIDATE_FUNNEL_MAX_R2", 80))
     base_conditions = [
@@ -283,7 +281,6 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         f"成交额下限={eff.amount_yi_min}亿",
         f"数据阶段={current_stage}（offset=1 北向/龙虎榜缺数据标 missing 保留）",
         f"R2 top-N 限界：取前 {max_r2} 候选（按 gene_score 降序）",
-        phase_note,
     ]
 
     def _fetch_pair(fn_a, fn_b):
@@ -353,7 +350,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         layer_id="R2", name="收敛", as_of=as_of,
         input_count=len(r1_kept), output_count=len(r2_kept),
         filtered_out=r2_filtered, output_codes=r2_kept,
-        conditions=[f"换手>={eff.turnover_cold}%（{phase_note}）", *base_conditions],
+        conditions=[f"换手>={eff.turnover_cold}%", *base_conditions],
         passed=[
             {"code": c, "name": activity.get(c, {}).get("name", c),
              "gene_score": genes.get(c, {}).get("gene_score"),

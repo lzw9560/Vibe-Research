@@ -12,6 +12,9 @@ from candidate_funnel.models import BaseThreshold, ThresholdConfig
 
 # 情绪 phase → 档位边界调整（spec §5.2：暴风雨换手下限提至 12%）。
 # 仅收紧/放宽边界，不引入方向词。
+# ⚠ 已停用（S072 STI 去噪，grill 2026-08-17）：STI 无 §44 edge（9 天数据 + 权重拍脑袋
+# + 天气路由 lift 0.956<1），resolve_thresholds 不再按 phase 调阈值。保留作历史记录；
+# 暴风雨极端由 §16.4 指数熔断（上证跌>3% 不开仓）+ Q7 仓位=0 兜底，不靠 R2 换手阈值。
 PHASE_ADJUSTMENTS: dict[str, dict[str, float]] = {
     "暴风雨": {"turnover_cold": 12.0},  # 风险期收紧活跃下限
     "阴天": {"turnover_cold": 10.0},  # 略收紧
@@ -22,41 +25,31 @@ PHASE_ADJUSTMENTS: dict[str, dict[str, float]] = {
 
 
 def resolve_thresholds(cfg: ThresholdConfig, sti_phase: str | None) -> BaseThreshold:
-    """基数 + 情绪调整 → 生效阈值。
+    """基数 → 生效阈值。
 
-    - manual：直用 base，不引入情绪调整。
-    - auto/suggest：有 sti_phase 则按 PHASE_ADJUSTMENTS 调档位边界；缺 phase 降级为基数并标注。
-    - 调整项与生效阈值写入 cfg.adjustment / cfg.effective 以便可复现。
+    S072 STI 去噪（grill 2026-08-17）：sentiment_phase 不再调阈值——
+    STI 无 §44 edge（9 天数据 + 权重拍脑袋 + 天气路由 lift 0.956<1），R2 情绪调阈值是
+    同条无验证路径。固定基数。暴风雨极端由 §16.4 指数熔断 + Q7 仓位=0 兜底，不靠换手阈值。
+    sti_phase 参数保留（不破坏签名），仅记录不改阈值。
 
-    返回生效 BaseThreshold。注意：会就地写回 cfg.adjustment 与 cfg.effective（spec §3.2 约定）。
+    - manual：直用 base，不引入调整。
+    - auto/suggest：固定 base，adjustment 标"STI 去噪固定基数"（可复现）。
+    返回生效 BaseThreshold。会就地写回 cfg.adjustment / cfg.effective（spec §3.2 约定）。
     """
     base = cfg.base
+    eff = base.model_copy()
 
     if cfg.mode == "manual":
-        eff = base.model_copy()
         cfg.adjustment = None
         cfg.effective = eff
         return eff
 
-    if sti_phase is None:
-        eff = base.model_copy()
-        cfg.adjustment = {"phase": None, "降级": True, "note": "情绪档未取得，沿用基数"}
-        cfg.effective = eff
-        return eff
-
-    adj = PHASE_ADJUSTMENTS.get(sti_phase, {})
-    eff = base.model_copy()
-    applied: dict[str, object] = {"phase": sti_phase}
-    if adj:
-        for field, value in adj.items():
-            setattr(eff, field, value)
-        applied.update(adj)
-        applied["note"] = f"{sti_phase}调整档位边界"
-    else:
-        applied["note"] = f"{sti_phase}沿用基数"
-    # suggest 模式额外标注建议依据（D3）
+    applied: dict[str, object] = {
+        "phase": sti_phase,
+        "note": "STI 去噪固定基数（sentiment_phase 不再调阈值，§44 grill 2026-08-17）",
+    }
     if cfg.mode == "suggest":
-        applied["依据"] = f"建议阈值：依据当日情绪档 {sti_phase} 调整档位边界，用户可一键接受或手调"
+        applied["依据"] = "STI 无 §44 edge，R2 阈值固定基数（暴风雨由指数熔断+仓位0兜底）"
     cfg.adjustment = applied
     cfg.effective = eff
     return eff
