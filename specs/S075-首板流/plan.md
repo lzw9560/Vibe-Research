@@ -33,14 +33,25 @@
 
 | 维度 | 权重 | 数据源 | 逻辑 | §44状态 |
 |---|---|---|---|---|
-| **板块评分** | 20% | `sector_cycle.aggregate_sectors` / `sector_strength_rank` | 板块涨停≥3只=联动强，题材热度高 | 未validated |
+| **板块评分** | 15% | `sector_cycle.aggregate_sectors` / `sector_strength_rank` + 连板梯队(#45/#49) | 板块涨停≥3只=联动强 + 连板高度=情绪温度 | 未validated |
 | **游资画像** | 15% | `hot_money_seats.compute_seat_risk_factor` | 一日游席位占比高→扣分（×0.7），接力型→加分 | 未validated |
-| **封板强度** | 20% | ZTPoolItem: 封单额/流通市值比 + 首封时间 + 炸板次数 | 封板越早/封单越大/不炸=越强 | 未validated |
-| **筹码结构** | 10% | tencent_quote: 换手率(5-20%最优) + 量比(<1缩量优) + 成交额 | 缩量+健康换手=筹码稳定 | 未validated |
+| **封板强度** | 20% | ZTPoolItem封单/首封/炸板 + #21/#22 MA/低位 + #28a breakout_20d + 振幅 | 封板越早/封单越大/不炸=越强 + 低位首板溢价空间大 + 接近20日新高=动量确认 | 未validated |
+| **筹码结构** | 10% | tencent_quote: 换手率(5-20%最优) + 量比(<1缩量优) + 成交额 + 振幅 | 缩量+健康换手=筹码稳定 | 未validated |
 | **竞价确认** | 10% | T日9:25 竞价高开1-3% + 竞价量≥昨日5% | 竞价真金白银=资金真实意图 | 未validated |
-| **北向资金** | 10% | hsgt_realtime / 北向净流入 | 外资看好=基本面背书，但北向新规披露收紧 | 未validated |
-| **龙虎榜机构** | 10% | dragon_tiger_inst_net | 机构净买入=基本面认可，非纯游资炒作 | 未validated |
+| **北向资金** | 10% | hsgt_realtime / 北向净流入 | 外资看好=基本面背书（北向新规收紧降级0） | 未validated |
+| **龙虎榜机构** | 10% | dragon_tiger_inst_net | 机构净买入=基本面认可（无龙虎榜降级50分） | 未validated |
 | **题材热度** | 5% | ths_limit_up_pool.reason 聚合 | 题材越热（多只同题材涨停）=市场注意力集中 | 未validated |
+| **事件评分** | 5% | catalyst: classify_announcement(#33/#34利多加分 + #35-39利空扣分) | 利多公告=催化剂，利空公告=次日溢价被压制 | 未validated |
+
+**不纳入评分的因子**（§44证伪/数据阻断/方向被驳/不适用）：
+- #1 封板时间：证伪（r=0.18→0.010），不作连续评分，但已在剔除层1作binary阈值（≥14:00剔除）
+- #56-59 五因子：证伪（within-day r≈0），不加
+- #28b volatility：涨停假信号，不加
+- #11/#18 主力/板块资金：数据阻断（push2his IP限流），不加
+- #41 板块涨停≥2：方向被驳，纯label不接策略分，但已在剔除层3作binary阈值
+- #29-32 日历：是仓位调整（PositionAdvisor×0.7/×0.5）不是选股评分
+- #61 zt_count黄金区：首板流只做首板(lbc=1)，zt_count恒=1，不适用
+- #63-74 资本博弈：P2未验未做，后续迭代
 
 **落盘**：每只候选记录5维度评分+总分，供30天回测校准权重。
 
