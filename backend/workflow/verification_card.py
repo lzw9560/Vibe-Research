@@ -271,7 +271,6 @@ def update_verified(conditions: list[VerificationCondition]) -> int:
 
 def get_conditions(date_str: str | None = None) -> list[dict[str, Any]]:
     """查指定日的条件（含对账结果）。date 缺省取最近交易日。"""
-    run_migrations()
     date_str = date_str or last_trading_date_str()
     conn = _get_conn()
     try:
@@ -301,7 +300,6 @@ def get_pending_conditions() -> list[dict[str, Any]]:
 
 def generate_and_save(emotion_data: dict, date_str: str | None = None) -> list[VerificationCondition]:
     """盘后生成条件并落库。返回生成的条件列表。"""
-    run_migrations()
     conditions = generate_conditions(emotion_data, date_str)
     save_conditions(conditions)
     _logger.info("[verification_card] 生成 %d 条条件（date=%s）", len(conditions), conditions[0].date if conditions else "?")
@@ -313,7 +311,6 @@ def verify_and_update() -> list[VerificationCondition]:
 
     返回对账后的条件列表（含 verified status）。
     """
-    run_migrations()
     import market
 
     pending_rows = get_pending_conditions()
@@ -357,3 +354,23 @@ def verify_and_update() -> list[VerificationCondition]:
     update_verified(all_verified)
     _logger.info("[verification_card] 对账 %d 条条件", len(all_verified))
     return all_verified
+
+
+# ─────────────────────── 启动时迁移 ───────────────────────
+
+_migrations_applied = False
+
+
+def ensure_migrations() -> None:
+    """启动时调用一次，幂等。请求路径不再调 run_migrations。
+
+    `run_migrations()` 无 try/except，SQLite 并发锁或文件系统异常会抛异常。
+    旧实现将其挂在三个请求路径函数（get_conditions/generate_and_save/
+    verify_and_update）里，每次请求触发 → 路由层 `except Exception` 转 502。
+    现移到 app lifespan startup 执行一次，并以 `_migrations_applied` 缓存。
+    """
+    global _migrations_applied
+    if _migrations_applied:
+        return
+    run_migrations()
+    _migrations_applied = True

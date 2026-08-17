@@ -85,6 +85,14 @@ async def lifespan(_app: FastAPI):
     _pf_refresh_task = await pf.start_scheduler(1800)  # 持仓后台刷新 task
     # S052 D4：启动缺口补跑——回测快照缺失日后台排队回填
     from backfill_snapshots import startup_backfill_gap_check  # noqa: PLC0415
+    # verification_card 表迁移（启动时一次，不在请求路径上）
+    # 旧实现每次请求调 run_migrations → 并发锁异常 → 路由 502；移到 startup 幂等执行。
+    # 迁移失败不阻塞 startup（verification_card 是辅助功能）
+    try:
+        from workflow.verification_card import ensure_migrations  # noqa: PLC0415
+        ensure_migrations()
+    except Exception as _vc_err:  # noqa: BLE001 — 辅助功能失败不阻断启动
+        logger.warning("verification_card migration failed: %s", _vc_err)
     # S063：盘中情绪采样 task（仅交易日 09:25-15:00 运行）
     await intraday_sentiment_router.start_sampler()
     # grill：缺口补跑 + advisory 预热改为后台 fire-and-forget，不阻塞 startup
