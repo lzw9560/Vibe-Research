@@ -472,7 +472,7 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
         for g in genes
     ]
 
-    scored = score_candidates(candidates, weather_state)
+    scored = score_candidates(candidates, weather_state, signal_date)
     mult, _ = calendar_factor(signal_date)
 
     recommendations = [

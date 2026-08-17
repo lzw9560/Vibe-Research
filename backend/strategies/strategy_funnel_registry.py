@@ -377,11 +377,15 @@ def _cand_to_gene(cand: dict):
 def score_candidates(
     candidates: list[dict],
     weather_state: str | None,
+    trade_date: str | None = None,
 ) -> list[dict]:
     """天气硬开关 + 策略分排序 → 候选列表。
 
     candidates: [{code, name, factors: {seal_rate, premium, ...}, ...}]
     返回：[{code, name, strategy_code, strategy_name, score, breakdown, ...}]
+
+    trade_date: S073 §9.4 游资席位画像接线（可选）；传则 batch 取当日龙虎榜 + per-cand
+    compute_seat_risk_factor 修饰策略分（画像未建→modifier 1.0 降级标注）；不传则不接。
 
     流程（spec §3.1）：
     1. 天气 → 主跑策略组 + fallback
@@ -399,6 +403,18 @@ def score_candidates(
     # 天气推荐集合（软标注）——用于在候选上标 weather_recommended=True/False，
     # 不用于过滤候选。
     recommendation = get_weather_recommendation(weather_state)
+
+    # S073 §9.4 游资席位画像接线（batch billboard + profiles；画像未建→load_aggregate_profiles 返空→modifier 1.0 降级）
+    seat_profiles = None
+    billboard = None
+    if trade_date:
+        try:
+            from strategies.hot_money_seats import compute_seat_risk_factor, load_aggregate_profiles, fetch_billboard_for_date
+            seat_profiles = load_aggregate_profiles()
+            billboard = fetch_billboard_for_date(trade_date)
+        except Exception:
+            seat_profiles = None
+            billboard = None
 
     scored: list[dict] = []
     # match_strategies 实际处理入场条件的策略 code 集合（取自 limitup_strategy.STRATEGY_REGISTRY
@@ -436,6 +452,14 @@ def score_candidates(
             if strat_code in _MATCHED_STRATEGY_CODES and strat_code not in matched_codes:
                 continue
             score, breakdown = compute_strategy_score(factors, cfg.weight_set)
+            # S073 §9.4 游资画像修饰（画像未建→modifier 1.0 不扣分，标 risk_label）
+            seat_risk = None
+            if trade_date and billboard is not None:
+                try:
+                    seat_risk = compute_seat_risk_factor(cand.get("code", ""), trade_date, seat_profiles, None, billboard)
+                    score = round(score * seat_risk.score_modifier, 4)
+                except Exception:
+                    seat_risk = None
             scored.append({
                 **cand,
                 "strategy_code": cfg.code,
@@ -445,6 +469,15 @@ def score_candidates(
                 "funnel_type": cfg.funnel_type,
                 "position_params": cfg.position_params,
                 "weather_recommended": strat_code in recommendation,  # grill Q7：天气推荐标注（软标注）
+                "hot_money_seat_risk": (
+                    {
+                        "day_trip_ratio": seat_risk.day_trip_ratio,
+                        "relay_ratio": seat_risk.relay_ratio,
+                        "risk_label": seat_risk.risk_label,
+                        "score_modifier": seat_risk.score_modifier,
+                    }
+                    if seat_risk else None
+                ),
             })
 
     scored.sort(key=lambda x: x.get("strategy_score", 0), reverse=True)

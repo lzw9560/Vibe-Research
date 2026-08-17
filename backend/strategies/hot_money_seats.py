@@ -320,10 +320,13 @@ def compute_seat_risk_factor(
     trade_date: str,
     profiles: list[SeatProfile] | None = None,
     mutations: dict[str, dict] | None = None,
+    billboard: list[dict] | None = None,
 ) -> SeatRiskFactor:
     """计算个股游资席位风险因子（spec §9.4）。
 
-    从当日龙虎榜买卖明细 → 按席位分类计算 day_trip_ratio / relay_ratio → 策略分修饰。
+    billboard 参数支持外部 batch 传入（score_candidates 取一次供所有 cand 复用，避免 per-cand 重复 fetch）；
+    不传则内部 fetch_billboard_for_date。
+    画像未建（load_aggregate_profiles 返空/preset）→ 席位"样本不足" → modifier 1.0 降级标注。
 
     day_trip_ratio > 0.5 → 策略分 ×0.7（高风险）
     day_trip_ratio 0.2-0.5 → 策略分 ×0.9（中风险）
@@ -334,8 +337,9 @@ def compute_seat_risk_factor(
     profile_map = {p.seat_name: p for p in profiles}
     mutations = mutations or {}
 
-    # 取当日龙虎榜明细
-    billboard = fetch_billboard_for_date(trade_date)
+    # 当日龙虎榜明细（batch：外部传入；否则内部 fetch）
+    if billboard is None:
+        billboard = fetch_billboard_for_date(trade_date)
     code_billboard = [r for r in billboard if r.get("SECURITY_CODE") == code]
 
     if not code_billboard:

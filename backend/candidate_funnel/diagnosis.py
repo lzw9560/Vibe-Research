@@ -153,6 +153,33 @@ def build_indicator_set(
         m = (src or {}).get("missing")
         if isinstance(m, dict):
             ind.missing.update(m)
+    # S073 盘前因子"最后评估"：MA/BOLL 补算 from baostock kline cache
+    # （§44 未验证因子，接入评估层不硬过滤；数据缺标 missing）
+    try:
+        import json as _json
+        from vr_paths import resolve_data_dir as _resolve_data_dir
+        _kc = _resolve_data_dir() / "baostock_kline_cache.json"
+        if _kc.exists():
+            _cache = _json.loads(_kc.read_bytes())
+            _bars = _cache.get(code, [])
+            _closes = [b.get("close", 0) for b in _bars if b.get("close")]
+            if len(_closes) >= 20:
+                ind.ma5 = round(sum(_closes[-5:]) / 5, 3)
+                ind.ma10 = round(sum(_closes[-10:]) / 10, 3)
+                ind.ma20 = round(sum(_closes[-20:]) / 20, 3)
+                _last20 = _closes[-20:]
+                _mean = sum(_last20) / 20
+                _var = sum((x - _mean) ** 2 for x in _last20) / 20
+                _std = _var ** 0.5
+                ind.boll_upper = round(_mean + 2 * _std, 3)
+                ind.boll_lower = round(_mean - 2 * _std, 3)
+            elif len(_closes) >= 5:
+                ind.ma5 = round(sum(_closes[-5:]) / 5, 3)
+            # <5 不填（数据不足）
+        else:
+            ind.missing["ma_boll"] = "kline cache 未取得"
+    except Exception:
+        ind.missing["ma_boll"] = "MA/BOLL 计算失败"
     return ind
 
 

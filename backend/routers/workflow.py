@@ -144,6 +144,15 @@ async def _collect(run_id: str, target_date: str) -> None:
             from strategies.strategy_funnel_registry import score_candidates
             genes = await asyncio.to_thread(load_gene_scores, target_date)
             if genes:
+                # S073 修数据链断：scored 用 R3 幸存者（非 DB 全量），R3→scored 真串联
+                r3_layer = next((l for l in (funnel_layers or []) if l.get("layer_id") == "R3"), None)
+                r3_codes = set(r3_layer.get("output_codes", []) if r3_layer else [])
+                if r3_codes:
+                    genes_filtered = [g for g in genes if g.code in r3_codes]
+                    logger.info("scored 接 R3：%d 只幸存者（原全量 %d）", len(genes_filtered), len(genes))
+                    genes = genes_filtered
+                else:
+                    logger.info("R3 无幸存者或无 R3 层，scored 降级全量 %d 只", len(genes))
                 cand_input = [
                     {
                         "code": g.code,
@@ -155,7 +164,7 @@ async def _collect(run_id: str, target_date: str) -> None:
                     for g in genes
                 ]
                 weather_state = ctx.weather_state if ctx else None
-                scored = await asyncio.to_thread(score_candidates, cand_input, weather_state)
+                scored = await asyncio.to_thread(score_candidates, cand_input, weather_state, target_date)
                 # 过滤"无符合条件标的"占位项（strategy_code="none"）
                 scored_candidates = [s for s in scored if s.get("strategy_code") != "none"]
         except Exception as exc:  # noqa: BLE001 — 打分失败不影响 briefing 主态

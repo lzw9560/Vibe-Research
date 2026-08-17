@@ -23,6 +23,7 @@ import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candida
 import { Link, useSearchParams } from "react-router-dom";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
+import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
 
 function formatRelativeTime(generatedAt: string): string {
   try {
@@ -56,7 +57,7 @@ export default function PreMarketBriefing() {
   const [buyEntry, setBuyEntry] = useState<{ code: string; name: string } | null>(null);
   const transition = useTransitionWorkflowState();
 
-  const handleBuy = (entry: { code: string; name: string }) => setBuyEntry(entry);
+  // S054 handleBuy 已移除（CandidateFunnelEmbed onBuy 删，S073）；buyEntry/Sheet 暂 dead 保留
   const handleBuySubmit = (req: TransitionRequest) => {
     transition.mutate(req);
     setBuyEntry(null);
@@ -225,10 +226,8 @@ export default function PreMarketBriefing() {
           <CandidateFunnelEmbed
             date={briefing.data_date}
             onPick={setDrawerCode}
-            onBuy={handleBuy}
             snapshotLayers={briefing.from_snapshot ? funnelLayers : funnelLayers}
             scoredCandidates={briefing.scored_candidates}
-            activeStrategy={activeStrategy}
           />
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
@@ -275,56 +274,35 @@ export default function PreMarketBriefing() {
  * 不发额外 GET（消重复请求）。无 funnel_layers 时降级 live 查询。
  * B-lite：activeStrategy 非空且有 scored_candidates 时切到战法过滤视图。 */
 function CandidateFunnelEmbed({
+  date,
   onPick,
-  onBuy,
   snapshotLayers,
   scoredCandidates,
-  activeStrategy,
 }: {
   date?: string;
   onPick: (code: string) => void;
-  onBuy?: (entry: { code: string; name: string }) => void;
   snapshotLayers?: FunnelLayer[];
   scoredCandidates?: ScoredCandidate[];
-  activeStrategy?: string | null;
 }) {
-  // B-lite：战法 tab 选中且有打分候选 → 按战法过滤渲染
-  if (activeStrategy && scoredCandidates && scoredCandidates.length > 0) {
-    const filtered = scoredCandidates.filter((c) => c.strategy_code === activeStrategy);
-    if (filtered.length === 0) {
-      return (
-        <GlassCard className="mb-6 p-4">
-          <p className="text-sm text-muted-foreground">
-            战法「{activeStrategy}」无符合条件标的（候选池{scoredCandidates.length}只，命中该战法0只）
-          </p>
-        </GlassCard>
-      );
-    }
-    return (
-      <div className="mb-6 space-y-3">
-        <SectionHeader
-          title={`候选池 · ${activeStrategy}`}
-          subtitle={`${filtered.length}只命中（共${scoredCandidates.length}只打分候选）`}
-        />
-        <ScoredCandidateTable candidates={filtered} onPick={onPick} onBuy={onBuy} />
-      </div>
-    );
+  // S073 SelectionPipeline 替换 FunnelMatrixSimple/ScoredCandidateTable 互斥：
+  // 同图显 R1/R2/R3 + scored（漂移徽标，不臆造串联 R3→scored）；activeStrategy 不再换候选宇宙
+  if ((!snapshotLayers || snapshotLayers.length === 0) && (!scoredCandidates || scoredCandidates.length === 0)) {
+    return null;
   }
-  // 无战法选中或无打分候选 → 原 FunnelMatrixSimple（不破坏既有渲染）
-  // S049 D4：done/snapshot 响应都带 funnel_layers → 直用，不发 GET
-  if (snapshotLayers && snapshotLayers.length > 0) {
-    return (
-      <div className="mb-6 space-y-3">
-        <SectionHeader title="候选池漏斗矩阵" subtitle="R1/R2/R3 三列对齐 + 全参数" />
-        <FunnelMatrixSimple layers={snapshotLayers} onPick={onPick} onBuy={onBuy} />
-      </div>
-    );
-  }
-  return null;
+  return (
+    <SelectionPipeline
+      funnelLayers={snapshotLayers}
+      scoredCandidatesCount={scoredCandidates?.length}
+      mode="full"
+      date={date}
+      onPick={onPick}
+      showHonestyBanner={false}
+    />
+  );
 }
 
 /** B-lite：战法过滤候选表（复用 FunnelMatrixSimple 的表格样式，列聚焦战法分/推荐/止损止盈）。 */
-function ScoredCandidateTable({ candidates, onPick, onBuy }: {
+export function ScoredCandidateTable({ candidates, onPick, onBuy }: {
   candidates: ScoredCandidate[];
   onPick: (code: string) => void;
   onBuy?: (entry: { code: string; name: string }) => void;
@@ -381,7 +359,7 @@ function ScoredCandidateTable({ candidates, onPick, onBuy }: {
 }
 
 /** S049 D2：简易矩阵渲染（完整 FunnelMatrix 组件在 S7 任务建；此处先占位用 FunnelLayers 兜底） */
-function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; onPick: (code: string) => void; onBuy?: (entry: { code: string; name: string }) => void }) {
+export function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; onPick: (code: string) => void; onBuy?: (entry: { code: string; name: string }) => void }) {
   // 三层 passed union 去重
   const r1 = layers.find((l) => l.layer_id === "R1");
   const r2 = layers.find((l) => l.layer_id === "R2");
