@@ -134,8 +134,10 @@ async def _collect(run_id: str, target_date: str) -> None:
         # B-lite：战法打分接入 briefing 响应供前端 tab 过滤。
         # score_candidates 入参需 {code, name, factors(中文键名 dict), total_score, zt_count_250d}。
         # 数据源选 load_gene_scores（sync DB 读，快；与 funnel.fetch_genes 同源，不重复外部请求）。
-        # forward_test.py:435-447 用 getattr(g,"factor_seal_rate",0) 映射是脏数据（GeneScore 无此属性），
-        # 这里直接透传 g.factors（中文键名 dict，score_candidates/test_strategy_funnel_registry 同款口径）。
+        # forward_test.py:464-470 原用 getattr(g,"factor_seal_rate",0) 映射因子是脏数据
+        # （GeneScore 无英文 factor_* 属性，恒取默认 0）；已修复为 (g.factors or {}).get("中文键",0)
+        # →英文键名映射，与 backtest_lite.py:118 范式一致。
+        # 此处直接透传 g.factors（中文键名 dict，score_candidates/test_strategy_funnel_registry 同款口径）。
         scored_candidates: list[dict] = []
         try:
             from limitup_screener.data import load_gene_scores
