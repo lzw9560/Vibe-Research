@@ -1565,3 +1565,58 @@ export interface CoachChecklistItem {
   max_hold_warning: string | null;
   attention_mode: string;
 }
+
+// ============ S075 首板流 ============
+// 对齐后端 GET /api/workflow/first-board/candidates（routers/workflow.py:913）。
+// run_first_board_filter 产出：候选池 + 三层剔除记录 + 9 维度评分 + 市场环境标记。
+// §44 诚实标注：9 维度评分未 validated 仅参考；阈值/权重待回测校准（见 note 字段）。
+
+/** 单个候选的 9 维度评分明细 + 总分 + 排名。 */
+export interface FirstBoardScoreBreakdown {
+  sector: number;          // 维度1 板块评分 15%
+  hot_money: number;       // 维度2 游资画像 15%
+  seal_strength: number;   // 维度3 封板强度 20%
+  chip: number;            // 维度4 筹码结构 10%
+  auction: number;         // 维度5 竞价确认 10%
+  northbound: number;      // 维度6 北向资金 10%
+  institution: number;     // 维度7 龙虎榜机构 10%
+  theme: number;           // 维度8 题材热度 5%
+  event: number;           // 维度9 事件评分 5%
+  [key: string]: number;   // 容错后端未来扩展
+}
+
+export interface FirstBoardCandidate {
+  code: string;
+  name: string;
+  total: number;                       // 加权总分 0-100
+  scores: FirstBoardScoreBreakdown;    // 9 维度分明细
+  rank: number;                        // 1-based
+  [key: string]: unknown;              // 原始候选字段（price/industry/seal_amount 等）
+}
+
+/** 三层剔除记录（层1 封板质量 / 层2 筹码结构 / 层3 市场环境）。 */
+export interface FirstBoardExcludedItem {
+  code: string;
+  layer: 1 | 2 | 3;
+  reason: string;
+  [key: string]: unknown;
+}
+
+/** 市场环境标记（层3 不直接剔除，仅 flag；high_risk=true 表示大盘跌 > 1.5%）。 */
+export interface FirstBoardEnvFlags {
+  market_drop_pct: number | null;
+  high_risk: boolean;
+  max_boards: number | null;
+  ladder_broken: boolean;
+  [key: string]: unknown;
+}
+
+export interface FirstBoardCandidatesResponse {
+  date: string;                                  // YYYY-MM-DD
+  zt_pool_count: number;                          // 涨停池总数
+  first_board_count: number;                      // 首板数
+  candidates: FirstBoardCandidate[];              // 通过三层剔除 + 评分排序后的候选池
+  excluded: FirstBoardExcludedItem[];             // 三层剔除记录
+  env_flags: FirstBoardEnvFlags;                  // 市场环境标记
+  note: string;                                   // §44 诚实标注
+}

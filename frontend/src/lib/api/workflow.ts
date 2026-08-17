@@ -3,6 +3,7 @@ import { get, request } from "./client";
 import type {
   WorkflowStatus, PreMarketBriefing, PreMarketDates, PreMarketRefreshResponse, IntradayData, BombAlertItem, PostMarketReport,
   WorkflowState, WorkflowStateList, TransitionRequest, WorkflowStateHistoryItem,
+  FirstBoardCandidatesResponse,
 } from "./types";
 
 // Workflow status — 失败返 null（不抛），故包 try/catch（S013 T2：原裸 fetch 改走 get，
@@ -89,5 +90,15 @@ export async function getWorkflowStateHistory(code: string, date?: string): Prom
       : `/workflow/state/${code}/history`;
     const data = await get<{ code: string; date: string | null; history: WorkflowStateHistoryItem[] }>(path);
     return data?.history ?? null;
+  } catch { return null; }
+}
+
+// S075 首板流候选池——GET /api/workflow/first-board/candidates?date=
+// 后端 run_first_board_filter 产出（首板过滤+三层剔除+9维度评分+落盘）。
+// §44 诚实标注：9 维度评分未 validated 仅参考；阈值/权重待回测校准。
+export async function getFirstBoardCandidates(date?: string): Promise<FirstBoardCandidatesResponse | null> {
+  try {
+    const path = date ? `/workflow/first-board/candidates?date=${date}` : "/workflow/first-board/candidates";
+    return await get<FirstBoardCandidatesResponse>(path);
   } catch { return null; }
 }

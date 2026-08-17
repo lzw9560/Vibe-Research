@@ -32,6 +32,12 @@ vi.mock("@/lib/query/strategy", () => ({
   useCalendarFactor: () => ({ data: undefined }),
   useMarketKillSwitch: () => ({ data: undefined }),
   useSectorCycle: () => ({ data: undefined }),
+  // S075：HonestyBanner 调 useForwardTestSummary，补 mock 避免预存测试报错
+  useForwardTestSummary: () => ({ data: undefined, isLoading: false }),
+  // S075：SelectionPipeline 的 SectorRotationNode 调 useMultiRotation，补 mock
+  useMultiRotation: () => ({ data: undefined, isLoading: false }),
+  // S075：SelectionPipeline 的 NonLimitupLane 调 useNonLimitupFunnel，补 mock
+  useNonLimitupFunnel: () => ({ data: undefined, isLoading: false }),
 }));
 vi.mock("@/pages/workflow/CandidateDetail", () => ({ CandidateDetailPanel: () => null }));
 vi.mock("@/components/candidate/FunnelLayers", () => ({
@@ -110,8 +116,8 @@ describe("PreMarketBriefing (S048)", () => {
       refetch: vi.fn(),
     });
     renderAt("/workflow/pre-market?date=2026-07-01");
-    // S049 D2/D4：直渲 briefing.funnel_layers（矩阵行渲染 R1 passed 的 600519）
-    expect(screen.getByText("600519")).toBeInTheDocument();
+    // S049 D2/D4：直渲 briefing.funnel_layers（SelectionPipeline 渲染 layer_id "R1"）
+    expect(screen.getByText("R1")).toBeInTheDocument();
     // S049 D4：live 查询不再启用（funnel_layers 由 briefing 携带，不发 GET）
     expect(qMocks.useFunnelLayers).not.toHaveBeenCalled();
   });

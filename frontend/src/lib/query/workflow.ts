@@ -2,6 +2,7 @@
 // 状态流转是客观状态记录（用户自填操作），hooks 只搬运数据，不附加方向语义。
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  getFirstBoardCandidates,
   getWorkflowState,
   getWorkflowStateHistory,
   getWorkflowStates,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/api";
 import type { Opts } from "./types";
 import type {
+  FirstBoardCandidatesResponse,
   TransitionRequest,
   WorkflowState,
   WorkflowStateHistoryItem,
@@ -58,6 +60,19 @@ export function useWorkflowStateHistory(
     queryKey: ["workflow", "state", code, "history", date] as const,
     queryFn: () => getWorkflowStateHistory(code, date),
     enabled: !!code,
+    ...options,
+  });
+}
+
+// S075 首板流候选池——GET /api/workflow/first-board/candidates?date=
+// run_first_board_filter 产出（首板过滤+三层剔除+9维度评分+落盘）。
+// §44 诚实标注：9 维度评分未 validated 仅参考；阈值/权重待回测校准。
+// date 不传时后端取最近交易日；候选池日内不变，staleTime 5min 防短时重复请求。
+export function useFirstBoardCandidates(date?: string, options?: Opts<FirstBoardCandidatesResponse | null>) {
+  return useQuery({
+    queryKey: ["workflow", "first-board", "candidates", date ?? "latest"] as const,
+    queryFn: () => getFirstBoardCandidates(date),
+    staleTime: 5 * 60 * 1000,
     ...options,
   });
 }

@@ -66,7 +66,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    name: "交易工作台",
+    name: "选股工作流",
     icon: TrendingUp,
     tabs: [
       { to: "/workflow", label: "工作流" },
