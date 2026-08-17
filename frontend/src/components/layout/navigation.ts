@@ -142,6 +142,7 @@ export const SUB_TABS: Record<string, { key: string; label: string; to?: string 
     { key: "winrate", label: "胜率趋势" },
   ],
   "/workflow": [
+    { to: "/workflow/first-board", key: "first-board", label: "首板流" },
     { to: "/workflow/pre-market", key: "pre-market", label: "盘前简报" },
     { to: "/workflow/intraday", key: "intraday", label: "盘中监控" },
     { to: "/workflow/coach", key: "coach", label: "盯盘教练" },
