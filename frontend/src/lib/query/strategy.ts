@@ -162,8 +162,8 @@ export function useConceptRotation(date: string | undefined, options?: Opts<Conc
 /** S066 §5.4 多维度融合板块强度（行业+题材+概念，纯 label）。 */
 export interface MultiRotationResult {
   date: string;
-  multi_rank: { label: string; zt_count_today: number; dims: string[] }[];
-  multi_dim_rank: { label: string; zt_count_today: number; dims: string[] }[];
+  multi_rank: { label: string; zt_count_today: number; dims: string[]; codes: { code: string; name: string }[] }[];
+  multi_dim_rank: { label: string; zt_count_today: number; dims: string[]; codes: { code: string; name: string }[] }[];
   pool_size: number;
   count: number;
   note: string;

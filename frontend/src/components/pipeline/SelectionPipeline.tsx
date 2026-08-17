@@ -122,24 +122,51 @@ function LaneHeader({ title, sub, tone }: { title: string; sub?: string; tone?: 
 
 function SectorRotationNode({ date }: { date: string }) {
   const { data: rot, isLoading } = useMultiRotation(date);
+  const [expanded, setExpanded] = useState(false);
   if (isLoading) return <div className={`${NODE} text-xs text-muted-foreground`}>板块轮动加载中…</div>;
   if (!rot) return null;
   const dim = rot.multi_dim_rank.slice(0, 5);
   const top = rot.multi_rank.slice(0, 10);
   return (
     <div className={NODE}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">板块轮动（多维度融合）</span>
-        <span className="text-[10px] text-muted-foreground">§5.4 纯 label · 行业+题材+概念</span>
-      </div>
-      {dim.length > 0 && (
-        <div className="mt-0.5 text-xs text-muted-foreground">
-          共振 TOP5：{dim.map((s) => `${s.label}(${s.zt_count_today},${s.dims.length}维)`).join(" · ")}
+      <button onClick={() => setExpanded((v) => !v)} className="w-full text-left">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">板块轮动（多维度融合）</span>
+          <span className="text-[10px] text-muted-foreground">{expanded ? "▼ 收起" : "▶ 展开"}</span>
+        </div>
+        {dim.length > 0 && (
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            共振 TOP5：{dim.map((s) => `${s.label}(${s.zt_count_today},${s.dims.length}维)`).join(" · ")}
+          </div>
+        )}
+        {!expanded && (
+          <div className="mt-0.5 text-[11px] text-muted-foreground/80">
+            全标签 TOP10：{top.map((s) => `${s.label}(${s.zt_count_today})`).join(" · ")}
+          </div>
+        )}
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-1.5 border-t border-border/30 pt-2">
+          {top.map((s) => (
+            <div key={s.label} className="rounded border border-border/30 bg-card/20 p-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium">{s.label}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {s.zt_count_today} 涨停 · {s.dims.join("+")}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                {(s.codes || []).slice(0, 10).map((c) => (
+                  <span key={c.code} className="rounded bg-muted/30 px-1 py-0.5 text-muted-foreground">
+                    {c.name} <span className="text-muted-foreground/60">{c.code}</span>
+                  </span>
+                ))}
+                {(s.codes || []).length > 10 && <span className="text-muted-foreground/60">…共 {s.codes.length} 只</span>}
+              </div>
+            </div>
+          ))}
         </div>
       )}
-      <div className="mt-0.5 text-[11px] text-muted-foreground/80">
-        全标签 TOP10：{top.map((s) => `${s.label}(${s.zt_count_today})`).join(" · ")}
-      </div>
       <div className="mt-1 text-[10px] text-muted-foreground/60">
         多维度共振（dims≥2）更可信；ths 106 全市场 + concept_map 缓存
       </div>

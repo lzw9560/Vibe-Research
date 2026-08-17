@@ -345,7 +345,7 @@ def aggregate_multi(date: str) -> list[dict]:
     except Exception:
         pass
 
-    label_count: dict[str, dict] = {}  # label → {count, dims: set}
+    label_count: dict[str, dict] = {}  # label → {count, dims: set, codes: list}
     # concept_blocks/hot_concepts per 股太慢（106×2 slist），用预构建 concept_map 缓存（不阻塞）
     concept_cache: dict[str, list[str]] = {}
     try:
@@ -368,23 +368,25 @@ def aggregate_multi(date: str) -> list[dict]:
     def _is_noise(label: str) -> bool:
         if label in _NOISE_CONCEPTS:
             return True
-        # 通用噪声：含"股通/融资/重仓/振幅/盘/指数/MSCI/富时/板块/热股"等市场分类词
         for kw in ("股通", "融资", "重仓", "振幅", "盘股", "指数", "MSCI", "富时", "热股", "F10"):
             if kw in label:
                 return True
-        # 地域板块（xx板块/xx股）
         if label.endswith("板块") or label.endswith("股"):
             return True
         return False
 
+    # name 查询表（ths pool 有 name）
+    name_map: dict[str, str] = {}
+    for item in pool:
+        name_map[item.get("code", "")] = item.get("name", "")
+
     for item in pool:
         code = item.get("code", "")
+        name = item.get("name", code)
         labels: list[tuple[str, str]] = []  # (label, dim)
-        # 维度1 行业 f100
         ind = industry_map.get(code)
         if ind:
             labels.append((ind, "行业"))
-        # 维度2 ths reason 题材
         reason = (item.get("reason") or "").strip()
         if reason:
             for sep in ("+", "、", ";", "，", "/"):
@@ -393,15 +395,21 @@ def aggregate_multi(date: str) -> list[dict]:
                 tag = tag.strip()
                 if tag:
                     labels.append((tag, "题材"))
-        # 维度3 概念板块（concept_map 缓存，非 per 股 slist；过滤市场分类噪声）
         for tag in concept_cache.get(code, []):
             if not _is_noise(tag):
                 labels.append((tag, "概念"))
         for label, dim in labels:
             if label not in label_count:
-                label_count[label] = {"count": 0, "dims": set()}
+                label_count[label] = {"count": 0, "dims": set(), "codes": []}
             label_count[label]["count"] += 1
             label_count[label]["dims"].add(dim)
+            label_count[label]["codes"].append({"code": code, "name": name})
+
+    return [
+        {"label": k, "zt_count_today": v["count"], "dims": sorted(v["dims"]),
+         "codes": v["codes"][:20]}
+        for k, v in sorted(label_count.items(), key=lambda x: -x[1]["count"])
+    ]
 
     return [
         {"label": k, "zt_count_today": v["count"], "dims": sorted(v["dims"])}
