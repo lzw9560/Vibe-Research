@@ -216,6 +216,60 @@ async def get_sector_cycle(
     }
 
 
+@router.get("/api/strategy/funnel/sector-rotation")
+async def get_sector_rotation(date: str = Query(..., description="交易日 YYYY-MM-DD")) -> Dict[str, Any]:
+    """S066 §5.4.1 板块强度排名 TOP10 + §5.4.3 跨板块轮动检测（纯 label，§5.4 Q2 不接策略分）。
+    fund_flow 阻断降级 0（§44 push2his IP限流）。"""
+    from strategies.sector_cycle import sector_rotation
+    return {"data": sector_rotation(date)}
+
+
+@router.get("/api/strategy/non-limitup-funnel")
+async def get_non_limitup_funnel(
+    date: str = Query(..., description="交易日 YYYY-MM-DD"),
+    top_sectors: int = Query(5, ge=1, le=20, description="扫描板块数"),
+    per_sector: int = Query(20, ge=1, le=50, description="每板块成分股上限"),
+) -> Dict[str, Any]:
+    """S066 §4.2 非涨停类漏斗（Phase 2，§44 未验证因子，标"§44未验证"）。
+    热门板块 → 板块成分股 → 形态扫描(bars) → run_non_limitup_funnel 策略分 → 候选。
+    数据本地（baostock industry_map + kline cache），不依赖 datacenter。"""
+    import json
+    from strategies.sector_cycle import sector_rotation
+    from strategies.pattern_scan import get_sector_stocks, load_industry_map
+    from strategies.non_limitup_funnel import run_non_limitup_funnel
+    from vr_paths import resolve_data_dir
+
+    rot = sector_rotation(date)
+    top = [s for s in rot.get("strength_rank", []) if s.get("zt_count_today", 0) > 0][:top_sectors]
+    if not top:
+        return {"data": {"candidates": [], "count": 0, "sectors_scanned": 0, "note": "无热门板块（当日无涨停板块）"}}
+
+    industry_map = load_industry_map()
+    kc_path = resolve_data_dir() / "baostock_kline_cache.json"
+    cache = json.loads(kc_path.read_bytes()) if kc_path.exists() else {}
+
+    candidates: list[dict] = []
+    for s in top:
+        ind = s["industry"]
+        stocks = get_sector_stocks(ind, industry_map)[:per_sector]
+        for code in stocks:
+            bars = cache.get(code, [])
+            if len(bars) >= 20:
+                candidates.append({"code": code, "bars": bars, "sector": ind})
+
+    sector_rank_map = {s["industry"]: s.get("rank", 99) for s in top}
+    scored = run_non_limitup_funnel(candidates, weather_state=None, sector_rank_map=sector_rank_map)
+    return {
+        "data": {
+            "candidates": scored[:50],
+            "count": len(scored),
+            "sectors_scanned": len(top),
+            "candidates_input": len(candidates),
+            "note": "§44 Phase 2 未验证因子（relative_strength/ma_bullish/volume_signal/sector_strength），接入标未验证；数据本地 baostock",
+        },
+    }
+
+
 @router.get("/api/strategy/funnel/market-kill-switch")
 async def get_market_kill_switch() -> Dict[str, Any]:
     """S066 §16.4 市场级熔断检查。

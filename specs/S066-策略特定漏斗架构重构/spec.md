@@ -142,6 +142,15 @@ class StrategyFunnelConfig:
 > **grill 2026-08-16 Q7 决议**：天气硬开关降级为软标注。
 > 理由：(1) T-1 天气不代表 T 日天气——前提不成立；(2) §13.0 验证天气路由无统计显著提升；
 > (3) 强约束导致 0 候选比无约束更有害。暴风雨是唯一例外（仓位=0 硬约束保留）。
+>
+> **实现更新 2026-08-17（grill STI 无 §44 edge 后升级，超 Q7 软标注）**：STI/天气**选股页完全去噪**——
+> briefing/candidates 移除 WeatherDecisionBar（天气决策条）+ MarketEmotionBlock（STI 温度/情绪阶段卡）+
+> AskAi 天气/情绪上下文 + StrategyGroupTabs weatherState（去★推荐，纯战法 tab 平等）+
+> WinRateCompareSection 天气★列；STI/天气只留 SentimentWeather 复盘页（情绪气象站）。
+> 理由：STI 八维权重拍脑袋 + 9 天数据 + §44 未验证 + 天气路由 lift 0.956<1（task115）→
+> 无 edge 的加权指标不进选股页（不只软标注，完全去展示）。暴风雨硬约束（仓位=0）由
+> PositionAdvisor §6/§15 兜底，不靠选股页天气决策条。**Q7"软标注保留"升级为"选股页完全去噪留复盘"**。
+> 盘中因子（逆势涨停/龙头断板/情绪实时/大盘指数）不入选股，接入 IntradayMonitor 盘中待办（实现时 grill）。
 
 ```python
 # 旧：WEATHER_STRATEGY_MAP（强约束——不允许的战法直接过滤）

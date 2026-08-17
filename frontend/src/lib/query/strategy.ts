@@ -112,7 +112,7 @@ export function useCalendarFactor(date: string, options?: Opts<CalendarFactorRes
   });
 }
 
-/** S066 §5 板块周期分析。 */
+/** S066 §5.4 板块周期分析。 */
 export function useSectorCycle(date: string, industry: string, options?: Opts<SectorCycleResult | null>) {
   return useQuery({
     queryKey: ["strategy", "funnel", "sector-cycle", date, industry] as const,
@@ -120,6 +120,43 @@ export function useSectorCycle(date: string, industry: string, options?: Opts<Se
     staleTime: 300_000,
     ...options,
   });
+}
+
+/** S066 §5.4.1 板块强度排名 TOP10 + §5.4.3 跨板块轮动检测（纯 label）。 */
+export interface SectorRotationResult {
+  date: string;
+  strength_rank: { industry: string; zt_count_today: number; zt_momentum: number; fund_flow: number; rank: number; strength: number; modifier: number }[];
+  rotation: { industry: string; prev_rank: number | null; curr_rank: number | null; change: number; signal: string }[];
+  fund_flow_blocked: boolean;
+  note: string;
+}
+
+export function useSectorRotation(date: string | undefined, options?: Opts<SectorRotationResult>) {
+  return useQuery({
+    queryKey: ["strategy", "funnel", "sector-rotation", date ?? ""] as const,
+    queryFn: () => request<SectorRotationResult>(`/strategy/funnel/sector-rotation?date=${date}`),
+    enabled: !!date,
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
+export function useNonLimitupFunnel(date: string | undefined, options?: Opts<NonLimitupFunnelResult>) {
+  return useQuery({
+    queryKey: ["strategy", "non-limitup-funnel", date ?? ""] as const,
+    queryFn: () => request<NonLimitupFunnelResult>(`/strategy/non-limitup-funnel?date=${date}`),
+    enabled: !!date,
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
+export interface NonLimitupFunnelResult {
+  candidates: { code: string; name?: string; strategy_code?: string; score?: number; sector?: string }[];
+  count: number;
+  sectors_scanned: number;
+  candidates_input: number;
+  note: string;
 }
 
 /** S066 §16.4 市场级熔断检查。 */

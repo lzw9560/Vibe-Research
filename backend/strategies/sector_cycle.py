@@ -225,3 +225,48 @@ def sector_breadth(up_count: int, down_count: int) -> float:
     if total == 0:
         return 0.0
     return round(up_count / total, 4)
+
+
+def aggregate_sectors(date: str) -> list[dict]:
+    """聚合当日 all industries → sectors（§5.4.1/5.4.3 输入）。
+    zt_count_today + zt_momentum 从 gene_scores；fund_flow 阻断降级 0（§44 数据阻断 push2his IP限流）。"""
+    conn = sqlite3.connect(str(_DB))
+    try:
+        industries = [r[0] for r in conn.execute(
+            "SELECT DISTINCT industry FROM gene_scores WHERE date = ? AND industry IS NOT NULL",
+            (date,),
+        ).fetchall()]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+    sectors: list[dict] = []
+    for ind in industries:
+        count_today = _get_zt_count_by_date_industry(date, ind)
+        prev_dates = _get_prev_trading_dates(date, 3)
+        count_avg_3d = sum(_get_zt_count_by_date_industry(d, ind) for d in prev_dates) / max(len(prev_dates), 1)
+        sectors.append({
+            "industry": ind,
+            "zt_count_today": count_today,
+            "zt_momentum": count_today - count_avg_3d,
+            "fund_flow": 0,  # §44 数据阻断降级 0
+        })
+    return sectors
+
+
+def sector_rotation(date: str) -> dict:
+    """§5.4.1 板块强度排名 TOP10 + §5.4.3 跨板块轮动检测。
+    纯 label（§5.4 Q2 方向被驳，不接策略分）；fund_flow 阻断降级 0。"""
+    sectors_curr = aggregate_sectors(date)
+    prev_dates = _get_prev_trading_dates(date, 1)
+    prev_date = prev_dates[0] if prev_dates else None
+    sectors_prev = aggregate_sectors(prev_date) if prev_date else []
+    rank = sector_strength_rank(date, sectors_curr)
+    rotation = detect_rotation(prev_date, date, sectors_prev, sectors_curr) if (prev_date and sectors_prev) else []
+    return {
+        "date": date,
+        "strength_rank": rank,
+        "rotation": rotation,
+        "fund_flow_blocked": True,
+        "note": "§5.4 纯 label 不接策略分（Q2 方向被驳）；fund_flow 阻断降级 0（§44）",
+    }

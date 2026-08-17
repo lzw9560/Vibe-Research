@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { FunnelLayers } from "@/components/candidate/FunnelLayers";
+import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
 import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
 import { ThresholdPanel } from "@/components/candidate/ThresholdPanel";
 import { candidatesApi, type DiagnosisCard as Card, type FunnelResult } from "@/lib/candidates";
@@ -70,26 +70,15 @@ export function Candidates() {
 
       {err && <div className="text-sm text-danger">{err}</div>}
 
-      {result && <FunnelLayers layers={result.layers} />}
-
-      <div className="space-y-3">
-        <div className="font-medium">最终候选（{finalCards.length}）</div>
-        {finalCards.length === 0 && <div className="text-sm text-muted-foreground">无符合标的</div>}
-        <div className="grid gap-2">
-          {finalCards.map((c) => (
-            <button
-              key={c.code}
-              onClick={() => openDiagnosis(c.code)}
-              className="text-left"
-            >
-              <GlassCard className="p-3 flex justify-between hover:opacity-80">
-                <span>{c.indicators.name} <span className="text-muted-foreground">{c.code}</span></span>
-                <span className="text-sm text-muted-foreground">活跃度 {c.activity.tier}</span>
-              </GlassCard>
-            </button>
-          ))}
-        </div>
-      </div>
+      {result && (
+        <SelectionPipeline
+          funnelResult={result}
+          mode="funnel-only"
+          date={result.date}
+          onPick={openDiagnosis}
+          rerunHandlers={candidatesApi}
+        />
+      )}
 
       {active && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setActive(null)}>
