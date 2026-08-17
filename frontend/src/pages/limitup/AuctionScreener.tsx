@@ -10,14 +10,7 @@ import { TabBar } from "@/components/ui/TabBar";
 import { useAuctionTop } from "@/lib/query";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Monitor925 } from "@/components/auction/Monitor925";
-import { cn } from "@/lib/utils";
 
-function stiColor(phase: string | null) {
-  if (!phase) return "text-muted-foreground";
-  if (phase === "高潮" || phase === "启动") return "text-danger";
-  if (phase === "冰点" || phase === "退潮") return "text-success";
-  return "text-muted-foreground";
-}
 
 // 页内 Tab key：auction = 竞价预案 TOP N，monitor = 盘中监控 9:25
 type AuctionTab = "auction" | "monitor";
@@ -43,9 +36,7 @@ export function AuctionScreener() {
   const askAiContext = [
     `当前页面：竞价选股（AuctionScreener）`,
     `日期：${selectedDate}`,
-    result?.sti_score != null
-      ? `STI=${result.sti_score?.toFixed(1)}（${result.sti_phase ?? "--"}），分析 ${result.total_analyzed ?? "--"} 只`
-      : `STI/情绪：未取得`,
+    `分析 ${result?.total_analyzed ?? "--"} 只`,
     candidates.length > 0
       ? `竞价候选：${candidates.slice(0, 10).map((c) => `${c.code}(${c.name})评分${c.score}/基因${c.gene_score}/封板率${(c.seal_rate * 100).toFixed(0)}%`).join("，")}`
       : `竞价候选：未取得`,
@@ -55,7 +46,7 @@ export function AuctionScreener() {
     <div className="space-y-4">
       <PageHeader
         title="竞价选股"
-        subtitle="基于 STI 情绪温度计的竞价选股模型与盘中监控"
+        subtitle="竞价选股模型（S072：STI 无 §44 edge 已去噪，honest 标注）与盘中监控"
         actions={
           activeTab === "auction" ? (
             <div className="flex items-center gap-2">
@@ -94,12 +85,10 @@ export function AuctionScreener() {
         </GlassCard>
       ) : (
         <>
-          {/* STI 摘要栏 */}
-          {result && result.sti_score != null && (
-            <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/20 p-4 sm:grid-cols-4">
-              <MetricCard label="STI 得分" value={result.sti_score} valueClassName="text-primary" />
-              <MetricCard label="STI 阶段" value={result.sti_phase ?? "—"} valueClassName={cn(stiColor(result.sti_phase))} />
-              <MetricCard label="分析总数" value={result.total_analyzed} />
+          {/* S072 STI 去噪：去 STI 得分/阶段（无 §44 edge），留分析/候选数 */}
+          {result && (
+            <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/20 p-4">
+              <MetricCard label="分析总数" value={result.total_analyzed ?? "—"} />
               <MetricCard label="候选数" value={result.candidates?.length ?? 0} valueClassName="text-primary" />
             </div>
           )}

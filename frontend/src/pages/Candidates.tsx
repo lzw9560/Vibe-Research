@@ -37,7 +37,7 @@ export function Candidates() {
   // S066 AskAi：注入漏斗各层 + 最终候选
   const askAiContext = [
     `当前页面：候选池（Candidates）`,
-    result ? `run_id ${result.run_id} · 日期 ${result.date} · 情绪档 ${result.sentiment_phase ?? "未取得"}` : `漏斗：未运行`,
+    result ? `run_id ${result.run_id} · 日期 ${result.date}` : `漏斗：未运行`,
     result && result.layers.length > 0
       ? `漏斗层：${result.layers.map((l) => `${l.name}(${l.input_count}→${l.output_count})`).join("，")}`
       : ``,
@@ -63,7 +63,7 @@ export function Candidates() {
         <Button onClick={() => run()} disabled={loading}>{loading ? "运行中…" : "重跑漏斗"}</Button>
         {result && (
           <span className="text-sm text-muted-foreground">
-            run_id {result.run_id} · 情绪档 {result.sentiment_phase || "未取得"} · 最终候选 {finalCards.length}
+            run_id {result.run_id} · 最终候选 {finalCards.length}
           </span>
         )}
       </GlassCard>
