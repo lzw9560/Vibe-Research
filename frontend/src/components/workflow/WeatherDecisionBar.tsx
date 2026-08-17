@@ -1,5 +1,5 @@
 // S063 T19：盘前简报顶部天气决策条（WeatherDecisionBar）。
-// 全宽非卡片，纵向流第一块：天气图标+名+STI+阶段+推荐/不推荐 chips+熔断三灯+STI 迷你折线+天气色背景。
+// 全宽非卡片，纵向流第一块：天气图标+名+推荐/不推荐 chips+熔断三灯+天气色背景。S072 STI 去噪（score/phase 移出选股页留复盘）。
 // spec §5.2：背景色微染天气色（极淡的 amber/slate/red/violet tint）。
 import { Cloud, CloudRain, Sun, Zap, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -54,12 +54,7 @@ export function WeatherDecisionBar({ ctx }: Props) {
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <span className="text-lg font-semibold">{meta.label}</span>
-            <Badge variant={meta.badge}>
-              {ctx?.sti_score != null ? `STI ${ctx.sti_score.toFixed(1)}` : "STI —"}
-            </Badge>
-            {ctx?.sti_phase && (
-              <span className="text-xs text-muted-foreground">{ctx.sti_phase}</span>
-            )}
+            {/* S072 STI 去噪：score/phase 移出选股页（无 §44 edge，留 SentimentWeather 复盘） */}
           </div>
           <span className="text-xs text-muted-foreground">
             {ctx?.source_date ? `昨日情绪 · T-1(${ctx.source_date})` : "情绪数据未取得"}

@@ -38,26 +38,17 @@ function formatRelativeTime(generatedAt: string): string {
   }
 }
 
-/** S049 B：市场情绪区——STI 分数+阶段 + 三率 chips + ladder 分布 + 涨跌停家数。缺数据显 "--"。 */
+/** S049 B：市场情绪区——三率 chips + ladder 分布 + 涨跌停家数。S072 STI 去噪：score/phase 移出选股页（无 §44 edge，留复盘），保留原始市场数据。 */
 function MarketEmotionBlock({ emotion }: { emotion: import("@/lib/api/types").MarketEmotionBriefing | undefined }) {
   if (!emotion) return null;
-  const hasAny = emotion.sti_score != null || emotion.sti_phase || emotion.seal_rate != null
-    || emotion.ladder?.length || emotion.zt_count != null;
+  const hasAny = emotion.seal_rate != null || emotion.ladder?.length || emotion.zt_count != null;
   if (!hasAny) return null;
   const pct = (v: number | null | undefined) => v != null ? `${(v * 100).toFixed(1)}%` : "—";
   const num = (v: number | null | undefined) => v != null ? String(v) : "—";
   return (
     <div className="mb-6">
-      <SectionHeader title="市场情绪" subtitle="STI 温度 + 连板梯队 + 三率" />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <GlassCard className="p-4">
-          <p className="text-xs text-muted-foreground">STI 温度</p>
-          <p className="mt-1 text-2xl font-bold">{emotion.sti_score != null ? emotion.sti_score.toFixed(1) : "—"}</p>
-        </GlassCard>
-        <GlassCard className="p-4">
-          <p className="text-xs text-muted-foreground">情绪阶段</p>
-          <p className="mt-1 text-2xl font-bold">{emotion.sti_phase ?? "—"}</p>
-        </GlassCard>
+      <SectionHeader title="市场情绪" subtitle="连板梯队 + 三率（STI 去噪留复盘）" />
+      <div className="grid gap-3 sm:grid-cols-2">
         <GlassCard className="p-4">
           <p className="text-xs text-muted-foreground">涨停 / 跌停</p>
           <p className="mt-1 text-2xl font-bold">{num(emotion.zt_count)} / {num(emotion.dt_count)}</p>
@@ -144,7 +135,7 @@ export default function PreMarketBriefing() {
     `当前页面：盘前简报`,
     `日期：${briefing.data_date ?? date ?? "未取得"}`,
     pmCtx
-      ? `情绪天气：${pmCtx.weather_state}，STI=${pmCtx.sti_score ?? "--"}（${pmCtx.sti_phase ?? "--"}）`
+      ? `情绪天气：${pmCtx.weather_state ?? "未取得"}（STI 去噪，不注入无验证指标）`
       : `情绪天气：未取得`,
     pmEmotion
       ? `市场情绪：涨停${pmEmotion.zt_count ?? "--"}/跌停${pmEmotion.dt_count ?? "--"}/连板梯队${pmEmotion.ladder?.map(t => `${t.boards}板×${t.count}`).join(" ") || "--"}/封板率${pmEmotion.seal_rate != null ? pmEmotion.seal_rate.toFixed(0) : "--"}%/炸板率${pmEmotion.break_rate != null ? pmEmotion.break_rate.toFixed(0) : "--"}%/晋级率${pmEmotion.promotion_rate != null ? pmEmotion.promotion_rate.toFixed(0) : "--"}%`
