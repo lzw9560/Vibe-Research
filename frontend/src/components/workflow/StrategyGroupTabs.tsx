@@ -1,4 +1,4 @@
-// S066 §3.3 策略组 Tab——按天气硬开关激活的策略组分 tab。
+// S066 §3.3 策略组 Tab——天气软标注(Q7)推荐战法分 tab。
 // spec §11.2：策略分组：按天气激活的策略组分 tab，每 tab 显示该策略的候选列表。
 import { Cloud, CloudRain, Sun, Zap, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ interface Props {
   onSelect: (code: string) => void;
 }
 
-/** S066 §3.3 天气硬开关策略组 Tab。
+/** S066 §3.3 天气软标注策略组 Tab（Q7：非暴风雨全可用，推荐★徽标；暴风雨硬约束只 storm_reversal）。
  * 按当前天气的主跑策略 + fallback 分 tab，点击切换激活策略。
  */
 export function StrategyGroupTabs({ weatherState, activeStrategy, onSelect }: Props) {

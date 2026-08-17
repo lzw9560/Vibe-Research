@@ -1,5 +1,5 @@
 // S063 T19：盘前简报顶部天气决策条（WeatherDecisionBar）。
-// 全宽非卡片，纵向流第一块：天气图标+名+STI+阶段+允许/禁用 chips+熔断三灯+STI 迷你折线+天气色背景。
+// 全宽非卡片，纵向流第一块：天气图标+名+STI+阶段+推荐/不推荐 chips+熔断三灯+STI 迷你折线+天气色背景。
 // spec §5.2：背景色微染天气色（极淡的 amber/slate/red/violet tint）。
 import { Cloud, CloudRain, Sun, Zap, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -72,10 +72,10 @@ export function WeatherDecisionBar({ ctx }: Props) {
         </div>
       </div>
 
-      {/* 中：允许/禁用战法 chips */}
+      {/* 中：推荐/不推荐战法 chips（Q7 软标注；暴风雨 forbidden=硬约束 storm_reversal only） */}
       <div className="flex flex-1 flex-wrap items-center gap-1.5">
         {allowed.length === 0 && forbidden.length === 0 ? (
-          <span className="text-xs text-muted-foreground">战法适配未取得（沿用全允许）</span>
+          <span className="text-xs text-muted-foreground">战法推荐未取得（全可用，Q7 软标注）</span>
         ) : (
           <>
             {allowed.map((code) => (

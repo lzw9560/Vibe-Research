@@ -23,6 +23,7 @@ import type { TransitionRequest, FactorResult, ScoredCandidate } from "@/lib/api
 import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
 import { Link, useSearchParams } from "react-router-dom";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
+import { HonestyBanner } from "@/components/ui/HonestyBanner";
 
 function formatRelativeTime(generatedAt: string): string {
   try {
@@ -236,6 +237,8 @@ export default function PreMarketBriefing() {
       {/* S031 R23：done 纵向流——天气决策条 → 情绪 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉 */}
       {status === "done" && (
         <>
+          {/* S072 §44 诚实标注层（forward verdict + 各信号无 edge，盘前决策前置可见） */}
+          <HonestyBanner />
           {/* ⓪ 天气决策条（S063：T-1 硬标准头部，全宽非卡片） */}
           <div className="mb-6 space-y-3">
             <WeatherDecisionBar ctx={briefing.sentiment_context} />
@@ -245,7 +248,7 @@ export default function PreMarketBriefing() {
             <CalendarFactorHint date={briefing.data_date ?? ""} />
           </div>
 
-          {/* S066 §3.3 策略组 Tab——按天气硬开关激活的策略分 tab */}
+          {/* S066 §3.3 策略组 Tab——天气软标注(Q7)推荐战法分 tab */}
           <div className="mb-6">
             <StrategyGroupTabs
               weatherState={briefing.sentiment_context?.weather_state}
