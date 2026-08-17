@@ -34,8 +34,8 @@ class SentimentContext:
     source_date: str | None            # T-1 日期（数据来源日）
     decision_date: str                 # T 日期（决策适用日）
     weather_state: str | None          # 晴天/阴天/暴风雨/极端反弹/未知
-    sti_score: float | None            # T-1 STI 分数
-    sti_phase: str | None              # T-1 STI 阶段
+    sti_score: float | None            # T-1 STI 分数（S072：复盘用，选股链前端不展示；weather_state 计算内部用）
+    sti_phase: str | None              # T-1 STI 阶段（同上，复盘用不展示）
     fuse_state: dict[str, Any] | None  # 三条熔断规则状态
     allowed_styles: list[str] = field(default_factory=list)   # 今日允许的战法 code 列表
     forbidden_styles: list[str] = field(default_factory=list)  # 今日禁用的战法 code 列表

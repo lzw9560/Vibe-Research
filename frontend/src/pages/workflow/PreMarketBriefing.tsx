@@ -1,12 +1,11 @@
 import { useEffect, useCallback, useState, useMemo } from "react";
 import { TrendingUp } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
-import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { StrategyGroupTabs } from "@/components/workflow/StrategyGroupTabs";
 import { CalendarFactorHint } from "@/components/workflow/CalendarFactorHint";
 import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
 import { usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
-import { useStrategyBacktest, useWeatherStrategyMap } from "@/lib/query/strategy";
+import { useStrategyBacktest } from "@/lib/query/strategy";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -36,39 +35,6 @@ function formatRelativeTime(generatedAt: string): string {
   } catch {
     return generatedAt;
   }
-}
-
-/** S049 B：市场情绪区——三率 chips + ladder 分布 + 涨跌停家数。S072 STI 去噪：score/phase 移出选股页（无 §44 edge，留复盘），保留原始市场数据。 */
-function MarketEmotionBlock({ emotion }: { emotion: import("@/lib/api/types").MarketEmotionBriefing | undefined }) {
-  if (!emotion) return null;
-  const hasAny = emotion.seal_rate != null || emotion.ladder?.length || emotion.zt_count != null;
-  if (!hasAny) return null;
-  const pct = (v: number | null | undefined) => v != null ? `${(v * 100).toFixed(1)}%` : "—";
-  const num = (v: number | null | undefined) => v != null ? String(v) : "—";
-  return (
-    <div className="mb-6">
-      <SectionHeader title="市场情绪" subtitle="连板梯队 + 三率（STI 去噪留复盘）" />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <GlassCard className="p-4">
-          <p className="text-xs text-muted-foreground">涨停 / 跌停</p>
-          <p className="mt-1 text-2xl font-bold">{num(emotion.zt_count)} / {num(emotion.dt_count)}</p>
-        </GlassCard>
-        <GlassCard className="p-4">
-          <p className="text-xs text-muted-foreground">连板梯队</p>
-          <p className="mt-1 text-sm font-medium leading-relaxed">
-            {emotion.ladder?.length
-              ? emotion.ladder.map((t) => `${t.boards}板×${t.count}`).join(" ")
-              : "—"}
-          </p>
-        </GlassCard>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-xs">
-        <GlassCard className="px-3 py-1.5">封板率 {pct(emotion.seal_rate)}</GlassCard>
-        <GlassCard className="px-3 py-1.5">炸板率 {pct(emotion.break_rate)}</GlassCard>
-        <GlassCard className="px-3 py-1.5">晋级率 {pct(emotion.promotion_rate)}</GlassCard>
-      </div>
-    </div>
-  );
 }
 
 export default function PreMarketBriefing() {
@@ -125,21 +91,14 @@ export default function PreMarketBriefing() {
   if (!briefing) return null;
 
   const factors: FactorResult[] = briefing.factors ?? [];
-  const emotion = briefing.market_emotion;
   const funnelLayers = briefing.funnel_layers;
 
   // 问 AI 上下文——注入盘前简报真实数据
   const pmCtx = briefing.sentiment_context;
-  const pmEmotion = briefing.market_emotion;
   const askAiContext = [
     `当前页面：盘前简报`,
     `日期：${briefing.data_date ?? date ?? "未取得"}`,
-    pmCtx
-      ? `情绪天气：${pmCtx.weather_state ?? "未取得"}（STI 去噪，不注入无验证指标）`
-      : `情绪天气：未取得`,
-    pmEmotion
-      ? `市场情绪：涨停${pmEmotion.zt_count ?? "--"}/跌停${pmEmotion.dt_count ?? "--"}/连板梯队${pmEmotion.ladder?.map(t => `${t.boards}板×${t.count}`).join(" ") || "--"}/封板率${pmEmotion.seal_rate != null ? pmEmotion.seal_rate.toFixed(0) : "--"}%/炸板率${pmEmotion.break_rate != null ? pmEmotion.break_rate.toFixed(0) : "--"}%/晋级率${pmEmotion.promotion_rate != null ? pmEmotion.promotion_rate.toFixed(0) : "--"}%`
-      : `市场情绪：未取得`,
+    // S072 去噪：选股页不注入天气/情绪（STI 无 §44 edge + 天气路由 lift 0.956<1）；保留熔断/战法/漏斗
     pmCtx?.fuse_state
       ? `熔断：${pmCtx.fuse_state.fuse_state}，允许战法：${(pmCtx.allowed_styles ?? []).join("、") || "无"}，禁用：${(pmCtx.forbidden_styles ?? []).join("、") || "无"}`
       : `熔断：未取得`,
@@ -225,31 +184,26 @@ export default function PreMarketBriefing() {
         </GlassCard>
       )}
 
-      {/* S031 R23：done 纵向流——天气决策条 → 情绪 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉 */}
+      {/* S031 R23：done 纵向流——诚实标注 → 熔断/日历 → 策略组 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉（S072 去天气/情绪） */}
       {status === "done" && (
         <>
           {/* S072 §44 诚实标注层（forward verdict + 各信号无 edge，盘前决策前置可见） */}
           <HonestyBanner />
-          {/* ⓪ 天气决策条（S063：T-1 硬标准头部，全宽非卡片） */}
+          {/* S072 去天气决策条（STI/天气无 §44 edge）；保留熔断 + 日历（风控非情绪） */}
           <div className="mb-6 space-y-3">
-            <WeatherDecisionBar ctx={briefing.sentiment_context} />
             {/* S066 §16.4 市场级熔断横幅（触发时才渲染） */}
             <MarketKillSwitchBanner />
             {/* S066 §6 日历因子提示（周五×0.7/节前×0.3） */}
             <CalendarFactorHint date={briefing.data_date ?? ""} />
           </div>
 
-          {/* S066 §3.3 策略组 Tab——天气软标注(Q7)推荐战法分 tab */}
+          {/* S066 §3.3 策略组 Tab（S072 去天气软标注，全战法平等展示） */}
           <div className="mb-6">
             <StrategyGroupTabs
-              weatherState={briefing.sentiment_context?.weather_state}
               activeStrategy={activeStrategy}
               onSelect={setActiveStrategy}
             />
           </div>
-
-          {/* ① 市场情绪（S049 B 重写：STI+三率+ladder+涨跌停） */}
-          <MarketEmotionBlock emotion={emotion} />
 
           {/* ② 涨停基因因子漏斗（打分→战法→仓位 三步）——S049 D3：跳 candidate_funnel 卡（消重复，候选池漏斗在 ③ 统一呈现） */}
           {factors.filter((fr) => fr.factor_id !== "candidate_funnel").length > 0 ? (
@@ -278,7 +232,7 @@ export default function PreMarketBriefing() {
           />
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
-          <WinRateCompareSection factors={factors} onPick={setDrawerCode} weatherState={briefing.sentiment_context?.weather_state} />
+          <WinRateCompareSection factors={factors} onPick={setDrawerCode} />
         </>
       )}
 
@@ -289,7 +243,7 @@ export default function PreMarketBriefing() {
       {/* S054 R4：盘前行为干预卡（展开不收起）——三桶算账 + 研判 + 深看链接 */}
       {status === "done" && <PreMarketBehaviorBlock />}
 
-      {/* S060：昨日验证对账块（嵌市场情绪区下方） */}
+      {/* S060：昨日验证对账块 */}
       {status === "done" && <VerificationCardBlock />}
 
       {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关（S033：传 date 供状态卡/徽标） */}
@@ -384,7 +338,6 @@ function ScoredCandidateTable({ candidates, onPick, onBuy }: {
               <th className="px-2 py-1 text-left">代码</th>
               <th className="px-2 py-1 text-left">名称</th>
               <th className="px-2 py-1">战法分</th>
-              <th className="px-2 py-1">推荐</th>
               <th className="px-2 py-1">止损%</th>
               <th className="px-2 py-1">止盈%</th>
               <th className="px-2 py-1">操作</th>
@@ -402,7 +355,6 @@ function ScoredCandidateTable({ candidates, onPick, onBuy }: {
                 <td className="px-2 py-1 text-center font-mono">
                   {typeof c.strategy_score === "number" ? c.strategy_score.toFixed(1) : "—"}
                 </td>
-                <td className="px-2 py-1 text-center">{c.weather_recommended ? "★" : ""}</td>
                 <td className="px-2 py-1 text-center">{c.position_params?.stop_loss_pct ?? "—"}</td>
                 <td className="px-2 py-1 text-center">{c.position_params?.take_profit_pct ?? "—"}</td>
                 <td className="px-2 py-1 text-center">
@@ -530,26 +482,15 @@ function FunnelMatrixSimple({ layers, onPick, onBuy }: { layers: FunnelLayer[]; 
 }
 
 /** S031 R22：战法胜率对比——useStrategyBacktest 真实回测 + 各因子 L2 passed 合成估算。
- * grill Q7：从 weather-map 端点取天气推荐集合，按当前天气 weather_state 取推荐战法，
- * 传给 WinRateComparePanel 在战法行标「推荐」（软标注，不过滤）。 */
+ * S072 去天气：不再按天气推荐标★（天气无 §44 edge，lift 0.956<1）。 */
 function WinRateCompareSection({
   factors,
   onPick,
-  weatherState,
 }: {
   factors: FactorResult[];
   onPick: (code: string) => void;
-  weatherState?: string;
 }) {
   const { data: backtest, isLoading } = useStrategyBacktest(60);
-  // grill Q7：天气-策略推荐映射表（5min 缓存，复用已有 hook，不发额外请求）
-  const { data: weatherMap } = useWeatherStrategyMap();
-  // weatherMap 已被 request() 解包 .data → { weather_strategy_map, weather_recommendation, fallback_strategies }
-  const weatherRecommended = useMemo(() => {
-    if (!weatherState) return undefined;
-    const recs = weatherMap?.weather_recommendation?.[weatherState];
-    return recs && recs.length > 0 ? new Set(recs) : undefined;
-  }, [weatherState, weatherMap]);
   // 取所有因子 L2 战法层 passed（携 best_strategy + confidence_value）
   const l2Passed = factors
     .flatMap((f) => f.layers ?? [])
@@ -563,7 +504,6 @@ function WinRateCompareSection({
         l2Passed={l2Passed}
         loading={isLoading}
         onPickCandidate={onPick}
-        weatherRecommended={weatherRecommended}
       />
     </div>
   );

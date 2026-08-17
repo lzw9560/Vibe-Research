@@ -242,15 +242,16 @@ async def get_forward_test_summary_endpoint(
     benchmark_win_rate: float = Query(60.0, description="Phase 0b benchmark_A（信息字段，非门）"),
     min_days: int = Query(20, ge=1, le=60, description="最少交易日数"),
 ) -> Dict[str, Any]:
-    """S066 Phase 0e 前向测试汇总（paper trading 结果，§44 合规）。
+    """S066 Phase 0e 前向测试汇总（paper trading 结果，§44 60日复验窗口）。
 
-    通过标准（spec §13 ① / §44 数据支撑优先）：
+    通过标准（spec §13 ① / §44 数据支撑优先，forward_test 内部 passed 判定逻辑不变）：
     - total_days >= min_days（20 交易日）
     - win_rate >= §13.0 绝对 60%（非 benchmark×0.8 弱 degradation）
-    - lift = strategy_winrate / random_baseline_winrate >= 2.0（§44：lift<2x=噪声）
+    - lift = strategy_winrate / random_baseline_winrate >= 2.0（§44 60日复验窗口：lift<2 标未 validated，前向测试仍跑，60日后复验）
     - random_baseline 已回填（universe_returns 非空，否则无法算 lift → 不通过）
     - 无崩溃（consecutive_loss < 8，kill criteria 未触发）
 
+    注：passed=False 不阻断接入跑通——§44 统计结论作为诚实标注（标"未 validated/探索性"），系统仍按等权 placeholder 推进；60 日数据积累后复验，破2x→validated 升级权重，<2x→保留接入标注"复验未破2x"。
     前向测试期间不投真金。20 天运行需日历时间积累。
     """
     from strategies.forward_test import get_forward_test_summary

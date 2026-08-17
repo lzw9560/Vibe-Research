@@ -3,20 +3,20 @@
 > 一切为了提高期望收益（赚钱）。Phase 0 先验证 alpha 存在，再逐步增加复杂度。
 > 依赖链：0a(回填) -> 0b(回归) -> 0c(阈值) -> 0d(权重) -> 0e(前向测试) -> Phase 1/2(并行) -> Phase 3(前端)
 
-## §44 验证后修订（2026-08-16，按 AGENTS.md §44 数据支撑优先）
+## §44 验证后修订（2026-08-16，按 AGENTS.md §44 数据支撑优先；2026-08-17 §44 从"硬约束 bar"改为"60日复验窗口"）
 
-> **Phase 0b/0e 回归 + 前向测试均未验证 alpha（§44 bar）**：
+> **Phase 0b/0e 回归 + 前向测试均未验证 alpha（§44 60日复验窗口：未 validated，不阻断接入跑通）**：
 > - Phase 0b：全 6 因子 within-day（横截面）r≈0、CI 含 0（pooled r=+0.07 是日间 confound，非选股力）。
-> - Phase 0e（`tools/forward_test_backfill.py` retroactive 跑 31 天 eastmoney_live）：策略胜率 49.2% CI[44.8,53.6] vs 随机基准 50.2% CI[48.2,52.3]，**lift 0.98x <2x = 噪声**（且 <1 略劣于随机）。
-> - 三方一致：§1.1 grill Q1（total_score 无 edge）+ Phase 0b + Phase 0e → S066 信号在 §44 bar 下**均无次日收益 edge**。
+> - Phase 0e（`tools/forward_test_backfill.py` retroactive 跑 31 天 eastmoney_live）：策略胜率 49.2% CI[44.8,53.6] vs 随机基准 50.2% CI[48.2,52.3]，**lift 0.98x <2x → 标未 validated**（且 <1 略劣于随机；不阻断接入，标探索性跑通）。
+> - 三方一致：§1.1 grill Q1（total_score 无 edge）+ Phase 0b + Phase 0e → S066 信号在 §44 60日复验窗口下**均无次日收益 edge（诚实标注非阻断）**。
 >
-> **§13.0 被违反**：Phase 1-3（9 战法+kill+Kelly+板块+日历，全复杂度）建在 Phase 0 未验证的地基上——Phase 0e runner（run_daily_forward_test）此前未接线、forward_test_records 0 行，§13.0"先验证 alpha>60% 再加复杂度"门没过。框架 pass-logic 也不合规（pass_threshold=48=回测60×0.8 弱 bar ≠ §13.0 绝对 60，无随机基准）。
+> **§13.0 被违反**：Phase 1-3（9 战法+kill+Kelly+板块+日历，全复杂度）建在 Phase 0 未验证的地基上——Phase 0e runner（run_daily_forward_test）此前未接线、forward_test_records 0 行，§13.0"先验证 alpha>60% 再加复杂度"门没过。框架 pass-logic 也不合规（pass_threshold=48=回测60×0.8 弱 bar ≠ §13.0 绝对 60，无随机基准）。注：这是 §13.0 绝对门合规问题（forward_test 内部 passed 判定逻辑），与"§44 60日复验窗口不阻断接入"口径正交——接入跑通≠通过 §44 validated 门。
 >
-> **修订路径**（不回退 Phase 1-3，但诚实标注未验证）：
+> **修订路径**（不回退 Phase 1-3，但诚实标注未验证；60日复验窗口口径）：
 > 1. **HOLD 新复杂度**（Phase 4+ / 新层）至 alpha 验证（§13.0"不提升的不加"）。
-> 2. **修框架 pass-logic 到 §44 合规**：加随机基准 + lift、门槛对齐 §13.0 绝对 60（非 48 degradation）。
+> 2. **修框架 pass-logic 到 §44 60日复验窗口口径**（forward_test 内部 passed 判定逻辑不变）：加随机基准 + lift、门槛对齐 §13.0 绝对 60（非 48 degradation）。passed=False 不阻断接入跑通——§44 统计结论作为诚实标注（标"未 validated/探索性"），系统仍按等权 placeholder 推进。
 > 3. **weather-adapted 重跑**：Phase 0e 回填接历史天气（sentiment_context），测完整架构非退化版（当前 weather=None 是下界）。
-> 4. **60 天积累复验**：eastmoney_live 满 60 天后重跑 Phase 0b（within-day r）+ 0e（胜率 lift），lift 破 2x + r 显著 → alpha 成立；否则确认无 edge。
+> 4. **60 天积累复验**（~2026-09-20 到点）：eastmoney_live 满 60 天后重跑 Phase 0b（within-day r）+ 0e（胜率 lift），lift 破 2x + r 显著 → alpha 成立 → validated 升级权重；<2x → 保留接入标注"复验未破2x"，不硬过滤。
 > 5. **前端 getAStockTimeInfo 重构**：改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源；非交易日 fix 见 591f536，节假日待重构补）。
 >
 > **原 Phase 1-3 计划状态**：已实现（Phase 0-3 全闭合），但建在 placeholder/null-验证信号上——非"validated alpha"，是"待验证的架构 shape"。下方原计划保留作参考。
@@ -61,8 +61,8 @@
 ### 0e 前向测试（20 交易日，不投真金）
 - 用 0d 权重跑系统：涨停股 x 策略分排序 x 板块周期 x 日历因子
 - 每日记录推荐 vs 实际表现
-- 通过标准：系统无崩溃 + 推荐胜率 >= 回测 x 0.8（§44：×0.8=48 弱 bar ≠ §13.0 绝对60 + 无随机基准 → 不合规，见下 + spec §13）
-  > **§44 修订**：此"×0.8 degradation"弱 bar（=48）≠ §13.0 绝对 60，且无随机基准 → §44-non-compliant（50% 随机策略也过 48）。实测策略 49.2% vs 随机 50.2% lift 0.98x 噪声（见 spec §13 + plan §44 修订路径第 2 条：修框架 pass-logic 对齐 60 + 加随机基准）。
+- 通过标准：系统无崩溃 + 推荐胜率 >= 回测 x 0.8（§44 forward_test 内部 pass-logic：×0.8=48 弱 bar ≠ §13.0 绝对60 + 无随机基准 → 不合规，见下 + spec §13）
+  > **§44 修订**：此"×0.8 degradation"弱 bar（=48）≠ §13.0 绝对 60，且无随机基准 → §44-non-compliant（50% 随机策略也过 48）。实测策略 49.2% vs 随机 50.2% lift 0.98x → 标未 validated（见 spec §13 + plan §44 修订路径第 2 条：修框架 pass-logic 对齐 60 + 加随机基准）。注：这是 §13.0 绝对门合规问题（forward_test 内部 passed 判定逻辑），与"§44 60日复验窗口不阻断接入"口径正交——接入跑通≠通过 §44 validated 门。
 - 不通过 -> 修 bug 再跑 20 天
 - 合并策略：develop 分支跑，通过后 squash 合并
 

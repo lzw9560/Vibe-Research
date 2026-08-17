@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""§44 验证：T-1 资金流（main_net 净流入）→ T 涨停（盘前选股假设）。
+"""§44 60日复验窗口验证：T-1 资金流（main_net 净流入）→ T 涨停（盘前选股假设）。
 
 假设：一只股 T-1 主力净流入高 → T 涨停概率↑（资金驱动涨停，causal）。盘前选股用 T-1 资金流筛 T 涨停候选。
-§44 bar：lift>=2x（高 T-1 资金流股的 T 涨停率 / 低 T-1 资金流股）+ CI 不重叠 + n>=30。
+§44 60日复验窗口：lift>=2x（高 T-1 资金流股的 T 涨停率 / 低 T-1 资金流股）+ CI 不重叠 + n>=30 → validated；
+<2x 标未 validated（复验日满60天后定权重），不阻断接入跑通。本脚本计算逻辑不变，只改注释口径。
 
 设计：对每个 T（eastmoney_live 日）：
   正类 = 涨停-T 股（gene_scores T）；负类 = 对照样本（非涨停-T，从 code_industry 随机抽）
@@ -111,11 +112,11 @@ def main(sample_per_day: int = 100, sleep_s: float = 2.5) -> int:
     lift = t_rate / b_rate if b_rate else 0.0
     tb_lo, tb_hi = _wilson(t_pos, q)
     bb_lo, bb_hi = _wilson(b_pos, q)
-    print(f"\n=== T-1 资金流 → T 涨停 §44 验证 ===")
+    print(f"\n=== T-1 资金流 → T 涨停 §44 60日复验窗口验证 ===")
     print(f"样本: {n}（fetched ok={fetch_ok} fail={fetch_fail}）")
     print(f"top-quintile T-1 main_net: 涨停 {t_pos}/{q} = {t_rate*100:.2f}% CI[{tb_lo*100:.2f},{tb_hi*100:.2f}]")
     print(f"bottom-quintile          : 涨停 {b_pos}/{q} = {b_rate*100:.2f}% CI[{bb_lo*100:.2f},{bb_hi*100:.2f}]")
-    print(f"lift = {lift:.3f}x → {'≥2x §44 edge' if lift >= 2.0 else '<2x §44 噪声'}"
+    print(f"lift = {lift:.3f}x → {'≥2x §44 validated' if lift >= 2.0 else '<2x §44 未 validated（不阻断，60日后复验）'}"
           f"{'；CI 不重叠（显著）' if tb_lo > bb_hi else '；CI 重叠（不显著）'}")
     print(f"caveat: sample_per_day={sample_per_day}（样本化降 scale）；push2his 断连则 fail 多、n 小。")
     return 0

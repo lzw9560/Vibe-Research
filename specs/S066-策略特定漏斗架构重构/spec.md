@@ -33,16 +33,17 @@
 
 **Phase 0a 回填计划**：gene_scores.db 有 6537 条记录（1104 只独立股票），当前仅用了 74 条。Phase 0a 将回填全部 6537 样本的 kline 次日收益，届时所有因子回归在 6537 样本上重新计算。n=6537 时可检测 r=0.024 级别的效应。
 
-**grill Q1 验证（2026-08-16，`tools/screener_edge_validation.py` a7fad90，按 AGENTS.md §44 bar）**：
+**grill Q1 验证（2026-08-16，`tools/screener_edge_validation.py` a7fad90，按 AGENTS.md §44 数据支撑优先）**：
 screener 按 total_score 选同日 top-N（横截面排名）。补全验证区分 (a) 收益预测器 / (b) 质量筛 / (c) 功效：
 - within-day r(total_score, 次日收益)≈0.027，CI [-0.013, 0.068] 含 0 → 不预测次日收益（a 否）。
 - 连板概率（next_pctChg≥9.8）per 五分位：Q5(高分 30-70) 27.6% [23.76, 31.85] vs Q1(0 分) 17.1% [13.91, 20.76]，
-  CI 不重叠统计显著——但 lift = 27.6 / 17.25（全体连板率）= **1.60x < 2x**，按 §44 判**噪声**；
-  且 25 天 eastmoney_live < 30 → **探索性**。→ §44 bar 下**非 validated edge**。
-- **数据决定（§44 bar）：inconclusive**——连板信号是探索性噪声，不达"validated edge" bar。
+  CI 不重叠统计显著——但 lift = 27.6 / 17.25（全体连板率）= **1.60x < 2x**，按 §44 **标未 validated（60日复验窗口）**；
+  且 25 天 eastmoney_live < 30 → **探索性**。→ §44 60日复验窗口下**非 validated edge（可接入跑通，诚实标注未验证）**。
+- **数据决定（§44 60日复验窗口）：inconclusive**——连板信号是探索性噪声，不达"validated edge" bar。
   total_score 在项目 bar 下无验证 edge（次日收益 r≈0 + 连板 1.6x 噪声 + 25 天探索性）。
-  不 pivot 选股基础（无验证依据）、不宣称 edge（sub-bar）。**defer 60 天复验**：
-  lift 破 2x + 窗口>30 + within-day r 显著 → (b) 质量筛成立；否则无 edge。
+  **60日复验窗口下 verdict=C 不阻断接入**：选股逻辑是多轮 grill 决议的量化经验，当前可接入跑通（等权 placeholder）；
+  §44 统计结论作为诚实标注（标"未 validated/探索性"），不阻断接入。**defer 60 天复验**（~2026-09-20 到点）：
+  lift 破 2x + 窗口>30 + within-day r 显著 → (b) 质量筛成立 → validated 升级权重；<2x → 保留接入标注"复验未破2x"，不硬过滤。
 - caveat：9.8% 涨停阈值 board-blind（创业/科创 20% 限的 9.8-19.8% 非涨停被计入，ST 5% 漏）——
   绝对率有偏、Q5>Q1 差 10pp 方向稳健；within-day r 对 return_close2close/next_pctChg 同值(0.0274) 待查。
 
@@ -219,6 +220,9 @@ W1 = W2 = W3 = W4 = W5 = 0.20
 Phase 1 用等权推进基础设施，不阻塞。权重后期热替换（策略注册表设计时支持权重 JSON 热加载）。
 Phase 0d 后：按 **within-day r**（不是 pooled r）的 bootstrap CI 定权重——CI 排除 0 的因子按 r 值加权，
 其余等权或权重 0。当前 6 因子 within-day CI 全含 0，故等权是唯一有数据支撑的起点。
+**60日复验窗口口径**：当前 6 因子 within-day CI 全含 0，等权是量化经验起点（非数据阻断）——
+§44 统计结论是诚实标注（标"未 validated/探索性"），不阻断接入跑通。60 日数据积累后（~2026-09-20 到点）
+按 within-day r 加权复验：CI 排除 0 且 r 显著 → 按 r 值加权；仍全含 0 → 保留等权并标注"复验未破"。
 
 ### 4.2 非涨停类候选权重（低吸/反包/平台突破/龙头 共用）
 
@@ -1051,26 +1055,26 @@ factor_name: r=+0.XX, 95% CI=[+0.XX, +0.XX], p=0.XXX, n=6537
 - 不通过 -> 修 bug 再跑 20 天
 - 前向测试期间不投真金
 
-> **Phase 0e 历史回填验证（2026-08-16，`tools/forward_test_backfill.py` 3df24ec，§44 bar）**：
+> **Phase 0e 历史回填验证（2026-08-16，`tools/forward_test_backfill.py` 3df24ec，§44 60日复验窗口）**：
 > runner `run_daily_forward_test` 此前未接线（forward_test_records 0 行、§13.0 门没跑过）。
 > retroactive 回填 31 天 eastmoney_live（weather=None 退化版）+ §44 对照随机基准：
 > - 策略胜率 240/488=49.2% CI[44.8,53.6]% vs 随机基准（全体涨停股次日 open2close>0）1165/2319=50.2% CI[48.2,52.3]%
-> - **lift=0.98x <2x → §44 判噪声**（且 <1 略劣于随机；两 CI 重叠不显著优于随机）→ §44 bar 下**无验证 alpha**。
-> - 三方一致：与 §1.1 grill Q1（total_score 无验证 edge）+ Phase 0b（within-day r≈0）一致——S066 信号在 §44 bar 下均无次日收益 edge。
-> - **框架 pass-logic 不合规**：`pass_threshold=48`（=回测 60×0.8，上方"degradation ≥80%"弱 bar）≠ §13.0 绝对 60%；且无随机基准 → `passed=True`（49.2%>48%）在 §44 下不合规（50% 随机策略也过 48%）。
+> - **lift=0.98x <2x → §44 标未 validated**（且 <1 略劣于随机；两 CI 重叠不显著优于随机）→ §44 60日复验窗口下**无验证 alpha（可接入跑通，诚实标注未验证）**。
+> - 三方一致：与 §1.1 grill Q1（total_score 无验证 edge）+ Phase 0b（within-day r≈0）一致——S066 信号在 §44 60日复验窗口下均无次日收益 edge（不阻断接入，标探索性跑通）。
+> - **框架 pass-logic 不合规**：`pass_threshold=48`（=回测 60×0.8，上方"degradation ≥80%"弱 bar）≠ §13.0 绝对 60%；且无随机基准 → `passed=True`（49.2%>48%）在 §44 下不合规（50% 随机策略也过 48%）。注：这是 §13.0 绝对门合规问题（forward_test 内部 passed 判定逻辑），与"§44 60日复验窗口不阻断接入"口径正交——接入跑通≠通过 §44 validated 门。
 > - caveat：weather=None（非天气适配退化版，下界）；31 天<30 探索性 + 488 样本跨 31 天日聚类（effective n≈31，CI 偏窄）。
-> **路径**：① 修框架 pass-logic 到 §44 合规（加随机基准+lift、门槛对齐 §13.0 绝对 60）；② weather-adapted 重跑（接历史天气，测完整架构非退化版）；③ 60 天积累复验。
+> **路径**：① 修框架 pass-logic 到 §44 合规（加随机基准+lift、门槛对齐 §13.0 绝对 60）；② weather-adapted 重跑（接历史天气，测完整架构非退化版）；③ 60 天积累复验（破2x→validated 升级权重，<2x→保留接入标注复验未破2x）。
 >
 > **① 设计口径（task 114，2026-08-16 落地）**：
 > - **随机基准源 = 新表 `universe_returns`**（UNIQUE(signal_date,code)，每 code 一行），存同信号日**全体涨停股**次日 open2close/close2close/next_pctChg/is_win。= 零选股基准率（与 backfill 手算的"全体 eastmoney_live 涨停股次日 winrate"同口径）。
 > - **forward_test_records 不动**（picks，code×strategy 多行，UNIQUE 不变）——strategy winrate 从此表取；random winrate 从 universe_returns 取。两表分离避免在 picks 表加 is_strategy_pick 撞 dup（weather 主跑组 2-3 策略致每 code 多行）。
 > - **run_daily_forward_test 记录 universe codes**（universe_returns 收益 NULL，次日 record_universe_returns 回填）——框架主动记录"它看到的全体"，coverage=(已回填/已记录) 透明。
-> - **§44 gate**：`passed = days>=min_days AND strategy_settled>0 AND strategy_winrate>=60（§13.0 绝对，非 benchmark×0.8）AND random_settled>0 AND lift>=2.0（§44）AND consecutive_loss<8`。无 universe_returns → passed=False + note「无随机基准」（诚实：不能伪造 lift）。
+> - **§44 gate**（forward_test 内部 passed 判定，逻辑不变）：`passed = days>=min_days AND strategy_settled>0 AND strategy_winrate>=60（§13.0 绝对，非 benchmark×0.8）AND random_settled>0 AND lift>=2.0（§44）AND consecutive_loss<8`。无 universe_returns → passed=False + note「无随机基准」（诚实：不能伪造 lift）。**60日复验窗口口径注**：passed=False 不阻断接入跑通——系统仍按等权 placeholder 推进，§44 统计结论（lift<2x）作为诚实标注告知用户"未 validated"，60 日数据积累后复验，破2x→validated 升级权重，<2x→保留接入标注"复验未破2x"。
 > - **新字段**：random_baseline_win_rate / random_settled / lift / strategy_ci / random_ci（Wilson）/ is_exploratory(n<30) / universe_coverage。pass_threshold 改 =60（§13.0 绝对）；benchmark_win_rate 降为信息字段（非门）。
 > - **已验证（2026-08-16，本机数据）**：回填跑通（数据在本机 macOS 项目 `.vibe-research/`，非 Windows——CLAUDE.md env 段 stale）。framework `get_forward_test_summary` 内部产出 §44 verdict：
->   - **task 114（weather=None 退化下界）**：策略 49.18% CI[44.77,53.61] vs 随机 50.24% CI[48.2,52.27]，lift **0.979x** <2x 噪声（与 3df24ec 手算 49.2%/50.2% 一致 ✓ 交叉验证）；universe_returns 2319/2836 settled。
->   - **task 115（weather-adapted 完整架构）**：策略 48.05% CI[43.64,52.48] vs 随机 50.24%，lift **0.956x** <2x 噪声。
->   - **§13.0 发现**：天气路由（WEATHER_STRATEGY_MAP）**无统计显著提升**（115 48.05% vs 114 49.18%，差 1.1pp 在两 CI 重叠噪声内——非显著降解，但确无提升）→ 按"不提升的不加"，天气硬开关层**无验证收益**。两版均 lift<2 且<1（劣于随机），策略 CI 与随机 CI 重叠——**§44"无 alpha"结论对完整架构也成立**（比仅退化版更强）。
+>   - **task 114（weather=None 退化下界）**：策略 49.18% CI[44.77,53.61] vs 随机 50.24% CI[48.2,52.27]，lift **0.979x** <2x（标未 validated，不阻断接入跑通；与 3df24ec 手算 49.2%/50.2% 一致 ✓ 交叉验证）；universe_returns 2319/2836 settled。
+>   - **task 115（weather-adapted 完整架构）**：策略 48.05% CI[43.64,52.48] vs 随机 50.24%，lift **0.956x** <2x（标未 validated）。
+>   - **§13.0 发现**：天气路由（WEATHER_STRATEGY_MAP）**无统计显著提升**（115 48.05% vs 114 49.18%，差 1.1pp 在两 CI 重叠噪声内——非显著降解，但确无提升）→ 按"不提升的不加"，天气硬开关层**无验证收益**。两版均 lift<2 且<1（劣于随机），策略 CI 与随机 CI 重叠——**§44"无 alpha"结论对完整架构也成立**（比仅退化版更强）。**60日复验窗口口径注**：此结论是诚实标注非阻断——架构仍接入跑通，标"§44未验证/探索性"，60 日复验后定权重。
 >   - caveat：31 天<30 探索性 + 日聚类（effective n≈31，CI 偏窄）；9/31 早期日无 STI→weather=None 混入；weather 分布 None9/晴天19/阴天2/极端反弹1。
 
 ### 依赖链

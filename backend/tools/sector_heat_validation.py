@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""§44 验证：板块热度 → 次日新涨停（宽 universe，横截面因子）。
+"""§44 60日复验窗口验证：板块热度 → 次日新涨停（宽 universe，横截面因子）。
 
 假设：一只股在**涨停数多的板块**（热板块）里、且**今日未涨停** → 次日涨停概率↑（板块注意力
 轮动→成员涨停）。这是横截面因子（板块上下文→个股结果），区别于 8 因子（个股涨停史 post-hoc）。
 
-§44 bar：lift>=2x（热板块成员次日新涨停率 / 冷板块成员次日新涨停率）+ CI 不重叠 + n>=30 才算 edge。
+§44 60日复验窗口：lift>=2x（热板块成员次日新涨停率 / 冷板块成员次日新涨停率）+ CI 不重叠 + n>=30 → validated；
+<2x 标未 validated（复验日满60天后定权重），不阻断接入跑通。本脚本计算 r/CI/lift 逻辑不变，只改注释口径。
 
 设计：
 - 对每个 D（eastmoney_live 日，D+1 也在 set 内）：
@@ -100,12 +101,12 @@ def main() -> int:
         hlo, hhi = _wilson(hn, hm)
         clo, chi = _wilson(cn, cm)
         sig = "CI不重叠" if hlo > chi else "CI重叠"
-        verdict = "≥2x EDGE" if lift >= 2.0 else "<2x 噪声"
+        verdict = "≥2x validated" if lift >= 2.0 else "<2x 未 validated"
         print(f"{name:6s}: hot {hn}/{hm}={hr*100:.2f}%[{hlo*100:.2f},{hhi*100:.2f}]  "
               f"cold {cn}/{cm}={cr*100:.2f}%[{clo*100:.2f},{chi*100:.2f}]  "
               f"lift={lift:.3f}x → {verdict}（{sig}）")
     print(f"\ncaveat: n={len(daily)}日{'（<30 探索性）' if len(daily) < 30 else ''}；冷=0涨停板块（基线≈市场~1%）；"
-          f"若全 <2x → 板块热度对次日新涨停无 §44 edge。")
+          f"若全 <2x → 板块热度对次日新涨停无 §44 edge（标未 validated，不阻断接入，60日后复验）。")
     return 0
 
 

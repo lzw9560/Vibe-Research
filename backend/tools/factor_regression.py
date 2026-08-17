@@ -12,6 +12,7 @@
 - day-cluster bootstrap：按交易日整日重抽样，给 pooled/within r 一个尊重
   聚类结构的 95% CI（pooled p 值的 IID 假设在日级相关下失效，必须补这一刀）
 - verdict 判定：A=方向不变且显著；B=某因子方向反转；C=全部不显著
+- 60日复验窗口口径：verdict=C 不阻断接入——选股逻辑是多轮 grill 决议的量化经验，当前可接入跑通（等权 placeholder）；§44 统计结论作为诚实标注（标未 validated/探索性），60日后复验定权重。本脚本计算逻辑不变，只改注释口径。
 
 输出：
 - `.vibe-research/factor_significance.json`（结构化结果）
@@ -80,10 +81,12 @@ GROUP_FACTORS = {
 }
 
 # verdict 文案
+# 60日复验窗口口径：verdict=C 不阻断接入——选股逻辑是多轮 grill 决议的量化经验，
+# 当前可接入跑通（等权 placeholder）；§44 统计结论作为诚实标注（标未 validated），60日后复验定权重。
 SPEC_IMPACT = {
     "A": "继续 Phase 1 按现 spec 实现",
     "B": "暂停 Phase 1，改 §4 权重方向",
-    "C": "前置 Phase 2，引入新因子体系",
+    "C": "前置 Phase 2，引入新因子体系（60日复验窗口：C 不阻断接入，标未 validated 跑通，60日后复验）",
 }
 
 
@@ -386,6 +389,10 @@ def compute_verdict(groups: dict[str, dict]) -> dict:
     A: 所有核心因子方向与 §1.1 一致，且至少 3 个因子 CI 排除 0
     B: 任一核心因子 r 方向反转，且 CI 排除 0
     C: 全部核心因子 CI 包含 0（都不显著）
+
+    60日复验窗口口径：verdict=C 不阻断接入——选股逻辑是多轮 grill 决议的量化经验，
+    当前可接入跑通（等权 placeholder）；§44 统计结论作为诚实标注（标未 validated/探索性），60日后复验定权重。
+    本函数计算逻辑不变，只改注释口径。
     """
     direction_changes = []
 

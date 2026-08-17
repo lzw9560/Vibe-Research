@@ -48,7 +48,7 @@ export function WeatherDecisionBar({ ctx }: Props) {
         meta.tint,
       )}
     >
-      {/* 左：天气图标 + 名 + STI + 阶段 */}
+      {/* 左：天气图标 + 名（S072 STI 去噪：选股页无 score/phase，留 SentimentWeather 复盘） */}
       <div className="flex items-center gap-3">
         <Icon className="h-8 w-8 text-foreground/80" />
         <div className="flex flex-col">

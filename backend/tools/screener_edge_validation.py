@@ -154,7 +154,8 @@ def main() -> int:
                    "r≈0 可能是测不出小效应而非真无——需更多天数。")
     elif ret_null and pct_null:
         verdict = ("total_score 既不预测次日收益(a) 也不预测次日涨跌幅/连板 —— 选股无验证 edge；"
-                   "top-N-by-total_score 当前无 edge，该诚实标注 + 等 60 天复验或 pivot 选股基础。")
+                   "top-N-by-total_score 当前无 edge，该诚实标注（标未 validated，不阻断接入跑通）+ 等 60 天复验或 pivot 选股基础。"
+                   "60日复验窗口：破2x→validated 升级权重，<2x→保留接入标注复验未破2x。")
     else:
         verdict = "部分信号，见下表。"
 

@@ -4,7 +4,7 @@
 
 ## §44 验证后状态（2026-08-16）
 
-> **Phase 0a-0e + Phase 1-3 已实现**（Phase 0-3 全闭合），但建在 placeholder/null-验证信号上（Phase 0b within-day r≈0 + Phase 0e 胜率 49.2% vs 随机 50.2% lift 0.98x 噪声 → §44 bar 下无 validated alpha）。详见 plan.md §44 修订段 + spec §1.1/§13。
+> **Phase 0a-0e + Phase 1-3 已实现**（Phase 0-3 全闭合），但建在 placeholder/null-验证信号上（Phase 0b within-day r≈0 + Phase 0e 胜率 49.2% vs 随机 50.2% lift 0.98x → 标未 validated → §44 60日复验窗口下无 validated alpha，不阻断接入跑通）。详见 plan.md §44 修订段 + spec §1.1/§13。
 > **HOLD 新复杂度**（Phase 4+/新层）至 alpha 验证（§13.0"不提升的不加"）。
 > **下方原任务（001-113）保留作参考**（已建但建在 placeholder）；新增 §44 修订路径任务见文末。
 
@@ -47,7 +47,7 @@
 
 - [B] 024: 搭建 paper trading 框架（每日记录推荐 vs 实际，无真金）
 - [B] 025: 跑 20 交易日，每日日志
-- [T] 026: 验证通过标准（§44：原"胜率>=回测×0.8"=48 弱 bar ≠ §13.0 绝对60 + 无随机基准 → 不合规；实测 49.2% vs 随机 50.2% lift 0.98x 噪声。须改：对齐 60 + 加随机基准+lift）
+- [T] 026: 验证通过标准（§44 forward_test 内部 pass-logic：原"胜率>=回测×0.8"=48 弱 bar ≠ §13.0 绝对60 + 无随机基准 → 不合规；实测 49.2% vs 随机 50.2% lift 0.98x → 标未 validated。须改：对齐 60 + 加随机基准+lift。注：这是 §13.0 绝对门合规问题，与"§44 60日复验窗口不阻断接入"口径正交）
 
 ## Phase 1：涨停类策略实现
 
@@ -187,9 +187,9 @@
 
 > §13.0 违反 + 无 validated alpha 后的修订路径（不回退 Phase 1-3，但验证优先 + 诚实标注）。
 
-- [B] 114: ✅ 修 Phase 0e 框架 pass-logic 到 §44 合规（加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）——落地：新表 `universe_returns`（§44 随机基准源，UNIQUE signal_date,code）+ `record_universe_returns` + `run_daily_forward_test` 主动记 universe codes + gate `winrate>=60 AND lift>=2.0 AND random_settled>0` + Wilson CI + is_exploratory；forward_test_records 不动（避免 dup）；18 测试过（含 §44 三关键测试：no_edge/no_universe/pass）。**本机真实数据已验证**：framework 内部产出 verdict = 49.18% vs 50.24% lift 0.979x 噪声（与手算 49.2%/50.2% 一致 ✓）；universe_returns 2319/2836（spec §13 ①）
-- [B] 115: ✅ Phase 0e weather-adapted 重跑（backfill `--weather` 按日 build_context 取历史天气）——完整架构 verdict = 48.05% vs 50.24% lift **0.956x** 噪声。**§13.0 发现：天气路由无统计显著提升**（48.05% vs 退化版 49.18%，差 1.1pp 在 CI 重叠噪声内，非显著降解但确无提升）→ 按"不提升的不加"天气硬开关无验证收益；两版均 lift<2 → §44"无 alpha"对完整架构也成立。caveat：9/31 早期日无 STI→weather=None 混入（spec §13 ①）
-- [B] 116: 60 天 eastmoney_live 积累后复验 Phase 0b（within-day r）+ 0e（胜率 lift）——lift 破 2x + r 显著 → alpha 成立；否则确认无 edge。**本机仅 31 日（到 2026-08-14），需 ~29 未来交易日 LIVE 积累（~2026-09-20 到点）——真·日历阻塞，不可跳过**。已就绪：框架（114）+ 提醒任务（123，周一 18:00 到点推送）+ **诚实层**（get_forward_test_summary 加覆盖 caveat：settled<80% total → note 标"部分样本"，防 60 日时 partial-sample verdict 伪装全量）。**live-returns-data 缺口**：backtest_samples 仅 31 日，60 日时 backfill 只能 settle 31 → verdict 部分；要全 60 需 live T+1 收益管道或 backtest_samples 扩 live 日——对 §44 已证无 edge 的系统现在铺属过度（§13.0），留 60 日临近再定
+- [B] 114: ✅ 修 Phase 0e 框架 pass-logic 到 §44 60日复验窗口口径（forward_test 内部 passed 判定逻辑不变：加随机基准 + lift、门槛对齐 §13.0 绝对 60，非 48 degradation）——落地：新表 `universe_returns`（§44 随机基准源，UNIQUE signal_date,code）+ `record_universe_returns` + `run_daily_forward_test` 主动记 universe codes + gate `winrate>=60 AND lift>=2.0 AND random_settled>0` + Wilson CI + is_exploratory；forward_test_records 不动（避免 dup）；18 测试过（含 §44 三关键测试：no_edge/no_universe/pass）。**本机真实数据已验证**：framework 内部产出 verdict = 49.18% vs 50.24% lift 0.979x → 标未 validated（与手算 49.2%/50.2% 一致 ✓）；universe_returns 2319/2836（spec §13 ①）。passed=False 不阻断接入跑通——§44 统计结论作为诚实标注。
+- [B] 115: ✅ Phase 0e weather-adapted 重跑（backfill `--weather` 按日 build_context 取历史天气）——完整架构 verdict = 48.05% vs 50.24% lift **0.956x** → 标未 validated。**§13.0 发现：天气路由无统计显著提升**（48.05% vs 退化版 49.18%，差 1.1pp 在两 CI 重叠噪声内，非显著降解但确无提升）→ 按"不提升的不加"天气硬开关无验证收益；两版均 lift<2 → §44"无 alpha"结论对完整架构也成立（诚实标注非阻断，架构仍接入跑通）。caveat：9/31 早期日无 STI→weather=None 混入（spec §13 ①）
+- [B] 116: 60 天 eastmoney_live 积累后复验 Phase 0b（within-day r）+ 0e（胜率 lift）——lift 破 2x + r 显著 → alpha 成立 → validated 升级权重；<2x → 标未 validated 保留接入（不硬过滤）。**本机仅 31 日（到 2026-08-14），需 ~29 未来交易日 LIVE 积累（~2026-09-20 到点）——真·日历阻塞，不可跳过**。已就绪：框架（114）+ 提醒任务（123，周一 18:00 到点推送）+ **诚实层**（get_forward_test_summary 加覆盖 caveat：settled<80% total → note 标"部分样本"，防 60 日时 partial-sample verdict 伪装全量）。**live-returns-data 缺口**：backtest_samples 仅 31 日，60 日时 backfill 只能 settle 31 → verdict 部分；要全 60 需 live T+1 收益管道或 backtest_samples 扩 live 日——对 §44 已证无 edge 的系统现在铺属过度（§13.0），留 60 日临近再定。注：当前 verdict"无 edge"是诚实标注非阻断——系统仍按等权 placeholder 接入跑通，60 日复验后定权重。
 - [B] 123: ✅ §44 60 天复验提醒任务（`s066_validation_checkpoint` scheduled task）——周一 18:00 数 eastmoney_live 日数，达 60 → 写 `.vibe-research/s066_60day_due.json` + WARNING + notify_on_success 推送；到点由人/会话跑 backfill --weather 查 lift（只提醒不自动验证）。executor `_execute_s066_validation_checkpoint` + seed 默认任务（cron `0 18 * * 1`，notify_on_success=True）；2 测试（not_due/due+checkpoint）+ 注册测试过
 - [F] 117: ✅ 前端 getAStockTimeInfo 重构——改用后端 /api/workflow/status 源（单源 + 北京时区 + 节假日 is_trading_day），去本地重复（drift 源）——落地：删 `getAStockTimeInfo`（43 行本地 tz/仅周末/无节假日），useMemo 直接取 `backend.stage/market_status/next_stage/next_stage_time/current_time`（零新增请求，复用既有 60s 轮询）；backend null → "加载中"降级（不本地重算，避免 drift 复现）；+2 测试（backend→UI 流 + fallback）+13 测试过 + tsc 干净。**countDownToNext（line 86）仍用浏览器 new Date() 算倒计时，非-CN 用户 tz 漂移——cosmetic drift，登记 task 122 follow-up**
 - [B] 118: ✅ 036 板块停留天数——"在榜"口径=当日该板块 ≥1 涨停（涨停榜在榜，§13.0 最简定义无需调 N 阈值）；`_sector_stay_days(date,industry)` = 从 date 起向前连续在榜交易日数（遇不在榜断，0=今日不在榜，2 查询：今日 count + 前 30 日在榜日期集）；接入 `analyze_sector_phase` → `SectorPhase.stay_days`；+2 测试（fermentation 加 stay_days==4 断言 + streak-break 连榜4/今日在榜昨断=1/今日不在榜=0），19 过

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""§44 caveat 收口：kline TA edge 的 3 步 robustness 验证。
+"""§44 60日复验窗口 caveat 收口：kline TA edge 的 3 步 robustness 验证。
 
 1. day-cluster bootstrap：breakout/volatility lift 在 day-resample 下 robust 吗（CI 下界>1→非日级 confound）。
 2. premium-return：breakout/volatility → T return_open2close（cache 算），per-quintile avg → edge translate 到 PnL？
 3. incremental-8：今日涨停子集上，TA-alone vs 8-alone vs 8+TA → T+1 涨停 lift（8 增量还是稀释？）。
+
+60日复验窗口口径：<2x 标未 validated（不阻断接入跑通，标探索性），复验日满60天后定权重；本脚本计算逻辑不变，只改注释口径。
 
 用法：cd backend && .venv/bin/python tools/kline_ta_robustness.py
 """
@@ -97,7 +99,7 @@ def main() -> int:
 
     n = len(obs)
     n_days = len(set(o["T"] for o in obs))
-    print(f"=== §44 caveat 收口（{n} obs, {n_days} T 日）===\n")
+    print(f"=== §44 60日复验窗口 caveat 收口（{n} obs, {n_days} T 日）===\n")
 
     # === Step 1: day-cluster bootstrap（breakout + volatility）===
     print("── Step 1: day-cluster bootstrap ──")

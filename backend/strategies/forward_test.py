@@ -4,15 +4,16 @@
 spec §13.0/§0e：
 - 用 0d 权重跑系统：涨停股 × 策略分排序 × 板块周期 × 日历因子
 - 每日记录推荐 vs 实际表现
-- 通过标准（§44 合规，task 114 落地）：系统无崩溃 + 推荐胜率 >= §13.0 绝对 60% + lift>=2x
+- 通过标准（§44 60日复验窗口，forward_test 内部 passed 判定逻辑不变）：系统无崩溃 + 推荐胜率 >= §13.0 绝对 60% + lift>=2x
 - 不通过 → 修 bug 再跑 20 天
 - 前向测试期间不投真金
 
-§44 合规设计（spec §13 ①）：
+§44 60日复验窗口口径（spec §13 ①，诚实标注非阻断）：
 - 随机基准 = 新表 universe_returns（同信号日全体涨停股次日 winrate = 零选股基准率）。
 - forward_test_records（picks，code×strategy 多行）不动；strategy winrate 从此表、random winrate 从 universe_returns。
 - run_daily_forward_test 主动记录 universe codes（收益 NULL，次日回填）→ lift 不可被调用方伪造。
-- gate：winrate>=60（§13.0 绝对）AND lift>=2.0（§44）AND random_settled>0 AND consecutive_loss<8。
+- gate（forward_test 内部 passed 判定，逻辑不变）：winrate>=60（§13.0 绝对）AND lift>=2.0（§44）AND random_settled>0 AND consecutive_loss<8。
+- **60日复验窗口口径注**：passed=False 不阻断接入跑通——§44 统计结论（lift<2x）作为诚实标注（标"未 validated/探索性"），系统仍按等权 placeholder 推进；60 日数据积累后复验，破2x→validated 升级权重，<2x→保留接入标注"复验未破2x"。
 
 每日盘后调用 record_daily_recommendations → 次日 record_actual_returns（picks）+ record_universe_returns（universe）回填。
 诚实边界：无 next_bar 收益的标 missing，不臆造；无 universe_returns → passed=False + note（不能伪造 lift）。
@@ -28,8 +29,9 @@ from vr_paths import resolve_data_dir
 _DB = GENE_SCORES_DB_PATH
 
 # §44 / §13.0 通过门槛（绝对，非 benchmark×0.8 弱 degradation）
+# 注：forward_test 内部 passed 判定逻辑不变；60日复验窗口口径下 passed=False 不阻断接入跑通。
 PASS_WINRATE_FLOOR: float = 60.0   # §13.0：alpha>60% 才加复杂度
-PASS_LIFT_FLOOR: float = 2.0       # §44：lift<2x = 噪声，不得作设计依据
+PASS_LIFT_FLOOR: float = 2.0       # §44 60日复验窗口：lift<2 标未 validated（前向测试仍跑，60日后复验定权重）
 
 
 # ===========================================================================
@@ -115,18 +117,18 @@ class DailyRecommendation:
 
 @dataclass(frozen=True)
 class ForwardTestResult:
-    """前向测试汇总结果（§44 合规：含随机基准 + lift + Wilson CI）。"""
+    """前向测试汇总结果（§44 60日复验窗口：含随机基准 + lift + Wilson CI，诚实标注非阻断）。"""
     total_days: int
     total_recommendations: int
     settled_count: int            # picks 有 next_bar 收益的记录数
     win_count: int               # picks wins
     win_rate: float               # picks 胜率 0-100
     avg_return: float             # picks 平均 open2close %
-    # §44 随机基准 + lift
+    # §44 随机基准 + lift（60日复验窗口：作为诚实标注，非接入阻断）
     random_settled: int = 0        # universe 有收益的记录数
     random_win_count: int = 0
     random_baseline_win_rate: float = 0.0  # universe winrate %（零选股基准率）
-    lift: float = 0.0             # strategy / random（<2x = §44 噪声）
+    lift: float = 0.0             # strategy / random（<2x 标未 validated，不阻断接入跑通，60日后复验）
     strategy_ci: tuple[float, float] = (0.0, 0.0)   # Wilson [lo,hi] %
     random_ci: tuple[float, float] = (0.0, 0.0)
     is_exploratory: bool = False  # §44(2)：n<30 探索性非定论
@@ -229,7 +231,7 @@ def record_universe_returns(
 ) -> int:
     """回填某信号日 universe（全体涨停股）的次日收益（universe_returns 表）。
 
-    universe = 同信号日全体涨停股（零选股基准率），§44 随机基准源。
+    universe = 同信号日全体涨停股（零选股基准率），§44 随机基准源（60日复验窗口：诚实标注，非接入阻断）。
     与 record_actual_returns（picks）独立：picks→forward_test_records，universe→universe_returns。
     幂等（UNIQUE(signal_date,code)，INSERT OR REPLACE）。
     缺 next_bar 的标 None（不臆造）。返回 upsert 条数。
@@ -263,24 +265,25 @@ def record_universe_returns(
 
 
 # ===========================================================================
-# 汇总：前向测试结果（§44 合规通过判定）
+# 汇总：前向测试结果（§44 60日复验窗口口径，forward_test 内部 passed 判定逻辑不变）
 # ===========================================================================
 
 def get_forward_test_summary(
     benchmark_win_rate: float = 60.0,  # Phase 0b benchmark_A（信息字段，非门）
     min_days: int = 20,
 ) -> ForwardTestResult:
-    """汇总前向测试结果（§13.0 + §44 合规通过标准）。
+    """汇总前向测试结果（§13.0 + §44 60日复验窗口，forward_test 内部 passed 判定逻辑不变）。
 
-    §44 通过标准（结论前必过的诚实门）：
+    §44 60日复验窗口口径（结论前必过的诚实门——诚实标注非阻断）：
     - total_days >= min_days（20 交易日）
     - strategy_win_rate >= PASS_WINRATE_FLOOR（§13.0 绝对 60%，非 benchmark×0.8 弱 bar）
-    - lift = strategy_winrate / random_baseline_winrate >= PASS_LIFT_FLOOR（2.0；§44：lift<2x=噪声）
+    - lift = strategy_winrate / random_baseline_winrate >= PASS_LIFT_FLOOR（2.0；§44 60日复验窗口：lift<2 标未 validated，前向测试仍跑，60日后复验定权重）
     - random_settled > 0（universe_returns 有回填，否则无法算 lift → 不通过）
     - 无崩溃（consecutive_loss < 8，kill criteria 未触发）
 
     random_baseline = 同信号日全体涨停股次日 winrate（universe_returns）= 零选股基准率。
     无 universe_returns → passed=False + note（诚实：不能伪造 lift）。
+    注：passed=False 不阻断接入跑通——§44 统计结论作为诚实标注（标"未 validated/探索性"），系统仍按等权 placeholder 推进；60 日数据积累后复验，破2x→validated 升级权重，<2x→保留接入标注"复验未破2x"。
     """
     _ensure_table()
     conn = sqlite3.connect(_DB, timeout=10)
@@ -328,9 +331,10 @@ def get_forward_test_summary(
     lift = round(s_winrate / u_winrate, 3) if u_winrate > 0 else 0.0
     s_lo, s_hi = _wilson(s_wins, s_settled)
     u_lo, u_hi = _wilson(u_wins, u_settled)
-    is_exploratory = s_settled < 30  # §44(2)：n<30 探索性非定论
+    is_exploratory = s_settled < 30  # §44(2)：n<30 探索性非定论（60日复验窗口：不阻断接入，标探索性跑通）
 
-    # §44 通过判定
+    # §44 60日复验窗口口径：forward_test 内部 passed 判定逻辑不变（lift>=2.0 仍为门）；
+    # passed=False 不阻断接入跑通——§44 统计结论作为诚实标注，60 日后复验定权重。
     passed = (
         days >= min_days
         and s_settled > 0
@@ -352,7 +356,7 @@ def get_forward_test_summary(
         note_parts.append("无随机基准（universe_returns 未回填 → 无法 §44 验证 lift）")
     if u_settled > 0 and s_settled > 0:
         if lift < PASS_LIFT_FLOOR:
-            note_parts.append(f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（不优于随机）")
+            note_parts.append(f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（未 validated，不阻断接入跑通，60日后复验）")
         if s_lo <= u_hi:  # 策略 CI 与随机 CI 重叠 = 不显著优于随机
             note_parts.append("策略 CI 与随机 CI 重叠（不显著优于随机）")
     if s_settled > 0 and s_winrate < PASS_WINRATE_FLOOR:
@@ -362,7 +366,7 @@ def get_forward_test_summary(
     if consecutive_loss >= 8:
         note_parts.append(f"连续亏损 {consecutive_loss} 笔（kill criteria 触发）")
     if not note_parts:
-        note_parts.append("§44 前向测试通过（胜率>=60% + lift>=2x）")
+        note_parts.append("§44 前向测试通过（胜率>=60% + lift>=2x → validated）")
 
     return ForwardTestResult(
         total_days=days,
@@ -419,7 +423,7 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
     3. 次日盘后回填收益（picks 由 record_actual_returns，universe 由 record_universe_returns）
     4. 返回当日推荐数
 
-    §44：主动记录 universe codes 让框架持有"它看到的全体"，lift 不可被调用方伪造。
+    §44 60日复验窗口：主动记录 universe codes 让框架持有"它看到的全体"，lift 不可被调用方伪造（诚实标注，非接入阻断）。
     """
     from limitup_screener.data import load_gene_scores
     from strategies.strategy_funnel_registry import score_candidates
@@ -468,7 +472,7 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
 
     count = record_daily_recommendations(signal_date, recommendations)
 
-    # §44：记录当日全体涨停股 universe codes（收益 NULL，次日 record_universe_returns 回填）
+    # §44 60日复验窗口：记录当日全体涨停股 universe codes（收益 NULL，次日 record_universe_returns 回填）——诚实标注源，非接入阻断
     _record_universe_codes(signal_date, genes)
 
     return {

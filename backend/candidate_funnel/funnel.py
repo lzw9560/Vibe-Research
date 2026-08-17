@@ -228,7 +228,7 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentConte
     各跑一遍会重复外部请求；命中缓存即复用。rerun 走 run_funnel_force（清缓存路径）。
 
     注意：ctx 不参与缓存键——同日同 config 的 weather_state 应一致（T-1 硬标准），
-    若用户重算 STI 改了 T-1，应走 run_funnel_force 清缓存。
+    若 T-1 情绪数据（weather_state）改了，应走 run_funnel_force 清缓存（S072：STI 不再调 R2 阈值，仅 weather_state 软标注）。
     """
     import time
     key = _funnel_cache_key(date, cfg)
