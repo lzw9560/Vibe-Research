@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 
 /** S066 §0e 前向测试命中率面板。
- * 显示：总交易日 / 已结算推荐 / 胜率 vs 基准×0.8 / 平均收益 / 连续亏损 / 通过状态。
+ * 显示：总交易日 / 已结算推荐 / 胜率 vs 基准×0.8 / 平均收益 / 连续亏损 / §44 60日复验窗口三态。
  */
 export function ForwardTestPanel() {
   const { data, isLoading } = useForwardTestSummary();
@@ -26,43 +26,50 @@ export function ForwardTestPanel() {
     );
   }
 
-  const passed = data.passed;
+  // §44 60日复验窗口三态判定（主显示），passed 字段向后兼容保留
+  const validationStatus = data.validation_status ?? "未 validated";
+  const isValidated = validationStatus === "validated";
+  const isExploratory = validationStatus === "探索性";
+  const killAlert = data.consecutive_loss >= 5;  // 策略级 kill criteria 预警（仍走 destructive）
   const winRateLow = data.settled_count > 0 && data.win_rate < data.pass_threshold;
-  const killAlert = data.consecutive_loss >= 5;  // 策略级 kill criteria 预警
   const progress = Math.min(data.total_days / 20, 1) * 100;  // 20 交易日进度
+
+  // 主状态文案：kill 预警优先，次 validation_status 三态
+  const statusText = killAlert
+    ? "Kill Criteria 预警"
+    : isValidated
+      ? "§44 validated"
+      : isExploratory
+        ? "§44 探索性（n<30）"
+        : "§44 未 validated（跑通中，60日后复验）";
+  const StatusIcon = killAlert ? AlertTriangle : isValidated ? CheckCircle2 : isExploratory ? TrendingDown : Activity;
 
   return (
     <div className="space-y-4">
       <SectionHeader
         title="前向测试（Paper Trading）"
-        subtitle="每日推荐 vs 实际表现 · 不投真金 · 20 交易日验证"
+        subtitle="每日推荐 vs 实际表现 · 不投真金 · §44 60日复验窗口"
       />
 
-      {/* 通过状态横幅 */}
+      {/* §44 60日复验窗口三态状态横幅 */}
       <div
         className={cn(
           "flex items-center gap-3 rounded-lg border px-4 py-3",
-          passed
-            ? "border-success/30 bg-success/5 text-success"
-            : killAlert
-              ? "border-destructive/40 bg-destructive/10 text-destructive"
-              : "border-warning/30 bg-warning/5 text-warning",
+          killAlert
+            ? "border-destructive/40 bg-destructive/10 text-destructive"
+            : isValidated
+              ? "border-success/30 bg-success/5 text-success"
+              : isExploratory
+                ? "border-muted-foreground/30 bg-muted/5 text-muted-foreground"
+                : "border-warning/30 bg-warning/5 text-warning",
         )}
       >
-        {passed ? (
-          <CheckCircle2 className="h-5 w-5 shrink-0" />
-        ) : killAlert ? (
-          <AlertTriangle className="h-5 w-5 shrink-0" />
-        ) : (
-          <Activity className="h-5 w-5 shrink-0" />
-        )}
+        <StatusIcon className="h-5 w-5 shrink-0" />
         <div className="flex-1">
-          <p className="text-sm font-bold">
-            {passed ? "前向测试通过" : killAlert ? "Kill Criteria 预警" : "前向测试进行中"}
-          </p>
+          <p className="text-sm font-bold">{statusText}</p>
           <p className="text-xs opacity-80">{data.note}</p>
         </div>
-        <Badge variant={passed ? "success" : killAlert ? "danger" : "warning"}>
+        <Badge variant={killAlert ? "danger" : isValidated ? "success" : isExploratory ? "default" : "warning"}>
           {data.total_days}/20 日
         </Badge>
       </div>
@@ -117,7 +124,7 @@ export function ForwardTestPanel() {
           <div
             className={cn(
               "h-2 rounded-full transition-all",
-              passed ? "bg-success" : "bg-primary",
+              isValidated ? "bg-success" : "bg-primary",
             )}
             style={{ width: `${progress}%` }}
           />

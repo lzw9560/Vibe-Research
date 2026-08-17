@@ -266,6 +266,7 @@ async def get_forward_test_summary_endpoint(
             "avg_return": result.avg_return,
             "pass_threshold": result.pass_threshold,
             "passed": result.passed,
+            "validation_status": result.validation_status,  # §44 60日复验窗口三态
             "consecutive_loss": result.consecutive_loss,
             "random_baseline_win_rate": result.random_baseline_win_rate,
             "random_settled": result.random_settled,

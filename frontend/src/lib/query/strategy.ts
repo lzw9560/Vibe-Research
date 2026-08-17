@@ -152,6 +152,7 @@ export interface ForwardTestSummary {
   lift: number;
   is_exploratory: boolean;
   note: string;
+  validation_status?: string;  // §44 60日复验窗口三态：validated | 未 validated | 探索性
 }
 
 export interface ForwardTestRecord {

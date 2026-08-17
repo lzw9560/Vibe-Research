@@ -138,6 +138,7 @@ class ForwardTestResult:
     passed: bool = False
     consecutive_loss: int = 0
     note: str = ""
+    validation_status: str = "未 validated"  # §44 60日复验窗口三态：validated | 未 validated | 探索性
 
 
 # ===========================================================================
@@ -368,6 +369,17 @@ def get_forward_test_summary(
     if not note_parts:
         note_parts.append("§44 前向测试通过（胜率>=60% + lift>=2x → validated）")
 
+    # §44 60日复验窗口三态判定（语义层，基于 passed + is_exploratory 派生）
+    # - 探索性（n<30）：优先，数据不足非定论
+    # - validated（lift>=2 + winrate>=60 + ...）：通过 §44 门
+    # - 未 validated（跑通中，60日后复验）：lift<2 或 winrate<60 等，不阻断接入
+    if is_exploratory:
+        validation_status = "探索性"
+    elif passed:
+        validation_status = "validated"
+    else:
+        validation_status = "未 validated"
+
     return ForwardTestResult(
         total_days=days,
         total_recommendations=total,
@@ -388,6 +400,7 @@ def get_forward_test_summary(
         passed=passed,
         consecutive_loss=consecutive_loss,
         note="；".join(note_parts),
+        validation_status=validation_status,
     )
 
 

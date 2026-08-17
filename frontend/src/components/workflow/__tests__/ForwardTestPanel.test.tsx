@@ -33,7 +33,7 @@ describe("ForwardTestPanel (S066)", () => {
     expect(screen.getByText("前向测试数据未取得")).toBeInTheDocument();
   });
 
-  it("通过测试 → 显示通过横幅", () => {
+  it("通过测试 → 显示 §44 validated 横幅", () => {
     mockSummary.useForwardTestSummary.mockReturnValue({
       isLoading: false,
       data: {
@@ -41,15 +41,15 @@ describe("ForwardTestPanel (S066)", () => {
         win_count: 32, win_rate: 80.0, avg_return: 1.5,
         benchmark_win_rate: 60.0, pass_threshold: 48.0,
         passed: true, consecutive_loss: 1, note: "前向测试通过",
+        validation_status: "validated",
       },
     });
     renderPanel();
-    // "前向测试通过" 出现在横幅标题 + note，用 getAllByText
-    expect(screen.getAllByText(/前向测试通过/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/§44 validated/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/80\.0%/).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("不通过 → 显示进行中", () => {
+  it("不通过（探索性 n<30）→ 显示 §44 探索性", () => {
     mockSummary.useForwardTestSummary.mockReturnValue({
       isLoading: false,
       data: {
@@ -58,11 +58,29 @@ describe("ForwardTestPanel (S066)", () => {
         benchmark_win_rate: 60.0, pass_threshold: 48.0,
         passed: false, consecutive_loss: 2,
         note: "样本不足：5/20 交易日",
+        validation_status: "探索性",
       },
     });
     renderPanel();
-    expect(screen.getByText("前向测试进行中")).toBeInTheDocument();
+    expect(screen.getByText(/§44 探索性/)).toBeInTheDocument();
     expect(screen.getByText("5/20 日")).toBeInTheDocument();
+  });
+
+  it("不通过（未 validated n>=30）→ 显示 §44 未 validated 跑通中", () => {
+    mockSummary.useForwardTestSummary.mockReturnValue({
+      isLoading: false,
+      data: {
+        total_days: 25, total_recommendations: 35, settled_count: 35,
+        win_count: 20, win_rate: 57.1, avg_return: -0.2,
+        benchmark_win_rate: 60.0, pass_threshold: 60.0,
+        passed: false, consecutive_loss: 2,
+        note: "lift 1.0x < 2.0x → §44 噪声",
+        validation_status: "未 validated",
+      },
+    });
+    renderPanel();
+    expect(screen.getByText(/§44 未 validated（跑通中，60日后复验）/)).toBeInTheDocument();
+    expect(screen.getByText("25/20 日")).toBeInTheDocument();
   });
 
   it("kill criteria 预警（连续亏损>=5）", () => {
@@ -74,6 +92,7 @@ describe("ForwardTestPanel (S066)", () => {
         benchmark_win_rate: 60.0, pass_threshold: 48.0,
         passed: false, consecutive_loss: 6,
         note: "胜率 25% < 阈值 48%；连续亏损预警",
+        validation_status: "未 validated",
       },
     });
     renderPanel();
@@ -88,6 +107,7 @@ describe("ForwardTestPanel (S066)", () => {
         win_count: 32, win_rate: 80.0, avg_return: 1.5,
         benchmark_win_rate: 60.0, pass_threshold: 48.0,
         passed: true, consecutive_loss: 1, note: "通过",
+        validation_status: "validated",
       },
     });
     renderPanel();
@@ -105,6 +125,7 @@ describe("ForwardTestPanel (S066)", () => {
         win_count: 12, win_rate: 60.0, avg_return: 0.5,
         benchmark_win_rate: 60.0, pass_threshold: 48.0,
         passed: false, consecutive_loss: 0, note: "进行中",
+        validation_status: "探索性",
       },
     });
     renderPanel();
@@ -120,6 +141,7 @@ describe("ForwardTestPanel (S066)", () => {
         win_count: 32, win_rate: 80.0, avg_return: 1.5,
         benchmark_win_rate: 60.0, pass_threshold: 48.0,
         passed: true, consecutive_loss: 1, note: "通过",
+        validation_status: "validated",
       },
     });
     renderPanel();

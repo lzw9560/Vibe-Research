@@ -154,13 +154,14 @@ class TestRecordActualReturns:
 
 
 class TestGetForwardTestSummary:
-    """前向测试汇总（§44 合规：胜率>=60% + lift>=2x + random_baseline 已记录）。"""
+    """前向测试汇总（§44 60日复验窗口三态：validated | 未 validated | 探索性）。"""
 
     def test_empty_summary(self, fresh_db):
-        """空表 → 未通过（样本不足）。"""
+        """空表 → 未通过（样本不足，探索性 n<30）。"""
         result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
         assert result.total_days == 0
         assert result.passed is False
+        assert result.validation_status == "探索性"  # n<30 优先
         assert "样本不足" in result.note or "无已结算" in result.note
 
     def test_pass_criteria_met(self, fresh_db):
@@ -192,6 +193,7 @@ class TestGetForwardTestSummary:
         assert result.random_baseline_win_rate == 30.0  # 75/250
         assert result.lift >= 2.0  # 2.67
         assert result.passed is True
+        assert result.validation_status == "validated"  # lift>=2 + winrate>=60 + n>=30
 
     def test_fail_no_edge(self, fresh_db):
         """§44 核心：picks 高胜率但 universe 同样高 → lift<2x → 不通过（不优于随机）。"""
@@ -216,6 +218,7 @@ class TestGetForwardTestSummary:
         assert result.win_rate >= 60.0  # 胜率够高
         assert result.lift < 2.0  # 但 lift<2x
         assert result.passed is False
+        assert result.validation_status == "探索性"  # s_settled=25<30 优先于未 validated
         assert "噪声" in result.note or "重叠" in result.note
 
     def test_fail_no_universe(self, fresh_db):
@@ -305,3 +308,30 @@ class TestGetForwardTestSummary:
         assert result.settled_count == 10
         assert result.total_recommendations == 50
         assert "覆盖低" in result.note
+
+    def test_not_validated_lift_below_2x_with_n_ge_30(self, fresh_db):
+        """§44 60日复验窗口：n>=30 + lift<2x → 未 validated（不阻断接入跑通，60日后复验）。"""
+        for day in range(35):  # 35 天，每天 1 pick → s_settled=35>=30（非探索性）
+            date = f"2026-08-{day:02d}" if day < 31 else f"2026-09-{day-30:02d}"
+            recs = [DailyRecommendation(date, f"00{day:03d}", "A", "first_plate", 70.0)]
+            record_daily_recommendations(date, recs)
+            # picks 80% 胜率（day%5==0 输）
+            r = 2.0 if day % 5 != 0 else -1.0
+            record_actual_returns(date, {
+                f"00{day:03d}": {"return_open2close": r, "return_close2close": r, "next_pctChg": r},
+            })
+            # universe 也 80%（4/5 赢）→ lift 1.0x 未 validated
+            uni = {}
+            for i in range(5):
+                win = i != 0
+                rr = 2.0 if win else -1.0
+                uni[f"1{day}{i}"] = {"return_open2close": rr, "return_close2close": rr, "next_pctChg": rr}
+            record_universe_returns(date, uni)
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        assert result.settled_count >= 30  # 非探索性
+        assert result.is_exploratory is False
+        assert result.lift < 2.0  # lift 1.0x
+        assert result.passed is False  # passed 逻辑不变（lift<2 仍 False）
+        assert result.validation_status == "未 validated"  # n>=30 + lift<2 → 未 validated（非探索性）
+        assert "噪声" in result.note or "重叠" in result.note

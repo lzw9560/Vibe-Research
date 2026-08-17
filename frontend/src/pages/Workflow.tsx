@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
-import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
+// S072：WeatherDecisionBar 移出工作流首页（天气无 §44 edge，留 PostMarketReview 复盘）
 import { useWorkflowStatus, usePreMarketBriefing, usePreMarketDates, useWorkflowStates } from "@/lib/query";
 
 // ---- 类型定义 ----
@@ -357,9 +357,7 @@ export default function Workflow() {
     `当前页面：Workflow 总览`,
     `当前阶段：${STAGE_CONFIG[status?.stageKey ?? "pre-market"]?.label ?? ""}（${status?.marketStatus ?? ""}）`,
     `候选数：${status?.candidateCount ?? 0}，活跃信号：${status?.signalCount ?? 0}，今日胜率：${status?.winRate ?? "--"}%`,
-    ctx
-      ? `情绪天气：${ctx.weather_state}，STI=${ctx.sti_score ?? "--"}（${ctx.sti_phase ?? "--"}）`
-      : `情绪天气：未取得`,
+    // S072 去噪：不注入天气/STI（无 §44 edge）；保留熔断
     ctx?.fuse_state
       ? `熔断：${ctx.fuse_state.fuse_state}，允许战法：${(ctx.allowed_styles ?? []).join("、") || "无"}，禁用：${(ctx.forbidden_styles ?? []).join("、") || "无"}`
       : `熔断：未取得`,
@@ -434,8 +432,7 @@ export default function Workflow() {
         }
       />
 
-      {/* S063 风格顶部条：天气决策条 + 流水线进度（替代旧 SessionMap） */}
-      <WeatherDecisionBar ctx={histBriefing?.sentiment_context} />
+      {/* S072 去天气决策条（无 §44 edge）；保留流水线进度 */}
       <div className="mb-2">
         <PipelineProgressBar current={stageToPipeline(status?.stageKey ?? "pre-market")} />
       </div>
