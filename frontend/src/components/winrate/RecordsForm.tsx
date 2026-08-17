@@ -196,11 +196,6 @@ export function RecordsForm({ onSubmitted }: RecordsFormProps) {
           placeholder="0.80"
         />
         <Input
-          label="STI标签"
-          value={form.sti_label}
-          onChange={(e) => update("sti_label", e.target.value)}
-        />
-        <Input
           label="板块"
           value={form.sector}
           onChange={(e) => update("sector", e.target.value)}

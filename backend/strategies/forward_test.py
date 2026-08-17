@@ -32,6 +32,7 @@ _DB = GENE_SCORES_DB_PATH
 # 注：forward_test 内部 passed 判定逻辑不变；60日复验窗口口径下 passed=False 不阻断接入跑通。
 PASS_WINRATE_FLOOR: float = 60.0   # §13.0：alpha>60% 才加复杂度
 PASS_LIFT_FLOOR: float = 2.0       # §44 60日复验窗口：lift<2 标未 validated（前向测试仍跑，60日后复验定权重）
+PASS_LIFT_HARD_FLOOR: float = 1.0  # §44 硬底线：lift<1 劣于随机 → 移除/权重0，不保留跑通
 
 
 # ===========================================================================
@@ -356,7 +357,9 @@ def get_forward_test_summary(
     if u_settled == 0:
         note_parts.append("无随机基准（universe_returns 未回填 → 无法 §44 验证 lift）")
     if u_settled > 0 and s_settled > 0:
-        if lift < PASS_LIFT_FLOOR:
+        if lift < PASS_LIFT_HARD_FLOOR:
+            note_parts.append(f"lift {lift}x < {PASS_LIFT_HARD_FLOOR}x → §44 硬底线（劣于随机，移除/权重0，不保留跑通）")
+        elif lift < PASS_LIFT_FLOOR:
             note_parts.append(f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（未 validated，不阻断接入跑通，60日后复验）")
         if s_lo <= u_hi:  # 策略 CI 与随机 CI 重叠 = 不显著优于随机
             note_parts.append("策略 CI 与随机 CI 重叠（不显著优于随机）")
@@ -369,12 +372,15 @@ def get_forward_test_summary(
     if not note_parts:
         note_parts.append("§44 前向测试通过（胜率>=60% + lift>=2x → validated）")
 
-    # §44 60日复验窗口三态判定（语义层，基于 passed + is_exploratory 派生）
-    # - 探索性（n<30）：优先，数据不足非定论
+    # §44 60日复验窗口四态判定（语义层，基于 is_exploratory + lift + passed 派生）
+    # - 探索性（n<30）：最高优先，数据不足非定论（即使 lift<1 也标探索性，样本不足无法定论）
+    # - 劣于随机（lift<1）：硬底线，移除/权重0，不保留跑通
     # - validated（lift>=2 + winrate>=60 + ...）：通过 §44 门
-    # - 未 validated（跑通中，60日后复验）：lift<2 或 winrate<60 等，不阻断接入
+    # - 未 validated（1<lift<2 或 winrate<60 等）：跑通中，60日后复验
     if is_exploratory:
         validation_status = "探索性"
+    elif lift < PASS_LIFT_HARD_FLOOR:
+        validation_status = "劣于随机"  # lift<1 硬底线：移除/权重0，不保留跑通
     elif passed:
         validation_status = "validated"
     else:

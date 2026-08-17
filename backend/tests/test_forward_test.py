@@ -335,3 +335,55 @@ class TestGetForwardTestSummary:
         assert result.passed is False  # passed 逻辑不变（lift<2 仍 False）
         assert result.validation_status == "未 validated"  # n>=30 + lift<2 → 未 validated（非探索性）
         assert "噪声" in result.note or "重叠" in result.note
+
+    def test_lift_below_1_hard_floor(self, fresh_db):
+        """§44 硬底线：n>=30 + lift<1 → 劣于随机（移除/权重0，不保留跑通）。"""
+        for day in range(35):  # 35 天，每天 1 pick → s_settled=35>=30（非探索性）
+            date = f"2026-08-{day:02d}" if day < 31 else f"2026-09-{day-30:02d}"
+            recs = [DailyRecommendation(date, f"00{day:03d}", "A", "first_plate", 70.0)]
+            record_daily_recommendations(date, recs)
+            # picks 40% 胜率（day%5 ∈ {0,1} 赢 → 2/5=40%）
+            r = 2.0 if day % 5 < 2 else -1.0
+            record_actual_returns(date, {
+                f"00{day:03d}": {"return_open2close": r, "return_close2close": r, "next_pctChg": r},
+            })
+            # universe 60% 胜率（3/5 赢）→ lift = 40/60 = 0.667 <1（劣于随机）
+            uni = {}
+            for i in range(5):
+                win = i < 3
+                rr = 2.0 if win else -1.0
+                uni[f"1{day}{i}"] = {"return_open2close": rr, "return_close2close": rr, "next_pctChg": rr}
+            record_universe_returns(date, uni)
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        assert result.settled_count >= 30  # 非探索性
+        assert result.is_exploratory is False
+        assert result.lift < 1.0  # lift=40/60=0.667<1（劣于随机）
+        assert result.passed is False
+        assert result.validation_status == "劣于随机"  # lift<1 硬底线
+        assert "硬底线" in result.note or "劣于随机" in result.note
+
+    def test_lift_below_1_but_exploratory_still_wins(self, fresh_db):
+        """§44 优先级：n<30 + lift<1 → 探索性（非劣于随机，样本不足无法定论）。"""
+        for day in range(25):  # 25 天，每天 1 pick → s_settled=25<30（探索性）
+            date = f"2026-08-{day:02d}"
+            recs = [DailyRecommendation(date, f"00{day:03d}", "A", "first_plate", 70.0)]
+            record_daily_recommendations(date, recs)
+            # picks 40% 胜率（day%5 ∈ {0,1} 赢 → 2/5=40%）
+            r = 2.0 if day % 5 < 2 else -1.0
+            record_actual_returns(date, {
+                f"00{day:03d}": {"return_open2close": r, "return_close2close": r, "next_pctChg": r},
+            })
+            # universe 60% 胜率（3/5 赢）→ lift=40/60=0.667<1
+            uni = {}
+            for i in range(5):
+                win = i < 3
+                rr = 2.0 if win else -1.0
+                uni[f"1{day}{i}"] = {"return_open2close": rr, "return_close2close": rr, "next_pctChg": rr}
+            record_universe_returns(date, uni)
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        assert result.settled_count < 30  # 探索性
+        assert result.is_exploratory is True
+        assert result.lift < 1.0  # lift<1 但 n<30
+        assert result.validation_status == "探索性"  # 探索性优先，非劣于随机

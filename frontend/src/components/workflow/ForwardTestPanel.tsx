@@ -26,23 +26,36 @@ export function ForwardTestPanel() {
     );
   }
 
-  // §44 60日复验窗口三态判定（主显示），passed 字段向后兼容保留
+  // §44 60日复验窗口四态判定（主显示），passed 字段向后兼容保留
+  // 优先级：探索性（n<30）> 劣于随机（lift<1）> validated > 未 validated
   const validationStatus = data.validation_status ?? "未 validated";
   const isValidated = validationStatus === "validated";
   const isExploratory = validationStatus === "探索性";
+  const isWorseThanRandom = validationStatus === "劣于随机";  // lift<1 硬底线
   const killAlert = data.consecutive_loss >= 5;  // 策略级 kill criteria 预警（仍走 destructive）
   const winRateLow = data.settled_count > 0 && data.win_rate < data.pass_threshold;
   const progress = Math.min(data.total_days / 20, 1) * 100;  // 20 交易日进度
 
-  // 主状态文案：kill 预警优先，次 validation_status 三态
+  // 主状态文案：kill 预警优先，次 validation_status 四态
   const statusText = killAlert
     ? "Kill Criteria 预警"
-    : isValidated
-      ? "§44 validated"
-      : isExploratory
-        ? "§44 探索性（n<30）"
-        : "§44 未 validated（跑通中，60日后复验）";
-  const StatusIcon = killAlert ? AlertTriangle : isValidated ? CheckCircle2 : isExploratory ? TrendingDown : Activity;
+    : isExploratory
+      ? "§44 探索性（n<30）"
+      : isWorseThanRandom
+        ? "§44 硬底线（劣于随机，移除/权重0）"
+        : isValidated
+          ? "§44 validated"
+          : "§44 未 validated（跑通中，60日后复验）";
+  // 图标：kill 预警 AlertTriangle，劣于随机 TrendingDown（红），探索性 TrendingDown（灰），validated CheckCircle2，未 validated Activity
+  const StatusIcon = killAlert
+    ? AlertTriangle
+    : isExploratory
+      ? TrendingDown
+      : isWorseThanRandom
+        ? TrendingDown
+        : isValidated
+          ? CheckCircle2
+          : Activity;
 
   return (
     <div className="space-y-4">
@@ -51,17 +64,19 @@ export function ForwardTestPanel() {
         subtitle="每日推荐 vs 实际表现 · 不投真金 · §44 60日复验窗口"
       />
 
-      {/* §44 60日复验窗口三态状态横幅 */}
+      {/* §44 60日复验窗口四态状态横幅 */}
       <div
         className={cn(
           "flex items-center gap-3 rounded-lg border px-4 py-3",
           killAlert
             ? "border-destructive/40 bg-destructive/10 text-destructive"
-            : isValidated
-              ? "border-success/30 bg-success/5 text-success"
-              : isExploratory
-                ? "border-muted-foreground/30 bg-muted/5 text-muted-foreground"
-                : "border-warning/30 bg-warning/5 text-warning",
+            : isWorseThanRandom
+              ? "border-destructive/40 bg-destructive/10 text-destructive"  // 劣于随机=硬底线，红色（移除/权重0）
+              : isValidated
+                ? "border-success/30 bg-success/5 text-success"
+                : isExploratory
+                  ? "border-muted-foreground/30 bg-muted/5 text-muted-foreground"
+                  : "border-warning/30 bg-warning/5 text-warning",
         )}
       >
         <StatusIcon className="h-5 w-5 shrink-0" />
@@ -69,7 +84,7 @@ export function ForwardTestPanel() {
           <p className="text-sm font-bold">{statusText}</p>
           <p className="text-xs opacity-80">{data.note}</p>
         </div>
-        <Badge variant={killAlert ? "danger" : isValidated ? "success" : isExploratory ? "default" : "warning"}>
+        <Badge variant={killAlert || isWorseThanRandom ? "danger" : isValidated ? "success" : isExploratory ? "default" : "warning"}>
           {data.total_days}/20 日
         </Badge>
       </div>

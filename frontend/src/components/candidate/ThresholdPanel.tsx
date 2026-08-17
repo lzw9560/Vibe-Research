@@ -35,14 +35,11 @@ export function ThresholdPanel() {
           </Button>
         ))}
       </div>
-      {cfg && (
+      {cfg?.config.adjustment?.依据 ? (
         <div className="text-sm text-muted-foreground">
-          当日情绪档：<span className="text-foreground">{cfg.config.sentiment_phase || "未取得（降级基数）"}</span>
-          {cfg.config.adjustment?.依据
-            ? <div className="mt-1">依据：{String(cfg.config.adjustment.依据)}</div>
-            : null}
+          依据：{String(cfg.config.adjustment.依据)}
         </div>
-      )}
+      ) : null}
       <div className="flex items-center gap-2">
         <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存模式"}</Button>
         {cfg && <span className="text-xs text-muted-foreground">来源开关：{Object.entries(cfg.sources).filter(([, v]) => v).map(([k]) => k).join("、")}</span>}

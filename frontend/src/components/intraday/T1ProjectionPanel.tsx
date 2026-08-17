@@ -49,9 +49,9 @@ export function T1ProjectionPanel() {
 
       <div className="flex items-center gap-2 rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-700 dark:text-amber-400">
         <span className="font-medium">投影，非最终判定</span>
-        <span className="text-muted-foreground">
-          —— 收盘后以 STI 盘后定时计算结果为准{data.as_of ? `（当前采样 ${data.as_of}）` : ""}
-        </span>
+        {data.as_of ? (
+          <span className="text-muted-foreground">—— 当前采样 {data.as_of}</span>
+        ) : null}
       </div>
     </div>
   );

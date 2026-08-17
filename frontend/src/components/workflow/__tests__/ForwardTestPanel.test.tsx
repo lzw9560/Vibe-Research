@@ -83,6 +83,23 @@ describe("ForwardTestPanel (S066)", () => {
     expect(screen.getByText("25/20 日")).toBeInTheDocument();
   });
 
+  it("劣于随机（lift<1 硬底线）→ 显示 §44 硬底线红色", () => {
+    mockSummary.useForwardTestSummary.mockReturnValue({
+      isLoading: false,
+      data: {
+        total_days: 35, total_recommendations: 35, settled_count: 35,
+        win_count: 14, win_rate: 40.0, avg_return: -0.8,
+        benchmark_win_rate: 60.0, pass_threshold: 60.0,
+        passed: false, consecutive_loss: 3,
+        note: "lift 0.667x < 1.0x → §44 硬底线（劣于随机，移除/权重0，不保留跑通）",
+        validation_status: "劣于随机",
+      },
+    });
+    renderPanel();
+    expect(screen.getByText(/§44 硬底线（劣于随机，移除\/权重0）/)).toBeInTheDocument();
+    expect(screen.getByText("35/20 日")).toBeInTheDocument();
+  });
+
   it("kill criteria 预警（连续亏损>=5）", () => {
     mockSummary.useForwardTestSummary.mockReturnValue({
       isLoading: false,
