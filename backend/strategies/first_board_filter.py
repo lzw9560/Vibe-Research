@@ -56,19 +56,19 @@ _KLINE_CACHE: dict[str, list[dict]] | None = None
 # 所有阈值集中在此常量，顶部统一管理。当前值为骨架占位，非回测校准值。
 # 标注"待回测校准"：实际阈值需用 30 天首板数据回测后调整（见 tasks.md 021 回测校准）。
 EXCLUDE_THRESHOLDS: dict = {
-    # ── 硬剔除底线（不分市场状态，固定，待回测校准）─────────────────────
+    # ── 硬剔除底线（grill 收紧：只留"绝对不能买"2 条，待回测校准）─────────
     "max_break_times": 2,          # 炸板次数 ≥2 剔除（封板不牢）
     "min_seal_ratio": 0.001,        # 封单/流通市值 <0.1% 剔除（封单太薄）
-    "max_turnover": 30.0,          # 换手率 >30% 剔除（筹码松动）
     # 移除的（改为评分维度，不再硬剔除）：
-    # "late_seal_time": 140000,    # 改为 score_dim_seal_time 评分
-    # "max_amount_yi": 15.0,       # 改为 chip 评分体现
-    # "max_vol_ratio": 2.0,         # 改为 chip 评分体现
-    # ── 层3 市场环境（T-1 粗筛）──────────────────────────────────────────
-    "market_drop_threshold": -1.5,  # 大盘跌 >1.5% 标记高风险（不直接剔除，仅标记）
-    "min_sector_zt_count": 2,       # 同板块涨停 <2 且无题材 剔除（孤板无板块效应）
+    # "max_turnover": 30.0,          # 移除，改 score_dim_turnover 倒U型评分
+    # "late_seal_time": 140000,      # 改为 score_dim_seal_time 评分
+    # "max_amount_yi": 15.0,         # 改为 chip 评分体现
+    # "max_vol_ratio": 2.0,          # 改为 chip 评分体现
+    # ── 层3 改纯环境标记（不剔除，只输出 env_flags 供评分权重分层用）────────
+    "exclude_isolated_board": False,  # 孤板不硬剔除，改评分（grill 收紧）
     "exclude_chinext": False,       # 创业板不剔除（候选池按板块分组排序区分展示）
-    "exclude_isolated_board": True, # 孤板剔除开关（用户可关），待回测校准
+    "market_drop_threshold": -1.5,  # 大盘跌 >1.5% 标记高风险（不剔除，仅标记）
+    "min_sector_zt_count": 2,       # 保留但只做评分参考，不剔除
 }
 
 
@@ -78,17 +78,21 @@ EXCLUDE_THRESHOLDS: dict = {
 # grill 锁定决策：权重按 zt_count 4 档分层（冰点/普通/活跃/亢奋）。
 # 数据缺失维度 score=-1 不参与加权，权重重分配到其他有效维度。
 MARKET_PHASE_WEIGHTS: dict[str, dict[str, float]] = {
-    "冰点": {  # zt<30：封板质量主导（seal_time+seal_ratio=0.70），板块联动弱
-        "seal_time": 0.30, "sector_link": 0.10, "market_cap": 0.20, "seal_ratio": 0.40,
+    "冰点": {  # zt<30：封板质量主导（seal_time+seal_ratio=0.55），板块联动弱
+        "seal_time": 0.25, "sector_link": 0.10, "market_cap": 0.20,
+        "seal_ratio": 0.30, "turnover": 0.15,
     },
     "普通": {  # 30-60：均衡
-        "seal_time": 0.25, "sector_link": 0.20, "market_cap": 0.15, "seal_ratio": 0.40,
+        "seal_time": 0.20, "sector_link": 0.20, "market_cap": 0.15,
+        "seal_ratio": 0.30, "turnover": 0.15,
     },
     "活跃": {  # 60-100：板块联动权重提升
-        "seal_time": 0.20, "sector_link": 0.30, "market_cap": 0.10, "seal_ratio": 0.40,
+        "seal_time": 0.15, "sector_link": 0.30, "market_cap": 0.10,
+        "seal_ratio": 0.30, "turnover": 0.15,
     },
     "亢奋": {  # zt>=100：板块联动主导（接力情绪强）
-        "seal_time": 0.15, "sector_link": 0.40, "market_cap": 0.10, "seal_ratio": 0.35,
+        "seal_time": 0.10, "sector_link": 0.40, "market_cap": 0.10,
+        "seal_ratio": 0.25, "turnover": 0.15,
     },
 }
 
@@ -405,53 +409,25 @@ def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], l
 def exclude_layer2_chip_structure(
     candidates: list[dict], date: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    """剔除层2：筹码结构硬底线（只保留换手>30%硬剔除）。
+    """剔除层2：grill 收紧后简化为透传（不剔除，只缓存 _chip_structure 供评分用）。
 
-    条件（仅换手率硬剔除，待回测校准）：
-    - 换手率 > max_turnover（默认 30%，筹码松动）
-
-    ⚠️ 成交额/量比不再硬剔除（改为 chip 评分体现）。
-    数据来源：baostock_kline_cache.json 历史 K 线（换手，无未来函数）。
-    数据缺失降级：历史数据取不到 → 跳过（不误剔）。
+    grill 收紧决策：移除换手>30% 硬剔除（改 score_dim_turnover 倒U型评分），
+    层2不再剔除任何候选——只预取 _chip_structure（baostock 历史K线换手/量比/成交额）
+    缓存到候选对象，供 score_dim_turnover / score_dim4_chip 评分复用，避免重复请求。
 
     Args:
         candidates: 通过层1的候选 list[dict]。
         date: YYYY-MM-DD 或 YYYYMMDD（T-1 日，用于查 baostock 历史 K 线）。
 
     Returns:
-        (kept, filtered_records)：同层1返回格式。
+        (kept, filtered_records)：kept=candidates 原样透传，filtered=[]（不剔除）。
     """
-    kept: list[dict] = []
-    filtered: list[dict] = []
-
-    max_to = EXCLUDE_THRESHOLDS["max_turnover"]
-
     for fb in candidates:
-        code = fb.get("code", "")
-        # 取筹码结构（若已缓存则复用；否则现取——用历史 K 线，无未来函数）
-        chip = fb.get("_chip_structure")
-        if chip is None:
-            chip = extract_chip_structure(code, date)
-            fb["_chip_structure"] = chip  # 缓存到候选对象，避免重复请求
-
-        reasons: list[str] = []
-
-        # 硬剔除：换手率 > 30%
-        tp = chip.get("turnover_pct")
-        if tp is not None and tp > max_to:
-            reasons.append(f"换手{tp:.0f}%筹码松动")
-
-        if reasons:
-            filtered.append({
-                "code": code,
-                "name": fb.get("name", ""),
-                "layer": 2,
-                "reason": "/".join(reasons),
-            })
-        else:
-            kept.append(fb)
-
-    return kept, filtered
+        # 预取筹码结构缓存（供评分复用，不剔除）
+        if fb.get("_chip_structure") is None:
+            code = fb.get("code", "")
+            fb["_chip_structure"] = extract_chip_structure(code, date)
+    return list(candidates), []
 
 
 def _sector_zt_count(first_boards: list[dict], industry: str | None) -> int:
@@ -571,50 +547,17 @@ def exclude_layer3_market_env(
         "ladder_broken": ladder_broken,
     }
 
-    # 层3 剔除条件读取
-    min_sector_count = EXCLUDE_THRESHOLDS["min_sector_zt_count"]
-    exclude_isolated = EXCLUDE_THRESHOLDS.get("exclude_isolated_board", True)
-    # 创业板不剔除（exclude_chinext=False），候选池按板块分组排序区分展示
-
-    kept: list[dict] = []
-    filtered: list[dict] = []
-
+    # 层3 grill 收紧：改纯环境标记（不剔除，只输出 env_flags）
+    # 孤板/创业板不硬剔除，改评分（score_dim_sector_link 体现板块联动）
+    # 只预取 _sector_info 缓存供评分复用
     for fb in candidates:
         code = fb.get("code", "")
-        industry = fb.get("industry")
+        if fb.get("_sector_info") is None:
+            fb["_sector_info"] = extract_sector(code)
 
-        # 同板块涨停数（基于 first_boards 池聚合，含首板+连板）
-        sector_count = _sector_zt_count(fb_pool, industry)
-
-        # 取概念题材（若已缓存则复用）
-        sector_info = fb.get("_sector_info")
-        if sector_info is None:
-            sector_info = extract_sector(code)
-            fb["_sector_info"] = sector_info
-        concept_tags = sector_info.get("concept_tags") or []
-
-        reasons: list[str] = []
-
-        # 孤板剔除：同板块涨停 < min_sector_zt_count 且无题材，开关 exclude_isolated 控制
-        if exclude_isolated and sector_count < min_sector_count and not concept_tags:
-            reasons.append(
-                f"同板块{sector_count}家涨停无题材"
-            )
-
-        # 注意：high_risk / ladder_broken 不直接剔除，仅在 env_flags 标记
-        # （T-1 粗筛语义：高风险市场环境下降低仓位，不直接清空候选）
-
-        if reasons:
-            filtered.append({
-                "code": code,
-                "name": fb.get("name", ""),
-                "layer": 3,
-                "reason": "/".join(reasons),
-            })
-        else:
-            kept.append(fb)
-
-    return kept, filtered, env_flags
+    # grill 收紧：层3不剔除任何候选，全部保留（环境风险在 env_flags 标记，
+    # 评分权重分层 market_phase 体现——冰点档降仓位而非清空）
+    return list(candidates), [], env_flags
 
 
 # ===========================================================================
@@ -1251,18 +1194,53 @@ def score_dim_seal_ratio(candidate: dict, date: str) -> tuple[float, dict]:
         return 30.0, raw
 
 
+def score_dim_turnover(candidate: dict, date: str) -> tuple[float, dict]:
+    """换手率评分——倒 U 型，5-15% 最优（grill 收紧：换手改评分，不硬剔除）。
+
+    数据源：baostock 历史K线 turn 字段（extract_chip_structure 已预取缓存）。
+    旧层2的 max_turnover=30% 硬剔除改为评分：
+    - 5-15% 健康满分（筹码交换充分但不松动）
+    - 2-5% / 15-25% 次优（偏冷/偏热）
+    - >25% 低分（筹码松动）
+    - <2% 过冷（无人气）
+
+    Returns:
+        (score, raw)：raw 含 turnover_pct。
+        数据缺失（无 baostock 历史K线）→ score=-1 不参与加权。
+    """
+    raw: dict = {"turnover_pct": None}
+    # 复用层2预取的 _chip_structure 缓存（避免重复请求 baostock）
+    chip = candidate.get("_chip_structure")
+    if chip is None:
+        chip = extract_chip_structure(candidate.get("code", ""), date)
+        candidate["_chip_structure"] = chip
+    tp = chip.get("turnover_pct")
+    raw["turnover_pct"] = tp
+    if tp is None:
+        return -1.0, raw  # 数据缺失，不参与加权
+    if 5.0 <= tp <= 15.0:
+        return 100.0, raw
+    elif 2.0 <= tp < 5.0 or 15.0 < tp <= 25.0:
+        return 70.0, raw
+    elif tp > 25.0:
+        return 30.0, raw  # 筹码松动低分（不再硬剔除）
+    else:  # < 2.0
+        return 40.0, raw  # 过冷
+
+
 # ===========================================================================
 # 020 评分加权总分 + 排序（权重分层 + 数据缺失不参与加权）
 # ===========================================================================
 
 # 维度函数映射表（score_candidate 用）。
-# 新增 4 维度（seal_time/sector_link/market_cap/seal_ratio）+ 保留 5 旧维度
-# + 废弃 2 维度（auction/northbound 返 -1 不参与加权）。
+# grill 收紧：5 核心维度（seal_time/sector_link/market_cap/seal_ratio/turnover）
+# + 保留 5 旧维度 + 废弃 2 维度（auction/northbound 返 -1 不参与加权）。
 _SCORE_DIMS = [
-    ("seal_time", score_dim_seal_time),       # 新增：封板时间
-    ("sector_link", score_dim_sector_link),   # 新增：板块联动
-    ("market_cap", score_dim_market_cap),     # 新增：市值
-    ("seal_ratio", score_dim_seal_ratio),     # 新增：封单比
+    ("seal_time", score_dim_seal_time),       # 核心：封板时间
+    ("sector_link", score_dim_sector_link),   # 核心：板块联动
+    ("market_cap", score_dim_market_cap),     # 核心：市值
+    ("seal_ratio", score_dim_seal_ratio),     # 核心：封单比
+    ("turnover", score_dim_turnover),         # 核心：换手率（grill 收紧：换手改评分）
     ("hot_money", score_dim2_hot_money),      # 保留：游资画像
     ("chip", score_dim4_chip),                # 保留：筹码结构
     ("institution", score_dim7_institution),  # 保留：龙虎榜机构
@@ -1391,6 +1369,20 @@ def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
     # rank 从 1 开始连续编号（整体连续，不分段重置）
     for i, s in enumerate(scored):
         s["rank"] = i + 1
+
+    # P70 分位精选池（grill 收紧：评分前 30% 标"精选"，后 70% 标"观察"）
+    if len(scored) >= 3:
+        # 前 30% 的最后一个 index（向下取整，至少 1 只精选）
+        cutoff_idx = max(1, int(len(scored) * 0.3)) - 1
+        cutoff_score = scored[cutoff_idx]["total"]
+        for s in scored:
+            s["pool_type"] = "精选" if s["total"] >= cutoff_score else "观察"
+    else:
+        # 候选<3 只时全部精选
+        for s in scored:
+            s["pool_type"] = "精选"
+    print(f"[fb_filter] 精选池: {sum(1 for s in scored if s.get('pool_type')=='精选')}/{len(scored)}", flush=True)
+
     return scored
 
 

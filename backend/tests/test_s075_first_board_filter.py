@@ -203,7 +203,10 @@ class TestExcludeLayers:
     # ── 层2：筹码结构 ──────────────────────────────────────────────────
 
     def test_layer2_high_turnover_excluded(self, monkeypatch):
-        """换手>30% 剔除（grill 固定底线 30%）。"""
+        """grill 收紧：层2不再剔除换手（改 score_dim_turnover 倒U型评分）。
+
+        层2简化为透传——只缓存 _chip_structure 供评分用，不剔除任何候选。
+        """
         from strategies.first_board_filter import exclude_layer2_chip_structure
         # mock extract_chip_structure 返历史筹码（turnover_pct 字段名）
         monkeypatch.setattr(
@@ -212,14 +215,15 @@ class TestExcludeLayers:
         )
 
         fbs = [
-            _make_first_board(code="001"),  # 35% 换手 → 剔除
-            _make_first_board(code="002"),  # 同 mock，35% → 剔除
+            _make_first_board(code="001"),  # 35% 换手 → 保留（改评分不剔除）
+            _make_first_board(code="002"),
         ]
         kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
-        # 两个都 35% 换手 → 都剔除
-        assert len(kept) == 0
-        assert len(filtered) == 2
-        assert "换手" in filtered[0]["reason"]
+        # grill 收紧：层2不剔除 → 全部保留
+        assert len(kept) == 2
+        assert filtered == []
+        # _chip_structure 缓存到候选对象（供评分复用）
+        assert kept[0]["_chip_structure"]["turnover_pct"] == 35.0
 
     def test_layer2_high_amount_excluded(self, monkeypatch):
         """成交额不再硬剔除（改为 chip 评分体现，grill 决策）。
@@ -295,7 +299,10 @@ class TestExcludeLayers:
         # 这里不验证剔除（下一用例验），只验 high_risk 标记
 
     def test_layer3_isolated_sector_excluded(self, monkeypatch):
-        """同板块涨停<2 且无题材 → 剔除（孤板无板块效应）。"""
+        """grill 收紧：层3不再剔除孤板（改纯环境标记，孤板改评分）。
+
+        层3只输出 env_flags，不剔除任何候选——孤板在 score_dim_sector_link 评分体现。
+        """
         from strategies.first_board_filter import exclude_layer3_market_env
         monkeypatch.setattr(
             "strategies.first_board_filter._emotion",
@@ -306,13 +313,14 @@ class TestExcludeLayers:
         # mock concept_blocks 返空 → 无题材
         monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
 
-        # 只 1 只半导体，sector_count=1<2，无题材 → 剔除
+        # 只 1 只半导体，sector_count=1<2，无题材 → 保留（层3不剔除，改评分）
         fb = _make_first_board(code="001", industry="半导体")
         kept, filtered, env = exclude_layer3_market_env([fb], "20260818", first_boards=[fb])
-        assert len(kept) == 0
-        assert len(filtered) == 1
-        assert filtered[0]["layer"] == 3
-        assert "同板块" in filtered[0]["reason"]
+        # grill 收紧：层3不剔除 → 全部保留
+        assert len(kept) == 1
+        assert filtered == []
+        # _sector_info 缓存到候选对象
+        assert kept[0]["_sector_info"] is not None
 
     def test_layer3_sector_with_theme_kept(self, monkeypatch):
         """同板块涨停<2 但有题材 → 保留（有题材支撑不剔）。"""
@@ -390,7 +398,7 @@ class TestScoreCandidate:
         result = score_candidate(cand, "20260818", "普通")
         assert 0.0 <= result["total"] <= 100.0
         assert "scores" in result
-        assert len(result["scores"]) == 11  # 11 维度
+        assert len(result["scores"]) == 12  # 12 维度（grill 收紧加 turnover）
 
     def test_rank_descending(self):
         """rank_candidates 按总分降序（新签名 score_candidate 加 phase 参数）。"""
