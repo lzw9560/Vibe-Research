@@ -49,6 +49,7 @@ from routers import coach as coach_router  # S064：盯盘教练
 from routers import debate as debate_router  # main：多空辩论 + 反思审计
 from routers import prediction_ledger_router as prediction_ledger_router_mod
 from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
+from routers import notes as notes_router  # 投研记录笔记（后端 SQLite 落盘，全局可见）
 try:
     from routers import value_funnel as value_funnel_router
 except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 quality.py 时不挡 app 启动
@@ -226,6 +227,7 @@ app.include_router(advisory.router)
 app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
 app.include_router(coach_router.router)  # S064：盯盘教练
 app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
+app.include_router(notes_router.router)  # 投研记录笔记（CRUD + SQLite 落盘）
 if value_funnel_router is not None:
     app.include_router(value_funnel_router.router)
 
