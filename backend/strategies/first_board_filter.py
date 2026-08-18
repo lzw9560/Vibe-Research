@@ -9,7 +9,7 @@
 - 020 加权总分：score_candidate / rank_candidates
 - 021 评分落盘：save_scores
 
-阈值/权重集中在本模块顶部常量（EXCLUDE_THRESHOLDS / SCORE_WEIGHTS），**待回测校准**
+阈值/权重集中在本模块顶部常量（EXCLUDE_THRESHOLDS / MARKET_PHASE_WEIGHTS），**待回测校准**
 （30 天后用实际数据调，见 tasks.md 021 回测校准）。
 
 字段名说明（经核实，与东财 push2ex 实际返回一致，见
@@ -56,14 +56,14 @@ _KLINE_CACHE: dict[str, list[dict]] | None = None
 # 所有阈值集中在此常量，顶部统一管理。当前值为骨架占位，非回测校准值。
 # 标注"待回测校准"：实际阈值需用 30 天首板数据回测后调整（见 tasks.md 021 回测校准）。
 EXCLUDE_THRESHOLDS: dict = {
-    # ── 层1 封板质量 ──────────────────────────────────────────────────────
-    "max_break_times": 2,           # 炸板次数 ≥2 剔除（封板不牢）
-    "late_seal_time": 140000,       # 首封时间 ≥14:00(数字140000) 剔除（尾盘偷袭）
-    "min_seal_ratio": 0.005,        # 封单/流通市值 <0.5% 剔除（封单太薄）
-    # ── 层2 筹码结构 ──────────────────────────────────────────────────────
-    "max_turnover": 25.0,           # 换手率 >25% 剔除（筹码松动）
-    "max_amount_yi": 15.0,          # 成交额 >15亿 剔除（资金分歧过大）
-    "max_vol_ratio": 2.0,           # 量比 ≥2.0 剔除（放量过大，非自然涨停）
+    # ── 硬剔除底线（不分市场状态，固定，待回测校准）─────────────────────
+    "max_break_times": 2,          # 炸板次数 ≥2 剔除（封板不牢）
+    "min_seal_ratio": 0.001,        # 封单/流通市值 <0.1% 剔除（封单太薄）
+    "max_turnover": 30.0,          # 换手率 >30% 剔除（筹码松动）
+    # 移除的（改为评分维度，不再硬剔除）：
+    # "late_seal_time": 140000,    # 改为 score_dim_seal_time 评分
+    # "max_amount_yi": 15.0,       # 改为 chip 评分体现
+    # "max_vol_ratio": 2.0,         # 改为 chip 评分体现
     # ── 层3 市场环境（T-1 粗筛）──────────────────────────────────────────
     "market_drop_threshold": -1.5,  # 大盘跌 >1.5% 标记高风险（不直接剔除，仅标记）
     "min_sector_zt_count": 2,       # 同板块涨停 <2 且无题材 剔除（孤板无板块效应）
@@ -73,21 +73,40 @@ EXCLUDE_THRESHOLDS: dict = {
 
 
 # ===========================================================================
-# 9 维度评分权重（待回测校准，30 天后用实际数据调）
+# 评分权重分层（按 zt_count 市场状态分层，待回测校准）
 # ===========================================================================
-# 权重和为 1.0。当前值为 plan.md 权重，**待回测校准**（见 tasks.md 021 回测校准）。
-# 每个维度函数顶部注释"§44 未 validated，待回测校准"——维度内部逻辑未经 §44 验证。
-SCORE_WEIGHTS: dict = {
-    "sector": 0.15,         # 维度1 板块评分（板块涨停≥3 只=联动强）
-    "hot_money": 0.15,      # 维度2 游资画像（一日游占比高→扣分）
-    "seal_strength": 0.20,  # 维度3 封板强度（封板越早/封单越大/不炸=越强）
-    "chip": 0.10,           # 维度4 筹码结构（缩量+健康换手=筹码稳定）
-    "auction": 0.10,        # 维度5 竞价确认（T 日 9:25 竞价高开 1-3%）
-    "northbound": 0.10,     # 维度6 北向资金（正流入加分）
-    "institution": 0.10,    # 维度7 龙虎榜机构（机构净买入=基本面认可）
-    "theme": 0.05,          # 维度8 题材热度（同题材涨停≥3 只=满热度）
-    "event": 0.05,          # 维度9 事件评分（#33/#34 利好+，#35-39 利空-）
+# grill 锁定决策：权重按 zt_count 4 档分层（冰点/普通/活跃/亢奋）。
+# 数据缺失维度 score=-1 不参与加权，权重重分配到其他有效维度。
+MARKET_PHASE_WEIGHTS: dict[str, dict[str, float]] = {
+    "冰点": {  # zt<30：封板质量主导（seal_time+seal_ratio=0.70），板块联动弱
+        "seal_time": 0.30, "sector_link": 0.10, "market_cap": 0.20, "seal_ratio": 0.40,
+    },
+    "普通": {  # 30-60：均衡
+        "seal_time": 0.25, "sector_link": 0.20, "market_cap": 0.15, "seal_ratio": 0.40,
+    },
+    "活跃": {  # 60-100：板块联动权重提升
+        "seal_time": 0.20, "sector_link": 0.30, "market_cap": 0.10, "seal_ratio": 0.40,
+    },
+    "亢奋": {  # zt>=100：板块联动主导（接力情绪强）
+        "seal_time": 0.15, "sector_link": 0.40, "market_cap": 0.10, "seal_ratio": 0.35,
+    },
 }
+
+
+def _market_phase(zt_count: int | None) -> str:
+    """按涨停家数判定市场档位（冰点/普通/活跃/亢奋）。
+
+    zt_count=None → "普通"（无法判定时取中性档）。
+    """
+    if zt_count is None:
+        return "普通"
+    if zt_count < 30:
+        return "冰点"
+    if zt_count < 60:
+        return "普通"
+    if zt_count < 100:
+        return "活跃"
+    return "亢奋"
 
 
 # ===========================================================================
@@ -331,29 +350,26 @@ def extract_sector(code: str) -> dict:
 # ===========================================================================
 
 def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], list[dict]]:
-    """剔除层1：封板质量。
+    """剔除层1：封板质量硬底线（不分市场状态，固定）。
 
-    条件（任一命中即剔除）：
+    条件（任一命中即剔除，待回测校准）：
     - 炸板次数 ≥ max_break_times（默认 2）
-    - 首封时间 ≥ late_seal_time（默认 14:00，尾盘偷袭）
-    - 封单/流通市值 < min_seal_ratio（默认 0.5%，封单太薄）
+    - 封单/流通市值 < min_seal_ratio（默认 0.1%，封单太薄）
 
-    数据缺失降级：break_times/first_seal/seal_amount/float_cap 任一缺失，
-    跳过对应条件（不因数据缺失误剔除）。
+    ⚠️ 首封时间不再硬剔除（改为 score_dim_seal_time 评分体现）。
+    数据缺失降级：break_times/seal_amount/float_cap 任一缺失，跳过对应条件
+    （不因数据缺失误剔除）。
 
     Args:
         first_boards: filter_first_board 返回的首板列表。
 
     Returns:
-        (kept, filtered_records)：
-        - kept: 通过层1的首板 list[dict]
-        - filtered_records: 被剔除记录 list[dict]，每项 {code, layer:1, reason}
+        (kept, filtered_records)：每项 {code, name, layer:1, reason}
     """
     kept: list[dict] = []
     filtered: list[dict] = []
 
     max_bt = EXCLUDE_THRESHOLDS["max_break_times"]
-    late_seal = EXCLUDE_THRESHOLDS["late_seal_time"]
     min_sr = EXCLUDE_THRESHOLDS["min_seal_ratio"]
 
     for fb in first_boards:
@@ -365,13 +381,7 @@ def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], l
         if bt is not None and bt >= max_bt:
             reasons.append(f"炸板{int(bt)}次")
 
-        # 条件2：首封时间（尾盘偷袭）
-        fbt = fb.get("first_seal")
-        if fbt is not None and fbt >= late_seal:
-            hhmm = fb.get("first_seal_hhmm") or _fbt_to_hhmm(fbt) or ""
-            reasons.append(f"首封{hhmm}尾盘")
-
-        # 条件3：封单/流通市值
+        # 条件2：封单/流通市值
         seal = fb.get("seal_amount")
         fcap = fb.get("float_cap")
         if seal is not None and fcap is not None and fcap > 0:
@@ -395,21 +405,18 @@ def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], l
 def exclude_layer2_chip_structure(
     candidates: list[dict], date: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    """剔除层2：筹码结构。
+    """剔除层2：筹码结构硬底线（只保留换手>30%硬剔除）。
 
-    条件（任一命中即剔除）：
-    - 换手率 > max_turnover（默认 25%，筹码松动）
-    - 成交额 > max_amount_yi 亿（默认 15 亿，资金分歧过大）
-    - 量比 ≥ max_vol_ratio（默认 2.0，放量过大）
+    条件（仅换手率硬剔除，待回测校准）：
+    - 换手率 > max_turnover（默认 30%，筹码松动）
 
-    数据来源：baostock_kline_cache.json 历史 K 线（换手/量比/成交额，无未来函数）。
-    数据缺失降级：历史数据取不到 → 该字段 None → 跳过对应条件，
-    **不因数据缺失误剔除**（宁可放过，不冤杀）。
+    ⚠️ 成交额/量比不再硬剔除（改为 chip 评分体现）。
+    数据来源：baostock_kline_cache.json 历史 K 线（换手，无未来函数）。
+    数据缺失降级：历史数据取不到 → 跳过（不误剔）。
 
     Args:
         candidates: 通过层1的候选 list[dict]。
         date: YYYY-MM-DD 或 YYYYMMDD（T-1 日，用于查 baostock 历史 K 线）。
-              None → extract_chip_structure 返空，层2 全降级跳过（不误剔）。
 
     Returns:
         (kept, filtered_records)：同层1返回格式。
@@ -418,8 +425,6 @@ def exclude_layer2_chip_structure(
     filtered: list[dict] = []
 
     max_to = EXCLUDE_THRESHOLDS["max_turnover"]
-    max_amt_yi = EXCLUDE_THRESHOLDS["max_amount_yi"]
-    max_vr = EXCLUDE_THRESHOLDS["max_vol_ratio"]
 
     for fb in candidates:
         code = fb.get("code", "")
@@ -431,24 +436,10 @@ def exclude_layer2_chip_structure(
 
         reasons: list[str] = []
 
-        # 条件1：换手率
+        # 硬剔除：换手率 > 30%
         tp = chip.get("turnover_pct")
         if tp is not None and tp > max_to:
             reasons.append(f"换手{tp:.0f}%筹码松动")
-
-        # 条件2：成交额（优先用 tencent 的 amount，降级用涨停池的 amount）
-        amt = chip.get("amount")
-        if amt is None:
-            amt = fb.get("amount")
-        if amt is not None:
-            amt_yi = amt / 1e8  # 元 → 亿
-            if amt_yi > max_amt_yi:
-                reasons.append(f"成交额{amt_yi:.1f}亿过大")
-
-        # 条件3：量比
-        vr = chip.get("vol_ratio")
-        if vr is not None and vr >= max_vr:
-            reasons.append(f"量比{vr:.1f}放量")
 
         if reasons:
             filtered.append({
@@ -912,19 +903,16 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
 # 逻辑：T 日盘前实时，T-1 盘后预填 0 待 T 日更新。
 
 def score_dim5_auction(candidate: dict, date: str) -> tuple[float, dict]:
-    """竞价确认评分。
+    """竞价确认评分（废弃——数据缺失返 -1 不参与加权）。
 
-    T-1 盘后跑时预填 0（无 T 日竞价数据），T 日盘前更新。
-    本维度需要 T 日 9:25 竞价数据，T-1 盘后不可得 → 返 0 分（标注待 T 日更新）。
+    T-1 盘后无 T 日竞价数据 → 返 -1（数据缺失，不参与加权，权重重分配）。
+    T 日盘前 9:25 后实盘接入时从 astock 取竞价数据重算。
 
     Returns:
-        (score, raw)：raw 含 auction_open_pct/auction_vol_ratio。
-        T-1 盘后无 T 日竞价数据 → raw 两字段均 None，score=0。
+        (score, raw)：score=-1（数据缺失），raw 两字段均 None。
     """
-    # T-1 盘后无 T 日竞价数据 → 预填 0，待 T 日盘前更新
-    # 实盘接入时从 astock 取 T 日 9:25 竞价数据后重算
     raw: dict = {"auction_open_pct": None, "auction_vol_ratio": None}
-    return 0.0, raw
+    return -1.0, raw  # 数据缺失，不参与加权
 
 
 # ── 维度6：北向资金（权重 10%）──────────────────────────────────────────
@@ -957,8 +945,8 @@ def score_dim6_northbound(candidate: dict, date: str) -> tuple[float, dict]:
         nb = fetch_northbound(code, d)  # 万元
         raw["northbound_net"] = nb
         if nb is None:
-            # 2024-08-19 后个股北向停更 / 当日无数据 → 50 分中性
-            return 50.0, raw
+            # 2024-08-19 后个股北向停更 / 当日无数据 → -1（数据缺失，不参与加权）
+            return -1.0, raw
         if nb > 0:
             # 正流入：0-10000 万 → 70-100 分（对数缩放，避免极值）
             import math
@@ -1148,58 +1136,190 @@ def score_dim9_event(candidate: dict, date: str) -> tuple[float, dict]:
 
 
 # ===========================================================================
-# 020 9 维度加权总分 + 排序
+# 新增评分维度（grill 锁定：封板时间/板块联动/市值/封单比，待回测校准）
+# ===========================================================================
+# 数据缺失维度返 score=-1，不参与加权（权重重分配到其他有效维度）。
+
+def score_dim_seal_time(candidate: dict, date: str) -> tuple[float, dict]:
+    """封板时间评分——10:30 前满分，越晚越低。
+
+    旧层1的 late_seal_time 硬剔除改为评分（grill 决策）。
+
+    Returns:
+        (score, raw)：raw 含 first_seal/seal_time_hhmm。
+        first_seal 缺失 → score=-1（不参与加权）。
+    """
+    raw: dict = {"first_seal": None, "seal_time_hhmm": None}
+    fbt = candidate.get("first_seal")
+    if fbt is None:
+        return -1.0, raw  # 数据缺失，不参与加权
+    raw["first_seal"] = fbt
+    raw["seal_time_hhmm"] = _fbt_to_hhmm(fbt)
+    # fbt 格式 HHMMSS 数字，92500=09:25:00
+    if fbt <= 103000:      # 10:30 前满分
+        return 100.0, raw
+    elif fbt <= 110000:    # 10:30-11:00
+        return 80.0, raw
+    elif fbt <= 130000:    # 11:00-13:00
+        return 60.0, raw
+    elif fbt <= 140000:    # 13:00-14:00
+        return 40.0, raw
+    else:                  # 14:00 后尾盘
+        return 20.0, raw
+
+
+def score_dim_sector_link(candidate: dict, date: str) -> tuple[float, dict]:
+    """板块联动评分——同行业涨停≥3 只满分。
+
+    复用 score_dim1_sector 的 em_zt_topic_pool hybk 聚合逻辑（不依赖 gene_scores.db）。
+
+    Returns:
+        (score, raw)：raw 含 sector_zt_count/industry。
+        industry 缺失 → score=-1。
+    """
+    raw: dict = {"sector_zt_count": None, "industry": None}
+    try:
+        industry = candidate.get("industry")
+        if not industry:
+            return -1.0, raw  # 无行业归属，数据缺失
+        raw["industry"] = industry
+        compact = date.replace("-", "") if "-" in date else date
+        pool = em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc") or []
+        same_industry_count = sum(1 for p in pool if (p.get("hybk") or "") == industry)
+        raw["sector_zt_count"] = same_industry_count
+        if same_industry_count >= 3:
+            return 100.0, raw  # 板块联动强
+        elif same_industry_count >= 2:
+            return 80.0, raw
+        elif same_industry_count >= 1:
+            return 60.0, raw
+        else:
+            return 40.0, raw
+    except Exception as e:
+        _logger.debug("score_dim_sector_link 降级 -1 code=%s err=%s", candidate.get("code"), e)
+        return -1.0, raw
+
+
+def score_dim_market_cap(candidate: dict, date: str) -> tuple[float, dict]:
+    """市值评分——流通市值<200 亿满分（小盘更易封板）。
+
+    Returns:
+        (score, raw)：raw 含 float_cap_yi。
+        float_cap 缺失 → score=-1。
+    """
+    raw: dict = {"float_cap_yi": None}
+    float_cap = candidate.get("float_cap")
+    if not float_cap or float_cap <= 0:
+        return -1.0, raw
+    cap_yi = float_cap / 1e8  # 转亿
+    raw["float_cap_yi"] = round(cap_yi, 2)
+    if cap_yi < 50:
+        return 100.0, raw
+    elif cap_yi < 100:
+        return 90.0, raw
+    elif cap_yi < 200:
+        return 80.0, raw
+    elif cap_yi < 500:
+        return 50.0, raw
+    else:
+        return 30.0, raw
+
+
+def score_dim_seal_ratio(candidate: dict, date: str) -> tuple[float, dict]:
+    """封单比评分——封单/流通市值越高越好。
+
+    旧层1的 min_seal_ratio 硬剔除底线保留（0.1%），但 0.1%-2% 区间改为评分。
+
+    Returns:
+        (score, raw)：raw 含 seal_ratio。
+        seal_amount/float_cap 缺失 → score=-1。
+    """
+    raw: dict = {"seal_ratio": None}
+    seal = candidate.get("seal_amount")
+    fcap = candidate.get("float_cap")
+    if not seal or not fcap or fcap <= 0:
+        return -1.0, raw
+    ratio = seal / fcap
+    raw["seal_ratio"] = round(ratio, 4)
+    if ratio >= 0.02:       # ≥2% 满分
+        return 100.0, raw
+    elif ratio >= 0.01:    # 1-2%
+        return 80.0, raw
+    elif ratio >= 0.005:   # 0.5-1%
+        return 60.0, raw
+    else:                  # <0.5%（含硬剔除底线 0.1% 以上的）
+        return 30.0, raw
+
+
+# ===========================================================================
+# 020 评分加权总分 + 排序（权重分层 + 数据缺失不参与加权）
 # ===========================================================================
 
-# 维度函数映射表（score_candidate 用，避免 if-else 链）
+# 维度函数映射表（score_candidate 用）。
+# 新增 4 维度（seal_time/sector_link/market_cap/seal_ratio）+ 保留 5 旧维度
+# + 废弃 2 维度（auction/northbound 返 -1 不参与加权）。
 _SCORE_DIMS = [
-    ("sector", score_dim1_sector),
-    ("hot_money", score_dim2_hot_money),
-    ("seal_strength", score_dim3_seal_strength),
-    ("chip", score_dim4_chip),
-    ("auction", score_dim5_auction),
-    ("northbound", score_dim6_northbound),
-    ("institution", score_dim7_institution),
-    ("theme", score_dim8_theme),
-    ("event", score_dim9_event),
+    ("seal_time", score_dim_seal_time),       # 新增：封板时间
+    ("sector_link", score_dim_sector_link),   # 新增：板块联动
+    ("market_cap", score_dim_market_cap),     # 新增：市值
+    ("seal_ratio", score_dim_seal_ratio),     # 新增：封单比
+    ("hot_money", score_dim2_hot_money),      # 保留：游资画像
+    ("chip", score_dim4_chip),                # 保留：筹码结构
+    ("institution", score_dim7_institution),  # 保留：龙虎榜机构
+    ("theme", score_dim8_theme),              # 保留：题材热度
+    ("event", score_dim9_event),              # 保留：事件评分
+    # 废弃（数据缺失，返 -1 不参与加权）：
+    ("auction", score_dim5_auction),          # 竞价（T-1 盘后无数据→-1）
+    ("northbound", score_dim6_northbound),    # 北向（2024-08-19 后停更→-1）
 ]
 
 
-def score_candidate(candidate: dict, date: str) -> dict:
-    """9 维度评分。
+def score_candidate(candidate: dict, date: str, market_phase: str = "普通") -> dict:
+    """评分——权重按市场状态分层，数据缺失维度不参与加权。
+
+    grill 锁定决策：
+    - 权重按 zt_count 4 档分层（冰点/普通/活跃/亢奋），见 MARKET_PHASE_WEIGHTS；
+    - 数据缺失维度 score=-1 不参与加权，权重重分配到其他有效维度
+      （weighted_sum / active_weight_sum 归一化）；
+    - 保留维度（hot_money/chip/institution/theme/event）权重固定 0，
+      不参与分层加权（grill 决策：核心 4 维度 seal_time/sector_link/market_cap/seal_ratio
+      参与分层，其余维度作辅助参考不参与 total 加权——待回测校准后调整）。
 
     Args:
-        candidate: filter_first_board 产出的候选 dict（含 code/industry/seal_amount 等）。
+        candidate: filter_first_board 产出的候选 dict。
         date: YYYYMMDD。
+        market_phase: 市场档位 "冰点"/"普通"/"活跃"/"亢奋"。
 
     Returns:
-        dict 含：
-        - code: str
-        - name: str
-        - scores: dict（{dim_name: score}，9 个维度）
-        - raw_values: dict（{dim_name: raw_dict}，每维度的原始值，供"实际值→得分"对照）
-        - total: float（0-100 加权总分）
-        - rank: int（排名，score_candidate 不填，rank_candidates 填）
-
-    ⚠️ 维度函数返回 (score, raw) 元组（新签名）；兼容旧签名（只返 float）用
-    isinstance 判定，旧签名 raw=空 dict。
+        dict 含 code/name/scores/raw_values/total/rank/market_phase。
     """
+    phase_weights = MARKET_PHASE_WEIGHTS.get(market_phase, MARKET_PHASE_WEIGHTS["普通"])
+
     scores: dict = {}
     raw_values: dict = {}
-    total = 0.0
+    weighted_sum = 0.0
+    active_weight_sum = 0.0  # 有效权重和（排除数据缺失维度）
+
     for dim_name, dim_fn in _SCORE_DIMS:
-        weight = SCORE_WEIGHTS[dim_name]
         result = dim_fn(candidate, date)
         # 兼容旧签名（只返 float）和新签名（返 tuple）
         if isinstance(result, tuple):
             score, raw = result
         else:
             score, raw = float(result), {}
-        # 钳制 0-100
-        score = max(0.0, min(100.0, score))
+        # 钳制 -1 到 100（-1=数据缺失）
+        score = max(-1.0, min(100.0, score))
         scores[dim_name] = score
         raw_values[dim_name] = raw
-        total += score * weight
+
+        # 数据缺失（score=-1）不参与加权；有效维度按分层权重加权
+        if score >= 0 and dim_name in phase_weights:
+            weight = phase_weights[dim_name]
+            weighted_sum += score * weight
+            active_weight_sum += weight
+
+    # 重分配：有效权重和归一化
+    total = weighted_sum / active_weight_sum if active_weight_sum > 0 else 50.0
 
     return {
         "code": candidate.get("code", ""),
@@ -1208,11 +1328,14 @@ def score_candidate(candidate: dict, date: str) -> dict:
         "raw_values": raw_values,
         "total": round(total, 1),
         "rank": 0,  # rank_candidates 填
+        "market_phase": market_phase,
     }
 
 
 def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
     """按总分降序排序 + 按板块分组（主板在前，创业板在后）。
+
+    grill 决策：不截断——全部候选展示。权重按 zt_count 市场档位分层。
 
     Args:
         candidates: 通过三层剔除的候选 list[dict]。
@@ -1220,7 +1343,7 @@ def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
 
     Returns:
         list[dict]，每项含 scores+total+rank（1-based，分组排序后连续）+board_type
-        （"主板"/"创业板"/"其他"）。
+        +market_phase。
 
     排序规则：
     - 主板（60/00 开头）在前，创业板（300/301 开头）在后，其他最后；
@@ -1230,13 +1353,23 @@ def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
     进度日志：每 5 只打一条进度（flush=True，后台跑实时输出）。
     兜底：单只 score_candidate 失败 try/except 跳过（不进 scored，不阻塞整批）。
     """
+    # 取 zt_count 判定市场档位（用于权重分层）
+    try:
+        emotion = _emotion(date) or {}
+        zt_count = emotion.get("zt_count")
+    except Exception as e:
+        _logger.warning("rank_candidates _emotion 取 zt_count 失败 err=%s", e)
+        zt_count = None
+    phase = _market_phase(zt_count)
+    print(f"[fb_filter] 市场档位: {phase}（zt_count={zt_count}）", flush=True)
+
     scored: list[dict] = []
     n = len(candidates)
     for i, c in enumerate(candidates):
         if i % 5 == 0 or i == n - 1:
             print(f"[fb_filter] 评分进度: {i}/{n} code={c.get('code')}", flush=True)
         try:
-            scored.append(score_candidate(c, date))
+            scored.append(score_candidate(c, date, phase))
         except Exception as e:
             _logger.warning("score_candidate 失败 code=%s err=%s", c.get("code"), e)
     print(f"[fb_filter] 评分进度: {n}/{n} 完成", flush=True)
@@ -1283,8 +1416,8 @@ def save_scores(scored: list[dict], date: str, full_result: dict | None = None) 
         "date": date,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "count": len(scored),
-        "weights": SCORE_WEIGHTS,
-        "note": "9 维度评分，权重待回测校准（见 tasks.md 021）",
+        "weights": MARKET_PHASE_WEIGHTS,
+        "note": "评分权重按市场档位分层（冰点/普通/活跃/亢奋），待回测校准（grill 锁定）",
     }
     payload = {"_meta": meta, "scored_candidates": scored}
     if full_result is not None:

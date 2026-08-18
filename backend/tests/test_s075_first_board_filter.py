@@ -159,26 +159,28 @@ class TestExcludeLayers:
         assert "炸板2次" in rec["reason"]
 
     def test_layer1_late_seal_excluded(self):
-        """首封≥14:00(140000) 剔除（尾盘偷袭）。"""
+        """首封时间不再硬剔除（改为 score_dim_seal_time 评分体现）。
+
+        grill 决策：首封时间从硬剔除改为评分，层1只保留炸板+封单比硬剔除。
+        """
         from strategies.first_board_filter import exclude_layer1_seal_quality
         fbs = [
-            _make_first_board(code="001", first_seal=140000),   # 剔除
-            _make_first_board(code="002", first_seal=135900),   # 保留（13:59）
-            _make_first_board(code="003", first_seal=93000),    # 保留（9:30）
-            _make_first_board(code="004", first_seal=145000),   # 剔除（14:50）
+            _make_first_board(code="001", first_seal=140000),   # 保留（首封时间改评分）
+            _make_first_board(code="002", first_seal=135900),   # 保留
+            _make_first_board(code="003", first_seal=93000),    # 保留
+            _make_first_board(code="004", first_seal=145000),   # 保留（首封时间改评分）
         ]
         kept, filtered = exclude_layer1_seal_quality(fbs)
-        kept_codes = [c["code"] for c in kept]
-        assert "002" in kept_codes and "003" in kept_codes
-        assert "001" not in kept_codes and "004" not in kept_codes
-        assert any("14:00" in r["reason"] or "14:50" in r["reason"] for r in filtered)
+        # 全部保留（首封时间不再硬剔除）
+        assert len(kept) == 4
+        assert filtered == []
 
     def test_layer1_low_seal_ratio_excluded(self):
-        """封单/流通市值<0.5% 剔除。"""
+        """封单/流通市值<0.1% 剔除（grill 固定底线 0.1%）。"""
         from strategies.first_board_filter import exclude_layer1_seal_quality
-        # seal/float_cap: 1e6/20e8=0.0005%(<0.5% 剔除) vs 2e7/20e8=1%(保留)
+        # seal/float_cap: 1e5/20e8=0.00005%(<0.1% 剔除) vs 2e7/20e8=1%(保留)
         fbs = [
-            _make_first_board(code="001", seal_amount=1e6, float_cap=20e8),   # 0.05% 剔除
+            _make_first_board(code="001", seal_amount=1e5, float_cap=20e8),   # 0.005% 剔除
             _make_first_board(code="002", seal_amount=2e7, float_cap=20e8),    # 1% 保留
         ]
         kept, filtered = exclude_layer1_seal_quality(fbs)
@@ -201,43 +203,46 @@ class TestExcludeLayers:
     # ── 层2：筹码结构 ──────────────────────────────────────────────────
 
     def test_layer2_high_turnover_excluded(self, monkeypatch):
-        """换手>25% 剔除。"""
+        """换手>30% 剔除（grill 固定底线 30%）。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
         # mock extract_chip_structure 返历史筹码（turnover_pct 字段名）
         monkeypatch.setattr(
             "strategies.first_board_filter.extract_chip_structure",
-            lambda code, date: {"turnover_pct": 28.0, "vol_ratio": 1.0, "amount": 5e8}
+            lambda code, date: {"turnover_pct": 35.0, "vol_ratio": 1.0, "amount": 5e8}
         )
 
         fbs = [
-            _make_first_board(code="001"),  # 28% 换手 → 剔除
-            _make_first_board(code="002"),  # 同 mock，28% → 剔除
+            _make_first_board(code="001"),  # 35% 换手 → 剔除
+            _make_first_board(code="002"),  # 同 mock，35% → 剔除
         ]
         kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
-        # 两个都 28% 换手 → 都剔除
+        # 两个都 35% 换手 → 都剔除
         assert len(kept) == 0
         assert len(filtered) == 2
         assert "换手" in filtered[0]["reason"]
 
     def test_layer2_high_amount_excluded(self, monkeypatch):
-        """成交额>15亿 剔除。"""
+        """成交额不再硬剔除（改为 chip 评分体现，grill 决策）。
+
+        grill 锁定：层2只保留换手>30% 硬剔除，成交额/量比改为评分。
+        """
         from strategies.first_board_filter import exclude_layer2_chip_structure
-        # 001: 20亿(>15亿) 剔除；002: 5亿 保留
+        # 001: 20亿(>15亿旧阈值) ; 002: 5亿
         def mock_chip(code, date):
             return {"amount": 20e8 if code == "001" else 5e8, "turnover_pct": 8.0, "vol_ratio": 1.0}
         monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip)
 
         fbs = [
-            _make_first_board(code="001", amount=20e8),  # 20亿 → 剔除
+            _make_first_board(code="001", amount=20e8),  # 20亿 → 保留（不再硬剔）
             _make_first_board(code="002", amount=5e8),   # 5亿 → 保留
         ]
         kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
-        assert [c["code"] for c in kept] == ["002"]
-        assert filtered[0]["code"] == "001"
-        assert "成交额" in filtered[0]["reason"]
+        # 成交额不再硬剔除 → 全部保留
+        assert len(kept) == 2
+        assert filtered == []
 
     def test_layer2_high_vol_ratio_excluded(self, monkeypatch):
-        """量比≥2.0 剔除。"""
+        """量比不再硬剔除（改为 chip 评分体现，grill 决策）。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
         def mock_chip(code, date):
             return {"vol_ratio": 2.5 if code == "001" else 1.0,
@@ -249,8 +254,9 @@ class TestExcludeLayers:
             _make_first_board(code="002"),
         ]
         kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
-        assert [c["code"] for c in kept] == ["002"]
-        assert "量比" in filtered[0]["reason"]
+        # 量比不再硬剔除 → 全部保留
+        assert len(kept) == 2
+        assert filtered == []
 
     def test_layer2_tencent_missing_no_crash(self, monkeypatch):
         """extract_chip_structure 取不到（返空 dict）时不误剔（宁可放过不冤杀）。"""
@@ -328,7 +334,10 @@ class TestExcludeLayers:
         assert filtered == []
 
     def test_excluded_records_have_reason(self, monkeypatch):
-        """剔除记录含 code/layer/reason 字段，reason 写人话。"""
+        """剔除记录含 code/layer/reason 字段，reason 写人话。
+
+        grill 决策：层1只保留炸板+封单比硬剔除，首封时间不再剔除。
+        """
         from strategies.first_board_filter import exclude_layer1_seal_quality
         fb = _make_first_board(code="001", break_times=3, first_seal=143000,
                                seal_amount=1e5, float_cap=20e8)
@@ -337,9 +346,8 @@ class TestExcludeLayers:
         assert set(rec.keys()) >= {"code", "layer", "reason"}
         assert rec["code"] == "001"
         assert rec["layer"] == 1
-        # reason 含中文人话
+        # reason 含中文人话：炸板3次 + 封单/流通市值（首封时间不再剔除）
         assert "炸板3次" in rec["reason"]
-        assert "14:30" in rec["reason"]
         assert "封单/流通市值" in rec["reason"]
 
 
@@ -351,19 +359,22 @@ class TestScoreCandidate:
     """025：测试 9 维度评分。"""
 
     def test_weights_sum_to_one(self):
-        """SCORE_WEIGHTS 权重和=1.0。"""
-        from strategies.first_board_filter import SCORE_WEIGHTS
-        assert abs(sum(SCORE_WEIGHTS.values()) - 1.0) < 1e-9
+        """MARKET_PHASE_WEIGHTS 每档权重和=1.0。"""
+        from strategies.first_board_filter import MARKET_PHASE_WEIGHTS
+        for phase, weights in MARKET_PHASE_WEIGHTS.items():
+            assert abs(sum(weights.values()) - 1.0) < 1e-9, f"{phase} 权重和={sum(weights.values())}"
 
     def test_weights_count(self):
-        """9 个维度权重。"""
-        from strategies.first_board_filter import SCORE_WEIGHTS
-        assert len(SCORE_WEIGHTS) == 9
+        """4 档市场档位权重。"""
+        from strategies.first_board_filter import MARKET_PHASE_WEIGHTS
+        assert len(MARKET_PHASE_WEIGHTS) == 4  # 冰点/普通/活跃/亢奋
+        for phase in ("冰点", "普通", "活跃", "亢奋"):
+            assert phase in MARKET_PHASE_WEIGHTS
 
     def test_score_range_0_to_100(self, monkeypatch):
-        """总分在 0-100 范围。"""
+        """总分在 0-100 范围（新评分体系：11 维度，权重分层）。"""
         from strategies.first_board_filter import score_candidate
-        # mock 所有维度数据源为缺失 → 各维 50（auction=0）
+        # mock 所有维度数据源为缺失 → 核心维度 -1（不参与加权），保留维度 50
         monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
                             lambda code, date: {})
         monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
@@ -371,22 +382,18 @@ class TestScoreCandidate:
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
         monkeypatch.setattr("astock.announcements", lambda c, limit=10: [])
         monkeypatch.setattr("predict.features.fund_flow.fetch_northbound", lambda c, d=None: None)
-        # sector_cycle 用 DB，让它抛 → 降级 50
-        monkeypatch.setattr("strategies.sector_cycle.aggregate_sectors", lambda d: [])
-        # hot_money_seats 无龙虎榜 → risk_label="无数据" → 50
-        monkeypatch.setattr(
-            "strategies.hot_money_seats.compute_seat_risk_factor",
-            lambda *a, **kw: type("F", (), {"risk_label": "无数据", "score_modifier": 1.0})()
-        )
+        monkeypatch.setattr("strategies.first_board_filter.em_zt_topic_pool",
+                            lambda *a, **kw: [])
 
-        cand = _make_first_board(code="001")
-        result = score_candidate(cand, "20260818")
+        # candidate 无 first_seal/seal_amount/float_cap → 核心 4 维度 -1
+        cand = {"code": "001", "name": "A", "industry": None}
+        result = score_candidate(cand, "20260818", "普通")
         assert 0.0 <= result["total"] <= 100.0
         assert "scores" in result
-        assert len(result["scores"]) == 9
+        assert len(result["scores"]) == 11  # 11 维度
 
     def test_rank_descending(self):
-        """rank_candidates 按总分降序。"""
+        """rank_candidates 按总分降序（新签名 score_candidate 加 phase 参数）。"""
         from strategies.first_board_filter import rank_candidates
         # 用 mock candidate + patch score_candidate 避免网络
         cands = [
@@ -395,9 +402,12 @@ class TestScoreCandidate:
             {"code": "003", "name": "C"},
         ]
         scores_map = {"001": 80.0, "002": 60.0, "003": 70.0}
+        # 新签名 score_candidate(c, date, phase) → patch 匹配 3 参数
         with patch("strategies.first_board_filter.score_candidate",
-                   lambda c, d: {"code": c["code"], "name": c["name"],
-                                 "scores": {}, "total": scores_map[c["code"]], "rank": 0}):
+                   lambda c, d, p="普通": {"code": c["code"], "name": c["name"],
+                                           "scores": {}, "raw_values": {},
+                                           "total": scores_map[c["code"]], "rank": 0,
+                                           "market_phase": p}):
             out = rank_candidates(cands, "20260818")
         assert out[0]["code"] == "001" and out[0]["rank"] == 1
         assert out[1]["code"] == "003" and out[1]["rank"] == 2
@@ -405,18 +415,18 @@ class TestScoreCandidate:
         assert out[0]["total"] >= out[1]["total"] >= out[2]["total"]
 
     def test_dim_data_missing_returns_50(self, monkeypatch):
-        """数据缺失降级返 50（北向停更/无龙虎榜/无公告）。新签名返 (score, raw)。"""
+        """数据缺失：北向停更返-1/无龙虎榜返50/无公告返50（新签名返 tuple）。"""
         from strategies.first_board_filter import (
             score_dim6_northbound, score_dim7_institution, score_dim9_event,
         )
         cand = _make_first_board(code="001")
-        # 北向 fetch_northbound 返 None → 50
+        # 北向 fetch_northbound 返 None → -1（数据缺失，不参与加权）
         monkeypatch.setattr("predict.features.fund_flow.fetch_northbound", lambda c, d=None: None)
         s6, raw6 = score_dim6_northbound(cand, "20260818")
-        assert s6 == 50.0
-        assert raw6["northbound_net"] is None  # 数据缺失 raw 字段 None
+        assert s6 == -1.0  # 北向停更→数据缺失→-1
+        assert raw6["northbound_net"] is None
 
-        # 龙虎榜 dragon_tiger_board 返空 → institution_net=None → 50
+        # 龙虎榜 dragon_tiger_board 返空 → institution_net=None → 50（保留维度降级50）
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
         s7, raw7 = score_dim7_institution(cand, "20260818")
         assert s7 == 50.0
@@ -426,15 +436,15 @@ class TestScoreCandidate:
         monkeypatch.setattr("astock.announcements", lambda c, limit=10: [])
         s9, raw9 = score_dim9_event(cand, "20260818")
         assert s9 == 50.0
-        assert raw9["event_type"] == "无公告"  # 无公告标"无公告"
+        assert raw9["event_type"] == "无公告"
 
-    def test_dim5_auction_returns_zero(self):
-        """竞价确认 T-1 盘后预填 0（无 T 日竞价数据）。新签名返 (score, raw)。"""
+    def test_dim5_auction_returns_neg1(self):
+        """竞价确认 T-1 盘后返 -1（数据缺失，不参与加权）。"""
         from strategies.first_board_filter import score_dim5_auction
         cand = _make_first_board(code="001")
         s, raw = score_dim5_auction(cand, "20260818")
-        assert s == 0.0
-        assert raw["auction_open_pct"] is None  # T-1 盘后无竞价数据
+        assert s == -1.0  # 数据缺失，不参与加权
+        assert raw["auction_open_pct"] is None
         assert raw["auction_vol_ratio"] is None
 
     def test_dim3_seal_strength_scoring(self):
@@ -560,11 +570,14 @@ class TestDataMissingDegradation:
         out = rank_candidates(cands, "20260818")
         assert len(out) == 2
         for s in out:
-            # 非auction维度应都=50，auction=0
-            assert s["scores"]["auction"] == 0.0
-            for dim in ("sector", "hot_money", "northbound", "institution", "theme", "event"):
+            # auction/northbound 数据缺失返 -1（不参与加权）
+            assert s["scores"]["auction"] == -1.0
+            assert s["scores"]["northbound"] == -1.0
+            # 保留维度（hot_money/institution/theme/event）降级 50
+            # chip 可能用 candidate.amount 降级 → 非 50（允许）
+            for dim in ("hot_money", "institution", "theme", "event"):
                 assert s["scores"][dim] == 50.0, f"{dim}={s['scores'][dim]} 应=50"
-            # total = 50*0.9 + 0*0.1 = 45.0（seal_strength/chip 取决于 candidate 字段）
+            # total 在 0-100 范围
             assert 0 <= s["total"] <= 100
 
     def test_run_first_board_filter_end_to_end(self, monkeypatch, tmp_path):
