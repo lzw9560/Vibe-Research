@@ -116,28 +116,20 @@
 | 北向实时资金 | 2024-08-19 后停更 | **暂无替代**：保留字段标 None + "北向停更" | 低 |
 | 筹码分布 | repo 无数据源 | **积极寻找**：akshare 筹码分布 API | 中 |
 
-#### E. 盘前 vs 盘中因子分类
+#### E. 盘前 vs 盘中边界（grill Q1=A 砍盘中 + Q2=B修正 derived 取昨日值）
 
-**✅ 盘前可取（T-1 数据 + 静态数据 + 历史K线派生）**：
-- 涨停池昨日数据（lbc/zbc/fbt/zdp/zje/hybk/fund）
-- 基因得分（GeneScore 完整对象）
-- 市场宽度（breadth/break_rate/seal_rate/promotion_rate/max_boards）
-- 龙虎榜席位（buy_one_ratio/day_trip_ratio/institution_ratio/risk_label）
-- 资金流昨日（main_net_inflow/main_net_5d/dragon_tiger_inst_net/hot_money_relay）
-- 公告 + 概念 + 同花顺涨停原因
-- 估值（pe_ttm/pb/mcap_yi/limit_up/limit_down）
-- K线派生（max_high/shadow/ma_5/prev_turnover/prev_amount_yi/change_5d~20d/turnover_percentile）
-- 板块资金昨日（_sectors 盘前可取昨日值）
+**选股池只做盘前，不碰 T 日盘中实时数据。所有因子取 T-1 昨日值（昨日收盘后已落库的数据）。**
 
-**⚠️ 盘中才能取（实时数据）**：
-- tencent_quote 实时行情（price/change_pct/vol_ratio 等当日值）
-- 当日涨停池（em_zt_topic_pool 当日池）
-- 当日市场情绪（封板率/晋级率当日值）
-- S070 R7 分时派生（broken_duration/max_drop/last_lock）
-- 封单变化率（seal_delta 需盘中 snapshots 时序）
-- 板块资金当日值（sector_flow date<今日 返 None）
+| 因子 | 盘前取 T-1 昨日值的方式 | T 日盘中实时值 |
+|---|---|---|
+| S070 R7 派生（broken_duration/max_drop/last_lock）| `get_snapshots_by_code(code, yesterday_date)` → `compute_derived_features` 取昨日 snapshots（已落库）| 不取（盘中由战法工作流自行取 T 日实时）|
+| 封单变化率（seal_delta）| T-1 昨日 snapshots 时序算 | 不取 |
+| 市场宽度（breadth/break_rate/seal_rate/promotion_rate/max_boards）| `market._emotion(yesterday_date)` 取昨日 | 不取 |
+| 板块资金（sector_net_inflow/inflow/outflow）| `market._sectors()` 盘前取昨日值 | 不取（sector_flow date<今日 返 None）|
+| tencent_quote 实时行情 | 盘前取昨日 K线复算（activity.py 已有路径）| 不取 T 日实时 |
+| 当日涨停池 | 盘前取 `getYesterdayZTPool` 昨日池 | 不取 T 日当日池 |
 
-**盘前降级策略**：盘中因子在盘前取不到时标 None + 原因（"盘中采集"/"实时行情"/"snapshots 未就绪"），用替代近似值（涨停池静态值/K线历史复算）标注"近似"，不臆造。盘中采集完后补全。
+**选股池边界**：纯盘前 T-1 数据 + 静态数据 + 历史K线派生。不碰 T 日盘中实时数据。盘中阶段由战法工作流自行取 T 日实时数据。
 
 ### 2.2 既有选股池 API（grill 核实，Q4=A 复用）
 
