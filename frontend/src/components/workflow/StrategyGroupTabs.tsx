@@ -15,6 +15,8 @@ const STRATEGY_LABELS: Record<string, string> = {
   end_of_day_sneak: "尾盘偷袭",
   dragon_head: "龙头战法",
   storm_reversal: "暴风雨逆势",
+  weak_turn_strong: "弱转强接力",
+  pattern_reversal: "形态反包",
 };
 
 interface Props {

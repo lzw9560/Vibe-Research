@@ -658,6 +658,8 @@ function BuyEntryForm({
         <option value="n_shape_counterattack">N字反击</option>
         <option value="platform_breakout">平台突破</option>
         <option value="end_of_day_sneak">尾盘偷袭</option>
+        <option value="weak_turn_strong">弱转强接力</option>
+        <option value="pattern_reversal">形态反包</option>
       </select>
       <input
         className="w-full rounded border border-border/50 bg-background px-2 py-1 text-xs"

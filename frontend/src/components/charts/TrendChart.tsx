@@ -15,8 +15,8 @@ const GRID = { left: 56, right: 20, top: 32, bottom: 48 };
 const PRIMARY = "#fb923c";
 const PRIMARY_AREA = "rgba(251,146,60,0.12)";
 
-// 8 战法固定色板——按 strategy_code 锁色（同战法跨日期色稳定）。
-// 色相均匀分布在色轮上，饱和度/明度统一以保看板协调；8 色足够区分。
+// 战法固定色板——按 strategy_code 锁色（同战法跨日期色稳定）。
+// 色相均匀分布在色轮上，饱和度/明度统一以保看板协调。
 // 用 code 而非 name 作 key：name 后端可调，code 稳定（limitup_strategy.STRATEGY_REGISTRY）。
 const STRATEGY_PALETTE: Record<string, string> = {
   first_plate: "#ef4444",        // 红
@@ -27,8 +27,10 @@ const STRATEGY_PALETTE: Record<string, string> = {
   n_shape_counterattack: "#3b82f6", // 蓝
   platform_breakout: "#a855f7",  // 紫
   end_of_day_sneak: "#ec4899",  // 粉
+  weak_turn_strong: "#0ea5e9",   // 天蓝（S081 PRD 战法）
+  pattern_reversal: "#84cc16",   // 黄绿（S081 PRD 战法）
 };
-// 兜底色：未知战法 / palette 溢出（>8 个战法）。
+// 兜底色：未知战法 / palette 溢出（>10 个战法）。
 const STRATEGY_FALLBACK = "#64748b"; // slate-500
 
 /**
