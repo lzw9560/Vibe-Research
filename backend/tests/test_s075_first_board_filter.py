@@ -534,30 +534,36 @@ class TestDataMissingDegradation:
         assert len(kept) == 1
 
     def test_all_dims_missing_no_crash(self, monkeypatch, tmp_path):
-        """所有维度数据源都取不到时，候选仍能跑完，各维返 50 中性（auction=0）。"""
+        """所有维度数据源都取不到时，候选仍能跑完，各维返 50 中性（auction=0）。
+
+        新 score_dim1 用 em_zt_topic_pool hybk 聚合，score_dim2 用 dragon_tiger_board
+        最近龙虎榜——测试 mock 这两个数据源缺失，验证降级 50。
+        """
         from strategies.first_board_filter import rank_candidates
         # mock 所有数据源缺失
         monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
                             lambda code, date: {})
         monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
         monkeypatch.setattr("astock.ths_limit_up_pool", lambda d: [])
+        # dragon_tiger_board 返空（无龙虎榜记录）→ score_dim2 降级 50
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
         monkeypatch.setattr("astock.announcements", lambda c, limit=10: [])
         monkeypatch.setattr("predict.features.fund_flow.fetch_northbound", lambda c, d=None: None)
-        monkeypatch.setattr("strategies.sector_cycle.aggregate_sectors", lambda d: [])
-        monkeypatch.setattr(
-            "strategies.hot_money_seats.compute_seat_risk_factor",
-            lambda *a, **kw: type("F", (), {"risk_label": "无数据", "score_modifier": 1.0})()
-        )
+        # em_zt_topic_pool 返空 → score_dim1 涨停池空，same_industry_count=0
+        # 但 candidate.industry="半导体"存在 → score_dim1 返 40（非 50）
+        # 用 industry=None 的 candidate 让 score_dim1 返 50（无 industry→中性）
+        monkeypatch.setattr("strategies.first_board_filter.em_zt_topic_pool",
+                            lambda *a, **kw: [])
 
-        cands = [_make_first_board(code="001"), _make_first_board(code="002")]
+        cands = [_make_first_board(code="001", industry=None),
+                 _make_first_board(code="002", industry=None)]
         out = rank_candidates(cands, "20260818")
         assert len(out) == 2
         for s in out:
             # 非auction维度应都=50，auction=0
             assert s["scores"]["auction"] == 0.0
             for dim in ("sector", "hot_money", "northbound", "institution", "theme", "event"):
-                assert s["scores"][dim] == 50.0
+                assert s["scores"][dim] == 50.0, f"{dim}={s['scores'][dim]} 应=50"
             # total = 50*0.9 + 0*0.1 = 45.0（seal_strength/chip 取决于 candidate 字段）
             assert 0 <= s["total"] <= 100
 

@@ -635,56 +635,48 @@ def exclude_layer3_market_env(
 
 # ── 维度1：板块评分（权重 15%）──────────────────────────────────────────
 # §44 未 validated，待回测校准。
-# 数据源：sector_cycle.aggregate_sectors / sector_strength_rank + 连板梯队
-# 逻辑：板块涨停≥3 只=联动强，0-100 归一化。板块强度排名 TOP3 → 高分。
+# 数据源：em_zt_topic_pool hybk（行业）字段聚合同行业涨停数
+#   （不依赖 gene_scores.db 当日回填——盘后未回填导致降级50）
+# 逻辑：同行业涨停≥3 只=联动强，0-100 归一化。
+# em_zt_topic_pool 有 24h TTL 缓存，重复调不慢（fetch_zt_pool 已拉过，命中缓存）。
 
 def score_dim1_sector(candidate: dict, date: str) -> tuple[float, dict]:
-    """板块评分。
+    """板块评分——用涨停池 industry（hybk）字段聚合同行业涨停数。
 
-    逻辑：
-    - 调 sector_cycle.aggregate_sectors(date) 取当日板块强度排名
-    - 候选股 industry 命中 TOP3 板块 → 90-100 分
-    - TOP4-10 → 70-89 分
-    - 其他有板块 → 50-69 分
-    - 无板块/数据缺失 → 50 分中性
+    不依赖 gene_scores.db 当日回填（盘后未回填导致 sectors 为空 → 50 降级）。
+    改用 candidate.industry（来自 em_zt_topic_pool hybk 字段）+ 涨停池聚合。
 
     Args:
         candidate: filter_first_board 产出的候选 dict（含 industry 字段）。
         date: YYYYMMDD。
 
     Returns:
-        (score, raw)：raw 含 sector_rank（板块排名）/sector_zt_count（板块涨停数）。
-        数据缺失时 raw 对应字段 None。
+        (score, raw)：raw 含 sector_zt_count（同行业涨停数）/industry（行业名）。
+        数据缺失时对应字段 None。
     """
-    raw: dict = {"sector_rank": None, "sector_zt_count": None}
+    raw: dict = {"sector_rank": None, "sector_zt_count": None, "industry": None}
     try:
-        from strategies.sector_cycle import aggregate_sectors, sector_strength_rank
-        sectors = aggregate_sectors(date)
-        if not sectors:
-            return 50.0, raw
-        ranked = sector_strength_rank(date, sectors)
-        industry = candidate.get("industry") or ""
+        industry = candidate.get("industry")
         if not industry:
             return 50.0, raw
-        for s in ranked:
-            if (s.get("industry") or "") == industry:
-                rank = s.get("rank", 999)
-                zt_count = s.get("zt_count_today", 0)
-                raw["sector_rank"] = rank
-                raw["sector_zt_count"] = zt_count
-                # 排名越前 + 板块涨停数越多 → 分越高
-                if rank <= 3:
-                    base = 90.0
-                elif rank <= 10:
-                    base = 70.0
-                else:
-                    base = 50.0
-                # 板块涨停≥3 只加 5 分（联动强）
-                if zt_count >= 3:
-                    base = min(base + 5.0, 100.0)
-                return round(base, 1), raw
-        # industry 不在排名中（可能候选 industry 字段与板块名不一致）
-        return 50.0, raw
+        raw["industry"] = industry
+
+        # 从涨停池统计同行业涨停数（em_zt_topic_pool 有 24h TTL 缓存，不重复请求）
+        compact = date.replace("-", "") if "-" in date else date
+        pool = em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc") or []
+        same_industry_count = sum(1 for p in pool if (p.get("hybk") or "") == industry)
+        raw["sector_zt_count"] = same_industry_count
+
+        # 同行业涨停数 → 评分
+        if same_industry_count >= 3:
+            score = 100.0  # 板块联动强
+        elif same_industry_count >= 2:
+            score = 80.0
+        elif same_industry_count >= 1:
+            score = 60.0  # 含自身，有板块归属
+        else:
+            score = 40.0  # 孤板（理论不会，因为 candidate 自身在该行业）
+        return round(score, 1), raw
     except Exception as e:
         _logger.debug("score_dim1_sector 降级 50 code=%s err=%s", candidate.get("code"), e)
         return 50.0, raw
@@ -692,43 +684,61 @@ def score_dim1_sector(candidate: dict, date: str) -> tuple[float, dict]:
 
 # ── 维度2：游资画像（权重 15%）──────────────────────────────────────────
 # §44 未 validated，待回测校准。
-# 数据源：hot_money_seats.compute_seat_risk_factor
-# 逻辑：一日游占比高→×0.7 扣分，接力型→加分，0-100 归一化。
+# 数据源：astock.dragon_tiger_board 取最近龙虎榜记录
+#   （不取当日龙虎榜——盘后当日未出→compute_seat_risk_factor "无数据"→50 降级）
+# 逻辑：有上榜记录=游资参与，机构净买入=接力支撑，0-100 归一化。
 
 def score_dim2_hot_money(candidate: dict, date: str) -> tuple[float, dict]:
-    """游资画像评分。
+    """游资画像评分——用最近龙虎榜记录（不取当日）。
 
-    逻辑：
-    - 调 compute_seat_risk_factor(code, date) 取 SeatRiskFactor
-    - score_modifier 1.0 → 70 分基准（中性游资参与）
-    - score_modifier 0.7（高风险一日游）→ 70 × 0.7 = 49 分
-    - score_modifier 0.9（中风险）→ 63 分
-    - score_modifier 1.05（接力支撑）→ 73.5 分
-    - 无龙虎榜数据（risk_label="无数据"）→ 50 分中性
+    旧实现调 compute_seat_risk_factor(code, date) 取当日龙虎榜，盘后当日未出 →
+    "无数据" → 50 降级。改用 dragon_tiger_board(code) 取最近 30 天上榜记录，
+    从 records 数量 + institution.net_amt 判断游资活跃度。
 
     Args:
         candidate: 候选 dict（含 code）。
-        date: YYYYMMDD（compute_seat_risk_factor 用 YYYY-MM-DD，内部转换）。
+        date: YYYYMMDD（本维度取最近龙虎榜，不严格按 date）。
 
     Returns:
-        (score, raw)：raw 含 seat_risk_label（风险标签）/one_day_ratio（一日游占比）。
-        数据缺失时 raw 对应字段 None。
+        (score, raw)：raw 含 seat_risk_label（风险标签）/one_day_ratio（一日游占比，
+        最近龙虎榜无此字段，恒 None）/billboard_count（上榜次数）/inst_net（机构净买入万元）。
+        数据缺失时对应字段 None。
     """
-    raw: dict = {"seat_risk_label": None, "one_day_ratio": None}
+    raw: dict = {
+        "seat_risk_label": None, "one_day_ratio": None,
+        "billboard_count": None, "inst_net": None,
+    }
     try:
-        from strategies.hot_money_seats import compute_seat_risk_factor
+        from astock import dragon_tiger_board
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
-        # date 转 YYYY-MM-DD（compute_seat_risk_factor 接受此格式）
-        d = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date
-        factor = compute_seat_risk_factor(code, d)
-        raw["seat_risk_label"] = factor.risk_label
-        raw["one_day_ratio"] = factor.day_trip_ratio
-        if factor.risk_label == "无数据":
+        raw_dt = dragon_tiger_board(code) or {}
+        records = raw_dt.get("records") or []
+        institution = raw_dt.get("institution") or {}
+        billboard_count = len(records)
+        inst_net = institution.get("net_amt") if isinstance(institution, dict) else None
+        raw["billboard_count"] = billboard_count
+        raw["inst_net"] = inst_net
+
+        if billboard_count == 0:
+            raw["seat_risk_label"] = "无龙虎榜记录"
             return 50.0, raw
-        # score_modifier 0.7-1.05 → 0-100 分（1.0=70 基准）
-        score = 70.0 * factor.score_modifier
+
+        # 有上榜记录 → 游资参与，基础分 60
+        score = 60.0
+        raw["seat_risk_label"] = "有龙虎榜记录"
+        # 机构净买入 > 0 → 接力支撑加分
+        if inst_net is not None and inst_net > 0:
+            import math
+            # 机构净买入 0-5000 万 → +10-20 分
+            score = 60.0 + min(20.0, math.log10(max(inst_net, 1.0)) * 5.0)
+            raw["seat_risk_label"] = "机构净买入接力"
+        # 上榜次数多（≥3 次）→ 游资活跃再加 5 分
+        if billboard_count >= 3:
+            score = min(score + 5.0, 100.0)
+            raw["seat_risk_label"] = f"游资活跃({billboard_count}次上榜)"
+
         return round(max(0.0, min(100.0, score)), 1), raw
     except Exception as e:
         _logger.debug("score_dim2_hot_money 降级 50 code=%s err=%s", candidate.get("code"), e)
