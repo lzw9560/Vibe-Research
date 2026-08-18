@@ -48,7 +48,10 @@ function FunnelShrinkBar({ input, output }: { input: number; output: number }) {
 
 // ---- ① 筛选节点：涨停股池 → 首板过滤 → 3层剔除 ----
 function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | null }) {
-  const [expanded, setExpanded] = useState(false);
+  const [ztPoolExpanded, setZtPoolExpanded] = useState(false);
+  const [firstBoardExpanded, setFirstBoardExpanded] = useState(false);
+  const [excludedExpanded, setExcludedExpanded] = useState(false);
+  const [candidatesExpanded, setCandidatesExpanded] = useState(false);
 
   const ztPoolCount = data?.zt_pool_count ?? "—";
   const firstBoardCount = data?.first_board_count ?? "—";
@@ -63,6 +66,17 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
     excludedByLayer[layer].push(e);
   }
 
+  // 每层通过数量反推（基于 excluded 分组 + 候选池总数）
+  // 层1 输入 = 首板数；层1 输出 = 首板 - 层1剔除
+  // 层2 输入 = 层1输出；层2 输出 = 层2输入 - 层2剔除
+  // 层3 输入 = 层2输出；层3 输出 = 候选池总数（层3输出 = 候选池）
+  const fbNum = typeof firstBoardCount === "number" ? firstBoardCount : 0;
+  const l1Excluded = excludedByLayer[1].length;
+  const l2Excluded = excludedByLayer[2].length;
+  const l1Output = Math.max(fbNum - l1Excluded, 0);
+  const l2Output = Math.max(l1Output - l2Excluded, 0);
+  const l3Output = candidates.length; // 层3 输出 = 候选池
+
   const layerNames: Record<number, string> = {
     1: "层1 · 封板质量",
     2: "层2 · 筹码结构",
@@ -73,36 +87,96 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
     2: "换手>25% / 成交额>15亿 / 量比≥2.0",
     3: "同板块涨停<2 且无题材（孤板）",
   };
+  // 每层 input→output 用于 FunnelShrinkBar
+  const layerFunnel: Record<number, { input: number; output: number }> = {
+    1: { input: fbNum, output: l1Output },
+    2: { input: l1Output, output: l2Output },
+    3: { input: l2Output, output: l3Output },
+  };
+
+  // 统一展开指示器
+  const ExpandIndicator = ({ open }: { open: boolean }) => (
+    <span className="text-[10px] text-muted-foreground">{open ? "▼ 收起" : "▶ 展开"}</span>
+  );
 
   return (
     <div className="space-y-1">
-      {/* 涨停股池 */}
-      <div className={NODE_GREEN}>
+      {/* 涨停股池（可展开——API 仅返回汇总数，展开诚实降级） */}
+      <button
+        onClick={() => setZtPoolExpanded((v) => !v)}
+        className={cn(NODE_GREEN, "w-full text-left hover:bg-emerald-500/10")}
+      >
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">涨停股池</div>
             <div className="text-[11px] text-muted-foreground">em_zt_topic_pool · T日涨停 → 选 T+1</div>
           </div>
-          <div className="text-lg font-bold text-emerald-400">{ztPoolCount}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-bold text-emerald-400">{ztPoolCount}</div>
+            <ExpandIndicator open={ztPoolExpanded} />
+          </div>
         </div>
-      </div>
+      </button>
+      {ztPoolExpanded && (
+        <div className="ml-2 border-l-2 border-emerald-500/30 pl-3">
+          <div className={cn(NODE_DASHED, "border-emerald-500/30 bg-emerald-500/5")}>
+            <div className="text-[11px] font-medium text-emerald-300">涨停池明细数据未取得</div>
+            <p className="mt-1 text-[10px] text-muted-foreground/70">
+              API 仅返回 <code className="rounded bg-muted/30 px-1">zt_pool_count</code> 汇总数，
+              不含涨停池标的明细（code/name/lbc）。明细数据需后端补 <code className="rounded bg-muted/30 px-1">zt_pool_items</code> 字段后接入。
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground/50">
+              此处不臆造标的列表——诚实标注数据缺失。
+            </p>
+          </div>
+        </div>
+      )}
       <ArrowDown label="lbc=1 首板过滤" />
 
-      {/* 首板过滤 */}
-      <div className={NODE_GREEN}>
+      {/* 首板过滤（可展开——API 仅返回汇总数，展开诚实降级 + 链接到三层剔除看明细） */}
+      <button
+        onClick={() => setFirstBoardExpanded((v) => !v)}
+        className={cn(NODE_GREEN, "w-full text-left hover:bg-emerald-500/10")}
+      >
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">首板过滤</div>
             <div className="text-[11px] text-muted-foreground">连板数 lbc=1（首板涨停）</div>
           </div>
-          <div className="text-lg font-bold text-emerald-400">{firstBoardCount}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-bold text-emerald-400">{firstBoardCount}</div>
+            <ExpandIndicator open={firstBoardExpanded} />
+          </div>
         </div>
-      </div>
+      </button>
+      {firstBoardExpanded && (
+        <div className="ml-2 border-l-2 border-emerald-500/30 pl-3">
+          <div className={cn(NODE_DASHED, "border-emerald-500/30 bg-emerald-500/5")}>
+            <div className="text-[11px] font-medium text-emerald-300">首板明细数据未取得</div>
+            <p className="mt-1 text-[10px] text-muted-foreground/70">
+              API 返回 <code className="rounded bg-muted/30 px-1">first_board_count</code> 汇总数，
+              但不含首板过滤产出明细。下游可见的是三层剔除后的 <b className="text-foreground">候选池（{candidates.length} 只）</b>
+              + <b className="text-destructive">剔除记录（{excluded.length} 只）</b>。
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground/50">
+              ⚠ 候选 + 剔除 ≠ 首板数（三层剔除是串联过滤，剔除记录按层累加）。
+              反推不完全准确，故不展示反推列表。
+            </p>
+            <button
+              type="button"
+              onClick={() => { setExcludedExpanded(true); setFirstBoardExpanded(false); }}
+              className="mt-1.5 text-[10px] text-primary hover:underline"
+            >
+              → 展开三层剔除节点看候选+剔除明细
+            </button>
+          </div>
+        </div>
+      )}
       <ArrowDown label="3 层剔除" />
 
-      {/* 三层剔除节点（可展开剔除原因） */}
+      {/* 三层剔除节点（可展开——增强：每层通过数量 + FunnelShrinkBar + 剔除明细） */}
       <button
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => setExcludedExpanded((v) => !v)}
         className={cn(NODE, "w-full text-left hover:bg-card/60")}
       >
         <div className="flex items-center justify-between">
@@ -114,43 +188,71 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
             <span className="text-xs text-muted-foreground">
               {firstBoardCount === "—" ? "—" : `${firstBoardCount}→${candidates.length}`}
             </span>
-            <span className="text-[10px] text-muted-foreground">{expanded ? "▼ 收起" : "▶ 展开"}</span>
+            <ExpandIndicator open={excludedExpanded} />
           </div>
         </div>
         <div className="mt-1 text-[11px] text-muted-foreground/80">
-          共剔除 {excluded.length} 只 · 点展开看分层原因
+          共剔除 {excluded.length} 只 · 点展开看每层通过数 + 分层剔除原因
         </div>
       </button>
 
-      {expanded && (
+      {excludedExpanded && (
         <div className="space-y-2 border-t border-border/30 pt-2">
+          {/* 总收缩条（首板→候选池） */}
           <FunnelShrinkBar
             input={typeof firstBoardCount === "number" ? firstBoardCount : 0}
             output={candidates.length}
           />
           {[1, 2, 3].map((layer) => (
-            <div key={layer} className={cn(NODE_RED, "opacity-90")}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-destructive">{layerNames[layer]}</span>
-                <span className="text-[10px] text-destructive">剔除 {excludedByLayer[layer].length} 只</span>
+            <div key={layer}>
+              {/* 每层通过数量 + 收缩条 */}
+              <div className={cn(NODE, "mb-1.5")}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-foreground">
+                    {layerNames[layer]}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    通过 {layerFunnel[layer].output} 只
+                    <span className="text-muted-foreground/40"> / 剔除 {excludedByLayer[layer].length}</span>
+                  </span>
+                </div>
+                <div className="mt-1.5">
+                  <FunnelShrinkBar
+                    input={layerFunnel[layer].input}
+                    output={layerFunnel[layer].output}
+                  />
+                </div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                  {layerReasons[layer]}
+                </div>
               </div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">{layerReasons[layer]}</div>
+              {/* 该层剔除明细 */}
               {excludedByLayer[layer].length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {excludedByLayer[layer].slice(0, 10).map((e) => (
-                    <span
-                      key={e.code}
-                      title={e.reason}
-                      className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive"
-                    >
-                      {e.code} <span className="text-destructive/60">{e.reason}</span>
+                <div className={cn(NODE_RED, "opacity-90")}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-destructive">
+                      {layerNames[layer]} · 剔除明细
                     </span>
-                  ))}
-                  {excludedByLayer[layer].length > 10 && (
-                    <span className="text-[10px] text-muted-foreground/60">
-                      …共 {excludedByLayer[layer].length} 只
+                    <span className="text-[10px] text-destructive">
+                      {excludedByLayer[layer].length} 只
                     </span>
-                  )}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {excludedByLayer[layer].slice(0, 10).map((e) => (
+                      <span
+                        key={e.code}
+                        title={e.reason}
+                        className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive"
+                      >
+                        {e.code} <span className="text-destructive/60">{e.reason}</span>
+                      </span>
+                    ))}
+                    {excludedByLayer[layer].length > 10 && (
+                      <span className="text-[10px] text-muted-foreground/60">
+                        …共 {excludedByLayer[layer].length} 只
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -159,16 +261,27 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
       )}
       <ArrowDown label="9 维度评分" />
 
-      {/* 候选池（评分排序后） */}
-      <div className={NODE}>
+      {/* 候选池（可展开——展示 9 维度评分表） */}
+      <button
+        onClick={() => setCandidatesExpanded((v) => !v)}
+        className={cn(NODE, "w-full text-left hover:bg-card/60")}
+      >
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">候选池</div>
             <div className="text-[11px] text-muted-foreground">9 维度加权评分 · 降序</div>
           </div>
-          <div className="text-lg font-bold text-primary">{candidates.length}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-bold text-primary">{candidates.length}</div>
+            <ExpandIndicator open={candidatesExpanded} />
+          </div>
         </div>
-      </div>
+      </button>
+      {candidatesExpanded && (
+        <div className="border-t border-border/30 pt-2">
+          <CandidateScoreTable candidates={candidates} />
+        </div>
+      )}
     </div>
   );
 }
