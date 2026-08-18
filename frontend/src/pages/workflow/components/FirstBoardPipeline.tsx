@@ -879,8 +879,29 @@ const DIM_CONFIGS: DimConfig[] = [
 ];
 
 // ---- 候选评分明细表（折叠态一行得分 + 行可展开看"实际值→得分"对照）----
+// 可排序的列 key（rank/total 直接取 candidate 字段；其余为 scores 子键）
+type SortKey = "rank" | "total" | DimKey;
+
+// 维度列配置（表头显示名 + 对应 scores 子键）
+const SCORE_COLS: { key: DimKey; label: string }[] = [
+  { key: "sector", label: "板块" },
+  { key: "hot_money", label: "游资" },
+  { key: "seal_strength", label: "封板" },
+  { key: "chip", label: "筹码" },
+  { key: "auction", label: "竞价" },
+  { key: "northbound", label: "北向" },
+  { key: "institution", label: "机构" },
+  { key: "theme", label: "题材" },
+  { key: "event", label: "事件" },
+];
+
 export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCandidate[] }) {
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  // 列头排序 state（默认按 rank 升序——rank 1 是最高分）
+  const [sortKey, setSortKey] = useState<SortKey>("rank");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // 总分筛选滑块 state
+  const [minTotal, setMinTotal] = useState(0);
 
   if (candidates.length === 0) {
     return (
@@ -892,43 +913,131 @@ export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCand
 
   const toggle = (code: string) => setExpandedCode((prev) => (prev === code ? null : code));
 
+  // 列头点击切换排序
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      // rank 默认升序（1 在前），其余默认降序（高分在前）
+      setSortDir(key === "rank" ? "asc" : "desc");
+    }
+  };
+
+  // 取排序值
+  const getSortVal = (c: FirstBoardCandidate, key: SortKey): number => {
+    if (key === "rank") return c.rank;
+    if (key === "total") return c.total;
+    return c.scores?.[key] ?? -1;
+  };
+
+  // 排序 + 筛选
+  const sorted = [...candidates].sort((a, b) => {
+    const av = getSortVal(a, sortKey);
+    const bv = getSortVal(b, sortKey);
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
+  const filtered = sorted.filter((c) => c.total >= minTotal);
+
+  // 检查维度是否所有候选都缺失（score=-1 或 undefined）→ 表头加删除线
+  const isDimMissing = (dim: DimKey): boolean =>
+    candidates.every((c) => {
+      const v = c.scores?.[dim];
+      return v === -1 || v === undefined || v == null;
+    });
+
+  // 排序指示器
+  const SortIndicator = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return null;
+    return <span className="ml-0.5 text-[9px] text-primary">{sortDir === "desc" ? "▼" : "▲"}</span>;
+  };
+
+  // 列头公共样式（可点击排序）
+  const thClass = "px-2 py-1.5 text-right font-medium cursor-pointer hover:bg-muted/20 select-none";
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-border/40 text-muted-foreground">
-            <th className="px-2 py-1.5 text-left font-medium w-6"></th>
-            <th className="px-2 py-1.5 text-left font-medium">#</th>
-            <th className="px-2 py-1.5 text-left font-medium">代码</th>
-            <th className="px-2 py-1.5 text-left font-medium">名称</th>
-            <th className="px-2 py-1.5 text-right font-medium">总分</th>
-            <th className="px-2 py-1.5 text-right font-medium">板块</th>
-            <th className="px-2 py-1.5 text-right font-medium">游资</th>
-            <th className="px-2 py-1.5 text-right font-medium">封板</th>
-            <th className="px-2 py-1.5 text-right font-medium">筹码</th>
-            <th className="px-2 py-1.5 text-right font-medium">竞价</th>
-            <th className="px-2 py-1.5 text-right font-medium">北向</th>
-            <th className="px-2 py-1.5 text-right font-medium">机构</th>
-            <th className="px-2 py-1.5 text-right font-medium">题材</th>
-            <th className="px-2 py-1.5 text-right font-medium">事件</th>
-          </tr>
-        </thead>
-        <tbody>
-          {candidates.map((c) => {
-            const isOpen = expandedCode === c.code;
-            const hasRawValues = !!c.raw_values;
-            return (
-              <CandidateRowFragment
-                key={c.code}
-                candidate={c}
-                isOpen={isOpen}
-                hasRawValues={hasRawValues}
-                onToggle={() => toggle(c.code)}
-              />
-            );
-          })}
-        </tbody>
-      </table>
+    <div>
+      {/* 总分筛选滑块 */}
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">总分≥</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={minTotal}
+          onChange={(e) => setMinTotal(Number(e.target.value))}
+          className="w-32 accent-primary"
+          aria-label="总分筛选"
+        />
+        <span className="text-xs font-mono text-primary">{minTotal}</span>
+        <span className="text-xs text-muted-foreground">
+          （{filtered.length} 只符合
+          {filtered.length !== sorted.length && ` / 共 ${sorted.length} 只`}
+          ）
+        </span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border/40 text-muted-foreground">
+              <th className="px-2 py-1.5 text-left font-medium w-6"></th>
+              <th
+                className="px-2 py-1.5 text-left font-medium cursor-pointer hover:bg-muted/20 select-none"
+                onClick={() => toggleSort("rank")}
+                title="按排名排序"
+              >
+                #<SortIndicator col="rank" />
+              </th>
+              <th className="px-2 py-1.5 text-left font-medium">代码</th>
+              <th className="px-2 py-1.5 text-left font-medium">名称</th>
+              <th
+                className="px-2 py-1.5 text-right font-medium cursor-pointer hover:bg-muted/20 select-none"
+                onClick={() => toggleSort("total")}
+                title="按总分排序"
+              >
+                总分<SortIndicator col="total" />
+              </th>
+              {SCORE_COLS.map((col) => {
+                const missing = isDimMissing(col.key);
+                return (
+                  <th
+                    key={col.key}
+                    className={cn(thClass, missing && "line-through text-muted-foreground/40")}
+                    onClick={() => toggleSort(col.key)}
+                    title={missing ? "数据缺失（所有候选 score=-1）· 后续移除或寻找替代" : `按${col.label}排序`}
+                  >
+                    {col.label}<SortIndicator col={col.key} />
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={15} className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">
+                  无候选符合总分≥{minTotal}（共 {sorted.length} 只）· 调低滑块看更多
+                </td>
+              </tr>
+            ) : (
+              filtered.map((c) => {
+                const isOpen = expandedCode === c.code;
+                const hasRawValues = !!c.raw_values;
+                return (
+                  <CandidateRowFragment
+                    key={c.code}
+                    candidate={c}
+                    isOpen={isOpen}
+                    hasRawValues={hasRawValues}
+                    onToggle={() => toggle(c.code)}
+                  />
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -959,15 +1068,21 @@ function CandidateRowFragment({
         <td className="px-2 py-1.5 font-mono">{c.code}</td>
         <td className="px-2 py-1.5">{c.name}</td>
         <td className="px-2 py-1.5 text-right font-mono font-bold text-primary">{c.total.toFixed(1)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.sector.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.hot_money.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.seal_strength.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.chip.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.auction.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.northbound.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.institution.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.theme.toFixed(0)}</td>
-        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.event.toFixed(0)}</td>
+        {SCORE_COLS.map((col) => {
+          const score = c.scores?.[col.key];
+          const isMissing = score === -1 || score == null;
+          return (
+            <td
+              key={col.key}
+              className={cn(
+                "px-2 py-1.5 text-right font-mono",
+                isMissing ? "text-muted-foreground/30" : "text-muted-foreground",
+              )}
+            >
+              {isMissing ? "—" : score.toFixed(0)}
+            </td>
+          );
+        })}
       </tr>
       {/* 展开行：详情卡 */}
       {isOpen && (
@@ -982,6 +1097,7 @@ function CandidateRowFragment({
                 <div className="space-y-1">
                   {DIM_CONFIGS.map((dim) => {
                     const score = c.scores[dim.key];
+                    const isMissing = score === -1 || score == null;
                     const rawObj = c.raw_values?.[dim.key];
                     const rawDesc = dim.rawDescribe(rawObj);
                     return (
@@ -989,16 +1105,22 @@ function CandidateRowFragment({
                         key={dim.key}
                         className="flex items-start gap-2 border-b border-border/20 pb-1 last:border-0 last:pb-0"
                       >
-                        <span className="w-20 shrink-0 text-[11px] font-medium text-foreground">
+                        <span className={cn(
+                          "w-20 shrink-0 text-[11px] font-medium",
+                          isMissing ? "text-muted-foreground/40 line-through" : "text-foreground",
+                        )}>
                           {dim.label}
                           <span className="ml-1 text-[9px] text-muted-foreground/50">{dim.weight}</span>
                         </span>
                         <span className="flex-1 text-[11px] text-muted-foreground">
-                          {rawDesc}
+                          {isMissing ? "数据缺失（score=-1）· 后续移除或寻找替代" : rawDesc}
                         </span>
                         <span className="text-[11px] text-muted-foreground/40">→</span>
-                        <span className="w-12 shrink-0 text-right font-mono font-bold text-primary">
-                          {score.toFixed(0)}分
+                        <span className={cn(
+                          "w-12 shrink-0 text-right font-mono font-bold",
+                          isMissing ? "text-muted-foreground/40" : "text-primary",
+                        )}>
+                          {isMissing ? "—" : `${score.toFixed(0)}分`}
                         </span>
                       </div>
                     );
