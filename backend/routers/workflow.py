@@ -910,6 +910,15 @@ def get_workflow_state_history(code: str, date: Optional[str] = Query(None, desc
         raise HTTPException(500, f"获取流转历史失败：{e}") from e
 
 
+def _normalize_date(date: str) -> str:
+    """归一化日期为 YYYY-MM-DD（接受 YYYYMMDD 或 YYYY-MM-DD）。"""
+    if "-" in date:
+        return date
+    if len(date) == 8 and date.isdigit():
+        return f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+    return date
+
+
 def _resolve_first_board_date(date: str | None) -> str:
     """解析首板流查询日期——不传 date 时按收盘时点决定取 T 日还是 T-1。
 
@@ -918,13 +927,13 @@ def _resolve_first_board_date(date: str | None) -> str:
     收盘后（15:00 后）当日涨停池已确定，取当日。
 
     Args:
-        date: YYYY-MM-DD 字符串。传了就直接用；None 按收盘时点解析。
+        date: YYYY-MM-DD 或 YYYYMMDD 字符串。传了归一化后直接用；None 按收盘时点解析。
 
     Returns:
-        YYYY-MM-DD 字符串（传 date 原样返；不传时 15:00 前返 T-1 交易日，15:00 后返当日）。
+        YYYY-MM-DD 字符串（统一格式；不传时 15:00 前返 T-1 交易日，15:00 后返当日）。
     """
     if date:
-        return date
+        return _normalize_date(date)
     from datetime import date as Date, datetime, timedelta
 
     now = datetime.now()
@@ -1017,10 +1026,10 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
 
 @router.get("/api/workflow/first-board/dates")
 def get_first_board_dates() -> Dict[str, Any]:
-    """S075：首板流可用历史日期列表（有快照的日期，降序）。"""
+    """S075：首板流可用历史日期列表（有快照的日期，降序，YYYY-MM-DD）。"""
     try:
         from strategies.first_board_filter import list_score_dates
-        dates = list_score_dates()
+        dates = [_normalize_date(d) for d in list_score_dates()]
         return {"data": {"dates": dates, "count": len(dates)}}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"历史日期查询异常：{e}") from e
