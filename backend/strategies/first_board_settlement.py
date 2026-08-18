@@ -438,3 +438,222 @@ def run_first_board_settlement(
         "forward_test_summary": summary,
         "verdict": verdict,
     }
+
+
+# ===========================================================================
+# 4d：T+1 溢价评分 + 复盘报告（盘后调度用，tasks.md 060-062 调度）
+# ===========================================================================
+
+def _normalize_date_iso(date: str) -> str:
+    """YYYYMMDD → YYYY-MM-DD（baostock bar.date 格式）。
+
+    baostock_kline_cache 的 bar.date 形如 "2025-12-25"（ISO 格式），
+    而 signal_date 来自快照文件名（YYYYMMDD 紧凑格式）。日期比较必须同格式。
+    已是 YYYY-MM-DD 的直接返回。
+    """
+    if not date:
+        return ""
+    if "-" in date:
+        return date
+    if len(date) == 8 and date.isdigit():
+        return f"{date[:4]}-{date[4:6]}-{date[6:]}"
+    return date
+
+
+def run_t1_premium_review(signal_date: str) -> dict:
+    """T+1 溢价评分——对 T-1 候选做收益评价（盘后调度用）。
+
+    流程：
+    1. 读 T-1 快照（load_scores）取候选
+    2. 从 baostock_kline_cache 取 T 日 K 线（signal_date 后第一个 bar）
+    3. 算每只候选的标的收益（T 日 close vs T-1 open）——spec plan.md 口径
+    4. 算整体统计（平均收益/正收益占比/最佳/最差）
+    5. 调 judge_lift_four_states 判定选股质量
+
+    Args:
+        signal_date: T-1 日期（选股日）YYYYMMDD 或 YYYY-MM-DD。
+
+    Returns:
+        dict：
+        - signal_date: str（YYYYMMDD）
+        - candidates: list[dict]，每项 {code, name, rank, total_score,
+                       t1_date, t1_close, t1_open, t1_return_pct}
+        - stats: dict {n, mean_return_pct, pos_ratio, pos_count,
+                   best_return, worst_return}
+        - verdict: str（lift 四态）
+        - error: str（仅失败时，无快照/无 T+1 数据）
+        无 T+1 数据 → {"error": "...", "candidates": [...]}
+    """
+    from strategies.first_board_filter import load_scores
+    from vr_paths import resolve_data_dir
+    import json
+
+    cached = load_scores(signal_date)
+    if not cached or not cached.get("scored_candidates"):
+        return {"error": f"T-1({signal_date})无候选快照"}
+
+    candidates = cached["scored_candidates"]
+    compact_date = signal_date.replace("-", "") if "-" in signal_date else signal_date
+    iso_date = _normalize_date_iso(signal_date)
+
+    # baostock K 线缓存（与 first_board_filter._get_kline_cache 同路径）
+    cache_path = resolve_data_dir() / "baostock_kline_cache.json"
+    cache: dict = {}
+    try:
+        if cache_path.exists():
+            cache = json.loads(cache_path.read_bytes())
+    except Exception as e:
+        _logger.warning("run_t1_premium_review 读 baostock 缓存失败 err=%s", e)
+        cache = {}
+
+    t1_returns: list[dict] = []
+    for c in candidates:
+        code = c.get("code", "")
+        bars = cache.get(code, [])
+        # T 日 = bars 中 date > signal_date 的第一个 bar
+        # baostock bar.date 为 ISO "YYYY-MM-DD"，统一用 ISO 比较
+        t1_bar = None
+        t0_bar = None
+        for b in bars:
+            b_date = b.get("date", "")
+            # b_date 可能是 ISO 或紧凑，统一转 ISO 比较
+            b_iso = b_date if "-" in b_date else _normalize_date_iso(b_date)
+            if b_iso > iso_date:
+                t1_bar = b
+                break
+            if b_iso <= iso_date:
+                t0_bar = b  # 最后一个 <= signal_date 的 bar（T-1 日）
+
+        ret: float | None = None
+        t1_close = None
+        t1_open = None
+        t1_date = None
+        if t1_bar is not None:
+            t1_close = t1_bar.get("close")
+            t1_date = t1_bar.get("date")
+            # 标的收益口径（spec plan.md）：(T 日 close - T-1 open) / T-1 open * 100
+            # T-1 open 用 t0_bar.open（signal_date 当日 open）
+            if t0_bar is not None:
+                t1_open = t0_bar.get("open")
+            if t1_open and t1_open > 0 and t1_close is not None:
+                ret = round((t1_close - t1_open) / t1_open * 100, 4)
+
+        t1_returns.append({
+            "code": code,
+            "name": c.get("name", ""),
+            "rank": c.get("rank", 0),
+            "total_score": c.get("total", 0.0),
+            "t1_date": t1_date,
+            "t1_close": t1_close,
+            "t1_open": t1_open,
+            "t1_return_pct": ret,
+        })
+
+    # 整体统计
+    valid_returns = [
+        r["t1_return_pct"] for r in t1_returns
+        if r["t1_return_pct"] is not None
+    ]
+    n = len(valid_returns)
+    if n == 0:
+        return {
+            "error": "无T+1收益数据（baostock 缓存无 signal_date 后的 bar）",
+            "signal_date": compact_date,
+            "candidates": t1_returns,
+        }
+
+    mean_ret = sum(valid_returns) / n
+    pos_count = sum(1 for r in valid_returns if r > 0)
+    pos_ratio = pos_count / n
+    # lift 近似：策略胜率 vs 随机基准 50%（简化，无 universe 数据时）
+    # judge_lift_four_states 用 lift+n 判四态；此处 lift 用胜率/50 近似（诚实标注简化）
+    strategy_winrate = pos_ratio * 100
+    random_winrate = 50.0  # 简化随机基准（无 universe_returns，标注待回测）
+    lift = round(strategy_winrate / random_winrate, 3) if random_winrate > 0 else 0.0
+
+    verdict = judge_lift_four_states(lift, n)
+
+    return {
+        "signal_date": compact_date,
+        "candidates": t1_returns,
+        "stats": {
+            "n": n,
+            "mean_return_pct": round(mean_ret, 2),
+            "pos_ratio": round(pos_ratio, 2),
+            "pos_count": pos_count,
+            "best_return": round(max(valid_returns), 2),
+            "worst_return": round(min(valid_returns), 2),
+            "lift": lift,
+        },
+        "verdict": verdict,
+        "note": "lift 近似：策略胜率/50%随机基准（无 universe，待回测校准）",
+    }
+
+
+def build_review_report(t1_review: dict) -> str:
+    """构造飞书复盘报告 Markdown。
+
+    内容：
+    - 首板流 T+1 溢价评分
+    - 候选名单表格（排名/代码/名称/评分/T+1收益）
+    - 整体统计（平均收益/正收益占比/最佳/最差）
+    - 选股质量判定（lift 四态）
+    - §44 未 validated 标注
+
+    Args:
+        t1_review: run_t1_premium_review 返回的 dict。
+
+    Returns:
+        Markdown 字符串。
+    """
+    if t1_review.get("error"):
+        signal_date = t1_review.get("signal_date", "")
+        candidates = t1_review.get("candidates", [])
+        lines = [
+            "**首板流 T+1 溢价评分报告**",
+            "",
+            f"选股日：{signal_date}",
+            f"⚠ {t1_review['error']}",
+            "",
+        ]
+        if candidates:
+            lines.append("| 排名 | 代码 | 名称 | 评分 | T+1收益 |")
+            lines.append("|---|---|---|---|---|")
+            for c in candidates:
+                ret = c.get("t1_return_pct")
+                ret_str = f"{ret:+.2f}%" if ret is not None else "—"
+                lines.append(
+                    f"| {c.get('rank', '')} | {c.get('code', '')} | "
+                    f"{c.get('name', '')} | {c.get('total_score', 0):.1f} | {ret_str} |"
+                )
+        lines.append("⚠ §44 未 validated 仅参考；阈值/权重待回测校准")
+        lines.append("⚠ 历史统计特征，不构成投资建议")
+        return "\n".join(lines)
+
+    candidates = t1_review.get("candidates", [])
+    stats = t1_review.get("stats", {})
+    lines = ["**首板流 T+1 溢价评分报告**", ""]
+    lines.append(f"选股日：{t1_review.get('signal_date', '')}")
+    lines.append(f"候选数：{stats.get('n', 0)} 只")
+    lines.append(f"平均收益：{stats.get('mean_return_pct', 0):+.2f}%")
+    lines.append(
+        f"正收益占比：{stats.get('pos_ratio', 0):.0%}"
+        f"（{stats.get('pos_count', 0)}/{stats.get('n', 0)}）"
+    )
+    lines.append(f"最佳收益：{stats.get('best_return', 0):+.2f}%")
+    lines.append(f"最差收益：{stats.get('worst_return', 0):+.2f}%")
+    lines.append(f"选股质量：{t1_review.get('verdict', '')}")
+    lines.append("")
+    lines.append("| 排名 | 代码 | 名称 | 评分 | T+1收益 |")
+    lines.append("|---|---|---|---|---|")
+    for c in candidates:
+        ret = c.get("t1_return_pct")
+        ret_str = f"{ret:+.2f}%" if ret is not None else "—"
+        lines.append(
+            f"| {c.get('rank', '')} | {c.get('code', '')} | "
+            f"{c.get('name', '')} | {c.get('total_score', 0):.1f} | {ret_str} |"
+        )
+    lines.append("")
+    lines.append("⚠ §44 未 validated 仅参考；阈值/权重待回测校准")
+    lines.append("⚠ 历史统计特征，不构成投资建议")
+    return "\n".join(lines)

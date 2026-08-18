@@ -67,7 +67,7 @@ EXCLUDE_THRESHOLDS: dict = {
     # ── 层3 市场环境（T-1 粗筛）──────────────────────────────────────────
     "market_drop_threshold": -1.5,  # 大盘跌 >1.5% 标记高风险（不直接剔除，仅标记）
     "min_sector_zt_count": 2,       # 同板块涨停 <2 且无题材 剔除（孤板无板块效应）
-    "exclude_chinext": True,        # 剔除创业板（300/301 开头），待回测校准
+    "exclude_chinext": False,       # 创业板不剔除（候选池按板块分组排序区分展示）
     "exclude_isolated_board": True, # 孤板剔除开关（用户可关），待回测校准
 }
 
@@ -582,8 +582,8 @@ def exclude_layer3_market_env(
 
     # 层3 剔除条件读取
     min_sector_count = EXCLUDE_THRESHOLDS["min_sector_zt_count"]
-    exclude_chinext = EXCLUDE_THRESHOLDS.get("exclude_chinext", True)
     exclude_isolated = EXCLUDE_THRESHOLDS.get("exclude_isolated_board", True)
+    # 创业板不剔除（exclude_chinext=False），候选池按板块分组排序区分展示
 
     kept: list[dict] = []
     filtered: list[dict] = []
@@ -603,10 +603,6 @@ def exclude_layer3_market_env(
         concept_tags = sector_info.get("concept_tags") or []
 
         reasons: list[str] = []
-
-        # 创业板剔除（300/301 开头），开关 exclude_chinext 控制
-        if exclude_chinext and code.startswith(("300", "301")):
-            reasons.append("创业板剔除")
 
         # 孤板剔除：同板块涨停 < min_sector_zt_count 且无题材，开关 exclude_isolated 控制
         if exclude_isolated and sector_count < min_sector_count and not concept_tags:
@@ -1206,14 +1202,20 @@ def score_candidate(candidate: dict, date: str) -> dict:
 
 
 def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
-    """按总分降序排序。
+    """按总分降序排序 + 按板块分组（主板在前，创业板在后）。
 
     Args:
         candidates: 通过三层剔除的候选 list[dict]。
         date: YYYYMMDD。
 
     Returns:
-        list[dict]（按 total 降序），每项含 scores+total+rank（1-based）。
+        list[dict]，每项含 scores+total+rank（1-based，分组排序后连续）+board_type
+        （"主板"/"创业板"/"其他"）。
+
+    排序规则：
+    - 主板（60/00 开头）在前，创业板（300/301 开头）在后，其他最后；
+    - 每组内按 total 降序；
+    - rank 从 1 开始连续编号（不分段重置，整体连续）。
 
     进度日志：每 5 只打一条进度（flush=True，后台跑实时输出）。
     兜底：单只 score_candidate 失败 try/except 跳过（不进 scored，不阻塞整批）。
@@ -1228,7 +1230,22 @@ def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
         except Exception as e:
             _logger.warning("score_candidate 失败 code=%s err=%s", c.get("code"), e)
     print(f"[fb_filter] 评分进度: {n}/{n} 完成", flush=True)
-    scored.sort(key=lambda x: x["total"], reverse=True)
+
+    # 标记板块类型
+    for s in scored:
+        code = s.get("code", "")
+        if code.startswith(("300", "301")):
+            s["board_type"] = "创业板"
+        elif code.startswith(("60", "00")):
+            s["board_type"] = "主板"
+        else:
+            s["board_type"] = "其他"
+
+    # 按板块分组+组内降序：主板(0) 在前，创业板(1) 在后，其他(2) 最后
+    _board_order = {"主板": 0, "创业板": 1, "其他": 2}
+    scored.sort(key=lambda x: (_board_order.get(x["board_type"], 9), -x["total"]))
+
+    # rank 从 1 开始连续编号（整体连续，不分段重置）
     for i, s in enumerate(scored):
         s["rank"] = i + 1
     return scored

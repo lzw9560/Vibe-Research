@@ -43,6 +43,7 @@ _EXPECTED_TASK_TYPES = {
     "s066_validation_checkpoint",
     "forward_test_daily",
     "forward_test_t1_settle",
+    "first_board_t1_review",
 }
 
 

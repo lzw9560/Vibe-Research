@@ -451,6 +451,7 @@ class TaskExecutor:
             "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,  # §44 60 天复验检查点（提醒任务）
             "forward_test_daily": self._execute_forward_test_daily,  # S069 R1：每日记 forward_test picks+universe
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,  # S069 R2：T+1 收益回填
+            "first_board_t1_review": self._execute_first_board_t1_review,  # S075：T+1 溢价评分+复盘报告+飞书
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -1076,6 +1077,70 @@ def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, 
 TaskExecutor._execute_forward_test_t1_settle = _execute_forward_test_t1_settle
 
 
+def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S075 T+1 溢价评分 + 复盘报告 + 飞书通知（盘后对 T-1 候选做收益评价）。
+
+    流程：
+    1. 取 T-1（最近有快照的交易日）候选
+    2. 跑 run_t1_premium_review：baostock T 日 K 线算标的收益 + lift 四态判定
+    3. build_review_report 构造 Markdown 复盘报告
+    4. 飞书推送（NotificationService，route_type=alert/severity=info）
+
+    无快照 / 无 T+1 数据 / 通道未配 → 不崩，返对应状态。
+    失败 catch 不抛，返 status=error（评价是增强，不阻塞主流程）。
+    """
+    try:
+        from strategies.first_board_settlement import (
+            run_t1_premium_review,
+            build_review_report,
+        )
+        from strategies.first_board_filter import list_score_dates
+        from notification.notification_service import NotificationService
+
+        # 取 T-1：优先用 payload.date，否则取最近的快照日
+        signal_date = payload.get("date") if payload else None
+        if not signal_date:
+            dates = list_score_dates()
+            if not dates:
+                return {"status": "error", "msg": "无历史快照"}
+            signal_date = dates[0]  # 最近的快照日
+
+        # 跑 T+1 评价
+        review = run_t1_premium_review(signal_date)
+        report = build_review_report(review)
+
+        # 飞书推送
+        ns = NotificationService()
+        notified = False
+        if ns.is_available():
+            notified = ns.send(report, route_type="alert", severity="info")
+
+        stats = review.get("stats", {}) if not review.get("error") else {}
+        logger.info(
+            "[first_board_t1_review] %s 候选%d 只 mean=%s%% notified=%s verdict=%s",
+            signal_date,
+            stats.get("n", 0),
+            stats.get("mean_return_pct", 0),
+            notified,
+            review.get("verdict", review.get("error", "")),
+        )
+        return {
+            "signal_date": signal_date,
+            "status": "ok",
+            "candidates": stats.get("n", 0),
+            "mean_return": stats.get("mean_return_pct", 0),
+            "verdict": review.get("verdict", ""),
+            "error": review.get("error"),
+            "notified": notified,
+        }
+    except Exception as e:
+        logger.warning("[first_board_t1_review] 失败: %s", e)
+        return {"status": f"error: {e}"}
+
+
+TaskExecutor._execute_first_board_t1_review = _execute_first_board_t1_review
+
+
 _manager = ScheduledTaskManager()
 
 
@@ -1373,6 +1438,19 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 forward_test_t1_settle 已创建（cron 50 15 * * 0-4）")
+
+    # S075：盘后 T+1 溢价评分 + 复盘报告 + 飞书通知（晚 first_board_filter 16:15 +15min）。
+    # 对 T-1 候选做 T+1 收益评价，构造 Markdown 复盘报告，飞书推送用户。
+    if "first_board_t1_review" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="first_board_t1_review",
+            description="S075 T+1 溢价评分+复盘报告+飞书通知（盘后对 T-1 候选做收益评价）",
+            task_type="first_board_t1_review",
+            cron_expr="30 16 * * 0-4",  # 16:30（晚 first_board_filter 16:15 +15min）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 first_board_t1_review 已创建（cron 30 16 * * 0-4）")
 
 
 async def stop_scheduler() -> None:
