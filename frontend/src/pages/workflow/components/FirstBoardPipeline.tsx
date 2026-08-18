@@ -55,6 +55,16 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
   const [firstBoardExpanded, setFirstBoardExpanded] = useState(false);
   const [excludedExpanded, setExcludedExpanded] = useState(false);
   const [candidatesExpanded, setCandidatesExpanded] = useState(false);
+  // 每层剔除子表格独立展开状态（Set<number>，1/2/3 各自可收折；默认全展开方便查看）
+  const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set([1, 2, 3]));
+  const toggleLayer = (layer: number) => {
+    setExpandedLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layer)) next.delete(layer);
+      else next.add(layer);
+      return next;
+    });
+  };
 
   const ztPoolCount = data?.zt_pool_count ?? "—";
   const firstBoardCount = data?.first_board_count ?? "—";
@@ -206,60 +216,79 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
             input={typeof firstBoardCount === "number" ? firstBoardCount : 0}
             output={candidates.length}
           />
-          {[1, 2, 3].map((layer) => (
-            <div key={layer}>
-              {/* 每层通过数量 + 收缩条 */}
-              <div className={cn(NODE, "mb-1.5")}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground">
-                    {layerNames[layer]}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    通过 {layerFunnel[layer].output} 只
-                    <span className="text-muted-foreground/40"> / 剔除 {excludedByLayer[layer].length}</span>
-                  </span>
-                </div>
-                <div className="mt-1.5">
-                  <FunnelShrinkBar
-                    input={layerFunnel[layer].input}
-                    output={layerFunnel[layer].output}
-                  />
-                </div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground">
-                  {layerReasons[layer]}
-                </div>
-              </div>
-              {/* 该层剔除明细 */}
-              {excludedByLayer[layer].length > 0 && (
-                <div className={cn(NODE_RED, "opacity-90")}>
+          {[1, 2, 3].map((layer) => {
+            const layerOpen = expandedLayers.has(layer);
+            return (
+              <div key={layer}>
+                {/* 每层通过数量 + 收缩条（总览） */}
+                <div className={cn(NODE, "mb-1.5")}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-destructive">
-                      {layerNames[layer]} · 剔除明细
+                    <span className="text-xs font-medium text-foreground">
+                      {layerNames[layer]}
                     </span>
-                    <span className="text-[10px] text-destructive">
-                      {excludedByLayer[layer].length} 只
+                    <span className="text-[10px] text-muted-foreground">
+                      通过 {layerFunnel[layer].output} 只
+                      <span className="text-muted-foreground/40"> / 剔除 {excludedByLayer[layer].length}</span>
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {excludedByLayer[layer].slice(0, 10).map((e) => (
-                      <span
-                        key={e.code}
-                        title={e.reason}
-                        className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive"
-                      >
-                        {e.code} <span className="text-destructive/60">{e.reason}</span>
+                  <div className="mt-1.5">
+                    <FunnelShrinkBar
+                      input={layerFunnel[layer].input}
+                      output={layerFunnel[layer].output}
+                    />
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    {layerReasons[layer]}
+                  </div>
+                </div>
+                {/* 该层剔除明细子表格（可收折） */}
+                {excludedByLayer[layer].length > 0 && (
+                  <div className={cn(NODE_RED, "opacity-90")}>
+                    {/* 表头行：点击收折 */}
+                    <button
+                      type="button"
+                      onClick={() => toggleLayer(layer)}
+                      className="flex w-full items-center justify-between text-left hover:opacity-80"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-destructive">{layerOpen ? "▼" : "▶"}</span>
+                        <span className="text-[11px] font-medium text-destructive">
+                          {layerNames[layer]} · 剔除明细
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-destructive">
+                        {excludedByLayer[layer].length} 只
                       </span>
-                    ))}
-                    {excludedByLayer[layer].length > 10 && (
-                      <span className="text-[10px] text-muted-foreground/60">
-                        …共 {excludedByLayer[layer].length} 只
-                      </span>
+                    </button>
+                    {/* 展开后渲染表格 */}
+                    {layerOpen && (
+                      <table className="mt-2 w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border/40 text-muted-foreground">
+                            <th className="px-2 py-1 text-left font-medium">代码</th>
+                            <th className="px-2 py-1 text-left font-medium">名称</th>
+                            <th className="px-2 py-1 text-left font-medium">剔除原因</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {excludedByLayer[layer].map((e) => (
+                            <tr
+                              key={e.code}
+                              className="border-b border-border/20 hover:bg-muted/10"
+                            >
+                              <td className="px-2 py-1 font-mono text-destructive">{e.code}</td>
+                              <td className="px-2 py-1 text-muted-foreground/50">—</td>
+                              <td className="px-2 py-1 text-destructive/80">{e.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     )}
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       <ArrowDown label="9 维度评分" />
