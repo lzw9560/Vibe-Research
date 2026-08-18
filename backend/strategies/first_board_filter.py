@@ -46,6 +46,10 @@ _SCORES_DIR = Path.home() / ".vibe-research"
 # baostock 查历史指数不入 kline_cache（缓存只含个股），故用 baostock 库实时查历史。
 _HS300_PCT_CACHE: dict[str, float | None] = {}
 
+# baostock_kline_cache 模块级缓存（code → bars list）。
+# 31MB JSON 只读一次到内存，extract_chip_structure 复用，避免每只候选重读全文件（2s/只 → 0ms）。
+_KLINE_CACHE: dict[str, list[dict]] | None = None
+
 # ===========================================================================
 # 阈值配置（待回测校准，30 天后用实际数据调）
 # ===========================================================================
@@ -209,6 +213,9 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
     - vol_ratio：量比 = 当日每分钟均量 / 5 日每分钟均量
       （当日 volume/240 ÷ 前 5 日 volume 均值/240，240 = A 股开市分钟数）
 
+    性能：31MB JSON 模块级缓存只读一次（``_KLINE_CACHE``），后续候选复用，
+    避免每只重读全文件（旧实现 2s/只 → 0ms）。
+
     Args:
         code: 6 位股票代码。
         date: YYYY-MM-DD（T-1 日）。None → 返空 dict（无法定位历史 bar）。
@@ -228,19 +235,19 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
     # 归一 date 为 YYYY-MM-DD（baostock 缓存用此格式）
     d = date if "-" in date else f"{date[:4]}-{date[4:6]}-{date[6:8]}"
     try:
-        from vr_paths import resolve_data_dir
-        cache_path = resolve_data_dir() / "baostock_kline_cache.json"
-        if not cache_path.exists():
-            return {}
-        cache = json.loads(cache_path.read_bytes())
-        bars = cache.get(code, [])
+        bars = _get_kline_cache().get(code, [])
         if not bars:
             return {}
-        # 找 date 当日或之前最近的 bar（baostock 缓存已按日期升序）
-        target_bars = [b for b in bars if b.get("date", "") <= d]
-        if not target_bars:
+        # 找 date 当日或之前最近的 bar（bars 已按日期升序，从末尾往前找）
+        target_bar: dict | None = None
+        target_idx = -1
+        for i in range(len(bars) - 1, -1, -1):
+            if bars[i].get("date", "") <= d:
+                target_bar = bars[i]
+                target_idx = i
+                break
+        if target_bar is None:
             return {}
-        target_bar = target_bars[-1]  # 最近的（就是 date 当日或之前）
 
         out: dict = {}
         tp = _to_float(target_bar.get("turn"))
@@ -252,8 +259,10 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
 
         # 量比 = 当日每分钟均量 / 5 日每分钟均量
         volume = _to_float(target_bar.get("volume")) or 0.0
-        recent_5 = target_bars[-6:-1]  # 前 5 日（不含当日）
-        if recent_5 and len(recent_5) >= 1:
+        # 前 5 日（不含当日）：bars[target_idx-5 : target_idx]
+        start = max(0, target_idx - 5)
+        recent_5 = bars[start:target_idx]
+        if recent_5:
             vols_5d = [_to_float(b.get("volume")) or 0.0 for b in recent_5]
             avg_5d = sum(vols_5d) / len(vols_5d)
             vol_ratio = (volume / 240.0) / (avg_5d / 240.0) if avg_5d > 0 else 1.0
@@ -264,6 +273,29 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
     except Exception as e:
         _logger.warning("extract_chip_structure 历史数据失败 code=%s date=%s err=%s", code, d, e)
         return {}
+
+
+def _get_kline_cache() -> dict[str, list[dict]]:
+    """模块级懒加载 baostock_kline_cache.json（只读一次，后续复用）。
+
+    31MB JSON 首次读约 2s，后续 0ms。run_first_board_filter 跑 52 只首板
+    时只读一次，避免每只重读全文件（旧实现 52×2s=100s+ 卡死）。
+    """
+    global _KLINE_CACHE
+    if _KLINE_CACHE is not None:
+        return _KLINE_CACHE
+    try:
+        from vr_paths import resolve_data_dir
+        cache_path = resolve_data_dir() / "baostock_kline_cache.json"
+        if not cache_path.exists():
+            _KLINE_CACHE = {}
+            return _KLINE_CACHE
+        cache = json.loads(cache_path.read_bytes())
+    except Exception as e:
+        _logger.warning("_get_kline_cache 读取失败 err=%s", e)
+        cache = {}
+    _KLINE_CACHE = cache
+    return cache
 
 
 def extract_sector(code: str) -> dict:
@@ -1171,8 +1203,20 @@ def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
 
     Returns:
         list[dict]（按 total 降序），每项含 scores+total+rank（1-based）。
+
+    进度日志：每 5 只打一条进度（flush=True，后台跑实时输出）。
+    兜底：单只 score_candidate 失败 try/except 跳过（不进 scored，不阻塞整批）。
     """
-    scored = [score_candidate(c, date) for c in candidates]
+    scored: list[dict] = []
+    n = len(candidates)
+    for i, c in enumerate(candidates):
+        if i % 5 == 0 or i == n - 1:
+            print(f"[fb_filter] 评分进度: {i}/{n} code={c.get('code')}", flush=True)
+        try:
+            scored.append(score_candidate(c, date))
+        except Exception as e:
+            _logger.warning("score_candidate 失败 code=%s err=%s", c.get("code"), e)
+    print(f"[fb_filter] 评分进度: {n}/{n} 完成", flush=True)
     scored.sort(key=lambda x: x["total"], reverse=True)
     for i, s in enumerate(scored):
         s["rank"] = i + 1
@@ -1290,32 +1334,43 @@ def run_first_board_filter(date: str) -> dict:
     # 日期标准化
     compact_date = date.replace("-", "") if "-" in date else date
 
+    print(f"[fb_filter] 开始 date={compact_date}", flush=True)
+
     # 003 取涨停池
     pool = fetch_zt_pool(compact_date)
     zt_pool_count = len(pool)
+    print(f"[fb_filter] 涨停池: {zt_pool_count}", flush=True)
 
     # 004 过滤首板
     first_boards = filter_first_board(pool)
     first_board_count = len(first_boards)
+    print(f"[fb_filter] 首板: {first_board_count}", flush=True)
 
     excluded: list[dict] = []
 
     # 007 层1 封板质量
     after_l1, filtered_l1 = exclude_layer1_seal_quality(first_boards)
     excluded.extend(filtered_l1)
+    print(f"[fb_filter] 层1剔除: {len(filtered_l1)} 剩余: {len(after_l1)}", flush=True)
 
     # 008 层2 筹码结构（传 date 取历史 K 线，无未来函数）
     after_l2, filtered_l2 = exclude_layer2_chip_structure(after_l1, compact_date)
     excluded.extend(filtered_l2)
+    print(f"[fb_filter] 层2剔除: {len(filtered_l2)} 剩余: {len(after_l2)}", flush=True)
 
     # 009-010 层3 市场环境
     after_l3, filtered_l3, env_flags = exclude_layer3_market_env(
         after_l2, compact_date, first_boards=first_boards,
     )
     excluded.extend(filtered_l3)
+    print(f"[fb_filter] 层3剔除: {len(filtered_l3)} 剩余: {len(after_l3)} "
+          f"env={env_flags}", flush=True)
 
     # 011-021 9 维度评分 + 排序 + 落盘
+    print(f"[fb_filter] 开始评分 {len(after_l3)} 只候选...", flush=True)
     scored_candidates = rank_candidates(after_l3, compact_date)
+    print(f"[fb_filter] 评分完成: {len(scored_candidates)} 只", flush=True)
+
     result = {
         "date": compact_date,
         "zt_pool_count": zt_pool_count,
@@ -1327,6 +1382,7 @@ def run_first_board_filter(date: str) -> dict:
     }
     try:
         save_scores(scored_candidates, compact_date, full_result=result)
+        print(f"[fb_filter] 落盘完成", flush=True)
     except Exception as e:
         _logger.warning("save_scores 落盘失败 date=%s err=%s", compact_date, e)
 
