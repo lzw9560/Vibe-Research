@@ -452,6 +452,8 @@ class TaskExecutor:
             "forward_test_daily": self._execute_forward_test_daily,  # S069 R1：每日记 forward_test picks+universe
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,  # S069 R2：T+1 收益回填
             "first_board_t1_review": self._execute_first_board_t1_review,  # S075：T+1 溢价评分+复盘报告+飞书
+            "first_board_quote_probe": self._execute_first_board_quote_probe,  # S076：盘中多源行情探查（临时研究）
+            "zt_history_snapshot": self._execute_zt_history_snapshot,  # S078：涨停历史 snapshot 数据地基
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -1190,6 +1192,95 @@ def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, A
 
 
 TaskExecutor._execute_first_board_t1_review = _execute_first_board_t1_review
+
+
+# ===========================================================================
+# S076：盘中多源行情探查 executor（临时研究任务）
+# ===========================================================================
+
+def _execute_first_board_quote_probe(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S076 盘中多源行情探查——9:20-9:36 每分钟探 tencent/mootdx/东财 push2。
+
+    临时研究任务：产出 .scratch/s076-quote-probe/matrix_{date}.json，收 3-5 个交易日稳定
+    结论后 disable。东财 push2 ≥10min 状态文件门控（R6 限流，per-minute cron 跨进程用文件持久化）。
+    需 app 进程在 9:20-9:36 运行（无 catch-up，错过即缺）。失败 catch 不抛，返 error。
+    """
+    try:
+        from tools.first_board_quote_source_probe import (
+            probe_once, _append_row, OUT_DIR, EM_PUSH2_MIN_INTERVAL_S, DEFAULT_CODES,
+        )
+        import time as _time
+        import json as _json
+
+        codes = [c for c in (payload.get("codes") or DEFAULT_CODES) if c]
+
+        # 东财 push2 ≥10min 状态文件门控（per-minute cron 跨进程，用文件持久化上次时间）
+        state_path = OUT_DIR / "push2_state.json"
+        last_push2 = 0.0
+        try:
+            if state_path.exists():
+                last_push2 = float(
+                    _json.loads(state_path.read_text(encoding="utf-8")).get("last_push2_ts", 0.0)
+                )
+        except Exception:
+            last_push2 = 0.0
+
+        srcs = ["tencent", "mootdx"]
+        if _time.time() - last_push2 >= EM_PUSH2_MIN_INTERVAL_S:
+            srcs.append("em_push2")
+
+        row = probe_once(codes, sources=srcs)
+        path = _append_row(row)
+
+        if "em_push2" in srcs:
+            try:
+                OUT_DIR.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(
+                    _json.dumps({"last_push2_ts": _time.time()}), encoding="utf-8"
+                )
+            except Exception as e:
+                logger.warning("[first_board_quote_probe] push2 状态写失败: %s", e)
+
+        return {
+            "time": row.get("time"),
+            "sources": srcs,
+            "codes": codes,
+            "matrix_path": str(path),
+            "tencent_ok": row.get("tencent", {}).get("ok"),
+            "mootdx_ok": row.get("mootdx", {}).get("ok"),
+            "em_push2_ok": row.get("em_push2", {}).get("ok") if "em_push2" in row else None,
+        }
+    except Exception as e:
+        logger.warning("[first_board_quote_probe] 探查失败: %s", e)
+        return {"status": f"error: {e}"}
+
+
+TaskExecutor._execute_first_board_quote_probe = _execute_first_board_quote_probe
+
+
+# ===========================================================================
+# S078：涨停历史 snapshot executor（数据地基）
+# ===========================================================================
+
+def _execute_zt_history_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S078 涨停历史 snapshot——盘后 snapshot 当日涨停池 → zt_history.db（不 prune 累积）。
+
+    数据地基：涨停池历史 >1 月无源（em/ths/akshare 均 ~1 月），每日累积供长窗 §44 复验。
+    失败 catch 不抛，返 error（采集是增强，不阻塞主流程）。
+    """
+    try:
+        from data.zt_history_store import snapshot_zt_pool
+        from vr_paths import last_trading_date_str
+        target = payload.get("date") or last_trading_date_str()
+        written = snapshot_zt_pool(target)
+        logger.info("[zt_history_snapshot] %s 涨停池 snapshot 写入 %s 行", target, written)
+        return {"date": target, "written": written, "status": "ok"}
+    except Exception as e:
+        logger.warning("[zt_history_snapshot] 采集失败: %s", e)
+        return {"status": f"error: {e}"}
+
+
+TaskExecutor._execute_zt_history_snapshot = _execute_zt_history_snapshot
 
 
 _manager = ScheduledTaskManager()

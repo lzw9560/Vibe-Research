@@ -44,6 +44,8 @@ _EXPECTED_TASK_TYPES = {
     "forward_test_daily",
     "forward_test_t1_settle",
     "first_board_t1_review",
+    "first_board_quote_probe",
+    "zt_history_snapshot",
 }
 
 

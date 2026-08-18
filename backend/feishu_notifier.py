@@ -65,24 +65,22 @@ class FeishuNotifier:
         self._ticker_last[ticker] = time.time()
 
     async def push_card(self, card: dict[str, Any], ticker: str = "global") -> bool:
-        """推送飞书卡片。"""
+        """推送飞书卡片（interactive card 渲染）。"""
         if not self.webhook:
             return False
         if not self._check_throttle(ticker):
             return False
 
         try:
-            # 使用新的通知服务
-            service = get_notification_service()
-            result = await service.send_notification(
-                channel="feishu",
-                title=card.get("header", {}).get("title", {}).get("content", "投研助手"),
-                content=card,
-                ticker=ticker,
-            )
-            if result:
+            import requests
+            # 飞书 webhook interactive card payload（渲染卡片，非 JSON 文本）
+            payload = {"msg_type": "interactive", "card": card}
+            r = requests.post(self.webhook, json=payload, timeout=15)
+            result = r.json()
+            ok = result.get("code") == 0 or result.get("StatusCode") == 0 or result.get("status") == "success"
+            if ok:
                 self._mark_sent(ticker)
-            return result
+            return ok
         except Exception:
             return False
 
