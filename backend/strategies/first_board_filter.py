@@ -34,13 +34,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from astock import em_zt_topic_pool, tencent_quote, concept_blocks  # noqa: E402
+from astock import em_zt_topic_pool, concept_blocks  # noqa: E402
 from market import _emotion  # noqa: E402  私有函数，任务要求；后续可升级公开接口
 
 _logger = logging.getLogger(__name__)
 
 # 9 维度评分落盘目录（与 vr_paths 对齐，但本模块独立不依赖 vr_paths）
 _SCORES_DIR = Path.home() / ".vibe-research"
+
+# 沪深300 涨跌幅模块级缓存（date → pct%），避免 _market_drop_pct 重复 baostock login。
+# baostock 查历史指数不入 kline_cache（缓存只含个股），故用 baostock 库实时查历史。
+_HS300_PCT_CACHE: dict[str, float | None] = {}
 
 # ===========================================================================
 # 阈值配置（待回测校准，30 天后用实际数据调）
@@ -196,38 +200,70 @@ def filter_first_board(pool: list[dict]) -> list[dict]:
     return out
 
 
-def extract_chip_structure(code: str) -> dict:
-    """调 tencent_quote 取筹码结构字段。
+def extract_chip_structure(code: str, date: str | None = None) -> dict:
+    """取 T-1 日筹码结构（换手率/量比/成交额）——历史数据，无未来函数。
+
+    数据源：baostock_kline_cache.json 历史日K线（``turn``/``amount``/``volume``）。
+    - turn：换手率%（baostock 字段，直接用）
+    - amount：成交额元（baostock 字段，直接用）
+    - vol_ratio：量比 = 当日每分钟均量 / 5 日每分钟均量
+      （当日 volume/240 ÷ 前 5 日 volume 均值/240，240 = A 股开市分钟数）
 
     Args:
         code: 6 位股票代码。
+        date: YYYY-MM-DD（T-1 日）。None → 返空 dict（无法定位历史 bar）。
 
     Returns:
         dict 含：
         - turnover_pct: float | None（换手率，百分数，如 8.5 表示 8.5%）
         - vol_ratio: float | None（量比）
-        - amount: float | None（成交额，元；tencent 返 amount_wan 万元，×1e4 转元）
+        - amount: float | None（成交额，元）
         数据缺失/请求失败 → 空 dict {}（剔除层跳过该条件，不因数据缺失误剔除）。
+
+    ⚠️ 无未来函数：全部用 date 当日及之前的历史 K 线，不用 tencent_quote 实时接口。
+    旧实现调 tencent_quote([code]) 返回 T 日收盘筹码，用 T 日数据评判 T-1 首板 = 未来函数。
     """
+    if not date:
+        return {}
+    # 归一 date 为 YYYY-MM-DD（baostock 缓存用此格式）
+    d = date if "-" in date else f"{date[:4]}-{date[4:6]}-{date[6:8]}"
     try:
-        quotes = tencent_quote([code])
+        from vr_paths import resolve_data_dir
+        cache_path = resolve_data_dir() / "baostock_kline_cache.json"
+        if not cache_path.exists():
+            return {}
+        cache = json.loads(cache_path.read_bytes())
+        bars = cache.get(code, [])
+        if not bars:
+            return {}
+        # 找 date 当日或之前最近的 bar（baostock 缓存已按日期升序）
+        target_bars = [b for b in bars if b.get("date", "") <= d]
+        if not target_bars:
+            return {}
+        target_bar = target_bars[-1]  # 最近的（就是 date 当日或之前）
+
+        out: dict = {}
+        tp = _to_float(target_bar.get("turn"))
+        if tp is not None:
+            out["turnover_pct"] = tp
+        amt = _to_float(target_bar.get("amount"))
+        if amt is not None:
+            out["amount"] = amt
+
+        # 量比 = 当日每分钟均量 / 5 日每分钟均量
+        volume = _to_float(target_bar.get("volume")) or 0.0
+        recent_5 = target_bars[-6:-1]  # 前 5 日（不含当日）
+        if recent_5 and len(recent_5) >= 1:
+            vols_5d = [_to_float(b.get("volume")) or 0.0 for b in recent_5]
+            avg_5d = sum(vols_5d) / len(vols_5d)
+            vol_ratio = (volume / 240.0) / (avg_5d / 240.0) if avg_5d > 0 else 1.0
+            out["vol_ratio"] = round(vol_ratio, 2)
+        # 数据不足（<5 日）→ 不设 vol_ratio，剔除/评分层降级跳过
+
+        return out
     except Exception as e:
-        _logger.warning("extract_chip_structure tencent_quote 失败 code=%s err=%s", code, e)
+        _logger.warning("extract_chip_structure 历史数据失败 code=%s date=%s err=%s", code, d, e)
         return {}
-    q = quotes.get(code) if quotes else None
-    if not q or not isinstance(q, dict):
-        return {}
-    out: dict = {}
-    tp = _to_float(q.get("turnover_pct"))
-    if tp is not None:
-        out["turnover_pct"] = tp
-    vr = _to_float(q.get("vol_ratio"))
-    if vr is not None:
-        out["vol_ratio"] = vr
-    amt_wan = _to_float(q.get("amount_wan"))
-    if amt_wan is not None:
-        out["amount"] = amt_wan * 1e4  # 万元 → 元
-    return out
 
 
 def extract_sector(code: str) -> dict:
@@ -321,7 +357,9 @@ def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], l
     return kept, filtered
 
 
-def exclude_layer2_chip_structure(candidates: list[dict]) -> tuple[list[dict], list[dict]]:
+def exclude_layer2_chip_structure(
+    candidates: list[dict], date: str | None = None,
+) -> tuple[list[dict], list[dict]]:
     """剔除层2：筹码结构。
 
     条件（任一命中即剔除）：
@@ -329,12 +367,14 @@ def exclude_layer2_chip_structure(candidates: list[dict]) -> tuple[list[dict], l
     - 成交额 > max_amount_yi 亿（默认 15 亿，资金分歧过大）
     - 量比 ≥ max_vol_ratio（默认 2.0，放量过大）
 
-    数据来源：tencent_quote（实时/盘后收盘行情）。
-    数据缺失降级：tencent_quote 取不到 → 该字段 None → 跳过对应条件，
+    数据来源：baostock_kline_cache.json 历史 K 线（换手/量比/成交额，无未来函数）。
+    数据缺失降级：历史数据取不到 → 该字段 None → 跳过对应条件，
     **不因数据缺失误剔除**（宁可放过，不冤杀）。
 
     Args:
         candidates: 通过层1的候选 list[dict]。
+        date: YYYY-MM-DD 或 YYYYMMDD（T-1 日，用于查 baostock 历史 K 线）。
+              None → extract_chip_structure 返空，层2 全降级跳过（不误剔）。
 
     Returns:
         (kept, filtered_records)：同层1返回格式。
@@ -348,10 +388,10 @@ def exclude_layer2_chip_structure(candidates: list[dict]) -> tuple[list[dict], l
 
     for fb in candidates:
         code = fb.get("code", "")
-        # 取筹码结构（若已缓存则复用；否则现取）
+        # 取筹码结构（若已缓存则复用；否则现取——用历史 K 线，无未来函数）
         chip = fb.get("_chip_structure")
         if chip is None:
-            chip = extract_chip_structure(code)
+            chip = extract_chip_structure(code, date)
             fb["_chip_structure"] = chip  # 缓存到候选对象，避免重复请求
 
         reasons: list[str] = []
@@ -398,30 +438,51 @@ def _sector_zt_count(first_boards: list[dict], industry: str | None) -> int:
 
 
 def _market_drop_pct(date: str) -> float | None:
-    """取大盘（上证指数）当日涨跌幅。
+    """沪深300 当日涨跌幅（历史，无未来函数）。
+
+    数据源：baostock 查 sh.000300 历史日K（``pctChg`` 字段=涨跌幅%）。
+    baostock 指数 K 线不入 baostock_kline_cache.json（缓存只含个股），
+    故用 baostock 库实时查历史指数（非实时行情，历史数据无未来函数）。
+    模块级缓存避免重复 login。
 
     Args:
-        date: YYYYMMDD（用于后续历史指数查询；当前实时源取收盘价）。
+        date: YYYY-MMDD 或 YYYY-MM-DD（归一为 YYYY-MM-DD 查 baostock）。
 
     Returns:
-        上证指数 change_pct（百分数，如 -1.8 表示跌 1.8%）。
+        沪深300 涨跌幅（百分数，如 -1.8 表示跌 1.8%）。
         取不到 → None（不阻塞层3）。
+
+    ⚠️ 无未来函数：用 date 当日历史指数数据，不用 index_quote() 实时接口。
+    旧实现调 index_quote() 返回 T 日指数，用于 T-1 市场环境 = 未来函数。
     """
+    d = date if "-" in date else f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+    # 模块级缓存（date → pct），避免重复 login/query
+    if d in _HS300_PCT_CACHE:
+        return _HS300_PCT_CACHE[d]
     try:
-        from astock import index_quote
-        indices = index_quote()
+        import baostock as bs
+        lg = bs.login()
+        if lg.error_code != "0":
+            _logger.warning("_market_drop_pct baostock login 失败 %s", lg.error_msg)
+            return None
+        rs = bs.query_history_k_data_plus(
+            "sh.000300", "date,pctChg",
+            start_date=d, end_date=d,
+        )
+        if rs.error_code != "0":
+            _logger.warning("_market_drop_pct baostock 查询失败 %s", rs.error_msg)
+            return None
+        pct: float | None = None
+        while rs.next():
+            row = rs.get_row_data()
+            if row and row[1]:
+                pct = _to_float(row[1])
+                break
+        _HS300_PCT_CACHE[d] = pct
+        return pct
     except Exception as e:
-        _logger.warning("_market_drop_pct index_quote 失败 err=%s", e)
+        _logger.warning("_market_drop_pct baostock 指数失败 date=%s err=%s", d, e)
         return None
-    if not indices:
-        return None
-    # 优先取上证指数（name 含"上证"或 sh000001）
-    for idx in indices:
-        name = str(idx.get("name", ""))
-        if "上证" in name or "000001" in name:
-            return _to_float(idx.get("change_pct"))
-    # 降级取第一个
-    return _to_float(indices[0].get("change_pct"))
 
 
 def exclude_layer3_market_env(
@@ -741,7 +802,7 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
     try:
         chip = candidate.get("_chip_structure")
         if chip is None:
-            chip = extract_chip_structure(candidate.get("code", ""))
+            chip = extract_chip_structure(candidate.get("code", ""), date)
             candidate["_chip_structure"] = chip
 
         # 子项1：换手率
@@ -1243,8 +1304,8 @@ def run_first_board_filter(date: str) -> dict:
     after_l1, filtered_l1 = exclude_layer1_seal_quality(first_boards)
     excluded.extend(filtered_l1)
 
-    # 008 层2 筹码结构
-    after_l2, filtered_l2 = exclude_layer2_chip_structure(after_l1)
+    # 008 层2 筹码结构（传 date 取历史 K 线，无未来函数）
+    after_l2, filtered_l2 = exclude_layer2_chip_structure(after_l1, compact_date)
     excluded.extend(filtered_l2)
 
     # 009-010 层3 市场环境

@@ -203,15 +203,17 @@ class TestExcludeLayers:
     def test_layer2_high_turnover_excluded(self, monkeypatch):
         """换手>25% 剔除。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
-        def mock_tq(codes):
-            return {c: _make_tencent_quote(turnover_pct=28.0) for c in codes}
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq)
+        # mock extract_chip_structure 返历史筹码（turnover_pct 字段名）
+        monkeypatch.setattr(
+            "strategies.first_board_filter.extract_chip_structure",
+            lambda code, date: {"turnover_pct": 28.0, "vol_ratio": 1.0, "amount": 5e8}
+        )
 
         fbs = [
             _make_first_board(code="001"),  # 28% 换手 → 剔除
             _make_first_board(code="002"),  # 同 mock，28% → 剔除
         ]
-        kept, filtered = exclude_layer2_chip_structure(fbs)
+        kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
         # 两个都 28% 换手 → 都剔除
         assert len(kept) == 0
         assert len(filtered) == 2
@@ -220,19 +222,16 @@ class TestExcludeLayers:
     def test_layer2_high_amount_excluded(self, monkeypatch):
         """成交额>15亿 剔除。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
-        # tencent amount_wan=200000 万=20亿(>15亿) ; 50000 万=5亿(保留)
-        def mock_tq(codes):
-            out = {}
-            for c in codes:
-                out[c] = _make_tencent_quote(amount_wan=200000.0 if c == "001" else 50000.0)
-            return out
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq)
+        # 001: 20亿(>15亿) 剔除；002: 5亿 保留
+        def mock_chip(code, date):
+            return {"amount": 20e8 if code == "001" else 5e8, "turnover_pct": 8.0, "vol_ratio": 1.0}
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip)
 
         fbs = [
-            _make_first_board(code="001", amount=20e8),  # 20亿 tencent+pool 都大 → 剔除
+            _make_first_board(code="001", amount=20e8),  # 20亿 → 剔除
             _make_first_board(code="002", amount=5e8),   # 5亿 → 保留
         ]
-        kept, filtered = exclude_layer2_chip_structure(fbs)
+        kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
         assert [c["code"] for c in kept] == ["002"]
         assert filtered[0]["code"] == "001"
         assert "成交额" in filtered[0]["reason"]
@@ -240,31 +239,29 @@ class TestExcludeLayers:
     def test_layer2_high_vol_ratio_excluded(self, monkeypatch):
         """量比≥2.0 剔除。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
-        def mock_tq(codes):
-            out = {}
-            for c in codes:
-                out[c] = _make_tencent_quote(vol_ratio=2.5 if c == "001" else 1.0)
-            return out
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq)
+        def mock_chip(code, date):
+            return {"vol_ratio": 2.5 if code == "001" else 1.0,
+                    "turnover_pct": 8.0, "amount": 5e8}
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip)
 
         fbs = [
             _make_first_board(code="001"),
             _make_first_board(code="002"),
         ]
-        kept, filtered = exclude_layer2_chip_structure(fbs)
+        kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
         assert [c["code"] for c in kept] == ["002"]
         assert "量比" in filtered[0]["reason"]
 
     def test_layer2_tencent_missing_no_crash(self, monkeypatch):
-        """tencent_quote 取不到（返空 dict）时不误剔（宁可放过不冤杀）。"""
+        """extract_chip_structure 取不到（返空 dict）时不误剔（宁可放过不冤杀）。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
-        def mock_tq(codes):
-            return {}  # 空返回
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq)
+        # mock extract_chip_structure 返空（历史数据缺失）
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+                            lambda code, date: {})
 
         fbs = [_make_first_board(code="001", amount=1e8)]  # pool amount 1亿，正常
-        kept, filtered = exclude_layer2_chip_structure(fbs)
-        # tencent 缺失 → 跳过换手/量比/amount(降级用 pool 的 1亿)，1亿<15亿不剔
+        kept, filtered = exclude_layer2_chip_structure(fbs, "20260818")
+        # 筹码缺失 → 跳过换手/量比/amount(降级用 pool 的 1亿)，1亿<15亿不剔
         assert len(kept) == 1
         assert filtered == []
 
@@ -278,10 +275,9 @@ class TestExcludeLayers:
             "strategies.first_board_filter._emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
-        # mock index_quote 返上证跌 2%
-        def mock_idx():
-            return [{"name": "上证指数", "change_pct": -2.0}]
-        monkeypatch.setattr("astock.index_quote", mock_idx)
+        # mock _market_drop_pct 返沪深300 跌 2%（历史数据，无未来函数）
+        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct",
+                            lambda d: -2.0)
 
         fb = _make_first_board(code="001", industry="半导体")
         kept, filtered, env = exclude_layer3_market_env([fb], "20260818", first_boards=[fb])
@@ -299,8 +295,8 @@ class TestExcludeLayers:
             "strategies.first_board_filter._emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
-        # mock index_quote 返涨（非高风险）
-        monkeypatch.setattr("astock.index_quote", lambda: [{"name": "上证", "change_pct": 0.5}])
+        # mock _market_drop_pct 返涨（非高风险）
+        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct", lambda d: 0.5)
         # mock concept_blocks 返空 → 无题材
         monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
 
@@ -319,7 +315,7 @@ class TestExcludeLayers:
             "strategies.first_board_filter._emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
-        monkeypatch.setattr("astock.index_quote", lambda: [{"name": "上证", "change_pct": 0.5}])
+        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct", lambda d: 0.5)
         # mock concept_blocks 返有题材
         monkeypatch.setattr(
             "strategies.first_board_filter.concept_blocks",
@@ -368,7 +364,8 @@ class TestScoreCandidate:
         """总分在 0-100 范围。"""
         from strategies.first_board_filter import score_candidate
         # mock 所有维度数据源为缺失 → 各维 50（auction=0）
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", lambda c: {})
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+                            lambda code, date: {})
         monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
         monkeypatch.setattr("astock.ths_limit_up_pool", lambda d: [])
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
@@ -465,11 +462,10 @@ class TestScoreCandidate:
     def test_dim4_chip_scoring(self, monkeypatch):
         """筹码结构：健康换手+正常量比+适中成交=高分。新签名返 (score, raw)。"""
         from strategies.first_board_filter import score_dim4_chip
-        # 健康：换手8% + 量比1.0 + 成交5亿
-        def mock_tq(codes):
-            return {c: _make_tencent_quote(turnover_pct=8.0, vol_ratio=1.0, amount_wan=50000.0)
-                    for c in codes}
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq)
+        # 健康：换手8% + 量比1.0 + 成交5亿（mock 历史筹码）
+        def mock_chip(code, date):
+            return {"turnover_pct": 8.0, "vol_ratio": 1.0, "amount": 5e8}
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip)
 
         healthy = _make_first_board(code="001", amount=5e8)
         s_healthy, raw_healthy = score_dim4_chip(healthy, "20260818")
@@ -477,13 +473,12 @@ class TestScoreCandidate:
         # raw 字段落盘校验
         assert raw_healthy["turnover"] == 8.0
         assert raw_healthy["vol_ratio"] == 1.0
-        assert raw_healthy["amount"] == 5e8  # tencent amount_wan 50000 *1e4 = 5e8
+        assert raw_healthy["amount"] == 5e8
 
         # 松动：换手30% + 量比2.5 + 成交20亿
-        def mock_tq2(codes):
-            return {c: _make_tencent_quote(turnover_pct=30.0, vol_ratio=2.5, amount_wan=200000.0)
-                    for c in codes}
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq2)
+        def mock_chip2(code, date):
+            return {"turnover_pct": 30.0, "vol_ratio": 2.5, "amount": 20e8}
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip2)
 
         loose = _make_first_board(code="002", amount=20e8)
         s_loose, raw_loose = score_dim4_chip(loose, "20260818")
@@ -499,17 +494,16 @@ class TestScoreCandidate:
 class TestDataMissingDegradation:
     """026：测试数据缺失降级不崩不误剔。"""
 
-    def test_tencent_quote_missing_no_crash(self, monkeypatch):
-        """tencent_quote 取不到时剔除层跳过该条件（不因数据缺失误剔除）。"""
+    def test_chip_data_missing_no_crash(self, monkeypatch):
+        """extract_chip_structure 取不到（返空 dict）时不误剔（宁可放过不冤杀）。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
-        # tencent_quote 抛异常 → extract_chip_structure 返空 dict → 不误剔
-        def boom(codes):
-            raise ConnectionError("网络故障")
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", boom)
+        # mock extract_chip_structure 返空（历史 baostock 缓存缺失）
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+                            lambda code, date: {})
 
-        # pool amount 1亿（<15亿不剔），tencent 缺失 → 跳过换手/量比
+        # pool amount 1亿（<15亿不剔），筹码缺失 → 跳过换手/量比
         fb = _make_first_board(code="001", amount=1e8)
-        kept, filtered = exclude_layer2_chip_structure([fb])
+        kept, filtered = exclude_layer2_chip_structure([fb], "20260818")
         assert len(kept) == 1
         assert filtered == []
 
@@ -520,8 +514,9 @@ class TestDataMissingDegradation:
         def boom(d):
             raise RuntimeError("情绪数据故障")
         monkeypatch.setattr("strategies.first_board_filter._emotion", boom)
-        # index_quote 也抛 → market_drop_pct=None
-        monkeypatch.setattr("astock.index_quote", lambda: (_ for _ in ()).throw(RuntimeError("x")))
+        # _market_drop_pct 返 None（baostock 失败内部 try/except 降级返 None，不抛）
+        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct",
+                            lambda d: None)
         # concept_blocks 返有题材 → 避免孤板剔除，确保走完流程
         monkeypatch.setattr(
             "strategies.first_board_filter.concept_blocks",
@@ -542,7 +537,8 @@ class TestDataMissingDegradation:
         """所有维度数据源都取不到时，候选仍能跑完，各维返 50 中性（auction=0）。"""
         from strategies.first_board_filter import rank_candidates
         # mock 所有数据源缺失
-        monkeypatch.setattr("strategies.first_board_filter.tencent_quote", lambda c: {})
+        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+                            lambda code, date: {})
         monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
         monkeypatch.setattr("astock.ths_limit_up_pool", lambda d: [])
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
@@ -580,19 +576,18 @@ class TestDataMissingDegradation:
         ]
         monkeypatch.setattr(fbf, "em_zt_topic_pool", lambda *a, **kw: pool)
 
-        # mock tencent_quote 正常筹码（不触发层2剔除）
-        def mock_tq(codes):
-            return {c: _make_tencent_quote(turnover_pct=8.0, vol_ratio=1.0, amount_wan=50000.0)
-                    for c in codes}
-        monkeypatch.setattr(fbf, "tencent_quote", mock_tq)
+        # mock extract_chip_structure 返历史筹码（不触发层2剔除）
+        def mock_chip(code, date):
+            return {"turnover_pct": 8.0, "vol_ratio": 1.0, "amount": 5e8}
+        monkeypatch.setattr(fbf, "extract_chip_structure", mock_chip)
 
         # mock _emotion 正常
         monkeypatch.setattr(
             fbf, "_emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
-        # mock index_quote 涨（非高风险）
-        monkeypatch.setattr("astock.index_quote", lambda: [{"name": "上证", "change_pct": 0.5}])
+        # mock _market_drop_pct 涨（非高风险，历史数据无未来函数）
+        monkeypatch.setattr(fbf, "_market_drop_pct", lambda d: 0.5)
 
         # mock concept_blocks 有题材（避免孤板剔除）
         monkeypatch.setattr(
