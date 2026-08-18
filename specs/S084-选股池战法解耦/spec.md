@@ -185,23 +185,24 @@
   - [ ] R6.1 向后兼容：新参数默认 None，既有调用不传 card 行为不变
   - [ ] R6.2 传 card 时从 card 取全部子对象传给 match_strategies
 
-### 3.3 前端选股池 Tab（Q5=A + Q4=A）
+### 3.3 前端选股池 Tab（Q5=A 复用既有组件 + Q4=A 战法指向 PreMarketBriefing）
 
 - [ ] R7：`Workflow.tsx` 加两级 Tab 导航（选股池 / 战法）
-  - [ ] R7.1 选股池 Tab：调既有 `runFunnel(stage, date)` API 展示漏斗 R1→R2→R3 三层 + final_candidates（DiagnosisCard 列表含全部因子）
-  - [ ] R7.2 选股池 Tab 展示候选标的 + 六类指标 + 风险标记（复用 PreMarketBriefing 的 FactorSection/CandidateFunnelEmbed 组件）
-  - [ ] R7.3 选股池 Tab 不调 `/api/workflow/pre-market`（解耦，直接调选股池 API）
-- [ ] R8：战法 Tab 保留既有战法流入口卡片网格（首板流/弱转强接力/反包流等 7 个卡片）
-  - [ ] R8.1 点击战法卡片进入战法特定筛选页面（从选股池缓存读 DiagnosisCard 做战法匹配）
-  - [ ] R8.2 战法特定筛选页面调 `match_strategies` 传入 DiagnosisCard（含全部因子）
+  - [ ] R7.1 选股池 Tab：调既有 `runFunnel(stage, date)` API，用既有 `FunnelLayers` + `CandidateFunnelEmbed` 组件展示漏斗 R1→R2→R3 三层 + final_candidates（DiagnosisCard 列表含全部因子）。不新建组件
+  - [ ] R7.2 选股池 Tab 不调 `/api/workflow/pre-market`（解耦，直接调选股池 API）
+  - [ ] R7.3 选股池 Tab 展示市场宽度 market_context（breadth/炸板率/封板率/连板高度）—— 复用 DailyReview 的展示样式
+- [ ] R8：战法 Tab 保留既有战法流入口卡片网格（7 个卡片：首板流/弱转强接力/反包流等）
+  - [ ] R8.1 战法卡片 `to` 指向 `/workflow/pre-market?strategy={code}`（Q4=A 复用 PreMarketBriefing，已实现）
+  - [ ] R8.2 PreMarketBriefing 的 `?strategy=` 自动选中战法 Tab（已实现 C2 修复 + 前端战法选项已补 PRD 2 战法）
+  - [ ] R8.3 战法命中展示在 PreMarketBriefing 的 StrategyGroupTabs + scored_candidates + P2RiskPanel（已实现）
 
-### 3.4 pre_market_workflow 解耦（Q1=A 选股池独立）
+### 3.4 pre_market_workflow 保留不改（Q3=C 三入口并存）
 
-- [ ] R9：`pre_market_workflow.run()` 不再内部调选股池筛选 + 战法匹配
-  - [ ] R9.1 选股池产出由选股池 API 独立调 `run_funnel`（前端选股池 Tab 触发）
-  - [ ] R9.2 战法匹配由战法 API 独立调 `match_strategies`（前端战法 Tab 触发，从选股池缓存读 DiagnosisCard）
-  - [ ] R9.3 pre_market_workflow 保留仓位建议 + S079 后处理 + 推送（编排层，调选股池缓存 + 战法缓存产出）
-  - [ ] R9.4 或者 pre_market_workflow 完全废弃（选股池 Tab + 战法 Tab 各自独立，不需要编排层）—— 实现阶段核实
+- [ ] R9：`pre_market_workflow.run()` **保留原样不改**
+  - [ ] R9.1 pre_market_workflow 继续做 ①获取涨停池 ②候选池筛选 ③战法匹配 ④仓位建议 ⑤S079 后处理 ⑥推送（既有行为不变）
+  - [ ] R9.2 选股池 Tab + 战法 Tab 是**新增独立入口**，和 pre_market_workflow（盘前简报 `/workflow/pre-market`）并存
+  - [ ] R9.3 用户可从选股池 Tab 独立看选股池、从战法 Tab 独立看战法卡片、从盘前简报看完整串联视图。三入口并存，不冲突
+  - [ ] R9.4 旧入口（盘前简报）保留过渡，用户逐渐迁移到新入口。未来视使用情况决定是否废弃旧入口
 
 ---
 
@@ -217,7 +218,7 @@
 | `backend/candidate_funnel/diagnosis.py`（修改） | build_diagnosis_card 塞入 gene_score/pool_item/derived |
 | `backend/limitup_strategy.py`（修改） | match_strategies 各 elif 从 DiagnosisCard 读因子，删各自取数代码 |
 | `backend/strategies/strategy_matcher.py`（修改） | match() 改为接受 DiagnosisCard（或多参数） |
-| `backend/pre_market_workflow.py`（修改） | 解耦：选股池+战法独立，pre_market_workflow 退化为编排层或废弃 |
+| `backend/pre_market_workflow.py`（**不改**） | Q3=C 保留原样，三入口并存，不重构 |
 | `backend/routers/workflow.py`（修改） | 选股池 API 透传 DiagnosisCard 含 3 子对象 |
 | `frontend/src/pages/Workflow.tsx`（修改） | 加两级 Tab（选股池/战法），选股池 Tab 调 runFunnel API |
 | `frontend/src/lib/candidates.ts`（修改） | DiagnosisCard 类型加 3 子对象字段 |
