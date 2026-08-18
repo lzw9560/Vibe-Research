@@ -133,6 +133,12 @@ def build_indicator_set(
     # S057：流通市值——activity source 已取（tencent_quote.float_cap），塞入 IndicatorSet
     ind.float_market_cap = a.get("float_market_cap")
 
+    # S081：PRD 2 战法因子（activity source 从 K线扩展算，塞入 IndicatorSet 消除 match_strategies 重复取数）
+    ind.max_high_pct = a.get("max_high_pct")
+    ind.shadow_length_pct = a.get("shadow_length_pct")
+    ind.ma_5_status = a.get("ma_5_status")
+    ind.prev_turnover_pct = a.get("prev_turnover_pct")
+
     au = auction.get(code, {})
     ind.auction_open_pct = au.get("auction_open_pct")
 

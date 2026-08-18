@@ -47,6 +47,9 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
             "vol_ratio": None, "amount_yi": None, "amplitude_pct": None,
             "limit_up": None, "limit_down": None, "missing": {},
             "float_market_cap": None,  # S057：八项标准①流通市值
+            # S081：PRD 2 战法因子（历史日路径在下方从 K线扩展算）
+            "max_high_pct": None, "shadow_length_pct": None,
+            "ma_5_status": None, "prev_turnover_pct": None,
         }
         model = quote_from_tencent(c, today_quote.get(c, {}))
         entry["name"] = model.name
@@ -93,6 +96,33 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
             entry["turnover_pct"] = round(vol * 10000 / float_shares, 2)
         else:
             entry["missing"]["turnover_pct"] = "流通股本近似未取得（individual_data 宕）"
+
+        # S081：PRD 2 战法因子扩展（从已取 K线 bars 算，不重新取数）
+        # max_high_pct：当日最高涨幅 = (high/prev_close - 1)*100
+        if high is not None and prev_close and prev_close > 0:
+            entry["max_high_pct"] = round((high / prev_close - 1) * 100, 2)
+        # shadow_length_pct：上影线 = (high/close - 1)*100
+        if high is not None and close and close > 0:
+            entry["shadow_length_pct"] = round((high / close - 1) * 100, 2)
+        # ma_5_status：5日均线趋势（最近5日 close 均值 vs 前移一日均值）
+        if idx >= 5:
+            closes_5d = [_f(b.get("close")) for b in bars[idx-5:idx+1]]
+            closes_5d = [c for c in closes_5d if c is not None]
+            if len(closes_5d) >= 6:
+                ma5_today = sum(closes_5d[-5:]) / 5
+                ma5_prev = sum(closes_5d[-6:-1]) / 5
+                if ma5_today > ma5_prev:
+                    entry["ma_5_status"] = "Upward"
+                elif ma5_today < ma5_prev:
+                    entry["ma_5_status"] = "Downward"
+                else:
+                    entry["ma_5_status"] = "Flat"
+        # prev_turnover_pct：前日换手率（前日 bar vol*10000/float_shares）
+        if prev is not None and float_shares and float_shares > 0:
+            prev_vol = _f(prev.get("vol"))
+            if prev_vol is not None:
+                entry["prev_turnover_pct"] = round(prev_vol * 10000 / float_shares, 2)
+
         for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):
             if entry[k] is None and k not in entry["missing"]:
                 entry["missing"][k] = "K线字段未取得"
@@ -137,6 +167,11 @@ def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
                 "_as_of": as_of,
                 # S057：流通市值（元）—— 供八项标准①判定
                 "float_market_cap": model.float_market_cap,
+                # S081：PRD 2 战法因子（当日 tencent_quote 无 K线 bars，降级 None）
+                "max_high_pct": None,
+                "shadow_length_pct": None,
+                "ma_5_status": None,
+                "prev_turnover_pct": None,
             }
             missing: dict[str, str] = {}
             for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):

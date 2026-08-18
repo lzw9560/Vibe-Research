@@ -64,6 +64,11 @@ class IndicatorSet(BaseModel):
     holder_num_change: Optional[float] = None
     # S057：八项标准所需字段
     float_market_cap: Optional[float] = None  # 流通市值（元）；activity source 已有，build_indicator_set 塞入
+    # S081：PRD 2 战法因子（从 K线扩展算，消除 match_strategies 重复取数）
+    max_high_pct: Optional[float] = None       # 当日最高涨幅 = (high/prev_close - 1)*100
+    shadow_length_pct: Optional[float] = None  # 上影线长度 = (high/close - 1)*100
+    ma_5_status: Optional[str] = None          # 5日均线状态 "Upward"/"Downward"/"Flat"
+    prev_turnover_pct: Optional[float] = None  # 前日换手率（供 vol_ratio_1d 计算）
     # 数据缺失透明（AC6）：field -> 原因
     missing: dict[str, str] = {}
 

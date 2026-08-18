@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from pydantic import BaseModel
+from typing import Any
 
 from limitup_screener import (
     DISCLAIMER,
@@ -689,8 +690,17 @@ def calc_weather_fit(strategy_code: str, weather_state: str | None) -> str:
     return "不适配"
 
 
-def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) -> list[StrategySignal]:
-    """为个股匹配所有适用战法并生成信号（教育性展示）。"""
+def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None, indicators: Any = None) -> list[StrategySignal]:
+    """为个股匹配所有适用战法并生成信号（教育性展示）。
+
+    S081 重构：indicators 是 candidate_funnel.IndicatorSet（漏斗 R2 输出），
+    PRD 2 战法从 indicators 读 max_high_pct/shadow_length_pct/ma_5_status/prev_turnover_pct，
+    消除各自调 astock/kline 重复取数（漏斗 activity.py 已取 K线扩展算）。
+    - indicators=None（默认）：PRD 战法 K线派生因子取 None 不命中（降级，不报错）
+    - indicators 非空：PRD 战法从 indicators 读因子做判定
+    保留从 pool_item 读：lbc/hs/zdp/p（涨停池原始字段，漏斗不含）
+    保留从 S070 R7 读：broken_duration_min/max_drop_pct/last_lock_time（漏斗不含分时派生）
+    """
     signals: list[StrategySignal] = []
 
     for strategy in STRATEGY_REGISTRY:
@@ -832,20 +842,14 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
                 max_drop_pct = derived.get("max_drop_pct")
                 last_lock_time = derived.get("last_lock_time")
 
-                # A5 vol_ratio_1d：hs / 前日 hs（前日取不到标 None 降级）
+                # A5 vol_ratio_1d：当日换手 / 前日换手（从 indicators 读，消除重复取数）
+                # S081 重构：原从 S070 snapshots 取前日 hs（恒 None 缺口），改为从
+                # IndicatorSet.prev_turnover_pct 读（activity.py 从 K线 prev bar 算）
                 vol_ratio_1d = None
-                if hs and hs > 0:
-                    try:
-                        from datetime import datetime as _dt2, timedelta as _td
-                        _yest = (_dt2.now() - _td(days=1)).strftime("%Y-%m-%d")
-                        _prev_snaps = get_snapshots_by_code(code, _yest)
-                        if _prev_snaps:
-                            # 前日最后一条快照的 hs（若 snapshot 表存 hs；否则从 pool 历史取）
-                            # 注：seal_intraday_snapshots 无 hs 字段，前日 hs 需从涨停池历史取
-                            # 此处简化：前日 hs 取不到标 None 降级（不臆造）
-                            vol_ratio_1d = None  # 标 None，实际需历史涨停池取前日 hs
-                    except Exception:
-                        vol_ratio_1d = None
+                if indicators is not None and hs is not None and hs > 0:
+                    prev_hs = getattr(indicators, "prev_turnover_pct", None)
+                    if prev_hs and prev_hs > 0:
+                        vol_ratio_1d = round(hs / prev_hs, 2)
 
                 # A6 5 因子硬阈值判定（PRD §2.1，阈值探索性，进 config 可配）
                 # 阈值默认值（探索性，外部 PRD 拍定，零数据支撑）
@@ -880,17 +884,10 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
                 # ≤3 命中不输出（confidence=0，matches 为空 → continue）
 
         elif strategy["code"] == "pattern_reversal":
-            # B4 因子取数：close_pct 从 zdp；max_high_pct/shadow_length_pct 从 K线
+            # B4 因子取数：close_pct 从 zdp（pool_item）；K线派生从 indicators 读
+            # S081 重构：原调 kline_rebuild._get_kline_bars 重复取 K线（漏斗 activity.py 已取），
+            # 改为从 indicators 读 max_high_pct/shadow_length_pct/ma_5_status/volume
             close_pct = pool_item.get("zdp") if pool_item else None
-            # K线取数（复用 limitup_screener/kline_rebuild._get_kline_bars 模式）
-            bars: list = []
-            try:
-                from limitup_screener.kline_rebuild import _get_kline_bars
-                from datetime import datetime as _dt3
-                _end = _dt3.now().strftime("%Y-%m-%d")
-                bars = _get_kline_bars(code, _end, lookback_days=10)
-            except Exception:
-                bars = []
 
             max_high_pct = None
             shadow_length_pct = None
@@ -898,25 +895,14 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
             volume_1d = None
             volume_2d = None
 
-            if bars and len(bars) >= 2:
-                today_bar = bars[-1]
-                prev_close = bars[-2].close if len(bars) >= 2 else None
-                # max_high_pct：今日最高涨幅 = (今日 high - 前日 close) / 前日 close * 100
-                if today_bar.high and prev_close and prev_close > 0:
-                    max_high_pct = (today_bar.high - prev_close) / prev_close * 100
-                # shadow_length_pct：上影线 = (今日 high - 今日 close) / 前日 close * 100
-                if today_bar.high and today_bar.close and prev_close and prev_close > 0:
-                    shadow_length_pct = (today_bar.high - today_bar.close) / prev_close * 100
-                # volume_1d：今日成交量；volume_2d：前日成交量
-                volume_1d = today_bar.volume
-                volume_2d = bars[-2].volume if len(bars) >= 2 else None
-                # ma_5_status：5 日均线趋势（后 5 日 close 均值 vs 前移一日均值）
-                if len(bars) >= 6:
-                    closes = [b.close for b in bars[-6:] if b.close]
-                    if len(closes) >= 6:
-                        ma5_today = sum(closes[-5:]) / 5
-                        ma5_prev = sum(closes[-6:-1]) / 5
-                        ma_5_status = "Upward" if ma5_today > ma5_prev else "Downward"
+            # K线派生因子从 indicators 读（消除重复取数）
+            if indicators is not None:
+                max_high_pct = getattr(indicators, "max_high_pct", None)
+                shadow_length_pct = getattr(indicators, "shadow_length_pct", None)
+                ma_5_status = getattr(indicators, "ma_5_status", None)
+            # volume：从 pool_item.fundamt（成交额）近似，无前日对比降级
+            # 注：原代码用 bars[-1].volume vs bars[-2].volume，现 indicators 无 volume 字段，
+            # 降级 volume_1d/volume_2d=None（放量因子不命中，需漏斗扩展 volume 字段后补）
 
             # B6 5 因子硬阈值判定（PRD §2.2，阈值探索性）
             import config as _cfg_mod2
@@ -966,8 +952,9 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
             else:
                 entry_price = 0.0
         elif strategy["code"] == "pattern_reversal":
-            # 触发价 = _round_to_tick_size(昨日K线最高价 + 0.01)
-            _prev_high = bars[-1].high if bars else None
+            # 触发价 = _round_to_tick_size(涨停价 + 0.01)；涨停价从 pool_item.p
+            # S081 重构：原从 bars[-1].high 取（已删 K线取数），改为从 pool_item.p 近似
+            _prev_high = pool_item.get("p") if pool_item else None
             if _prev_high and _prev_high > 0:
                 entry_price = _round_to_tick_size(_prev_high + 0.01)
             else:
