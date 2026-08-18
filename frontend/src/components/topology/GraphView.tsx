@@ -2,10 +2,16 @@
 // 复用 useECharts hook（S024-B 抽公共）：init+setOption+resize+dispose 统一管理。
 // 合规（§0）：拓扑只呈现客观关联（同板块/共流入/梯队/席位），不输出方向词。
 import { useRef } from "react";
-import type * as echarts from "echarts";
+import * as echarts from "echarts/core";
+import type { EChartsOption } from "echarts";
+import { GraphChart, TreeChart } from "echarts/charts";
 import { useECharts } from "@/hooks/useECharts";
 import type { GraphData, GraphEdge, GraphNode, LayoutMode } from "./types";
 import { EDGE_COLORS, EDGE_COLOR_FALLBACK } from "./edgeColors";
+
+// S082 阶段2：graph/tree 算法注册下沉到本组件（从公共 useECharts 移出），
+// 随 GraphView chunk 加载——首页/其他页不引 GraphView 即不背 graph 力导向 + tree 体积。
+echarts.use([GraphChart, TreeChart]);
 
 interface GraphViewProps {
   data: GraphData;
@@ -55,7 +61,7 @@ function buildTree(data: GraphData): TreeNode[] {
 }
 
 /** echarts 力导向图 option。 */
-function buildGraphOption(data: GraphData): echarts.EChartsOption {
+function buildGraphOption(data: GraphData): EChartsOption {
   const categoryNames = [
     ...new Set(data.nodes.map((n) => n.category).filter((c): c is string => !!c)),
   ];
@@ -99,7 +105,7 @@ function buildGraphOption(data: GraphData): echarts.EChartsOption {
 }
 
 /** echarts 正交树 option（左→右）。 */
-function buildTreeOption(data: GraphData): echarts.EChartsOption {
+function buildTreeOption(data: GraphData): EChartsOption {
   const treeData = buildTree(data);
   return {
     tooltip: { trigger: "item" },

@@ -15,7 +15,7 @@ const echartsMocks = vi.hoisted(() => {
   const init = vi.fn(() => ({ setOption, dispose, resize }));
   return { init, setOption, dispose, resize };
 });
-vi.mock("echarts", () => ({ init: echartsMocks.init, default: { init: echartsMocks.init } }));
+vi.mock("echarts/core", () => ({ init: echartsMocks.init, use: vi.fn(), default: { init: echartsMocks.init, use: vi.fn() } }));
 
 // api mock：仅 backtestScatter/backtestResult 被页调用。
 const mockApi = vi.hoisted(() => ({

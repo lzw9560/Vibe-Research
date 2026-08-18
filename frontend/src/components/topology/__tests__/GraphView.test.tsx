@@ -14,9 +14,10 @@ const echartsMocks = vi.hoisted(() => {
   return { init, setOption, dispose, resize, on };
 });
 
-vi.mock("echarts", () => ({
+vi.mock("echarts/core", () => ({
   init: echartsMocks.init,
-  default: { init: echartsMocks.init },
+  use: vi.fn(),
+  default: { init: echartsMocks.init, use: vi.fn() },
 }));
 
 import { GraphView } from "../GraphView";

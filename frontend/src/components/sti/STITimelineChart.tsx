@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
-import * as echarts from "echarts";
+import * as echarts from "echarts/core";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/lib/utils";
 import { api, ApiError, type STITimelineItem } from "@/lib/api";

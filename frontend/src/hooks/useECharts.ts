@@ -3,7 +3,35 @@
 // 用法：const ref = useRef<HTMLDivElement>(null);
 //       useECharts(ref, () => option, [data], { skip: isEmpty, onReady: i => i.on("click", h) });
 import { useEffect, useRef, type RefObject, type DependencyList } from "react";
-import * as echarts from "echarts";
+import * as echarts from "echarts/core";
+import type { EChartsOption } from "echarts";
+import { LineChart, ScatterChart, RadarChart } from "echarts/charts";
+import {
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent,
+  RadarComponent,
+  MarkAreaComponent,
+  GraphicComponent,
+} from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+
+// S082：按需注册——只打包项目实际用到的 chart/component/renderer。
+// 阶段2：GraphChart/TreeChart 下沉到 GraphView.tsx 自行 use（仅 Topology 页用，随其 chunk）。
+echarts.use([
+  LineChart,
+  ScatterChart,
+  RadarChart,
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent,
+  RadarComponent,
+  MarkAreaComponent,
+  GraphicComponent,
+  CanvasRenderer,
+]);
 
 interface UseEChartsOptions {
   /** 为 true 时跳过 init（空数据 / loading 等守卫）。 */
@@ -27,7 +55,7 @@ interface UseEChartsOptions {
  */
 export function useECharts(
   ref: RefObject<HTMLDivElement | null>,
-  buildOption: () => echarts.EChartsOption,
+  buildOption: () => EChartsOption,
   deps: DependencyList,
   options?: UseEChartsOptions,
 ): RefObject<echarts.ECharts | null> {

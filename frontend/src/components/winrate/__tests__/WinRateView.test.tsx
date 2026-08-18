@@ -13,7 +13,7 @@ const echartsMocks = vi.hoisted(() => {
   return { init, setOption, dispose, resize };
 });
 
-vi.mock("echarts", () => ({ init: echartsMocks.init, default: { init: echartsMocks.init } }));
+vi.mock("echarts/core", () => ({ init: echartsMocks.init, use: vi.fn(), default: { init: echartsMocks.init, use: vi.fn() } }));
 
 const hooks = vi.hoisted(() => ({
   useWinRateStats: vi.fn(),
