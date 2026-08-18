@@ -150,13 +150,20 @@ def execute_entry(selected: list[dict], entry_price: float | None = None) -> lis
 
 
 def notify_entry_ready(selected: list[dict]) -> bool:
-    """建仓飞书通知——候选达 3 只推送"首板流候选已满 N 只，可建仓"。
+    """建仓飞书通知——候选达 3 只推送候选名单给用户。
+
+    content 含（Markdown 格式，飞书渲染表格）：
+    - 摘要：首板流候选已满 N 只，可建仓（绿灯 3-5 只等权/黄灯最多 3 只 15%）
+    - 候选名单表格：排名 | 代码 | 名称 | 评分
+    - 风控提示：止损 -3% / 止盈 +5% / T+1 必卖
+    - §44 标注：9 维度评分未 validated 仅参考
 
     复用 NotificationService（与 first_board_market_env 同款）。
     候选<3 只不推送（spec 2.4：等权 3-5 只，不足 3 只不建仓）。
 
     Args:
-        selected: select_for_entry 返回的选股 list。
+        selected: select_for_entry 返回的选股 list。每项含
+                   code/name/total_score/entry_rank（见 select_for_entry 产出）。
 
     Returns:
         bool：是否推送成功（至少一个渠道成功）。渠道未配置/候选<3 → False。
@@ -165,13 +172,25 @@ def notify_entry_ready(selected: list[dict]) -> bool:
         _logger.info("[notify_entry_ready] 候选 %d 只 <3，不推送建仓通知", len(selected))
         return False
 
-    codes = ", ".join(f"{s.get('code', '')} {s.get('name', '')}" for s in selected)
+    # 构造 Markdown content（飞书支持 Markdown 表格）
     pct = selected[0].get("position_pct", 0) * 100 if selected else 0
-    content = (
-        f"【首板流建仓提醒】候选已满 {len(selected)} 只，可建仓\n"
-        f"单股仓位 {pct:.0f}%，T+1 必卖（不赌连板）\n"
-        f"候选：{codes}"
-    )
+    lines: list[str] = []
+    lines.append(f"**首板流候选已满 {len(selected)} 只，可建仓**（单股仓位 {pct:.0f}%）")
+    lines.append("")
+    lines.append("| 排名 | 代码 | 名称 | 评分 |")
+    lines.append("|---|---|---|---|")
+    for s in selected:
+        rank = s.get("entry_rank", "-")
+        code = s.get("code", "")
+        name = s.get("name", "")
+        total = s.get("total_score", 0)
+        # total_score 可能 None（数据缺失），降级显示 "-"
+        total_str = f"{total:.1f}" if isinstance(total, (int, float)) else "-"
+        lines.append(f"| {rank} | {code} | {name} | {total_str} |")
+    lines.append("")
+    lines.append("⚠ 风控：止损 −3% / 止盈 +5% / T+1 必卖（不赌连板）")
+    lines.append("⚠ §44 未 validated 仅参考；阈值/权重待回测校准")
+    content = "\n".join(lines)
 
     try:
         from notification.notification_service import NotificationService
@@ -185,7 +204,10 @@ def notify_entry_ready(selected: list[dict]) -> bool:
         return False
 
     try:
-        return bool(ns.send(content, route_type="alert", severity="info"))
+        ok = bool(ns.send(content, route_type="alert", severity="info"))
+        if ok:
+            _logger.info("[notify_entry_ready] 候选名单已推送 %d 只", len(selected))
+        return ok
     except Exception as e:
         _logger.warning("[notify_entry_ready] 推送失败 err=%s", e)
         return False
