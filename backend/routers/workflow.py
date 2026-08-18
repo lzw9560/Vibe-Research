@@ -915,14 +915,36 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
     """S075：首板流候选池——返回候选+剔除原因+9维度评分，供前端pipeline展示。
 
     数据来自 run_first_board_filter（首板过滤+三层剔除+9维度评分+落盘）。
+    传历史日期时优先读快照（避免重复拉东财涨停池，历史保留期约 3 周），
+    无快照再实时跑。
     诚实标注：9维度评分§44未validated仅参考；阈值/权重待回测校准。
     """
     try:
-        from strategies.first_board_filter import run_first_board_filter
+        from strategies.first_board_filter import run_first_board_filter, load_scores
         from vr_paths import last_trading_date_str
         target = date or last_trading_date_str()
         # date 参数可能是 YYYY-MM-DD，转 YYYYMMDD（em_zt_topic_pool 要 YYYYMMDD）
         compact = target.replace("-", "") if "-" in target else target
+
+        # 历史日期优先读快照（避免重复拉东财涨停池）
+        cached = load_scores(compact)
+        if cached:
+            return {
+                "data": {
+                    "date": target,
+                    # 快照不含汇总数（save_scores 只落 scored_candidates），标 0
+                    "zt_pool_count": 0,
+                    "first_board_count": 0,
+                    "candidates": cached["scored_candidates"],
+                    # 快照不含剔除明细/env_flags，返空
+                    "excluded": [],
+                    "env_flags": {},
+                    "note": f"历史快照（更新于 {cached['updated_at']}）· 9维度评分§44未validated仅参考",
+                    "from_cache": True,
+                }
+            }
+
+        # 无快照实时跑
         result = run_first_board_filter(compact)
         return {
             "data": {
@@ -933,10 +955,22 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
                 "excluded": result["excluded"],
                 "env_flags": result.get("env_flags", {}),
                 "note": "9维度评分§44未validated仅参考；阈值/权重待回测校准",
+                "from_cache": False,
             }
         }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"首板流候选查询异常：{e}") from e
+
+
+@router.get("/api/workflow/first-board/dates")
+def get_first_board_dates() -> Dict[str, Any]:
+    """S075：首板流可用历史日期列表（有快照的日期，降序）。"""
+    try:
+        from strategies.first_board_filter import list_score_dates
+        dates = list_score_dates()
+        return {"data": {"dates": dates, "count": len(dates)}}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"历史日期查询异常：{e}") from e
 
 
 __all__ = ["router"]

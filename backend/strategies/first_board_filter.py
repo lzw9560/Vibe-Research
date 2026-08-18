@@ -1065,6 +1065,54 @@ def save_scores(scored: list[dict], date: str) -> Path:
     return out_path
 
 
+def load_scores(date: str) -> dict | None:
+    """读 ~/.vibe-research/first_board_scores_{date}.json 历史快照。
+
+    Args:
+        date: YYYYMMDD 或 YYYY-MM-DD（内部归一为 YYYYMMDD）。
+
+    Returns:
+        dict 含：
+        - date: str（快照日期 YYYYMMDD）
+        - scored_candidates: list[dict]（9 维度评分列表）
+        - updated_at: str（落盘时间戳）
+        无快照/读取失败 → None。
+    """
+    compact = date.replace("-", "") if "-" in date else date
+    path = _SCORES_DIR / f"first_board_scores_{compact}.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        _logger.warning("load_scores 读取失败 date=%s err=%s", compact, e)
+        return None
+    meta = data.get("_meta", {}) if isinstance(data, dict) else {}
+    return {
+        "date": meta.get("date", compact),
+        "scored_candidates": data.get("scored_candidates", []) if isinstance(data, dict) else [],
+        "updated_at": meta.get("updated_at", ""),
+    }
+
+
+def list_score_dates() -> list[str]:
+    """列出所有有快照的日期（YYYYMMDD 格式，降序）。
+
+    扫描 _SCORES_DIR 下的 first_board_scores_YYYYMMDD.json 文件，
+    返回日期字符串列表（最近的在前）。目录不存在/无文件 → []。
+    """
+    if not _SCORES_DIR.exists():
+        return []
+    dates: list[str] = []
+    for p in _SCORES_DIR.glob("first_board_scores_*.json"):
+        # 文件名 first_board_scores_20260818.json → stem first_board_scores_20260818
+        stem = p.stem.replace("first_board_scores_", "")
+        if stem.isdigit() and len(stem) == 8:
+            dates.append(stem)
+    dates.sort(reverse=True)
+    return dates
+
+
 def run_first_board_filter(date: str) -> dict:
     """主入口：串联 003-010（数据层 + 三层剔除）。
 
