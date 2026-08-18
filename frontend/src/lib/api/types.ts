@@ -1613,10 +1613,11 @@ export interface FirstBoardEnvFlags {
 
 export interface FirstBoardCandidatesResponse {
   date: string;                                  // YYYY-MM-DD
-  zt_pool_count: number;                          // 涨停池总数
-  first_board_count: number;                      // 首板数
+  zt_pool_count: number;                          // 涨停池总数（快照可能为 0）
+  first_board_count: number;                      // 首板数（快照可能为 0）
   candidates: FirstBoardCandidate[];              // 通过三层剔除 + 评分排序后的候选池
-  excluded: FirstBoardExcludedItem[];             // 三层剔除记录
-  env_flags: FirstBoardEnvFlags;                  // 市场环境标记
+  excluded: FirstBoardExcludedItem[];             // 三层剔除记录（快照可能为空）
+  env_flags: FirstBoardEnvFlags;                  // 市场环境标记（快照可能为空对象）
   note: string;                                   // §44 诚实标注
+  from_cache?: boolean;                           // true = 历史快照（zt_pool_count/excluded 可能空）
 }

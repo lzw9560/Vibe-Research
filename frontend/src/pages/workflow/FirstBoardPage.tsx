@@ -4,15 +4,17 @@
 // 顶部标注 §44 未 validated 仅参考（HonestyBanner 在 Pipeline 内 + tab 切换 + page 顶部脚注）。
 //
 // 数据来源：useFirstBoardCandidates（GET /api/workflow/first-board/candidates?date=）
+// 历史日期：useFirstBoardDates（GET /api/workflow/first-board/dates）——有快照的日期列表
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/Badge";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { FirstBoardPipeline } from "./components/FirstBoardPipeline";
 import { StrategyAttributionTab } from "./components/StrategyAttributionTab";
-import { useFirstBoardCandidates } from "@/lib/query";
+import { useFirstBoardCandidates, useFirstBoardDates } from "@/lib/query";
 
 type Tab = "pipeline" | "strategy-attribution";
 
@@ -22,7 +24,11 @@ export default function FirstBoardPage() {
   const [tab, setTab] = useState<Tab>("pipeline");
 
   const { data, isLoading, error, refetch, isFetching } = useFirstBoardCandidates(selectedDate);
+  // 有快照的日期列表（降序，YYYY-MM-DD）——日期选择器标注可用日期
+  const { data: datesData } = useFirstBoardDates();
   const refreshing = isFetching && !isLoading;
+  // 是否历史快照数据（from_cache=true 时 zt_pool_count/excluded 可能空）
+  const isFromCache = data?.from_cache === true;
 
   const handleRefresh = () => refetch();
 
@@ -46,19 +52,20 @@ export default function FirstBoardPage() {
   const askAiContext = useMemo(() => {
     return [
       `当前页面：首板流（Pipeline 主视图${tab === "strategy-attribution" ? "·战法归因" : ""}）`,
-      `数据日期：${data?.date ?? "未取得"}`,
+      `数据日期：${data?.date ?? "未取得"}${isFromCache ? "（历史快照）" : ""}`,
       data
         ? `涨停池 ${data.zt_pool_count} / 首板 ${data.first_board_count} / 候选 ${data.candidates.length} / 剔除 ${data.excluded.length}`
         : `首板流数据：未取得`,
       data?.env_flags
         ? `大盘跌 ${data.env_flags.market_drop_pct ?? "—"}% / 高风险 ${data.env_flags.high_risk} / 最高板 ${data.env_flags.max_boards ?? "—"} / 梯队断裂 ${data.env_flags.ladder_broken}`
-        : `市场环境：未取得`,
+        : `市场环境：${isFromCache ? "快照不含环境标记" : "未取得"}`,
       data?.note ?? "",
+      datesData?.dates?.length ? `历史可用日期：${datesData.dates.join("、")}` : "",
       tab === "strategy-attribution"
         ? `战法归因：同股多战法命中不排除（§44 未 validated 仅复盘参考）`
         : `Pipeline：5 步闭环（筛选→确认→建仓→卖出→结算）`,
     ].filter(Boolean).join("\n");
-  }, [data, tab]);
+  }, [data, tab, isFromCache, datesData]);
 
   // §44 诚实标注（page 顶部）
   const section44Note = "§44 未 validated 仅参考 · 9 维度评分权重待回测校准（30 天后用实际数据调）";
@@ -79,13 +86,41 @@ export default function FirstBoardPage() {
             aria-label="选择历史日期"
             className="rounded-lg border border-border/40 bg-muted/10 px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
+          {/* 历史快捷日期（有快照的最近 5 个，MM-DD 格式） */}
+          {datesData?.dates?.length ? (
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground/60">历史:</span>
+              {datesData.dates.slice(0, 5).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => handleDateChange(d)}
+                  title={d}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px] transition-colors",
+                    selectedDate === d
+                      ? "bg-primary/20 text-primary"
+                      : "bg-muted/20 text-muted-foreground hover:bg-muted/40",
+                  )}
+                >
+                  {d.slice(5)}
+                </button>
+              ))}
+              {datesData.dates.length > 5 && (
+                <span className="text-[10px] text-muted-foreground/40">
+                  +{datesData.dates.length - 5}
+                </span>
+              )}
+            </div>
+          ) : null}
           {selectedDate && (
             <button
               type="button"
               onClick={clearDate}
               className="text-xs text-muted-foreground hover:text-primary"
+              title="不传 date 时后端按收盘时点取 T日/T-1（收盘前取 T-1，收盘后取当日）"
             >
-              回到今日
+              回到当前时点
             </button>
           )}
         </>
@@ -110,9 +145,16 @@ export default function FirstBoardPage() {
         </div>
       )}
 
-      {/* 刷新提示 */}
-      {refreshing && (
-        <div className="mb-3 text-xs text-muted-foreground/60">刷新中…</div>
+      {/* 刷新提示 + 历史快照标注 */}
+      {(refreshing || isFromCache) && (
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          {refreshing && <span className="text-muted-foreground/60">刷新中…</span>}
+          {isFromCache && (
+            <span title="from_cache=true · 快照不含 zt_pool_count/excluded/env_flags">
+              <Badge variant="warning">历史快照</Badge>
+            </span>
+          )}
+        </div>
       )}
 
       {/* Tab 切换 */}

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getFirstBoardCandidates,
+  getFirstBoardDates,
   getWorkflowState,
   getWorkflowStateHistory,
   getWorkflowStates,
@@ -73,6 +74,18 @@ export function useFirstBoardCandidates(date?: string, options?: Opts<FirstBoard
     queryKey: ["workflow", "first-board", "candidates", date ?? "latest"] as const,
     queryFn: () => getFirstBoardCandidates(date),
     staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+}
+
+// S075 首板流可用历史日期列表——GET /api/workflow/first-board/dates
+// 返回有快照的日期降序（YYYY-MM-DD），供日期选择器标注可用日期。
+// 日期列表日内不变，staleTime 10min 防短时重复请求。
+export function useFirstBoardDates(options?: Opts<{ dates: string[]; count: number } | null>) {
+  return useQuery({
+    queryKey: ["workflow", "first-board", "dates"] as const,
+    queryFn: () => getFirstBoardDates(),
+    staleTime: 10 * 60 * 1000,
     ...options,
   });
 }

@@ -96,9 +96,18 @@ export async function getWorkflowStateHistory(code: string, date?: string): Prom
 // S075 首板流候选池——GET /api/workflow/first-board/candidates?date=
 // 后端 run_first_board_filter 产出（首板过滤+三层剔除+9维度评分+落盘）。
 // §44 诚实标注：9 维度评分未 validated 仅参考；阈值/权重待回测校准。
+// from_cache=true 时为历史快照（zt_pool_count/first_board_count/excluded/env_flags 可能空）。
 export async function getFirstBoardCandidates(date?: string): Promise<FirstBoardCandidatesResponse | null> {
   try {
     const path = date ? `/workflow/first-board/candidates?date=${date}` : "/workflow/first-board/candidates";
     return await get<FirstBoardCandidatesResponse>(path);
+  } catch { return null; }
+}
+
+// S075 首板流可用历史日期列表——GET /api/workflow/first-board/dates
+// 返回有快照的日期降序（YYYY-MM-DD），供日期选择器标注可用日期。
+export async function getFirstBoardDates(): Promise<{ dates: string[]; count: number } | null> {
+  try {
+    return await get<{ dates: string[]; count: number }>("/workflow/first-board/dates");
   } catch { return null; }
 }
