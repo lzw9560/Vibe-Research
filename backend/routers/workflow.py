@@ -910,36 +910,89 @@ def get_workflow_state_history(code: str, date: Optional[str] = Query(None, desc
         raise HTTPException(500, f"获取流转历史失败：{e}") from e
 
 
+def _resolve_first_board_date(date: str | None) -> str:
+    """解析首板流查询日期——不传 date 时按收盘时点决定取 T 日还是 T-1。
+
+    业务时序：首板流是"T-1 日首板涨停 → T 日建仓"。T 日收盘前（15:00 前）当日
+    涨停池为空（当日涨停股要等收盘后才确定），**收盘前应取 T-1 日的选股结果**；
+    收盘后（15:00 后）当日涨停池已确定，取当日。
+
+    Args:
+        date: YYYY-MM-DD 字符串。传了就直接用；None 按收盘时点解析。
+
+    Returns:
+        YYYY-MM-DD 字符串（传 date 原样返；不传时 15:00 前返 T-1 交易日，15:00 后返当日）。
+    """
+    if date:
+        return date
+    from datetime import date as Date, datetime, timedelta
+
+    now = datetime.now()
+    today = Date.today()
+    # 收盘前（15:00 前）取 T-1（上一个交易日）
+    if now.hour < 15:
+        from vr_paths import is_trading_day
+
+        t_minus_1 = today - timedelta(days=1)
+        # 回溯到交易日（跳过周末/节假日）
+        while not is_trading_day(t_minus_1):
+            t_minus_1 = t_minus_1 - timedelta(days=1)
+        return t_minus_1.isoformat()
+    # 收盘后取当日（last_trading_date_str 处理非交易日回退）
+    from vr_paths import last_trading_date_str
+
+    return last_trading_date_str()
+
+
 @router.get("/api/workflow/first-board/candidates")
-def get_first_board_candidates(date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+def get_first_board_candidates(date: str = Query(None, description="交易日 YYYY-MM-DD；不传按收盘时点取T日/T-1")) -> Dict[str, Any]:
     """S075：首板流候选池——返回候选+剔除原因+9维度评分，供前端pipeline展示。
 
-    数据来自 run_first_board_filter（首板过滤+三层剔除+9维度评分+落盘）。
-    传历史日期时优先读快照（避免重复拉东财涨停池，历史保留期约 3 周），
-    无快照再实时跑。
+    时序：T 日收盘前（15:00 前）取 T-1 数据（当日涨停池盘前为空），收盘后取当日。
+    快照优先：有快照读快照（含空快照——盘前跑的空快照标"盘前数据，盘后更新"），
+    无快照才实时跑。
     诚实标注：9维度评分§44未validated仅参考；阈值/权重待回测校准。
     """
     try:
         from strategies.first_board_filter import run_first_board_filter, load_scores
-        from vr_paths import last_trading_date_str
-        target = date or last_trading_date_str()
+
+        target = _resolve_first_board_date(date)
         # date 参数可能是 YYYY-MM-DD，转 YYYYMMDD（em_zt_topic_pool 要 YYYYMMDD）
         compact = target.replace("-", "") if "-" in target else target
 
-        # 历史日期优先读快照（避免重复拉东财涨停池）
+        # 快照优先（含空快照）——避免重复拉东财涨停池
         cached = load_scores(compact)
         if cached:
+            candidates = cached.get("scored_candidates", [])
+            if len(candidates) > 0:
+                # 有数据的快照（T-1 完整交易日盘后调度已落盘）——直接返回
+                return {
+                    "data": {
+                        "date": target,
+                        # 快照不含汇总数（save_scores 只落 scored_candidates），标 0
+                        "zt_pool_count": 0,
+                        "first_board_count": 0,
+                        "candidates": candidates,
+                        # 快照不含剔除明细/env_flags，返空
+                        "excluded": [],
+                        "env_flags": {},
+                        "note": f"历史快照（更新于 {cached['updated_at']}）· 9维度评分§44未validated仅参考",
+                        "from_cache": True,
+                    }
+                }
+            # 空快照（盘前跑的，当日涨停池为空）——返回但标注"盘前数据，待盘后更新"
             return {
                 "data": {
                     "date": target,
-                    # 快照不含汇总数（save_scores 只落 scored_candidates），标 0
                     "zt_pool_count": 0,
                     "first_board_count": 0,
-                    "candidates": cached["scored_candidates"],
-                    # 快照不含剔除明细/env_flags，返空
+                    "candidates": [],
                     "excluded": [],
                     "env_flags": {},
-                    "note": f"历史快照（更新于 {cached['updated_at']}）· 9维度评分§44未validated仅参考",
+                    "note": (
+                        f"盘前数据（更新于 {cached['updated_at']}），"
+                        "盘后16:15调度更新· §44未validated仅参考"
+                    ),
                     "from_cache": True,
                 }
             }
