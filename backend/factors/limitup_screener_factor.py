@@ -176,6 +176,14 @@ class LimitupScreenerFactor:
             "sentiment_index": report.sentiment_index,
             "sentiment_phase": report.sentiment_phase,
             "scanned_count": scanned,
+            # S079 P2 仓位闸 + 龙虎榜风控字段（从 PreMarketReport 透传，供 workflow 响应顶层提取）
+            "market_phase": getattr(report, "market_phase", None),
+            "market_phase_cap": getattr(report, "market_phase_cap", None),
+            "position_cap_tier": getattr(report, "position_cap_tier", None),
+            "seat_risk_flags": getattr(report, "seat_risk_flags", None) or {},
+            "data_missing_flags": getattr(report, "data_missing_flags", None) or {},
+            "execution_checklist": getattr(report, "execution_checklist", None) or [],
+            "param_disclaimer": getattr(report, "param_disclaimer", None),
         }
 
         return FactorResult(

@@ -9,6 +9,11 @@
 5. 战法匹配（8大战法自动匹配）
 6. 仓位建议
 7. 生成盘前报告
+
+S079 R9 仓位闸 + 龙虎榜黑名单两层后处理（在 advise_batch 输出之后、return 之前）：
+  Layer 1：DragonTigerSeatFilter.filter —— 龙虎榜席位三分级风控（硬剔除黑名单 + 软标记）
+  Layer 2：cap_by_market_phase —— 按 _market_phase 三状态裁剪仓位上限
+  叠加代数：final_cap = min(weather_cap, market_phase_cap, max_total_position)
 """
 from __future__ import annotations
 
@@ -31,6 +36,9 @@ from strategies.position_advisor import PositionAdvisor
 from vr_paths import last_trading_date_str
 
 logger = logging.getLogger(__name__)
+
+# S079 R9 参数标注（合规：CLAUDE.md §1.1 弱合规，参考值非执行指令）
+PARAM_DISCLAIMER = "仓位参数参考值，非执行指令 | 历史统计特征，市场有风险"
 
 
 @dataclass
@@ -83,9 +91,17 @@ class PreMarketReport:
     strong_candidates: list[GeneScore] = field(default_factory=list)
     filtered_out: list[dict] = field(default_factory=list)
     strategy_matches: list[StrategyMatch] = field(default_factory=list)
-    position_suggestions: list[PositionSuggestion] = field(default_factory=list)
+    position_suggestions: list[Any] = field(default_factory=list)  # position_advisor.PositionSuggestion（鸭子类型）
     total_suggested_position: float = 0.0
     warnings: list[str] = field(default_factory=list)
+    # S079 R9-R10 P2 扩展字段（仓位闸 + 龙虎榜风控 + checklist）
+    market_phase: str | None = None           # _market_phase 返回值（冰点/普通/活跃/亢奋/红期）
+    market_phase_cap: float | None = None     # 绿1.0/黄0.5/红0.2
+    position_cap_tier: str | None = None      # green/yellow/red
+    seat_risk_flags: dict[str, list[str]] = field(default_factory=dict)  # {code: [【拒绝介入】/独食独大/散户霸榜]}
+    data_missing_flags: dict[str, str] = field(default_factory=dict)     # {code: 警示字符串}
+    execution_checklist: list[str] = field(default_factory=list)
+    param_disclaimer: str | None = None        # "仓位参数参考值，非执行指令..."
 
 
 class PreMarketWorkflow:
@@ -151,8 +167,23 @@ class PreMarketWorkflow:
             [s for m in report.strategy_matches for s in m.matched_strategies],
             ctx.weather_state,
         )
+
+        # S079 R9：P2 仓位闸 + 龙虎榜黑名单两层后处理（在 return 之前）
+        #   Layer 1：DragonTigerSeatFilter.filter —— 龙虎榜席位三分级风控
+        #   Layer 2：cap_by_market_phase —— 按 _market_phase 三状态裁剪仓位上限
+        p2_result = self._apply_p2_post_filters(suggestions, ctx)
+        suggestions = p2_result["position_suggestions"]
         report.position_suggestions = suggestions
         report.total_suggested_position = sum(p.suggested_pct for p in suggestions)
+
+        # S079 R9 P2 扩展字段（仓位闸 + 龙虎榜风控标记，供前端/飞书展示）
+        report.market_phase = p2_result.get("market_phase")
+        report.market_phase_cap = p2_result.get("market_phase_cap")
+        report.position_cap_tier = p2_result.get("position_cap_tier")
+        report.seat_risk_flags = p2_result.get("seat_risk_flags", {})
+        report.data_missing_flags = p2_result.get("data_missing_flags", {})
+        report.execution_checklist = p2_result.get("execution_checklist", [])
+        report.param_disclaimer = PARAM_DISCLAIMER
 
         # 5. 情绪周期（复用现有 STI）
         try:
@@ -165,6 +196,176 @@ class PreMarketWorkflow:
             logger.debug("获取 STI 失败: %s", e)
 
         return report
+
+    def _apply_p2_post_filters(
+        self,
+        suggestions: list,
+        ctx,
+    ) -> dict[str, Any]:
+        """S079 R9 P2 仓位闸 + 龙虎榜黑名单两层后处理。
+
+        串行链（spec §5.1）：
+          Layer 1：DragonTigerSeatFilter.filter —— 龙虎榜席位三分级风控
+                   输入：suggestions + T-1 龙虎榜（复用 seat_engine）
+                   输出：硬剔除后标的 + seat_risk_flags + data_missing_flags
+          Layer 2：cap_by_market_phase —— 按 _market_phase 三状态裁剪仓位上限
+                   输入：Layer 1 输出 + T+1 _market_phase（从 market._emotion 取 4 因子）
+                   叠加：min(weather_cap, market_phase_cap, max_total_position)
+                   输出：标的 + 仓位上限
+
+        Args:
+            suggestions: PositionAdvisor.advise_batch 输出（position_advisor.PositionSuggestion 列表）
+            ctx: SentimentContext（含 weather_state / source_date）
+
+        Returns:
+            dict 含：
+              position_suggestions: 两层后处理后的标的列表
+              market_phase / market_phase_cap / position_cap_tier
+              seat_risk_flags / data_missing_flags
+              execution_checklist
+        """
+        from dragon_tiger_seat_filter import DragonTigerSeatFilter  # noqa: PLC0415
+        from strategies.first_board_filter import _market_phase, PHASE_TO_CAP_TIER  # noqa: PLC0415
+        from strategies.position_advisor import cap_by_market_phase, MARKET_PHASE_CAP  # noqa: PLC0415
+
+        # ---------------------------------------------------------------
+        # Layer 1：DragonTigerSeatFilter 龙虎榜席位三分级风控（R1-R5）
+        # ---------------------------------------------------------------
+        # T-1 交易日（龙虎榜为盘后数据，T+1 盘前使用）
+        # ctx.source_date 是 T-1（sentiment_context build_context 取 T-1 STI）
+        trade_date = getattr(ctx, "source_date", None) or self.date
+
+        seat_filter = DragonTigerSeatFilter()
+        filtered_suggestions, seat_risk_flags, data_missing_flags = seat_filter.filter(
+            suggestions=suggestions,
+            trade_date=trade_date,
+        )
+
+        # ---------------------------------------------------------------
+        # Layer 2：cap_by_market_phase 仓位闸后处理（R6-R7）
+        # ---------------------------------------------------------------
+        # R6.4 从 T-1 盘后市场数据计算 4 因子（复用 market._emotion）
+        factors = self._compute_market_phase_factors(trade_date)
+        phase = _market_phase(
+            zt_count=factors["zt_count"],
+            big_loss=factors.get("big_loss"),       # _emotion 无此字段 → None → 降级
+            floor=factors.get("floor"),
+            ladder_success=factors.get("ladder_success"),
+            ladder_height=factors.get("ladder_height"),
+        )
+
+        # cap_by_market_phase 叠加代数 min(weather_cap, market_phase_cap, max_total_position)
+        # 注：suggestions 已经过 advise_batch 内部 weather_cap 处理，cap_by_market_phase 在此之上叠加
+        capped_suggestions = cap_by_market_phase(
+            positions=filtered_suggestions,
+            phase=phase,
+            max_single_position=self._position_advisor.max_single_position,
+            max_total_position=self._position_advisor.max_total_position,
+        )
+
+        # 三状态展示字段
+        tier = PHASE_TO_CAP_TIER.get(phase, "yellow")
+        market_phase_cap = MARKET_PHASE_CAP[tier]
+
+        # ---------------------------------------------------------------
+        # R9.1 仓位参数 + R10 execution_checklist
+        # ---------------------------------------------------------------
+        total_cap = sum(p.suggested_pct for p in capped_suggestions)
+        n_stocks = len(capped_suggestions)
+        # 单笔委托金额 = 总仓位上限 × 个股仓位分配 ÷ 标的数
+        # 注：个股仓位分配 = capped_suggestions[i].suggested_pct，总仓位上限 = total_cap
+        #   单笔委托金额比例 = suggested_pct（已是总仓位分配，黄色期已在 cap_by_market_phase 砍半）
+        checklist = self._build_execution_checklist(
+            phase, tier, total_cap, n_stocks, data_missing_flags,
+        )
+
+        return {
+            "position_suggestions": capped_suggestions,
+            "market_phase": phase,
+            "market_phase_cap": market_phase_cap,
+            "position_cap_tier": tier,
+            "seat_risk_flags": seat_risk_flags,
+            "data_missing_flags": data_missing_flags,
+            "execution_checklist": checklist,
+        }
+
+    def _compute_market_phase_factors(self, trade_date: str) -> dict[str, Any]:
+        """S079 R6.4 从 T-1 盘后市场数据计算 _market_phase 4 因子。
+
+        复用 market._emotion() 既有端点（涨停池/跌停池/连板梯队）：
+          zt_count       ← _emotion["zt_count"]（涨停家数，既有）
+          floor          ← _emotion["dt_count"]（跌停家数 = len(跌停池)）
+          ladder_success ← _emotion["promotion_rate"]（连板晋级率 = len(lianban)/yzt_count）
+          ladder_height  ← _emotion["max_boards"]（连板最高高度）
+          big_loss       ← None（_emotion 无"大面股≥10%家数"字段，取不到标 None 降级）
+
+        取数失败 → 全部 None，_market_phase 降级为只按 zt_count 四档判定（R6.5 兼容）。
+
+        Args:
+            trade_date: T-1 交易日（YYYY-MM-DD）
+
+        Returns:
+            dict 含 zt_count/big_loss/floor/ladder_success/ladder_height，取不到的字段为 None
+        """
+        try:
+            import market as market_mod  # noqa: PLC0415
+            emotion = market_mod._emotion(trade_date) or {}
+            return {
+                "zt_count": emotion.get("zt_count"),
+                "big_loss": None,  # _emotion 无大面股字段，降级（R6.5 兼容）
+                "floor": emotion.get("dt_count"),
+                "ladder_success": emotion.get("promotion_rate"),
+                "ladder_height": emotion.get("max_boards"),
+            }
+        except Exception as e:
+            logger.debug("取 _market_phase 4 因子失败 date=%s err=%s", trade_date, e)
+            return {
+                "zt_count": None,
+                "big_loss": None,
+                "floor": None,
+                "ladder_success": None,
+                "ladder_height": None,
+            }
+
+    def _build_execution_checklist(
+        self,
+        phase: str,
+        tier: str,
+        total_cap: float,
+        n_stocks: int,
+        data_missing_flags: dict[str, str],
+    ) -> list[str]:
+        """S079 R10 人工执行 checklist（参数标注"参考值，非执行指令"）。
+
+        Args:
+            phase: _market_phase 返回值（冰点/普通/活跃/亢奋/红期）
+            tier: green/yellow/red
+            total_cap: 总仓位上限（叠加后）
+            n_stocks: 标的数
+            data_missing_flags: 数据缺失标记
+
+        Returns:
+            checklist 字符串列表
+        """
+        checklist: list[str] = [
+            PARAM_DISCLAIMER,
+            f"市场档位：{phase}（{tier}），总仓位上限 {total_cap:.1%}，标的数 {n_stocks}",
+        ]
+        # 黄色期砍半提示
+        if tier == "yellow":
+            checklist.append("黄色期仓位砍半：单笔委托金额 = 总仓位上限 × 个股仓位分配 ÷ 标的数")
+        # 红期强制熔断提示
+        if tier == "red":
+            checklist.append("红期强制熔断：仓位上限收紧至 20%，谨慎介入")
+        # 龙虎榜【拒绝介入】标的提示
+        checklist.append("【拒绝介入】标的（黑名单占比>15%）不可开仓")
+        # 数据缺失提示
+        if data_missing_flags:
+            missing_codes = ", ".join(data_missing_flags.keys())
+            checklist.append(f"席位风控数据未取得标的需人工核实龙虎榜：{missing_codes}")
+        # 风险提醒
+        checklist.append("历史统计特征，市场有风险（CLAUDE.md §1.1 弱合规）")
+        return checklist
 
     def _persist_workflow_states(self, pool: CandidatePool) -> None:
         """S032 R10：候选池状态落库（candidate/filtered）。

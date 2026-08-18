@@ -5,12 +5,15 @@
 - 基于战法匹配结果 + 账户风险参数，给出建议仓位比例
 - 输出入场价区间、止损、止盈、建议持仓天数
 - 不输出具体股数/金额，仅输出比例，避免越权代客理财
+
+S079 R7：新增 cap_by_market_phase 后处理，叠加在 advise_batch 输出之上。
 """
 from __future__ import annotations
 
 from typing import Any
 
 from limitup_strategy import StrategySignal
+from strategies.first_board_filter import PHASE_TO_CAP_TIER
 from strategies.strategy_matcher import StrategyMatcher
 
 
@@ -38,6 +41,9 @@ class PositionSuggestion:
         self.take_profit = take_profit
         self.matched_strategy = matched_strategy
         self.reasons = reasons
+        # S079 R7：仓位闸后处理标记（cap_by_market_phase 填充，默认空）
+        self.market_phase: str | None = None
+        self.market_phase_cap: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -50,6 +56,8 @@ class PositionSuggestion:
             "take_profit": self.take_profit,
             "matched_strategy": self.matched_strategy,
             "reasons": self.reasons,
+            "market_phase": self.market_phase,
+            "market_phase_cap": self.market_phase_cap,
         }
 
 
@@ -165,3 +173,88 @@ class PositionAdvisor:
 
 # 全局单例
 advisor = PositionAdvisor()
+
+
+# ===========================================================================
+# S079 R7：仓位闸后处理（cap_by_market_phase）
+# ===========================================================================
+
+# R7.1 三状态 cap 映射
+# 绿（活跃/亢奋）= 1.0  → 不放宽，只收紧（不顶掉 weather_cap 或 max_total_position）
+# 黄（普通）   = 0.5
+# 红（冰点/红期）= 0.2
+MARKET_PHASE_CAP: dict[str, float] = {
+    "green": 1.0,
+    "yellow": 0.5,
+    "red": 0.2,
+}
+
+
+def cap_by_market_phase(
+    positions: list[PositionSuggestion],
+    phase: str,
+    max_single_position: float = 0.3,
+    max_total_position: float = 0.8,
+) -> list[PositionSuggestion]:
+    """S079 R7 仓位闸后处理。
+
+    叠加在 PositionAdvisor.advise_batch 输出之上。每个 position.suggested_pct 已
+    经过 weather_cap 处理（advise_batch 内部 advise 的 weather 熔断）。
+
+    叠加代数（spec R7.1）：
+        final_cap = min(weather_cap, market_phase_cap, max_total_position)
+
+    其中：
+      - weather_cap：既有，advise_batch 输出的 suggested_pct 已应用 weather_cap
+      - market_phase_cap：新增，绿=1.0（不放宽）/黄=0.5/红=0.2
+      - max_total_position：既有 0.8 硬上限
+
+    绿档不放宽原则（R7.2）：market_phase_cap 绿档=1.0，
+        market_phase_cap_result = min(suggested_pct, max_single_position * 1.0)
+        = min(suggested_pct, max_single_position)
+      不会超过既有单票上限，只收紧不放宽。
+
+    互斥说明（R7.3）：同一情绪现象（大面股爆炸≈暴风雨）可能同时触发
+      weather 熔断和 market_phase 熔断，取 min() 不冲突（取最严）。
+
+    时序用途（R8，文档层声明）：
+      STI 是 T-1 盘后总结（limitup_sti 8 维度加权 → 4 天气），用于 advise 的
+      weather_state 参数；_market_phase 是 T+1 盘前仓位闸因子，用于本函数的
+      phase 参数。两者时序用途不同，不引入新概念，不替代 STI。
+
+    Args:
+        positions: advise_batch 返回的 PositionSuggestion 列表
+        phase: _market_phase 返回的字符串（冰点/普通/活跃/亢奋/红期）
+        max_single_position: 单票仓位上限（默认 0.3，与 PositionAdvisor 默认一致）
+        max_total_position: 总仓位硬上限（默认 0.8，与 PositionAdvisor 默认一致）
+
+    Returns:
+        仓位上限叠加处理后的 PositionSuggestion 列表（原地修改 + 返回）
+    """
+    # R7.1 三状态映射 + 未知 phase 降级 yellow（保守）
+    tier = PHASE_TO_CAP_TIER.get(phase, "yellow")
+    market_phase_cap = MARKET_PHASE_CAP[tier]
+
+    for pos in positions:
+        # pos.suggested_pct 已经过 weather_cap 处理（advise_batch 输出）
+        weather_cap_result = pos.suggested_pct
+
+        # market_phase_cap 叠加：min(suggested_pct, max_single_position * market_phase_cap)
+        market_phase_cap_result = min(
+            pos.suggested_pct,
+            max_single_position * market_phase_cap,
+        )
+
+        # R7.1 叠加代数：final_cap = min(weather_cap, market_phase_cap, max_total_position)
+        final_pct = min(
+            weather_cap_result,
+            market_phase_cap_result,
+            max_total_position,
+        )
+        pos.suggested_pct = round(final_pct, 2)
+
+        # R7 标记仓位闸信息（供前端展示）
+        pos.market_phase = phase
+        pos.market_phase_cap = market_phase_cap
+
+    return positions

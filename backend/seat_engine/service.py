@@ -336,6 +336,16 @@ class SeatEngine:
         if signal is None:
             return None
 
+        # S079 R3：买一占比（= buy_seats[0].buy_amt / total_buy_amount）
+        # 供 DragonTigerSeatFilter 独食独大判定（买一占比≥55% 或占全天≥10%）
+        # buy_seats 已按 datacenter 返回顺序（前五席位），buy_seats[0] 即买一
+        buy_one_ratio = 0.0
+        if buy_seats and total_buy_amount > 0:
+            buy_one_amt = buy_seats[0].get("buy_amt", 0)
+            # 注：buy_seats 中 buy_amt 已 round(/10000, 1) 转万元，total_buy_amount
+            # 同样 round 转万元，比例计算不受单位影响
+            buy_one_ratio = round(buy_one_amt / total_buy_amount, 4)
+
         return {
             "signal": signal,
             "details": {
@@ -348,6 +358,7 @@ class SeatEngine:
                 "institution_buy_amt": round(institution_buy_amt / 10000, 1),
                 "institution_sell_amt": round(institution_sell_amt / 10000, 1),
                 "total_buy_amount": round(total_buy_amount / 10000, 1),
+                "buy_one_ratio": buy_one_ratio,  # S079 R3 新增
             },
             "disclaimer": SEAT_DISCLAIMER,
         }

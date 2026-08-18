@@ -1,0 +1,37 @@
+# S079 龙虎榜黑名单席位配置（R2.1）
+#
+# 标注：探索性（外部 PRD 拍定，零数据支撑，进 config 可配，AC8 回测调参）
+#   - PRD §3 初始列举，可扩展
+#   - 阈值命中率<5% 或空池率>30% 触发调参（spec AC8）
+#   - 跑 `financial_rigor.py --thresholds prd_p2 --window 60d` 复算
+#
+# 历史统计特征，市场有风险（CLAUDE.md §1.1 弱合规）
+
+# 黑名单席位名单（子串模糊匹配，应对"中国国际金融上海分公司" vs "中金公司上海分公司"写法差异）
+# 匹配规则：双向子串包含 bl_name in seat_name or seat_name in bl_name
+blacklist:
+  - "拉萨团结路"
+  - "拉萨东环路"
+  - "拉萨金融路"
+  - "东方财富拉萨"
+  - "华鑫证券上海茅台路"
+
+# 散户大本营席位名单（子串模糊匹配，用于 R4 散户霸榜计数）
+retail_seats:
+  - "拉萨团结路"
+  - "拉萨东环路"
+  - "拉萨金融路"
+  - "东方财富拉萨"
+
+# 硬剔除阈值（PRD §3 拍定，探索性）
+threshold:
+  blacklist_ratio: 0.15        # 黑名单席位买入额占比 > 15% → 硬剔除（R2）
+  buy_one_ratio: 0.55          # 买一占比 ≥ 55%（前五买入额）→ 独食独大软标记（R3）
+  buy_one_ratio_daily: 0.10    # 买一占比 ≥ 10%（全天成交额）→ 独食独大软标记（R3）
+  retail_seat_count: 3         # 拉萨席位 ≥ 3 个 → 散户霸榜软标记（R4）
+
+# 仓位砍半系数（R3 独食独大，复用 hot_money_seats.SeatRiskFactor score_modifier 先例）
+monopoly_position_modifier: 0.5    # 独食独大标的 suggested_pct *= 0.5
+
+# 战法匹配置信度降权系数（R4 散户霸榜，复用 hot_money_seats.day_trip_ratio 基础扩展）
+retail_confidence_modifier: 0.8    # 散户霸榜标的置信度 *= 0.8

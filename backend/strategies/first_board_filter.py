@@ -97,11 +97,45 @@ MARKET_PHASE_WEIGHTS: dict[str, dict[str, float]] = {
 }
 
 
-def _market_phase(zt_count: int | None) -> str:
-    """按涨停家数判定市场档位（冰点/普通/活跃/亢奋）。
+def _market_phase(
+    zt_count: int | None,
+    big_loss: int | None = None,
+    floor: int | None = None,
+    ladder_success: float | None = None,
+    ladder_height: int | None = None,
+) -> str:
+    """按涨停家数 + 市场风险因子判定市场档位。
 
-    zt_count=None → "普通"（无法判定时取中性档）。
+    S079 R6 扩展：从单因子 zt_count 改为 4 因子输入 + 红期硬熔断覆盖。
+
+    档位：冰点 / 普通 / 活跃 / 亢奋 / 红期
+      - 红期硬熔断覆盖（优先级最高）：big_loss≥8 或 floor≥20 → "红期"
+      - 四档判定（原逻辑保留）：zt_count <30→冰点 / <60→普通 / <100→活跃 / ≥100→亢奋
+
+    因子含义（spec R6.1，T-1 盘后数据计算）：
+      zt_count: 涨停家数（保留，既有）
+      big_loss: 大面股≥10% 家数（big_loss_count）
+      floor: 跌停家数（floor_count）
+      ladder_success: 连板晋级率（ladder_success_rate）
+      ladder_height: 连板最高高度（max_ladder_height）
+
+    向后兼容（R6.5）：旧签名 `_market_phase(zt_count)` 调用走原四档判定
+      （big_loss/floor/ladder_success/ladder_height 均为 None → 跳过红期硬熔断），
+      `score_candidate`（line ~1350）现有调用不破坏。
+
+    时序用途（R8，文档层声明）：
+      STI 是 T-1 盘后总结（limitup_sti 8 维度加权 → 4 天气），用于 PositionAdvisor.advise
+      的 weather_state 参数；_market_phase 是 T+1 盘前仓位闸因子，用于
+      position_advisor.cap_by_market_phase 的 phase 参数。两者时序用途不同，
+      不引入新概念，不替代 STI。
     """
+    # R6.2 红期硬熔断覆盖（优先级最高）
+    if big_loss is not None and big_loss >= 8:
+        return "红期"
+    if floor is not None and floor >= 20:
+        return "红期"
+
+    # R6.1 四档判定（原逻辑保留）
     if zt_count is None:
         return "普通"
     if zt_count < 30:
@@ -111,6 +145,17 @@ def _market_phase(zt_count: int | None) -> str:
     if zt_count < 100:
         return "活跃"
     return "亢奋"
+
+
+# R6.3 三状态映射常量（供 position_advisor.cap_by_market_phase 使用）
+# 绿 = 活跃 + 亢奋 / 黄 = 普通 / 红 = 冰点 或 红期硬熔断覆盖触发
+PHASE_TO_CAP_TIER: dict[str, str] = {
+    "活跃": "green",
+    "亢奋": "green",
+    "普通": "yellow",
+    "冰点": "red",
+    "红期": "red",
+}
 
 
 # ===========================================================================

@@ -8,7 +8,11 @@ spec §9 设计：
 - 预设画像覆盖已知席位（hot_money_seats_preset.json），实际数据积累后修正
 
 数据源：东财 datacenter RPT_BILLBOARD_DAILYDETAILSBUY/SELL
-- spec §8.1：direct fetch 绕过 em_get 熔断（datacenter API 可直接 urllib 调用）
+- S079 AC6 处置（2026-08-18）：原 spec §8.1 注释"datacenter API 可直接 urllib 调用"
+  经核实 datacenter-web.eastmoney.com 与 push2ex 同属东财域名，限流策略可能同源（同 IP 池）。
+  风险：原 urllib 直调无限流无熔断，有 IP 封禁风险。
+  处置：改用 astock.em_get（复用既有防封底线：0.3s 限流 + circuit_breaker 熔断 + 代理探测），
+  不臆造新限流。em_get 对所有东财域名统一防护，datacenter 与 push2ex 共享 breaker("eastmoney")。
 - 不输出个体席位名（S018 R11：个体席位标签 alpha 已衰减，只用聚合分类）
 
 输出：
@@ -25,6 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import astock
 from vr_paths import resolve_data_dir
 
 _DATA_DIR = resolve_data_dir()
@@ -72,7 +77,7 @@ class SeatRiskFactor:
 def fetch_billboard_dates(days: int = 60) -> list[str]:
     """获取最近 N 个有龙虎榜数据的交易日日期列表。
 
-    direct urllib 调 datacenter（绕过 em_get 熔断，spec §8.1）。
+    S079 AC6：走 astock.em_get 限流 + 熔断（原 urllib 直调已废弃，见模块 docstring）。
     """
     end_date = datetime.now().strftime("%Y-%m-%d")
     start_date = (datetime.now() - timedelta(days=days + 15)).strftime("%Y-%m-%d")  # 多取 15 日防周末
@@ -82,9 +87,8 @@ def fetch_billboard_dates(days: int = 60) -> list[str]:
         f"&pageNumber=1&pageSize=500&sortColumns=TRADE_DATE&sortTypes=-1&source=WEB&client=WEB"
     )
     try:
-        req = urllib.request.Request(url, headers=_UA)
-        resp = urllib.request.urlopen(req, timeout=15)
-        data = json.loads(resp.read())
+        resp = astock.em_get(url, headers=_UA, timeout=15)
+        data = resp.json() if hasattr(resp, "json") else json.loads(resp.read())
         rows = data.get("result", {}).get("data", []) or []
         dates = sorted(set(str(r.get("TRADE_DATE", ""))[:10] for r in rows if r.get("TRADE_DATE")))
         return dates[-days:] if len(dates) > days else dates
@@ -95,7 +99,7 @@ def fetch_billboard_dates(days: int = 60) -> list[str]:
 def fetch_billboard_for_date(trade_date: str) -> list[dict]:
     """取指定日期所有龙虎榜买卖明细（buy + sell 合并）。
 
-    direct urllib 绕过 em_get（spec §8.1 备用源）。
+    S079 AC6：走 astock.em_get 限流 + 熔断（原 urllib 直调已废弃，见模块 docstring）。
     返回 [{SECURITY_CODE, OPERATEDEPT_NAME, BUY, SELL, NET, TRADE_DATE, side}]。
     """
     results: list[dict] = []
@@ -107,9 +111,8 @@ def fetch_billboard_for_date(trade_date: str) -> list[dict]:
             f"&pageNumber=1&pageSize=500&sortColumns=TRADE_DATE&sortTypes=-1&source=WEB&client=WEB"
         )
         try:
-            req = urllib.request.Request(url, headers=_UA)
-            resp = urllib.request.urlopen(req, timeout=15)
-            data = json.loads(resp.read())
+            resp = astock.em_get(url, headers=_UA, timeout=15)
+            data = resp.json() if hasattr(resp, "json") else json.loads(resp.read())
             rows = data.get("result", {}).get("data", []) or []
             for r in rows:
                 r["side"] = side

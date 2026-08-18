@@ -169,6 +169,11 @@ async def _collect(run_id: str, target_date: str) -> None:
                 scored_candidates = [s for s in scored if s.get("strategy_code") != "none"]
         except Exception as exc:  # noqa: BLE001 — 打分失败不影响 briefing 主态
             logger.warning("scored_candidates 构建失败 %s: %s", target_date, exc)
+
+        # S079 D1：从 limitup_screener factor 的 config 提取 P2 仓位闸 + 龙虎榜风控字段
+        # PreMarketWorkflow.run() 在 LimitupScreenerFactor.fetch 内被调用，P2 字段塞 config_out
+        # → _serialize_factor 透传 → 这里提取到 _cache 顶层供响应直接消费
+        p2_fields = _extract_p2_fields(results)
         _cache.update(
             run_id=run_id,
             status="done",
@@ -179,6 +184,14 @@ async def _collect(run_id: str, target_date: str) -> None:
             as_of=as_of,
             error=None,
             scored_candidates=scored_candidates,
+            # S079 P2 顶层字段（供 get_pre_market_workflow 响应直接透传）
+            market_phase=p2_fields.get("market_phase"),
+            market_phase_cap=p2_fields.get("market_phase_cap"),
+            position_cap_tier=p2_fields.get("position_cap_tier"),
+            seat_risk_flags=p2_fields.get("seat_risk_flags", {}),
+            data_missing_flags=p2_fields.get("data_missing_flags", {}),
+            execution_checklist=p2_fields.get("execution_checklist", []),
+            param_disclaimer=p2_fields.get("param_disclaimer"),
         )
         # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _build_funnel_layers 重建）
         funnel_mod.clear_funnel_cache(target_date)
@@ -204,11 +217,48 @@ async def _collect(run_id: str, target_date: str) -> None:
                 "scored_candidates": scored_candidates,
                 # 补采标记：采集时刻 target_date 早于最近交易日
                 "is_backfill": target_date < last_trading_date_str(),
+                # S079 P2 仓位闸 + 龙虎榜风控字段（历史快照同结构）
+                "market_phase": p2_fields.get("market_phase"),
+                "market_phase_cap": p2_fields.get("market_phase_cap"),
+                "position_cap_tier": p2_fields.get("position_cap_tier"),
+                "seat_risk_flags": p2_fields.get("seat_risk_flags", {}),
+                "data_missing_flags": p2_fields.get("data_missing_flags", {}),
+                "execution_checklist": p2_fields.get("execution_checklist", []),
+                "param_disclaimer": p2_fields.get("param_disclaimer"),
             })
         except Exception as exc:  # noqa: BLE001 — 落盘失败不影响内存态
             logger.warning("快照写盘失败 %s: %s", target_date, exc)
     except Exception as exc:  # noqa: BLE001
         _cache.update(run_id=run_id, status="error", error=str(exc), as_of=_now_iso())
+
+
+def _extract_p2_fields(results: list) -> dict[str, Any]:
+    """S079 D1：从 factor_registry 结果提取 P2 仓位闸 + 龙虎榜风控字段。
+
+    PreMarketWorkflow.run() 在 LimitupScreenerFactor.fetch 内被调用，
+    P2 字段塞 config_out（factors/limitup_screener_factor.py）→
+    FactorResult.config → 这里提取。
+
+    Args:
+        results: factor_registry.afetch_all 返回的 FactorResult 列表
+
+    Returns:
+        dict 含 market_phase/market_phase_cap/position_cap_tier/
+        seat_risk_flags/data_missing_flags/execution_checklist/param_disclaimer。
+        找不到 limitup_screener factor 时返回全空（不阻塞主流程）。
+    """
+    p2_keys = (
+        "market_phase", "market_phase_cap", "position_cap_tier",
+        "seat_risk_flags", "data_missing_flags", "execution_checklist",
+        "param_disclaimer",
+    )
+    for fr in results or []:
+        factor_id = getattr(fr, "factor_id", "") or (fr.get("factor_id") if isinstance(fr, dict) else "")
+        if factor_id == "limitup_screener":
+            cfg = getattr(fr, "config", None) or (fr.get("config") if isinstance(fr, dict) else {}) or {}
+            return {k: cfg.get(k) for k in p2_keys}
+    # 找不到 → 全 None（降级，不阻塞）
+    return {k: None for k in p2_keys}
 
 
 def _fetch_market_emotion(date: str, ctx: "SentimentContext | None" = None) -> dict[str, Any]:
@@ -438,6 +488,14 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             resp["funnel_layers"] = funnel_layers
             # ctx 可能与采集时存的不完全一致（T-1 STI 被重算）→ 以最新 ctx 为准
             resp["sentiment_context"] = ctx.to_dict()
+            # S079 D1：透传 P2 仓位闸 + 龙虎榜风控字段到响应顶层
+            resp["market_phase"] = _cache.get("market_phase")
+            resp["market_phase_cap"] = _cache.get("market_phase_cap")
+            resp["position_cap_tier"] = _cache.get("position_cap_tier")
+            resp["seat_risk_flags"] = _cache.get("seat_risk_flags", {})
+            resp["data_missing_flags"] = _cache.get("data_missing_flags", {})
+            resp["execution_checklist"] = _cache.get("execution_checklist", [])
+            resp["param_disclaimer"] = _cache.get("param_disclaimer")
         elif status == "error":
             resp["error"] = _cache.get("error")
         return resp
@@ -464,6 +522,14 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             "funnel_layers": snap.get("funnel_layers", []),
             "scored_candidates": snap.get("scored_candidates", []),
             "is_backfill": snap.get("is_backfill", False),
+            # S079 D1：历史快照同结构透传 P2 字段（旧快照无此字段时降级 None/空）
+            "market_phase": snap.get("market_phase"),
+            "market_phase_cap": snap.get("market_phase_cap"),
+            "position_cap_tier": snap.get("position_cap_tier"),
+            "seat_risk_flags": snap.get("seat_risk_flags", {}),
+            "data_missing_flags": snap.get("data_missing_flags", {}),
+            "execution_checklist": snap.get("execution_checklist", []),
+            "param_disclaimer": snap.get("param_disclaimer"),
         }
 
     if d == last_trading_date_str():
