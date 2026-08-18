@@ -823,6 +823,10 @@ def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, A
     采集后对每只票跑规则引擎（C1-C6）→ 去重落库 bomb_alert_history。
     非交易时段不落库、不请求东财（门控）。采集前先 prune 旧数据（保留期外）。
     缺数据诚实标注，不臆造。
+
+    S070 R3 扩展：采集成功后对每只票跑 R1 trajectory + R7 派生计算 → 落库
+    intraday_features / seal_derived_features。派生失败不阻塞主采集
+    （标 degraded，不抛异常）。
     """
     from risk.seal_intraday_collector import collect_once, prune_old_snapshots, get_latest_snapshots
     from risk.bomb_alert_rules import check_all_rules
@@ -837,12 +841,18 @@ def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, A
 
     result = collect_once()
     result["pruned"] = pruned
+    # 补写 date（collect_once 内部用 datetime.now()，executor 回填便于追溯）
+    from datetime import datetime
+    _now = datetime.now()
+    if "date" not in result:
+        result["date"] = _now.strftime("%Y-%m-%d")
 
     # 采集成功后跑规则引擎（仅对本次采集的票）
     if result.get("written", 0) > 0:
         from datetime import datetime
         now = datetime.now()
-        latest_snaps = get_latest_snapshots(result.get("date") or now.strftime("%Y-%m-%d"))
+        date_str = result.get("date") or now.strftime("%Y-%m-%d")
+        latest_snaps = get_latest_snapshots(date_str)
         triggered_total = 0
         for snap in latest_snaps:
             code = snap.get("code")
@@ -851,11 +861,52 @@ def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, A
                 continue
             # 取该 code 全部时序（规则需窗口）
             from risk.seal_intraday_collector import get_snapshots_by_code
-            snaps = get_snapshots_by_code(code, result.get("date") or now.strftime("%Y-%m-%d"))
+            snaps = get_snapshots_by_code(code, date_str)
             results = check_all_rules(snaps, code, name, now=now)
             active = process_alerts(code, name, results, now=now)
             triggered_total += len(active)
         result["alerts_triggered"] = triggered_total
+
+        # S070 R3：R1 trajectory + R7 派生计算落库（采集成功后、return 前）
+        # 派生失败不阻塞主采集（try/except，标 degraded，不抛异常）
+        traj_written = 0
+        derived_written = 0
+        try:
+            from strategies.intraday_features import (
+                compute_trajectory, persist_trajectory,
+                compute_derived_features, persist_derived_features,
+            )
+            from risk.seal_intraday_collector import _get_conn, _DB_LOCK, get_snapshots_by_code
+            conn = _get_conn()
+            try:
+                with _DB_LOCK:
+                    for snap in latest_snaps:
+                        code = snap.get("code")
+                        name = snap.get("name") or code
+                        if not code:
+                            continue
+                        snaps = get_snapshots_by_code(code, date_str)
+                        if not snaps:
+                            continue  # 缺快照跳过派生，不臆造
+                        # R1 trajectory
+                        traj = compute_trajectory(snaps)
+                        persist_trajectory(date_str, code, name, traj, conn)
+                        traj_written += 1
+                        # R7 派生
+                        derived = compute_derived_features(snaps)
+                        persist_derived_features(date_str, code, name, derived, conn)
+                        derived_written += 1
+                    conn.commit()
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.warning("[seal_intraday] S070 派生计算落库失败（不阻塞主采集）: %s", exc)
+            # 标 degraded 但不改写已成功的 collect_once data_status
+            result["derived_status"] = "degraded"
+        else:
+            result["derived_status"] = "ok"
+        result["trajectory_written"] = traj_written
+        result["derived_written"] = derived_written
 
     return result
 

@@ -37,6 +37,9 @@ class TestMigrations:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
             assert "seal_intraday_snapshots" in tables
             assert "bomb_alert_history" in tables
+            # S070 R3：intraday 因子两表
+            assert "intraday_features" in tables
+            assert "seal_derived_features" in tables
         finally:
             conn.close()
 
@@ -47,6 +50,39 @@ class TestMigrations:
         try:
             cnt = conn.execute("SELECT COUNT(*) FROM seal_intraday_snapshots").fetchone()[0]
             assert cnt == 0
+        finally:
+            conn.close()
+
+    def test_s070_low_price_limit_pct_columns_added(self, isolated_seal_db):
+        """S070 R6.1：迁移后 seal_intraday_snapshots 含 low_price + limit_pct 列。"""
+        conn = sqlite3.connect(isolated_seal_db)
+        try:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(seal_intraday_snapshots)").fetchall()}
+            assert "low_price" in cols
+            assert "limit_pct" in cols
+        finally:
+            conn.close()
+
+    def test_s070_existing_rows_low_price_null(self, isolated_seal_db):
+        """S070 R6.1：既有数据行 low_price/limit_pct 为 NULL（不臆造历史）。"""
+        from risk.seal_intraday_collector import save_snapshots
+<<<<<<< Updated upstream
+        # 写一条不含 low_price/limit_pct 的旧格式行（模拟 S055 历史数据）
+=======
+>>>>>>> Stashed changes
+        save_snapshots([{"ts": "2026-08-10T10:00:00", "date": "2026-08-10", "code": "000001"}])
+        conn = sqlite3.connect(isolated_seal_db)
+        try:
+            row = conn.execute(
+                "SELECT low_price, limit_pct FROM seal_intraday_snapshots WHERE code='000001'"
+            ).fetchone()
+<<<<<<< Updated upstream
+            assert row[0] is None  # low_price 不臆造
+            assert row[1] is None  # limit_pct 不臆造
+=======
+            assert row[0] is None
+            assert row[1] is None
+>>>>>>> Stashed changes
         finally:
             conn.close()
 
@@ -113,12 +149,26 @@ class TestCollectOnce:
 
         fake_pool = [
             {"c": "000001", "n": "平安银行", "fbt": 93500, "zbc": 0, "zje": 12.5,
-             "open": 12.0, "seal_amount": 1e8, "float_shares": 1e9, "lbc": 1, "hybk": "银行"},
+             "open": 12.0, "seal_amount": 1e8, "float_shares": 1e9, "lbc": 1, "hybk": "银行",
+<<<<<<< Updated upstream
+             "zdp": 10.0},  # S070: 涨停涨幅%
+=======
+             "zdp": 10.0},
+>>>>>>> Stashed changes
             {"c": "600519", "n": "贵州茅台", "fbt": 100000, "zbc": 1, "zje": 1800,
-             "open": 1790, "seal_amount": 5e8, "float_shares": 1e9, "lbc": 2, "hybk": "白酒"},
+             "open": 1790, "seal_amount": 5e8, "float_shares": 1e9, "lbc": 2, "hybk": "白酒",
+             "zdp": 10.0},
         ]
         monkeypatch.setattr("astock.em_zt_topic_pool", lambda *a, **k: fake_pool)
-        monkeypatch.setattr("astock.tencent_quote", lambda codes: {"sh000001": {"pct": 0.5}})
+<<<<<<< Updated upstream
+        # S070 R6: tencent_quote 返回个股 low（vals[34]）→ low_price 落库
+=======
+        # S070 R6: tencent_quote 返回个股 low → low_price 落库
+>>>>>>> Stashed changes
+        monkeypatch.setattr("astock.tencent_quote", lambda codes: {
+            "000001": {"low": 12.2, "high": 13.5},
+            "600519": {"low": 1780.0, "high": 1820.0},
+        })
 
         result = collect_once()
         assert result["written"] == 2
@@ -130,6 +180,13 @@ class TestCollectOnce:
         assert len(rows) == 1
         assert rows[0]["name"] == "平安银行"
         assert rows[0]["sector"] == "银行"
+        # S070 R6: low_price + limit_pct 落库
+        assert rows[0]["low_price"] == 12.2
+        assert rows[0]["limit_pct"] == 10.0
+
+        rows2 = get_snapshots_by_code("600519")
+        assert rows2[0]["low_price"] == 1780.0
+        assert rows2[0]["limit_pct"] == 10.0
 
     def test_em_failure_degraded(self, isolated_seal_db, monkeypatch):
         """东财请求失败 → data_status=degraded，不臆造。"""

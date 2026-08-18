@@ -1,28 +1,223 @@
 # -*- coding: utf-8 -*-
-"""S070 R1：封单 trajectory（日内动态）从 seal_intraday_snapshots 导出。
+"""S070：intraday 因子计算层。
 
-封单 trajectory = 某日某股的 seal_amount 时序（per-minute snapshots）→ 动态特征：
-first/last/delta/max/min/mean/slope/n_snapshots/break_count（炸板次数，seal→0 跳变）。
-区别于 EOD 快照（seal_rate=首次封板时间，post-hoc）——trajectory 是日内动态（封住/衰减/炸板形态），
-intraday-class 未测因子（§44 public EOD 全死，trajectory 是不同类，untested）。
+R1：封单 trajectory（从 seal_intraday_snapshots 时序派生）
+R7：战法因子派生（last_lock_time / broken_duration_min / max_drop_pct，纯函数）
 
-§44 验证（R4，~30 日 S055 积累后）：trajectory 特征 → 次日涨停/溢价 lift>=2x。
-零新 fetch（导出现有 seal_intraday_snapshots）。
+模块提供两套接口（向后兼容 + plan §2 设计）：
+- 纯函数（plan C3/C7 设计，executor/外部传入 snapshots 列表）：
+  - ``compute_trajectory(snapshots) -> dict``：R1 trajectory 纯函数
+  - ``compute_derived_features(snapshots) -> dict``：R7 派生纯函数
+  - ``persist_trajectory(date, code, name, traj, conn)``：写 intraday_features
+  - ``persist_derived_features(date, code, name, derived, conn)``：写 seal_derived_features
+- DB 便利函数（遗留，内部委托纯函数，向后兼容）：
+  - ``compute_seal_trajectory(date, code, db_path) -> SealTrajectory | None``
+  - ``compute_all_trajectories(date, db_path) -> list[SealTrajectory]``
+
+工程底线：
+- 派生是纯函数，输入是 get_snapshots_by_code 返回的时序列表，不依赖网络
+- 缺数据标 None，不臆造（data_status=missing/degraded）
+- 60s 粒度近似标注（broken_duration_min 可能漏 <60s 短时炸板，AC7）
 """
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from vr_paths import resolve_data_dir
 
+_logger = logging.getLogger(__name__)
+
 _SEAL_DB = Path(resolve_data_dir()) / "seal_intraday.db"
 
+# 60s 粒度近似标注（AC7：broken_duration_min 可能漏 <60s 短时炸板）
+_GRANULARITY_NOTE = "60s粒度近似"
+
+
+# ---------------------------------------------------------------------------
+# R1 / R7 纯函数（plan §2 设计，输入 snapshots 列表，不依赖网络/DB）
+# ---------------------------------------------------------------------------
+
+def _linear_regression_slope(ys: list[float]) -> float:
+    """简单线性回归 slope（y = a + b*x，返 b）。n<2 返 0.0。
+
+    x 用快照序号 0..n-1（等间隔，等价于分钟数回归，避免 ts 解析依赖）。
+    """
+    n = len(ys)
+    if n < 2:
+        return 0.0
+    xs = list(range(n))
+    x_mean = sum(xs) / n
+    y_mean = sum(ys) / n
+    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, ys))
+    denominator = sum((x - x_mean) ** 2 for x in xs)
+    return numerator / denominator if denominator else 0.0
+
+
+def compute_trajectory(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+    """R1：从封单时序派生 trajectory 因子（纯函数）。
+
+    输入：get_snapshots_by_code(code, date) 返回的时序列表（按 ts 升序）。
+    输出：{seal_delta, seal_max, seal_min, seal_slope, snapshot_count, data_status}
+
+    算法：
+    - seal_delta = seal_amount[末] - seal_amount[首]（日内封单变化）
+    - seal_max / seal_min = 全时序 seal_amount 的 max / min
+    - seal_slope = 线性回归 slope（x=快照序号, y=seal_amount），正=增强，负=衰减
+    - snapshot_count = len(snapshots)（数据完整性参考，<10 标 degraded）
+    - 空/全缺 seal_amount → data_status=missing，各因子 None
+    """
+    if not snapshots:
+        return {"seal_delta": None, "seal_max": None, "seal_min": None,
+                "seal_slope": None, "snapshot_count": 0, "data_status": "missing"}
+
+    amounts = [s.get("seal_amount") for s in snapshots if s.get("seal_amount") is not None]
+    if not amounts:
+        return {"seal_delta": None, "seal_max": None, "seal_min": None,
+                "seal_slope": None, "snapshot_count": len(snapshots), "data_status": "missing"}
+
+    seal_delta = amounts[-1] - amounts[0] if len(amounts) >= 2 else 0.0
+    seal_max = max(amounts)
+    seal_min = min(amounts)
+    seal_slope = _linear_regression_slope(amounts)
+    # <10 快照标 degraded（数据不充分）
+    data_status = "ok" if len(snapshots) >= 10 else "degraded"
+
+    return {"seal_delta": seal_delta, "seal_max": seal_max, "seal_min": seal_min,
+            "seal_slope": seal_slope, "snapshot_count": len(snapshots),
+            "data_status": data_status}
+
+
+def compute_derived_features(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+    """R7：从封单时序派生战法硬阈值因子（纯函数，不依赖网络）。
+
+    输入：get_snapshots_by_code(code, date) 返回的时序列表（按 ts 升序）。
+    输出：{last_lock_time, broken_duration_min, max_drop_pct, limit_price,
+           granularity_note, data_status}
+
+    算法（AC6，可被 financial_rigor.py 复算）：
+    - last_lock_time：最后一个 open_count==0 的 ts（最后封死时刻）
+      open_count=0 表示当前未开板；全程开板（无 open_count==0）→ None
+    - broken_duration_min：count(open_count>0) × 1 分钟
+      60s 粒度近似（每个快照间隔 60s），可能漏 <60s 短时炸板（AC7 标注）
+    - limit_price：优先 limit_pct 反推（price/(1+limit_pct/100)），
+      缺 limit_pct → 退回首快照 price 近似（标 degraded）
+    - max_drop_pct：(limit_price - min(low_price)) / limit_price * 100
+      缺 low_price → None（不臆造）
+    """
+    if not snapshots:
+        return _empty_derived()
+
+    # last_lock_time：最后一个 open_count==0 的 ts
+    last_lock_time = None
+    for s in snapshots:
+        oc = s.get("open_count")
+        if oc is not None and oc == 0:
+            last_lock_time = s.get("ts")  # 不断覆盖，取最后一个
+
+    # broken_duration_min：open_count>0 的快照数 × 1 分钟（60s 粒度）
+    broken_count = sum(
+        1 for s in snapshots
+        if s.get("open_count") is not None and s["open_count"] > 0
+    )
+    broken_duration_min = float(broken_count)  # 每快照 60s = 1 分钟
+
+    # limit_price：优先 limit_pct 反推，缺则退回首快照 price 近似
+    limit_pct = snapshots[0].get("limit_pct")
+    first_price = snapshots[0].get("price")
+    limit_price = None
+    limit_price_degraded = False
+    if limit_pct is not None and first_price:
+        limit_price = first_price / (1 + limit_pct / 100)
+    elif first_price:
+        limit_price = first_price  # 退回首价近似
+        limit_price_degraded = True
+
+    # max_drop_pct：(涨停价 - min(low_price)) / 涨停价 * 100
+    low_prices = [
+        s.get("low_price") for s in snapshots
+        if s.get("low_price") is not None
+    ]
+    max_drop_pct = None
+    if low_prices and limit_price and limit_price > 0:
+        min_low = min(low_prices)
+        max_drop_pct = (limit_price - min_low) / limit_price * 100
+
+    # data_status
+    data_status = "ok"
+    if not low_prices:
+        data_status = "degraded"  # 缺 low_price
+    if limit_price_degraded:
+        data_status = "degraded"
+
+    return {
+        "last_lock_time": last_lock_time,
+        "broken_duration_min": broken_duration_min,
+        "max_drop_pct": max_drop_pct,
+        "limit_price": limit_price,
+        "granularity_note": _GRANULARITY_NOTE,  # AC7 标注
+        "data_status": data_status,
+    }
+
+
+def _empty_derived() -> dict[str, Any]:
+    """空时序的派生结果（全 None，data_status=missing）。"""
+    return {
+        "last_lock_time": None,
+        "broken_duration_min": None,
+        "max_drop_pct": None,
+        "limit_price": None,
+        "granularity_note": _GRANULARITY_NOTE,
+        "data_status": "missing",
+    }
+
+
+def persist_trajectory(date: str, code: str, name: str | None,
+                       traj: dict[str, Any], conn: sqlite3.Connection) -> None:
+    """R1：trajectory 写入 intraday_features 表（UPSERT）。
+
+    conn 由调用方管理（executor 批量写时复用连接，避免逐只开闭）。
+    """
+    conn.execute(
+        """INSERT OR REPLACE INTO intraday_features
+        (date, code, name, seal_delta, seal_max, seal_min, seal_slope,
+         snapshot_count, computed_at, data_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (date, code, name, traj["seal_delta"], traj["seal_max"], traj["seal_min"],
+         traj["seal_slope"], traj["snapshot_count"], datetime.now().isoformat(),
+         traj["data_status"]),
+    )
+
+
+def persist_derived_features(date: str, code: str, name: str | None,
+                             derived: dict[str, Any],
+                             conn: sqlite3.Connection) -> None:
+    """R7：派生结果写入 seal_derived_features 表（INSERT OR REPLACE）。
+
+    conn 由调用方管理（executor 批量写时复用连接）。
+    """
+    conn.execute(
+        """INSERT OR REPLACE INTO seal_derived_features
+        (date, code, name, last_lock_time, broken_duration_min, max_drop_pct,
+         limit_price, granularity_note, computed_at, data_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (date, code, name, derived["last_lock_time"], derived["broken_duration_min"],
+         derived["max_drop_pct"], derived["limit_price"], derived["granularity_note"],
+         datetime.now().isoformat(), derived["data_status"]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 遗留 DB 便利函数（向后兼容，内部委托纯函数）
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class SealTrajectory:
-    """某日某股的封单 trajectory 特征。"""
+    """某日某股的封单 trajectory 特征（遗留 dataclass，向后兼容）。"""
     code: str
     date: str
     n_snapshots: int
@@ -47,8 +242,14 @@ def _parse_ts_minute(ts: str) -> float:
         return 0.0
 
 
-def compute_seal_trajectory(date: str, code: str, db_path: Path | str | None = None) -> SealTrajectory | None:
-    """从 seal_intraday_snapshots 算 (date,code) 的封单 trajectory。无数据返 None。"""
+def compute_seal_trajectory(date: str, code: str,
+                            db_path: Path | str | None = None) -> SealTrajectory | None:
+    """从 seal_intraday_snapshots 算 (date,code) 的封单 trajectory（DB 便利函数）。
+
+    遗留接口，内部委托纯函数 compute_trajectory 计算 core 特征，
+    额外保留 first/last/mean/break_count（遗留 dataclass 字段）。
+    无数据返 None。
+    """
     db = Path(db_path) if db_path else _SEAL_DB
     if not db.exists():
         return None
@@ -91,8 +292,9 @@ def compute_seal_trajectory(date: str, code: str, db_path: Path | str | None = N
     )
 
 
-def compute_all_trajectories(date: str, db_path: Path | str | None = None) -> list[SealTrajectory]:
-    """某日全部 code 的 trajectory（从 snapshots distinct code）。"""
+def compute_all_trajectories(date: str,
+                             db_path: Path | str | None = None) -> list[SealTrajectory]:
+    """某日全部 code 的 trajectory（从 snapshots distinct code）。遗留便利函数。"""
     db = Path(db_path) if db_path else _SEAL_DB
     if not db.exists():
         return []

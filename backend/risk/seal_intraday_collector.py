@@ -40,12 +40,16 @@ def run_migrations() -> None:
     from migrations import MigrationManager
 
     manager = MigrationManager(db_path=_DB_PATH)
-    migration_v1 = (
-        Path(__file__).resolve().parent.parent
-        / "migrations" / "seal_intraday" / "20260811-001_create_seal_intraday_snapshots.sql"
-    ).read_text(encoding="utf-8")
+    migrations_dir = Path(__file__).resolve().parent.parent / "migrations" / "seal_intraday"
+    migration_v1 = (migrations_dir / "20260811-001_create_seal_intraday_snapshots.sql").read_text(encoding="utf-8")
+    # S070 R6.1：加 low_price + limit_pct 列（R6 分时低点 + R7 涨停价反推）
+    migration_v2 = (migrations_dir / "20260818-001_add_low_price_limit_pct.sql").read_text(encoding="utf-8")
+    # S070 R3：建 intraday_features（R1 trajectory）+ seal_derived_features（R7 派生）两表
+    migration_v3 = (migrations_dir / "20260818-002_create_intraday_features.sql").read_text(encoding="utf-8")
     migrations = [
         {"version": "20260811-001", "name": "create_seal_intraday_snapshots", "sql": migration_v1},
+        {"version": "20260818-001", "name": "add_low_price_limit_pct", "sql": migration_v2},
+        {"version": "20260818-002", "name": "create_intraday_features", "sql": migration_v3},
     ]
     manager.upgrade(migrations)
 
@@ -94,10 +98,11 @@ def save_snapshots(rows: list[dict[str, Any]]) -> int:
     """
     if not rows:
         return 0
-    # 补齐缺失字段（允许部分字段缺失）
+    # 补齐缺失字段（允许部分字段缺失）；S070 R6 加 low_price + limit_pct
     fields = ["ts", "date", "code", "name", "pool", "price", "seal_amount",
               "open_count", "first_seal_time", "consec_boards", "sector",
-              "float_market_cap", "index_5min_change"]
+              "float_market_cap", "index_5min_change",
+              "low_price", "limit_pct"]
     normalized = [{k: r.get(k) for k in fields} for r in rows]
     conn = _get_conn()
     try:
@@ -105,10 +110,12 @@ def save_snapshots(rows: list[dict[str, Any]]) -> int:
             cur = conn.executemany(
                 """INSERT INTO seal_intraday_snapshots
                 (ts, date, code, name, pool, price, seal_amount, open_count,
-                 first_seal_time, consec_boards, sector, float_market_cap, index_5min_change)
+                 first_seal_time, consec_boards, sector, float_market_cap, index_5min_change,
+                 low_price, limit_pct)
                 VALUES (:ts, :date, :code, :name, :pool, :price, :seal_amount,
                  :open_count, :first_seal_time, :consec_boards, :sector,
-                 :float_market_cap, :index_5min_change)""",
+                 :float_market_cap, :index_5min_change,
+                 :low_price, :limit_pct)""",
                 normalized,
             )
             conn.commit()
@@ -205,6 +212,19 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
     # 东财 getTopicZTPool 字段：c=代码/n=名/p=最新价/zdp=涨幅/amount=成交额/
     # ltsz=流通市值/tshare=总股本/hs=换手/lbc=连板/fbt=首封时间/fund=封单额(元)/
     # zbc=炸板次数/hybk=行业。封单额键名是 fund（非 seal_amount）。
+
+    # S070 R6.2：批量取涨停池个股 tencent_quote（分时低点 low=vals[34]）
+    # 一次请求全池 codes（60s TTL 缓存，同周期内复用，不重复请求）
+    # tencent_quote 失败 → low_price 留 None，不臆造（与 S055 data_status 范式一致）
+    codes = [str(item.get("c", "")) for item in zt_pool if item.get("c")]
+    quotes: dict[str, dict] = {}
+    if codes:
+        try:
+            quotes = astock.tencent_quote(codes) or {}
+        except Exception as exc:
+            _logger.warning("[seal_intraday] tencent_quote 取 low 失败: %s", exc)
+            quotes = {}
+
     rows: list[dict[str, Any]] = []
     for item in zt_pool:
         code = str(item.get("c", ""))
@@ -214,6 +234,11 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
         float_cap = item.get("ltsz")
         price = item.get("p") or item.get("zje") or 0
         seal_amount = item.get("fund")  # 封单额（元）
+        # S070 R6：分时低点（tencent_quote 的 low 字段，缺失时 None 不臆造）
+        q = quotes.get(code) or {}
+        low_price = q.get("low") if q else None
+        # S070 R7 前置：涨停涨幅%（zdp，用于反推涨停价 limit_price=price/(1+limit_pct/100)）
+        limit_pct = item.get("zdp")
         rows.append({
             "ts": ts,
             "date": date_str,
@@ -228,6 +253,8 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
             "sector": item.get("hybk"),
             "float_market_cap": float_cap,
             "index_5min_change": index_5min_change,
+            "low_price": low_price,
+            "limit_pct": limit_pct,
         })
 
     written = save_snapshots(rows)
