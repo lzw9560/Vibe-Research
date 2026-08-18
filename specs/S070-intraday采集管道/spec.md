@@ -1,8 +1,8 @@
-# Spec: S070 — intraday 数据采集管道（盘中 ephemeral → 盘后离线 §44 60日复验窗口）
+# Spec: S070 — intraday 数据采集管道（盘中 ephemeral → 盘后离线 §44 60日复验窗口 + 战法因子派生）
 
-> 状态：草案
+> 状态：草案（2026-08-18 扩展：并入原 S080 分时数据扩展内容）
 > 作者：lzw  日期：2026-08-16
-> 关联：S069（每日 forward_test 管道）、S055（盘中封单时序采集）、S066 §44（60日复验窗口）
+> 关联：S069（每日 forward_test 管道）、S055（盘中封单时序采集）、S066 §44（60日复验窗口）、**S079（打板P2仓位闸+龙虎榜，不依赖本 spec）**、**S081（打板P2战法匹配，依赖本 spec R7 派生字段就绪）**
 
 ## 1. 问题 / 目标
 
@@ -26,21 +26,40 @@
 
 ## 3. 需求清单
 
+### 3.1 原始需求（R1-R5，alpha 探索）
+
 - [ ] R1（封单 trajectory）：从 seal_intraday_snapshots 算日内封单 trajectory（delta/max/min/slope）→ 持久化（intraday_features 表或扩 snapshots）。
 - [ ] R2（资金流 intraday 采集）：探 em_get fflow/kline 实时端点，盘中采集个股实时资金净流入 → 持久化。
 - [ ] R3（持久化 + 日积）：intraday_features 表（date/code/feature...）；scheduled 采集日积。
 - [ ] R4（盘后 §44 60日复验窗口）：日积满 ~30 日后，§44 验证 intraday 因子（封单 trajectory / 资金流）→ 次日涨停/溢价 lift。验证前标"未 validated/探索性"跑通，验证后破2x→validated，<2x→标噪声保留接入。
 - [ ] R5（诚实标注）：未满 30 日标探索性；不破 2x 标未 validated（不阻断接入，标噪声跑通）；破 2x 才接入选股权重升级。
 
+### 3.2 战法因子派生扩展（R6-R8，原 S080 并入，2026-08-18）
+
+> **并入背景**：原计划独立 S080 spec 做分时数据扩展，但 S070 已扩展同一个 `seal_intraday_snapshots` 表 + `collect_once` 函数，并入避免两 spec 改同一表/collector 的实现冲突。S081（打板P2战法匹配）依赖本节 R7 派生字段就绪。
+
+- [ ] R6（分时低点采集）：扩展 `seal_intraday_snapshots` 表加 `low_price` 字段 + `collect_once` 采集分时最低价
+  - [ ] R6.1 表迁移：`ALTER TABLE seal_intraday_snapshots ADD COLUMN low_price REAL`（分时最低价，60s 粒度快照时的区间低点）
+  - [ ] R6.2 数据源：分时低点从 `tencent_quote`（腾讯行情，不封 IP）或 `astock` 分时接口取。优先 tencent_quote（已用于 index_5min_change，同源不新增防封风险）
+  - [ ] R6.3 缺失处置：分时低点取不到时 `low_price=NULL`，不臆造（与 S055 既有"data_status=degraded"一致）
+- [ ] R7（战法因子派生计算）：从 `seal_intraday_snapshots` 时序派生 PRD 2 战法硬阈值因子
+  - [ ] R7.1 `last_lock_time`（最后封死时刻）：从时序快照里 `open_count` 最后一次=0 的 `ts` 推算（派生，不需新采集）
+  - [ ] R7.2 `broken_duration_min`（炸板累计时长）：从时序快照里 `open_count>0` 的连续时段累加（60s 粒度，可能漏短时炸板 <60s，标注粒度限制）
+  - [ ] R7.3 `max_drop_pct`（炸板后回撤幅度）：`(涨停价 - low_price) / 涨停价 * 100`，依赖 R6 的 low_price 字段
+  - [ ] R7.4 派生结果持久化：写入 `intraday_features` 表（R3 已建）或新增 `seal_derived_features` 表
+- [ ] R8（S081 依赖门禁）：S081（打板P2战法匹配）战法匹配扩展依赖 R7 派生字段就绪。R7 未落地前，S081 标"数据层未就绪"不进实现
+
 ## 4. 受影响文件
 
 | 文件 | 改动 |
 |---|---|
 | `backend/scheduled_tasks.py` | 扩 seal_intraday_collect 或新增 intraday_fund_flow_collect executor |
-| `backend/strategies/intraday_features.py`（新） | 封单 trajectory 计算 + 资金流 intraday fetch |
+| `backend/strategies/intraday_features.py`（新） | 封单 trajectory 计算 + 资金流 intraday fetch + **R7 战法因子派生**（last_lock_time/broken_duration_min/max_drop_pct） |
 | `backend/data/sources/eastmoney.py` | fflow/kline intraday 端点（若 R2 可行） |
 | `backend/tools/intraday_edge_validation.py`（新） | §44 60日复验窗口验证 intraday 因子 → 次日涨停/溢价 |
-| `backend/tests/` | trajectory 计算 + 采集 executor 测试 |
+| `backend/risk/seal_intraday_collector.py`（修改） | **R6**：collect_once 扩展采集 low_price（分时最低价，tencent_quote 源） |
+| `backend/migrations/seal_intraday/`（新增迁移） | **R6.1**：`ALTER TABLE seal_intraday_snapshots ADD COLUMN low_price REAL` |
+| `backend/tests/` | trajectory 计算 + 采集 executor + **R7 派生计算**测试 |
 
 ## 5. 设计方案
 
@@ -56,10 +75,22 @@
 
 ## 6. 验收标准
 
+### 6.1 原始验收（A1-A4）
+
 - [ ] A1 R1：封单 trajectory 从 snapshots 算出 + 持久化（intraday_features 日积）。
 - [ ] A2 R2（若可行）：资金流 intraday 采集 + 持久化。
 - [ ] A3 ~30 日后 §44 60日复验窗口：intraday 因子 → 次日涨停 lift 报告（破 2x → validated 接选股权重升级；<2x → 标未 validated 保留接入 + 考虑 pivot (b)）。
 - [ ] A4 诚实：未满 30 探索性；不臆造（缺数据标 None）。
+
+### 6.2 战法因子派生验收（A5-A8，原 S080 并入）
+
+- [ ] A5 R6：`seal_intraday_snapshots` 表加 `low_price` 字段，`collect_once` 采集分时最低价（tencent_quote 源）。缺失时 `low_price=NULL` 不臆造
+- [ ] A6 R7：派生计算函数正确输出 `last_lock_time` / `broken_duration_min` / `max_drop_pct`，可由 `financial_rigor.py` 复算
+  - `last_lock_time`：从 `open_count` 最后一次=0 的 `ts` 推算
+  - `broken_duration_min`：从 `open_count>0` 连续时段累加（60s 粒度，标注粒度限制）
+  - `max_drop_pct`：`(涨停价 - low_price) / 涨停价 * 100`
+- [ ] A7 R7 粒度限制标注：`broken_duration_min` 60s 粒度可能漏短时炸板（<60s），派生结果标注"60s 粒度近似"
+- [ ] A8 R8 门禁：S081 战法匹配 spec 标"数据层未就绪"直到 R7 落地。R7 落地后通知 S081 可进实现
 
 ## 7. 合规自查（弱合规，§1.2 工程底线）
 
