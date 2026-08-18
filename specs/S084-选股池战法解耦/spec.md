@@ -22,21 +22,122 @@
 
 ## 2. 背景
 
-### 2.1 战法因子缺口分析（grill 核实）
+### 2.1 选股池因子补全清单（explorer 全量数据源盘点 2026-08-18）
 
-11 个短线战法需要的盘前因子 vs 漏斗已采集字段：
+> 原则：不删任何因子。能取到的标数据源；暂时取不到的标"⚠️ 预警：暂时无法取得" + 替代方案。盘前可取 vs 盘中才能取分类标注。
 
-| 因子 | 哪些战法用 | 漏斗是否有 | 缺口来源 |
+#### A. 已有因子（选股池已采集，15 个，不补）
+
+| 因子 | 数据源 | 盘前可取? |
+|---|---|---|
+| turnover_pct / vol_ratio / amount_yi / amplitude_pct | tencent_quote | ⚠️ 盘中实时值（盘前取昨日 K线复算） |
+| main_net_inflow / main_net_5d | stock_fund_flow_120d | ✅ 盘前取昨日（T+1） |
+| dragon_tiger_inst_net | dragon_tiger_board | ✅ 盘前取昨日（T+1） |
+| dragon_tiger_hot_money_relay | fetch_dt_hot_money_relay | ✅ 盘前取昨日 |
+| northbound | fetch_northbound | ⚠️ 2024-08-19 后停更返 None |
+| seal_amount | 涨停四池 fund | ✅ 盘前取昨日池 |
+| float_market_cap | tencent_quote float_mcap_yi | ✅ |
+| auction_open_pct | auction_screener | ⚠️ 盘后分析工具（15:30 后） |
+| max_high_pct / shadow_length_pct / ma_5_status / prev_turnover_pct | K线复算（S083 ada2b71） | ✅ 历史日K线 |
+
+#### B. 要补的因子 — 数据源可靠可取（17 个，标数据源 + 盘前/盘中）
+
+| 因子 | 数据源 | 去向 | 盘前可取? | 说明 |
+|---|---|---|---|---|
+| **涨停池原始 dict（6 字段）** | | | | |
+| lbc（连板数）| `em_zt_topic_pool` getYesterdayZTPool | pool_item | ✅ 盘前取昨日 | 走 em_get 限流 |
+| zbc（炸板次数）| 同上 | pool_item | ✅ | |
+| fbt（首封时间）| 同上 | pool_item | ✅ | |
+| zdp（涨幅%）| 同上 | pool_item | ✅ | |
+| zje（涨停价）| 同上 | pool_item | ✅ | |
+| hybk（行业/概念）| 同上 | pool_item | ✅ | |
+| **tencent_quote 扩展（8 字段）** | | | | |
+| last_close（昨收）| tencent_quote vals[4] | IndicatorSet | ✅ | 不封 IP |
+| open（开盘）| vals[5] | IndicatorSet | ⚠️ 盘中 | 盘前取昨日 K线 bar.open |
+| change_amt（涨跌额）| vals[31] | IndicatorSet | ⚠️ 盘中 | 同上 |
+| pe_ttm（市盈率）| vals[39] | IndicatorSet | ✅ | 静态估值 |
+| mcap_yi（总市值）| vals[44] | IndicatorSet | ✅ | |
+| pb（市净率）| vals[46] | IndicatorSet | ✅ | |
+| limit_up（涨停价）| vals[47] | IndicatorSet | ✅ | |
+| limit_down（跌停价）| vals[48] | IndicatorSet | ✅ | |
+| **板块资金（3 字段）** | | | | |
+| sector_net_inflow（板块净流入）| `market._sectors()` → akshare stock_fund_flow_industry | IndicatorSet | ⚠️ 盘中 | **替代方案**：盘前取昨日 _sectors() 返回值（akshare 盘前可取昨日） |
+| sector_inflow（流入）| 同上 | IndicatorSet | ⚠️ 盘中 | 同上替代 |
+| sector_outflow（流出）| 同上 | IndicatorSet | ⚠️ 盘中 | 同上替代 |
+| **K线扩展（1 字段）** | | | | |
+| prev_amount_yi（前日成交额）| activity.py 已取 K线 bars 前日 bar | IndicatorSet | ✅ | |
+| **S070 R7 派生（3 字段）** | | | | |
+| broken_duration_min | `compute_derived_features(get_snapshots_by_code)` | derived 子对象 | ⚠️ 盘中采集 | **预警：盘前 snapshots 未采集时 None**。替代方案：盘前用涨停池 zbc（炸板次数）+ fbt（首封时间）做近似代理，标"60s 粒度近似" |
+| max_drop_pct | 同上 | derived 子对象 | ⚠️ 盘中 | 同上预警。替代方案：盘前用 K线前日 low/涨停价 算前日回撤近似 |
+| last_lock_time | 同上 | derived 子对象 | ⚠️ 盘中 | 同上预警。替代方案：盘前用涨停池 fbt（首封时间）做近似代理 |
+| **GeneScore（完整对象）** | | | | |
+| total_score / zt_count_250d / factors（封板率/次日溢价率/红盘率/涨停频次/炸板后溢价）| `get_screener_result`（漏斗 R1 gene.py 已调但只存数字）| gene_score 子对象 | ✅ | gene.py 扩展存完整对象 |
+
+#### C. 数据源已有但选股池没采集的因子 — 建议补进（explorer 盘点发现，标数据源 + 可靠性）
+
+| 因子 | 数据源 | 去向 | 盘前可取? | 实战价值 | 说明 |
+|---|---|---|---|---|---|
+| **市场宽度（5 字段，市场级非个股级）** | | | | | |
+| breadth（冰点/偏弱/中性/偏强/普涨）| `market.get_short_term_emotion()` | FunnelResult.market_context | ✅ | 高 | 仓位闸硬熔断参考 |
+| break_rate（炸板率）| 同上 | market_context | ✅ | 高 | 退潮信号 |
+| seal_rate（封板率）| 同上 | market_context | ✅ | 高 | 板不牢信号 |
+| promotion_rate（晋级率）| 同上 | market_context | ✅ | 高 | 接力意愿 |
+| max_boards / ladder tiers（连板高度梯队）| 同上 | market_context | ✅ | 高 | 情绪天花板 |
+| **龙虎榜席位明细（已实现 S079，未进选股池）** | | | | | |
+| buy_one_ratio（买一占比）| `seat_engine.compute_consensus_signal` | DiagnosisCard.seat_detail | ✅ | 高 | 独食独大判定 |
+| day_trip_ratio（一日游占比）| `hot_money_seats.SeatRiskFactor` | seat_detail | ✅ | 高 | 次日砸盘风险 |
+| institution_ratio（机构占比）| 同上 | seat_detail | ✅ | 中 | 机构合力 |
+| risk_label（高/中/低风险）| 同上 | seat_detail | ✅ | 高 | 综合风控标记 |
+| **公告催化类型 + 概念联动（2 字段）** | | | | | |
+| announcement_type（预增/重组/回购/其他）| `catalyst.py classify_announcement` | IndicatorSet | ✅ | 中 | 次日溢价参考 |
+| concept_count（同概念涨停家数）| `catalyst.py concepts` 列表长度 | IndicatorSet | ✅ | 高 | 板块联动判定 |
+| **同花顺涨停原因（5 字段）** | | | | | |
+| reason（涨停原因题材）| `ths_limit_up_pool` | pool_item 扩展 | ✅ | 中 | 题材判定 |
+| board_type（板型：换手/一字/T字）| 同上 | pool_item 扩展 | ✅ | 高 | 打板战法区分 |
+| ths_seal_rate（同花顺封板率）| 同上 | pool_item 扩展 | ✅ | 中 | 交叉验证 |
+| first_time（首次涨停时间）| 同上 | pool_item 扩展 | ✅ | 中 | 与 fbt 交叉验证 |
+| is_again（回封标记）| 同上 | pool_item 扩展 | ✅ | 中 | 烂板回封战法 |
+| **封单变化率（派生）** | | | | | |
+| seal_delta（封单额变化率）| `seal_intraday_snapshots` 表已有 seal_amount 时序 | IndicatorSet | ⚠️ 盘中 | 高 | **预警：盘前 snapshots 未采集时 None**。替代：盘前用涨停池 fund（封单额静态值） |
+| **N日涨幅（派生，3 字段）** | | | | | |
+| change_5d / change_10d / change_20d | K线 bars 已取（activity.py）| IndicatorSet | ✅ | 中 | 短期趋势判断 |
+| **换手率分位（派生）** | | | | | |
+| turnover_percentile_250d | K线 250日 bars 已取 | IndicatorSet | ✅ | 中 | 放量异常判定 |
+| **板块资金连续流入天数（派生）** | | | | | |
+| sector_inflow_days | fund_flow main_net_5d 已有 5日累计 | IndicatorSet | ✅ | 中 | 主线确立判定 |
+
+#### D. ⚠️ 预警：暂时无法取得，积极寻找可靠源
+
+| 因子 | 现状 | 替代方案 | 优先级 |
 |---|---|---|---|
-| GeneScore（total_score/zt_count_250d/factors/封板率/次日溢价率/涨停频次） | 既有 9 战法全部 | ❌ gene.py 只存 gene_score 数字，丢完整对象 | limitup_screener（漏斗 R1 已调但只存数字） |
-| 涨停池原始 dict（lbc/zdp/fbt/zbc） | 弱转强+形态反包 | ❌ 漏斗不含 | astock.em_zt_topic_pool（涨停池） |
-| S070 R7 分时派生（broken_duration/max_drop/last_lock） | 弱转强接力 | ❌ 漏斗不含 | compute_derived_features(get_snapshots_by_code) |
-| 前日成交额（prev_amount_yi） | 形态反包（放量对比） | ❌ 漏斗只有当日 amount_yi | K线前日 bar（activity.py 已取 bars） |
-| K线派生（max_high/shadow/ma_5/prev_turnover） | 形态反包+弱转强 | ✅ S083 已加（ada2b71） | 已补全 |
-| 活跃度（turnover/vol_ratio/amount/amplitude） | 所有战法通用 | ✅ 漏斗 R2 已有 | 已有 |
-| 资金流（main_net/dragon_tiger/northbound） | 所有战法通用 | ✅ 漏斗 R2 已有 | 已有 |
+| 竞价金额（9:25 集合竞价成交额）| repo 无实时竞价数据源（auction_screener 是盘后分析非实时）| **积极寻找**：东财 push2ex 竞价接口 / akshare stock_zh_a_minute | 高（弱转强核心因子） |
+| 五档买卖盘（买一/卖一挂单量比）| repo 无盘口数据源 | **积极寻找**：东财 push2 盘口接口 / Level-2（需付费） | 高（封板意愿判定） |
+| 实时逐笔成交（红字大单/连续大单）| 需 Level-2 付费 | **暂无替代**：标记"需 Level-2 数据源" | 中 |
+| 北向实时资金 | 2024-08-19 后停更 | **暂无替代**：保留字段标 None + "北向停更" | 低 |
+| 筹码分布 | repo 无数据源 | **积极寻找**：akshare 筹码分布 API | 中 |
 
-**6 个缺口**：GeneScore 完整对象 / 涨停池原始 dict / S070 R7 分时派生（3 字段）/ 前日成交额。
+#### E. 盘前 vs 盘中因子分类
+
+**✅ 盘前可取（T-1 数据 + 静态数据 + 历史K线派生）**：
+- 涨停池昨日数据（lbc/zbc/fbt/zdp/zje/hybk/fund）
+- 基因得分（GeneScore 完整对象）
+- 市场宽度（breadth/break_rate/seal_rate/promotion_rate/max_boards）
+- 龙虎榜席位（buy_one_ratio/day_trip_ratio/institution_ratio/risk_label）
+- 资金流昨日（main_net_inflow/main_net_5d/dragon_tiger_inst_net/hot_money_relay）
+- 公告 + 概念 + 同花顺涨停原因
+- 估值（pe_ttm/pb/mcap_yi/limit_up/limit_down）
+- K线派生（max_high/shadow/ma_5/prev_turnover/prev_amount_yi/change_5d~20d/turnover_percentile）
+- 板块资金昨日（_sectors 盘前可取昨日值）
+
+**⚠️ 盘中才能取（实时数据）**：
+- tencent_quote 实时行情（price/change_pct/vol_ratio 等当日值）
+- 当日涨停池（em_zt_topic_pool 当日池）
+- 当日市场情绪（封板率/晋级率当日值）
+- S070 R7 分时派生（broken_duration/max_drop/last_lock）
+- 封单变化率（seal_delta 需盘中 snapshots 时序）
+- 板块资金当日值（sector_flow date<今日 返 None）
+
+**盘前降级策略**：盘中因子在盘前取不到时标 None + 原因（"盘中采集"/"实时行情"/"snapshots 未就绪"），用替代近似值（涨停池静态值/K线历史复算）标注"近似"，不臆造。盘中采集完后补全。
 
 ### 2.2 既有选股池 API（grill 核实，Q4=A 复用）
 
@@ -72,9 +173,14 @@
 - [ ] R3：`DiagnosisCard` 加 `derived: dict | None = None` 字段（S070 R7 分时派生）
   - [ ] R3.1 漏斗新增 source 或扩展，调 `compute_derived_features(get_snapshots_by_code(code, date))` 取 broken_duration_min/max_drop_pct/last_lock_time
   - [ ] R3.2 盘前 snapshots 未采集时 `derived=None` 标"分时数据未就绪"降级，不臆造
-- [ ] R4：`IndicatorSet` 加 `prev_amount_yi: Optional[float] = None`（前日成交额）
-  - [ ] R4.1 `activity.py` 已取 K线 bars，从前日 bar 算 `prev_amount_yi = prev_bar.amount / 1e8`
-  - [ ] R4.2 `diagnosis.py` `build_indicator_set` 透传
+- [ ] R4：`IndicatorSet` 扩展 12 字段（tencent_quote 扩展 8 + 板块资金 3 + 前日成交额 1）
+  - [ ] R4.1 tencent_quote 扩展 8 字段：`last_close`（昨收 vals[4]）/ `open`（开盘 vals[5]）/ `change_amt`（涨跌额 vals[31]）/ `pe_ttm`（市盈率 vals[39]）/ `mcap_yi`（总市值 vals[44]）/ `pb`（市净率 vals[46]）/ `limit_up_price`（涨停价 vals[47]）/ `limit_down_price`（跌停价 vals[48]）
+    - `activity.py` 已调 tencent_quote 取 price/change_pct/high/low/turnover_pct/amplitude_pct/float_mcap/vol_ratio，扩展取这 8 个字段（不重新调，同一次 tencent_quote 返回扩展读 vals）
+  - [ ] R4.2 板块资金 3 字段：`sector_net_inflow`（板块净流入）/ `sector_inflow`（流入）/ `sector_outflow`（流出）
+    - 从 `market._sectors()` 取（`astock._akshare().stock_fund_flow_industry`，每日复盘首页已展示 line 470-473）
+    - 或从 `fund_flow.py` 的 `fetch_sector_flow`（catalyst source 已调）取
+  - [ ] R4.3 前日成交额：`prev_amount_yi`（activity.py 已取 K线 bars，从前日 bar 算 `prev_bar.turnover / 1e8`）
+  - [ ] R4.4 `diagnosis.py` `build_indicator_set` 透传 12 新字段
 
 ### 3.2 战法从 DiagnosisCard 读全部因子（Q3=A + Q6=B）
 
@@ -111,10 +217,11 @@
 
 | 文件 | 改动 |
 |---|---|
-| `backend/candidate_funnel/models.py`（修改） | DiagnosisCard 加 3 字段（gene_score/pool_item/derived）；IndicatorSet 加 prev_amount_yi |
+| `backend/candidate_funnel/models.py`（修改） | DiagnosisCard 加 3 字段（gene_score/pool_item/derived）；IndicatorSet 加 12 字段（last_close/open/change_amt/pe_ttm/mcap_yi/pb/limit_up_price/limit_down_price/sector_net_inflow/sector_inflow/sector_outflow/prev_amount_yi）|
 | `backend/candidate_funnel/sources/gene.py`（修改） | 扩展 genes dict 存完整 GeneScore 对象 |
-| `backend/candidate_funnel/sources/activity.py`（修改） | 已取 K线 bars，扩展算 prev_amount_yi；或新增涨停池原始 dict 取数 |
-| `backend/candidate_funnel/sources/`（新增 source） | 涨停池原始 dict source（从 em_zt_topic_pool 取 lbc/zdp/fbt/zbc）+ S070 R7 派生 source |
+| `backend/candidate_funnel/sources/activity.py`（修改） | 已调 tencent_quote，扩展读 vals[4/5/31/39/44/46/47/48] 取 8 新字段；已取 K线 bars 算 prev_amount_yi |
+| `backend/candidate_funnel/sources/fund_flow.py`（修改） | 扩展取板块资金 3 字段（sector_net_inflow/inflow/outflow，从 stock_fund_flow_industry 或 fetch_sector_flow）|
+| `backend/candidate_funnel/sources/`（新增 source） | 涨停池原始 dict source（从 em_zt_topic_pool 取 lbc/zdp/fbt/zbc/zje/hybk）+ S070 R7 派生 source |
 | `backend/candidate_funnel/diagnosis.py`（修改） | build_diagnosis_card 塞入 gene_score/pool_item/derived |
 | `backend/limitup_strategy.py`（修改） | match_strategies 各 elif 从 DiagnosisCard 读因子，删各自取数代码 |
 | `backend/strategies/strategy_matcher.py`（修改） | match() 改为接受 DiagnosisCard（或多参数） |
@@ -177,7 +284,11 @@
 - [ ] AC2：gene.py 扩展存完整 GeneScore 对象（不只存 gene_score 数字），DiagnosisCard.gene_score 非 None
 - [ ] AC3：pool_item 从 astock.em_zt_topic_pool 取（lbc/zdp/fbt/zbc），走 em_get 限流
 - [ ] AC4：derived 从 S070 R7 compute_derived_features 取（broken_duration/max_drop/last_lock），盘前未采集时 None 降级
-- [ ] AC5：IndicatorSet 含 prev_amount_yi（前日成交额，activity.py 从 K线前日 bar 算）
+- [ ] AC5：IndicatorSet 含 12 扩展字段（tencent_quote 8 + 板块资金 3 + 前日成交额 1）
+- [ ] AC5a：FunnelResult 含 market_context 字段（市场宽度5因子：breadth/昨涨停今表现/炸板率/封板率/连板高度梯队），从 market.get_short_term_emotion() 取
+- [ ] AC5b：DiagnosisCard 含 seat_detail 子对象（龙虎榜席位明细：买一占比/一日游占比/机构占比），从 seat_engine.compute_consensus_signal 取
+- [ ] AC5c：IndicatorSet 含 4 派生因子（封单变化率/N日涨幅5日10日20日/换手率分位/板块资金连续流入天数），从已有数据派生不需新源
+- [ ] AC5d：IndicatorSet 含公告催化类型（announcement_type）+ 概念板块联动度（concept_heat/sector_linkage_count），从 catalyst.py 已有数据取
 - [ ] AC6：match_strategies 各 elif 从 DiagnosisCard 读全部因子，不调 astock/kline/S070（删重复取数代码）
 - [ ] AC7：既有 9 战法回归通过（传/不传 card 命中一致）
 - [ ] AC8：前端 Workflow.tsx 有两级 Tab（选股池/战法），选股池 Tab 调 runFunnel API 展示漏斗 + 候选
@@ -232,3 +343,4 @@
 - T1：pre_market_workflow 解耦后是否完全废弃（R9.4）—— 实阶段核实选股池 Tab + 战法 Tab 是否能完全替代盘前简报
 - T2：价值选股池（S005 value_funnel）是否纳入选股池 Tab 作为第二个池子 —— 本 spec 只做短线选股池，价值池后续
 - T3：战法-选股池映射（哪些战法用哪个池子）—— 本 spec 短线 11 战法共用短线池，映射=1:1，后续价值战法加入时需映射
+- T4：**多源异构 A 股数据源子模块**（独立 backlog，不影响 S084 主线）—— 在 astock 基础上打造更强大的多源异构数据层，抽离成独立子模块。目标：统一封装东财/腾讯/同花顺/mootdx/akshare/新浪/百度等多源数据，自动回退 + 交叉验证 + 统一字段口径，消除当前散落在 astock.py / data/sources/ / candidate_funnel/sources/ 的重复取数。explorer 全量盘点（exp-1）已确认现有数据源全貌，可作为子模块设计基础。**后续独立 spec，不阻断 S084**
