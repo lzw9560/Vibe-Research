@@ -67,6 +67,8 @@ EXCLUDE_THRESHOLDS: dict = {
     # ── 层3 市场环境（T-1 粗筛）──────────────────────────────────────────
     "market_drop_threshold": -1.5,  # 大盘跌 >1.5% 标记高风险（不直接剔除，仅标记）
     "min_sector_zt_count": 2,       # 同板块涨停 <2 且无题材 剔除（孤板无板块效应）
+    "exclude_chinext": True,        # 剔除创业板（300/301 开头），待回测校准
+    "exclude_isolated_board": True, # 孤板剔除开关（用户可关），待回测校准
 }
 
 
@@ -380,6 +382,7 @@ def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], l
         if reasons:
             filtered.append({
                 "code": code,
+                "name": fb.get("name", ""),
                 "layer": 1,
                 "reason": "/".join(reasons),
             })
@@ -450,6 +453,7 @@ def exclude_layer2_chip_structure(
         if reasons:
             filtered.append({
                 "code": code,
+                "name": fb.get("name", ""),
                 "layer": 2,
                 "reason": "/".join(reasons),
             })
@@ -576,8 +580,10 @@ def exclude_layer3_market_env(
         "ladder_broken": ladder_broken,
     }
 
-    # 层3 剔除：同板块涨停 <2 且无题材（孤板无板块效应）
+    # 层3 剔除条件读取
     min_sector_count = EXCLUDE_THRESHOLDS["min_sector_zt_count"]
+    exclude_chinext = EXCLUDE_THRESHOLDS.get("exclude_chinext", True)
+    exclude_isolated = EXCLUDE_THRESHOLDS.get("exclude_isolated_board", True)
 
     kept: list[dict] = []
     filtered: list[dict] = []
@@ -598,8 +604,12 @@ def exclude_layer3_market_env(
 
         reasons: list[str] = []
 
-        # 同板块涨停 < min_sector_zt_count 且无题材 → 剔除
-        if sector_count < min_sector_count and not concept_tags:
+        # 创业板剔除（300/301 开头），开关 exclude_chinext 控制
+        if exclude_chinext and code.startswith(("300", "301")):
+            reasons.append("创业板剔除")
+
+        # 孤板剔除：同板块涨停 < min_sector_zt_count 且无题材，开关 exclude_isolated 控制
+        if exclude_isolated and sector_count < min_sector_count and not concept_tags:
             reasons.append(
                 f"同板块{sector_count}家涨停无题材"
             )
@@ -610,6 +620,7 @@ def exclude_layer3_market_env(
         if reasons:
             filtered.append({
                 "code": code,
+                "name": fb.get("name", ""),
                 "layer": 3,
                 "reason": "/".join(reasons),
             })
