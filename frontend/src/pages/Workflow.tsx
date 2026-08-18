@@ -519,7 +519,7 @@ export default function Workflow() {
       <div className="space-y-6">
         <PageHeader
           title="选股工作流"
-          subtitle="战法流入口 · 首板流已实现 / 连板流·炸板回交流·低吸流·反包流·N字反击流 待实现"
+            subtitle="战法流入口 · 首板流·弱转强接力·反包流 已实现 / 连板流·炸板回交流·低吸流·N字反击流 待实现"
           actions={
             <div className="flex items-center gap-2">
               <AskAiButton context={askAiContext} />
@@ -585,13 +585,22 @@ export default function Workflow() {
               dimReason="待实现"
             />
 
-            {/* 反包流 待实现 */}
+            {/* 反包流 ✅ 已实现（S081 pattern_reversal） */}
             <StrategyFlowCard
               title="反包流"
-              subtitle="前日大跌后反包 T+1 工作流"
+              subtitle="前日大跌/长上影后反包 T+1 工作流"
               icon={BarChart3}
-              implemented={false}
-              dimReason="待实现"
+              implemented
+              footnote="S081 形态反包战法已实现（阈值探索性，待 live 验算）"
+            />
+
+            {/* 弱转强接力 ✅ 已实现（S081 weak_turn_strong） */}
+            <StrategyFlowCard
+              title="弱转强接力"
+              subtitle="昨日分歧炸板 → 次日弱转强 T+1 接力工作流"
+              icon={Zap}
+              implemented
+              footnote="S081 弱转强战法已实现（依赖 S070 R7 分时派生，阈值探索性，待 live 验算）"
             />
 
             {/* N字反击流 待实现 */}
