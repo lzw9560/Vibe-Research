@@ -553,17 +553,29 @@ function PositionNode({ data }: { data: FirstBoardCandidatesResponse | null }) {
         </span>
       </div>
       {candidates.length > 0 ? (
-        <div className="mt-2 space-y-1">
-          {/* 候选超过 20 只时限制高度可滚动，避免节点过长 */}
-          <div className={candidates.length > 20 ? "max-h-60 space-y-1 overflow-y-auto pr-1" : "space-y-1"}>
-            {candidates.map((c) => (
-              <div key={c.code} className="flex items-center justify-between text-[11px]">
-                <span className="text-foreground">
-                  #{c.rank} {c.code} {c.name}
-                </span>
-                <span className="font-mono text-primary">{c.total.toFixed(1)}</span>
-              </div>
-            ))}
+        <div className="mt-2">
+          {/* 表格展示全部候选（候选多时滚动，表头 sticky 固定） */}
+          <div className="max-h-60 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-card/80 backdrop-blur">
+                <tr className="border-b border-border/40 text-muted-foreground">
+                  <th className="px-2 py-1.5 text-left font-medium">#</th>
+                  <th className="px-2 py-1.5 text-left font-medium">代码</th>
+                  <th className="px-2 py-1.5 text-left font-medium">名称</th>
+                  <th className="px-2 py-1.5 text-right font-medium">评分</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((c) => (
+                  <tr key={c.code} className="border-b border-border/20 hover:bg-muted/10">
+                    <td className="px-2 py-1.5 text-muted-foreground">{c.rank}</td>
+                    <td className="px-2 py-1.5 font-mono">{c.code}</td>
+                    <td className="px-2 py-1.5">{c.name}</td>
+                    <td className="px-2 py-1.5 text-right font-mono font-bold text-primary">{c.total.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           <div className="mt-1 text-[10px] text-muted-foreground/60">
             ⚠ 推荐参考，不替用户做决定 · 风控：止损 −3% / 止盈 +5% / T+1 必卖
