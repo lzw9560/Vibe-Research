@@ -240,6 +240,22 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
                   <div className="mt-0.5 text-[10px] text-muted-foreground">
                     {layerReasons[layer]}
                   </div>
+                  {/* 层3 专属：孤板剔除开关 UI（后端常量，前端只读展示） */}
+                  {layer === 3 && (
+                    <div className="mt-1.5 flex items-center justify-between rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-medium text-amber-200">孤板剔除</span>
+                        {/* 只读 toggle（不可交互——后端无 API 修改，仅展示当前常量状态） */}
+                        <span className="inline-flex h-4 w-7 items-center rounded-full bg-emerald-500/30 px-0.5" title="后端常量 EXCLUDE_THRESHOLDS.exclude_isolated_board=true，前端只读">
+                          <span className="h-3 w-3 translate-x-3 rounded-full bg-emerald-400" />
+                        </span>
+                        <span className="text-[10px] text-emerald-400">开</span>
+                      </div>
+                      <span className="text-[9px] text-muted-foreground/50" title="后端 EXCLUDE_THRESHOLDS 常量，前端只读">
+                        后端常量 · 只读
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {/* 该层剔除明细子表格（可收折） */}
                 {excludedByLayer[layer].length > 0 && (
@@ -277,7 +293,7 @@ function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | nul
                               className="border-b border-border/20 hover:bg-muted/10"
                             >
                               <td className="px-2 py-1 font-mono text-destructive">{e.code}</td>
-                              <td className="px-2 py-1 text-muted-foreground/50">—</td>
+                              <td className="px-2 py-1 text-foreground">{e.name || "—"}</td>
                               <td className="px-2 py-1 text-destructive/80">{e.reason}</td>
                             </tr>
                           ))}

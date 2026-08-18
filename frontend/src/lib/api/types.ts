@@ -1619,6 +1619,7 @@ export interface FirstBoardCandidate {
 /** 三层剔除记录（层1 封板质量 / 层2 筹码结构 / 层3 市场环境）。 */
 export interface FirstBoardExcludedItem {
   code: string;
+  name?: string;                            // 标的名称（后端 excluded 记录补 name 字段；旧快照可能无）
   layer: 1 | 2 | 3;
   reason: string;
   [key: string]: unknown;
