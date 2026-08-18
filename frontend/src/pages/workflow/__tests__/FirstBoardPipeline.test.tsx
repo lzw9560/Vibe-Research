@@ -62,8 +62,8 @@ describe("FirstBoardPipeline 主视图 (S075 077)", () => {
     expect(screen.getByText("候选池")).toBeInTheDocument();
     // ② 确认节点（节点标题 "② 确认"，ArrowDown label "② 确认" 也匹配 → getAllByText）
     expect(screen.getAllByText(/② 确认/).length).toBeGreaterThan(0);
-    // ③ 建仓节点
-    expect(screen.getAllByText(/③ 建仓/).length).toBeGreaterThan(0);
+    // ③ 候选推荐节点（原"③ 建仓"改名为"③ 候选推荐"——展示全部候选不替用户做决定）
+    expect(screen.getAllByText(/③ 候选推荐/).length).toBeGreaterThan(0);
     // ④ 卖出节点
     expect(screen.getAllByText(/④ 卖出/).length).toBeGreaterThan(0);
     // ⑤ 结算节点
@@ -102,7 +102,7 @@ describe("FirstBoardPipeline 主视图 (S075 077)", () => {
     expect(screen.getByText("4 板")).toBeInTheDocument();
   });
 
-  it("③ 建仓节点显示前 3-5 只候选 + 评分", () => {
+  it("③ 候选推荐节点显示全部候选 + 评分", () => {
     renderPipeline();
     expect(screen.getByText(/001358/)).toBeInTheDocument();
     expect(screen.getByText(/兴欣新材/)).toBeInTheDocument();

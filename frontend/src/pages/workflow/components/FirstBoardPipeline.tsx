@@ -509,38 +509,43 @@ function ConfirmNode({ data }: { data: FirstBoardCandidatesResponse | null }) {
   );
 }
 
-// ---- ③ 建仓节点 ----
+// ---- ③ 候选推荐节点（展示全部候选，不替用户做决定）----
 function PositionNode({ data }: { data: FirstBoardCandidatesResponse | null }) {
   const candidates = data?.candidates ?? [];
-  const top = candidates.slice(0, 5);
   return (
-    <div className={top.length > 0 ? NODE : NODE_DASHED}>
+    <div className={candidates.length > 0 ? NODE : NODE_DASHED}>
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-medium">③ 建仓</div>
-          <div className="text-[11px] text-muted-foreground">前 3-5 只 + 评分 + 仓位</div>
+          <div className="text-sm font-medium">③ 候选推荐</div>
+          <div className="text-[11px] text-muted-foreground">全部候选 · 评分排序 · 推荐参考不替用户做决定</div>
         </div>
         <span className="rounded bg-primary/20 px-1 text-[10px] text-primary">
-          {top.length > 0 ? `${top.length} 候选` : "待 Phase 3"}
+          {candidates.length > 0 ? `全部 ${candidates.length} 只` : "待 Phase 3"}
         </span>
       </div>
-      {top.length > 0 ? (
+      {candidates.length > 0 ? (
         <div className="mt-2 space-y-1">
-          {top.map((c) => (
-            <div key={c.code} className="flex items-center justify-between text-[11px]">
-              <span className="text-foreground">
-                #{c.rank} {c.code} {c.name}
-              </span>
-              <span className="font-mono text-primary">{c.total.toFixed(1)}</span>
-            </div>
-          ))}
+          {/* 候选超过 20 只时限制高度可滚动，避免节点过长 */}
+          <div className={candidates.length > 20 ? "max-h-60 space-y-1 overflow-y-auto pr-1" : "space-y-1"}>
+            {candidates.map((c) => (
+              <div key={c.code} className="flex items-center justify-between text-[11px]">
+                <span className="text-foreground">
+                  #{c.rank} {c.code} {c.name}
+                </span>
+                <span className="font-mono text-primary">{c.total.toFixed(1)}</span>
+              </div>
+            ))}
+          </div>
           <div className="mt-1 text-[10px] text-muted-foreground/60">
-            风控：止损 −3% / 止盈 +5% / max_hold_days=1 / T+1 必卖
+            ⚠ 推荐参考，不替用户做决定 · 风控：止损 −3% / 止盈 +5% / T+1 必卖
+          </div>
+          <div className="text-[10px] text-amber-200/60">
+            §44 未 validated 仅参考；阈值/权重待回测校准
           </div>
         </div>
       ) : (
         <div className="mt-2 text-[10px] text-muted-foreground/60">
-          候选池为空，无建仓标的
+          候选池为空
         </div>
       )}
     </div>

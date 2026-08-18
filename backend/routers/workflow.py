@@ -958,8 +958,8 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
     """S075：首板流候选池——返回候选+剔除原因+9维度评分，供前端pipeline展示。
 
     时序：T 日收盘前（15:00 前）取 T-1 数据（当日涨停池盘前为空），收盘后取当日。
-    快照优先：有快照读快照（含空快照——盘前跑的空快照标"盘前数据，盘后更新"），
-    无快照才实时跑。
+    快照优先：选股只在盘后执行（调度16:15），盘中/盘前读 T-1 盘后快照，不实时跑
+    （盘中实时跑会用当日盘中数据污染 T-1 选股结果）。
     诚实标注：9维度评分§44未validated仅参考；阈值/权重待回测校准。
     """
     try:
@@ -969,7 +969,7 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
         # date 参数可能是 YYYY-MM-DD，转 YYYYMMDD（em_zt_topic_pool 要 YYYYMMDD）
         compact = target.replace("-", "") if "-" in target else target
 
-        # 快照优先（含空快照）——避免重复拉东财涨停池
+        # 快照优先——选股只在盘后执行，盘中/盘前读 T-1 盘后快照
         cached = load_scores(compact)
         if cached:
             candidates = cached.get("scored_candidates", [])
@@ -1004,7 +1004,29 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
                 }
             }
 
-        # 无快照实时跑
+        # 无快照——盘中/盘前不实时跑（会污染 T-1 数据），收盘后可实时跑
+        from datetime import datetime as _dt
+        now_hour = _dt.now().hour
+        if now_hour < 15:
+            # 盘中/盘前无快照：选股只在盘后执行，不实时跑
+            return {
+                "data": {
+                    "date": target,
+                    "zt_pool_count": 0,
+                    "first_board_count": 0,
+                    "candidates": [],
+                    "excluded": [],
+                    "env_flags": {},
+                    "note": (
+                        f"T-1（{target}）选股结果未取得，"
+                        "选股只在盘后执行（调度16:15），盘中不实时跑避免数据污染· "
+                        "§44未validated仅参考"
+                    ),
+                    "from_cache": False,
+                }
+            }
+
+        # 收盘后无快照——可实时跑（盘后数据已确定）
         result = run_first_board_filter(compact)
         return {
             "data": {
