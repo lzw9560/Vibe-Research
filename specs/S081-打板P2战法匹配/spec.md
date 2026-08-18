@@ -1,10 +1,12 @@
-# Spec: S081 — 打板 P2 战法匹配扩展（backlog，等 S070 R7）
+# Spec: S081 — 打板 P2 战法匹配扩展（草案，S070 R7 已就绪）
 
-> 状态：backlog（等 S070 R7 派生字段就绪）
+> 状态：草案（2026-08-18 S070 R7 已落地，本 spec 可进实现）
 > 作者：Claude  日期：2026-08-18
-> 关联：`CLAUDE.md` §1.1、`specs/S002-打板工作流重构/spec.md`（P1 候选池漏斗）、**`specs/S070-intraday采集管道/`（数据层先行，R7 派生 last_lock_time/broken_duration_min/max_drop_pct）**、`specs/S079-打板P2战法与仓位闸/`（仓位闸+龙虎榜，不依赖本 spec）、`backend/strategies/strategy_matcher.py`、`backend/limitup_strategy.py`、原 PRD `/Users/lizhiwei/Downloads/Quantitative_Limit_Up_Trading_System_Implementation_Guide.md`
+> 关联：`CLAUDE.md` §1.1、`specs/S002-打板工作流重构/spec.md`（P1 候选池漏斗）、**`specs/S070-intraday采集管道/`（数据层，R6-R8 战法因子派生，✅ R7 已落地）**、`specs/S079-打板P2战法与仓位闸/`（仓位闸+龙虎榜，不依赖本 spec）、`backend/strategies/strategy_matcher.py`、`backend/limitup_strategy.py`、原 PRD `/Users/lizhiwei/Downloads/Quantitative_Limit_Up_Trading_System_Implementation_Guide.md`
 >
-> **三拆背景**：原 S079 含战法匹配+仓位闸+龙虎榜三模块。Oracle 审查发现 PRD 2 战法核心因子（broken_duration_min/max_drop_pct/last_lock_time）在 repo 零匹配，需 S070 R7 派生字段就绪 —— 战法匹配拆本 spec 等 S070。S079（仓位闸+龙虎榜）不依赖本 spec，已先行。
+> **三拆背景**：原 S079 含战法匹配+仓位闸+龙虎榜三模块。Oracle 审查发现 PRD 2 战法核心因子（broken_duration_min/max_drop_pct/last_lock_time）在 repo 零匹配，需新增分时数据源 —— 战法匹配拆本 spec 等 S070 R7 派生字段就绪（原计划独立 S080 spec 已并入 S070 R6-R8）。S079（仓位闸+龙虎榜）不依赖本 spec，已先行。
+>
+> **R7 就绪通知（2026-08-18）**：S070 R6（low_price 采集）+ R7（compute_derived_features 派生 last_lock_time/broken_duration_min/max_drop_pct）+ R8（门禁）已落地（feature/S070 分支 commit e71a803 + 3763cca）。本 spec 从 backlog 转草案，可进实现。派生函数：`backend/strategies/intraday_features.py::compute_derived_features(snapshots) -> dict`，输入 `get_snapshots_by_code(code, date)` 返回的时序列表。
 
 ---
 
