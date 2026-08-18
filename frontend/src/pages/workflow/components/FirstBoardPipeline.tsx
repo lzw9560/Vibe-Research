@@ -335,6 +335,151 @@ function MarketEnvLamps({ data }: { data: FirstBoardCandidatesResponse | null })
   );
 }
 
+// ---- 盯盘手册（spec 2.3 时刻表，②确认节点用）----
+// 5 个时段 × 4 列（时刻/工具提供/人工观察/决策）。静态 spec 内容，无 API 数据。
+// 当前时段高亮（绿底），盘后/非交易时段不高亮，诚实标注。
+const WATCHBOOK_SLOTS = [
+  {
+    id: "s1",
+    time: "9:15-9:20",
+    tool: "竞价价/量推送",
+    watch: "大单是否可撤（诱饵识别）",
+    decision: "只看不动",
+  },
+  {
+    id: "s2",
+    time: "9:20-9:25",
+    tool: "竞价价/量（不可撤）",
+    watch: "量价是否匹配",
+    decision: "竞价确认",
+  },
+  {
+    id: "s3",
+    time: "9:25",
+    tool: "竞价收盘价推送",
+    watch: "高开1-3%→健康 / >5%追高",
+    decision: "✅确认/❌放弃",
+  },
+  {
+    id: "s4",
+    time: "9:30-9:35",
+    tool: "开盘价+5分钟K线推送",
+    watch: "5分钟不破开盘价",
+    decision: "✅买盘支撑",
+  },
+  {
+    id: "s5",
+    time: "9:35-9:45",
+    tool: "候选逐只确认状态推送",
+    watch: "买一档挂单量 vs 卖一档",
+    decision: "买>卖→建仓",
+  },
+] as const;
+
+/** 判断当前在哪个盯盘时段（北京时间 9:15-9:45）。返回 slot id 或 null（盘后/非交易时段）。
+ *  用浏览器本地时间——诚实标注：前端无法取得北京 tz 后端时间，盯盘手册是辅助参考，
+ *  时段高亮仅供视觉引导，非精确交易时段判定（后端 Phase 2 接入后可用 backend current_time）。 */
+function currentWatchbookSlot(): string | null {
+  const now = new Date();
+  const day = now.getDay(); // 0=周日, 6=周六
+  if (day === 0 || day === 6) return null; // 周末非交易
+  // 北京时间 UTC+8；浏览器可能在其他 tz。盯盘手册是 9:15-9:45 北京时间。
+  // 取 UTC 分钟数 + 8h offset，mod 1440 得北京时间分钟数。
+  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const bjMin = (utcMin + 8 * 60) % 1440;
+  // 9:15=555, 9:20=560, 9:25=565, 9:30=570, 9:35=575, 9:45=585
+  if (bjMin >= 555 && bjMin < 560) return "s1";
+  if (bjMin >= 560 && bjMin < 565) return "s2";
+  if (bjMin >= 565 && bjMin < 570) return "s3";
+  if (bjMin >= 570 && bjMin < 575) return "s4";
+  if (bjMin >= 575 && bjMin < 585) return "s5";
+  return null;
+}
+
+function WatchbookManual() {
+  const [expanded, setExpanded] = useState(false);
+  const currentSlot = currentWatchbookSlot();
+  const currentSlotData = WATCHBOOK_SLOTS.find((s) => s.id === currentSlot) ?? null;
+
+  // 缩略态文案：当前时段 or 盘后/非交易时段
+  const summaryText = currentSlotData
+    ? `当前：${currentSlotData.time} · ${currentSlotData.decision}`
+    : "盘后/非交易时段";
+
+  return (
+    <div className="mt-2">
+      {/* 缩略行（可点击展开） */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className={cn(NODE_AMBER, "w-full text-left hover:bg-amber-500/10")}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px]">⏱</span>
+            <span className="text-xs font-medium text-amber-200">盯盘手册 9:15-9:45</span>
+            <span className="text-[10px] text-muted-foreground/60">5 个时段</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "text-[10px]",
+              currentSlotData ? "text-emerald-400" : "text-muted-foreground/50",
+            )}>
+              {summaryText}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {expanded ? "▼ 收起" : "▶ 展开"}
+            </span>
+          </div>
+        </div>
+      </button>
+
+      {/* 详情态：5 行 4 列 grid 时刻表 */}
+      {expanded && (
+        <div className="mt-1.5 border-t border-amber-500/20 pt-2">
+          {/* 表头 */}
+          <div className="grid grid-cols-[80px_1fr_1fr_1fr] gap-1 border-b border-border/40 pb-1 text-[10px] font-medium text-muted-foreground">
+            <span>时刻</span>
+            <span>工具提供（自动）</span>
+            <span>人工观察（盯盘）</span>
+            <span>决策</span>
+          </div>
+          {/* 5 行时段 */}
+          {WATCHBOOK_SLOTS.map((slot) => {
+            const isCurrent = slot.id === currentSlot;
+            return (
+              <div
+                key={slot.id}
+                className={cn(
+                  "grid grid-cols-[80px_1fr_1fr_1fr] gap-1 rounded px-1 py-1 text-[10px] transition-colors",
+                  isCurrent
+                    ? "bg-emerald-500/15 ring-1 ring-emerald-500/40"
+                    : "bg-muted/5",
+                )}
+              >
+                <span className={cn("font-mono", isCurrent ? "text-emerald-300 font-bold" : "text-muted-foreground")}>
+                  {isCurrent && "▶ "}{slot.time}
+                </span>
+                <span className="text-muted-foreground">{slot.tool}</span>
+                <span className="text-muted-foreground">{slot.watch}</span>
+                <span className={isCurrent ? "text-foreground font-medium" : "text-muted-foreground"}>
+                  {slot.decision}
+                </span>
+              </div>
+            );
+          })}
+          {/* 诚实标注 */}
+          <p className="mt-1.5 text-[10px] text-muted-foreground/50">
+            {currentSlotData
+              ? `当前时段高亮（绿底）· 时段判定用浏览器时间，后端 Phase 2 接入后改用 backend current_time 北京 tz`
+              : "盘后/非交易时段，不高亮 · 时段判定用浏览器时间，后端 Phase 2 接入后改用 backend current_time 北京 tz"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- ② 确认节点（Phase 2 后端实现，前端占位）----
 function ConfirmNode({ data }: { data: FirstBoardCandidatesResponse | null }) {
   const candidates = data?.candidates ?? [];
@@ -352,6 +497,8 @@ function ConfirmNode({ data }: { data: FirstBoardCandidatesResponse | null }) {
       </div>
       {/* 大盘3因素灯 */}
       <MarketEnvLamps data={data} />
+      {/* 盯盘手册（spec 2.3 时刻表，缩略+点开看详情） */}
+      <WatchbookManual />
       <div className="mt-2 text-[10px] text-muted-foreground/70">
         逐只状态：待确认 → 确认中 → ✅/❌（Phase 2 竞价+开盘确认后接入）
       </div>
