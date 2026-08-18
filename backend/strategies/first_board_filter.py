@@ -538,7 +538,7 @@ def exclude_layer3_market_env(
 # 数据源：sector_cycle.aggregate_sectors / sector_strength_rank + 连板梯队
 # 逻辑：板块涨停≥3 只=联动强，0-100 归一化。板块强度排名 TOP3 → 高分。
 
-def score_dim1_sector(candidate: dict, date: str) -> float:
+def score_dim1_sector(candidate: dict, date: str) -> tuple[float, dict]:
     """板块评分。
 
     逻辑：
@@ -551,20 +551,27 @@ def score_dim1_sector(candidate: dict, date: str) -> float:
     Args:
         candidate: filter_first_board 产出的候选 dict（含 industry 字段）。
         date: YYYYMMDD。
+
+    Returns:
+        (score, raw)：raw 含 sector_rank（板块排名）/sector_zt_count（板块涨停数）。
+        数据缺失时 raw 对应字段 None。
     """
+    raw: dict = {"sector_rank": None, "sector_zt_count": None}
     try:
         from strategies.sector_cycle import aggregate_sectors, sector_strength_rank
         sectors = aggregate_sectors(date)
         if not sectors:
-            return 50.0
+            return 50.0, raw
         ranked = sector_strength_rank(date, sectors)
         industry = candidate.get("industry") or ""
         if not industry:
-            return 50.0
+            return 50.0, raw
         for s in ranked:
             if (s.get("industry") or "") == industry:
                 rank = s.get("rank", 999)
                 zt_count = s.get("zt_count_today", 0)
+                raw["sector_rank"] = rank
+                raw["sector_zt_count"] = zt_count
                 # 排名越前 + 板块涨停数越多 → 分越高
                 if rank <= 3:
                     base = 90.0
@@ -575,12 +582,12 @@ def score_dim1_sector(candidate: dict, date: str) -> float:
                 # 板块涨停≥3 只加 5 分（联动强）
                 if zt_count >= 3:
                     base = min(base + 5.0, 100.0)
-                return round(base, 1)
+                return round(base, 1), raw
         # industry 不在排名中（可能候选 industry 字段与板块名不一致）
-        return 50.0
+        return 50.0, raw
     except Exception as e:
         _logger.debug("score_dim1_sector 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ── 维度2：游资画像（权重 15%）──────────────────────────────────────────
@@ -588,7 +595,7 @@ def score_dim1_sector(candidate: dict, date: str) -> float:
 # 数据源：hot_money_seats.compute_seat_risk_factor
 # 逻辑：一日游占比高→×0.7 扣分，接力型→加分，0-100 归一化。
 
-def score_dim2_hot_money(candidate: dict, date: str) -> float:
+def score_dim2_hot_money(candidate: dict, date: str) -> tuple[float, dict]:
     """游资画像评分。
 
     逻辑：
@@ -602,23 +609,30 @@ def score_dim2_hot_money(candidate: dict, date: str) -> float:
     Args:
         candidate: 候选 dict（含 code）。
         date: YYYYMMDD（compute_seat_risk_factor 用 YYYY-MM-DD，内部转换）。
+
+    Returns:
+        (score, raw)：raw 含 seat_risk_label（风险标签）/one_day_ratio（一日游占比）。
+        数据缺失时 raw 对应字段 None。
     """
+    raw: dict = {"seat_risk_label": None, "one_day_ratio": None}
     try:
         from strategies.hot_money_seats import compute_seat_risk_factor
         code = candidate.get("code", "")
         if not code:
-            return 50.0
+            return 50.0, raw
         # date 转 YYYY-MM-DD（compute_seat_risk_factor 接受此格式）
         d = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date
         factor = compute_seat_risk_factor(code, d)
+        raw["seat_risk_label"] = factor.risk_label
+        raw["one_day_ratio"] = factor.day_trip_ratio
         if factor.risk_label == "无数据":
-            return 50.0
+            return 50.0, raw
         # score_modifier 0.7-1.05 → 0-100 分（1.0=70 基准）
         score = 70.0 * factor.score_modifier
-        return round(max(0.0, min(100.0, score)), 1)
+        return round(max(0.0, min(100.0, score)), 1), raw
     except Exception as e:
         _logger.debug("score_dim2_hot_money 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ── 维度3：封板强度（权重 20%）──────────────────────────────────────────
@@ -626,7 +640,7 @@ def score_dim2_hot_money(candidate: dict, date: str) -> float:
 # 数据源：ZTPoolItem 封单/首封/炸板 + breakout_20d（可选）+ 振幅
 # 逻辑：封板越早/封单越大/不炸=越强，0-100 加权。
 
-def score_dim3_seal_strength(candidate: dict, date: str) -> float:
+def score_dim3_seal_strength(candidate: dict, date: str) -> tuple[float, dict]:
     """封板强度评分。
 
     逻辑（加权，各子项 0-100）：
@@ -637,10 +651,19 @@ def score_dim3_seal_strength(candidate: dict, date: str) -> float:
     Args:
         candidate: 候选 dict（含 first_seal/seal_amount/float_cap/break_times）。
         date: YYYYMMDD（本维度不直接用，预留）。
+
+    Returns:
+        (score, raw)：raw 含 first_seal/seal_amount/float_cap/seal_ratio/break_times。
+        数据缺失时对应字段 None。
     """
+    raw: dict = {
+        "first_seal": None, "seal_amount": None, "float_cap": None,
+        "seal_ratio": None, "break_times": None,
+    }
     try:
         # 子项1：首封时间（92500-145000 → 0-100）
         fbt = candidate.get("first_seal")
+        raw["first_seal"] = fbt
         time_score = 50.0  # 缺失中性
         if fbt is not None and 90000 <= fbt <= 150000:
             # 92500=满分，145000=0 分，线性递减
@@ -658,9 +681,12 @@ def score_dim3_seal_strength(candidate: dict, date: str) -> float:
         # 子项2：封单/流通市值
         seal = candidate.get("seal_amount")
         fcap = candidate.get("float_cap")
+        raw["seal_amount"] = seal
+        raw["float_cap"] = fcap
         seal_score = 50.0  # 缺失中性
         if seal is not None and fcap is not None and fcap > 0:
             ratio = seal / fcap  # 0-1
+            raw["seal_ratio"] = round(ratio, 4)
             if ratio >= 0.02:
                 seal_score = 100.0
             elif ratio >= 0.01:
@@ -674,6 +700,7 @@ def score_dim3_seal_strength(candidate: dict, date: str) -> float:
 
         # 子项3：炸板次数
         bt = candidate.get("break_times")
+        raw["break_times"] = bt
         bt_score = 100.0  # 缺失视为不炸（满分）
         if bt is not None:
             if bt == 0:
@@ -684,10 +711,10 @@ def score_dim3_seal_strength(candidate: dict, date: str) -> float:
                 bt_score = 0.0
 
         total = time_score * 0.40 + seal_score * 0.30 + bt_score * 0.30
-        return round(max(0.0, min(100.0, total)), 1)
+        return round(max(0.0, min(100.0, total)), 1), raw
     except Exception as e:
         _logger.debug("score_dim3_seal_strength 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ── 维度4：筹码结构（权重 10%）──────────────────────────────────────────
@@ -695,7 +722,7 @@ def score_dim3_seal_strength(candidate: dict, date: str) -> float:
 # 数据源：tencent_quote 换手/量比/成交额/振幅
 # 逻辑：缩量+健康换手=筹码稳定，0-100 加权。
 
-def score_dim4_chip(candidate: dict, date: str) -> float:
+def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
     """筹码结构评分。
 
     逻辑（加权，各子项 0-100）：
@@ -705,7 +732,12 @@ def score_dim4_chip(candidate: dict, date: str) -> float:
 
     数据来源：tencent_quote（实时/盘后收盘行情）。
     数据缺失 → 该子项 50 分中性，不因缺失误判。
+
+    Returns:
+        (score, raw)：raw 含 turnover（换手率%）/vol_ratio（量比）/amount（成交额元）。
+        数据缺失时对应字段 None。
     """
+    raw: dict = {"turnover": None, "vol_ratio": None, "amount": None}
     try:
         chip = candidate.get("_chip_structure")
         if chip is None:
@@ -714,6 +746,7 @@ def score_dim4_chip(candidate: dict, date: str) -> float:
 
         # 子项1：换手率
         tp = chip.get("turnover_pct")
+        raw["turnover"] = tp
         tp_score = 50.0
         if tp is not None:
             if 5.0 <= tp <= 15.0:
@@ -727,6 +760,7 @@ def score_dim4_chip(candidate: dict, date: str) -> float:
 
         # 子项2：量比
         vr = chip.get("vol_ratio")
+        raw["vol_ratio"] = vr
         vr_score = 50.0
         if vr is not None:
             if 0.8 <= vr <= 1.5:
@@ -742,6 +776,7 @@ def score_dim4_chip(candidate: dict, date: str) -> float:
         amt = chip.get("amount")
         if amt is None:
             amt = candidate.get("amount")
+        raw["amount"] = amt
         amt_score = 50.0
         if amt is not None:
             amt_yi = amt / 1e8  # 元 → 亿
@@ -755,10 +790,10 @@ def score_dim4_chip(candidate: dict, date: str) -> float:
                 amt_score = 30.0
 
         total = tp_score * 0.40 + vr_score * 0.30 + amt_score * 0.30
-        return round(max(0.0, min(100.0, total)), 1)
+        return round(max(0.0, min(100.0, total)), 1), raw
     except Exception as e:
         _logger.debug("score_dim4_chip 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ── 维度5：竞价确认（权重 10%）──────────────────────────────────────────
@@ -766,15 +801,20 @@ def score_dim4_chip(candidate: dict, date: str) -> float:
 # 数据源：T 日 9:25 竞价高开 1-3% + 竞价量≥昨日 5%
 # 逻辑：T 日盘前实时，T-1 盘后预填 0 待 T 日更新。
 
-def score_dim5_auction(candidate: dict, date: str) -> float:
+def score_dim5_auction(candidate: dict, date: str) -> tuple[float, dict]:
     """竞价确认评分。
 
     T-1 盘后跑时预填 0（无 T 日竞价数据），T 日盘前更新。
     本维度需要 T 日 9:25 竞价数据，T-1 盘后不可得 → 返 0 分（标注待 T 日更新）。
+
+    Returns:
+        (score, raw)：raw 含 auction_open_pct/auction_vol_ratio。
+        T-1 盘后无 T 日竞价数据 → raw 两字段均 None，score=0。
     """
     # T-1 盘后无 T 日竞价数据 → 预填 0，待 T 日盘前更新
     # 实盘接入时从 astock 取 T 日 9:25 竞价数据后重算
-    return 0.0
+    raw: dict = {"auction_open_pct": None, "auction_vol_ratio": None}
+    return 0.0, raw
 
 
 # ── 维度6：北向资金（权重 10%）──────────────────────────────────────────
@@ -782,7 +822,7 @@ def score_dim5_auction(candidate: dict, date: str) -> float:
 # 数据源：predict.features.fund_flow.fetch_northbound 个股北向净流入
 # 逻辑：正流入加分（2024-08-19 后停更降级 50 分）
 
-def score_dim6_northbound(candidate: dict, date: str) -> float:
+def score_dim6_northbound(candidate: dict, date: str) -> tuple[float, dict]:
     """北向资金评分。
 
     逻辑：
@@ -792,29 +832,35 @@ def score_dim6_northbound(candidate: dict, date: str) -> float:
     - None（停更/无数据）→ 50 分中性
 
     2024-08-19 北向规则变更后个股日级北向数据停更，返 None → 50 分中性。
+
+    Returns:
+        (score, raw)：raw 含 northbound_net（北向净流入，万元）。
+        停更/无数据 → None。
     """
+    raw: dict = {"northbound_net": None}
     try:
         from predict.features.fund_flow import fetch_northbound
         code = candidate.get("code", "")
         if not code:
-            return 50.0
+            return 50.0, raw
         d = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date
         nb = fetch_northbound(code, d)  # 万元
+        raw["northbound_net"] = nb
         if nb is None:
             # 2024-08-19 后个股北向停更 / 当日无数据 → 50 分中性
-            return 50.0
+            return 50.0, raw
         if nb > 0:
             # 正流入：0-10000 万 → 70-100 分（对数缩放，避免极值）
             import math
             score = 70.0 + min(30.0, math.log10(max(nb, 1.0)) * 10.0)
-            return round(max(0.0, min(100.0, score)), 1)
+            return round(max(0.0, min(100.0, score)), 1), raw
         else:
             # 负流出：0 到 -5000 万 → 50 到 0 分
             score = max(0.0, 50.0 + (nb / 100.0))  # 每流出 100 万扣 1 分
-            return round(max(0.0, min(100.0, score)), 1)
+            return round(max(0.0, min(100.0, score)), 1), raw
     except Exception as e:
         _logger.debug("score_dim6_northbound 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ── 维度7：龙虎榜机构（权重 10%）──────────────────────────────────────
@@ -822,7 +868,7 @@ def score_dim6_northbound(candidate: dict, date: str) -> float:
 # 数据源：astock.dragon_tiger_board + data.mappers.dragon_tiger_from_dict
 # 逻辑：机构净买入=基本面认可（无龙虎榜降级 50 分）
 
-def score_dim7_institution(candidate: dict, date: str) -> float:
+def score_dim7_institution(candidate: dict, date: str) -> tuple[float, dict]:
     """龙虎榜机构评分。
 
     逻辑：
@@ -830,31 +876,37 @@ def score_dim7_institution(candidate: dict, date: str) -> float:
     - 机构净买入 >0 → 70-100 分（越大越高）
     - 机构净卖出 <0 → 0-50 分
     - 无龙虎榜 / 无机构席位 → 50 分中性
+
+    Returns:
+        (score, raw)：raw 含 inst_net（机构净买入，万元）。
+        无龙虎榜/无机构席位 → None。
     """
+    raw: dict = {"inst_net": None}
     try:
         from astock import dragon_tiger_board
         from data.mappers import dragon_tiger_from_dict
         code = candidate.get("code", "")
         if not code:
-            return 50.0
-        raw = dragon_tiger_board(code) or {}
-        dt = dragon_tiger_from_dict(raw)
+            return 50.0, raw
+        raw_dt = dragon_tiger_board(code) or {}
+        dt = dragon_tiger_from_dict(raw_dt)
         inst_net = dt.institution_net  # 万元
+        raw["inst_net"] = inst_net
         if inst_net is None:
             # 无龙虎榜 / 无机构席位 → 50 分中性
-            return 50.0
+            return 50.0, raw
         if inst_net > 0:
             # 机构净买入：0-5000 万 → 70-100 分
             import math
             score = 70.0 + min(30.0, math.log10(max(inst_net, 1.0)) * 10.0)
-            return round(max(0.0, min(100.0, score)), 1)
+            return round(max(0.0, min(100.0, score)), 1), raw
         else:
             # 机构净卖出：每卖出 100 万扣 1 分
             score = max(0.0, 50.0 + (inst_net / 100.0))
-            return round(max(0.0, min(100.0, score)), 1)
+            return round(max(0.0, min(100.0, score)), 1), raw
     except Exception as e:
         _logger.debug("score_dim7_institution 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ── 维度8：题材热度（权重 5%）──────────────────────────────────────────
@@ -862,7 +914,7 @@ def score_dim7_institution(candidate: dict, date: str) -> float:
 # 数据源：astock.ths_limit_up_pool reason 聚合
 # 逻辑：同题材涨停≥3 只=满热度
 
-def score_dim8_theme(candidate: dict, date: str) -> float:
+def score_dim8_theme(candidate: dict, date: str) -> tuple[float, dict]:
     """题材热度评分。
 
     逻辑：
@@ -871,26 +923,32 @@ def score_dim8_theme(candidate: dict, date: str) -> float:
     - 2 只 → 70 分
     - 1 只（自身）→ 30 分（无题材热度）
     - 无 reason / 数据缺失 → 50 分中性
+
+    Returns:
+        (score, raw)：raw 含 theme_zt_count（同题材涨停数）/theme_name（命中的题材名）。
+        数据缺失时对应字段 None。
     """
+    raw: dict = {"theme_zt_count": None, "theme_name": None}
     try:
         from astock import ths_limit_up_pool
         code = candidate.get("code", "")
         if not code:
-            return 50.0
+            return 50.0, raw
         pool = ths_limit_up_pool(date)
         if not pool:
-            return 50.0
+            return 50.0, raw
         # 找到候选股的 reason
         cand_item = next((p for p in pool if p.get("code") == code), None)
         if not cand_item or not cand_item.get("reason"):
-            return 50.0
+            return 50.0, raw
         reason = cand_item["reason"]
+        raw["theme_name"] = reason
         # split 题材（+ / 、 / ; 等分隔）
         for sep in ("+", "、", ";", "，", "/"):
             reason = reason.replace(sep, "+")
         tags = [t.strip() for t in reason.split("+") if t.strip()]
         if not tags:
-            return 50.0
+            return 50.0, raw
         # 聚合每个题材的涨停数
         concept_count: dict[str, int] = {}
         for item in pool:
@@ -905,17 +963,22 @@ def score_dim8_theme(candidate: dict, date: str) -> float:
                     concept_count[tag] = concept_count.get(tag, 0) + 1
         # 取候选股题材的最大涨停数
         max_count = max((concept_count.get(t, 0) for t in tags), default=0)
+        raw["theme_zt_count"] = max_count
+        # theme_name 精确为涨停数最多的那个题材
+        if tags:
+            best_tag = max(tags, key=lambda t: concept_count.get(t, 0))
+            raw["theme_name"] = best_tag
         if max_count >= 3:
-            return 100.0
+            return 100.0, raw
         elif max_count == 2:
-            return 70.0
+            return 70.0, raw
         elif max_count == 1:
-            return 30.0
+            return 30.0, raw
         else:
-            return 50.0
+            return 50.0, raw
     except Exception as e:
         _logger.debug("score_dim8_theme 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ── 维度9：事件评分（权重 5%）──────────────────────────────────────────
@@ -923,7 +986,7 @@ def score_dim8_theme(candidate: dict, date: str) -> float:
 # 数据源：astock.announcements + news_radar_context.classify_announcement
 # 逻辑：#33/#34 利多加分 + #35-39 利空扣分，无公告=50 分中性
 
-def score_dim9_event(candidate: dict, date: str) -> float:
+def score_dim9_event(candidate: dict, date: str) -> tuple[float, dict]:
     """事件评分。
 
     逻辑：
@@ -936,34 +999,42 @@ def score_dim9_event(candidate: dict, date: str) -> float:
     Args:
         candidate: 候选 dict（含 code）。
         date: YYYYMMDD（本维度取近期公告，不严格按 date）。
+
+    Returns:
+        (score, raw)：raw 含 event_type（利多/利空/中性分类）/announcement_title（公告标题）。
+        无公告时 event_type="无公告"，announcement_title=None。
     """
+    raw: dict = {"event_type": None, "announcement_title": None}
     try:
         from astock import announcements
         from strategies.news_radar_context import classify_announcement
         code = candidate.get("code", "")
         if not code:
-            return 50.0
+            return 50.0, raw
         anns = announcements(code, limit=10) or []
         if not anns:
             # 无公告 → 50 分中性
-            return 50.0
+            raw["event_type"] = "无公告"
+            return 50.0, raw
         # 取最近一条公告分类
         latest = anns[0] if isinstance(anns[0], dict) else {}
         title = latest.get("title") or ""
+        raw["announcement_title"] = title
         ann_type = classify_announcement(title)
+        raw["event_type"] = ann_type
         if ann_type in ("预增", "扭亏", "重组", "回购", "增持"):
             # 利好：预增/扭亏=90，重组=85，回购=80，增持=75
             score_map = {"预增": 90.0, "扭亏": 90.0, "重组": 85.0, "回购": 80.0, "增持": 75.0}
-            return score_map.get(ann_type, 70.0)
+            return score_map.get(ann_type, 70.0), raw
         elif ann_type == "风险提示":
             # 利空：0-30 分
-            return 20.0
+            return 20.0, raw
         else:
             # 未知/其他 → 50 分中性
-            return 50.0
+            return 50.0, raw
     except Exception as e:
         _logger.debug("score_dim9_event 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0
+        return 50.0, raw
 
 
 # ===========================================================================
@@ -996,23 +1067,35 @@ def score_candidate(candidate: dict, date: str) -> dict:
         - code: str
         - name: str
         - scores: dict（{dim_name: score}，9 个维度）
+        - raw_values: dict（{dim_name: raw_dict}，每维度的原始值，供"实际值→得分"对照）
         - total: float（0-100 加权总分）
         - rank: int（排名，score_candidate 不填，rank_candidates 填）
+
+    ⚠️ 维度函数返回 (score, raw) 元组（新签名）；兼容旧签名（只返 float）用
+    isinstance 判定，旧签名 raw=空 dict。
     """
     scores: dict = {}
+    raw_values: dict = {}
     total = 0.0
     for dim_name, dim_fn in _SCORE_DIMS:
         weight = SCORE_WEIGHTS[dim_name]
-        score = dim_fn(candidate, date)
+        result = dim_fn(candidate, date)
+        # 兼容旧签名（只返 float）和新签名（返 tuple）
+        if isinstance(result, tuple):
+            score, raw = result
+        else:
+            score, raw = float(result), {}
         # 钳制 0-100
         score = max(0.0, min(100.0, score))
         scores[dim_name] = score
+        raw_values[dim_name] = raw
         total += score * weight
 
     return {
         "code": candidate.get("code", ""),
         "name": candidate.get("name", ""),
         "scores": scores,
+        "raw_values": raw_values,
         "total": round(total, 1),
         "rank": 0,  # rank_candidates 填
     }

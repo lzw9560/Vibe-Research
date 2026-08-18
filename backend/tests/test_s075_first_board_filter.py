@@ -408,46 +408,62 @@ class TestScoreCandidate:
         assert out[0]["total"] >= out[1]["total"] >= out[2]["total"]
 
     def test_dim_data_missing_returns_50(self, monkeypatch):
-        """数据缺失降级返 50（北向停更/无龙虎榜/无公告）。"""
+        """数据缺失降级返 50（北向停更/无龙虎榜/无公告）。新签名返 (score, raw)。"""
         from strategies.first_board_filter import (
             score_dim6_northbound, score_dim7_institution, score_dim9_event,
         )
         cand = _make_first_board(code="001")
         # 北向 fetch_northbound 返 None → 50
         monkeypatch.setattr("predict.features.fund_flow.fetch_northbound", lambda c, d=None: None)
-        assert score_dim6_northbound(cand, "20260818") == 50.0
+        s6, raw6 = score_dim6_northbound(cand, "20260818")
+        assert s6 == 50.0
+        assert raw6["northbound_net"] is None  # 数据缺失 raw 字段 None
 
         # 龙虎榜 dragon_tiger_board 返空 → institution_net=None → 50
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
-        assert score_dim7_institution(cand, "20260818") == 50.0
+        s7, raw7 = score_dim7_institution(cand, "20260818")
+        assert s7 == 50.0
+        assert raw7["inst_net"] is None
 
         # 公告 announcements 返空 → 50
         monkeypatch.setattr("astock.announcements", lambda c, limit=10: [])
-        assert score_dim9_event(cand, "20260818") == 50.0
+        s9, raw9 = score_dim9_event(cand, "20260818")
+        assert s9 == 50.0
+        assert raw9["event_type"] == "无公告"  # 无公告标"无公告"
 
     def test_dim5_auction_returns_zero(self):
-        """竞价确认 T-1 盘后预填 0（无 T 日竞价数据）。"""
+        """竞价确认 T-1 盘后预填 0（无 T 日竞价数据）。新签名返 (score, raw)。"""
         from strategies.first_board_filter import score_dim5_auction
         cand = _make_first_board(code="001")
-        assert score_dim5_auction(cand, "20260818") == 0.0
+        s, raw = score_dim5_auction(cand, "20260818")
+        assert s == 0.0
+        assert raw["auction_open_pct"] is None  # T-1 盘后无竞价数据
+        assert raw["auction_vol_ratio"] is None
 
     def test_dim3_seal_strength_scoring(self):
-        """封板强度：开盘秒板+大封单+不炸=高分；尾盘+小封单+炸=低分。"""
+        """封板强度：开盘秒板+大封单+不炸=高分；尾盘+小封单+炸=低分。新签名返 (score, raw)。"""
         from strategies.first_board_filter import score_dim3_seal_strength
         # 高分：9:25 封板(100) + 封单2%(100) + 0炸板(100)
         strong = _make_first_board(code="001", first_seal=92500,
                                    seal_amount=4e7, float_cap=20e8, break_times=0)
-        s = score_dim3_seal_strength(strong, "20260818")
-        assert s >= 90.0
+        s_strong, raw_strong = score_dim3_seal_strength(strong, "20260818")
+        assert s_strong >= 90.0
+        # raw 字段落盘校验
+        assert raw_strong["first_seal"] == 92500
+        assert raw_strong["seal_amount"] == 4e7
+        assert raw_strong["float_cap"] == 20e8
+        assert raw_strong["seal_ratio"] == round(4e7 / 20e8, 4)
+        assert raw_strong["break_times"] == 0
 
         # 低分：14:30 封板(20) + 封单0.1%(10) + 2炸板(0)
         weak = _make_first_board(code="002", first_seal=143000,
                                  seal_amount=2e5, float_cap=20e8, break_times=2)
-        w = score_dim3_seal_strength(weak, "20260818")
-        assert w <= 30.0
+        s_weak, raw_weak = score_dim3_seal_strength(weak, "20260818")
+        assert s_weak <= 30.0
+        assert raw_weak["first_seal"] == 143000
 
     def test_dim4_chip_scoring(self, monkeypatch):
-        """筹码结构：健康换手+正常量比+适中成交=高分。"""
+        """筹码结构：健康换手+正常量比+适中成交=高分。新签名返 (score, raw)。"""
         from strategies.first_board_filter import score_dim4_chip
         # 健康：换手8% + 量比1.0 + 成交5亿
         def mock_tq(codes):
@@ -456,8 +472,12 @@ class TestScoreCandidate:
         monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq)
 
         healthy = _make_first_board(code="001", amount=5e8)
-        s = score_dim4_chip(healthy, "20260818")
-        assert s >= 80.0
+        s_healthy, raw_healthy = score_dim4_chip(healthy, "20260818")
+        assert s_healthy >= 80.0
+        # raw 字段落盘校验
+        assert raw_healthy["turnover"] == 8.0
+        assert raw_healthy["vol_ratio"] == 1.0
+        assert raw_healthy["amount"] == 5e8  # tencent amount_wan 50000 *1e4 = 5e8
 
         # 松动：换手30% + 量比2.5 + 成交20亿
         def mock_tq2(codes):
@@ -466,8 +486,10 @@ class TestScoreCandidate:
         monkeypatch.setattr("strategies.first_board_filter.tencent_quote", mock_tq2)
 
         loose = _make_first_board(code="002", amount=20e8)
-        w = score_dim4_chip(loose, "20260818")
-        assert w <= 30.0
+        s_loose, raw_loose = score_dim4_chip(loose, "20260818")
+        assert s_loose <= 30.0
+        assert raw_loose["turnover"] == 30.0
+        assert raw_loose["vol_ratio"] == 2.5
 
 
 # =========================================================================
