@@ -166,12 +166,14 @@
   - [ ] R3.1 漏斗新增 source 或扩展，调 `compute_derived_features(get_snapshots_by_code(code, date))` 取 broken_duration_min/max_drop_pct/last_lock_time
   - [ ] R3.2 盘前 snapshots 未采集时 `derived=None` 标"分时数据未就绪"降级，不臆造
 - [ ] R4：`IndicatorSet` 扩展 12 字段（tencent_quote 扩展 8 + 板块资金 3 + 前日成交额 1）
-  - [ ] R4.1 tencent_quote 扩展 8 字段：`last_close`（昨收 vals[4]）/ `open`（开盘 vals[5]）/ `change_amt`（涨跌额 vals[31]）/ `pe_ttm`（市盈率 vals[39]）/ `mcap_yi`（总市值 vals[44]）/ `pb`（市净率 vals[46]）/ `limit_up_price`（涨停价 vals[47]）/ `limit_down_price`（跌停价 vals[48]）
-    - `activity.py` 已调 tencent_quote 取 price/change_pct/high/low/turnover_pct/amplitude_pct/float_mcap/vol_ratio，扩展取这 8 个字段（不重新调，同一次 tencent_quote 返回扩展读 vals）
+  - [ ] R4.1 **按历史日路径分字段取数**（Oracle B4 修复：activity.py 盘前取 T-1 走 kline 复算路径，tencent_quote vals 在历史日拿不到）：
+    - **kline prev_bar 复算（历史日可取）**：`open`（前日 K线 bar.open）/ `change_amt`（前日 close - prev_close）/ `limit_up`/`limit_down`（复用既有 IndicatorSet.limit_up/limit_down 字段，不新增同名）
+    - **静态估值（tencent_quote 当日取，口径为"当前值"非"T-1"，spec 显式声明）**：`pe_ttm` / `mcap_yi` / `pb` —— 这些是静态估值字段，盘前 tencent_quote 取当日返回值（非历史日 K线路径），口径标注"当前估值非 T-1 昨日值"
+    - **`last_close`**：从前日 K线 bar.close 取（kline 复算路径，历史日可取）
   - [ ] R4.2 板块资金 3 字段：`sector_net_inflow`（板块净流入）/ `sector_inflow`（流入）/ `sector_outflow`（流出）
-    - 从 `market._sectors()` 取（`astock._akshare().stock_fund_flow_industry`，每日复盘首页已展示 line 470-473）
+    - 从 `market._sectors()` 取（akshare stock_fund_flow_industry，每日复盘首页已展示 line 470-473）
     - 或从 `fund_flow.py` 的 `fetch_sector_flow`（catalyst source 已调）取
-  - [ ] R4.3 前日成交额：`prev_amount_yi`（activity.py 已取 K线 bars，从前日 bar 算 `prev_bar.turnover / 1e8`）
+  - [ ] R4.3 前日成交额：`prev_amount_yi`（activity.py 已取 K线 bars，从前日 bar.turnover / 1e8）
   - [ ] R4.4 `diagnosis.py` `build_indicator_set` 透传 12 新字段
 
 ### 3.2 战法从 DiagnosisCard 读全部因子（Q3=A + Q6=B）
@@ -180,7 +182,7 @@
   - [ ] R5.1 既有 9 战法从 `card.gene_score` 读 GeneScore（total_score/zt_count_250d/factors）
   - [ ] R5.2 PRD 弱转强接力从 `card.pool_item` 读 lbc/hs/zdp + `card.indicators.prev_turnover_pct` 算 vol_ratio_1d + `card.derived` 读 broken_duration/max_drop/last_lock
   - [ ] R5.3 PRD 形态反包从 `card.pool_item.zdp` + `card.indicators.max_high_pct/shadow_length_pct/ma_5_status` + `card.indicators.prev_amount_yi/amount_yi` 算放量对比
-  - [ ] R5.4 删 `match_strategies` 各 elif 分支的 astock/kline/S070 调用（全部从 card 读）
+  - [ ] R5.4 card=None 时保留既有 fallback 路径（不删 S070 自取数 / kline_rebuild 调用），card 非空时 override 从 card 读。**Q3=C 保留 pre_market_workflow 不改，其 match 调用不传 card → 走 fallback 路径行为不变**
 - [ ] R6：`StrategyMatcher.match()` 改为接受 `DiagnosisCard`（或 gene+indicators+pool_item+derived 多参数）
   - [ ] R6.1 向后兼容：新参数默认 None，既有调用不传 card 行为不变
   - [ ] R6.2 传 card 时从 card 取全部子对象传给 match_strategies
@@ -188,7 +190,7 @@
 ### 3.3 前端选股池 Tab（Q5=A 复用既有组件 + Q4=A 战法指向 PreMarketBriefing）
 
 - [ ] R7：`Workflow.tsx` 加两级 Tab 导航（选股池 / 战法）
-  - [ ] R7.1 选股池 Tab：调既有 `runFunnel(stage, date)` API，用既有 `FunnelLayers` + `CandidateFunnelEmbed` 组件展示漏斗 R1→R2→R3 三层 + final_candidates（DiagnosisCard 列表含全部因子）。不新建组件
+  - [ ] R7.1 选股池 Tab：调既有 `runFunnel(stage, date)` API，用 `FunnelLayers`（独立组件 `candidate/FunnelLayers.tsx`）+ `SelectionPipeline`（`Candidates.tsx` 已有独立使用先例）展示漏斗 R1→R2→R3 三层 + final_candidates。不新建组件，不复用 PreMarketBriefing 局部函数 CandidateFunnelEmbed
   - [ ] R7.2 选股池 Tab 不调 `/api/workflow/pre-market`（解耦，直接调选股池 API）
   - [ ] R7.3 选股池 Tab 展示市场宽度 market_context（breadth/炸板率/封板率/连板高度）—— 复用 DailyReview 的展示样式
 - [ ] R8：战法 Tab 保留既有战法流入口卡片网格（7 个卡片：首板流/弱转强接力/反包流等）
@@ -227,31 +229,33 @@
 
 ## 5. 设计方案
 
-### 5.1 解耦架构（选股池独立产出 → 战法独立消费）
+### 5.1 解耦架构（选股池独立产出 → 战法复用既有页面）
 
 ```
-[选股池 Tab]（前端 Workflow.tsx）
+[选股池 Tab]（前端 Workflow.tsx 新增）
   调 runFunnel API → run_funnel() 产出 FunnelResult
   FunnelResult.final_candidates: list[DiagnosisCard]
     DiagnosisCard 含：
       ├── gene_score: GeneScore（既有9战法用，gene.py 扩展存完整对象）
       ├── pool_item: dict（涨停池原始dict，lbc/zdp/fbt/zbc/fund/hybk）
-      ├── derived: dict（S070 R7 派生，broken_duration/max_drop/last_lock）
-      ├── indicators: IndicatorSet（活跃度+资金流+K线派生+prev_amount_yi）
+      ├── derived: dict（S070 R7 派生 T-1 昨日值，broken_duration/max_drop/last_lock）
+      ├── indicators: IndicatorSet（活跃度+资金流+K线派生+tencent_quote扩展+板块资金+prev_amount_yi）
       ├── activity: ActivityAssessment
       └── risk_flags: list[str]
-    ↓ 存 TTL 缓存（_FUNNEL_CACHE）
+  展示：FunnelLayers（漏斗R1→R2→R3）+ final_candidates 候选矩阵 + market_context
+  不调 /api/workflow/pre-market，独立调选股池 API
 
-[战法 Tab]（前端 Workflow.tsx）
-  从选股池缓存读 DiagnosisCard
-  调 match_strategies(card) → 战法特定硬阈值匹配
-    既有9战法：从 card.gene_score 读
-    PRD弱转强：从 card.pool_item + card.derived + card.indicators 读
-    PRD形态反包：从 card.pool_item + card.indicators 读
-  输出 StrategySignal（命中/置信度/触发价）
-  ↓
-  仓位建议（PositionAdvisor）+ S079 后处理（cap_by_market_phase + DragonTigerSeatFilter）
+[战法 Tab]（前端 Workflow.tsx 既有）
+  展示战法流入口卡片网格（7个卡片：首板流/弱转强接力/反包流等）
+  点击卡片 → 跳转 /workflow/pre-market?strategy={code}（Q4=A 复用 PreMarketBriefing）
+  PreMarketBriefing 内部做战法匹配 + 仓位 + S079 后处理（既有链不改）
+
+[盘前简报]（PreMarketBriefing 既有，Q3=C 保留不改）
+  /workflow/pre-market 完整串联视图（选股池→战法→仓位→风控→推送）
+  ?strategy= 选中战法 Tab（C2 修复已实现）
 ```
+
+> **三入口并存**：选股池 Tab（独立看选股池）+ 战法 Tab（看战法卡片，点击进 PreMarketBriefing）+ 盘前简报（完整串联视图）。不新增第二条战法+仓位+S079 链。
 
 ### 5.2 备选方案为何不选
 
@@ -278,15 +282,13 @@
 - [ ] AC3：pool_item 从 astock.em_zt_topic_pool 取（lbc/zdp/fbt/zbc），走 em_get 限流
 - [ ] AC4：derived 从 S070 R7 compute_derived_features 取（broken_duration/max_drop/last_lock），盘前未采集时 None 降级
 - [ ] AC5：IndicatorSet 含 12 扩展字段（tencent_quote 8 + 板块资金 3 + 前日成交额 1）
-- [ ] AC5a：FunnelResult 含 market_context 字段（市场宽度5因子：breadth/昨涨停今表现/炸板率/封板率/连板高度梯队），从 market.get_short_term_emotion() 取
-- [ ] AC5b：DiagnosisCard 含 seat_detail 子对象（龙虎榜席位明细：买一占比/一日游占比/机构占比），从 seat_engine.compute_consensus_signal 取
-- [ ] AC5c：IndicatorSet 含 4 派生因子（封单变化率/N日涨幅5日10日20日/换手率分位/板块资金连续流入天数），从已有数据派生不需新源
-- [ ] AC5d：IndicatorSet 含公告催化类型（announcement_type）+ 概念板块联动度（concept_heat/sector_linkage_count），从 catalyst.py 已有数据取
+- [ ] ~~AC5a/AC5b/AC5c/AC5d~~ **移 backlog**（C 段 22 因子：市场宽度/龙虎榜席位明细/公告催化/同花顺涨停原因/封单变化率/N日涨幅/换手分位/板块连续流入）—— 本 spec 只做 B 段 17 因子（3 子对象 + 12 IndicatorSet 字段），C 段因子作为后续增强另立 task，不在本 spec 验收范围
 - [ ] AC6：match_strategies 各 elif 从 DiagnosisCard 读全部因子，不调 astock/kline/S070（删重复取数代码）
 - [ ] AC7：既有 9 战法回归通过（传/不传 card 命中一致）
+- [ ] AC7a：PRD 2 战法（弱转强接力/形态反包）回归通过 —— card=None 走 fallback 路径行为与 S081 落地时一致；card 非空从 card 读因子命中一致
 - [ ] AC8：前端 Workflow.tsx 有两级 Tab（选股池/战法），选股池 Tab 调 runFunnel API 展示漏斗 + 候选
 - [ ] AC9：战法 Tab 保留既有战法流入口卡片，点击进入战法特定筛选（从选股池缓存读 DiagnosisCard）
-- [ ] AC10：pre_market_workflow 解耦（选股池+战法独立，不再串在一个函数里）
+- [ ] AC10：三入口并存（选股池Tab独立 + 战法Tab复用PreMarketBriefing + 盘前简报保留不改），新增两入口不修改既有 pre_market_workflow 链路
 - [ ] AC11：所有研判/买卖时机/仓位参数挂轻量风险提醒（CLAUDE.md §1.1 弱合规）
 
 ---
