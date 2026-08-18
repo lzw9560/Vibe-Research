@@ -139,11 +139,33 @@ class PreMarketWorkflow:
 
         # 3. 战法匹配（使用 StrategyMatcher）——匹配全部 qualified（S031 R15 去 [:20] 上限）
         # S063 T2/T7：管线头部 SentimentContext 一次采集，下传 weather_state
+        # S081 C2 修复：从涨停池补取 pool_item 传给 match()，供 PRD 2 战法取 lbc/hs/zdp/p
+        #   路径 A：复用 first_board_filter.fetch_zt_pool(date) 取涨停池原始 dict（走 em_get 限流 + 24h 缓存）
+        #   按 code 匹配出 pool_item，传给 StrategyMatcher.match(gene, weather_state, pool_item)
+        #   缺涨停池数据时 pool_item=None 降级，PRD 战法标"数据缺失"不命中（既有 9 战法不受影响）
         from sentiment_context import build_context  # noqa: PLC0415
+        from strategies.first_board_filter import fetch_zt_pool  # noqa: PLC0415
+
         ctx = build_context(self.date)
+
+        # 取涨停池原始 dict，建 code→pool_item 映射（一次取数，循环内复用）
+        pool_item_map: dict[str, dict] = {}
+        try:
+            zt_pool = fetch_zt_pool(self.date)
+            # 涨停池 dict 字段：c(代码)/n(名)/lbc(连板)/zbc(炸板)/fbt(首封)/zdp(涨幅)/hs(换手)/p(价)等
+            for p in zt_pool or []:
+                code = str(p.get("c", "") or "").strip()
+                if code:
+                    pool_item_map[code] = p
+        except Exception as e:
+            logger.warning("取涨停池补 pool_item 失败 date=%s err=%s（PRD 战法降级）", self.date, e)
+
         for stock in pool.candidates:
             try:
-                signals = self._strategy_matcher.match(stock, ctx.weather_state)
+                pool_item = pool_item_map.get(stock.code)
+                signals = self._strategy_matcher.match(
+                    stock, ctx.weather_state, pool_item=pool_item,
+                )
                 if signals:
                     best = signals[0]
                     match = StrategyMatch(

@@ -33,14 +33,29 @@ class StrategyMatcher:
             self._registry_cache = get_strategy_registry()
         return self._registry_cache
 
-    def match(self, gene: GeneScore, weather_state: str | None = None) -> list[StrategySignal]:
+    def match(
+        self,
+        gene: GeneScore,
+        weather_state: str | None = None,
+        pool_item: dict | None = None,
+    ) -> list[StrategySignal]:
         """
         对单只股票匹配所有适用战法。
 
         直接复用 limitup_strategy.match_strategies，保持策略逻辑单一事实来源。
         S063 T7：传 weather_state 时，为每条 signal 调 calc_weather_fit 标注适配度。
+
+        S081 C2 修复：pool_item 是涨停池原始 dict（含 lbc/hs/zdp/p 等字段），
+        供 PRD 2 战法（weak_turn_strong/pattern_reversal）取因子。
+        - pool_item=None（默认）：既有 9 战法不依赖 pool_item，行为不变；
+          PRD 2 战法因子取 None 不命中（降级，不报错）
+        - pool_item 非空：PRD 2 战法正常取 lbc/hs/zdp/p 做判定
+
+        pool_item 来源（路径 A）：pre_market_workflow 从 astock.em_zt_topic_pool
+        取涨停池，按 code 匹配出原始 dict 传入。em_zt_topic_pool 走 em_get
+        限流（防封底线不可绕过）+ 24h 缓存。
         """
-        signals = match_strategies(gene.code, gene)
+        signals = match_strategies(gene.code, gene, pool_item)
         if weather_state is not None:
             from limitup_strategy import calc_weather_fit  # noqa: PLC0415
             for s in signals:
@@ -48,14 +63,21 @@ class StrategyMatcher:
         return signals
 
     def match_batch(
-        self, genes: list[GeneScore], weather_state: str | None = None
+        self,
+        genes: list[GeneScore],
+        weather_state: str | None = None,
+        pool_items: dict[str, dict] | None = None,
     ) -> dict[str, list[StrategySignal]]:
         """
         批量匹配，返回 {code: signals}。
+
+        S081 C2 修复：pool_items 是 {code: pool_item_dict} 映射，
+        供 PRD 2 战法取因子。pool_items=None 时降级（既有 9 战法不受影响）。
         """
         results: dict[str, list[StrategySignal]] = {}
         for gene in genes:
-            results[gene.code] = self.match(gene, weather_state)
+            pool_item = pool_items.get(gene.code) if pool_items else None
+            results[gene.code] = self.match(gene, weather_state, pool_item)
         return results
 
     def get_best_strategy(self, gene: GeneScore) -> StrategySignal | None:
