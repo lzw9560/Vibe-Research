@@ -974,17 +974,15 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
         if cached:
             candidates = cached.get("scored_candidates", [])
             if len(candidates) > 0:
-                # 有数据的快照（T-1 完整交易日盘后调度已落盘）——直接返回
+                # 有数据的快照——还原全部 Pipeline 过程数据
                 return {
                     "data": {
                         "date": target,
-                        # 快照不含汇总数（save_scores 只落 scored_candidates），标 0
-                        "zt_pool_count": 0,
-                        "first_board_count": 0,
+                        "zt_pool_count": cached.get("zt_pool_count", 0),
+                        "first_board_count": cached.get("first_board_count", 0),
                         "candidates": candidates,
-                        # 快照不含剔除明细/env_flags，返空
-                        "excluded": [],
-                        "env_flags": {},
+                        "excluded": cached.get("excluded", []),
+                        "env_flags": cached.get("env_flags", {}),
                         "note": f"历史快照（更新于 {cached['updated_at']}）· 9维度评分§44未validated仅参考",
                         "from_cache": True,
                     }
@@ -993,11 +991,11 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
             return {
                 "data": {
                     "date": target,
-                    "zt_pool_count": 0,
-                    "first_board_count": 0,
+                    "zt_pool_count": cached.get("zt_pool_count", 0),
+                    "first_board_count": cached.get("first_board_count", 0),
                     "candidates": [],
-                    "excluded": [],
-                    "env_flags": {},
+                    "excluded": cached.get("excluded", []),
+                    "env_flags": cached.get("env_flags", {}),
                     "note": (
                         f"盘前数据（更新于 {cached['updated_at']}），"
                         "盘后16:15调度更新· §44未validated仅参考"

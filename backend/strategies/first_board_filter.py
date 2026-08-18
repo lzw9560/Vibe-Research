@@ -1039,28 +1039,33 @@ def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
 # 021 评分落盘
 # ===========================================================================
 
-def save_scores(scored: list[dict], date: str) -> Path:
+def save_scores(scored: list[dict], date: str, full_result: dict | None = None) -> Path:
     """存 ~/.vibe-research/first_board_scores_{date}.json。
 
     Args:
         scored: rank_candidates 返回的评分列表。
         date: YYYYMMDD（用于文件名）。
+        full_result: run_first_board_filter 的完整返回（含 zt_pool_count/excluded/env_flags），
+            传入则一并落盘，供历史快照还原 Pipeline 全过程数据。
 
     Returns:
         Path：落盘文件路径。
     """
     _SCORES_DIR.mkdir(parents=True, exist_ok=True)
     out_path = _SCORES_DIR / f"first_board_scores_{date}.json"
-    payload = {
-        "_meta": {
-            "date": date,
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "count": len(scored),
-            "weights": SCORE_WEIGHTS,
-            "note": "9 维度评分，权重待回测校准（见 tasks.md 021）",
-        },
-        "scored_candidates": scored,
+    meta = {
+        "date": date,
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "count": len(scored),
+        "weights": SCORE_WEIGHTS,
+        "note": "9 维度评分，权重待回测校准（见 tasks.md 021）",
     }
+    payload = {"_meta": meta, "scored_candidates": scored}
+    if full_result is not None:
+        payload["zt_pool_count"] = full_result.get("zt_pool_count", 0)
+        payload["first_board_count"] = full_result.get("first_board_count", 0)
+        payload["excluded"] = full_result.get("excluded", [])
+        payload["env_flags"] = full_result.get("env_flags", {})
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return out_path
 
@@ -1076,6 +1081,10 @@ def load_scores(date: str) -> dict | None:
         - date: str（快照日期 YYYYMMDD）
         - scored_candidates: list[dict]（9 维度评分列表）
         - updated_at: str（落盘时间戳）
+        - zt_pool_count: int（新版本落盘，旧快照缺=0）
+        - first_board_count: int
+        - excluded: list[dict]
+        - env_flags: dict
         无快照/读取失败 → None。
     """
     compact = date.replace("-", "") if "-" in date else date
@@ -1087,11 +1096,17 @@ def load_scores(date: str) -> dict | None:
     except Exception as e:
         _logger.warning("load_scores 读取失败 date=%s err=%s", compact, e)
         return None
-    meta = data.get("_meta", {}) if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return None
+    meta = data.get("_meta", {})
     return {
         "date": meta.get("date", compact),
-        "scored_candidates": data.get("scored_candidates", []) if isinstance(data, dict) else [],
+        "scored_candidates": data.get("scored_candidates", []),
         "updated_at": meta.get("updated_at", ""),
+        "zt_pool_count": data.get("zt_pool_count", 0),
+        "first_board_count": data.get("first_board_count", 0),
+        "excluded": data.get("excluded", []),
+        "env_flags": data.get("env_flags", {}),
     }
 
 
@@ -1157,12 +1172,7 @@ def run_first_board_filter(date: str) -> dict:
 
     # 011-021 9 维度评分 + 排序 + 落盘
     scored_candidates = rank_candidates(after_l3, compact_date)
-    try:
-        save_scores(scored_candidates, compact_date)
-    except Exception as e:
-        _logger.warning("save_scores 落盘失败 date=%s err=%s", compact_date, e)
-
-    return {
+    result = {
         "date": compact_date,
         "zt_pool_count": zt_pool_count,
         "first_board_count": first_board_count,
@@ -1171,6 +1181,12 @@ def run_first_board_filter(date: str) -> dict:
         "excluded": excluded,
         "env_flags": env_flags,
     }
+    try:
+        save_scores(scored_candidates, compact_date, full_result=result)
+    except Exception as e:
+        _logger.warning("save_scores 落盘失败 date=%s err=%s", compact_date, e)
+
+    return result
 
 
 if __name__ == "__main__":
