@@ -13,8 +13,11 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
 import type {
-  FirstBoardCandidate, FirstBoardCandidatesResponse, FirstBoardExcludedItem,
+  FirstBoardCandidate, FirstBoardCandidatesResponse, FirstBoardExcludedItem, FirstBoardRawValues,
 } from "@/lib/api";
+
+// 维度 key 联合类型（与 FirstBoardScoreBreakdown 字段对齐，但用显式字符串避免索引签名 symbol 问题）
+type DimKey = "sector" | "hot_money" | "seal_strength" | "chip" | "auction" | "northbound" | "institution" | "theme" | "event";
 
 // ---- 节点样式（复用 SelectionPipeline 的 NODE / NODE_DASHED 语义）----
 const NODE = "rounded-lg border border-border/40 bg-card/40 p-3";
@@ -683,7 +686,140 @@ export function FirstBoardPipeline({ data, isLoading }: Props) {
 }
 
 // 候选评分明细表（供 FirstBoardPage 战法归因 tab 复用）
+// ---- 数值格式化工具 ----
+/** 金额格式化：元 → 万/亿单位。null → "—" */
+function formatAmount(yuan: number | null | undefined): string {
+  if (yuan == null) return "—";
+  const abs = Math.abs(yuan);
+  if (abs >= 1e8) return `${(yuan / 1e8).toFixed(2)}亿`;
+  if (abs >= 1e4) return `${(yuan / 1e4).toFixed(2)}万`;
+  return `${yuan.toFixed(0)}`;
+}
+/** 首封时间格式化：93500 → "09:35"。null → "—" */
+function formatSealTime(t: number | null | undefined): string {
+  if (t == null) return "—";
+  const s = String(t).padStart(6, "0");
+  const hh = s.slice(0, 2);
+  const mm = s.slice(2, 4);
+  return `${hh}:${mm}`;
+}
+
+// ---- 9 维度配置（维度名/权重/原始值描述生成器）----
+interface DimConfig {
+  key: DimKey;
+  label: string;
+  weight: string;
+  /** 生成原始值的人话描述（基于 raw_values 子对象） */
+  rawDescribe: (raw: FirstBoardRawValues[DimKey] | undefined) => string;
+}
+
+const DIM_CONFIGS: DimConfig[] = [
+  {
+    key: "sector", label: "板块评分", weight: "15%",
+    rawDescribe: (r) => {
+      const v = r as { sector_zt_count?: number | null; sector_rank?: number | null } | undefined;
+      if (!v) return "—";
+      const parts: string[] = [];
+      if (v.sector_zt_count != null) parts.push(`板块涨停${v.sector_zt_count}只`);
+      if (v.sector_rank != null) parts.push(`排名第${v.sector_rank}`);
+      return parts.length ? parts.join("，") : "—";
+    },
+  },
+  {
+    key: "hot_money", label: "游资画像", weight: "15%",
+    rawDescribe: (r) => {
+      const v = r as { seat_risk_label?: string | null; one_day_ratio?: number | null } | undefined;
+      if (!v) return "—";
+      const parts: string[] = [];
+      if (v.seat_risk_label) parts.push(v.seat_risk_label);
+      if (v.one_day_ratio != null) parts.push(`一日游占比${(v.one_day_ratio * 100).toFixed(0)}%`);
+      return parts.length ? parts.join("，") : "—";
+    },
+  },
+  {
+    key: "seal_strength", label: "封板强度", weight: "20%",
+    rawDescribe: (r) => {
+      const v = r as {
+        first_seal?: number | null; seal_amount?: number | null;
+        float_cap?: number | null; seal_ratio?: number | null; break_times?: number | null;
+      } | undefined;
+      if (!v) return "—";
+      const parts: string[] = [];
+      if (v.first_seal != null) parts.push(`首封${formatSealTime(v.first_seal)}`);
+      if (v.seal_amount != null) parts.push(`封单${formatAmount(v.seal_amount)}`);
+      if (v.float_cap != null) parts.push(`流通${formatAmount(v.float_cap)}`);
+      if (v.seal_ratio != null) parts.push(`比${(v.seal_ratio * 100).toFixed(2)}%`);
+      if (v.break_times != null) parts.push(`${v.break_times}炸板`);
+      return parts.length ? parts.join("，") : "—";
+    },
+  },
+  {
+    key: "chip", label: "筹码结构", weight: "10%",
+    rawDescribe: (r) => {
+      const v = r as { turnover?: number | null; vol_ratio?: number | null; amount?: number | null } | undefined;
+      if (!v) return "—";
+      const parts: string[] = [];
+      if (v.turnover != null) parts.push(`换手${v.turnover.toFixed(1)}%`);
+      if (v.vol_ratio != null) parts.push(`量比${v.vol_ratio.toFixed(2)}`);
+      if (v.amount != null) parts.push(`成交${formatAmount(v.amount)}`);
+      return parts.length ? parts.join("，") : "—";
+    },
+  },
+  {
+    key: "auction", label: "竞价确认", weight: "10%",
+    rawDescribe: (r) => {
+      const v = r as { auction_open_pct?: number | null; auction_vol_ratio?: number | null } | undefined;
+      if (!v) return "—";
+      const parts: string[] = [];
+      if (v.auction_open_pct != null) parts.push(`高开${(v.auction_open_pct * 100).toFixed(1)}%`);
+      if (v.auction_vol_ratio != null) parts.push(`竞价量比${(v.auction_vol_ratio * 100).toFixed(0)}%`);
+      return parts.length ? parts.join("，") : "—（T日盘前）";
+    },
+  },
+  {
+    key: "northbound", label: "北向资金", weight: "10%",
+    rawDescribe: (r) => {
+      const v = r as { northbound_net?: number | null } | undefined;
+      if (!v) return "—";
+      return v.northbound_net != null ? `净流入${formatAmount(v.northbound_net)}` : "—";
+    },
+  },
+  {
+    key: "institution", label: "龙虎榜机构", weight: "10%",
+    rawDescribe: (r) => {
+      const v = r as { inst_net?: number | null } | undefined;
+      if (!v) return "—";
+      return v.inst_net != null ? `机构净买入${formatAmount(v.inst_net)}` : "—";
+    },
+  },
+  {
+    key: "theme", label: "题材热度", weight: "5%",
+    rawDescribe: (r) => {
+      const v = r as { theme_zt_count?: number | null; theme_name?: string | null } | undefined;
+      if (!v) return "—";
+      const parts: string[] = [];
+      if (v.theme_zt_count != null) parts.push(`同题材涨停${v.theme_zt_count}只`);
+      if (v.theme_name) parts.push(`题材"${v.theme_name}"`);
+      return parts.length ? parts.join("，") : "—";
+    },
+  },
+  {
+    key: "event", label: "事件评分", weight: "5%",
+    rawDescribe: (r) => {
+      const v = r as { event_type?: string | null; announcement_title?: string | null } | undefined;
+      if (!v) return "—";
+      const parts: string[] = [];
+      if (v.event_type) parts.push(v.event_type);
+      if (v.announcement_title) parts.push(v.announcement_title);
+      return parts.length ? parts.join("，") : "—";
+    },
+  },
+];
+
+// ---- 候选评分明细表（折叠态一行得分 + 行可展开看"实际值→得分"对照）----
 export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCandidate[] }) {
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
+
   if (candidates.length === 0) {
     return (
       <div className={NODE_DASHED}>
@@ -691,11 +827,15 @@ export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCand
       </div>
     );
   }
+
+  const toggle = (code: string) => setExpandedCode((prev) => (prev === code ? null : code));
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-border/40 text-muted-foreground">
+            <th className="px-2 py-1.5 text-left font-medium w-6"></th>
             <th className="px-2 py-1.5 text-left font-medium">#</th>
             <th className="px-2 py-1.5 text-left font-medium">代码</th>
             <th className="px-2 py-1.5 text-left font-medium">名称</th>
@@ -712,26 +852,105 @@ export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCand
           </tr>
         </thead>
         <tbody>
-          {candidates.map((c) => (
-            <tr key={c.code} className="border-b border-border/20 hover:bg-muted/10">
-              <td className="px-2 py-1.5 text-muted-foreground">{c.rank}</td>
-              <td className="px-2 py-1.5 font-mono">{c.code}</td>
-              <td className="px-2 py-1.5">{c.name}</td>
-              <td className="px-2 py-1.5 text-right font-mono font-bold text-primary">{c.total.toFixed(1)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.sector.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.hot_money.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.seal_strength.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.chip.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.auction.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.northbound.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.institution.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.theme.toFixed(0)}</td>
-              <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.event.toFixed(0)}</td>
-            </tr>
-          ))}
+          {candidates.map((c) => {
+            const isOpen = expandedCode === c.code;
+            const hasRawValues = !!c.raw_values;
+            return (
+              <CandidateRowFragment
+                key={c.code}
+                candidate={c}
+                isOpen={isOpen}
+                hasRawValues={hasRawValues}
+                onToggle={() => toggle(c.code)}
+              />
+            );
+          })}
         </tbody>
       </table>
     </div>
+  );
+}
+
+// 单个候选的行 + 展开详情卡（两个 <tr>，React Fragment 包裹）
+function CandidateRowFragment({
+  candidate: c, isOpen, hasRawValues, onToggle,
+}: {
+  candidate: FirstBoardCandidate;
+  isOpen: boolean;
+  hasRawValues: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      {/* 主行（可点击展开） */}
+      <tr
+        onClick={onToggle}
+        className={cn(
+          "border-b border-border/20 hover:bg-muted/10 cursor-pointer transition-colors",
+          isOpen && "bg-muted/15",
+        )}
+      >
+        <td className="px-2 py-1.5 text-muted-foreground text-center">
+          <span className="text-[10px]">{isOpen ? "▼" : "▶"}</span>
+        </td>
+        <td className="px-2 py-1.5 text-muted-foreground">{c.rank}</td>
+        <td className="px-2 py-1.5 font-mono">{c.code}</td>
+        <td className="px-2 py-1.5">{c.name}</td>
+        <td className="px-2 py-1.5 text-right font-mono font-bold text-primary">{c.total.toFixed(1)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.sector.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.hot_money.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.seal_strength.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.chip.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.auction.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.northbound.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.institution.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.theme.toFixed(0)}</td>
+        <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{c.scores.event.toFixed(0)}</td>
+      </tr>
+      {/* 展开行：详情卡 */}
+      {isOpen && (
+        <tr>
+          <td colSpan={15} className="px-2 pb-3 pt-1">
+            <div className={cn(NODE, "bg-muted/5")}>
+              {!hasRawValues ? (
+                <div className="py-2 text-center text-[11px] text-muted-foreground/60">
+                  ⚠ 旧快照无原始值（raw_values 未取得）· 仅显示评分，无法展示"实际值→得分"对照
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {DIM_CONFIGS.map((dim) => {
+                    const score = c.scores[dim.key];
+                    const rawObj = c.raw_values?.[dim.key];
+                    const rawDesc = dim.rawDescribe(rawObj);
+                    return (
+                      <div
+                        key={dim.key}
+                        className="flex items-start gap-2 border-b border-border/20 pb-1 last:border-0 last:pb-0"
+                      >
+                        <span className="w-20 shrink-0 text-[11px] font-medium text-foreground">
+                          {dim.label}
+                          <span className="ml-1 text-[9px] text-muted-foreground/50">{dim.weight}</span>
+                        </span>
+                        <span className="flex-1 text-[11px] text-muted-foreground">
+                          {rawDesc}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground/40">→</span>
+                        <span className="w-12 shrink-0 text-right font-mono font-bold text-primary">
+                          {score.toFixed(0)}分
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div className="pt-1 text-[10px] text-muted-foreground/50">
+                    原始值来自后端 raw_values 字段 · 缺失字段标"—" · §44 未 validated 仅参考
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 

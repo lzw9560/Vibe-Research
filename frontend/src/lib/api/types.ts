@@ -1585,12 +1585,34 @@ export interface FirstBoardScoreBreakdown {
   [key: string]: number;   // 容错后端未来扩展
 }
 
+/** 9 维度原始数据（raw_values——后端 score_candidate 新增字段）。
+ * 旧快照无此字段 → undefined，前端降级显示"旧快照无原始值"。
+ * 每个维度的子字段可能为 null（数据源缺失），前端标"—"。 */
+export interface FirstBoardRawValues {
+  sector?: { sector_zt_count?: number | null; sector_rank?: number | null };
+  hot_money?: { seat_risk_label?: string | null; one_day_ratio?: number | null };
+  seal_strength?: {
+    first_seal?: number | null;       // 首封时间（HHMMSS 数字，如 93500）
+    seal_amount?: number | null;      // 封单额（元）
+    float_cap?: number | null;        // 流通市值（元）
+    seal_ratio?: number | null;       // 封单/流通市值比
+    break_times?: number | null;      // 炸板次数
+  };
+  chip?: { turnover?: number | null; vol_ratio?: number | null; amount?: number | null };
+  auction?: { auction_open_pct?: number | null; auction_vol_ratio?: number | null };
+  northbound?: { northbound_net?: number | null };
+  institution?: { inst_net?: number | null };
+  theme?: { theme_zt_count?: number | null; theme_name?: string | null };
+  event?: { event_type?: string | null; announcement_title?: string | null };
+}
+
 export interface FirstBoardCandidate {
   code: string;
   name: string;
   total: number;                       // 加权总分 0-100
   scores: FirstBoardScoreBreakdown;    // 9 维度分明细
   rank: number;                        // 1-based
+  raw_values?: FirstBoardRawValues;    // 9 维度原始数据（旧快照可能无此字段）
   [key: string]: unknown;              // 原始候选字段（price/industry/seal_amount 等）
 }
 
