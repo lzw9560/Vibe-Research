@@ -628,6 +628,42 @@ STRATEGY_REGISTRY: list[dict] = [
         "weather_regimes": ["晴天", "阴天"],
         "aliases": ["龙头", "龙头股"],
     },
+    {
+        # S081 R1：弱转强接力战法（PRD §2.1）
+        # 因子：limit_up_days(lbc) + broken_duration_min/max_drop_pct/last_lock_time(S070 R7 派生) + vol_ratio_1d(hs/前日hs)
+        # PRD 阈值为外部拍定值（零数据支撑），标"探索性"，进 config 可配，约定回测调参门限（AC8）
+        "code": "weak_turn_strong",
+        "name": "弱转强接力",
+        "entry_type": "次日竞价确认后",
+        "stop_loss_pct": -5.0,
+        "take_profit_pct": 10.0,
+        "max_hold_days": 2,
+        "entry_condition": "昨日涨停+炸板≥20min+回撤≥5%+尾盘封死(≥14:40)+换手1.8-3.0倍",
+        "stop_loss_condition": "跌破前日收盘价-5%",
+        "take_profit_condition": "涨至+5%~+10%后回落",
+        "exit_condition": "持仓2日未盈利或触发止损/止盈",
+        "weather_regimes": ["晴天", "极端反弹"],
+        "aliases": ["弱转强", "分歧转一致"],
+        "note": "S081：PRD 阈值探索性（外部拍定，零数据支撑），因子依赖 S070 R7 派生（60s 粒度近似）",
+    },
+    {
+        # S081 R3：形态反包战法（PRD §2.2）
+        # 因子：close_pct(zdp) + max_high_pct/shadow_length_pct(K线) + volume_1d/2d(fundamt+前日) + ma_5_status(K线+均线)
+        # 不依赖 S070 R7（因子来自涨停池+K线，可先行实现）
+        "code": "pattern_reversal",
+        "name": "形态反包",
+        "entry_type": "次日突破昨日最高价确认",
+        "stop_loss_pct": -4.0,
+        "take_profit_pct": 12.0,
+        "max_hold_days": 3,
+        "entry_condition": "昨日未封涨停+最高≥7%+上影线≥4%+放量1.2倍+5日线向上",
+        "stop_loss_condition": "跌破前日最低价",
+        "take_profit_condition": "涨至+8%~+12%后回落",
+        "exit_condition": "突破失败回落或触发止损/止盈",
+        "weather_regimes": ["晴天", "阴天"],
+        "aliases": ["反包", "长上影洗盘修复"],
+        "note": "S081：PRD 阈值探索性，因子来自涨停池+K线（不依赖 S070 R7）",
+    },
 ]
 
 
@@ -755,17 +791,201 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
                 ))
                 confidence = 0.4
 
+        # ===================================================================
+        # S081 PRD P2 战法（弱转强接力 + 形态反包）
+        # PRD 阈值探索性（外部拍定，零数据支撑），进 config 可配
+        # ===================================================================
+        elif strategy["code"] == "weak_turn_strong":
+            # A4 因子取数：lbc/hs 从 pool_item；S070 R7 派生从 compute_derived_features
+            lbc = int(pool_item.get("lbc") or 0) if pool_item else 0
+            hs = pool_item.get("hs") if pool_item else None  # 当日换手率
+            # S070 R7 派生（broken_duration_min/max_drop_pct/last_lock_time）
+            # 输入：get_snapshots_by_code(code, date) 返回的时序列表
+            derived: dict = {}
+            s070_status = "ok"
+            try:
+                from risk.seal_intraday_collector import get_snapshots_by_code
+                from strategies.intraday_features import compute_derived_features
+                from datetime import datetime as _dt
+                _snap_date = _dt.now().strftime("%Y-%m-%d")
+                _snaps = get_snapshots_by_code(code, _snap_date)
+                if not _snaps:
+                    s070_status = "missing_s070_r7"
+                else:
+                    derived = compute_derived_features(_snaps)
+                    if derived.get("data_status") == "missing":
+                        s070_status = "missing_s070_r7"
+            except Exception:
+                s070_status = "missing_s070_r7"
+
+            # A7 S070 R7 门禁：snapshots 取不到标 missing_s070_r7 跳过不报错
+            if s070_status == "missing_s070_r7":
+                matches.append(ConditionMatch(
+                    condition="S070 R7 数据层未就绪",
+                    value="snapshots 缺失",
+                    description="策略逻辑上，弱转强接力战法依赖 S070 R7 分时派生数据，当日 snapshots 未采集，跳过匹配（不报错）",
+                ))
+                # confidence=0 → 不输出信号（下方 if not matches 仍 continue，但 matches 非空需用 confidence=0 过滤）
+                confidence = 0.0
+            else:
+                broken_duration_min = derived.get("broken_duration_min")
+                max_drop_pct = derived.get("max_drop_pct")
+                last_lock_time = derived.get("last_lock_time")
+
+                # A5 vol_ratio_1d：hs / 前日 hs（前日取不到标 None 降级）
+                vol_ratio_1d = None
+                if hs and hs > 0:
+                    try:
+                        from datetime import datetime as _dt2, timedelta as _td
+                        _yest = (_dt2.now() - _td(days=1)).strftime("%Y-%m-%d")
+                        _prev_snaps = get_snapshots_by_code(code, _yest)
+                        if _prev_snaps:
+                            # 前日最后一条快照的 hs（若 snapshot 表存 hs；否则从 pool 历史取）
+                            # 注：seal_intraday_snapshots 无 hs 字段，前日 hs 需从涨停池历史取
+                            # 此处简化：前日 hs 取不到标 None 降级（不臆造）
+                            vol_ratio_1d = None  # 标 None，实际需历史涨停池取前日 hs
+                    except Exception:
+                        vol_ratio_1d = None
+
+                # A6 5 因子硬阈值判定（PRD §2.1，阈值探索性，进 config 可配）
+                # 阈值默认值（探索性，外部 PRD 拍定，零数据支撑）
+                import config as _cfg_mod
+                _wts_cfg = getattr(_cfg_mod, "S081_WEAK_TURN_STRONG", None) or {}
+                TH_LBC = _wts_cfg.get("limit_up_days_min", 1)
+                TH_BROKEN = _wts_cfg.get("broken_duration_min", 20)
+                TH_DROP = _wts_cfg.get("max_drop_pct", 5.0)
+                TH_LOCK = _wts_cfg.get("last_lock_time", "14:40")
+                TH_VOL_LO = _wts_cfg.get("vol_ratio_lo", 1.8)
+                TH_VOL_HI = _wts_cfg.get("vol_ratio_hi", 3.0)
+
+                f1 = lbc >= TH_LBC
+                f2 = broken_duration_min is not None and broken_duration_min >= TH_BROKEN
+                f3 = max_drop_pct is not None and max_drop_pct >= TH_DROP
+                f4 = last_lock_time is not None and last_lock_time >= f"2026-01-01T{TH_LOCK}"
+                f5 = vol_ratio_1d is not None and TH_VOL_LO <= vol_ratio_1d <= TH_VOL_HI
+                hit_count = sum([f1, f2, f3, f4, f5])
+
+                if hit_count >= 4:
+                    confidence = 1.0 if hit_count == 5 else 0.7  # 全命中 high / 4 命中 medium
+                    if f1:
+                        matches.append(ConditionMatch(condition="连板天数达标", value=f"lbc={lbc}", description=f"策略逻辑上，连板 {lbc} 日（阈值≥{TH_LBC}）"))
+                    if f2:
+                        matches.append(ConditionMatch(condition="炸板时长达标", value=f"broken={broken_duration_min:.1f}min", description=f"策略逻辑上，炸板累计 {broken_duration_min:.1f} 分钟（阈值≥{TH_BROKEN}min，60s粒度近似）"))
+                    if f3:
+                        matches.append(ConditionMatch(condition="回撤幅度达标", value=f"max_drop={max_drop_pct:.2f}%", description=f"策略逻辑上，炸板后回撤 {max_drop_pct:.2f}%（阈值≥{TH_DROP}%）"))
+                    if f4:
+                        matches.append(ConditionMatch(condition="尾盘封死达标", value=f"last_lock={last_lock_time}", description=f"策略逻辑上，最后封死时刻 {last_lock_time}（阈值≥{TH_LOCK}）"))
+                    if f5:
+                        matches.append(ConditionMatch(condition="换手倍数达标", value=f"vol_ratio={vol_ratio_1d:.2f}", description=f"策略逻辑上，换手倍数 {vol_ratio_1d:.2f}（区间 {TH_VOL_LO}-{TH_VOL_HI}）"))
+                # ≤3 命中不输出（confidence=0，matches 为空 → continue）
+
+        elif strategy["code"] == "pattern_reversal":
+            # B4 因子取数：close_pct 从 zdp；max_high_pct/shadow_length_pct 从 K线
+            close_pct = pool_item.get("zdp") if pool_item else None
+            # K线取数（复用 limitup_screener/kline_rebuild._get_kline_bars 模式）
+            bars: list = []
+            try:
+                from limitup_screener.kline_rebuild import _get_kline_bars
+                from datetime import datetime as _dt3
+                _end = _dt3.now().strftime("%Y-%m-%d")
+                bars = _get_kline_bars(code, _end, lookback_days=10)
+            except Exception:
+                bars = []
+
+            max_high_pct = None
+            shadow_length_pct = None
+            ma_5_status = None
+            volume_1d = None
+            volume_2d = None
+
+            if bars and len(bars) >= 2:
+                today_bar = bars[-1]
+                prev_close = bars[-2].close if len(bars) >= 2 else None
+                # max_high_pct：今日最高涨幅 = (今日 high - 前日 close) / 前日 close * 100
+                if today_bar.high and prev_close and prev_close > 0:
+                    max_high_pct = (today_bar.high - prev_close) / prev_close * 100
+                # shadow_length_pct：上影线 = (今日 high - 今日 close) / 前日 close * 100
+                if today_bar.high and today_bar.close and prev_close and prev_close > 0:
+                    shadow_length_pct = (today_bar.high - today_bar.close) / prev_close * 100
+                # volume_1d：今日成交量；volume_2d：前日成交量
+                volume_1d = today_bar.volume
+                volume_2d = bars[-2].volume if len(bars) >= 2 else None
+                # ma_5_status：5 日均线趋势（后 5 日 close 均值 vs 前移一日均值）
+                if len(bars) >= 6:
+                    closes = [b.close for b in bars[-6:] if b.close]
+                    if len(closes) >= 6:
+                        ma5_today = sum(closes[-5:]) / 5
+                        ma5_prev = sum(closes[-6:-1]) / 5
+                        ma_5_status = "Upward" if ma5_today > ma5_prev else "Downward"
+
+            # B6 5 因子硬阈值判定（PRD §2.2，阈值探索性）
+            import config as _cfg_mod2
+            _pr_cfg = getattr(_cfg_mod2, "S081_PATTERN_REVERSAL", None) or {}
+            TH_CLOSE = _pr_cfg.get("close_pct_max", 9.5)
+            TH_HIGH = _pr_cfg.get("max_high_pct_min", 7.0)
+            TH_SHADOW = _pr_cfg.get("shadow_length_pct_min", 4.0)
+            TH_VOL_RATIO = _pr_cfg.get("volume_ratio_min", 1.2)
+            TH_MA5 = _pr_cfg.get("ma_5_status", "Upward")
+
+            f1 = close_pct is not None and close_pct < TH_CLOSE
+            f2 = max_high_pct is not None and max_high_pct >= TH_HIGH
+            f3 = shadow_length_pct is not None and shadow_length_pct >= TH_SHADOW
+            f4 = (volume_1d is not None and volume_2d is not None
+                  and volume_2d > 0 and volume_1d > volume_2d * TH_VOL_RATIO)
+            f5 = ma_5_status == TH_MA5
+            hit_count = sum([f1, f2, f3, f4, f5])
+
+            if hit_count >= 4:
+                confidence = 1.0 if hit_count == 5 else 0.7
+                if f1:
+                    matches.append(ConditionMatch(condition="收盘涨幅未封涨停", value=f"close_pct={close_pct:.2f}%", description=f"策略逻辑上，收盘涨幅 {close_pct:.2f}%（阈值<{TH_CLOSE}%）"))
+                if f2:
+                    matches.append(ConditionMatch(condition="最高涨幅达标", value=f"max_high={max_high_pct:.2f}%", description=f"策略逻辑上，最高涨幅 {max_high_pct:.2f}%（阈值≥{TH_HIGH}%）"))
+                if f3:
+                    matches.append(ConditionMatch(condition="上影线达标", value=f"shadow={shadow_length_pct:.2f}%", description=f"策略逻辑上，上影线 {shadow_length_pct:.2f}%（阈值≥{TH_SHADOW}%）"))
+                if f4:
+                    matches.append(ConditionMatch(condition="放量达标", value=f"vol_ratio={volume_1d/volume_2d:.2f}", description=f"策略逻辑上，今日量/前日量={volume_1d/volume_2d:.2f}（阈值≥{TH_VOL_RATIO}）"))
+                if f5:
+                    matches.append(ConditionMatch(condition="5日线向上", value=f"ma_5={ma_5_status}", description=f"策略逻辑上，5日均线 {ma_5_status}（阈值={TH_MA5}）"))
+            # ≤3 命中不输出
+
         if not matches:
             continue
 
-        # 计算入场价/止损/止盈（简化：以当前基因得分作为价格代理）
-        entry_price = round(gene.total_score, 2)
+        # S081 A7：S070 R7 门禁的弱转强 confidence=0 → 不输出信号
+        if confidence == 0.0:
+            continue
+
+        # 计算入场价/止损/止盈
+        # S081 A8/B7：PRD 战法用真实触发价（复用 _round_to_tick_size），非 PRD 战法保持基因得分代理
+        if strategy["code"] == "weak_turn_strong":
+            # 触发价 = _round_to_tick_size(昨日涨停价)；昨日涨停价从 pool_item.p（涨停价）
+            _prev_close = pool_item.get("p") if pool_item else None
+            if _prev_close and _prev_close > 0:
+                entry_price = _round_to_tick_size(_prev_close)
+            else:
+                entry_price = 0.0
+        elif strategy["code"] == "pattern_reversal":
+            # 触发价 = _round_to_tick_size(昨日K线最高价 + 0.01)
+            _prev_high = bars[-1].high if bars else None
+            if _prev_high and _prev_high > 0:
+                entry_price = _round_to_tick_size(_prev_high + 0.01)
+            else:
+                entry_price = 0.0
+        else:
+            # 既有 9 战法：简化以基因得分作价格代理
+            entry_price = round(gene.total_score, 2)
         stop_loss = round(entry_price * (1 + strategy["stop_loss_pct"] / 100), 2)
         take_profit = round(entry_price * (1 + strategy["take_profit_pct"] / 100), 2)
 
         # 历史统计（简化：用基因得分作为成功率代理）
         historical_win_rate = min(confidence * 0.8 + 0.2, 0.95)
         historical_avg_return = round((strategy["take_profit_pct"] - strategy["stop_loss_pct"]) / 2 * historical_win_rate, 2)
+
+        # S081 A8/B7：PRD 战法参数标注"参考值，非执行指令"（AC5/AC7）
+        _prd_disclaimer = ""
+        if strategy["code"] in ("weak_turn_strong", "pattern_reversal"):
+            _prd_disclaimer = "参数为参考值，非执行指令；历史统计特征不代表未来行为，市场有风险"
 
         signals.append(StrategySignal(
             code=code,
@@ -802,7 +1022,7 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None) 
                 f"历史统计样本量：{gene.zt_count_250d}次",
                 f"策略逻辑上，该战法历史平均收益：{historical_avg_return}%",
                 "历史统计特征不代表未来行为，仅作研究参考",
-            ],
+            ] + ([_prd_disclaimer] if _prd_disclaimer else []),
         ))
 
     # 按风险收益比 × 历史胜率排序
