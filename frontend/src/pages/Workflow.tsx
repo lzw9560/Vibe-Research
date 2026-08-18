@@ -590,6 +590,7 @@ export default function Workflow() {
               title="反包流"
               subtitle="前日大跌/长上影后反包 T+1 工作流"
               icon={BarChart3}
+              to="/workflow/pre-market?strategy=pattern_reversal"
               implemented
               footnote="S081 形态反包战法已实现（阈值探索性，待 live 验算）"
             />
@@ -599,6 +600,7 @@ export default function Workflow() {
               title="弱转强接力"
               subtitle="昨日分歧炸板 → 次日弱转强 T+1 接力工作流"
               icon={Zap}
+              to="/workflow/pre-market?strategy=weak_turn_strong"
               implemented
               footnote="S081 弱转强战法已实现（依赖 S070 R7 分时派生，阈值探索性，待 live 验算）"
             />

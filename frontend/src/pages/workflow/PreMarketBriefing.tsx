@@ -52,7 +52,10 @@ export default function PreMarketBriefing() {
   // S031 R18：候选诊断抽屉（点候选不整页跳，弹侧边抽屉）
   const [drawerCode, setDrawerCode] = useState<string | null>(null);
   // B-lite：当前选中战法 tab（null=显示全量漏斗矩阵；非空=按战法过滤 scored_candidates）
-  const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
+  // 战法流入口卡片通过 ?strategy= query param 指定初始选中战法
+  const [activeStrategy, setActiveStrategy] = useState<string | null>(
+    searchParams.get("strategy") ?? null,
+  );
   // S054：盘前录入建仓入口（候选矩阵「买入」按钮 → 弹 TransitionForm）
   const [buyEntry, setBuyEntry] = useState<{ code: string; name: string } | null>(null);
   const transition = useTransitionWorkflowState();
