@@ -144,6 +144,6 @@ def test_catalyst_via_model(monkeypatch):
 
 def test_fund_flow_dragon_tiger_via_model(monkeypatch):
     monkeypatch.setattr(astock, "stock_fund_flow_120d", lambda c: [])
-    monkeypatch.setattr(astock, "dragon_tiger_board", lambda c: {"institution": {"net_amt": 3e8}})
+    monkeypatch.setattr(astock, "dragon_tiger_board", lambda c, trade_date=None, look_back=30: {"institution": {"net_amt": 3e8}})
     out = fund_flow.fetch_fund_flow(["600519"], "2026-07-30")
     assert out["600519"]["dragon_tiger_inst_net"] == 3e8

@@ -214,10 +214,11 @@ class TestR3DegradationContract(unittest.TestCase):
         return run_funnel(stage="all", date="2026-08-13", cfg=cfg)
 
     def test_r3_degradation_when_auction_catalyst_both_empty(self):
-        """auction={}+catalyst={} → R3 = R2 输出（3 只），data_status="降级"。
+        """S084 reframe：R3 不再过滤（竞价/催化下放战法层），auction/catalyst 双空时 R3 = R2 全量。
 
-        修复前：_filter_r3 的 has_auction/has_catalyst 全 False → 3 只全被过滤 → R3=0。
-        修复后：双空跳过 _filter_r3，r3_kept=list(r2_kept)，标注降级原因。
+        S084 前：_filter_r3 双空跳过过滤标 data_status="降级"。
+        S084 后（funnel.py:411-413）：R3 永不过滤，r3_kept=R2 全量，data_status="R3 已下放战法"。
+        原"降级保留"已成默认行为。本测试验 R3 不丢候选（核心契约 1/2/4 仍守）+ 新标签。
         """
         genes = self._three_genes()
         activity = self._three_activity(genes)
@@ -230,24 +231,26 @@ class TestR3DegradationContract(unittest.TestCase):
         self.assertEqual(r2.output_count, 3, "R2 应保留 3 只（activity 全合格），否则测试场景失效")
         self.assertEqual(sorted(r2.output_codes), ["600001", "600002", "600003"])
 
-        # 契约 1：R3 output_count == R2 output_count（降级保留，非 0）
+        # 契约 1：R3 output_count == R2 output_count（pass-through，非 0）
         self.assertEqual(r3.output_count, 3)
         # 契约 2：R3 passed 的 code 集合 == R2 passed 的 code 集合
         self.assertEqual(
             sorted(p["code"] for p in r3.passed),
             sorted(p["code"] for p in r2.passed),
         )
-        # 契约 3：data_status="降级"，reason 含降级保留说明
-        self.assertEqual(r3.data_status, "降级")
-        self.assertIn("降级保留", r3.data_reason or "")
+        # 契约 3：S084 reframe——data_status="R3 已下放战法"（不再标"降级"）
+        self.assertEqual(r3.data_status, "R3 已下放战法")
+        self.assertIn("下放", r3.data_reason or "")
         # 契约 4：final_candidates 含全部 3 只（下游自动正确）
         final_codes = {c.code for c in result.final_candidates}
         self.assertEqual(final_codes, {"600001", "600002", "600003"})
 
     def test_r3_normal_filter_when_auction_present(self):
-        """auction 有数据时 R3 走 _filter_r3 正常过滤，只保留有 auction_open_pct 的票。
+        """S084 reframe：即便 auction 有数据，R3 也不再过滤（竞价过滤下放战法层）。
 
-        对照组：证明降级分支只在双空时触发，有数据时 R3 严格过滤。
+        S084 前：auction 有数据 → R3 走 _filter_r3 只保留有 auction_open_pct 的票（1 只）。
+        S084 后：R3 永不过滤，auction 有无都保留 R2 全量。本测试验 reframe 不回退（R3 不因
+        auction 存在而过滤——若未来 R3 过滤回归战法层以外的漏斗层，本测试会先红）。
         """
         genes = self._three_genes()
         activity = self._three_activity(genes)
@@ -257,14 +260,16 @@ class TestR3DegradationContract(unittest.TestCase):
         layers_by_id = {l.layer_id: l for l in result.layers}
         r3 = layers_by_id["R3"]
 
-        # 契约 1：R3 output_count == 1（只保留有 auction_open_pct 的）
-        self.assertEqual(r3.output_count, 1)
-        # 契约 2：R3 passed = ["600001"]
-        self.assertEqual([p["code"] for p in r3.passed], ["600001"])
-        # 契约 3：data_status 非"降级"（正常过滤路径不标降级）
-        self.assertNotEqual(r3.data_status, "降级")
-        # 契约 4：final_candidates 仅含 600001
-        self.assertEqual({c.code for c in result.final_candidates}, {"600001"})
+        # 契约 1：R3 output_count == 3（S084 reframe：auction 存在也不过滤，保留 R2 全量）
+        self.assertEqual(r3.output_count, 3)
+        # 契约 2：R3 passed 含全部 3 只（非仅 600001）
+        self.assertEqual(
+            sorted(p["code"] for p in r3.passed), ["600001", "600002", "600003"]
+        )
+        # 契约 3：data_status="R3 已下放战法"（auction 存在同样不下放过滤回漏斗层）
+        self.assertEqual(r3.data_status, "R3 已下放战法")
+        # 契约 4：final_candidates 含全部 3 只（auction 不再收敛候选）
+        self.assertEqual({c.code for c in result.final_candidates}, {"600001", "600002", "600003"})
 
 
 if __name__ == "__main__":

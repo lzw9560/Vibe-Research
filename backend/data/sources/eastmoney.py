@@ -214,6 +214,43 @@ def ths_limit_up_pool(date: str) -> list[dict]:
     return out
 
 
+def sector_fund_flow() -> list[dict]:
+    """行业板块资金流（东财 push2 clist，fs=m:90+t:2 行业板块，~100 个行业）。
+
+    S085 A5：替代 market._sectors 的 akshare stock_fund_flow_industry（打同花顺 raw requests 无熔断）。
+    走 em_get + 双 host 降级（push2→push2delay，同 market_turnover_rank 范式）。
+    返每板块：name/f14(名) / pct/f3(涨跌幅) / net(亿, f62元/1e8) / inflow=None / outflow=None /
+    firms(f104+f105 涨跌家数)。
+
+    probe（2026-08-19 live）：akshare 打同花顺非东财（§1.2 东财 scope 不强制——A5 是防封工程改进，
+    非选股 bug）；东财 push2 直连断、push2delay 可达（双 host 降级必要）；东财行业板块无 inflow/outflow
+    字段（只 f62 净额）；sector_* 全 dead fields（无下游消费）→ inflow/outflow=None 保形状无影响。
+    """
+    params = {"pn": "1", "pz": "100", "po": "1", "np": "1", "fltt": "2", "invt": "2",
+              "fid": "f62",  # 按主力净额降序
+              "fs": "m:90+t:2",
+              "fields": "f12,f14,f3,f62,f104,f105", "ut": _PUSH2_UT}
+    for host in ("push2.eastmoney.com", "push2delay.eastmoney.com"):
+        try:
+            r = em_get(f"https://{host}/api/qt/clist/get", params=params,
+                       headers={"User-Agent": UA}, timeout=12)
+            items = (r.json().get("data") or {}).get("diff") or []
+            if isinstance(items, dict):
+                items = list(items.values())
+            if items:
+                return [{
+                    "name": str(d.get("f14", "")),
+                    "pct": round(_numf(d.get("f3")) or 0.0, 2),
+                    "net": round((_numf(d.get("f62")) or 0.0) / 1e8, 2),  # 元→亿
+                    "inflow": None,   # 东财行业板块无此字段（dead field 保形状）
+                    "outflow": None,
+                    "firms": (_numf(d.get("f104")) or 0) + (_numf(d.get("f105")) or 0),
+                } for d in items]
+        except Exception:
+            continue  # 断连/限流 → 下一 host
+    return []
+
+
 def market_turnover_rank(n: int = 20) -> list[dict]:
     """全市场成交额榜（沪深京 A 股按成交额降序 TopN）。
 

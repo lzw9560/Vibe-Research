@@ -348,11 +348,16 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     layers: list[FunnelLayer] = [r1]
 
     # ---- R2 收敛（并行）——S084 R1-only：活跃度过滤已下放战法层，本层仅展示全量 ----
+    # S085 A4/A3：盘前所有因子取 T-1（S084 盘前边界实现缺口）——盘前 fetch_activity 用
+    # yesterday_date 走 kline T-1 路径（算 prev_amount_yi/K线派生，修放量比降级 limitup_strategy:922）；
+    # 历史日保 date（replay 取该日）。
+    _is_pre_market = (date or "")[:10] >= _date.today().isoformat()
+    act_date = (yesterday_date or date) if _is_pre_market else date
     r2_data_status: str | None = None
     r2_data_reason: str | None = None
     try:
         activity, fund = _fetch_pair(
-            lambda: sources.activity.fetch_activity(r2_input_codes, date),
+            lambda: sources.activity.fetch_activity(r2_input_codes, act_date),
             lambda: sources.fund_flow.fetch_fund_flow(r2_input_codes, date, sectors=sectors, industry_map=industry_map),
         )
     except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
@@ -460,10 +465,35 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         gene_obj = genes.get(code, {}).get("gene_obj")
         pool_item = zt_pool_map.get(code) if zt_pool_map else None
         derived = derived_source.fetch_derived(code, yesterday_date) if yesterday_date else None
+        # S085 B3：seal_delta 从 derived 透传到 ind（derived_source 已并入 trajectory reader）
+        if derived is not None:
+            ind.seal_delta = derived.get("seal_delta")
         cards.append(build_diagnosis_card(
             code, name, ind, eff, market_ctx=board, as_of=as_of,
             gene_obj=gene_obj, pool_item=pool_item, derived=derived,
+            # S085 B2：bulk 漏斗 with_seat_detail=False（默认）——席位聚合 per-code 调
+            # compute_consensus_signal（3 次 datacenter/code），N 候选会拖垮响应；
+            # 选股池列表跳过，单股 diagnose() 才开 with_seat_detail=True。
         ))
+
+    # S085 B1：run 级市场聚合上下文（4 率 + lianban_stocks + date），
+    # 复用 board_ladder.get_market_emotion_raw shared cache（零额外外调）。
+    # 非个股字段（S049 B 已剥离三率）；仅展示/审计，不参与 capped/胜率/结算。
+    market_context: dict | None = None
+    try:
+        from candidate_funnel.sources.board_ladder import get_market_emotion_raw
+        emo = get_market_emotion_raw(date)
+        if emo:
+            market_context = {
+                "date": emo.get("date") or date,
+                "seal_rate": emo.get("seal_rate"),
+                "break_rate": emo.get("break_rate"),
+                "promotion_rate": emo.get("promotion_rate"),
+                "max_boards": emo.get("max_boards"),
+                "lianban_stocks": emo.get("lianban_stocks") or [],
+            }
+    except Exception:
+        market_context = None
 
     return FunnelResult(
         run_id=f"run-{date}-{stage}",
@@ -473,6 +503,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         threshold_config=cfg,
         sentiment_phase=phase,
         as_of=as_of,
+        market_context=market_context,
     )
 
 
@@ -488,15 +519,7 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     eff = resolve_thresholds(cfg, phase)
     genes = sources.gene.fetch_genes(date)
     board = sources.board_ladder.fetch_board_ladder(date)
-    activity = sources.activity.fetch_activity([code], date)
-    # S084 R4.2：sectors 从 market.get_overview() 取（5min 缓存，防封）
-    sectors = None
-    try:
-        import market as _market
-        sectors = (_market.get_overview() or {}).get("sectors")
-    except Exception:
-        sectors = None
-    # S084 Q1=A/Q2=B：T-1 昨日（date 畸形→None 不用今日冒充，review HIGH 修复）
+    # S085 A4/A3：先算 yesterday_date（盘前所有因子取 T-1 用，原在 fetch_activity 后移前）
     from datetime import date as _date, timedelta as _timedelta
     yesterday_date: str | None
     try:
@@ -505,6 +528,18 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
         yesterday_date = _last_td(_d - _timedelta(days=1)).isoformat()
     except Exception:
         yesterday_date = None
+    # S085 A4/A3：盘前（date>=today）fetch_activity 用 yesterday_date 走 kline T-1
+    # （算 prev_amount_yi/K线派生，修放量比降级 limitup_strategy:922）；历史日保 date（replay 取该日）
+    _is_pre_market = (date or "")[:10] >= _date.today().isoformat()
+    act_date = (yesterday_date or date) if _is_pre_market else date
+    activity = sources.activity.fetch_activity([code], act_date)
+    # S084 R4.2：sectors 从 market.get_overview() 取（5min 缓存，防封）
+    sectors = None
+    try:
+        import market as _market
+        sectors = (_market.get_overview() or {}).get("sectors")
+    except Exception:
+        sectors = None
     # S084 R2：zt_pool_map + 行业映射（hybk，em_get-backed 替代 individual_info，防封 review HIGH 修复）
     from candidate_funnel.sources import zt_pool_source
     zt_pool_map = zt_pool_source.fetch_zt_pool_map(yesterday_date) if yesterday_date else {}
@@ -533,4 +568,6 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     return build_diagnosis_card(
         code, name, ind, eff, market_ctx=board, as_of=as_of,
         gene_obj=gene_obj, pool_item=pool_item, derived=derived,
+        trade_date=yesterday_date,  # S085 B2：单股 diagnose 开席位聚合（1 code 开销可接受）
+        with_seat_detail=True,
     )

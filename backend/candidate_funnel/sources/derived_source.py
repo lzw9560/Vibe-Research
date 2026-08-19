@@ -32,6 +32,16 @@ def fetch_derived(code: str, yesterday_date: str) -> dict | None:
     if cached is not None:
         if cached.get("data_status") == "missing":
             return None
+        # S085 B3：并入 intraday_features trajectory 的 seal_delta（修只写不读孤儿）
+        try:
+            from risk.seal_intraday_collector import get_trajectory_result
+            traj = get_trajectory_result(code, yesterday_date)
+            if traj is not None:
+                cached["seal_delta"] = traj.get("seal_delta")
+            else:
+                cached["seal_delta"] = None
+        except Exception:
+            cached["seal_delta"] = None
         return cached
 
     # 2. fallback：表无则实时算（不 per-code 阻塞；战法层 B2 亦会自补）

@@ -371,6 +371,7 @@ def _cand_to_gene(cand: dict):
         last_zt_dates=[],
         zt_count_250d=int(zt_count),
         data_source=cand.get("data_source", "eastmoney_live"),
+        date=cand.get("date", ""),
     )
 
 

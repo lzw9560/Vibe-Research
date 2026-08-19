@@ -96,8 +96,12 @@ def test_activity_output_shape_unchanged(monkeypatch):
     assert e["limit_up"] == 1870.0
     # amount_yi = turnover(元) / 1e8
     assert abs(e["amount_yi"] - 123456.0 * 1e4 / 1e8) < 1e-9
-    # 无 missing（全字段取得）
-    assert "missing" not in e
+    # S084 R4.3：tencent 当日路径对 K线派生字段（prev_amount_yi 需前日 bar）标 missing
+    # 是合理的（盘前无前日 K线，需历史日 kline 复算，见 S085 A4）；basic quote 字段须全取得。
+    _basic = {"name", "price", "change_pct", "turnover_pct", "vol_ratio",
+              "amount_yi", "amplitude_pct", "limit_up", "limit_down"}
+    _missing_basic = set((e.get("missing") or {}).keys()) & _basic
+    assert not _missing_basic, f"basic quote 字段不应 missing: {_missing_basic}"
 
 
 def test_activity_missing_fields_flagged(monkeypatch):

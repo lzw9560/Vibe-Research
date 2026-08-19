@@ -208,6 +208,7 @@ async def rebuild_date(
             zt_count_250d=len(history),
             data_source="kline_rebuild",
             missing_factors=list(_MISSING_FACTORS),
+            date=date,
         )
 
     # 分批 gather，每批 _CONCURRENCY 个

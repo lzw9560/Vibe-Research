@@ -25,6 +25,11 @@ def fetch_fund_flow(codes: list[str], as_of: str, sectors: list[dict] | None = N
         }
         try:
             flows = astock.stock_fund_flow_120d(c) or []
+            # S085 A6：按 as_of 过滤 flows ≤ as_of——修 replay 误取今日资金流。
+            # 盘前 as_of=T→flows 最后 T-1（T 日未出）；replay as_of=H→flows ≤ H。
+            # 不改 stock_fund_flow_120d 签名（topology/risk_models/前端直调不受影响）。
+            if as_of:
+                flows = [f for f in flows if (f.get("date") or "")[:10] <= as_of]
             if flows:
                 # astock 返回 main_net 单位为"元"，模型口径为"万"，需换算。
                 entry["main_net_inflow"] = round((flows[-1].get("main_net") or 0) / 10000.0, 1)
@@ -45,7 +50,9 @@ def fetch_fund_flow(codes: list[str], as_of: str, sectors: list[dict] | None = N
         except Exception:
             entry["missing"]["main_net_inflow"] = "资金流取数失败"
         try:
-            dt = dragon_tiger_from_dict(astock.dragon_tiger_board(c) or {})
+            # S085 A2d：传 as_of 给 dragon_tiger_board——修 replay 误取今日龙虎榜
+            # （盘前 as_of=T→T 日未出榜返 T-1 最近；replay as_of=H→查到 H）。
+            dt = dragon_tiger_from_dict(astock.dragon_tiger_board(c, trade_date=as_of) or {})
             entry["dragon_tiger_inst_net"] = dt.institution_net
             if entry["dragon_tiger_inst_net"] is None:
                 entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜待披露"

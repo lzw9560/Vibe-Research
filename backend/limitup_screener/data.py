@@ -167,6 +167,7 @@ def load_gene_scores(date: str) -> list | None:
             data_source=ds,
             missing_factors=missing,
             industry=ind or "",
+            date=row["date"] if "date" in row.keys() else "",
         ))
     return scores
 

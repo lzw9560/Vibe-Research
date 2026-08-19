@@ -213,16 +213,35 @@ def build_diagnosis_card(
     gene_obj: Any = None,           # S084 R1：GeneScore 完整对象（model_dump 塞 card.gene_score）
     pool_item: dict | None = None,  # S084 R2：涨停池原始 dict
     derived: dict | None = None,    # S084 R3：S070 R7 分时派生
+    trade_date: str | None = None,  # S085 B2：T-1 交易日（龙虎榜盘后数据，供席位聚合取数）
+    with_seat_detail: bool = False,  # S085 B2：席位聚合 opt-in（bulk 漏斗默认关，单股 diagnose 开）
 ) -> DiagnosisCard:
     """聚合 → DiagnosisCard（AC4）。risk_flags 为客观标注（AC8/§8 极端估值）。
 
     S057：增八项标准三态判定（check_eight_standards），结果挂入 eight_standards 字段；
     未过数≥3 标 capped=True + cap_reason（封顶阈值在 funnel.py 消费侧实施）。
     S084：增 3 子对象（gene_score/pool_item/derived），各默认 None 降级不臆造。
+    S085 B2：增 seat_detail 聚合子对象（buy_one_ratio + 席位类型聚合 + score_modifier）。
+    合规 S018 R11：seat_detail 只放聚合分类，不放个体席位名/花名。无龙虎榜→None 降级不臆造。
+    性能：seat_detail 取数 per-code 调 compute_consensus_signal（3 次 datacenter/code），
+    bulk 漏斗（run_funnel_impl，N 候选）默认 with_seat_detail=False 跳过（避免 N×datacenter 拖垮响应）；
+    单股 diagnose() 开 with_seat_detail=True（1 code，开销可接受）。
     """
     activity = assess_activity(ind, eff)
     stabilization = detect_stabilization(ind, market_ctx)
     risk_flags: list[str] = []
+    # S085 A1：seal_amount 接线——zt pool 的 fund(封单额，元) 透到 ind.seal_amount，
+    # 否则八项标准⑥(_check_seal_ratio) 恒 missing → fail_count 偏置 → capped 判定偏（选股池得分封顶 55）。
+    # 命名碰撞守护：用 pool_item.get("fund")（封单额）非 build_indicator_set 的 fund 参数（资金流 dict）。
+    # 单位：fund 元 + float_market_cap 元 → ratio 无量纲（见 eight_standards._check_seal_ratio）。
+    # 非涨停股 pool_item=None → 不注入 → seal_amount=None → ⑥ missing（正确，⑥仅对涨停股有意义）。
+    if pool_item:
+        _fund = pool_item.get("fund")
+        if _fund not in (None, "", "-"):
+            try:
+                ind.seal_amount = float(_fund)
+            except (TypeError, ValueError):
+                ind.seal_amount = None
     eight = check_eight_standards(ind, market_ctx)
     capped = eight.fail_count >= 3
     cap_reason = (
@@ -235,6 +254,8 @@ def build_diagnosis_card(
         if gene_obj is not None and hasattr(gene_obj, "model_dump")
         else None
     )
+    # S085 B2：席位聚合 opt-in——bulk 漏斗跳过（perf），单股 diagnose 开
+    seat_detail = _build_seat_detail(code, trade_date) if with_seat_detail else None
     return DiagnosisCard(
         code=code,
         name=name,
@@ -249,7 +270,48 @@ def build_diagnosis_card(
         gene_score=gene_score,
         pool_item=pool_item,
         derived=derived,
+        seat_detail=seat_detail,
     )
+
+
+def _build_seat_detail(code: str, trade_date: str | None) -> dict | None:
+    """从 seat_engine + hot_money_seats 取席位聚合信号 → seat_detail 子对象。
+
+    聚合 only（守 S018 R11）：buy_one_ratio + 席位类型聚合列表 + score_modifier/risk_label。
+    不放个体席位名/营业部名。无 trade_date / 无龙虎榜 / 取数异常 → None 降级（不臆造）。
+    承重：seat_detail 不参与 capped/胜率/结算，仅选股池呈现（见 核实报告.md B2）。
+    """
+    if not trade_date:
+        return None
+    try:
+        from seat_engine.service import get_engine
+        engine = get_engine()
+        consensus = engine.compute_consensus_signal(trade_date, code)
+    except Exception:
+        return None
+    if not consensus or not consensus.get("details"):
+        return None
+    details = consensus["details"]
+    # score_modifier（画像未建→modifier 1.0 降级，hot_money_seats 既有逻辑）
+    score_modifier = None
+    risk_label = None
+    try:
+        from strategies.hot_money_seats import compute_seat_risk_factor
+        seat_risk = compute_seat_risk_factor(code, trade_date)
+        if seat_risk is not None:
+            score_modifier = seat_risk.score_modifier
+            risk_label = seat_risk.risk_label
+    except Exception:
+        pass
+    return {
+        "buy_one_ratio": details.get("buy_one_ratio"),
+        "buy_seat_types": details.get("buy_seat_types") or [],
+        "sell_seat_types": details.get("sell_seat_types") or [],
+        "consensus_signal": consensus.get("signal"),
+        "score_modifier": score_modifier,
+        "risk_label": risk_label,
+        "data_status": "ok" if details.get("buy_one_ratio") is not None else "partial",
+    }
 
 
 from candidate_funnel.thresholds import EIGHT_STANDARD_CAP_THRESHOLD as _CAP_THRESHOLD  # noqa: E402, I001

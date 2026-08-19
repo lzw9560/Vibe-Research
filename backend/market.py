@@ -74,23 +74,18 @@ def _sentiment(date: str | None = None) -> dict:
 
 
 def _sectors() -> list[dict]:
-    """行业资金流（按净额降序）。不含领涨股等个股字段。"""
+    """行业资金流（按净额降序）。不含领涨股等个股字段。
+
+    S085 A5：换源东财 push2 clist 行业板块走 em_get（替代 akshare stock_fund_flow_industry
+    打同花顺 raw requests 无熔断）。双 host 降级（push2→push2delay）。
+    返 name/pct/net(亿)/inflow(None)/outflow(None)/firms——东财行业板块无 inflow/outflow
+    字段（dead fields 保形状）。详见 eastmoney.sector_fund_flow docstring。
+    """
     try:
-        f = astock._akshare().stock_fund_flow_industry(symbol="即时")
-        f = f.sort_values("净额", ascending=False)
+        from data.sources.eastmoney import sector_fund_flow
+        return sector_fund_flow()
     except Exception:
         return []
-    out = []
-    for _, row in f.iterrows():
-        out.append({
-            "name": str(row["行业"]),
-            "pct": round(float(row.get("行业-涨跌幅", 0) or 0), 2),
-            "net": round(float(row.get("净额", 0) or 0), 2),
-            "inflow": round(float(row.get("流入资金", 0) or 0), 2),
-            "outflow": round(float(row.get("流出资金", 0) or 0), 2),
-            "firms": _num(row.get("公司家数")),
-        })
-    return out
 
 
 def get_overview() -> dict:

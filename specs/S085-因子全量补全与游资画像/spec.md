@@ -1,6 +1,6 @@
 # Spec: S085 — 因子全量补全 + 游资画像 + 接预警 + 防封
 
-> 状态：草案 ｜ 日期：2026-08-19
+> 状态：草案（核实完成 2026-08-19，约四成前提已修正，见 [核实报告.md](./核实报告.md)）｜ 日期：2026-08-19
 > 关联：S084（选股池解耦 reframe，已实现 R1-only）、全量因子审查（4 agent 审计 54 因子，wur9khaus）
 > 起因：S084 reframe 后全量因子审查发现：(1) 已有 32 因子 5+ bug（seal_amount 接线缺/dragon_tiger mapper 丢 seats/K线派生盘前 None/prev_amount_yi/板块资金防封）；(2) backlog 22 因子 20/22 数据源真有但未透传（市场宽度 board_ladder 已取数丢弃/seat_detail 已实现/seal_delta 已算）；(3) 预警 5 因子 2 个误判（竞价金额 tencent 9:25 可取/五档 mootdx bids 可取，未接选股池）；(4) 知名游资名单 + 持续性/一日游习惯分析全缺（你最初要的游资画像 + 习惯）；(5) 同花顺 raw requests 触防封底线。本 spec 全量补全。
 

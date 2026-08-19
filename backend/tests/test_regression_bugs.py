@@ -63,7 +63,11 @@ class TestScheduledTasksImports(unittest.TestCase):
             "s066_validation_checkpoint",
             "forward_test_daily",
             "forward_test_t1_settle",
-            "first_board_t1_review",        }
+            "first_board_t1_review",
+            "first_board_quote_probe",  # S076：盘中多源行情探查
+            "zt_history_snapshot",      # S078：涨停历史 snapshot 数据地基
+            "derived_precompute",       # S084 C1：盘后 derived 异步预采集
+        }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")
 

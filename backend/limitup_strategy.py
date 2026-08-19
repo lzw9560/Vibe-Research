@@ -360,6 +360,7 @@ async def get_analysis(code: str, date: str | None = None, risk: OneDayRisk | No
             zt_count_250d=0,
             backtest_points=[],
             backtest_summary={},
+            date=result.date,
         )
     else:
         gene_obj = await _rebuild_gene_with_backtest(code, result.date)
@@ -445,6 +446,7 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
             factors={"次日溢价率": 0.0, "红盘率": 0.0, "封板率": 0.0, "炸板后溢价": 0.0, "涨停频次": 0.0},
             wilson_adjusted=0.0, qualify=False, high_gene=False,
             last_zt_dates=[], zt_count_250d=0, backtest_points=[], backtest_summary={},
+            date=target_date,
         )
 
     name = stock_item.name or ""
@@ -488,6 +490,7 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
         last_zt_dates=last_dates,
         zt_count_250d=len(stock_history),
         backtest_points=bt_points,
+        date=target_date,
     )
 
 

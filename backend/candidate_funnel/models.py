@@ -58,6 +58,7 @@ class IndicatorSet(BaseModel):
     macd: Optional[float] = None
     # 补充参考信号(客观呈现)
     seal_amount: Optional[float] = None
+    seal_delta: Optional[float] = None  # S085 B3：日内封单 delta（末-首，from intraday_features 表 trajectory）
     auction_open_pct: Optional[float] = None
     chip_profit_ratio: Optional[float] = None
     block_trade_premium: Optional[float] = None
@@ -160,6 +161,10 @@ class DiagnosisCard(BaseModel):
     gene_score: Optional[dict] = None        # 涨停基因完整对象 dump（total_score/factors/zt_count_250d/...）
     pool_item: Optional[dict] = None         # 涨停池原始 dict（lbc/zbc/fbt/zdp/zje/hybk，走 em_get 限流）
     derived: Optional[dict] = None           # S070 R7 分时派生（broken_duration_min/max_drop_pct/last_lock_time），盘前未采集时 None 降级
+    # S085 B2：游资席位聚合子对象（聚合 only，守 S018 R11 不放个体席位名/花名）。
+    # {buy_one_ratio, buy_seat_types, sell_seat_types, score_modifier, risk_label, data_status}
+    # 无龙虎榜/取数失败 → None 降级（不臆造）。不参与 capped/胜率/结算，仅选股池呈现。
+    seat_detail: Optional[dict] = None
 
 
 # ---------- S057 八项标准 ----------
@@ -221,3 +226,7 @@ class FunnelResult(BaseModel):
     threshold_config: ThresholdConfig
     sentiment_phase: Optional[str] = None
     as_of: datetime
+    # S085 B1：run 级市场聚合上下文（4 率 + lianban_stocks + date），复用 get_market_emotion_raw
+    # shared cache 透传（零额外外调）。非个股 IndicatorSet 字段（S049 B 已剥离——全市场同值
+    # 塞个股无信息量）。仅展示/审计，不参与 capped/胜率/结算（final_candidates 仍唯一承重出口）。
+    market_context: Optional[dict] = None

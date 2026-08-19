@@ -26,7 +26,7 @@ from models.news import News
 from models.normalize import normalize_stock_code
 from models.quote import Quote
 from models.report import Report
-from models.seat import BillboardDetail, DragonTiger, DragonTigerRecord
+from models.seat import BillboardDetail, DragonTiger, DragonTigerRecord, Seat
 from models.valuation import Valuation
 
 
@@ -584,14 +584,34 @@ def company_info_from_individual_info(raw: dict) -> CompanyInfo:
 # ── 龙虎榜 / 席位 / 行业 / 公告 / 概念（T13e）─────────────────────────────
 
 def dragon_tiger_from_dict(raw: dict) -> DragonTiger:
-    """astock.dragon_tiger_board raw（{records:[{net_buy}], institution:{net_amt}}）→ DragonTiger。"""
+    """astock.dragon_tiger_board raw（{records:[{net_buy}], seats:{buy/sell:[{name,buy_amt,sell_amt,net}]}, institution:{net_amt}}）→ DragonTiger。
+
+    S085 A2：透传 raw['seats']（买卖 TOP5 席位明细，万元）到 DragonTiger.buy_seats/sell_seats。
+    向后兼容：records/institution_net 既有映射不动（消费方 fund_flow R2 / first_board_filter dim7 依赖）。
+    raw seats 键为 name/buy_amt/sell_amt/net（eastmoney.py:400-408），与 BillboardDetail（元 + OPERATEDEPT_NAME）口径不同。
+    """
     records = []
     for r in (raw.get("records") or []):
         records.append(DragonTigerRecord(net_buy=_numf(r.get("net_buy"))))
     inst = raw.get("institution") or {}
+
+    def _seat(r: dict) -> Seat:
+        return Seat(
+            name=r.get("name"),
+            buy_amt=_numf(r.get("buy_amt")),
+            sell_amt=_numf(r.get("sell_amt")),
+            net=_numf(r.get("net")),
+        )
+
+    raw_seats = raw.get("seats") or {}
+    buy_seats = tuple(_seat(r) for r in (raw_seats.get("buy") or []))
+    sell_seats = tuple(_seat(r) for r in (raw_seats.get("sell") or []))
+
     return DragonTiger(
         records=tuple(records),
         institution_net=_numf(inst.get("net_amt")) if isinstance(inst, dict) else None,
+        buy_seats=buy_seats,
+        sell_seats=sell_seats,
     )
 
 

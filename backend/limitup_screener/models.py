@@ -53,7 +53,8 @@ class GeneScore(BaseModel):
     # S040 v2: 数据源标注（eastmoney_live=完整5因子 / kline_rebuild=3因子重建）
     data_source: str = "eastmoney_live"
     industry: str = ""  # S066 Q16 step2：板块行业（pool hybk 主、code_industry 兜底），供 (date,industry) 聚合
-    missing_factors: list[str] = []  # K线重建缺失的因子名（如 ["封板率","炸板后溢价"]）
+    missing_factors: list[str] = []  # K线重建缺失的因子名（如 ["封板率","炸板后溢价"])
+    date: str = ""  # S085 A7：score 计算日期（gene_scores PK 来源），供 entry 侧自检陈旧
 
 
 class ScreenerResult(BaseModel):
@@ -191,6 +192,7 @@ def compute_gene_score(
     zb: list[ZTPoolItem],
     include_backtest: bool = False,
     pool_item: ZTPoolItem | None = None,
+    date: str = "",
 ) -> GeneScore:
     """计算单只涨停股的基因得分（消费者经 ZTPoolItem 模型读字段）。"""
     factors = compute_factors(history, yzt, zb)
@@ -262,4 +264,5 @@ def compute_gene_score(
         limit_up_price=limit_up_price,
         limit_down_price=limit_down_price,
         industry=((pool_item.industry or "") if pool_item else ""),
+        date=date,
     )

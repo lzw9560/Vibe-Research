@@ -172,15 +172,25 @@ def build_seat_profiles(billboard_data: list[dict]) -> list[SeatProfile]:
             ))
             continue
 
-        # 简化：检查买入日次日是否在卖方榜（需跨日匹配，这里用 buy_dates 和 sell_dates 交集近似）
+        # S085 C3：真实下一交易日替代 1-3 自然日 offset——修长假漏判
+        # （春节/国庆买入，真实下一交易日=长假后第 1 日，但 +1..3 自然日够不着→MISSED
+        # → next_day_sell_rate 偏低 → 偏向接力型 → 少扣一日游风险 → 选股分偏高）。
+        # 从 billboard_data 提取 sorted 真实交易日，用 index+1..3 真实下一交易日替代自然日
+        # （保留 1-3 宽泛语义，只修长假 catch）。
+        trade_dates_sorted = sorted({
+            str(r.get("TRADE_DATE", ""))[:10] for r in billboard_data if r.get("TRADE_DATE")
+        })
         next_day_sell_count = 0
         for bd in buy_dates:
-            # 次日 = bd + 1 交易日（简化：检查 bd 后 3 日内是否出现在卖方榜）
-            bd_dt = datetime.strptime(bd, "%Y-%m-%d")
+            if bd not in trade_dates_sorted:
+                continue
+            idx = trade_dates_sorted.index(bd)
+            # 1-3 真实下一交易日（长假跨过，index+1 = 真实下一交易日）
             for offset in range(1, 4):
-                next_dt = bd_dt + timedelta(days=offset)
-                next_str = next_dt.strftime("%Y-%m-%d")
-                if next_str in stats["sell_dates"]:
+                nxt = idx + offset
+                if nxt >= len(trade_dates_sorted):
+                    break
+                if trade_dates_sorted[nxt] in stats["sell_dates"]:
                     next_day_sell_count += 1
                     break
 

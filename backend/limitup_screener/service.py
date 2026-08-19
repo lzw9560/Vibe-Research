@@ -218,7 +218,7 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
     # 并行计算基因得分
     async def _compute_one(args: tuple) -> GeneScore:
         c, n, h, y, z, item = args
-        return compute_gene_score(c, n, h, y, z, include_backtest=True, pool_item=item)
+        return compute_gene_score(c, n, h, y, z, include_backtest=True, pool_item=item, date=target_date)
 
     gene_tasks = [_compute_one(s) for s in scores]
     gene_results = await asyncio.gather(*gene_tasks, return_exceptions=True)

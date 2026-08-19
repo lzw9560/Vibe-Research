@@ -249,6 +249,32 @@ def get_derived_result(code: str, date: str) -> dict[str, Any] | None:
     }
 
 
+def get_trajectory_result(code: str, date: str) -> dict[str, Any] | None:
+    """S085 B3：读 intraday_features 表 trajectory 的 seal_delta（修只写不读孤儿）。
+
+    persist_trajectory 写 intraday_features（seal_delta 列），但原无 reader（全仓 grep
+    FROM intraday_features 空）。本 reader 让 seal_delta 可读，derived_source 透传到 card。
+    无行 / 缺表 / DB 未就绪 → None（不臆造）。消费方待接（目前 dead field，像 A7）。
+    """
+    try:
+        conn = _get_conn()
+        try:
+            row = conn.execute(
+                "SELECT seal_delta, data_status FROM intraday_features WHERE code = ? AND date = ?",
+                (code, date),
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    return {
+        "seal_delta": row["seal_delta"],
+        "data_status": row["data_status"],
+    }
+
+
 def collect_once(date_str: str | None = None) -> dict[str, Any]:
     """单次采集：取涨停池 + 腾讯行情 → 写快照。
 
