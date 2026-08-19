@@ -41,6 +41,7 @@ def test_public_surface_intact():
         "industry_comparison", "profit_forecast", "stock_news", "individual_info",
         "disclosure", "financials", "valuation_percentile", "kline", "finance",
         "investor_qa", "calc_peg", "pe_digestion", "full_valuation",
+        "bids", "ths_limit_up_pool",
     ]
     missing = [name for name in expected if not hasattr(astock, name)]
     assert missing == [], f"astock 门面缺公开名: {missing}"

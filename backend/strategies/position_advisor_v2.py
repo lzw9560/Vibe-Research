@@ -137,10 +137,18 @@ def clear_caches() -> None:
     _KLINE_CACHE.clear()
 
 
-def _latest_gene_map() -> dict[str, Any]:
-    """今日 gene_scores（DB 读，不触发网络）；今日无则取 DB 最新日。→ {code: GeneScore}。"""
+def _latest_gene_map() -> tuple[dict[str, Any], str, bool]:
+    """今日 gene_scores（DB 读，不触发网络）；今日无则取 DB 最新日。
+
+    → ``( {code: GeneScore}, data_date, data_stale )``。
+    data_date：今日有 scores → today；回退 DB 最新日 → latest；无任何数据 → ""。
+    data_stale：binary 标注 data_date 非空且 != today（周末/节假日回退属正常，
+    如实标注「非今日」不阻塞，不降级仓位/win_rate——阈值留待回溯数据后定）。
+    不臆造：data_date==""（无 date）→ not stale（无 date 不标）。
+    """
     today = datetime.now().strftime("%Y-%m-%d")
     scores = load_gene_scores(today)
+    data_date = today if scores else ""
     if not scores:
         from limitup_screener.data import get_db
 
@@ -155,7 +163,25 @@ def _latest_gene_map() -> dict[str, Any]:
             latest = None
         if latest:
             scores = load_gene_scores(latest)
-    return {g.code: g for g in (scores or [])}
+            data_date = latest
+    data_stale = bool(data_date) and data_date != today
+    return {g.code: g for g in (scores or [])}, data_date, data_stale
+
+
+def _gene_stale_note(data_date: str) -> str:
+    """stale risk_note：如实呈现数据日非今日（不标「异常」，周末/节假日属正常）。"""
+    return f"数据日={data_date}，非今日（盘后预计算可能未跑），建议盘后重算"
+
+
+def _with_gene_freshness(
+    extra: dict[str, Any], risk_notes: list[str], data_date: str, data_stale: bool
+) -> tuple[dict[str, Any], list[str]]:
+    """把 gene 数据日/stale 标注并入 AdvisoryItem.extra + risk_notes（immutable：返回新副本）。"""
+    new_extra = {**extra, "gene_data_date": data_date, "data_stale": data_stale}
+    new_notes = [*risk_notes]
+    if data_stale:
+        new_notes.append(_gene_stale_note(data_date))
+    return new_extra, new_notes
 
 
 def _lookup_strategy(
@@ -468,7 +494,7 @@ def advise_recommendations(limit: int = 20) -> list[AdvisoryItem]:
     + run_strategy_backtest win_rate，输出入场建议（仓位/止损/止盈/理由）。
     win_rate 替代 v1 合成公式。
     """
-    gene_map = _latest_gene_map()
+    gene_map, data_date, data_stale = _latest_gene_map()
     if not gene_map:
         return []
     wr_map = _win_rate_map()
@@ -481,6 +507,14 @@ def advise_recommendations(limit: int = 20) -> list[AdvisoryItem]:
         take = params.get("take_profit_pct", 15)
         pct = _suggested_pct(wr)
         wr_disp = f"{wr*100:.0f}%（样本 {ss}）" if wr is not None else "无回测数据"
+        extra, risk_notes = _with_gene_freshness(
+            {
+                "gene_score": g.total_score, "suggested_pct": pct,
+                "stop_loss_pct": stop, "take_profit_pct": take,
+            },
+            [f"止损 {stop}% / 止盈 {take}%", _DISCLAIMER],
+            data_date, data_stale,
+        )
         items.append(AdvisoryItem(
             code=g.code, name=g.name or g.code, scene="recommendation", action="enter",
             win_rate=wr, win_rate_source=src, matched_strategy=sn or None,
@@ -489,11 +523,8 @@ def advise_recommendations(limit: int = 20) -> list[AdvisoryItem]:
                 f"战法「{sn or '未匹配'}」90 天回测胜率 {wr_disp}",
                 f"建议仓位 {int(pct*100)}%（研究参考，非交易指令）",
             ],
-            risk_notes=[f"止损 {stop}% / 止盈 {take}%", _DISCLAIMER],
-            extra={
-                "gene_score": g.total_score, "suggested_pct": pct,
-                "stop_loss_pct": stop, "take_profit_pct": take,
-            },
+            risk_notes=risk_notes,
+            extra=extra,
         ))
     return items
 
@@ -509,17 +540,20 @@ def advise_watchlist() -> list[AdvisoryItem]:
         codes = []
     if not codes:
         return []
-    gene_map = _latest_gene_map()
+    gene_map, data_date, data_stale = _latest_gene_map()
     wr_map = _win_rate_map()
     items: list[AdvisoryItem] = []
     for code in codes:
         g = gene_map.get(code)
         if g is None:
+            extra, risk_notes = _with_gene_freshness(
+                {"status": "no_signal"}, [_DISCLAIMER], data_date, data_stale,
+            )
             items.append(AdvisoryItem(
                 code=code, name=code, scene="watchlist", action="no_signal",
                 win_rate=None, win_rate_source="none", matched_strategy=None,
                 reasons=["该标的当日不在涨停池，无涨停信号"],
-                risk_notes=[_DISCLAIMER], extra={"status": "no_signal"},
+                risk_notes=risk_notes, extra=extra,
             ))
             continue
         sc, sn, wr, ss, src = _lookup_strategy(code, g, wr_map)
@@ -528,6 +562,14 @@ def advise_watchlist() -> list[AdvisoryItem]:
         take = params.get("take_profit_pct", 15)
         pct = _suggested_pct(wr)
         wr_disp = f"{wr*100:.0f}%（样本 {ss}）" if wr is not None else "无回测数据"
+        extra, risk_notes = _with_gene_freshness(
+            {
+                "gene_score": g.total_score, "suggested_pct": pct,
+                "stop_loss_pct": stop, "take_profit_pct": take,
+            },
+            [f"止损 {stop}% / 止盈 {take}%", _DISCLAIMER],
+            data_date, data_stale,
+        )
         items.append(AdvisoryItem(
             code=code, name=g.name or code, scene="watchlist", action="enter",
             win_rate=wr, win_rate_source=src, matched_strategy=sn or None,
@@ -536,11 +578,8 @@ def advise_watchlist() -> list[AdvisoryItem]:
                 f"战法「{sn or '未匹配'}」90 天回测胜率 {wr_disp}",
                 f"建议仓位 {int(pct*100)}%",
             ],
-            risk_notes=[f"止损 {stop}% / 止盈 {take}%", _DISCLAIMER],
-            extra={
-                "gene_score": g.total_score, "suggested_pct": pct,
-                "stop_loss_pct": stop, "take_profit_pct": take,
-            },
+            risk_notes=risk_notes,
+            extra=extra,
         ))
     return items
 
@@ -563,7 +602,7 @@ async def advise_holdings() -> list[AdvisoryItem]:
         return []
     # S067 P1-2：移除 _kline_cache.clear()——自毁解析缓存导致 holdings 场景每次重解析。
     # kline 日内有效（_KLINE_CACHE TTL 1h + _kline_cache 复用），无需每次清。
-    gene_map = _latest_gene_map()
+    gene_map, data_date, data_stale = _latest_gene_map()
     wr_map = _win_rate_map()
     # S067 P2-2：批量持仓战法匹配——一次 IN 查询消除 N+1 DB
     holding_codes = [h.get("code") for h in holdings if h.get("code")]
@@ -604,11 +643,15 @@ async def advise_holdings() -> list[AdvisoryItem]:
         risk_notes = [_DISCLAIMER]
         if layer == 2:
             risk_notes.append("历史战法信号已超 max_hold_days 窗口")
+        extra, risk_notes = _with_gene_freshness(
+            {"pnl_pct": pnl_pct, "cost": cost, "price": price, "layer": layer},
+            risk_notes, data_date, data_stale,
+        )
         items.append(AdvisoryItem(
             code=code, name=name, scene="holding", action=action,
             win_rate=wr, win_rate_source=src, matched_strategy=sn or None,
             reasons=reasons, risk_notes=risk_notes,
-            extra={"pnl_pct": pnl_pct, "cost": cost, "price": price, "layer": layer},
+            extra=extra,
         ))
     return items
 

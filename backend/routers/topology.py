@@ -101,7 +101,7 @@ class FundFlowEdgeProvider:
     def build_edges(self, candidates: list[dict], *, date: str | None = None) -> list[dict]:
         return _collect_shared_sets(
             candidates,
-            fetch_fn=lambda code, _d: astock.stock_fund_flow_120d(code),
+            fetch_fn=lambda code, d: astock.stock_fund_flow_120d(code, date=d),  # S085 A6 残留：传 d 修 replay 误取今日
             extract_fn=lambda flow: {
                 r.get("date", "")
                 for r in (flow or [])[-_FUND_RECENT_DAYS:]

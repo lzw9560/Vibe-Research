@@ -692,7 +692,8 @@ def score_dim2_hot_money(candidate: dict, date: str) -> tuple[float, dict]:
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
-        raw_dt = dragon_tiger_board(code) or {}
+        _dt = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date  # S085 A2d：YYYYMMDD→ISO（dragon_tiger_board strptime %Y-%m-%d，裸传 YYYYMMDD 会 ValueError→静默 50）
+        raw_dt = dragon_tiger_board(code, trade_date=_dt) or {}  # S085 A2d 残留：传 date 修 replay 误取今日
         records = raw_dt.get("records") or []
         institution = raw_dt.get("institution") or {}
         billboard_count = len(records)
@@ -974,7 +975,8 @@ def score_dim7_institution(candidate: dict, date: str) -> tuple[float, dict]:
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
-        raw_dt = dragon_tiger_board(code) or {}
+        _dt = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date  # S085 A2d：YYYYMMDD→ISO（dragon_tiger_board strptime %Y-%m-%d，裸传 YYYYMMDD 会 ValueError→静默 50）
+        raw_dt = dragon_tiger_board(code, trade_date=_dt) or {}  # S085 A2d 残留：传 date 修 replay 误取今日
         dt = dragon_tiger_from_dict(raw_dt)
         inst_net = dt.institution_net  # 万元
         raw["inst_net"] = inst_net

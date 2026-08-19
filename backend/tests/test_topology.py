@@ -73,7 +73,7 @@ def test_sector_provider_same_concept(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code: {
+        lambda code, date=None:{
             "600519": {"concept_tags": ["白酒", "消费", "机构重仓"]},
             "000858": {"concept_tags": ["白酒", "消费"]},
             "300750": {"concept_tags": ["新能源"]},
@@ -104,7 +104,7 @@ def test_sector_provider_empty_when_no_tags(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code: {"concept_tags": []},
+        lambda code, date=None:{"concept_tags": []},
     )
     assert SectorEdgeProvider().build_edges(_CANDIDATES) == []
 
@@ -114,7 +114,7 @@ def test_sector_single_shared_concept_no_edge(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code: {
+        lambda code, date=None:{
             "600519": {"concept_tags": ["白酒", "消费"]},
             "000858": {"concept_tags": ["白酒", "新能源"]},  # 与 600519 仅共享 白酒
             "300750": {"concept_tags": ["新能源", "储能"]},  # 与 000858 仅共享 新能源
@@ -137,7 +137,7 @@ def test_fund_flow_provider_coinflow(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "stock_fund_flow_120d",
-        lambda code: {
+        lambda code, date=None:{
             "600519": _flow(shared_dates + [("2026-08-04", -1e8)]),
             "000858": _flow(shared_dates),  # 三天共享正流入 → weight=3
             "300750": _flow(shared_dates[:2]),  # 仅 2 天共享（<3）→ 不达阈值无边
@@ -156,7 +156,7 @@ def test_fund_flow_below_threshold_no_edge(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "stock_fund_flow_120d",
-        lambda code: _flow([("2026-08-01", 1e8), ("2026-08-02", 2e8)]),  # 三候选全共享 2 天
+        lambda code, date=None:_flow([("2026-08-01", 1e8), ("2026-08-02", 2e8)]),  # 三候选全共享 2 天
     )
     edges = FundFlowEdgeProvider().build_edges(_CANDIDATES)
     assert [e for e in edges if e["type"] == "fund_flow"] == []
@@ -164,7 +164,7 @@ def test_fund_flow_below_threshold_no_edge(monkeypatch):
 
 def test_fund_flow_provider_resilient(monkeypatch):
     """数据源异常 → 空边不崩溃。"""
-    monkeypatch.setattr(topology.astock, "stock_fund_flow_120d", lambda code: (_ for _ in ()).throw(RuntimeError("x")))
+    monkeypatch.setattr(topology.astock, "stock_fund_flow_120d", lambda code, date=None:(_ for _ in ()).throw(RuntimeError("x")))
     assert FundFlowEdgeProvider().build_edges(_CANDIDATES) == []
 
 
@@ -183,7 +183,7 @@ def test_fund_flow_window_excludes_old_dates(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "stock_fund_flow_120d",
-        lambda code: _flow(flow_rows),  # 三候选完全相同 → 仅窗口外有共享正日
+        lambda code, date=None:_flow(flow_rows),  # 三候选完全相同 → 仅窗口外有共享正日
     )
     edges = FundFlowEdgeProvider().build_edges(_CANDIDATES)
     ff = [e for e in edges if e["type"] == "fund_flow"]
@@ -314,7 +314,7 @@ def test_seat_provider_resilient(monkeypatch):
 def test_relation_aggregation_nodes_and_edges(monkeypatch):
     """聚合多 provider → GraphData{nodes,edges}；节点=候选去重。"""
     # review fix 防封：mock concept_blocks 防离线测试发真实东财请求（§1.2 防封底线）
-    monkeypatch.setattr(topology.astock, "concept_blocks", lambda code: {"concept_tags": []})
+    monkeypatch.setattr(topology.astock, "concept_blocks", lambda code, date=None:{"concept_tags": []})
     providers = [_FakeProvider(), SectorEdgeProvider()]  # fake + sector
     graph = build_relation_graph(_CANDIDATES, providers=providers)
     assert set(graph.keys()) == {"nodes", "edges"}
@@ -552,13 +552,13 @@ def test_endpoint_relation_all_four_edge_types(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code: {"concept_tags": ["白酒", "消费"]},
+        lambda code, date=None:{"concept_tags": ["白酒", "消费"]},
     )
     # fund_flow：共享 3 日正流入（窗口内；S048 R9 阈值 ≥3）
     monkeypatch.setattr(
         topology.astock,
         "stock_fund_flow_120d",
-        lambda code: _flow([("2026-08-01", 1e8), ("2026-08-02", 1e8), ("2026-08-03", 1e8)]),
+        lambda code, date=None:_flow([("2026-08-01", 1e8), ("2026-08-02", 1e8), ("2026-08-03", 1e8)]),
     )
     # ladder：同 3 板 + 同白酒行业
     monkeypatch.setattr(

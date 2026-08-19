@@ -64,6 +64,7 @@ from data.sources.eastmoney import (  # noqa: F401,E402
     hot_concepts,
     industry_comparison,
     ths_limit_up_pool,  # S049 同花顺涨停揭秘（交叉验证/降级备用源）
+    bids,  # S085 D2 五档买卖盘（push2/push2delay 双 host 降级）
 )
 
 # ── akshare 源（惰性）──────────────────────────────────────────────────────

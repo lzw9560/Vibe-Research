@@ -14,16 +14,21 @@
   stock_fund_flow_120d / dragon_tiger_board / lockup_expiry / concept_blocks / industry_comparison）
 - 直 requests 系：``eastmoney_reports`` / ``eastmoney_industry_reports`` / ``pdf_url``
   / ``announcements`` / ``hot_concepts``
-- 同花顺交叉验证源：``ths_limit_up_pool``（涨停揭秘，dataapi 域，非东财防封域，
-  直 requests；仅供 market._emotion 交叉验证/降级备用，不进主取数路径）
+- 五档买卖盘：``bids``（push2/push2delay 双 host 降级，走 em_get 限流；S085 D2）
+- 同花顺交叉验证源：``ths_limit_up_pool``（涨停揭秘，dataapi 域，非东财防封域；
+  走 ``_ths_get`` 限流——独立 ths breaker + 0.5s 间隔 + 抖动，不裸调 requests；
+  仅供 market._emotion 交叉验证/降级备用，不进主取数路径）
 """
 
 from __future__ import annotations
 
+import random
+import threading
 import time
 from datetime import datetime, timedelta
 
 import requests
+from circuit_breaker import get_breaker
 
 from data.transport import eastmoney_get as em_get  # 防封底线：走限流/熔断/代理
 from ._common import UA
@@ -166,17 +171,50 @@ def _numf(v):
 
 
 # ---------------------------------------------------------------------------
-# 同花顺涨停揭秘（dataapi.10jqka，非东财防封域，直 requests）
+# 同花顺涨停揭秘（dataapi.10jqka，非东财防封域）
 # S049 新增：仅供 market._emotion 交叉验证 + 降级备用，不进主取数路径。
-# 不走 em_get 限流（不同域），但请求频率受 _emotion 5min TTL 缓存约束（同缓存
-# 内只发一次）。请求失败返 []，不崩主流程。
+# S085 D4：走 _ths_get 限流（独立 ths breaker + 0.5s 间隔 + 抖动），不裸调 requests。
+# 请求频率另受 _emotion 5min TTL 缓存约束（同缓存内只发一次）。请求失败返 []，不崩主流程。
 # ---------------------------------------------------------------------------
+# 同花顺请求最小间隔（秒）——同花顺非东财域，独立防封节流（不复用 em_get 限流）
+_THS_MIN_INTERVAL = 0.5
+_ths_lock = threading.Lock()
+_ths_last_call = [0.0]   # Lock 守护的可变单元素列表（防并发击穿 0.5s 间隔）
+
+
+def _ths_get(url: str, params: dict | None = None, headers: dict | None = None,
+             timeout: int = 10):
+    """同花顺专用限流请求（dataapi.10jqka 域，非东财，em_get 不能包）。
+
+    独立失败计数 ``get_breaker("ths")``（新 breaker 名，与 eastmoney 隔离）+
+    ``_THS_MIN_INTERVAL`` 最小间隔 + 抖动，复用 UA。
+    ``_ths_lock`` 串行化 wait/sleep/时间戳更新三步原子（防并发击穿 0.5s 间隔）。
+    失败 raise（消费方 ths_limit_up_pool 已有 try/except 兜 []）。
+    """
+    breaker = get_breaker("ths")
+    if not breaker.allow_request():
+        raise RuntimeError(f"[CircuitBreaker:ths] 同花顺数据源熔断中，快速失败（{url}）")
+    with _ths_lock:  # 原子化：算 wait → sleep → 设时间戳（防并发竞态击穿 0.5s 间隔）
+        wait = _THS_MIN_INTERVAL - (time.time() - _ths_last_call[0])
+        if wait > 0:
+            time.sleep(wait + random.uniform(0.1, 0.3))
+        _ths_last_call[0] = time.time()
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=timeout)
+        breaker.record_success()
+        return r
+    except Exception:
+        breaker.record_failure()
+        raise
+
+
 def ths_limit_up_pool(date: str) -> list[dict]:
     """同花顺涨停揭秘（涨停原因 + 封板质量增强源）。date=YYYYMMDD。
 
-    返回每只: code/name/price/pct/reason(涨停原因题材)/board_type(换手板/一字板/T字板)/
-    seal_rate(封板成功率,0~1)/break_times(炸板次数)/seal_amount(封单额,元)/
-    high_days(几天几板,字符串如"3天3板")/first_time(首次涨停时间 HH:MM:SS)/is_again(是否回封 0/1)。
+    S085 D4：走 ``_ths_get`` 限流（独立 ths breaker + 0.5s 间隔 + 抖动），不裸调 requests。
+    返每只: ``code`` / ``reason``(涨停原因题材) / ``high_days``(几天几板,字符串如"3天3板")。
+    仅消费方读取的 3 字段（market high_days / first_board_filter code+reason /
+    sector_cycle reason / build_concept_map code）；9 死字段精简（无下游消费）。
 
     用途：东财涨停池为空时降级补 zt_count/max_boards；主源正常时做 zt_count 交叉验证。
     ⚠️ 不臆造：zb/dt/yzt 无法从此源重建，调用方保持 None。
@@ -189,29 +227,18 @@ def ths_limit_up_pool(date: str) -> list[dict]:
         "date": date,
     }
     try:
-        r = requests.get(url, params=params, headers={"User-Agent": UA}, timeout=10)
+        r = _ths_get(url, params=params, headers={"User-Agent": UA}, timeout=10)
         info = (r.json().get("data") or {}).get("info", [])
     except Exception as e:
         # 不崩主流程：降级返空，主源数据正常返回
         import logging
         logging.getLogger(__name__).warning("同花顺涨停揭秘请求失败: %s", e)
         return []
-    out = []
-    for it in info:
-        ft = it.get("first_limit_up_time")
-        out.append({
-            "code": it.get("code"), "name": it.get("name"),
-            "price": it.get("latest"), "pct": it.get("change_rate"),
-            "reason": it.get("reason_type", ""),
-            "board_type": it.get("limit_up_type", ""),
-            "seal_rate": it.get("limit_up_suc_rate"),
-            "break_times": it.get("open_num") or 0,
-            "seal_amount": it.get("order_amount"),
-            "high_days": it.get("high_days", ""),
-            "first_time": datetime.fromtimestamp(int(ft)).strftime("%H:%M:%S") if ft else "",
-            "is_again": it.get("is_again_limit"),
-        })
-    return out
+    return [{
+        "code": it.get("code"),
+        "reason": it.get("reason_type", ""),
+        "high_days": it.get("high_days", ""),
+    } for it in info]
 
 
 def sector_fund_flow() -> list[dict]:
@@ -359,11 +386,13 @@ def dividend_history(code: str, page_size: int = 20) -> list[dict]:
     } for r in data]
 
 
-def stock_fund_flow_120d(code: str) -> list[dict]:
+def stock_fund_flow_120d(code: str, date: str | None = None) -> list[dict]:
     """个股资金流（日级，最近 120 交易日）：主力 / 小单 / 中单 / 大单 / 超大单净流入（元）。
 
     S049a：push2his 断连时降级 push2delay（东财延迟镜像，同 path 同 ut 仅 host 不同；
     资金流为日级盘后数据，延迟无实质影响）。首个返非空 klines 的 host 即用；都失败返空。
+    S085 A6 残留：date 传则过滤 flows ≤ date（修 topology replay 误取今日；fund_flow.py
+    走 A6 内部过滤不复用此参数，topology/risk_models 实时取最新不传 date）。
     """
     market_code = 1 if code.startswith("6") else 0
     params = {
@@ -381,6 +410,8 @@ def stock_fund_flow_120d(code: str) -> list[dict]:
         except Exception:
             continue  # 断连/限流 → 下一 host
         rows = _parse_fflow_klines(d)
+        if date and rows:  # S085 A6 残留：过滤 ≤ date（replay 取该日或之前最近）
+            rows = [r for r in rows if (r.get("date") or "")[:10] <= date]
         if rows:  # 200 但 klines 空（断连恢复期）也视同失败，继续降级
             return rows
     return []
@@ -402,6 +433,78 @@ def _parse_fflow_klines(d: dict) -> list[dict]:
                 "mid_net": _f(p[3]), "large_net": _f(p[4]), "super_net": _f(p[5]),
             })
     return rows
+
+
+# ---------------------------------------------------------------------------
+# 五档买卖盘（东财 push2/push2delay，走 em_get 限流）—— S085 D2
+# ---------------------------------------------------------------------------
+# akshare stock_bid_ask_em 原汁 fields 串（含 f120/f262/f530 高位字段触发五档自动返回，
+# 最小/空 fields 返空——勿自造精简集）。
+_BID_FIELDS = (
+    "f120,f121,f122,f174,f175,f59,f163,f43,f57,f58,f169,f170,f46,f44,f51,"
+    "f168,f47,f164,f116,f60,f45,f52,f50,f48,f167,f117,f71,f161,f49,f530,"
+    "f135,f136,f137,f138,f139,f141,f142,f144,f145,f147,f148,f140,f143,f146,"
+    "f149,f55,f62,f162,f92,f173,f104,f105,f84,f85,f183,f184,f185,f186,f187,"
+    "f188,f189,f190,f191,f192,f107,f111,f86,f177,f78,f110,f262,f263,f264,f267,"
+    "f268,f255,f256,f257,f258,f127,f199,f128,f198,f259,f260,f261,f171,f277,f278,"
+    "f279,f288,f152,f250,f251,f252,f253,f254,f269,f270,f271,f272,f273,f274,f275,"
+    "f276,f265,f266,f289,f290,f286,f285,f292,f293,f294,f295"
+)
+# 买1→买5 / 卖1→卖5（akshare 口径：buy1=f19/f20 ... buy5=f11/f12；
+# sell1=f39/f40 ... sell5=f31/f32；vol×100=股，akshare f32*100 证实）
+_BID_BUY_PAIRS = [("f19", "f20"), ("f17", "f18"), ("f15", "f16"),
+                  ("f13", "f14"), ("f11", "f12")]    # 买1→买5
+_BID_SELL_PAIRS = [("f39", "f40"), ("f37", "f38"), ("f35", "f36"),
+                   ("f33", "f34"), ("f31", "f32")]   # 卖1→卖5
+
+
+def _parse_bids(code: str, data: dict) -> dict:
+    """解析 push2 stock/get 五档 data → {code,name,latest,prev_close,buy[],sell[]}。
+
+    buy/sell 每档 {level, price, vol}；vol=raw×100（手→股，akshare 同口径）；
+    vol 缺失（'-'）→ None（不臆造 0）。
+    """
+    def _level(pairs):
+        out = []
+        for i, (fp, fv) in enumerate(pairs, start=1):
+            price = _numf(data.get(fp))
+            raw_vol = _numf(data.get(fv))
+            vol = (raw_vol * 100) if raw_vol is not None else None
+            out.append({"level": i, "price": price, "vol": vol})
+        return out
+    return {
+        "code": str(data.get("f57") or code),
+        "name": data.get("f58", ""),
+        "latest": _numf(data.get("f43")),
+        "prev_close": _numf(data.get("f60")),
+        "buy": _level(_BID_BUY_PAIRS),
+        "sell": _level(_BID_SELL_PAIRS),
+    }
+
+
+def bids(code: str) -> dict:
+    """五档买卖盘（东财 push2/push2delay，走 em_get 限流）。
+
+    push2(实时)易封 → push2delay(延迟行情)优先 + 双 host 降级（同 stock_fund_flow_120d 范式）。
+    返回 {code, name, latest, prev_close, buy[5], sell[5]}：每档 {level, price, vol}。
+    vol 单位股（raw 手 ×100，与 akshare stock_bid_ask_em 同口径）。
+    ⚠️ 不臆造：端点失败/空 data → 空五档（buy/sell=[]，latest/prev_close=None）。
+    """
+    market_code = 1 if code.startswith("6") else 0
+    params = {"fltt": "2", "invt": "2", "fields": _BID_FIELDS,
+              "secid": f"{market_code}.{code}"}
+    headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+    for host in ("push2delay.eastmoney.com", "push2.eastmoney.com"):
+        try:
+            r = em_get(f"https://{host}/api/qt/stock/get",
+                       params=params, headers=headers, timeout=10)
+            data = r.json().get("data")
+            if data:  # 空数据（None/{}）→ 继续降级下一 host
+                return _parse_bids(code, data)
+        except Exception:
+            continue  # 断连/限流 → 下一 host
+    return {"code": code, "name": "", "latest": None,
+            "prev_close": None, "buy": [], "sell": []}
 
 
 def dragon_tiger_board(code: str, trade_date: str | None = None, look_back: int = 30) -> dict:
