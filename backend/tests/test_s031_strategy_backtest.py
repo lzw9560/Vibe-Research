@@ -43,14 +43,17 @@ def test_run_strategy_backtest_aggregates(mock_dates, mock_load, mock_kline_mapp
 
     results = run_strategy_backtest(60)
 
-    assert len(results) == 11  # 9 既有 + S081 PRD 2（weak_turn_strong/pattern_reversal）
+    assert len(results) == 12  # S086 合并后 12 战法（9 既有 + low_absorption + S081 PRD 2 + storm_reversal）
     assert all(r.available_days == 1 for r in results)  # DB 实际可用天数
     first_plate = next(r for r in results if r.strategy_code == "first_plate")
     assert first_plate.sample_size == 1
     assert first_plate.win_rate == 1.0  # 1/1
     assert first_plate.avg_return == 8.0  # take_profit_pct=8
-    others = [r for r in results if r.strategy_code != "first_plate"]
-    assert all(r.sample_size == 0 for r in others), "其余 10 战法不应命中"
+    # S086 B1.7：dragon_head 无条件放行 → 亦命中（sample_size=1）
+    dragon_head = next(r for r in results if r.strategy_code == "dragon_head")
+    assert dragon_head.sample_size == 1
+    others = [r for r in results if r.strategy_code not in ("first_plate", "dragon_head")]
+    assert all(r.sample_size == 0 for r in others), "其余战法不应命中（dragon_head 无条件放行除外）"
 
 
 @patch("strategies.strategy_backtest.astock")
@@ -68,7 +71,7 @@ def test_run_strategy_backtest_skips_missing_kline(mock_dates, mock_load, mock_k
     results = run_strategy_backtest(60)
     first_plate = next(r for r in results if r.strategy_code == "first_plate")
     assert first_plate.sample_size == 0
-    assert first_plate.skipped == 1  # 命中但因无 K 线跳过
+    assert first_plate.skipped == 2  # first_plate + dragon_head 命中但无 K 线跳过（dragon_head 无条件放行）
 
 
 def test_backtest_endpoint_returns_8_strategies(monkeypatch):

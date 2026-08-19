@@ -87,18 +87,18 @@ class PositionAdvisor:
         """
         基于单条策略信号生成仓位建议。
 
-        S063 T8：接 weather_state 做仓位上限熔断：
-        - 暴风雨 → 仓位上限=0（禁止开仓）
+        S086 R4：天气仓位软标注（不硬阻断）：
+        - 暴风雨 → 仓位×0.3 建议（非强制，advice_note；不 return None 强制空仓）
         - 极端反弹 → 仓位上限降至 50%（半仓）
         - 晴天/阴天/未知 → 正常计算
         """
         if not signal or signal.confidence <= 0:
             return None
 
-        # S063 T8：天气仓位熔断（硬上限）
+        # S086 R4：天气仓位软标注（不硬阻断）。暴风暴仓位×0.3 降为建议提示（非强制）。
         weather_cap = 1.0  # 默认不限制
         if weather_state == "暴风雨":
-            return None  # 禁止开仓：不生成建议
+            weather_cap = 0.3  # 建议仓位×0.3（环境极端），不 return None 强制空仓
         if weather_state == "极端反弹":
             weather_cap = 0.5  # 仓位上限降至 50%
 

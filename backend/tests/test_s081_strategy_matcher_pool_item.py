@@ -296,16 +296,18 @@ class TestExistingStrategiesUnaffected:
         pool_item = _make_pool_item("600000")
         signals_with = matcher.match(gene, None, pool_item=pool_item)
 
-        # 既有 9 战法 strategy_code（排除 PRD 2 战法）
+        # 既有战法 strategy_code（排除 PRD 2 战法 + storm_reversal——
+        # S086 R3 后 storm_reversal 读 pool_item["fbt"]，与 PRD 战法同属 pool_item 依赖）
+        pool_dependent = ("weak_turn_strong", "pattern_reversal", "storm_reversal")
         existing_codes = {
             s.strategy_code for s in signals_none
-            if s.strategy_code not in ("weak_turn_strong", "pattern_reversal")
+            if s.strategy_code not in pool_dependent
         }
         existing_codes_with = {
             s.strategy_code for s in signals_with
-            if s.strategy_code not in ("weak_turn_strong", "pattern_reversal")
+            if s.strategy_code not in pool_dependent
         }
-        # 既有 9 战法命中结果一致（不依赖 pool_item）
+        # 既有战法命中结果一致（不依赖 pool_item）
         assert existing_codes == existing_codes_with
 
 

@@ -191,11 +191,22 @@ class TestRunNonLimitupFunnel:
         scores = [r["strategy_score"] for r in result]
         assert scores == sorted(scores, reverse=True)
 
-    def test_storm_no_non_limitup_strategies(self):
-        """暴风雨无非涨停类主跑策略 → 返空（或 fallback 无结果）。"""
-        candidates = [{"code": "000001", "bars": [], "sector": "电子"}]
-        result = run_non_limitup_funnel(candidates, "暴风雨")
-        assert len(result) == 0  # 暴风暴只跑 storm_reversal（涨停类）
+    def test_storm_allows_non_limitup_strategies(self):
+        """S086 R3：暴风雨不再硬约束——非涨停类策略亦 allowed（返非空，与晴天同）。
+
+        旧：暴风雨 → get_strategies_for_weather 返 ["storm_reversal"]（涨停类），非涨停类返空；
+        新：暴风雨 → 全 allowed，非涨停类策略（龙头/平台突破/低吸/反包）亦跑。
+        """
+        bars = [
+            {"close": 10, "high": 10.5, "low": 9.8, "volume": 100, "amount": 1e9, "ma5": 10, "ma10": 9.8, "ma20": 9.5},
+            {"close": 11, "high": 11.5, "low": 10.4, "volume": 120, "amount": 1.2e9, "ma5": 10.5, "ma10": 10, "ma20": 9.6},
+            {"close": 12, "high": 12.5, "low": 11.4, "volume": 150, "amount": 1.5e9, "ma5": 11, "ma10": 10.2, "ma20": 9.8},
+            {"close": 13, "high": 13.5, "low": 12.4, "volume": 200, "amount": 2e9, "ma5": 11.5, "ma10": 10.5, "ma20": 10},
+            {"close": 14, "high": 14.5, "low": 13.4, "volume": 300, "amount": 2.5e9, "ma5": 12, "ma10": 11, "ma20": 10.2},
+        ]
+        candidates = [{"code": "000001", "bars": bars, "sector": "电子"}]
+        result = run_non_limitup_funnel(candidates, "暴风雨", {"电子": 1})
+        assert len(result) > 0  # S086 R3：暴风雨允许非涨停类策略（不再只跑 storm_reversal）
 
     def test_empty_candidates_returns_empty(self):
         result = run_non_limitup_funnel([], "晴天")

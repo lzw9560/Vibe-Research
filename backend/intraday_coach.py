@@ -287,8 +287,11 @@ MODE_RULES: dict[str, dict[str, Any]] = {
 _ACTIVE_STATUSES = ("watching", "monitoring", "holding")
 
 
-def _strategy_meta(strategy_name: str | None) -> dict[str, Any]:
-    """从 STRATEGY_REGISTRY 查战法元数据（max_hold_days/stop_loss_pct 等）。"""
+def _strategy_meta(strategy_name: str | None) -> Any:
+    """从 STRATEGY_REGISTRY 查战法元数据（max_hold_days/stop_loss_pct 等）。
+
+    返回 StrategyConfig（dict-compat：.get 可用）或 {}；调用方一律 .get() 取字段。
+    """
     if not strategy_name:
         return {}
     for s in STRATEGY_REGISTRY:

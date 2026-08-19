@@ -49,10 +49,16 @@ class TestWeatherHardSwitch:
         rec = get_weather_recommendation("晴天")
         assert rec == {"consecutive_relay", "dragon_head", "platform_breakout"}
 
-    def test_storm_only_runs_storm_reversal(self):
-        """暴风雨 → 只跑 storm_reversal（唯一保留的硬约束），无 fallback。"""
+    def test_storm_no_longer_hard_restricted(self):
+        """S086 R3：暴风雨不再硬约束——全 allowed（含 storm_reversal），无 fallback。
+
+        旧：暴风雨 → primary=["storm_reversal"]（硬约束其余 forbidden）；
+        新：暴风雨 → 全部战法 allowed（primary=所有已注册），fallback 恒空。
+        """
         primary, fallback = get_strategies_for_weather("暴风雨")
-        assert primary == ["storm_reversal"]
+        assert "storm_reversal" in primary  # 推荐的在
+        assert "first_plate" in primary  # 非推荐也 allowed（不强过滤）
+        assert len(primary) == len(STRATEGY_FUNNEL_REGISTRY)  # 全 allowed
         assert fallback == []
 
     def test_unknown_returns_all_strategies(self):
@@ -85,9 +91,15 @@ class TestWeatherHardSwitch:
 class TestStrategyRegistry:
     """策略注册表完整性。"""
 
-    def test_registry_has_10_strategies(self):
-        """10 个策略（9 常规 + 1 storm_reversal）。"""
-        assert len(STRATEGY_FUNNEL_REGISTRY) == 10
+    def test_registry_has_12_strategies(self):
+        """S086 合并后 12 个策略（9 常规 + low_absorption + S081 PRD 2 + storm_reversal）。
+
+        旧 STRATEGY_FUNNEL_REGISTRY（10）+ 旧 STRATEGY_REGISTRY（11）合并为单一
+        STRATEGY_REGISTRY（12），STRATEGY_FUNNEL_REGISTRY 为别名同源。
+        """
+        assert len(STRATEGY_FUNNEL_REGISTRY) == 12
+        from strategies.strategy_funnel_registry import STRATEGY_REGISTRY
+        assert STRATEGY_REGISTRY is STRATEGY_FUNNEL_REGISTRY
 
     def test_all_codes_unique(self):
         codes = [s.code for s in STRATEGY_FUNNEL_REGISTRY]
@@ -200,17 +212,27 @@ class TestScoreCandidates:
         assert scored[0]["code"] == "A"
         assert scored[0]["strategy_score"] > scored[-1]["strategy_score"]
 
-    def test_storm_reversal_only_in_storm_weather(self):
-        """storm_reversal 只在暴风雨日评分。"""
-        cands = [{"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_freq_score": 20}}]
-        # 晴天不应出现 storm_reversal
-        scored = score_candidates(cands, "晴天")
-        for s in scored:
-            assert s["strategy_code"] != "storm_reversal"
+    def test_storm_reversal_scores_by_fbt_any_weather(self):
+        """S086 R3/A9：storm_reversal 评分由 fbt（封板≤10:30）决定，不限天气。
 
-        # 暴风雨应出现 storm_reversal
-        scored_storm = score_candidates(cands, "暴风雨")
-        assert any(s["strategy_code"] == "storm_reversal" for s in scored_storm)
+        旧：storm_reversal 在暴风雨日无条件评分（_MATCHED 白名单豁免）；
+        新：storm_reversal 有 match 条件（pool_item["fbt"]≤103000），任意天气命中即评分。
+        无 pool_item_map → 不命中；fbt≤10:30 → 命中（晴天/暴风雨均评分）；fbt>10:30 → 不命中。
+        """
+        cands = [{"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_freq_score": 20}}]
+
+        # 无 pool_item_map → storm_reversal 无 fbt 不命中（晴天/暴风雨均不出现）
+        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "晴天"))
+        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "暴风雨"))
+
+        # 提供 fbt≤10:30 的 pool_item_map → storm_reversal 命中（暴风雨/晴天均评分）
+        pool_early = {"A": {"c": "A", "fbt": 93000, "p": 10.0}}
+        assert any(s["strategy_code"] == "storm_reversal" for s in score_candidates(cands, "暴风雨", pool_item_map=pool_early))
+        assert any(s["strategy_code"] == "storm_reversal" for s in score_candidates(cands, "晴天", pool_item_map=pool_early))
+
+        # fbt>10:30 → 不命中
+        pool_late = {"A": {"c": "A", "fbt": 140000, "p": 10.0}}
+        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "暴风雨", pool_item_map=pool_late))
 
     def test_unknown_weather_uses_conservative(self):
         """未知天气 → 保守降级（首板+连板）。

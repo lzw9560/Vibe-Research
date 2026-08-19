@@ -214,8 +214,11 @@ def _lookup_strategy(
     return best if best else (None, "", None, 0, "none")
 
 
-def _strat_params(strategy_code: str | None) -> dict:
-    """从 STRATEGY_REGISTRY 取战法参数（stop_loss_pct/take_profit_pct/max_hold_days）。"""
+def _strat_params(strategy_code: str | None) -> Any:
+    """从 STRATEGY_REGISTRY 取战法参数（stop_loss_pct/take_profit_pct/max_hold_days）。
+
+    返回 StrategyConfig（dict-compat：.get/__getitem__ 可用）或 {}；调用方一律 .get() 取字段。
+    """
     if not strategy_code:
         return {}
     for s in STRATEGY_REGISTRY:

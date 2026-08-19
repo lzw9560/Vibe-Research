@@ -1,27 +1,52 @@
 # -*- coding: utf-8 -*-
-"""S066 §3-4 策略特定漏斗注册表 + 天气硬开关 + 3 套权重策略分计算。
+"""S066 §3-4 策略特定漏斗注册表 + 天气软标注 + 3 套权重策略分计算。
 
-核心架构变更（spec §3）：
-- 旧 STRATEGY_REGISTRY 是 list[dict]，calc_weather_fit 是**软过滤**（降权不屏蔽）
-- 新 STRATEGY_FUNNEL_REGISTRY 是 dataclass 列表，WEATHER_STRATEGY_MAP 是**硬开关**
-  （不适配天气的策略不跑，不是降权）
+S086 重构：合并旧 STRATEGY_REGISTRY（dict，11 项）+ STRATEGY_FUNNEL_REGISTRY
+（dataclass，10 项）为单一 ``STRATEGY_REGISTRY: list[StrategyConfig]``（12 项，
+含 storm_reversal）。``STRATEGY_FUNNEL_REGISTRY`` 保留为别名（向后兼容 routers/strategy
++ test）。消灭 ``_MATCHED_STRATEGY_CODES`` 白名单与暴风雨硬开关（R3 全 allowed）。
+
+核心架构：
+- 单一注册表 ``StrategyConfig``（参数 + 指向 Strategy 实现），位于 strategy_base
+- match 分发由 ``strategy_base.dispatch_match`` 调度器统一组装（不再 if/elif switch）
 - 3 套权重（涨停类/非涨停类/暴风暴），不是 9 套——样本量不够支撑每策略单独估参
+- 天气硬开关降级为软标注（grill Q7 + S086 R3：暴风雨不再 forbidden，全 allowed）
 
 权重来源：.vibe-research/strategy_weights.json（Phase 0d 全样本回归定稿，非拍脑袋）。
 权重加载失败 → 等权兜底（不崩，标注 fallback）。
-
-与旧 limitup_strategy.STRATEGY_REGISTRY 的关系：
-- 旧 registry 保留（match_strategies 仍用），本模块是**新增层**不是替换
-- 新 registry 的策略 code 与旧 registry 对齐（first_plate/consecutive_relay/...）
-- 前端候选卡片逐步切到新 registry 的策略分排序
 """
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import field
 from pathlib import Path
 from typing import Literal, Optional
+
+# S086：数据结构上提到 strategy_base（单一事实源），本模块只组装注册表 + 权重 + 质量标准
+from strategies.strategy_base import (
+    PositionParams,
+    QualityCheck,
+    StrategyConfig,
+    StrategyContext,
+    _prepare_derived,
+    _prepare_pool_item,
+    dispatch_match,
+)
+from strategies.impl import (
+    BreakResealStrategy,
+    ConsecutiveRelayStrategy,
+    DragonHeadStrategy,
+    EndOfDaySneakStrategy,
+    FirstPlateStrategy,
+    LowAbsorptionStrategy,
+    NShapeCounterattackStrategy,
+    PatternReversalStrategy,
+    PlatformBreakoutStrategy,
+    ReversePackageStrategy,
+    StormReversalStrategy,
+    WeakTurnStrongStrategy,
+)
 
 # spec §3: weights 由 Phase 0d 全样本回归定稿（.vibe-research/strategy_weights.json）
 # 测试时 VR_DATA_DIR 指向临时目录（conftest），weights 不存在 → 等权兜底
@@ -29,58 +54,23 @@ _DATA_DIR = Path(os.environ.get("VR_DATA_DIR", "")) if os.environ.get("VR_DATA_D
 _WEIGHTS_PATH = _DATA_DIR / "strategy_weights.json"
 _WEIGHTS_CACHE: dict | None = None
 
-
-# ===========================================================================
-# 数据结构
-# ===========================================================================
-
-@dataclass(frozen=True)
-class PositionParams:
-    """止损/止盈/最大持有期。"""
-    stop_loss_pct: float       # 止损百分比（负数，如 -3.0 = -3%）
-    take_profit_pct: float      # 止盈百分比（正数，如 +8.0 = +8%）
-    max_hold_days: int          # 最大持有天数
-    position_scale: float = 1.0  # 仓位缩放（暴风暴 x0.3）
-
-
-@dataclass(frozen=True)
-class QualityCheck:
-    """策略特定质量标准项。"""
-    name: str                   # 检查项名称
-    required: bool              # True=硬标准（不过滤掉），False=展示项
-    description: str = ""       # 说明
-
-
-@dataclass(frozen=True)
-class StrategyFunnelConfig:
-    """策略特定漏斗配置（spec §3.2）。"""
-    code: str                                   # first_plate / consecutive_relay / ...
-    name: str                                   # 首板挖掘 / 连板接力 / ...
-    funnel_type: Literal["limitup", "market_scan"]
-    weight_set: str                             # limitup / non_limitup / storm_reversal
-    weather_regimes: list[str]                  # 适配天气
-    is_primary: bool                            # 天气匹配时是否主跑
-    fallback: bool                              # 主跑无候选时是否尝试
-    position_params: PositionParams
-    quality_standards: list[QualityCheck] = field(default_factory=list)
-    note: str = ""
-    activation_note: Optional[str] = None  # 激活状态注记，非空表示该战法当前不可用（如"待 S055 激活"）
+# 向后兼容别名（旧 StrategyFunnelConfig → 新 StrategyConfig 超集）
+StrategyFunnelConfig = StrategyConfig
 
 
 # ===========================================================================
-# 天气-策略推荐（spec §3.3，grill Q7 降级为软标注）
+# 天气-策略推荐（spec §3.3，grill Q7 降级为软标注；S086 R3 暴风雨不再硬约束）
 # ===========================================================================
 
-# grill Q7：天气硬开关降级为软标注（暴风雨除外）
-# 旧 WEATHER_STRATEGY_MAP 是强约束（不允许的战法直接过滤）
-# 新 WEATHER_RECOMMENDATION 是软标注（所有战法可用，天气匹配的标注"推荐"）
+# grill Q7 + S086 R3：天气硬开关降级为软标注（含暴风雨例外移除）
+# 所有战法对所有天气可用，天气匹配的标注"推荐"（weather_recommended）。
 # 理由：(1) T-1 天气不代表 T 日天气；(2) §13.0 验证天气路由无统计显著提升；
-#       (3) 强约束导致 0 候选比无约束更有害。暴风雨是唯一例外——保留硬约束（仓位=0）。
+#       (3) 强约束导致 0 候选比无约束更有害。
 WEATHER_RECOMMENDATION: dict[str, set[str]] = {
     "晴天":   {"consecutive_relay", "dragon_head", "platform_breakout"},
     "阴天":   {"first_plate", "break_reseal", "end_of_day_sneak"},
     "极端反弹": {"reverse_package"},
-    "暴风雨": {"storm_reversal"},  # 唯一硬约束：仓位=0
+    "暴风雨": {"storm_reversal"},  # 软标注推荐（不再硬约束仓位=0）
     "未知":   set(),
 }
 
@@ -97,11 +87,7 @@ FALLBACK_STRATEGIES: dict[str, list[str]] = {
 
 
 def get_weather_recommendation(weather_state: str | None) -> set[str]:
-    """grill Q7：天气推荐战法集合（软标注）。暴风雨仍硬约束。
-
-    返回的集合仅用于在候选上标注 weather_recommended=True/False，
-    不用于过滤候选（所有战法对所有非暴风雨天气可用）。
-    """
+    """天气推荐战法集合（软标注，不用于过滤候选）。"""
     if not weather_state:
         return set()
     return WEATHER_RECOMMENDATION.get(weather_state, set())
@@ -110,175 +96,244 @@ def get_weather_recommendation(weather_state: str | None) -> set[str]:
 def get_strategies_for_weather(weather_state: str | None) -> tuple[list[str], list[str]]:
     """天气 → (主跑策略 codes, fallback 策略 codes)。
 
-    grill Q7：暴风雨仍硬约束（只 storm_reversal）；其他天气返回所有战法
-    （不强过滤）。天气推荐集合用 get_weather_recommendation() 查。
-
-    返回的 primary_codes 对非暴风雨天气恒为所有已注册战法（非空），
-    fallback 恒为 []。暴风雨返回 (["storm_reversal"], [])。
+    S086 R3：暴风雨不再硬约束（全 allowed）；所有天气返回所有已注册战法（非空），
+    fallback 恒为 []。天气推荐集合用 get_weather_recommendation() 查。
     """
-    if weather_state == "暴风雨":
-        return (["storm_reversal"], [])
-    # 其他天气：所有战法都可用（不强过滤）
-    all_codes = [s.code for s in STRATEGY_FUNNEL_REGISTRY]
+    all_codes = [s.code for s in STRATEGY_REGISTRY]
     return (all_codes, [])
 
 
 # ===========================================================================
-# 策略注册表
+# 策略注册表（单一 STRATEGY_REGISTRY：12 项，合并旧 dict + 旧 dataclass）
 # ===========================================================================
 
-STRATEGY_FUNNEL_REGISTRY: list[StrategyFunnelConfig] = [
+STRATEGY_REGISTRY: list[StrategyConfig] = [
     # --- 涨停类（weight_set=limitup）---
-    StrategyFunnelConfig(
+    StrategyConfig(
         code="first_plate",
         name="首板挖掘",
-        funnel_type="limitup",
-        weight_set="limitup",
-        weather_regimes=["阴天", "未知"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-3.0, 8.0, 3),
+        strategy_impl=FirstPlateStrategy(),
+        stop_loss_pct=-3.0, take_profit_pct=8.0, max_hold_days=3,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["阴天"], is_primary=True, fallback=False,
+        entry_type="次日竞价/开盘确认后",
+        entry_condition="首次涨停+基因得分≥60+量比>1.5",
+        stop_loss_condition="跌破前日收盘价-3%",
+        take_profit_condition="涨至+5%~+10%后回落",
+        exit_condition="持仓3日未盈利或触发止损/止盈",
+        aliases=["首板", "首次涨停"],
         quality_standards=[
             QualityCheck("开板次数", True, "封板稳定性，反复开板说明抛压大"),
             QualityCheck("封板时间≤10:30", True, "尾盘封板不算首板质量"),
         ],
     ),
-    StrategyFunnelConfig(
+    StrategyConfig(
         code="consecutive_relay",
         name="连板接力",
-        funnel_type="limitup",
-        weight_set="limitup",
-        weather_regimes=["晴天", "未知"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-5.0, 12.0, 2),
+        strategy_impl=ConsecutiveRelayStrategy(),
+        stop_loss_pct=-5.0, take_profit_pct=12.0, max_hold_days=2,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["晴天", "未知"], is_primary=True, fallback=False,
+        entry_type="连板次日竞价确认",
+        entry_condition="连板≥2+封板强度≥0.8+板块热度",
+        stop_loss_condition="跌破前日收盘价",
+        take_profit_condition="涨至+8%~+15%后回落",
+        exit_condition="连板高度≥3板或触发止损/止盈",
+        aliases=["连板", "接力"],
         quality_standards=[
             QualityCheck("连板数≥2", True, "入场条件（连板接力定义）"),
             QualityCheck("封板率≥80%", True, "封板决心"),
         ],
     ),
-    StrategyFunnelConfig(
+    StrategyConfig(
         code="break_reseal",
         name="炸板回封",
-        funnel_type="limitup",
-        weight_set="limitup",
-        weather_regimes=["阴天", "极端反弹"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-3.0, 6.0, 1),
+        strategy_impl=BreakResealStrategy(),
+        stop_loss_pct=-3.0, take_profit_pct=6.0, max_hold_days=1,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["阴天", "极端反弹"], is_primary=True, fallback=False,
+        entry_type="回封确认后",
+        entry_condition="涨停后开板≥1次+回封+封板强度≥0.6",
+        stop_loss_condition="跌破回封价",
+        take_profit_condition="涨至+5%~+8%后回落",
+        exit_condition="当日收盘前未回封或触发止损/止盈",
+        aliases=["回封", "炸板回封"],
+        note="S053 R3：match 门槛与注册表统一为封板率≥80%（zt_count 3-5 黄金区 89.5% 命中率，19 样本）",
         quality_standards=[
             QualityCheck("开板次数≥1", True, "炸板回封定义需要至少一次开板"),
             QualityCheck("封板率≥80%", True, "回封后封板强度（S053 数据证据统一到 80%）"),
         ],
-        note="S053 R3：match 门槛与注册表统一为封板率≥80%（zt_count 3-5 黄金区 89.5% 命中率，19 样本）",
-    ),
-    StrategyFunnelConfig(
-        code="end_of_day_sneak",
-        name="尾盘偷袭",
-        funnel_type="limitup",
-        weight_set="limitup",
-        weather_regimes=["阴天"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-2.0, 4.0, 1),
-        quality_standards=[
-            QualityCheck("封板时间>14:30", True, "尾盘专属，早盘封板不算"),
-            QualityCheck("量比>2", True, "尾盘急拉需放量"),
-        ],
-    ),
-    StrategyFunnelConfig(
-        code="n_shape_counterattack",
-        name="N字反击",
-        funnel_type="limitup",
-        weight_set="limitup",
-        weather_regimes=["晴天", "极端反弹"],
-        is_primary=False,
-        fallback=True,
-        position_params=PositionParams(-3.0, 8.0, 3),
-        quality_standards=[
-            QualityCheck("2日内涨停", True, "N字形态需要前置涨停"),
-        ],
-        note="归入涨停类权重集（spec §4.4）",
     ),
     # --- 非涨停类（weight_set=non_limitup）---
-    StrategyFunnelConfig(
+    StrategyConfig(
         code="low_absorption",
         name="低吸龙头",
-        funnel_type="market_scan",
-        weight_set="non_limitup",
-        weather_regimes=["晴天", "阴天"],
-        is_primary=False,
-        fallback=True,
-        position_params=PositionParams(-5.0, 10.0, 5),
+        strategy_impl=LowAbsorptionStrategy(),
+        stop_loss_pct=-5.0, take_profit_pct=10.0, max_hold_days=5,
+        funnel_type="market_scan", weight_set="non_limitup",
+        weather_regimes=["晴天", "阴天"], is_primary=False, fallback=True,
+        entry_type="回调至5日均线附近",
+        entry_condition="板块龙头回调+STI非冰点+资金净流入",
+        stop_loss_condition="跌破10日均线",
+        take_profit_condition="涨至+8%~+12%后回落",
+        exit_condition="跌破10日线或持仓5日未盈利",
+        aliases=["低吸", "龙头低吸"],
         quality_standards=[
             QualityCheck("回调至MA5", True, "低吸入场点"),
         ],
     ),
-    StrategyFunnelConfig(
+    StrategyConfig(
         code="reverse_package",
         name="反包战法",
-        funnel_type="market_scan",
-        weight_set="non_limitup",
-        weather_regimes=["极端反弹"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-3.0, 6.0, 1),
+        strategy_impl=ReversePackageStrategy(),
+        stop_loss_pct=-3.0, take_profit_pct=6.0, max_hold_days=1,  # S062：严格 T+1
+        funnel_type="market_scan", weight_set="non_limitup",
+        weather_regimes=["极端反弹"], is_primary=True, fallback=False,
+        entry_type="次日竞价/开盘买入（前日反包确认）",
+        entry_condition="T-2/T-3 涨停（加分）+ T-1 未涨停（断板调整）+ T-1 成交额>15亿 + 均线多头（M7/M14>1.0）+ 实体涨跌幅>-3%（加分）；游资席位出现（VR 加分项）",
+        stop_loss_condition="跌破前日最低价",
+        take_profit_condition="涨至+5%~+8%后回落",
+        exit_condition="T+1 卖出纪律（不扛票）或触发止损/止盈",
+        aliases=["反包", "地天板"],
+        activation_note=None,  # S086 D1：数据已就绪，清过时 activation_note
         quality_standards=[
             QualityCheck("T-1未涨停", True, "反包定义"),
             QualityCheck("成交额>15亿", True, "反包需流动性"),
             QualityCheck("均线多头", False, "加分项"),
         ],
-        activation_note="待 S055 激活（seal_intraday.db 无 open_count>=2 数据）",
     ),
-    StrategyFunnelConfig(
+    StrategyConfig(
+        code="n_shape_counterattack",
+        name="N字反击",
+        strategy_impl=NShapeCounterattackStrategy(),
+        stop_loss_pct=-3.0, take_profit_pct=8.0, max_hold_days=3,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["晴天", "极端反弹"], is_primary=False, fallback=True,
+        entry_type="回调企稳后放量",
+        entry_condition="2日内涨停→回调→再次放量",
+        stop_loss_condition="跌破回调低点",
+        take_profit_condition="涨至+5%~+10%后回落",
+        exit_condition="未出现放量反弹或触发止损/止盈",
+        aliases=["N字", "反击"],
+        note="归入涨停类权重集（spec §4.4）",
+        quality_standards=[
+            QualityCheck("2日内涨停", True, "N字形态需要前置涨停"),
+        ],
+    ),
+    StrategyConfig(
         code="platform_breakout",
         name="平台突破",
-        funnel_type="market_scan",
-        weight_set="non_limitup",
-        weather_regimes=["晴天"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-5.0, 12.0, 7),
+        strategy_impl=PlatformBreakoutStrategy(),
+        stop_loss_pct=-5.0, take_profit_pct=12.0, max_hold_days=7,
+        funnel_type="market_scan", weight_set="non_limitup",
+        weather_regimes=["晴天"], is_primary=True, fallback=False,
+        entry_type="突破确认后",
+        entry_condition="横盘≥5日+今日突破+成交额放大2倍",
+        stop_loss_condition="跌破平台上沿",
+        take_profit_condition="涨至+8%~+15%后回落",
+        exit_condition="突破失败回落或触发止损/止盈",
+        aliases=["突破", "平台"],
         quality_standards=[
             QualityCheck("横盘≥5日", True, "平台定义"),
             QualityCheck("成交额放大2倍", True, "突破放量"),
         ],
     ),
-    StrategyFunnelConfig(
+    StrategyConfig(
+        code="end_of_day_sneak",
+        name="尾盘偷袭",
+        strategy_impl=EndOfDaySneakStrategy(),
+        stop_loss_pct=-2.0, take_profit_pct=4.0, max_hold_days=1,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["阴天"], is_primary=True, fallback=False,
+        entry_type="尾盘封板确认",
+        entry_condition="14:30后急拉+封板+量比>2",
+        stop_loss_condition="跌破封板价",
+        take_profit_condition="涨至+3%~+5%后回落",
+        exit_condition="未封板或触发止损/止盈",
+        aliases=["尾盘", "偷袭"],
+        quality_standards=[
+            QualityCheck("封板时间>14:30", True, "尾盘专属，早盘封板不算"),
+            QualityCheck("量比>2", True, "尾盘急拉需放量"),
+        ],
+    ),
+    StrategyConfig(
         code="dragon_head",
         name="龙头战法",
-        funnel_type="market_scan",
-        weight_set="non_limitup",
-        weather_regimes=["晴天", "阴天"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-5.0, 15.0, 5),
+        strategy_impl=DragonHeadStrategy(),
+        stop_loss_pct=-5.0, take_profit_pct=15.0, max_hold_days=5,
+        funnel_type="market_scan", weight_set="non_limitup",
+        weather_regimes=["晴天", "阴天"], is_primary=True, fallback=False,
+        entry_type="板块启动期龙头确认",
+        entry_condition="板块领涨地位+相对强度跑赢板块2%+换手>5%+量比>1.5+板块级催化",
+        stop_loss_condition="跌破5日均线",
+        take_profit_condition="涨至+10%~+15%后回落",
+        exit_condition="板块退潮或触发止损/止盈",
+        aliases=["龙头", "龙头股"],
         quality_standards=[
             QualityCheck("板块领涨", True, "龙头定义"),
             QualityCheck("换手>5%", True, "龙头活跃度"),
         ],
     ),
-    # --- 暴风雨逆势涨停子策略 ---
-    StrategyFunnelConfig(
+    # --- S081 PRD P2 战法（弱转强接力 + 形态反包，dict 侧注册，探索性阈值）---
+    StrategyConfig(
+        code="weak_turn_strong",
+        name="弱转强接力",
+        strategy_impl=WeakTurnStrongStrategy(),
+        stop_loss_pct=-5.0, take_profit_pct=10.0, max_hold_days=2,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["晴天", "极端反弹"], is_primary=True, fallback=False,
+        entry_type="次日竞价确认后",
+        entry_condition="昨日涨停+炸板≥20min+回撤≥5%+尾盘封死(≥14:40)+换手1.8-3.0倍",
+        stop_loss_condition="跌破前日收盘价-5%",
+        take_profit_condition="涨至+5%~+10%后回落",
+        exit_condition="持仓2日未盈利或触发止损/止盈",
+        aliases=["弱转强", "分歧转一致"],
+        note="S081：PRD 阈值探索性（外部拍定，零数据支撑），因子依赖 S070 R7 派生（60s 粒度近似）",
+    ),
+    StrategyConfig(
+        code="pattern_reversal",
+        name="形态反包",
+        strategy_impl=PatternReversalStrategy(),
+        stop_loss_pct=-4.0, take_profit_pct=12.0, max_hold_days=3,
+        funnel_type="market_scan", weight_set="non_limitup",
+        weather_regimes=["晴天", "阴天"], is_primary=True, fallback=False,
+        entry_type="次日突破昨日最高价确认",
+        entry_condition="昨日未封涨停+最高≥7%+上影线≥4%+放量1.2倍+5日线向上",
+        stop_loss_condition="跌破前日最低价",
+        take_profit_condition="涨至+8%~+12%后回落",
+        exit_condition="突破失败回落或触发止损/止盈",
+        aliases=["反包", "长上影洗盘修复"],
+        note="S081：PRD 阈值探索性，因子来自涨停池+K线（不依赖 S070 R7）",
+    ),
+    # --- 暴风雨逆势涨停子策略（S086 R3：纳入 match，条件=封板≤10:30）---
+    StrategyConfig(
         code="storm_reversal",
         name="暴风雨逆势涨停",
-        funnel_type="limitup",
-        weight_set="storm_reversal",
-        weather_regimes=["暴风雨"],
-        is_primary=True,
-        fallback=False,
-        position_params=PositionParams(-3.0, 10.0, 1, position_scale=0.3),  # 仓位 x0.3
+        strategy_impl=StormReversalStrategy(),
+        stop_loss_pct=-3.0, take_profit_pct=10.0, max_hold_days=1,
+        position_scale=0.3,  # S086 R4：仓位×0.3 降为建议（position_advisor 软标注，不强制）
+        funnel_type="limitup", weight_set="storm_reversal",
+        weather_regimes=["暴风雨"], is_primary=True, fallback=False,
+        entry_type="早盘封板确认",
+        entry_condition="暴风雨天早盘（≤10:30）封板逆势",
+        stop_loss_condition="跌破封板价",
+        take_profit_condition="涨至+5%~+10%后回落",
+        exit_condition="次日开盘清仓或触发止损/止盈",
+        aliases=["暴风雨逆势", "逆势涨停"],
+        note="暴风雨天推荐主跑策略，仓位×0.3（环境极端，建议非强制）",
         quality_standards=[
             QualityCheck("封板时间≤10:30", True, "暴风雨天尾盘涨停不算逆势"),
         ],
-        note="暴风雨天唯一主跑策略，仓位 x0.3（环境极端）",
     ),
 ]
 
+# 向后兼容别名：旧 STRATEGY_FUNNEL_REGISTRY 消费方（routers/strategy.py / test）零改动
+STRATEGY_FUNNEL_REGISTRY: list[StrategyConfig] = STRATEGY_REGISTRY
 
-def get_strategy_config(code: str) -> StrategyFunnelConfig | None:
+
+def get_strategy_config(code: str) -> StrategyConfig | None:
     """按 code 查策略配置。"""
-    return next((s for s in STRATEGY_FUNNEL_REGISTRY if s.code == code), None)
+    return next((s for s in STRATEGY_REGISTRY if s.code == code), None)
 
 
 # ===========================================================================
@@ -348,12 +403,12 @@ def compute_strategy_score(
 
 
 def _cand_to_gene(cand: dict):
-    """dict 候选 → GeneScore 适配（grill Q6：match_strategies 需要 GeneScore）。
+    """dict 候选 → GeneScore 适配（grill Q6：dispatch_match 需要 GeneScore）。
 
-    字段映射经 limitup_screener/models.py:33 GeneScore 定义核实。
+    字段映射经 limitup_screener/models.py GeneScore 定义核实。
     factors 优先取 cand["factors"]；total_score/zt_count_250d 同时回退到 factors 内同名键。
     wilson_adjusted/qualify/high_gene/last_zt_dates 用安全默认值——
-    match_strategies 只读 total_score/factors/zt_count_250d/code，不读这几项。
+    dispatch_match 只读 total_score/factors/zt_count_250d/code，不读这几项。
     """
     from limitup_screener.models import GeneScore
 
@@ -379,8 +434,9 @@ def score_candidates(
     candidates: list[dict],
     weather_state: str | None,
     trade_date: str | None = None,
+    pool_item_map: dict[str, dict] | None = None,
 ) -> list[dict]:
-    """天气硬开关 + 策略分排序 → 候选列表。
+    """天气软标注 + 策略分排序 → 候选列表。
 
     candidates: [{code, name, factors: {seal_rate, premium, ...}, ...}]
     返回：[{code, name, strategy_code, strategy_name, score, breakdown, ...}]
@@ -388,21 +444,22 @@ def score_candidates(
     trade_date: S073 §9.4 游资席位画像接线（可选）；传则 batch 取当日龙虎榜 + per-cand
     compute_seat_risk_factor 修饰策略分（画像未建→modifier 1.0 降级标注）；不传则不接。
 
-    流程（spec §3.1）：
-    1. 天气 → 主跑策略组 + fallback
-    2. 每个主跑策略用其 weight_set 计算策略分
-    3. 按策略分降序排序
-    4. fallback 策略仅在主跑无候选时尝试（本函数返回主跑结果，fallback 由调用方决定）
+    pool_item_map: S086 R7/C8——{code: 涨停池原始 dict（含 fbt/lbc/zdp/p/...）}，
+    供调度器构造 StrategyContext.pool_item（storm_reversal 读 fbt；PRD 战法读 lbc/zdp/p）。
+    不传（默认 None）→ pool_item=None 降级，storm_reversal/PRD 战法不命中（既有战法不受影响），
+    入场价 fallback gene.total_score + "价格代理" 标注（A7）。
 
-    grill Q6（match 过滤闭环）：对每个候选×策略，先调
-    limitup_strategy.match_strategies 检查是否满足入场条件；不满足则该策略
-    不打分、不返回。避免前端看到"算分了但不满足入场条件"的脏数据。
+    流程（spec §3.1）：
+    1. 天气 → 主跑策略组（R3 全 allowed，含暴风雨）+ fallback
+    2. 每个候选调 dispatch_match 算命中的战法 signals（match 过滤闭环，无白名单）
+    3. 命中战法用其 weight_set 计算策略分
+    4. 按策略分降序排序
+
+    grill Q6（match 过滤闭环）：dispatch_match 只返回 match 命中的战法 signals，
+    matched_codes 即过滤结果（消灭旧 _MATCHED_STRATEGY_CODES 白名单）。
     """
     primary_codes, _ = get_strategies_for_weather(weather_state)
-    # grill Q7：非暴风雨天气 primary_codes 恒为所有已注册战法（非空），
-    # 暴风雨恒为 ["storm_reversal"]；不再需要未知降级 fallback。
-    # 天气推荐集合（软标注）——用于在候选上标 weather_recommended=True/False，
-    # 不用于过滤候选。
+    # 天气推荐集合（软标注）——用于在候选上标 weather_recommended=True/False
     recommendation = get_weather_recommendation(weather_state)
 
     # S073 §9.4 游资席位画像接线（batch billboard + profiles；画像未建→load_aggregate_profiles 返空→modifier 1.0 降级）
@@ -418,39 +475,31 @@ def score_candidates(
             billboard = None
 
     scored: list[dict] = []
-    # match_strategies 实际处理入场条件的策略 code 集合（取自 limitup_strategy.STRATEGY_REGISTRY
-    # 的 if/elif 分支覆盖）。dragon_head 在 registry 但无 match 分支；storm_reversal
-    # 不在 registry。这两个策略无入场条件可过滤，按"无条件"处理（不阻断），避免
-    # 晴天(dragon_head 主跑)/暴风雨(storm_reversal 独跑)被 match 闭环误杀成永远空集。
-    _MATCHED_STRATEGY_CODES = {
-        "first_plate", "consecutive_relay", "break_reseal", "low_absorption",
-        "reverse_package", "n_shape_counterattack", "platform_breakout",
-        "end_of_day_sneak",
-    }
     for cand in candidates:
         factors = cand.get("factors", {})
-        # grill Q6：dict → GeneScore 适配（match_strategies 的入参类型）
+        # grill Q6：dict → GeneScore 适配（dispatch_match 的入参类型）
         gene = _cand_to_gene(cand)
-        # 延迟 import：limitup_strategy 顶层 import astock，避免本模块加载时
-        # 强制拉起 astock 依赖链（测试/conftest 与 forward_test 已含 backend 于 sys.path）
-        from limitup_strategy import match_strategies
-        # 对每只候选一次性算出所有命中的战法 signals，内循环按 strat_code 查表
+        code = cand.get("code", "")
+        # S086 R7：从 pool_item_map 构造 ctx.pool_item；derived 走调度器统一 fallback
+        pool_item = _prepare_pool_item(pool_item_map, code)
+        derived = _prepare_derived(None, code)
+        ctx = StrategyContext(
+            code=code, gene=gene, pool_item=pool_item,
+            indicators=None, derived=derived, weather_state=weather_state,
+        )
+        # dispatch_match 跑全部 12 战法 → 只返回命中的 signals
         try:
-            signals = match_strategies(cand.get("code", ""), gene)
+            signals = dispatch_match(ctx, STRATEGY_REGISTRY)
             matched_codes = {s.strategy_code for s in signals}
-        except Exception:
-            matched_codes = set()  # match 失败按"不命中"处理，不阻断整体打分
+        except Exception:  # noqa: BLE001 - match 失败按"不命中"处理，不阻断整体打分
+            matched_codes = set()
         for strat_code in primary_codes:
             cfg = get_strategy_config(strat_code)
             if cfg is None:
                 continue
-            # 暴风雨逆势只取暴风雨日涨停股（spec §3.2）
-            if cfg.code == "storm_reversal" and weather_state != "暴风雨":
-                continue
-            # grill Q6：match 过滤——不满足入场条件的候选×策略不打分、不返回。
-            # 仅对 match_strategies 有入场条件分支的策略过滤；无分支的策略
-            # （dragon_head/storm_reversal）按"无条件"放行，避免误杀。
-            if strat_code in _MATCHED_STRATEGY_CODES and strat_code not in matched_codes:
+            # S086 R3/C2：暴风雨守卫已删——storm_reversal 可在任意天气评分（若 fbt 命中）
+            # grill Q6 match 过滤：仅对 dispatch 命中的战法打分（matched_codes 即过滤结果）
+            if strat_code not in matched_codes:
                 continue
             score, breakdown = compute_strategy_score(factors, cfg.weight_set)
             # S073 §9.4 游资画像修饰（画像未建→modifier 1.0 不扣分，标 risk_label）

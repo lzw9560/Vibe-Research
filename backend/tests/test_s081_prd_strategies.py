@@ -45,10 +45,10 @@ def gene_factory():
 # ============================================================
 
 class TestRegistry:
-    def test_registry_has_11_strategies(self):
-        """AC1: STRATEGY_REGISTRY 11 项（9 原有 + 2 新增）。"""
+    def test_registry_has_12_strategies(self):
+        """AC1: STRATEGY_REGISTRY 12 项（9 原有 + S081 PRD 2 + S086 storm_reversal 合并）。"""
         from limitup_strategy import STRATEGY_REGISTRY
-        assert len(STRATEGY_REGISTRY) == 11
+        assert len(STRATEGY_REGISTRY) == 12
 
     def test_weak_turn_strong_registered(self):
         """AC1: weak_turn_strong 注册项存在。"""

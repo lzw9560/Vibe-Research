@@ -222,28 +222,28 @@ def _compute_allowed_styles(weather_state: str | None) -> tuple[list[str], list[
 
     all_codes = [s["code"] for s in STRATEGY_REGISTRY]
 
-    # grill Q7：暴风雨仍硬约束——只允许 storm_reversal，其余 forbidden
-    if weather_state == "暴风雨":
-        return ["storm_reversal"], [c for c in all_codes if c != "storm_reversal"]
-
-    # 其他天气：全 allowed，不强禁（天气推荐用 WEATHER_RECOMMENDATION 软标注）
+    # S086 R3：暴风雨不再硬约束——全 allowed（天气推荐用 WEATHER_RECOMMENDATION 软标注）。
+    # 仓位×0.3 由 PositionAdvisor 作建议提示（非强制），不再 forbidden 任何战法。
     return all_codes, []
 
 
 def _compute_fuse_state(weather_state: str | None) -> dict[str, Any]:
-    """复用 sentiment_weather 熔断逻辑（R1 仓位熔断：暴风雨→triggered）。
+    """仓位熔断软标注（S086 R3/C3：暴风雨不再硬阻断，标"建议降仓"）。
 
     不调 HTTP 端点（避免请求开销），直接复用 get_weather_fuse 的判定逻辑。
-    返回 {fuse_state, weather_state, rules} 结构。
+    返回 {fuse_state, weather_state, rules} 结构。暴风雨 → position_fuse 标
+    "建议降仓"（is_triggered=False，不阻断；仓位×0.3 由 PositionAdvisor 作
+    建议提示，非强制）。
     """
-    r1_triggered = weather_state == "暴风雨"
+    storm_advisory = weather_state == "暴风雨"
     rules = [
         {
             "id": "position_fuse",
             "name": "仓位熔断",
-            "current_state": "triggered" if r1_triggered else "normal",
+            "current_state": "建议降仓" if storm_advisory else "normal",
             "weather_state": weather_state or "未知",
-            "is_triggered": r1_triggered,
+            "is_triggered": False,  # S086 R3：软标注，不硬阻断
+            "advisory": storm_advisory,
         },
         {
             "id": "cancel_fuse",
@@ -260,7 +260,7 @@ def _compute_fuse_state(weather_state: str | None) -> dict[str, Any]:
     ]
     any_triggered = any(r.get("is_triggered") for r in rules)
     return {
-        "fuse_state": "triggered" if any_triggered else "normal",
+        "fuse_state": "triggered" if any_triggered else ("建议降仓" if storm_advisory else "normal"),
         "weather_state": weather_state or "未知",
         "rules": rules,
     }

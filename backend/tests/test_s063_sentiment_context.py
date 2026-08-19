@@ -138,7 +138,7 @@ class TestIntradayScoring(unittest.TestCase):
 
 
 class TestPositionAdvisorWeatherState(unittest.TestCase):
-    """AC4：PositionAdvisor 暴风雨→禁止开仓，极端反弹→50%。"""
+    """S086 R4：PositionAdvisor 暴风雨→仓位×0.3 建议（非强制），极端反弹→50%。"""
 
     def _make_signal(self, confidence: float = 0.8) -> "StrategySignal":
         from limitup_strategy import StrategySignal
@@ -154,12 +154,15 @@ class TestPositionAdvisorWeatherState(unittest.TestCase):
             signal_strength=80,
         )
 
-    def test_storm_blocks_opening(self):
+    def test_storm_soft_caps_30pct(self):
+        """S086 R4：暴风雨不再禁止开仓——仓位×0.3 建议（非强制），返回建议而非 None。"""
         from strategies.position_advisor import PositionAdvisor
         advisor = PositionAdvisor()
         sig = self._make_signal()
         result = advisor.advise(sig, weather_state="暴风雨")
-        self.assertIsNone(result)  # 暴风雨 → 禁止开仓
+        self.assertIsNotNone(result)  # S086 R4：不再 return None 禁止开仓
+        # 暴风暴 weather_cap=0.3 → 仓位×0.3 建议（非强制，advice note 在 reasons 里）
+        self.assertLessEqual(result.suggested_pct, advisor.max_single_position * 0.3)
 
     def test_extreme_rebound_caps_50pct(self):
         from strategies.position_advisor import PositionAdvisor
