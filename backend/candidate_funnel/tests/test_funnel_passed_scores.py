@@ -43,7 +43,7 @@ def mock_sources(monkeypatch):
         sources.activity, "fetch_activity",
         lambda codes, date: {c: {"name": genes[c]["name"], "turnover_pct": 15.0, "vol_ratio": 1.8, "amount_yi": 12.0, "amplitude_pct": 5.0} for c in codes},
     )
-    monkeypatch.setattr(sources.fund_flow, "fetch_fund_flow", lambda codes, date: {c: {"main_net_inflow": 5000.0, "main_net_5d": 20000.0, "northbound": 800.0} for c in codes})
+    monkeypatch.setattr(sources.fund_flow, "fetch_fund_flow", lambda codes, date, sectors=None, industry_map=None: {c: {"main_net_inflow": 5000.0, "main_net_5d": 20000.0, "northbound": 800.0} for c in codes})
     monkeypatch.setattr(sources.auction, "fetch_auction", lambda date: {"000001": {"auction_open_pct": 2.0}})
     monkeypatch.setattr(
         sources.catalyst, "fetch_catalyst",
@@ -53,7 +53,7 @@ def mock_sources(monkeypatch):
         },
     )
     monkeypatch.setattr(sources.watchlist_in, "get_watchlist_codes", lambda: [])
-    monkeypatch.setattr(funnel, "_fetch_sentiment_phase", lambda date: None)
+    monkeypatch.setattr(funnel, "_fetch_sentiment_phase", lambda date, ctx=None: None)
     return genes
 
 
@@ -123,7 +123,7 @@ def test_r2_passed_missing源字段为None(mock_sources):
     import candidate_funnel.funnel as fmod
     # fund 只给 000001，000002 缺
     orig = sources.fund_flow.fetch_fund_flow
-    sources.fund_flow.fetch_fund_flow = lambda codes, date: {"000001": {"main_net_inflow": 5000.0, "main_net_5d": 20000.0, "northbound": 800.0}}
+    sources.fund_flow.fetch_fund_flow = lambda codes, date, sectors=None, industry_map=None: {"000001": {"main_net_inflow": 5000.0, "main_net_5d": 20000.0, "northbound": 800.0}}
     try:
         result = funnel.run_funnel("pre_market", "2026-08-10", ThresholdConfig())
         r2 = {l.layer_id: l for l in result.layers}["R2"]

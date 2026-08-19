@@ -43,14 +43,14 @@ def test_run_strategy_backtest_aggregates(mock_dates, mock_load, mock_kline_mapp
 
     results = run_strategy_backtest(60)
 
-    assert len(results) == 9
+    assert len(results) == 11  # 9 既有 + S081 PRD 2（weak_turn_strong/pattern_reversal）
     assert all(r.available_days == 1 for r in results)  # DB 实际可用天数
     first_plate = next(r for r in results if r.strategy_code == "first_plate")
     assert first_plate.sample_size == 1
     assert first_plate.win_rate == 1.0  # 1/1
     assert first_plate.avg_return == 8.0  # take_profit_pct=8
     others = [r for r in results if r.strategy_code != "first_plate"]
-    assert all(r.sample_size == 0 for r in others), "其余 8 战法不应命中"
+    assert all(r.sample_size == 0 for r in others), "其余 10 战法不应命中"
 
 
 @patch("strategies.strategy_backtest.astock")

@@ -50,6 +50,9 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
             # S081：PRD 2 战法因子（历史日路径在下方从 K线扩展算）
             "max_high_pct": None, "shadow_length_pct": None,
             "ma_5_status": None, "prev_turnover_pct": None,
+            # S084：tencent_quote 扩展 + 前日成交额（历史日路径：kline 复算 + 估值 None）
+            "last_close": None, "open": None, "change_amt": None,
+            "pe_ttm": None, "mcap_yi": None, "pb": None, "prev_amount_yi": None,
         }
         model = quote_from_tencent(c, today_quote.get(c, {}))
         entry["name"] = model.name
@@ -85,6 +88,11 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
         vol = _f(bar.get("vol")) or 0.0
         amount = _f(bar.get("amount")) or 0.0
         entry["price"] = close
+        # S084 R4.1：kline 复算路径（历史日可取）
+        entry["last_close"] = prev_close  # T-2 收盘 = T-1 昨收
+        entry["open"] = _f(bar.get("open"))  # T-1 开盘
+        if close is not None and prev_close is not None:
+            entry["change_amt"] = round(close - prev_close, 2)  # T-1 涨跌额
         if prev_close:
             entry["change_pct"] = round((close - prev_close) / prev_close * 100, 2)
             entry["amplitude_pct"] = round((high - low) / prev_close * 100, 2)
@@ -122,6 +130,16 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
             prev_vol = _f(prev.get("vol"))
             if prev_vol is not None:
                 entry["prev_turnover_pct"] = round(prev_vol * 10000 / float_shares, 2)
+
+        # S084 R4.3：前日成交额（前日 bar amount/1e8，亿）
+        if prev is not None:
+            prev_amount = _f(prev.get("amount"))
+            if prev_amount is not None:
+                entry["prev_amount_yi"] = round(prev_amount / 1e8, 4)
+
+        # S084 R4.1：pe_ttm/mcap_yi/pb 历史日无源（tencent_quote 仅当日），标 missing 不臆造
+        for _k in ("pe_ttm", "mcap_yi", "pb"):
+            entry["missing"][_k] = "当前估值非T-1（tencent_quote 当日取，历史日路径无源）"
 
         for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):
             if entry[k] is None and k not in entry["missing"]:
@@ -172,11 +190,21 @@ def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
                 "shadow_length_pct": None,
                 "ma_5_status": None,
                 "prev_turnover_pct": None,
+                # S084 R4.1：tencent_quote 扩展（当日路径直接读 Quote 模型字段）
+                "last_close": model.last_close,
+                "open": model.open,
+                "change_amt": model.change_amount,  # Quote 字段 change_amount → entry key change_amt
+                "pe_ttm": model.pe_ttm,
+                "mcap_yi": model.market_cap_yi,  # Quote property（亿）
+                "pb": model.pb,
+                # 当日路径无前日 K线 bar，prev_amount_yi 无源
+                "prev_amount_yi": None,
             }
             missing: dict[str, str] = {}
             for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):
                 if entry[k] is None:
                     missing[k] = "行情字段未取得"
+            missing["prev_amount_yi"] = "当日路径无前日 K线（需历史日 kline 复算）"
             if missing:
                 entry["missing"] = missing
             out[c] = entry

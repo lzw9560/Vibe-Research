@@ -17,6 +17,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
+import { useQuery } from "@tanstack/react-query";
+import { candidatesApi } from "@/lib/candidates";
+import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
+import { FunnelLayers } from "@/components/candidate/FunnelLayers";
 // S072：WeatherDecisionBar 移出工作流首页（天气无 §44 edge，留 PostMarketReview 复盘）
 import {
   useWorkflowStatus, usePreMarketBriefing, usePreMarketDates, useWorkflowStates,
@@ -403,6 +407,14 @@ export default function Workflow() {
 
   // S075 065：默认显示卡片入口；点 workflow 降级入口卡片切到原状态机看板
   const [view, setView] = useState<"entries" | "legacy-state-machine">("entries");
+  // S084：两级 Tab（选股池 / 战法），默认战法保既有行为（Q5=A 复用既有组件）
+  const [tab, setTab] = useState<"strategies" | "pool">("strategies");
+  // S084 选股池：调既有 runFunnel API（独立入口，不调 /api/workflow/pre-market，解耦 R7.2）
+  const { data: funnelResult, isLoading: funnelLoading } = useQuery({
+    queryKey: ["s084-funnel", selectedDate ?? "today"],
+    queryFn: () => candidatesApi.runFunnel("all", selectedDate ?? undefined),
+    enabled: view === "entries" && tab === "pool",
+  });
 
   // S048 R3：历史视角数据源——盘前卡读快照候选数，盘中/盘后卡读该日状态计数
   const { data: histBriefing } = usePreMarketBriefing(selectedDate ?? undefined);
@@ -517,6 +529,12 @@ export default function Workflow() {
 
     return (
       <div className="space-y-6">
+        {/* S084 两级 Tab（选股池 / 战法）——spec R7 顶部导航，最顶 */}
+        <div className="flex gap-2">
+          <Button variant={tab === "strategies" ? "primary" : "ghost"} size="sm" onClick={() => setTab("strategies")}>战法</Button>
+          <Button variant={tab === "pool" ? "primary" : "ghost"} size="sm" onClick={() => setTab("pool")}>选股池</Button>
+        </div>
+
         <PageHeader
           title="选股工作流"
             subtitle="战法流入口 · 首板流·弱转强接力·反包流 已实现 / 连板流·炸板回交流·低吸流·N字反击流 待实现"
@@ -540,12 +558,36 @@ export default function Workflow() {
           }
         />
 
-        {/* 战法流入口网格 */}
-        <div>
-          <SectionHeader
-            title="战法流入口"
-            subtitle="按战法分流的选股→确认→建仓→卖出→结算 闭环工作流"
-          />
+        {tab === "pool" ? (
+          // S084 R7.1 选股池 Tab：FunnelLayers（R1→R2→R3 三层）+ SelectionPipeline（final_candidates）
+          //   不调 /api/workflow/pre-market（R7.2 解耦）；market_context（R7.3）随 AC5a 移 backlog
+          funnelLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : funnelResult ? (
+            <>
+              <FunnelLayers
+                layers={funnelResult.layers}
+                date={funnelResult.date}
+                onPick={() => {}}
+              />
+              <SelectionPipeline
+                finalCandidates={funnelResult.final_candidates}
+                mode="funnel-only"
+                date={funnelResult.date}
+                rerunHandlers={candidatesApi}
+                onPick={() => {}}
+              />
+            </>
+          ) : (
+            <GlassCard className="p-4"><p className="text-sm text-muted-foreground">选股池数据未取得（调 /workflow/candidates/funnel）</p></GlassCard>
+          )
+        ) : (
+          // S084 R8 战法 Tab：既有战法流入口卡片网格（7 个卡片）
+          <div>
+            <SectionHeader
+              title="战法流入口"
+              subtitle="按战法分流的选股→确认→建仓→卖出→结算 闭环工作流"
+            />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* 首板流 ✅ 已实现 */}
             <StrategyFlowCard
@@ -615,8 +657,9 @@ export default function Workflow() {
             />
           </div>
         </div>
+        )}
 
-        {/* workflow 降级入口（原状态机看板） */}
+        {/* workflow 降级入口（原状态机看板）——S084 tab 外共享 */}
         <div>
           <SectionHeader
             title="状态机看板（降级入口）"

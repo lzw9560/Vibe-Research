@@ -4,11 +4,21 @@
 from __future__ import annotations
 
 from datetime import date
+
+import pytest
 from unittest.mock import patch
 
 from candidate_funnel import funnel, sources
 from candidate_funnel.models import ThresholdConfig
 from vr_paths import is_trading_day, last_trading_date, last_trading_date_str
+
+
+@pytest.fixture(autouse=True)
+def _clear_funnel_cache_each_test():
+    """清 funnel TTL 缓存——同 (date,config) 的测试会命中缓存绕过各自 mock（S084 baseline 修复）。"""
+    funnel.clear_funnel_cache()
+    yield
+    funnel.clear_funnel_cache()
 
 
 # ---------- last_trading_date ----------
@@ -76,7 +86,7 @@ def test_r2_source_failure_marks_data_status():
 
 
 def test_normal_run_no_data_status():
-    """正常采集时 layer.data_status 为 None。"""
+    """正常采集（不抛异常）不标'未取得'；auction/catalyst 正常返空时 R3 标'降级'（exp-3 保留 R2）≠ 采集失败。"""
     with patch("candidate_funnel.funnel.sources.gene.fetch_genes", return_value={}):
         with patch("candidate_funnel.funnel.sources.board_ladder.fetch_board_ladder", return_value={}):
             with patch("candidate_funnel.funnel.sources.activity.fetch_activity", return_value={}):
@@ -86,4 +96,4 @@ def test_normal_run_no_data_status():
                             with patch("candidate_funnel.funnel.sources.watchlist_in.get_watchlist_codes", return_value=[]):
                                 result = funnel.run_funnel("all", "2026-08-01", _make_cfg())
     for layer in result.layers:
-        assert layer.data_status is None  # 采集到 0 个 ≠ 采集失败
+        assert layer.data_status != "未取得"  # 采集失败才标'未取得'；'降级'是数据为空非失败

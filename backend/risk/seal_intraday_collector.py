@@ -45,6 +45,8 @@ def run_migrations() -> None:
     # S070 R6.1：加 low_price + limit_pct 列（R6 分时低点 + R7 涨停价反推）
     migration_v2 = (migrations_dir / "20260818-001_add_low_price_limit_pct.sql").read_text(encoding="utf-8")
     # S070 R3：建 intraday_features（R1 trajectory）+ seal_derived_features（R7 派生）两表
+    # S084 follow-up：derived 预采集合并入 seal_derived_features（删冗余 derived_results 表，
+    # 其字段为 seal_derived_features 子集，get_derived_result/save_derived_result 接口不变）
     migration_v3 = (migrations_dir / "20260818-002_create_intraday_features.sql").read_text(encoding="utf-8")
     migrations = [
         {"version": "20260811-001", "name": "create_seal_intraday_snapshots", "sql": migration_v1},
@@ -170,6 +172,81 @@ def get_recent_window(code: str, date: str, minutes: int = 5) -> list[dict[str, 
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# S084 C2/C3：derived 预采集读写（盘后 executor 写 / derived_source 读）
+# S084 follow-up：合并入 seal_derived_features（删冗余 derived_results 表，
+#   字段为 seal_derived_features 子集，save/get_derived_result 接口不变）。
+# ---------------------------------------------------------------------------
+
+#: 派生粒度标注常量（表 granularity_note 列缺值时兜底，与 compute_derived_features 同形）
+_DERIVED_GRANULARITY_NOTE = "60s粒度近似"
+
+
+def save_derived_result(date: str, code: str, derived: dict[str, Any]) -> None:
+    """S084 C2：derived 预采集结果写 seal_derived_features 表（INSERT OR REPLACE，幂等）。
+
+    盘后 executor 对昨日涨停股全量扫一遍后逐只调用。批量场景 executor 可复用
+    连接直接写（见 ``_execute_derived_precompute``，复用 persist_derived_features），
+    本函数供单只/补算场景。
+    S084 follow-up：改写 seal_derived_features（原 derived_results 已删，字段为其子集）。
+    name 缺省 None（批量场景由 executor 从涨停池取 name 直传 persist_derived_features）。
+    """
+    conn = _get_conn()
+    try:
+        with _DB_LOCK:
+            conn.execute(
+                """INSERT OR REPLACE INTO seal_derived_features
+                (date, code, name, last_lock_time, broken_duration_min, max_drop_pct,
+                 limit_price, granularity_note, computed_at, data_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (date, code, None,
+                 derived.get("last_lock_time"),
+                 derived.get("broken_duration_min"),
+                 derived.get("max_drop_pct"),
+                 derived.get("limit_price"),
+                 derived.get("granularity_note") or _DERIVED_GRANULARITY_NOTE,
+                 datetime.now().isoformat(),
+                 derived.get("data_status")),
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def get_derived_result(code: str, date: str) -> dict[str, Any] | None:
+    """S084 C3：derived_source 读 seal_derived_features 预采集表（SELECT WHERE code/date）。
+
+    无行 / 缺表 / DB 未就绪 → None（交 derived_source fallback 实时算或降级 None，不臆造）。
+    重建与 ``compute_derived_features`` 同形 dict（读 seal_derived_features 全字段；
+    granularity_note 列缺值时补常量兜底，保证下游 shape 一致）。
+    S084 follow-up：改读 seal_derived_features（原 derived_results 已删），接口不变。
+    """
+    try:
+        conn = _get_conn()
+        try:
+            row = conn.execute(
+                "SELECT last_lock_time, broken_duration_min, max_drop_pct, limit_price, "
+                "granularity_note, data_status "
+                "FROM seal_derived_features WHERE code = ? AND date = ?",
+                (code, date),
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:
+        # fresh env 未跑迁移 / 表不存在 → None，交 fallback（不臆造）
+        return None
+    if not row:
+        return None
+    return {
+        "last_lock_time": row["last_lock_time"],
+        "broken_duration_min": row["broken_duration_min"],
+        "max_drop_pct": row["max_drop_pct"],
+        "limit_price": row["limit_price"],
+        "granularity_note": row["granularity_note"] or _DERIVED_GRANULARITY_NOTE,
+        "data_status": row["data_status"],
+    }
 
 
 def collect_once(date_str: str | None = None) -> dict[str, Any]:

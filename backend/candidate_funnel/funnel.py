@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""漏斗编排（S002 B9）：R1→R2→R3 + 自选并行。
+"""漏斗编排（S002 B9 / S084 R1-only）：R1 宽源 + 自选并行。
 
-每层输出为下轮输入；任一层空则下游无输入并提示（AC9）。
-R2 按生效阈值过滤冷股；R3 按竞价/催化过滤。最终候选构建诊断卡。
+S084 TASK A：选股池 R1-only——R2/R3 过滤已下放战法层，本层仅展示全量候选
+（data_status 标「已下放战法」）。final_candidates = R1 全涨停 ∪ 自选，不再经 R2/R3 收敛。
+R2/R3 的 _filter_r2/_filter_r3 函数保留供战法层与单测调用（diagnose 不依赖）。
 """
 
 from __future__ import annotations
@@ -273,6 +274,29 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     phase = _fetch_sentiment_phase(date, ctx)
     eff = resolve_thresholds(cfg, phase)  # S072 STI 去噪：phase 不再调阈值（固定基数），仅记录
     current_stage = _STAGE_MAP.get(stage, "s1")
+    # S084 Q1=A/Q2=B：T-1 昨日（zt_pool/derived 取昨日值；activity/fund 按 date 分路径）
+    from datetime import date as _date, timedelta as _timedelta
+    yesterday_date: str | None
+    try:
+        from vr_paths import last_trading_date as _last_td
+        _d = _date.fromisoformat((date or "")[:10])
+        yesterday_date = _last_td(_d - _timedelta(days=1)).isoformat()
+    except Exception:
+        # date 畸形不可解析 → None（zt_pool/derived 不取，不用今日值冒充 T-1，review HIGH 修复）
+        yesterday_date = None
+    # S084 R4.2：板块资金（行业级）—— market.get_overview() 5min 缓存
+    # （防封底线：不裸调 market._sectors() raw akshare 无 em_get/circuit_breaker）
+    sectors = None
+    try:
+        import market as _market
+        sectors = (_market.get_overview() or {}).get("sectors")
+    except Exception:
+        sectors = None
+    # S084 R2：涨停池原始 dict（T-1 昨日池，走 em_get 限流）+ 行业映射（hybk）
+    from candidate_funnel.sources import zt_pool_source
+    zt_pool_map = zt_pool_source.fetch_zt_pool_map(yesterday_date) if yesterday_date else {}
+    # 行业映射从 zt pool hybk 提取（em_get-backed 替代 raw akshare individual_info，防封 review HIGH 修复）
+    industry_map = {c: p.get("hybk") for c, p in zt_pool_map.items() if p.get("hybk")}
     max_r2 = int(getattr(default_config, "CANDIDATE_FUNNEL_MAX_R2", 80))
     base_conditions = [
         f"换手冷档={eff.turnover_cold}%",
@@ -323,21 +347,21 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     )
     layers: list[FunnelLayer] = [r1]
 
-    # ---- R2 收敛（并行）----
+    # ---- R2 收敛（并行）——S084 R1-only：活跃度过滤已下放战法层，本层仅展示全量 ----
     r2_data_status: str | None = None
     r2_data_reason: str | None = None
     try:
         activity, fund = _fetch_pair(
             lambda: sources.activity.fetch_activity(r2_input_codes, date),
-            lambda: sources.fund_flow.fetch_fund_flow(r2_input_codes, date),
+            lambda: sources.fund_flow.fetch_fund_flow(r2_input_codes, date, sectors=sectors, industry_map=industry_map),
         )
     except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
         activity, fund = {}, {}
         r2_data_status = "未取得"
         r2_data_reason = f"R2 收敛采集失败: {exc}"
     # R1 passed 补齐 activity 字段——矩阵展示 R1-only 候选换手率/量比/成交额/振幅。
-    # activity 已在 R2 采集（fetch_activity 输入=r1_kept 全量），回填 R1 passed 避免
-    # R1-only 行（未进 R2）在矩阵里这些列全空。任一缺失仍 None，不臆造。
+    # activity 已在 R2 采集（fetch_activity 输入=r2_input_codes top-N 限界），回填 R1 passed；
+    # 超出 top-N 的候选 activity 缺失 → 这些列 None，不臆造。
     if activity:
         for _p in r1.passed:
             _a = activity.get(_p.get("code"), {}) or {}
@@ -345,12 +369,17 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
             _p["vol_ratio"] = _a.get("vol_ratio")
             _p["amount_yi"] = _a.get("amount_yi")
             _p["amplitude_pct"] = _a.get("amplitude_pct")
-    r2_kept, r2_filtered = _filter_r2(r1_kept, activity, eff, fund)
+    # S084 TASK A：R2 不再过滤活跃度——下放战法层。r2_kept = R1 全量，filtered_out 留空。
+    r2_kept = list(r1_kept)
+    r2_filtered: list[FilterRecord] = []
+    if r2_data_status is None:
+        r2_data_status = "R2 已下放战法"
+        r2_data_reason = "活跃度过滤已下放战法层，本层保留 R1 全量候选（不过滤）"
     r2 = FunnelLayer(
         layer_id="R2", name="收敛", as_of=as_of,
         input_count=len(r1_kept), output_count=len(r2_kept),
         filtered_out=r2_filtered, output_codes=r2_kept,
-        conditions=[f"换手>={eff.turnover_cold}%", *base_conditions],
+        conditions=["R2 已下放战法（不过滤活跃度）", *base_conditions],
         passed=[
             {"code": c, "name": activity.get(c, {}).get("name", c),
              "gene_score": genes.get(c, {}).get("gene_score"),
@@ -368,7 +397,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     )
     layers.append(r2)
 
-    # ---- R3 定稿（并行）----
+    # ---- R3 定稿（并行）——S084 R1-only：竞价/催化过滤已下放战法层，本层仅展示全量 ----
     r3_data_status: str | None = None
     r3_data_reason: str | None = None
     try:
@@ -380,23 +409,18 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         auction, catalyst = {}, {}
         r3_data_status = "未取得"
         r3_data_reason = f"R3 定稿采集失败: {exc}"
-    # exp-3 降级：auction/catalyst 均为空时（采集异常 OR 正常返空），
-    # _filter_r3 的 has_auction or has_catalyst 全 False 会把所有候选过滤掉，
-    # R3 输出 0 候选。降级保留 R2 输出，_filter_r3 保持单一职责仅在有数据时调。
-    # 诚实标注：未被 except 标注 data_status 时补标降级原因，不掩盖。
-    if not auction and not catalyst:
-        r3_kept = list(r2_kept)
-        r3_filtered = []
-        if r3_data_status is None:
-            r3_data_status = "降级"
-            r3_data_reason = "R3 数据缺失（auction/catalyst 均空），降级保留 R2 输出"
-    else:
-        r3_kept, r3_filtered = _filter_r3(r2_kept, auction, catalyst, genes, activity)
+    # S084 TASK A：R3 不再过滤竞价/催化——下放战法层。r3_kept = R2 全量（=R1），filtered_out 留空。
+    # 原 exp-3 降级（auction/catalyst 均空时保留 R2）已成默认行为，不再单独标降级。
+    r3_kept = list(r2_kept)
+    r3_filtered: list[FilterRecord] = []
+    if r3_data_status is None:
+        r3_data_status = "R3 已下放战法"
+        r3_data_reason = "竞价/催化过滤已下放战法层，本层保留 R2 全量候选（不过滤）"
     r3 = FunnelLayer(
         layer_id="R3", name="定稿", as_of=as_of,
         input_count=len(r2_kept), output_count=len(r3_kept),
         filtered_out=r3_filtered, output_codes=r3_kept,
-        conditions=["集合竞价异动 OR 公告催化 OR 板块联动", *base_conditions],
+        conditions=["R3 已下放战法（不过滤竞价/催化）", *base_conditions],
         passed=[
             {"code": c, "name": _resolve_name(c, genes, activity, auction, catalyst),
              "gene_score": genes.get(c, {}).get("gene_score"),
@@ -419,9 +443,11 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     )
     layers.append(self_layer)
 
-    # ---- 最终候选 = R3 输出 ∪ 自选 ----
-    final_codes = list(dict.fromkeys(r3_kept + list(wl)))
+    # ---- 最终候选 = R1 全涨停 ∪ 自选（S084 R1-only：不经 R2/R3 收敛）----
+    final_codes = list(dict.fromkeys(r1_kept + list(wl)))
     cards = []
+    # S084 R3：derived source 懒加载（per code 取 T-1 昨日派生，盘前未采集→None 降级）
+    from candidate_funnel.sources import derived_source
     for code in final_codes:
         name = (
             genes.get(code, {}).get("name")
@@ -430,7 +456,14 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
             or code
         )
         ind = build_indicator_set(code, name, genes, activity, fund, auction, catalyst, board)
-        cards.append(build_diagnosis_card(code, name, ind, eff, market_ctx=board, as_of=as_of))
+        # S084 Q6=B：透传 3 子对象（gene_obj/pool_item/derived）
+        gene_obj = genes.get(code, {}).get("gene_obj")
+        pool_item = zt_pool_map.get(code) if zt_pool_map else None
+        derived = derived_source.fetch_derived(code, yesterday_date) if yesterday_date else None
+        cards.append(build_diagnosis_card(
+            code, name, ind, eff, market_ctx=board, as_of=as_of,
+            gene_obj=gene_obj, pool_item=pool_item, derived=derived,
+        ))
 
     return FunnelResult(
         run_id=f"run-{date}-{stage}",
@@ -456,7 +489,27 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     genes = sources.gene.fetch_genes(date)
     board = sources.board_ladder.fetch_board_ladder(date)
     activity = sources.activity.fetch_activity([code], date)
-    fund = sources.fund_flow.fetch_fund_flow([code], date)
+    # S084 R4.2：sectors 从 market.get_overview() 取（5min 缓存，防封）
+    sectors = None
+    try:
+        import market as _market
+        sectors = (_market.get_overview() or {}).get("sectors")
+    except Exception:
+        sectors = None
+    # S084 Q1=A/Q2=B：T-1 昨日（date 畸形→None 不用今日冒充，review HIGH 修复）
+    from datetime import date as _date, timedelta as _timedelta
+    yesterday_date: str | None
+    try:
+        from vr_paths import last_trading_date as _last_td
+        _d = _date.fromisoformat((date or "")[:10])
+        yesterday_date = _last_td(_d - _timedelta(days=1)).isoformat()
+    except Exception:
+        yesterday_date = None
+    # S084 R2：zt_pool_map + 行业映射（hybk，em_get-backed 替代 individual_info，防封 review HIGH 修复）
+    from candidate_funnel.sources import zt_pool_source
+    zt_pool_map = zt_pool_source.fetch_zt_pool_map(yesterday_date) if yesterday_date else {}
+    industry_map = {c: p.get("hybk") for c, p in zt_pool_map.items() if p.get("hybk")}
+    fund = sources.fund_flow.fetch_fund_flow([code], date, sectors=sectors, industry_map=industry_map)
     auction = sources.auction.fetch_auction(date)
     catalyst = sources.catalyst.fetch_catalyst([code], date)
     name = (
@@ -472,4 +525,12 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
             src_dates.append(d)
     as_of = min(src_dates) if src_dates else datetime.now()
     ind = build_indicator_set(code, name, genes, activity, fund, auction, catalyst, board)
-    return build_diagnosis_card(code, name, ind, eff, market_ctx=board, as_of=as_of)
+    # S084 Q6=B：透传 3 子对象（zt_pool_map 已采集复用；derived guard yesterday_date）
+    from candidate_funnel.sources import derived_source
+    gene_obj = genes.get(code, {}).get("gene_obj")
+    pool_item = zt_pool_map.get(code)
+    derived = derived_source.fetch_derived(code, yesterday_date) if yesterday_date else None
+    return build_diagnosis_card(
+        code, name, ind, eff, market_ctx=board, as_of=as_of,
+        gene_obj=gene_obj, pool_item=pool_item, derived=derived,
+    )

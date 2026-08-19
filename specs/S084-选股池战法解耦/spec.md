@@ -1,6 +1,6 @@
 # Spec: S084 — 选股池战法解耦（选股池 Tab + 战法 Tab 两级导航 + 因子补全）
 
-> 状态：草案
+> 状态：已实现（2026-08-19，见 `验收报告.md`）
 > 作者：Claude  日期：2026-08-18
 > 关联：`CLAUDE.md` §1.1、`specs/S002-打板工作流重构/`（P1 候选池漏斗）、`specs/S070-intraday采集管道/`（R7 派生）、`specs/S079-打板P2战法与仓位闸/`（仓位闸+龙虎榜）、`specs/S081-打板P2战法匹配/`（PRD 2 战法）、`specs/S083-工作流重构选股池分层/`（因子复用部分已 commit ada2b71，漏斗接入部分作废改耦合方向）
 >
@@ -16,7 +16,7 @@
 3. **选股池因子缺口**：战法需要 6 类因子（GeneScore/涨停池原始dict/S070R7派生/前日成交额/K线派生/活跃度），选股池漏斗只采集了部分，战法还要自己补取
 4. **前端导航按时间阶段**：Workflow.tsx 按"盘前/盘中/盘后"组织，不是按"选股池/战法"功能组织
 
-**目标**：选股池独立产出 + 战法独立消费 + 前端两级 Tab 导航。选股池 = 漏斗 R1→R2→R3 完整筛选 + 补全所有战法盘前因子（GeneScore/涨停池原始dict/S070R7派生/K线派生/活跃度/资金流），输出 `DiagnosisCard`（含 `gene_score` + `pool_item` + `derived` + `indicators`）。战法从选股池 `DiagnosisCard` 读全部因子，不自己取数。前端 Workflow.tsx 加"选股池"Tab + "战法"Tab 两级导航。
+**目标**（grill reframe 2026-08-19）：选股池独立产出 + 战法独立消费 + 前端两级 Tab 导航。**选股池只做 R1（全涨停 + 补全所有战法盘前因子），不做 R2/R3 过滤**——R2（活跃度）/R3（催化）下放战法层，每战法自定阈值（原 R1→R2→R3 漏斗筛选收回，因 R2/R3 是具体战法筛选逻辑，放选股池层会预筛掉其他战法的标的）。选股池输出 `DiagnosisCard`（含 `gene_score` + `pool_item` + `derived` + `indicators`），因子懒加载/异步预采集（**16:30 收盘后异步后台任务预采集 derived 等落库，不阻塞主流程**；战法调用时未补全则战法层 fallback 自补）。前端 Workflow.tsx "选股池"Tab + "战法"Tab 两级导航。**§44 从工程底线降级为参考性建议**（不强制 gate；设计方案经深度调研，不阻塞实现）。
 
 ---
 
@@ -154,57 +154,53 @@
 
 ## 3. 需求清单
 
-### 3.1 选股池 DiagnosisCard 补全 3 子对象（Q6=B）
+> **grill reframe 2026-08-19**：选股池只做 R1（全涨停 + 补因子），不做 R2/R3 过滤（R2/R3 下放战法层）。原 R1→R2→R3 漏斗筛选收回——R2/R3 是具体战法筛选逻辑，放选股池层会预筛掉其他战法标的。
 
-- [ ] R1：`DiagnosisCard` 加 `gene_score: GeneScore | None = None` 字段
-  - [ ] R1.1 `candidate_funnel/sources/gene.py` 扩展 `genes[code]` 存完整 GeneScore 对象（不只存 gene_score 数字，存 `gene_obj: GeneScore`）
-  - [ ] R1.2 `candidate_funnel/diagnosis.py` `build_diagnosis_card` 从 `genes[code].gene_obj` 取 GeneScore 塞入
-- [ ] R2：`DiagnosisCard` 加 `pool_item: dict | None = None` 字段（涨停池原始 dict）
-  - [ ] R2.1 漏斗新增 source 或扩展 activity.py，从 `astock.em_zt_topic_pool` 取涨停池原始 dict（lbc/zdp/fbt/zbc/fund/hybk），按 code 匹配
-  - [ ] R2.2 `build_diagnosis_card` 塞入 pool_item
-- [ ] R3：`DiagnosisCard` 加 `derived: dict | None = None` 字段（S070 R7 分时派生）
-  - [ ] R3.1 漏斗新增 source 或扩展，调 `compute_derived_features(get_snapshots_by_code(code, date))` 取 broken_duration_min/max_drop_pct/last_lock_time
-  - [ ] R3.2 盘前 snapshots 未采集时 `derived=None` 标"分时数据未就绪"降级，不臆造
-- [ ] R4：`IndicatorSet` 扩展 12 字段（tencent_quote 扩展 8 + 板块资金 3 + 前日成交额 1）
-  - [ ] R4.1 **按历史日路径分字段取数**（Oracle B4 修复：activity.py 盘前取 T-1 走 kline 复算路径，tencent_quote vals 在历史日拿不到）：
-    - **kline prev_bar 复算（历史日可取）**：`open`（前日 K线 bar.open）/ `change_amt`（前日 close - prev_close）/ `limit_up`/`limit_down`（复用既有 IndicatorSet.limit_up/limit_down 字段，不新增同名）
-    - **静态估值（tencent_quote 当日取，口径为"当前值"非"T-1"，spec 显式声明）**：`pe_ttm` / `mcap_yi` / `pb` —— 这些是静态估值字段，盘前 tencent_quote 取当日返回值（非历史日 K线路径），口径标注"当前估值非 T-1 昨日值"
-    - **`last_close`**：从前日 K线 bar.close 取（kline 复算路径，历史日可取）
-  - [ ] R4.2 板块资金 3 字段：`sector_net_inflow`（板块净流入）/ `sector_inflow`（流入）/ `sector_outflow`（流出）
-    - 从 `market._sectors()` 取（akshare stock_fund_flow_industry，每日复盘首页已展示 line 470-473）
-    - 或从 `fund_flow.py` 的 `fetch_sector_flow`（catalyst source 已调）取
-  - [ ] R4.3 前日成交额：`prev_amount_yi`（activity.py 已取 K线 bars，从前日 bar.turnover / 1e8）
-  - [ ] R4.4 `diagnosis.py` `build_indicator_set` 透传 12 新字段
+### 3.1 选股池 = 全涨停（R1）+ DiagnosisCard 3 子对象 + IndicatorSet 因子
 
-### 3.2 战法从 DiagnosisCard 读全部因子（Q3=A + Q6=B）
+- [ ] R1：选股池只取全涨停（R1 宽源），**不做 R2（活跃度）/R3（催化）过滤**
+  - [ ] R1.1 `funnel.py _run_funnel_impl` 删 `_filter_r2`/`_filter_r3` 逻辑，final_candidates = R1 全涨停 + 自选
+  - [ ] R1.2 `DiagnosisCard` 加 3 子对象：`gene_score`（gene.py 存 gene_obj 完整对象）+ `pool_item`（zt_pool_source，em_get-backed）+ `derived`（derived_source，懒加载/异步预采集）
+  - [ ] R1.3 `IndicatorSet` 加 10 字段（last_close/open/change_amt/pe_ttm/mcap_yi/pb/sector_net_inflow/sector_inflow/sector_outflow/prev_amount_yi），按历史日路径分字段取数（B4：kline 复算 vs tencent_quote 当日）
+- [ ] R2：R2（活跃度）/R3（催化）下放战法层
+  - [ ] R2.1 `match_strategies` 每战法自定 R2/R3 阈值（first_plate 定 turnover/amount；weak_turn_strong 定 lbc/broken；pattern_reversal 定 zdp/max_high/shadow）
+  - [ ] R2.2 选股池不替战法筛 R2/R3，战法从 card 读因子 + 自定阈值判定
 
-- [ ] R5：`match_strategies` 改为从 `DiagnosisCard` 读因子（不再各自调 astock/kline/S070）
-  - [ ] R5.1 既有 9 战法从 `card.gene_score` 读 GeneScore（total_score/zt_count_250d/factors）
-  - [ ] R5.2 PRD 弱转强接力从 `card.pool_item` 读 lbc/hs/zdp + `card.indicators.prev_turnover_pct` 算 vol_ratio_1d + `card.derived` 读 broken_duration/max_drop/last_lock
-  - [ ] R5.3 PRD 形态反包从 `card.pool_item.zdp` + `card.indicators.max_high_pct/shadow_length_pct/ma_5_status` + `card.indicators.prev_amount_yi/amount_yi` 算放量对比
-  - [ ] R5.4 card=None 时保留既有 fallback 路径（不删 S070 自取数 / kline_rebuild 调用），card 非空时 override 从 card 读。**Q3=C 保留 pre_market_workflow 不改，其 match 调用不传 card → 走 fallback 路径行为不变**
-- [ ] R6：`StrategyMatcher.match()` 改为接受 `DiagnosisCard`（或 gene+indicators+pool_item+derived 多参数）
-  - [ ] R6.1 向后兼容：新参数默认 None，既有调用不传 card 行为不变
-  - [ ] R6.2 传 card 时从 card 取全部子对象传给 match_strategies
+### 3.2 16:30 异步预采集 + 战法 fallback
 
-### 3.3 前端选股池 Tab（Q5=A 复用既有组件 + Q4=A 战法指向 PreMarketBriefing）
+- [ ] R3：16:30 异步预采集（scheduled_tasks 新任务）
+  - [ ] R3.1 `scheduled_tasks.py` 加任务类型：每日 16:30 启动，预采集 derived（`compute_derived_features(get_snapshots_by_code)`）落库（derived 缓存表/字段）
+  - [ ] R3.2 不阻塞主流程——选股池 `run_funnel` 读预采集的 derived（不 per-code 实时算）；未预采集则 derived=None 降级
+- [ ] R4：战法 fallback（card.derived=None 时战法层自补）
+  - [ ] R4.1 `match_strategies` weak_turn_strong：card.derived=None 时战法层调 `get_snapshots_by_code` + `compute_derived_features` 自补（B2 fallback 保留，card=None 走原路径）
+  - [ ] R4.2 card.derived 非空（异步预采集落库）→ 直接读，不重算
 
-- [ ] R7：`Workflow.tsx` 加两级 Tab 导航（选股池 / 战法）
-  - [ ] R7.1 选股池 Tab：调既有 `runFunnel(stage, date)` API，用 `FunnelLayers`（独立组件 `candidate/FunnelLayers.tsx`）+ `SelectionPipeline`（`Candidates.tsx` 已有独立使用先例）展示漏斗 R1→R2→R3 三层 + final_candidates。不新建组件，不复用 PreMarketBriefing 局部函数 CandidateFunnelEmbed
-  - [ ] R7.2 选股池 Tab 不调 `/api/workflow/pre-market`（解耦，直接调选股池 API）
-  - [ ] R7.3 选股池 Tab 展示市场宽度 market_context（breadth/炸板率/封板率/连板高度）—— 复用 DailyReview 的展示样式
-- [ ] R8：战法 Tab 保留既有战法流入口卡片网格（7 个卡片：首板流/弱转强接力/反包流等）
-  - [ ] R8.1 战法卡片 `to` 指向 `/workflow/pre-market?strategy={code}`（Q4=A 复用 PreMarketBriefing，已实现）
-  - [ ] R8.2 PreMarketBriefing 的 `?strategy=` 自动选中战法 Tab（已实现 C2 修复 + 前端战法选项已补 PRD 2 战法）
-  - [ ] R8.3 战法命中展示在 PreMarketBriefing 的 StrategyGroupTabs + scored_candidates + P2RiskPanel（已实现）
+### 3.3 §44 降级（工程底线 → 参考性建议）
 
-### 3.4 pre_market_workflow 保留不改（Q3=C 三入口并存）
+- [ ] R5：§44（lift bar）从工程底线降级为参考性建议
+  - [ ] R5.1 `CLAUDE.md` §1.2：§44 从"必过 gate"改为"参考性建议"（设计方案经深度调研，不阻塞实现）
+  - [ ] R5.2 §44 验证移到设计阶段（验证设计方案）+ 回溯模块（独立模块，引入 §44 作为回溯方案之一，长期积累数据后跑）
 
-- [ ] R9：`pre_market_workflow.run()` **保留原样不改**
-  - [ ] R9.1 pre_market_workflow 继续做 ①获取涨停池 ②候选池筛选 ③战法匹配 ④仓位建议 ⑤S079 后处理 ⑥推送（既有行为不变）
-  - [ ] R9.2 选股池 Tab + 战法 Tab 是**新增独立入口**，和 pre_market_workflow（盘前简报 `/workflow/pre-market`）并存
-  - [ ] R9.3 用户可从选股池 Tab 独立看选股池、从战法 Tab 独立看战法卡片、从盘前简报看完整串联视图。三入口并存，不冲突
-  - [ ] R9.4 旧入口（盘前简报）保留过渡，用户逐渐迁移到新入口。未来视使用情况决定是否废弃旧入口
+### 3.4 战法从 DiagnosisCard 读因子 + 自定 R2/R3 + fallback
+
+- [ ] R6：`match_strategies` 加 `card` 参数（默认 None 向后兼容）
+  - [ ] R6.1 既有 9 战法从 `card.gene_score` 读 + 自定 R2/R3 阈值
+  - [ ] R6.2 PRD 弱转强接力从 `card.pool_item`/`card.derived`/`card.indicators` 读；card.derived=None 时 fallback 自补（R4）
+  - [ ] R6.3 PRD 形态反包从 `card.pool_item.zdp`/`card.indicators` 读 + 自定 R3 阈值
+  - [ ] R6.4 card=None 时走既有 fallback（pre_market_workflow 不传 card，行为不变）
+- [ ] R7：`StrategyMatcher.match/match_batch` 加 card/cards_map 透传
+
+### 3.5 前端选股池 Tab + 战法 Tab（Q5=A 复用既有组件）
+
+- [ ] R8：`Workflow.tsx` 两级 Tab（选股池 / 战法），tab 在最顶（PageHeader 上）
+  - [ ] R8.1 选股池 Tab：调 `candidatesApi.runFunnel` + `FunnelLayers`（R1 全涨停 + 因子）+ `SelectionPipeline`（final_candidates 全因子 DiagnosisCard 详情）
+  - [ ] R8.2 选股池 Tab 不调 `/api/workflow/pre-market`
+  - [ ] R8.3 战法 Tab：保留既有 7 卡片网格，to 指向 `/workflow/pre-market?strategy=`
+- [ ] R9：每层选股结果详情显示该层相关因子；终选（final_candidates）显示所有因子（DiagnosisCard 3 子对象 + IndicatorSet 全字段）
+
+### 3.6 pre_market_workflow 保留不改（Q3=C 三入口并存）
+
+- [ ] R10：`pre_market_workflow.run()` 保留原样不改（三入口并存）
 
 ---
 
@@ -212,84 +208,82 @@
 
 | 文件 | 改动 |
 |---|---|
-| `backend/candidate_funnel/models.py`（修改） | DiagnosisCard 加 3 字段（gene_score/pool_item/derived）；IndicatorSet 加 12 字段（last_close/open/change_amt/pe_ttm/mcap_yi/pb/limit_up_price/limit_down_price/sector_net_inflow/sector_inflow/sector_outflow/prev_amount_yi）|
-| `backend/candidate_funnel/sources/gene.py`（修改） | 扩展 genes dict 存完整 GeneScore 对象 |
-| `backend/candidate_funnel/sources/activity.py`（修改） | 已调 tencent_quote，扩展读 vals[4/5/31/39/44/46/47/48] 取 8 新字段；已取 K线 bars 算 prev_amount_yi |
-| `backend/candidate_funnel/sources/fund_flow.py`（修改） | 扩展取板块资金 3 字段（sector_net_inflow/inflow/outflow，从 stock_fund_flow_industry 或 fetch_sector_flow）|
-| `backend/candidate_funnel/sources/`（新增 source） | 涨停池原始 dict source（从 em_zt_topic_pool 取 lbc/zdp/fbt/zbc/zje/hybk）+ S070 R7 派生 source |
-| `backend/candidate_funnel/diagnosis.py`（修改） | build_diagnosis_card 塞入 gene_score/pool_item/derived |
-| `backend/limitup_strategy.py`（修改） | match_strategies 各 elif 从 DiagnosisCard 读因子，删各自取数代码 |
-| `backend/strategies/strategy_matcher.py`（修改） | match() 改为接受 DiagnosisCard（或多参数） |
-| `backend/pre_market_workflow.py`（**不改**） | Q3=C 保留原样，三入口并存，不重构 |
+| `backend/candidate_funnel/funnel.py`（修改） | `_run_funnel_impl` **删 R2/R3 过滤**（`_filter_r2`/`_filter_r3` 调用），final_candidates = R1 全涨停 + 自选；yesterday_date + zt_pool_map + industry_map + per-code derived（懒加载/读预采集） |
+| `backend/candidate_funnel/models.py`（已改） | DiagnosisCard 加 3 字段；IndicatorSet 加 10 字段（limit_up/limit_down 复用既有，实际 10 新增） |
+| `backend/candidate_funnel/sources/gene.py`（已改） | genes dict 存 gene_obj 完整 GeneScore 对象 |
+| `backend/candidate_funnel/sources/activity.py`（已改） | 两路径新字段（kline 复算 + tencent_quote 当日） |
+| `backend/candidate_funnel/sources/fund_flow.py`（已改） | sectors 参数 + industry_map（zt pool hybk，em_get-backed，review HIGH 修复） |
+| `backend/candidate_funnel/sources/zt_pool_source.py`（已新增） | 涨停池原始 dict source（first_board_filter.fetch_zt_pool，em_get） |
+| `backend/candidate_funnel/sources/derived_source.py`（已新增） | S070 R7 派生 source（读预采集/实时算） |
+| `backend/candidate_funnel/diagnosis.py`（已改） | build_diagnosis_card 塞 3 子对象 + build_indicator_set 透传 10 字段 |
+| `backend/limitup_strategy.py`（修改） | match_strategies 加 card 参数（已改）+ **每战法自定 R2/R3 阈值**（新，R2/R3 从选股池下放）+ **derived=None 战法层 fallback 自补**（R4） |
+| `backend/strategies/strategy_matcher.py`（已改） | match/match_batch 加 card/cards_map |
+| `backend/scheduled_tasks.py`（修改） | **加 16:30 异步预采集任务类型**（derived 落库，不阻塞主流程，R3） |
+| `backend/pre_market_workflow.py`（**不改**） | Q3=C 保留原样，三入口并存 |
 | `backend/routers/workflow.py`（修改） | 选股池 API 透传 DiagnosisCard 含 3 子对象 |
-| `frontend/src/pages/Workflow.tsx`（修改） | 加两级 Tab（选股池/战法），选股池 Tab 调 runFunnel API |
-| `frontend/src/lib/candidates.ts`（修改） | DiagnosisCard 类型加 3 子对象字段 |
+| `frontend/src/pages/Workflow.tsx`（已改） | 两级 Tab（最顶）+ 选股池 Tab（FunnelLayers + SelectionPipeline 终选全因子） |
+| `frontend/src/lib/candidates.ts`（已改） | DiagnosisCard 类型加 3 子对象 + IndicatorSet 10 字段 |
+| `frontend/src/components/candidate/DiagnosisCard.tsx`（已改） | 展示 3 子对象 + 10 字段 |
+| `frontend/src/components/ui/FunnelLayerCard.tsx`（已改） | 每行显示该层因子（passedFactors） |
+| `frontend/src/components/pipeline/SelectionPipeline.tsx`（已改） | 终选可展开显示 final_candidates 全因子（FinalCandidatesNode） |
+| `CLAUDE.md`（修改） | §1.2 §44 从工程底线降级为参考性建议（R5） |
 
 ---
 
 ## 5. 设计方案
 
-### 5.1 解耦架构（选股池独立产出 → 战法复用既有页面）
+### 5.1 解耦架构（选股池 R1-only → 战法自定 R2/R3 + 异步预采集 + fallback）
 
 ```
-[选股池 Tab]（前端 Workflow.tsx 新增）
+[选股池 Tab]（前端 Workflow.tsx）
   调 runFunnel API → run_funnel() 产出 FunnelResult
+  选股池只 R1（全涨停 + 补因子），不做 R2/R3 过滤
   FunnelResult.final_candidates: list[DiagnosisCard]
-    DiagnosisCard 含：
-      ├── gene_score: GeneScore（既有9战法用，gene.py 扩展存完整对象）
-      ├── pool_item: dict（涨停池原始dict，lbc/zdp/fbt/zbc/fund/hybk）
-      ├── derived: dict（S070 R7 派生 T-1 昨日值，broken_duration/max_drop/last_lock）
-      ├── indicators: IndicatorSet（活跃度+资金流+K线派生+tencent_quote扩展+板块资金+prev_amount_yi）
-      ├── activity: ActivityAssessment
-      └── risk_flags: list[str]
-  展示：FunnelLayers（漏斗R1→R2→R3）+ final_candidates 候选矩阵 + market_context
-  不调 /api/workflow/pre-market，独立调选股池 API
+    DiagnosisCard 含：gene_score + pool_item + derived + indicators（全因子）
+  展示：FunnelLayers（R1 全涨停 + 因子）+ SelectionPipeline（终选全因子详情）
+  不调 /api/workflow/pre-market
 
-[战法 Tab]（前端 Workflow.tsx 既有）
-  展示战法流入口卡片网格（7个卡片：首板流/弱转强接力/反包流等）
-  点击卡片 → 跳转 /workflow/pre-market?strategy={code}（Q4=A 复用 PreMarketBriefing）
-  PreMarketBriefing 内部做战法匹配 + 仓位 + S079 后处理（既有链不改）
+[16:30 异步预采集]（scheduled_tasks 新任务）
+  收盘后 16:30 启动，预采集 derived（compute_derived_features(get_snapshots_by_code)）落库
+  不阻塞主流程；选股池读预采集的（不 per-code 实时算）；未预采集则 derived=None
 
-[盘前简报]（PreMarketBriefing 既有，Q3=C 保留不改）
-  /workflow/pre-market 完整串联视图（选股池→战法→仓位→风控→推送）
-  ?strategy= 选中战法 Tab（C2 修复已实现）
+[战法层]（match_strategies）
+  从 card 读因子 + 每战法自定 R2/R3 阈值（R2 活跃度/R3 催化从选股池下放）
+  card.derived=None（未预采集）→ 战法层 fallback 自补（get_snapshots_by_code + compute_derived_features）
+  card=None → 走既有 fallback（pre_market_workflow 不传 card，行为不变）
+
+[战法 Tab] + [盘前简报]（既有，不改，三入口并存）
 ```
 
-> **三入口并存**：选股池 Tab（独立看选股池）+ 战法 Tab（看战法卡片，点击进 PreMarketBriefing）+ 盘前简报（完整串联视图）。不新增第二条战法+仓位+S079 链。
+### 5.2 R1→R2→R3 漏斗为何收回（grill reframe）
 
-### 5.2 备选方案为何不选
-
-- **S083 漏斗接入 pre_market_workflow（耦合方向）**：把漏斗塞进 pre_market_workflow 内部，选股池和战法仍串在一个函数里，不解耦
-- **Q6=A 全部补进 IndicatorSet**：IndicatorSet 膨胀到 23 字段，且 S070 R7 分时派生是盘中数据塞进盘前指标语义不对
-- **Q5=B 改侧边栏**：改动面大，分散的 /candidates + /value-funnel + /limitup 合并到统一入口涉及多页面迁移
-- **Q5=C 新建路由**：新建 /pools + /strategies 改动面大
+- R2（活跃度：换手/成交/北向）/R3（催化：竞价/公告/板块）是**具体战法筛选逻辑**，放选股池层会预筛掉其他战法标的（首板流纯资金板被 R3 催化过滤；weak_turn_strong 炸板股被 R1 涨停基因过滤；连板高度标的无当日催化被 R3 过滤）
+- 选股池应是**所有涨停战法标的的 superset**（全涨停 + 因子），R2/R3 下放战法层（每战法自定阈值）—— 这才是真"解耦"（选股池独立产出，战法独立消费+自筛）
 
 ### 5.3 工程约束
 
-- **不破坏既有 9 战法**：match_strategies 新参数默认 None，既有调用不传 card 行为不变
-- **不破坏 S079 后处理**：cap_by_market_phase + DragonTigerSeatFilter 在战法匹配之后串，不改
-- **不破坏 S070 R7 派生**：derived 子对象盘前 snapshots 未采集时标 None 降级
-- **em_get 防封底线**：涨停池原始 dict 从 astock.em_zt_topic_pool 取（走 em_get 限流）
-- **数据缺失透明**：3 子对象各自管理缺失，gene_score=None/pool_item=None/derived=None 各标原因
-- **选股池 API 复用**：前端选股池 Tab 调既有 runFunnel API，不新建端点
+- **不破坏既有 9 战法**：match_strategies card 默认 None，既有调用行为不变
+- **不破坏 S079 后处理**：cap_by_market_phase + DragonTigerSeatFilter 不改
+- **em_get 防封底线**：zt_pool_source 走 first_board_filter.fetch_zt_pool（em_get + 24h 缓存）；sectors 走 market.get_overview（5min 缓存）；individual_info 已改 industry_map（zt pool hybk，em_get-backed，review HIGH 修复）
+- **不臆造**：3 子对象各自 None 降级；pe_ttm/pb/mcap_yi 历史日 None+missing（tencent_quote 仅当日）
+- **异步不阻塞**：16:30 预采集落库，选股池读预采集（不 per-code 实时算 derived）
+- **§44 降级**：参考性建议，不强制 gate（设计方案经深度调研；§44 移设计期 + 回溯模块）
 
 ---
 
 ## 6. 验收标准
 
-- [ ] AC1：DiagnosisCard 含 3 子对象（gene_score/pool_item/derived），选股池一站式输出所有战法盘前因子
-- [ ] AC2：gene.py 扩展存完整 GeneScore 对象（不只存 gene_score 数字），DiagnosisCard.gene_score 非 None
-- [ ] AC3：pool_item 从 astock.em_zt_topic_pool 取（lbc/zdp/fbt/zbc），走 em_get 限流
-- [ ] AC4：derived 从 S070 R7 compute_derived_features 取（broken_duration/max_drop/last_lock），盘前未采集时 None 降级
-- [ ] AC5：IndicatorSet 含 12 扩展字段（tencent_quote 8 + 板块资金 3 + 前日成交额 1）
-- [ ] ~~AC5a/AC5b/AC5c/AC5d~~ **移 backlog**（C 段 22 因子：市场宽度/龙虎榜席位明细/公告催化/同花顺涨停原因/封单变化率/N日涨幅/换手分位/板块连续流入）—— 本 spec 只做 B 段 17 因子（3 子对象 + 12 IndicatorSet 字段），C 段因子作为后续增强另立 task，不在本 spec 验收范围
-- [ ] AC6：match_strategies 各 elif 从 DiagnosisCard 读全部因子，不调 astock/kline/S070（删重复取数代码）
-- [ ] AC7：既有 9 战法回归通过（传/不传 card 命中一致）
-- [ ] AC7a：PRD 2 战法（弱转强接力/形态反包）回归通过 —— card=None 走 fallback 路径行为与 S081 落地时一致；card 非空从 card 读因子命中一致
-- [ ] AC8：前端 Workflow.tsx 有两级 Tab（选股池/战法），选股池 Tab 调 runFunnel API 展示漏斗 + 候选
-- [ ] AC9：战法 Tab 保留既有战法流入口卡片，点击进入战法特定筛选（从选股池缓存读 DiagnosisCard）
-- [ ] AC10：三入口并存（选股池Tab独立 + 战法Tab复用PreMarketBriefing + 盘前简报保留不改），新增两入口不修改既有 pre_market_workflow 链路
-- [ ] AC11：所有研判/买卖时机/仓位参数挂轻量风险提醒（CLAUDE.md §1.1 弱合规）
+- [ ] AC1：选股池只 R1（全涨停），不做 R2/R3 过滤（`_filter_r2`/`_filter_r3` 删除/下放战法）
+- [ ] AC2：DiagnosisCard 含 3 子对象（gene_score/pool_item/derived）+ IndicatorSet 10 字段（已实现）
+- [ ] AC3：R2/R3 下放战法——match_strategies 每战法自定活跃度/催化阈值
+- [ ] AC4：16:30 异步预采集 derived 落库（scheduled_tasks 新任务），不阻塞主流程
+- [ ] AC5：战法 fallback——card.derived=None 时战法层自补（get_snapshots_by_code + compute_derived_features）
+- [ ] AC6：§44 降级——CLAUDE.md §1.2 改为参考性建议
+- [ ] AC7：match_strategies card 参数（向后兼容），既有 9 战法 + PRD 2 战法回归通过
+- [ ] AC8：前端两级 Tab（最顶）+ 选股池 Tab（FunnelLayers + SelectionPipeline 终选全因子）
+- [ ] AC9：每层选股结果详情显示该层因子；终选显示所有因子（DiagnosisCard 3 子对象 + IndicatorSet 全字段）
+- [ ] AC10：三入口并存（选股池 Tab + 战法 Tab + 盘前简报），pre_market_workflow 不改
+- [ ] AC11：轻量风险提醒（CLAUDE.md §1.1 弱合规）
 
 ---
 

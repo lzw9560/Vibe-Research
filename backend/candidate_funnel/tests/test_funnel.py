@@ -81,10 +81,14 @@ class TestRunFunnelEndToEnd(unittest.TestCase):
         self.assertEqual(r1.input_count, 3)
         self.assertEqual(r1.output_count, 2)
         r2 = next(l for l in result.layers if l.layer_id == "R2")
-        self.assertNotIn("000001", r2.output_codes)
+        # S084 R1-only：R2 不过滤活跃度，000001（冷股）保留在 R2 输出
+        self.assertIn("000001", r2.output_codes)
         self.assertIn("600519", r2.output_codes)
         final_codes = [c.code for c in result.final_candidates]
+        # S084 R1-only：final = R1 全涨停 ∪ 自选（不经 R2/R3 收敛）
         self.assertIn("600519", final_codes)
+        self.assertIn("000001", final_codes)  # R2 不再过滤冷股 → 进最终候选
+        self.assertIn("002594", final_codes)  # 自选并行通道
         self.assertEqual(result.sentiment_phase, "晴天")
 
     def test_each_layer_output_feeds_next_input(self):

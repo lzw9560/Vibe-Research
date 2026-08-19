@@ -69,6 +69,21 @@ class IndicatorSet(BaseModel):
     shadow_length_pct: Optional[float] = None  # 上影线长度 = (high/close - 1)*100
     ma_5_status: Optional[str] = None          # 5日均线状态 "Upward"/"Downward"/"Flat"
     prev_turnover_pct: Optional[float] = None  # 前日换手率（供 vol_ratio_1d 计算）
+    # S084：选股池战法解耦 — tencent_quote 扩展 + 板块资金 + 前日成交额
+    #   limit_up/limit_down 复用既有 L38-39，不新增同名
+    #   取数路径分两路（B4 决议）：
+    #     - kline prev_bar 复算（历史日可取）：open / change_amt / last_close / prev_amount_yi
+    #     - tencent_quote 当日取（口径=当前估值非 T-1）：pe_ttm / mcap_yi / pb
+    last_close: Optional[float] = None       # 昨收（前日 K线 bar.close）
+    open: Optional[float] = None             # 开盘（前日 K线 bar.open；盘中实时另取）
+    change_amt: Optional[float] = None       # 涨跌额（前日 close - prev_close）
+    pe_ttm: Optional[float] = None           # 市盈率TTM（tencent_quote 当日，口径=当前估值非 T-1）
+    mcap_yi: Optional[float] = None          # 总市值(亿)（tencent_quote 当日）
+    pb: Optional[float] = None              # 市净率（tencent_quote 当日）
+    sector_net_inflow: Optional[float] = None  # 板块净流入（market.get_overview 昨日，行业级）
+    sector_inflow: Optional[float] = None      # 板块流入（行业级）
+    sector_outflow: Optional[float] = None     # 板块流出（行业级）
+    prev_amount_yi: Optional[float] = None     # 前日成交额(亿)（前日 bar.amount/1e8）
     # 数据缺失透明（AC6）：field -> 原因
     missing: dict[str, str] = {}
 
@@ -140,6 +155,11 @@ class DiagnosisCard(BaseModel):
     eight_standards: Optional["EightStandardResult"] = None
     capped: bool = False  # 八项未过≥3 → 最终得分封顶 55
     cap_reason: Optional[str] = None
+    # S084：选股池战法解耦 3 子对象（各默认 None，既有快照无字段降级；Q6=B）
+    # 用 Optional[dict] 而非 GeneScore 模型：避免跨模块 import 耦合 + model_dump(mode='json') 序列化安全
+    gene_score: Optional[dict] = None        # 涨停基因完整对象 dump（total_score/factors/zt_count_250d/...）
+    pool_item: Optional[dict] = None         # 涨停池原始 dict（lbc/zbc/fbt/zdp/zje/hybk，走 em_get 限流）
+    derived: Optional[dict] = None           # S070 R7 分时派生（broken_duration_min/max_drop_pct/last_lock_time），盘前未采集时 None 降级
 
 
 # ---------- S057 八项标准 ----------
