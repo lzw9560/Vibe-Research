@@ -21,6 +21,7 @@ spec §13.0/§0e：
 from __future__ import annotations
 
 import sqlite3
+import logging
 from dataclasses import dataclass
 
 from config import GENE_SCORES_DB_PATH
@@ -472,7 +473,22 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
         for g in genes
     ]
 
-    scored = score_candidates(candidates, weather_state, signal_date)
+    # S086 R7：取涨停池建 pool_item_map 传给 score_candidates，
+    # 供 storm_reversal(fbt)/PRD 战法(lbc/zdp/p) 取因子 + R2 真实入场价 pool_item.p。
+    # fetch_zt_pool → em_zt_topic_pool 走 em_get 限流 + 24h 缓存（防封底线）；
+    # 失败/空池 → 空 map 降级，entry_price fallback gene.total_score + "价格代理"（A7）。
+    pool_item_map: dict[str, dict] = {}
+    try:
+        from strategies.first_board_filter import fetch_zt_pool  # noqa: PLC0415
+        for p in fetch_zt_pool(signal_date) or []:
+            code = str(p.get("c", "") or "").strip()
+            if code:
+                pool_item_map[code] = p
+    except Exception as exc:  # noqa: BLE001 — 取池失败降级空 map，不阻断前向测试
+        logging.getLogger("vibe-research").warning(
+            "forward_test 取涨停池建 pool_item_map 失败 %s: %s", signal_date, exc,
+        )
+    scored = score_candidates(candidates, weather_state, signal_date, pool_item_map)
     mult, _ = calendar_factor(signal_date)
 
     recommendations = [

@@ -387,3 +387,86 @@ class TestGetForwardTestSummary:
         assert result.is_exploratory is True
         assert result.lift < 1.0  # lift<1 但 n<30
         assert result.validation_status == "探索性"  # 探索性优先，非劣于随机
+
+
+# ===========================================================================
+# S086 R7：run_daily_forward_test 接 pool_item_map（涨停池→score_candidates）
+# ===========================================================================
+
+def test_run_daily_forward_test_passes_pool_item_map(monkeypatch):
+    """S086 R7：run_daily_forward_test 取涨停池建 pool_item_map 传给 score_candidates。
+
+    验证：fetch_zt_pool 的原始池（按 "c" 字段）建 {code: pool_item} 映射，
+    作为第 4 个位置参传给 score_candidates（供 storm_reversal fbt / R2 真实入场价）。
+    fetch_zt_pool 失败 → 空 map 降级（A7 fallback），不阻断。
+    """
+    from strategies import forward_test as ft
+    from limitup_screener.models import GeneScore
+
+    gene = GeneScore(
+        code="000001", name="X", total_score=70.0,
+        factors={"封板率": 80, "涨停频次": 30, "次日溢价率": 50, "红盘率": 60, "炸板后溢价": 0},
+        wilson_adjusted=70.0, qualify=True, high_gene=False,
+        last_zt_dates=[], zt_count_250d=3, date="2026-08-18",
+    )
+    monkeypatch.setattr("limitup_screener.data.load_gene_scores", lambda d: [gene])
+
+    # fetch_zt_pool 返回含 fbt 的涨停池（"c" 字段做 code）
+    monkeypatch.setattr(
+        "strategies.first_board_filter.fetch_zt_pool",
+        lambda d: [{"c": "000001", "fbt": 93000, "p": 10.0, "lbc": 2, "n": "X"}],
+    )
+
+    captured: dict = {}
+
+    def _fake_score(cands, weather, trade_date, pool_item_map=None):
+        captured["pool_item_map"] = pool_item_map
+        captured["n_cands"] = len(cands)
+        return [{"code": "000001", "name": "X", "strategy_code": "first_plate",
+                 "strategy_name": "首板", "strategy_score": 70, "score_breakdown": {}}]
+
+    monkeypatch.setattr("strategies.strategy_funnel_registry.score_candidates", _fake_score)
+    monkeypatch.setattr("strategies.calendar_factor.calendar_factor", lambda d: (1.0, ""))
+    monkeypatch.setattr("strategies.forward_test.record_daily_recommendations", lambda d, recs: len(recs))
+    monkeypatch.setattr("strategies.forward_test._record_universe_codes", lambda d, genes: None)
+
+    r = ft.run_daily_forward_test("2026-08-18", "晴天")
+
+    # pool_item_map 按 "c" 建，含完整 raw 池停池 dict（fbt/p/lbc 供战法取因子）
+    assert captured["pool_item_map"] == {
+        "000001": {"c": "000001", "fbt": 93000, "p": 10.0, "lbc": 2, "n": "X"},
+    }
+    assert captured["n_cands"] == 1
+    assert r["recommendations"] == 1
+
+
+def test_run_daily_forward_test_degrades_when_fetch_zt_pool_fails(monkeypatch):
+    """S086 R7/A7：fetch_zt_pool 异常 → 空 pool_item_map 降级，score_candidates 仍被调用（A7 价格代理 fallback）。"""
+    from strategies import forward_test as ft
+    from limitup_screener.models import GeneScore
+
+    gene = GeneScore(
+        code="000001", name="X", total_score=70.0,
+        factors={"封板率": 80, "涨停频次": 30, "次日溢价率": 50, "红盘率": 60, "炸板后溢价": 0},
+        wilson_adjusted=70.0, qualify=True, high_gene=False,
+        last_zt_dates=[], zt_count_250d=3, date="2026-08-18",
+    )
+    monkeypatch.setattr("limitup_screener.data.load_gene_scores", lambda d: [gene])
+
+    def _boom(_d):
+        raise RuntimeError("em_get 限流触发")
+    monkeypatch.setattr("strategies.first_board_filter.fetch_zt_pool", _boom)
+
+    captured: dict = {}
+
+    def _fake_score(cands, weather, trade_date, pool_item_map=None):
+        captured["pool_item_map"] = pool_item_map
+        return []
+    monkeypatch.setattr("strategies.strategy_funnel_registry.score_candidates", _fake_score)
+    monkeypatch.setattr("strategies.calendar_factor.calendar_factor", lambda d: (1.0, ""))
+    monkeypatch.setattr("strategies.forward_test.record_daily_recommendations", lambda d, recs: 0)
+    monkeypatch.setattr("strategies.forward_test._record_universe_codes", lambda d, genes: None)
+
+    ft.run_daily_forward_test("2026-08-18", "晴天")
+    # 失败降级为空 map（不抛、不阻断；entry_price 走 A7 gene.total_score 代理）
+    assert captured["pool_item_map"] == {}
