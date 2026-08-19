@@ -42,7 +42,23 @@ export function DiagnosisCardView({ card }: { card: Card }) {
         {row("北向", ind.northbound, "万")}
         {row("竞价开盘", ind.auction_open_pct != null ? `${(ind.auction_open_pct * 100).toFixed(2)}%` : null)}
         {row("板块资金", ind.sector_flow)}
+        {/* S084 R4.1/R4.2/R4.3：tencent_quote 扩展 + 板块资金 + 前日成交额 */}
+        {row("昨收", ind.last_close)}
+        {row("开盘", ind.open)}
+        {row("涨跌额", ind.change_amt)}
+        {row("市盈率TTM", ind.pe_ttm)}
+        {row("总市值", ind.mcap_yi, "亿")}
+        {row("市净率", ind.pb)}
+        {row("板块净流入", ind.sector_net_inflow, "万")}
+        {row("板块流入", ind.sector_inflow, "万")}
+        {row("板块流出", ind.sector_outflow, "万")}
+        {row("前日成交", ind.prev_amount_yi, "亿")}
       </div>
+
+      {/* S084 Q6=B：3 子对象——选股池一站式战法盘前因子 */}
+      {card.gene_score && <GeneScoreBlock data={card.gene_score} />}
+      {card.pool_item && <PoolItemBlock data={card.pool_item} />}
+      {card.derived && <DerivedBlock data={card.derived} />}
 
       <div className="text-sm">
         <div className="text-muted-foreground mb-1">企稳信号：</div>
@@ -121,6 +137,60 @@ function sig(label: string, v: boolean | null | undefined) {
     <div className="flex justify-between">
       <span className="text-muted-foreground">{label}</span>
       <span>{v ? "命中" : "未命中"}</span>
+    </div>
+  );
+}
+
+// S084 Q6=B：3 子对象展示块（gene_score/pool_item/derived）
+function GeneScoreBlock({ data }: { data: Record<string, unknown> }) {
+  const gs = data as { total_score?: number; zt_count_250d?: number; high_gene?: boolean; qualify?: boolean; factors?: Record<string, number | null> };
+  const factorEntries = gs.factors ? Object.entries(gs.factors) : [];
+  return (
+    <div className="text-sm">
+      <div className="text-muted-foreground mb-1">涨停基因（GeneScore）：</div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+        {row("基因总分", gs.total_score)}
+        {row("250日涨停", gs.zt_count_250d)}
+        {row("高基因", gs.high_gene == null ? null : gs.high_gene ? "是" : "否")}
+        {row("合格", gs.qualify == null ? null : gs.qualify ? "是" : "否")}
+      </div>
+      {factorEntries.length > 0 && (
+        <div className="mt-1 text-xs text-muted-foreground">
+          因子：{factorEntries.map(([k, v]) => `${k}=${v ?? "—"}`).join(" · ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PoolItemBlock({ data }: { data: Record<string, unknown> }) {
+  const p = data as { lbc?: number; zbc?: number; fbt?: string; zdp?: number; zje?: number; hybk?: string };
+  return (
+    <div className="text-sm">
+      <div className="text-muted-foreground mb-1">涨停池原始 dict（pool_item）：</div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+        {row("连板数", p.lbc)}
+        {row("炸板次数", p.zbc)}
+        {row("首封时间", p.fbt)}
+        {row("涨幅%", p.zdp)}
+        {row("涨停价", p.zje)}
+        {row("行业", p.hybk)}
+      </div>
+    </div>
+  );
+}
+
+function DerivedBlock({ data }: { data: Record<string, unknown> }) {
+  const d = data as { broken_duration_min?: number; max_drop_pct?: number; last_lock_time?: string; data_status?: string };
+  return (
+    <div className="text-sm">
+      <div className="text-muted-foreground mb-1">S070 R7 分时派生（derived，T-1 昨日）：</div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+        {row("炸板时长(分)", d.broken_duration_min)}
+        {row("最大回撤%", d.max_drop_pct)}
+        {row("最后封死", d.last_lock_time)}
+        {row("数据状态", d.data_status)}
+      </div>
     </div>
   );
 }

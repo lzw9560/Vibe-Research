@@ -130,6 +130,11 @@ def build_indicator_set(
     ind.dragon_tiger_hot_money_relay = f.get("dragon_tiger_hot_money_relay")
     ind.northbound = f.get("northbound")
 
+    # S084 R4.2：板块资金 3 字段（行业级，fund source 从 market.get_overview()['sectors'] 匹配）
+    ind.sector_net_inflow = f.get("sector_net_inflow")
+    ind.sector_inflow = f.get("sector_inflow")
+    ind.sector_outflow = f.get("sector_outflow")
+
     # S057：流通市值——activity source 已取（tencent_quote.float_cap），塞入 IndicatorSet
     ind.float_market_cap = a.get("float_market_cap")
 
@@ -138,6 +143,15 @@ def build_indicator_set(
     ind.shadow_length_pct = a.get("shadow_length_pct")
     ind.ma_5_status = a.get("ma_5_status")
     ind.prev_turnover_pct = a.get("prev_turnover_pct")
+
+    # S084 R4.1/R4.3：tencent_quote 扩展 + 前日成交额（activity source，按历史日路径分字段）
+    ind.last_close = a.get("last_close")
+    ind.open = a.get("open")
+    ind.change_amt = a.get("change_amt")
+    ind.pe_ttm = a.get("pe_ttm")
+    ind.mcap_yi = a.get("mcap_yi")
+    ind.pb = a.get("pb")
+    ind.prev_amount_yi = a.get("prev_amount_yi")
 
     au = auction.get(code, {})
     ind.auction_open_pct = au.get("auction_open_pct")
@@ -196,11 +210,15 @@ def build_diagnosis_card(
     eff: BaseThreshold,
     market_ctx: dict | None = None,
     as_of: datetime | None = None,
+    gene_obj: Any = None,           # S084 R1：GeneScore 完整对象（model_dump 塞 card.gene_score）
+    pool_item: dict | None = None,  # S084 R2：涨停池原始 dict
+    derived: dict | None = None,    # S084 R3：S070 R7 分时派生
 ) -> DiagnosisCard:
     """聚合 → DiagnosisCard（AC4）。risk_flags 为客观标注（AC8/§8 极端估值）。
 
     S057：增八项标准三态判定（check_eight_standards），结果挂入 eight_standards 字段；
     未过数≥3 标 capped=True + cap_reason（封顶阈值在 funnel.py 消费侧实施）。
+    S084：增 3 子对象（gene_score/pool_item/derived），各默认 None 降级不臆造。
     """
     activity = assess_activity(ind, eff)
     stabilization = detect_stabilization(ind, market_ctx)
@@ -210,6 +228,12 @@ def build_diagnosis_card(
     cap_reason = (
         f"八项标准未过{eight.fail_count}项，得分封顶{_CAP_THRESHOLD}"
         if capped else None
+    )
+    # S084 R1：gene_obj → model_dump(mode='json')；非 pydantic 对象（如 mock）防御性跳过
+    gene_score = (
+        gene_obj.model_dump(mode="json")
+        if gene_obj is not None and hasattr(gene_obj, "model_dump")
+        else None
     )
     return DiagnosisCard(
         code=code,
@@ -222,6 +246,9 @@ def build_diagnosis_card(
         eight_standards=eight,
         capped=capped,
         cap_reason=cap_reason,
+        gene_score=gene_score,
+        pool_item=pool_item,
+        derived=derived,
     )
 
 

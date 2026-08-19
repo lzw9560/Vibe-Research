@@ -52,5 +52,6 @@ def fetch_genes(date: str) -> dict[str, dict]:
             "gene_score": getattr(g, "total_score", None),
             "high_gene": getattr(g, "high_gene", False),
             "qualify": getattr(g, "qualify", False),
+            "gene_obj": g,  # S084 R1：存完整 GeneScore 对象（diagnosis.py 塞 card.gene_score）
         }
     return out

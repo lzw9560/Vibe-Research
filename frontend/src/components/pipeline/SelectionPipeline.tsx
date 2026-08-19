@@ -7,6 +7,7 @@ import { useMultiRotation } from "@/lib/query/strategy";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { NonLimitupLane } from "./NonLimitupPlaceholder";
 import type { FunnelLayer, FunnelResult, DiagnosisCard } from "@/lib/candidates";
+import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
 
 interface RerunHandlers {
   rerunLayer: (layerId: string, date?: string, body?: Record<string, unknown>) => Promise<unknown>;
@@ -70,7 +71,7 @@ export function SelectionPipeline({
               />
             ))}
             <ArrowDown />
-            <PipelineNode label="终选" sub="final_candidates" count={finals.length} />
+            <FinalCandidatesNode finals={finals} />
             <ArrowDown label="战法分" />
             {mode === "full" && hasScored ? (
               <ScoredBranch count={scoredCandidatesCount!} />
@@ -97,6 +98,38 @@ function PipelineNode({ label, sub, count }: { label: string; sub?: string; coun
         </div>
         <div className="text-lg font-bold text-primary">{count ?? "—"}</div>
       </div>
+    </div>
+  );
+}
+
+// S084：终选节点可展开，展示 final_candidates（DiagnosisCard）全部因子
+//   spec §5.1：选股池 Tab = FunnelLayers（三层）+ final_candidates 候选矩阵（含所有因子）
+function FinalCandidatesNode({ finals }: { finals: DiagnosisCard[] }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className={NODE}>
+      <button onClick={() => setExpanded((v) => !v)} className="w-full text-left">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">终选（final_candidates）</div>
+            <div className="text-[11px] text-muted-foreground">含所有因子：gene_score/pool_item/derived/indicators</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-primary">{finals.length}</span>
+            <span className="text-[10px] text-muted-foreground">{expanded ? "▼" : "▶"}</span>
+          </div>
+        </div>
+      </button>
+      {expanded && finals.length > 0 && (
+        <div className="mt-2 space-y-2 border-t border-border/30 pt-2">
+          {finals.map((c) => (
+            <DiagnosisCardView key={c.code} card={c} />
+          ))}
+        </div>
+      )}
+      {expanded && finals.length === 0 && (
+        <div className="mt-2 text-xs text-muted-foreground">无最终候选</div>
+      )}
     </div>
   );
 }

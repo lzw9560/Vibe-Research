@@ -454,6 +454,7 @@ class TaskExecutor:
             "first_board_t1_review": self._execute_first_board_t1_review,  # S075：T+1 溢价评分+复盘报告+飞书
             "first_board_quote_probe": self._execute_first_board_quote_probe,  # S076：盘中多源行情探查（临时研究）
             "zt_history_snapshot": self._execute_zt_history_snapshot,  # S078：涨停历史 snapshot 数据地基
+            "derived_precompute": self._execute_derived_precompute,  # S084 C1：盘后 derived 异步预采集
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -1283,6 +1284,102 @@ def _execute_zt_history_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any
 TaskExecutor._execute_zt_history_snapshot = _execute_zt_history_snapshot
 
 
+# ===========================================================================
+# S084 C1/C2：盘后 derived 异步预采集 executor（17:00 工作日，龙虎榜 16:30 更新后）
+# ===========================================================================
+
+def _execute_derived_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S084 C2：17:00 盘后异步预采集——对昨日涨停股全量算 derived 落 seal_derived_features 表。
+
+    取 yesterday（默认 last_trading_date(today-1)，与 funnel 的 yesterday_date 同口径）→
+    zt_pool_source.fetch_zt_pool_map(yesterday) 取昨日涨停 codes → 对每只
+    get_snapshots_by_code(code, yesterday) + compute_derived_features →
+    persist_derived_features 写 seal_derived_features(date=yesterday)。选股池
+    derived_source 后续读 seal_derived_features（不 per-code 实时算）。
+
+    缺快照 / data_status='missing' → 跳过（不臆造）。单只失败不阻塞其余（catch 跳过）。
+    整体失败 catch 不抛，返 status=error（预采集是增强，不阻塞主流程）。
+    S084 follow-up：原 derived_results 表合并入 seal_derived_features（字段子集），
+    复用 persist_derived_features 持久化（DRY，与盘中 collect 同写路径）。
+    """
+    from datetime import date as _date, timedelta as _td
+    from vr_paths import last_trading_date as _last_td
+
+    try:
+        from candidate_funnel.sources import zt_pool_source
+        from risk.seal_intraday_collector import (
+            run_migrations, get_snapshots_by_code, _get_conn, _DB_LOCK,
+        )
+        from strategies.intraday_features import (
+            compute_derived_features, persist_derived_features,
+        )
+    except Exception as e:
+        logger.warning("[derived_precompute] 依赖导入失败: %s", e)
+        return {"status": f"error: {e}"}
+
+    # yesterday：与 funnel._run_funnel_impl 同口径（last_trading_date(today-1)），
+    # payload.get("date") 允许指定回填昨日日期。
+    yesterday = payload.get("date") or _last_td(_date.today() - _td(days=1)).isoformat()
+
+    # 幂等建表（fresh env 自愈；已应用则 no-op），避免 seal_derived_features 缺表致写失败
+    try:
+        run_migrations()
+    except Exception as e:
+        logger.warning("[derived_precompute] 迁移失败（继续，首行写可能失败）: %s", e)
+
+    try:
+        zt_map = zt_pool_source.fetch_zt_pool_map(yesterday)
+    except Exception as e:
+        logger.warning("[derived_precompute] %s 涨停池取数失败: %s", yesterday, e)
+        return {"date": yesterday, "status": f"error: {e}", "codes": 0, "written": 0}
+
+    codes = list(zt_map.keys())
+    if not codes:
+        logger.info("[derived_precompute] %s 昨日涨停池为空（非交易日或采集失败）", yesterday)
+        return {"date": yesterday, "status": "ok", "codes": 0, "written": 0, "skipped": 0}
+
+    written = 0
+    skipped = 0
+    conn = _get_conn()
+    try:
+        with _DB_LOCK:
+            for code in codes:
+                try:
+                    snaps = get_snapshots_by_code(code, yesterday)
+                    if not snaps:
+                        skipped += 1
+                        continue  # 缺快照跳过，不臆造
+                    derived = compute_derived_features(snaps)
+                    if derived.get("data_status") == "missing":
+                        skipped += 1
+                        continue
+                    # 复用 persist_derived_features 写 seal_derived_features
+                    # （INSERT OR REPLACE 幂等，同 (date,code) 重跑覆盖；S084 follow-up：
+                    #   合并自 derived_results，DRY 复用战法层持久化函数，与盘中 collect 同路径）
+                    name = (zt_map.get(code) or {}).get("n")
+                    persist_derived_features(yesterday, code, name, derived, conn)
+                    written += 1
+                except Exception as exc:
+                    logger.warning(
+                        "[derived_precompute] %s %s 派生落库失败（跳过）: %s",
+                        yesterday, code, exc,
+                    )
+                    skipped += 1
+            conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(
+        "[derived_precompute] %s derived 预采集完成：涨停%s/写入%s/跳过%s",
+        yesterday, len(codes), written, skipped,
+    )
+    return {"date": yesterday, "status": "ok", "codes": len(codes),
+            "written": written, "skipped": skipped}
+
+
+TaskExecutor._execute_derived_precompute = _execute_derived_precompute
+
+
 _manager = ScheduledTaskManager()
 
 
@@ -1517,25 +1614,28 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 seal_intraday_collect 已创建（cron * 9-14 * * 0-4）")
 
-    # S004 R5：盘后漏斗预计算——晚 STI 30 分钟避抢 DB。
+    # S004 R5：盘后漏斗预计算——晚 derived_precompute 15min（读 derived 预采集）+ 龙虎榜 16:30 后。
+    # candidate_funnel 走 fund_flow 取龙虎榜（dragon_tiger_board，东财 16:30 后才更新），
+    # 故漏斗预计算须在 16:30 后；且 derived_source 读 derived 预采集，须晚 derived_precompute。
     if "candidate_funnel_precompute" not in existing:
         _manager.create_task(ScheduledTask(
             name="candidate_funnel_precompute",
-            description="S004 盘后漏斗预计算（预热 _FUNNEL_CACHE，盘后复盘页即时读缓存）",
+            description="S004 盘后漏斗预计算（预热 _FUNNEL_CACHE，龙虎榜 16:30 后 + 读 derived 预采集）",
             task_type="candidate_funnel_precompute",
-            cron_expr="5 16 * * 0-4",
+            cron_expr="15 17 * * 0-4",  # 17:15（晚 derived_precompute 17:00 +15min，龙虎榜 16:30 后）
             payload={},
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 candidate_funnel_precompute 已创建（cron 5 16 * * 0-4）")
+        logger.info("[scheduler] seed 默认任务 candidate_funnel_precompute 已创建（cron 15 17 * * 0-4）")
 
-    # S075：盘后首板流筛选——晚 candidate_funnel_precompute 10min 避抢 DB。
+    # S075：盘后首板流筛选——16:15（晚 forward_test_t1_settle 15:50，避抢 DB；
+    #   candidate_funnel_precompute 已后移 17:15，与 first_board 不再同刻抢 DB）。
     if "first_board_filter" not in existing:
         _manager.create_task(ScheduledTask(
             name="first_board_filter",
             description="S075 盘后首板流筛选（首板过滤+三层剔除+9维度评分，15:30后跑）",
             task_type="first_board_filter",
-            cron_expr="15 16 * * 0-4",  # 16:15（晚 precompute 10min）
+            cron_expr="15 16 * * 0-4",  # 16:15（晚 forward_test_t1_settle 15:50）
             payload={},
             enabled=True,
         ))
@@ -1593,6 +1693,20 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 first_board_t1_review 已创建（cron 30 16 * * 0-4）")
+
+    # S084 C1：盘后 derived 异步预采集——17:00 对昨日涨停股全量算派生落 seal_derived_features，
+    # 选股池 derived_source 读预采集（不 per-code 实时算）。龙虎榜 16:30 后统一盘后跑，
+    # derived 不依赖龙虎榜但提前 candidate_funnel_precompute 17:15（漏斗读 derived 预采集）。
+    if "derived_precompute" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="derived_precompute",
+            description="S084 盘后 derived 异步预采集（昨日涨停股全量算派生落 seal_derived_features，选股池读预采集）",
+            task_type="derived_precompute",
+            cron_expr="0 17 * * 0-4",  # 17:00 工作日（0=周一约定，龙虎榜 16:30 后 + 早 candidate 17:15）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 derived_precompute 已创建（cron 0 17 * * 0-4）")
 
 
 async def stop_scheduler() -> None:

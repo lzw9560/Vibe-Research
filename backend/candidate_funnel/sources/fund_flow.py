@@ -8,7 +8,7 @@ from data.mappers import dragon_tiger_from_dict
 from predict.features.fund_flow import fetch_dt_hot_money_relay, fetch_northbound
 
 
-def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
+def fetch_fund_flow(codes: list[str], as_of: str, sectors: list[dict] | None = None, industry_map: dict[str, str] | None = None) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for c in codes:
         entry: dict = {
@@ -17,6 +17,10 @@ def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
             "dragon_tiger_inst_net": None,
             "dragon_tiger_hot_money_relay": None,
             "northbound": None,
+            # S084 R4.2：板块资金 3 字段（行业级，从 market.get_overview()['sectors'] 按个股行业匹配）
+            "sector_net_inflow": None,
+            "sector_inflow": None,
+            "sector_outflow": None,
             "missing": {},
         }
         try:
@@ -61,5 +65,23 @@ def fetch_fund_flow(codes: list[str], as_of: str) -> dict[str, dict]:
                 entry["missing"]["northbound"] = "北向未取得（2024-08-19 后个股日级北向停更/当日无数据）"
         except Exception:
             entry["missing"]["northbound"] = "北向取数失败"
+
+        # S084 R4.2：板块资金（行业级，sectors 外部传入——由 funnel 调 market.get_overview()['sectors']
+        # 5min 缓存 batch 复用，避免 per-code raw akshare 调用违反防封底线）
+        if sectors:
+            # S084 R4.2：行业从 zt pool hybk 提取（em_get-backed，替代 raw akshare individual_info，防封底线 review HIGH 修复）
+            industry = industry_map.get(c) if industry_map else None
+            if industry:
+                match = next((s for s in sectors if s.get("name") == industry), None)
+                if match:
+                    entry["sector_net_inflow"] = match.get("net")
+                    entry["sector_inflow"] = match.get("inflow")
+                    entry["sector_outflow"] = match.get("outflow")
+                else:
+                    entry["missing"]["sector_net_inflow"] = "行业未匹配（板块列表无此行业）"
+            else:
+                entry["missing"]["sector_net_inflow"] = "个股行业未取得（zt pool 无 hybk）"
+        else:
+            entry["missing"]["sector_net_inflow"] = "板块资金未采集（sectors 未传入）"
         out[c] = entry
     return out

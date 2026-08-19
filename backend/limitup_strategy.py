@@ -690,7 +690,7 @@ def calc_weather_fit(strategy_code: str, weather_state: str | None) -> str:
     return "不适配"
 
 
-def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None, indicators: Any = None) -> list[StrategySignal]:
+def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None, indicators: Any = None, card: Any = None) -> list[StrategySignal]:
     """为个股匹配所有适用战法并生成信号（教育性展示）。
 
     S081 重构：indicators 是 candidate_funnel.IndicatorSet（漏斗 R2 输出），
@@ -702,6 +702,17 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None, 
     保留从 S070 R7 读：broken_duration_min/max_drop_pct/last_lock_time（漏斗不含分时派生）
     """
     signals: list[StrategySignal] = []
+
+    # S084 R5：card 非空时从 card 子对象 override 读（B2：card=None 保留 fallback 不删）
+    # card=None 时走既有 fallback（Q3=C pre_market_workflow 不传 card → 行为不变）
+    if card is not None:
+        if pool_item is None:
+            pool_item = getattr(card, "pool_item", None)
+        if indicators is None:
+            indicators = getattr(card, "indicators", None)
+        card_derived = getattr(card, "derived", None)
+    else:
+        card_derived = None
 
     for strategy in STRATEGY_REGISTRY:
         matches: list[ConditionMatch] = []
@@ -813,20 +824,28 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None, 
             # 输入：get_snapshots_by_code(code, date) 返回的时序列表
             derived: dict = {}
             s070_status = "ok"
-            try:
-                from risk.seal_intraday_collector import get_snapshots_by_code
-                from strategies.intraday_features import compute_derived_features
-                from datetime import datetime as _dt
-                _snap_date = _dt.now().strftime("%Y-%m-%d")
-                _snaps = get_snapshots_by_code(code, _snap_date)
-                if not _snaps:
-                    s070_status = "missing_s070_r7"
-                else:
-                    derived = compute_derived_features(_snaps)
-                    if derived.get("data_status") == "missing":
+            if card_derived is not None:
+                # S084 R3：card.derived 非空 override（T-1 昨日值，非今日）
+                derived = card_derived
+            else:
+                # S084 R4：card_derived None（card=None 或 card.derived=None）
+                # → 战法层 fallback 自补（取今日 snapshots，不直接 missing）
+                # 合并旧 if card is not None 分支：盘前 snapshots 未采集时不再硬标 missing，
+                # 统一走 S070 fallback 自补，取不到再 missing_s070_r7
+                try:
+                    from risk.seal_intraday_collector import get_snapshots_by_code
+                    from strategies.intraday_features import compute_derived_features
+                    from datetime import datetime as _dt
+                    _snap_date = _dt.now().strftime("%Y-%m-%d")
+                    _snaps = get_snapshots_by_code(code, _snap_date)
+                    if not _snaps:
                         s070_status = "missing_s070_r7"
-            except Exception:
-                s070_status = "missing_s070_r7"
+                    else:
+                        derived = compute_derived_features(_snaps)
+                        if derived.get("data_status") == "missing":
+                            s070_status = "missing_s070_r7"
+                except Exception:
+                    s070_status = "missing_s070_r7"
 
             # A7 S070 R7 门禁：snapshots 取不到标 missing_s070_r7 跳过不报错
             if s070_status == "missing_s070_r7":
@@ -900,9 +919,13 @@ def match_strategies(code: str, gene: GeneScore, pool_item: dict | None = None, 
                 max_high_pct = getattr(indicators, "max_high_pct", None)
                 shadow_length_pct = getattr(indicators, "shadow_length_pct", None)
                 ma_5_status = getattr(indicators, "ma_5_status", None)
-            # volume：从 pool_item.fundamt（成交额）近似，无前日对比降级
-            # 注：原代码用 bars[-1].volume vs bars[-2].volume，现 indicators 无 volume 字段，
-            # 降级 volume_1d/volume_2d=None（放量因子不命中，需漏斗扩展 volume 字段后补）
+                # S084 R4.3：volume 从 indicators.amount_yi/prev_amount_yi 算放量比
+                # （补 S081 缺的 volume 字段——成交额代理"量"，f4 放量因子可命中）
+                _amt_1d = getattr(indicators, "amount_yi", None)
+                _amt_2d = getattr(indicators, "prev_amount_yi", None)
+                if _amt_1d is not None and _amt_2d is not None and _amt_2d > 0:
+                    volume_1d = _amt_1d
+                    volume_2d = _amt_2d
 
             # B6 5 因子硬阈值判定（PRD §2.2，阈值探索性）
             import config as _cfg_mod2

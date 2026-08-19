@@ -18,6 +18,11 @@ export interface IndicatorSet {
   ma5?: number | null; ma10?: number | null; ma20?: number | null; boll_upper?: number | null; boll_lower?: number | null; macd?: number | null;
   seal_amount?: number | null; auction_open_pct?: number | null;
   float_market_cap?: number | null;  // S057：流通市值（元）
+  // S084：tencent_quote 扩展 + 板块资金 + 前日成交额（limit_up/limit_down 已有 L14 不重复）
+  last_close?: number | null; open?: number | null; change_amt?: number | null;
+  pe_ttm?: number | null; mcap_yi?: number | null; pb?: number | null;
+  sector_net_inflow?: number | null; sector_inflow?: number | null; sector_outflow?: number | null;
+  prev_amount_yi?: number | null;
   missing: Record<string, string>;
 }
 export type ActivityTier = "冷" | "活跃" | "热";
@@ -52,6 +57,10 @@ export interface DiagnosisCard {
   eight_standards?: EightStandardResult | null;  // S057
   capped?: boolean;  // S057：未过≥3 → 封顶 55
   cap_reason?: string | null;
+  // S084：选股池战法解耦 3 子对象（Q6=B，各默认 null 降级；dict 透传避免跨模型耦合）
+  gene_score?: Record<string, unknown> | null;  // 涨停基因完整对象 dump
+  pool_item?: Record<string, unknown> | null;   // 涨停池原始 dict
+  derived?: Record<string, unknown> | null;     // S070 R7 分时派生
 }
 export interface FilterRecord { code: string; name?: string | null; reason: string }
 

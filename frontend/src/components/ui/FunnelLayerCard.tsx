@@ -27,6 +27,22 @@ function scoreDisplay(c: PassedItem): string | null {
   return null;
 }
 
+/** S084：每层候选行展示该层相关因子（PassedItem 可用字段，按层语义累积）。 */
+function passedFactors(c: PassedItem): string {
+  const parts: string[] = [];
+  if (c.consec_boards != null) parts.push(`连板${c.consec_boards}`);
+  if (c.turnover_pct != null) parts.push(`换手${c.turnover_pct}%`);
+  if (c.vol_ratio != null) parts.push(`量比${c.vol_ratio}`);
+  if (c.amount_yi != null) parts.push(`成交${c.amount_yi}亿`);
+  if (c.amplitude_pct != null) parts.push(`振幅${c.amplitude_pct}%`);
+  if (c.main_net_inflow != null) parts.push(`主力${c.main_net_inflow}万`);
+  if (c.main_net_5d != null) parts.push(`5日${c.main_net_5d}万`);
+  if (c.northbound != null) parts.push(`北向${c.northbound}万`);
+  if (c.auction_open_pct != null) parts.push(`竞价${(c.auction_open_pct * 100).toFixed(2)}%`);
+  if (c.catalyst_summary) parts.push(c.catalyst_summary);
+  return parts.join(" · ");
+}
+
 interface Props {
   layer: FunnelLayer;
   onPick?: (code: string) => void;
@@ -175,28 +191,34 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
           <div className="space-y-0.5">
             {visible.slice(0, 15).map((c) => {
               const disp = scoreDisplay(c);
+              const factors = passedFactors(c);
               return (
                 <button
                   key={c.code}
                   type="button"
                   onClick={() => onPick?.(c.code)}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-muted/50"
+                  className="flex w-full flex-col items-start gap-0.5 rounded px-2 py-1 text-left text-sm hover:bg-muted/50"
                   title={c.name}
                 >
-                  {date && (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "h-2 w-2 shrink-0 rounded-full",
-                        STATUS_COLORS[stateMap.get(c.code) ?? ""] ?? "bg-gray-200",
-                      )}
-                    />
-                  )}
-                  <span className="flex-1 truncate">
-                    {c.name} <span className="text-xs text-muted-foreground">{c.code}</span>
-                  </span>
-                  {disp !== null && (
-                    <span className="text-xs font-medium text-primary">{disp}</span>
+                  <div className="flex w-full items-center gap-2">
+                    {date && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "h-2 w-2 shrink-0 rounded-full",
+                          STATUS_COLORS[stateMap.get(c.code) ?? ""] ?? "bg-gray-200",
+                        )}
+                      />
+                    )}
+                    <span className="flex-1 truncate">
+                      {c.name} <span className="text-xs text-muted-foreground">{c.code}</span>
+                    </span>
+                    {disp !== null && (
+                      <span className="text-xs font-medium text-primary">{disp}</span>
+                    )}
+                  </div>
+                  {factors && (
+                    <div className="pl-4 text-[10px] text-muted-foreground/70">{factors}</div>
                   )}
                 </button>
               );

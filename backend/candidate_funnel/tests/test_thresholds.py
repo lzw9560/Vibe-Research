@@ -38,7 +38,7 @@ class TestResolveThresholdsDegraded(unittest.TestCase):
         self.assertEqual(eff.turnover_cold, 8.0)
         # 降级标记可复现
         self.assertIsNotNone(cfg.adjustment)
-        self.assertIn("情绪档未取得", str(cfg.adjustment))
+        self.assertIn("STI 去噪", str(cfg.adjustment))  # §44 grill：note 改为"STI 去噪固定基数"
 
     def test_auto_missing_phase_degrades_to_base(self):
         cfg = ThresholdConfig(mode="auto")
@@ -52,8 +52,8 @@ class TestResolveThresholdsPhaseAdjusted(unittest.TestCase):
     def test_storm_phase_raises_turnover_floor(self):
         cfg = ThresholdConfig(mode="auto")
         eff = resolve_thresholds(cfg, sti_phase="暴风雨")
-        self.assertGreater(eff.turnover_cold, 8.0)
-        self.assertGreaterEqual(eff.turnover_cold, 12.0)
+        # §44 grill 2026-08-17（S072 STI 去噪）：sentiment_phase 不再调阈值，暴风雨固定基数 8.0
+        self.assertEqual(eff.turnover_cold, 8.0)
         # 调整项写入 adjustment 以便可复现（AC5）
         self.assertIsNotNone(cfg.adjustment)
         self.assertTrue(len(cfg.adjustment) > 0)
@@ -75,7 +75,8 @@ class TestResolveSuggestBasis(unittest.TestCase):
     def test_suggest_storm_includes_basis(self):
         cfg = ThresholdConfig(mode="suggest")
         eff = resolve_thresholds(cfg, sti_phase="暴风雨")
-        self.assertGreaterEqual(eff.turnover_cold, 12.0)
+        # §44 grill 2026-08-17：暴风雨不再 raise turnover floor，固定基数
+        self.assertEqual(eff.turnover_cold, 8.0)
         self.assertIsNotNone(cfg.adjustment)
         self.assertIn("依据", str(cfg.adjustment))
 

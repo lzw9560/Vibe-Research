@@ -39,6 +39,7 @@ class StrategyMatcher:
         weather_state: str | None = None,
         pool_item: dict | None = None,
         indicators: Any = None,
+        card: Any = None,  # S084 R6：DiagnosisCard
     ) -> list[StrategySignal]:
         """
         对单只股票匹配所有适用战法。
@@ -64,7 +65,7 @@ class StrategyMatcher:
         取该 code 的 DiagnosisCard.indicators，建 {code: IndicatorSet} 映射传入。
         run_funnel 有缓存兜底，同日多次调不重复取数。
         """
-        signals = match_strategies(gene.code, gene, pool_item, indicators)
+        signals = match_strategies(gene.code, gene, pool_item, indicators, card=card)
         if weather_state is not None:
             from limitup_strategy import calc_weather_fit  # noqa: PLC0415
             for s in signals:
@@ -77,6 +78,7 @@ class StrategyMatcher:
         weather_state: str | None = None,
         pool_items: dict[str, dict] | None = None,
         indicators_map: dict[str, Any] | None = None,
+        cards_map: dict[str, Any] | None = None,  # S084 R6：{code: DiagnosisCard}
     ) -> dict[str, list[StrategySignal]]:
         """
         批量匹配，返回 {code: signals}。
@@ -89,7 +91,8 @@ class StrategyMatcher:
         for gene in genes:
             pool_item = pool_items.get(gene.code) if pool_items else None
             indicators = indicators_map.get(gene.code) if indicators_map else None
-            results[gene.code] = self.match(gene, weather_state, pool_item, indicators)
+            card = cards_map.get(gene.code) if cards_map else None
+            results[gene.code] = self.match(gene, weather_state, pool_item, indicators, card=card)
         return results
 
     def get_best_strategy(self, gene: GeneScore) -> StrategySignal | None:
