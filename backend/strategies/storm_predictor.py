@@ -49,13 +49,17 @@ def _probability_to_level(p: float) -> tuple[str, float]:
 
 
 def _prev_trading_day(date: str) -> str:
-    """取前一交易日（复用 vr_paths.last_trading_date，做节假日判断）。"""
+    """取严格前一交易日（先退一日再用 last_trading_date 回退过周末/节假日）。
+
+    S088 grill Q1 修：原 last_trading_date(d) 在 d 为交易日时返回 d 本身，导致
+    "前一交易日"取到当日。改用 vr_paths.prev_trading_date（先 d-1 再回退）。
+    """
     try:
-        from vr_paths import last_trading_date
+        from vr_paths import prev_trading_date
         from datetime import datetime as _dt
 
         d = _dt.strptime(date, "%Y-%m-%d") if "-" in date else _dt.strptime(date, "%Y%m%d")
-        return last_trading_date(d).strftime("%Y-%m-%d")
+        return prev_trading_date(d).strftime("%Y-%m-%d")
     except Exception:
         return date
 
@@ -150,27 +154,45 @@ def _collect_internal_factor(date: str) -> StormFactor:
 
 
 def _collect_news_factor(date: str) -> StormFactor:
-    """新闻密度辅助（newsradar 盘后利空数量）。权重 0.20。
+    """新闻利空/利好对比（newsradar 盘后）。权重 0.20。
 
-    利空关键词密度 → 暴风雨概率加分（不先做 NLP 情绪量化）。
+    S088 grill Q5：原 radar.get("items") 取不存在的顶层键致因子恒 missing、0.20 权重失效；
+    fetch_radar 返回 dict 顶层是 industries 嵌套 items（无顶层 items 键），须扁平化聚合。
+    加利好对冲：收窄关键词到强情绪复合词（剔除增长/合作/风险等中性高频词，否则利好噪声比利空大），
+    占比口径（非差值）避免总量膨胀失真。不臆造、缺数据标 missing。
     """
     try:
         import newsradar  # noqa: PLC0415
 
         radar = newsradar.get_radar(force=False) or {}
-        items = radar.get("items", []) if isinstance(radar, dict) else []
+        # fetch_radar 顶层是 industries 嵌套 items（无顶层 items 键）；扁平化聚合
+        items = (
+            [it for ind in (radar.get("industries", []) or [])
+             for it in (ind.get("items", []) or [])]
+            if isinstance(radar, dict) else []
+        )
         if not items:
             return StormFactor("新闻密度", 50.0, "新闻未取得", "missing")
 
-        bearish_kw = ["跌", "崩", "雷", "退市", "监管", "处罚", "下滑", "亏损", "利空", "风险", "爆", "违约"]
-        bearish_count = sum(
-            1
-            for it in items
-            if any(k in (str(it.get("title", "")) + str(it.get("summary", ""))) for k in bearish_kw)
-        )
-        # 利空密度 → 分（>10 利空 = 高概率，<3 = 低）
-        score = min(100.0, bearish_count * 8)
-        detail = f"总 {len(items)} 条 / 利空 {bearish_count} 条"
+        bearish_kw = ["暴跌", "崩盘", "跌停", "退市", "爆雷", "违约", "大利空", "重挫", "闪崩", "熔断"]
+        bullish_kw = ["涨停", "大涨", "暴涨", "突破新高", "超预期", "大订单", "增持", "回购", "大利好"]
+
+        def _text(it: dict) -> str:
+            return str(it.get("title", "")) + str(it.get("summary", ""))
+
+        bearish_count = sum(1 for it in items if any(k in _text(it) for k in bearish_kw))
+        bullish_count = sum(1 for it in items if any(k in _text(it) for k in bullish_kw))
+
+        total = bearish_count + bullish_count
+        if total == 0:
+            return StormFactor(
+                "新闻密度", 50.0,
+                f"总 {len(items)} 条 / 无强情绪词命中", "missing",
+            )
+        # 利空占比 → 分（利空越多概率越高）；占比口径非差值，免总量膨胀失真
+        ratio = bearish_count / total
+        score = ratio * 100.0
+        detail = f"总 {len(items)} 条 / 利空 {bearish_count} / 利好 {bullish_count} / 利空占比 {ratio:.0%}"
         return StormFactor("新闻密度", round(score, 1), detail)
     except Exception as exc:  # noqa: BLE001
         return StormFactor("新闻密度", 50.0, f"采集失败: {exc}", "missing")

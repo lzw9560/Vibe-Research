@@ -47,7 +47,12 @@ def fetch_snapshot() -> dict:
         import newsradar  # noqa: PLC0415
 
         radar = newsradar.fetch_radar() or {}
-        snap["news_items"] = radar.get("items", []) if isinstance(radar, dict) else []
+        # S088 grill Q5：fetch_radar 顶层无 items 键，是 industries 嵌套 items，须扁平化
+        snap["news_items"] = (
+            [it for ind in (radar.get("industries", []) or [])
+             for it in (ind.get("items", []) or [])]
+            if isinstance(radar, dict) else []
+        )
     except Exception as exc:  # noqa: BLE001
         snap["news_items"] = []
         _logger.debug("[storm-daemon] 新闻快照失败: %s", exc)
@@ -70,15 +75,17 @@ def fetch_snapshot() -> dict:
 
 
 def get_t1_global_snapshot(date: str) -> dict | None:
-    """读 T-1 夜间外围快照（predict_storm 用，替代 get_global_indices 当前）。
+    """读前一交易日（T-1）夜间外围快照（predict_storm 用，替代 get_global_indices 当前）。
 
-    返回 T-1 最后一个快照（夜间美股收盘后）。无快照返 None（调用方 fallback 当前）。
+    返回前一交易日最后一个快照（夜间美股收盘后）。无快照返 None（调用方 fallback 当前）。
+    S088 grill Q1 修：原 last_trading_date(d) 在交易日返回 d 本身，读当日快照而非前日夜间；
+    改用 prev_trading_date（先退一日再回退）。
     """
     try:
-        from vr_paths import last_trading_date  # noqa: PLC0415
+        from vr_paths import prev_trading_date  # noqa: PLC0415
 
         d = _dt.strptime(date, "%Y-%m-%d") if "-" in date else _dt.strptime(date, "%Y%m%d")
-        t1 = last_trading_date(d).strftime("%Y-%m-%d")
+        t1 = prev_trading_date(d).strftime("%Y-%m-%d")
         path = _SNAP_DIR / f"{t1}.json"
         if not path.exists():
             return None

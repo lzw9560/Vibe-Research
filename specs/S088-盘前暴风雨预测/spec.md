@@ -1,10 +1,11 @@
 # Spec: S088 — 盘前暴风雨预测模型
 
-> 状态：草案
+> 状态：grill 对抗性核实完成（2026-08-20）——Q6 done；Q1/Q2/Q3 partial（done 被高估）；Q4 partial（补丁就绪待落地）；Q5 pending（种子低估阻塞性取数 bug）。待实施 Q1/Q4/Q5 承重修复，Q2/Q3 live 探测 + R10 推迟。见 §10。
 > 作者：lzw9560　日期：2026-08-20
 > 关联：S063（SentimentContext 事后 STI 检测）/ S087（语境 tab 接入）/ S086（战法 pipeline）
 >
 > grill 记录：经 grilling skill 多轮审查（极端行情预测可行性 + 因子优先级），用户全部认可。
+> 2026-08-20 二次对抗性核实：6 agent 并行反例尝试，发现 Q1 修不彻底（T-1 语义偷换）、Q5 阻塞性取数 bug（items 取不存在的顶层键）、Q4 真实 wiring 缺口（仅 ④⑤ 非 handoff 说的四字段全缺）。详见 §10。
 
 ## 1. 问题 / 目标
 
@@ -112,3 +113,69 @@
 | 概率分预测力 | 中 | A7 0819 回测验证；诚实标注概率非确定 |
 
 回滚：删 storm_predictor.py + 端点 + ContextTab 接入（纯新增，无数据迁移）。
+
+## 10. grill Q1-Q6 决议记录（2026-08-20 对抗性核实）
+
+> 6 agent 并行反例核实，每项跑"找反例调用点 / 验 done 是否真生效 / 扫更深 bug"。结论：Q6 done；Q1/Q2/Q3 partial（done 被高估）；Q4 partial（认知成立，补丁就绪）；Q5 pending（种子方向对但低估阻塞性取数 bug）。
+
+### Q1 — storm-daemon T-1 快照　状态：partial（修不彻底）
+
+种子称已修历史 bug（0819 预测取了当日外围没预警）。核实**反驳**：
+- `storm_daemon.py:72-88` `get_t1_global_snapshot` 用 `last_trading_date(d)` 算 T-1 文件名
+- `vr_paths.py` `last_trading_date(d)` 在 d 为交易日时**返回 d 本身**（实测 `last_trading_date(2026-08-19)=2026-08-19`）→ 预测 0819 读 `0819.json`（当日快照）而非 `0818.json`（前一日夜间），与要修的 bug 同源
+- `storm_daemon.py:119` 模块级 `start()`，但全仓仅 `storm_predictor.py:69` lazy import 触发，`app.py` lifespan 无接入 → 冷启动当日无快照必 fallback，首次 fetch 等 30min
+- 实测：`storm_snapshots/` 目录不存在 → `get_t1` 必返 None → 外围因子恒 fallback_current
+
+成立部分：conftest `VR_STORM_DAEMON=0` 真禁、daemon 线程不阻塞、fallback 标注透明。**待办**：
+1. `get_t1_global_snapshot` 改用"先退一日再回退交易日"（`last_trading_date(d - timedelta(days=1))` 或新增 `prev_trading_date(d)`），确保预测 0819 读 0818.json
+2. `app.py` lifespan startup 加 `import strategies.storm_daemon`（触发模块级 start）或显式 `storm_daemon.start()`
+3. 补 `tests/test_s088_storm_predictor.py` 覆盖 A7（0819 回测）
+
+### Q2 — 日经225 secid + 权重0.15　状态：partial（核心前提未验证）
+
+种子称已 done。核实**反驳**：`gstock.py:32` 注释"试 secid 确认"=作者自认未验证；`gstock.py:24`"均已实测"只覆盖原 6 指数。akshare 证 `100.N225` 在 **clist/get 批量端点**有效，但 `gstock._push2_stock_get` 用的是 **stock/get 单引端点**（端点不同，不保证可用）。fetch 空则 `storm_predictor.py:96` `n225_chg=0.0` 静默归零、0.15 权重白给无再归一、detail 显示"日经 +0.00%"缺失与平盘不可区分。成立：commit+权重和=1.0。**待办**（live_emoney_block 推迟）：跑一次 live em_get 确认 stock/get 返 100.N225；加 per-index missing 标志 + 缺失项权重再归一。
+
+### Q3 — SOX/纳指科技/KOSPI secid　状态：partial（三者状态不同）
+
+种子称 PENDING + search 风控。核实**反驳**两点：(1) KOSPI 非真未知——akshare `cons.py:173`+`index_global_em.py:28` 双重佐证 `100.KS11`（返空是错猜 `100.KOSPI` 名而非 `100.KS11` 码）；(2) "search 接口风控"标错对象——`gstock.py:86` 指数走 hardcoded secid + push2 stock/get，不经 search（search 仅个股）。未反驳：SOX 确无 push2 secid（走 datacenter `RPT_INDUSTRY_INDEX/EMI00055562`）、NDXT 全仓无证据（`100.NDXT` 仅规律猜）。**待办**（live_emoney_block 推迟）：KOSPI 可照 N225 先例加 `100.KS11` 后 live 验；SOX 换 datacenter 路线（不需 ut、走 em_get）；NDXT 需破"国外源不并入"约束或 yahoo/stooq。安全探测：≥10min 间隔、push2→push2delay 降级、照 `tools/first_board_quote_source_probe.py` 范式。
+
+### Q4 — 八项 ④⑤ missing 补全　状态：partial（认知成立，补丁就绪）
+
+种子称"四字段全缺"。核实**修正**：真正 wiring 缺口仅 ④⑤。生产路径 `funnel.py:471/568` `market_ctx=board`，而 `board=fetch_board_ladder`（`board_ladder.py:43-52`）只返 `{lianban_stocks}` 无 fbt/zbc → `eight_standards.py:114-116` `_check_seal_time`（④）与 `:151-153` `_check_reopens`（⑤）恒 missing。⑥ seal_amount 已在 `diagnosis.py:238-244` 从 `pool_item.fund` 接线（test_s085 实测生效）、① float_market_cap 已在 `diagnosis.py:139` 从 activity 接线。**待办**：`diagnosis.py:245` 调 `check_eight_standards` 前注入 per-card ctx：
+```python
+eight_ctx = dict(market_ctx or {})  # 必须拷贝：board 在 run_funnel 全 N 卡复用，直接赋值会泄漏上一只票 fbt
+if pool_item:
+    from strategies.first_board_filter import _fbt_to_hhmm, _to_float  # 复用，zt_pool_source:23 已有先例
+    fbt = pool_item.get("fbt")
+    if fbt is not None:
+        hhmm = _fbt_to_hhmm(fbt)  # 必须经转换：_time_within 无法解析 5 位 fbt(92500→h=925 恒 fail)
+        if hhmm is not None:
+            eight_ctx["first_seal_time"] = hhmm
+    zbc_raw = pool_item.get("zbc")
+    if zbc_raw is not None:
+        zbc = _to_float(zbc_raw)  # 须 coerce int：_check_reopens line163 r<=MAX 若 r 是 str 会 TypeError
+        if zbc is not None:
+            eight_ctx["open_count"] = int(zbc)
+eight = check_eight_standards(ind, eight_ctx)
+```
+`_fbt_to_hhmm` 复用（跨包 `_` import 是 smell，最干净是下沉到共享位置，但最小可用=直接 import，不推荐下沉重复 15 行逻辑）。文件稳定：`diagnosis.py`(8/19)/`funnel.py`(8/19)/`first_board_filter.py`(8/19)，并发编辑器今日只动 `strategy_funnel_registry.py`。
+
+### Q5 — 新闻利好对比　状态：pending（种子低估阻塞性取数 bug）
+
+种子称 PENDING（缺利好对冲）。核实**补充**更优先的阻塞性 bug：`storm_predictor.py:161` `items = radar.get("items", [])` 取**不存在的顶层键**——`newsradar.fetch_radar` 返回 dict 顶层是 `industries` 嵌套（实测 keys=generated_at/recent_days/industries/stats），正确取法是 industries 遍历聚合。故 news 因子**恒返 50.0/missing，0.20 权重完全失效**。`storm_daemon.py:50` 同款 bug（T-1 快照 news_items 永远空）。另：`bearish_kw` 含"增长/合作/风险"等中性高频词，实测增长匹配 5 条——关键词口径本身需收窄到强情绪词。**待办**：
+1. （必做，阻塞性）`storm_predictor.py:161` 改 `items = [it for ind in (radar.get("industries", []) or []) for it in (ind.get("items", []) or [])]`；`storm_daemon.py:50` 同改
+2. （种子实质）收窄关键词到强情绪复合词：`bearish_kw=[暴跌,崩盘,跌停,退市,爆雷,违约,大利空,重挫,闪崩,熔断]`，`bullish_kw=[涨停,大涨,暴涨,突破新高,超预期,大订单,增持,回购,大利好]`；占比口径 `ratio=bearish/max(bearish+bullish,1)`，`score=ratio*100`（避免总量膨胀使差值失真）；`bearish+bullish==0` 返 50.0 标 missing；detail 输出三值可审计。权重 0.20 下对总概率分最大 ±10 分，足以跨 50→70 极高阈值，值得做。spec §5.3 NLP 跳过不违——关键词级属密度范畴。
+
+### Q6 — 估值水位 R4 跳过　状态：done（无需修）
+
+核实**确认**：grill 共识 A 已落地——`storm_predictor.py:10` docstring + `:233` 加权 0.35+0.35+0.20+0.10 + `:249` factors 列表无估值因子（非占位空壳），spec §3 R4/§5.1/§5.3 一致"先跳过、不臆造、权重重分"。commit `86e0e4a` 显列 Q1-Q6，Q6=A 估值跳过。无需修。相邻未完项（非 Q6 范畴）：R10 定时盘前 8:00（`scheduled_tasks._executors` 无 storm 条目，grep=0）——**blocking**，`scheduled_tasks.py` 当前 976 行并发编辑器 diff，须推迟到该文件稳定后。
+
+## 11. 实施状态
+
+- [x] push 9 commit（develop→origin，df0bd90..6cf9ecb）
+- [ ] Q5 取数 bug 修复（storm_predictor + storm_daemon）
+- [ ] Q1 T-1 计算 + lifespan 接入 + test_s088 回测
+- [ ] Q4 八项 ④⑤ 补全（diagnosis.py）
+- [推迟] Q2 日经 secid live 验证 + 静默失败修复（live_emoney_block）
+- [推迟] Q3 KOSPI/SOX/NDXT（live_emoney_block）
+- [blocking] R10 storm 定时任务（scheduled_tasks 并发重构中）

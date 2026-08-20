@@ -242,7 +242,23 @@ def build_diagnosis_card(
                 ind.seal_amount = float(_fund)
             except (TypeError, ValueError):
                 ind.seal_amount = None
-    eight = check_eight_standards(ind, market_ctx)
+    # S088 grill Q4：八项 ④⑤ 补全。market_ctx(=board) 只有 lianban_stocks 无 fbt/zbc，
+    # ④ first_seal_time / ⑤ open_count 恒 missing。从 pool_item 注入到 per-card ctx 拷贝
+    # （board 在 run_funnel 全 N 卡复用，直接赋值会泄漏上一只票数据）。
+    eight_ctx = dict(market_ctx or {})
+    if pool_item:
+        from strategies.first_board_filter import _fbt_to_hhmm, _to_float  # noqa: PLC0415 — 复用，zt_pool_source 已有跨包先例
+        fbt = pool_item.get("fbt")
+        if fbt is not None:
+            hhmm = _fbt_to_hhmm(fbt)  # _time_within 无法解析 5 位 fbt(92500→h=925 恒 fail)，须转 HH:MM
+            if hhmm is not None:
+                eight_ctx["first_seal_time"] = hhmm
+        zbc_raw = pool_item.get("zbc")
+        if zbc_raw is not None:
+            zbc = _to_float(zbc_raw)  # coerce：_check_reopens r<=MAX 若 r 是 str 会 TypeError
+            if zbc is not None:
+                eight_ctx["open_count"] = int(zbc)
+    eight = check_eight_standards(ind, eight_ctx)
     capped = eight.fail_count >= 3
     cap_reason = (
         f"八项标准未过{eight.fail_count}项，得分封顶{_CAP_THRESHOLD}"

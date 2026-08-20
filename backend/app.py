@@ -106,6 +106,14 @@ async def lifespan(_app: FastAPI):
         return t
     _spawn(startup_backfill_gap_check())
     _spawn(_warmup_advisory_backtest())
+    # S088 Q1：storm-daemon 接入 lifespan——每 30min 存外围+新闻快照，
+    # predict_storm 读前一交易日夜间快照。模块级 start() 幂等，VR_STORM_DAEMON=0 禁（conftest）。
+    # 不接入则冷启动当日无快照必 fallback、首次 fetch 被动等 30min。
+    try:
+        import strategies.storm_daemon as _storm_daemon  # noqa: PLC0415
+        _storm_daemon.start()
+    except Exception as _e:  # noqa: BLE001 — daemon 启动失败不阻断服务
+        logger.warning("[S088] storm_daemon 启动失败（不影响服务）: %s", _e)
     yield
     # shutdown
     await intraday_sentiment_router.stop_sampler()

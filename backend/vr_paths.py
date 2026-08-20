@@ -85,6 +85,17 @@ def last_trading_date(d: date | None = None) -> date:
     return d
 
 
+def prev_trading_date(d: date | None = None) -> date:
+    """返回 d 之前（不含 d）的最近交易日——严格前一交易日。
+
+    last_trading_date(d) 在 d 为交易日时返回 d 本身，故"前一交易日"须先退一日
+    再回退过周末/节假日，否则取到当日。S088 grill Q1：predict_storm 预测交易日
+    时须读前一交易日的夜间快照，而非当日快照。
+    """
+    d = d or date.today()
+    return last_trading_date(d - _td(days=1))
+
+
 def last_trading_date_str(d: date | None = None) -> str:
     """返回 last_trading_date 的 YYYY-MM-DD 字符串。"""
     return last_trading_date(d).isoformat()
