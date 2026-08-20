@@ -76,7 +76,8 @@ export function StrategyMatchMatrix({ date }: Props) {
 
       {view === "matrix" ? (
         <GlassCard className="p-4">
-          <h3 className="mb-3 font-semibold">票×战法命中 matrix（{byCode.size} 只候选）</h3>
+          <h3 className="mb-1 font-semibold">票×战法命中 matrix（{byCode.size} 只候选）</h3>
+          <p className="mb-3 text-xs text-muted-foreground/60">战法后"分N" = 策略分 strategy_score（0-100，权重集加权），非 confidence</p>
           <div className="space-y-1">
             {codes.map(([code, e]) => (
               <div key={code} className="flex items-center gap-2 py-1.5 text-sm border-b border-border/20 last:border-0">

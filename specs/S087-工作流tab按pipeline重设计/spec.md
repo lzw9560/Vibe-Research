@@ -108,3 +108,24 @@
 | 非涨停池站位与涨停池 dispatch_match 混淆 | 低 | R12 已标注架构接缝，tab 设计时非涨停池独立站位 |
 
 回滚：前端 git revert（纯前端 + 1 后端缓存表，无数据迁移）。
+
+## 10. 迭代决策（grill 第二轮，2026-08-20，用户浏览器验收后 13 条反馈）
+
+第一版实现后用户实际验收，迭代 13 项（R14-R25）：
+
+- **R14（战法 tab）**：加第 6 tab"战法"——战绩（forward_test lift/winrate + prediction_ledger 验证 + strategy_backtest by_strat 聚合）+ 改参数（注册表 stop/take/max_hold + S081 阈值 config）。原战法卡片网格恢复为独立 tab（第一版误删，⑫⑬ 修正）。
+- **R15（tab 顶部）**：6-tab 导航移到页面最顶（PageHeader 上方）；盘前三步①选股/②匹配/③仓位可折叠 + 线性流动箭头（→）。
+- **R16（涨停池缓存+改名）**：选股步改名"涨停池" + 读近多日缓存（不只当日）。
+- **R17（漏斗可收缩）**：FunnelLayers 各层可折叠/展开。
+- **R18（R2/R3 UI 标注）**：R2/R3 标"采集层"（不过滤，标注标的数不变原因 = S084 下放战法层）。
+- **R19（板块轮动）**：放语境 tab，接 `/api/strategy/funnel/sector-rotation`（有数据；`/api/sector/rotation` 空是错端点弃用）。
+- **R20（删非涨停池卡）**：盘前 tab 非涨停池站位卡删除（⑩ 站位→占位错字消除，不放别处）。
+- **R21（终选因子详情）**：final_candidates 列表缩略 + 点击展开因子详情（表格放不下时）。
+- **R22（strategy_score 标注）**：战法匹配括号数字标"策略分"（非 confidence）。
+- **R23（仓位内嵌）**：盘前③仓位步内嵌 PositionAdvisor + P2 字段（不跳转 /advisory）。
+- **R24（盘中监控命中标的）**：盘中 tab 默认展示所有战法命中标的的监控（不只持仓）。
+- **R25（每日结算）**：用现有 forward_test_daily + prediction_ledger + forward_test_t1_settle，不扩候选×战法矩阵。
+
+## 11. 实现记录
+
+第一版（commit d7a47ad）落地：5-tab + funnel_cache + candidates 端点 + T1Tab/ContextTab/StrategyMatchMatrix + Workflow.tsx 重写 + B5 缓存优先 + 单测。第二版（迭代 R14-R25）待实现：6-tab（+战法 tab）+ 上述 UI 调整。

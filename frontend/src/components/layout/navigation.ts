@@ -141,15 +141,7 @@ export const SUB_TABS: Record<string, { key: string; label: string; to?: string 
     { key: "result", label: "回测结果" },
     { key: "winrate", label: "胜率趋势" },
   ],
-  "/workflow": [
-    { to: "/workflow/first-board", key: "first-board", label: "首板流" },
-    { to: "/workflow/pre-market", key: "pre-market", label: "盘前简报" },
-    { to: "/workflow/intraday", key: "intraday", label: "盘中监控" },
-    { to: "/workflow/coach", key: "coach", label: "盯盘教练" },
-    { to: "/workflow/alerts", key: "alerts", label: "炸板预警" },
-    { to: "/workflow/post-market", key: "post-market", label: "盘后复盘" },
-    { to: "/workflow/topology", key: "topology", label: "拓扑展示" },
-  ],
+  "/workflow": [],  // S087：Workflow 内部 6-tab 自管（T-1/语境/盘前/盘中/盘后/战法），不渲染 Layout sub tab（避免 2 层 tab）
   "/metrics": [
     { key: "overview", label: "指标概览" },
     { key: "trends", label: "趋势分析" },

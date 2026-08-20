@@ -3,7 +3,9 @@
 // 展示天气/熔断软标注/allowed_styles + 市场 4 率——跑选股前的决策语境。
 // R13：AskAiButton 携带本 tab 上下文。
 
-import { usePreMarketBriefing } from "@/lib/query";
+import { usePreMarketBriefing, localTodayStr } from "@/lib/query";
+import { useQuery } from "@tanstack/react-query";
+import { request } from "@/lib/api/client";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Badge } from "@/components/ui/Badge";
 import { AskAiButton } from "@/components/ui/AskAiButton";
@@ -26,6 +28,17 @@ export function ContextTab({ date }: Props) {
   const ctx = briefing?.sentiment_context;
   const me = briefing?.market_emotion;
 
+  // R19：板块轮动（接 /api/strategy/funnel/sector-rotation，有数据端点；/api/sector/rotation 空弃用）
+  const { data: sectorRot } = useQuery({
+    queryKey: ["sector-rotation", date ?? "latest"],
+    queryFn: () =>
+      request<{ date: string; strength_rank: Array<{ industry: string; zt_count_today: number; strength: number; rank: number }> }>(
+        `/api/strategy/funnel/sector-rotation?date=${date ?? localTodayStr()}`,
+      ),
+    retry: false,
+  });
+  const sectors = sectorRot?.strength_rank ?? [];
+
   const weather = ctx?.weather_state ?? "未取得";
   const fuse = ctx?.fuse_state;
   const fuseState = (fuse as { fuse_state?: string } | null)?.fuse_state ?? "未取得";
@@ -43,6 +56,7 @@ export function ContextTab({ date }: Props) {
     `天气：${weather} | 熔断：${fuseState} | 综合分：${composite ?? "—"}`,
     `allowed_styles：${allowed.join("、") || "全 12 战法"} | forbidden：${forbidden.join("、") || "无"}`,
     `市场 4 率：涨停${ztCount ?? "—"}/跌停${dtCount ?? "—"}/最高连板${maxBoards ?? "—"}/晋级率${promotionRate ?? "—"}`,
+    `板块轮动 TOP：${sectors.slice(0, 5).map((s) => `${s.industry}(${s.strength})`).join("、")}`,
     `S086 R3：暴风雨不再 forbidden（全 allowed，仓位×0.3 软标注建议）`,
   ].join("\n");
 
@@ -68,6 +82,19 @@ export function ContextTab({ date }: Props) {
         <Row label="跌停家数" value={dtCount != null ? String(dtCount) : "未取得"} ok={dtCount != null} />
         <Row label="最高连板" value={maxBoards != null ? `${maxBoards} 板` : "未取得"} ok={maxBoards != null} />
         <Row label="连板晋级率" value={promotionRate != null ? `${promotionRate}` : "未取得"} ok={promotionRate != null} />
+      </GlassCard>
+
+      <GlassCard className="p-4">
+        <h3 className="mb-2 font-semibold">板块轮动（强度 TOP 5）</h3>
+        <div className="space-y-1">
+          {sectors.slice(0, 5).map((s) => (
+            <div key={s.industry} className="flex items-center justify-between py-1 text-sm border-b border-border/20 last:border-0">
+              <span className="font-mono text-foreground">{s.rank}. {s.industry}</span>
+              <span className="text-muted-foreground/70">涨停{s.zt_count_today} · 强度{s.strength}</span>
+            </div>
+          ))}
+          {sectors.length === 0 && <p className="text-sm text-muted-foreground">板块轮动未取得</p>}
+        </div>
       </GlassCard>
 
       <AskAiButton context={askAiContext} />
