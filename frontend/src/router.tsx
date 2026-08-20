@@ -71,6 +71,9 @@ export const router = createBrowserRouter([
       { path: "/workflow/alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },
       { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
       { path: "/workflow/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },
+      // S090 战法 tab 404 修复：前向测试 + 阈值配置独立页（EntryCard 链接原指向 404）
+      { path: "/strategy/funnel/forward-test", element: lazyEl(() => import("@/pages/strategy/ForwardTestPage")) },
+      { path: "/strategy/funnel/config", element: lazyEl(() => import("@/pages/strategy/StrategyConfigPage")) },
       { path: "/workflow/candidates/:code", element: lazyEl(() => import("@/pages/workflow/CandidateDetail")) },
       { path: "/workflow/factor/:factorId", element: lazyEl(() => import("@/pages/workflow/FactorDetailPage"), "FactorDetailPage") },
       { path: "/sector-divergence", element: lazyEl(() => import("@/pages/SectorDivergence")) },
