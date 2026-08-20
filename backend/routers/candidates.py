@@ -15,6 +15,11 @@ from fastapi import APIRouter, Query, HTTPException
 
 from app import cache_response
 from candidate_funnel import funnel as funnel_mod
+from candidate_funnel.funnel_cache import (  # S087 R10：run_funnel 结果落库缓存
+    list_cached_dates,
+    load_funnel_result,
+    save_funnel_result,
+)
 from candidate_funnel.models import BaseThreshold, ThresholdConfig
 from config import AssistantDefaultConfig
 
@@ -44,8 +49,36 @@ def _today() -> str:
 
 @router.post("/candidates/funnel")
 async def post_funnel(stage: str = "all", date: str | None = None):
-    """POST → FunnelResult（AC1/AC7/AC9）。"""
-    return await asyncio.to_thread(funnel_mod.run_funnel, stage, date or _today(), _store["config"])
+    """POST → 实跑 FunnelResult + 落缓存（S087 R10）。
+
+    实跑 run_funnel（慢，全市场）+ save_funnel_result（落库供前端读缓存秒开）。
+    前端 tab 默认读 GET /candidates/funnel/cache，"重新跑"按钮才调本端点。
+    """
+    d = date or _today()
+    result = await asyncio.to_thread(funnel_mod.run_funnel, stage, d, _store["config"])
+    await asyncio.to_thread(save_funnel_result, d, stage, result)
+    return result
+
+
+@router.get("/candidates/funnel/cache")
+async def get_funnel_cache(date: str | None = None):
+    """GET → 读缓存的 FunnelResult（秒开，S087 R10）。
+
+    前端 tab 默认调此端点；缓存缺返 404，前端 fallback POST 实跑或显示空态。
+    """
+    from vr_paths import last_trading_date_str  # noqa: PLC0415
+
+    d = date or last_trading_date_str()
+    cached = load_funnel_result(d, "all")
+    if cached is None:
+        raise HTTPException(404, detail=f"无缓存 run_funnel 结果 date={d}，请点'重新跑'触发实跑")
+    return cached
+
+
+@router.get("/candidates/funnel/dates")
+async def list_funnel_cache_dates():
+    """GET → 有缓存的日期列表（前端日期选择器标注，S087 R10）。"""
+    return {"dates": list_cached_dates()}
 
 
 @router.get("/candidates")

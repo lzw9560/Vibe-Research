@@ -131,6 +131,10 @@ export interface FunnelConfigResponse { config: ThresholdConfig; sources: Record
 export const candidatesApi = {
   runFunnel: (stage = "all", date?: string) =>
     req<FunnelResult>(`/workflow/candidates/funnel?stage=${stage}${date ? `&date=${date}` : ""}`, "POST"),
+  // S087 R10：缓存优先——读落库 run_funnel 结果（秒开），404 时 fallback POST 实跑
+  readFunnelCache: (date?: string) =>
+    req<FunnelResult>(`/workflow/candidates/funnel/cache${date ? `?date=${date}` : ""}`),
+  listCacheDates: () => req<{ dates: string[] }>("/workflow/candidates/funnel/dates"),
   listCandidates: (date?: string) =>
     req<DiagnosisCard[]>(`/workflow/candidates${date ? `?date=${date}` : ""}`),
   diagnosis: (code: string, date?: string) =>
