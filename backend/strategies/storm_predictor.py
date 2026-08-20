@@ -162,6 +162,41 @@ def _collect_news_factor(date: str) -> StormFactor:
         return StormFactor("新闻密度", 50.0, f"采集失败: {exc}", "missing")
 
 
+def _collect_calendar_factor(date: str) -> StormFactor:
+    """日历事件风险（交割日 + 月末）。辅助加分。
+
+    50ETF/300ETF 期权交割日（每月第4周三）+ 股指期货交割日（每月第3周五）→ 交割日±1 波动加剧。
+    月末资金面季节性。固定日历可算，不需数据源。
+    """
+    try:
+        from datetime import datetime as _dt, date as _date
+
+        d = _dt.strptime(date, "%Y-%m-%d") if "-" in date else _dt.strptime(date, "%Y%m%d")
+
+        def _nth_weekday(year: int, month: int, weekday: int, n: int) -> _date:
+            first = _date(year, month, 1)
+            offset = (weekday - first.weekday()) % 7
+            return first.replace(day=1 + offset + (n - 1) * 7)
+
+        opt_day = _nth_weekday(d.year, d.month, 2, 4)  # 期权交割日：第4周三
+        fut_day = _nth_weekday(d.year, d.month, 4, 3)  # 期货交割日：第3周五
+        is_delivery = abs((d.date() - opt_day).days) <= 1 or abs((d.date() - fut_day).days) <= 1
+        is_month_end = d.day >= 28
+
+        if is_delivery:
+            score = 80.0
+            detail = f"交割日±1（期权{opt_day:%m-%d}/期货{fut_day:%m-%d}）波动加剧"
+        elif is_month_end:
+            score = 60.0
+            detail = "月末资金面季节性"
+        else:
+            score = 30.0
+            detail = f"非交割日（期权{opt_day:%m-%d}/期货{fut_day:%m-%d}）"
+        return StormFactor("日历事件", score, detail)
+    except Exception as exc:  # noqa: BLE001
+        return StormFactor("日历事件", 50.0, f"计算失败: {exc}", "missing")
+
+
 def predict_storm(date: str | None = None) -> StormPrediction:
     """盘前暴风雨预测主函数。
 
@@ -179,12 +214,14 @@ def predict_storm(date: str | None = None) -> StormPrediction:
     global_f = _collect_global_factor(d)
     internal_f = _collect_internal_factor(d)
     news_f = _collect_news_factor(d)
+    calendar_f = _collect_calendar_factor(d)
 
-    # 加权（spec §5.1：外围 0.40 + 内部 0.40 + 新闻 0.20；估值 R4 先跳过，权重重分配）
+    # 加权（外围 0.35 + 内部 0.35 + 新闻 0.20 + 日历 0.10；估值 R4 先跳过）
     probability = (
-        global_f.score * 0.40
-        + internal_f.score * 0.40
+        global_f.score * 0.35
+        + internal_f.score * 0.35
         + news_f.score * 0.20
+        + calendar_f.score * 0.10
     )
     probability = round(max(0.0, min(100.0, probability)), 1)
 
@@ -195,5 +232,5 @@ def predict_storm(date: str | None = None) -> StormPrediction:
         probability=probability,
         risk_level=risk_level,
         suggested_position=suggested_position,
-        factors=[global_f, internal_f, news_f],
+        factors=[global_f, internal_f, news_f, calendar_f],
     )
