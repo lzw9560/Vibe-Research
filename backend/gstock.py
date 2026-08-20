@@ -29,7 +29,8 @@ _INDICES = (
     {"key": "hsi", "name": "恒生指数", "secid": "100.HSI", "region": "港股"},
     {"key": "hstech", "name": "恒生科技", "secid": "124.HSTECH", "region": "港股"},
     {"key": "a50", "name": "富时A50", "secid": "100.XIN9", "region": "外盘期货"},
-    {"key": "n225", "name": "日经225", "secid": "100.N225", "region": "亚太"},  # S088 Q2：亚太情绪（试 secid 确认）
+    {"key": "n225", "name": "日经225", "secid": "100.N225", "region": "亚太"},  # S088 Q2：实测 stock/get 返数据（2026-08-20 探测 price=66216 chg+1.36%）
+    {"key": "kospi", "name": "韩国KOSPI", "secid": "100.KS11", "region": "亚太"},  # S088 Q3：实测返数据（韩国半导体 SKL/三星，与 SOX 互补覆盖半导体周期）
 )
 
 # 搜索返回的 MktNum → (secucode 后缀, 市场名)
@@ -79,8 +80,40 @@ def _quote_from(d: dict) -> dict:
     }
 
 
+def _fetch_sox_datacenter() -> dict | None:
+    """费城半导体指数（SOX）走 datacenter RPT_INDUSTRY_INDEX/EMI00055562（非 push2 secid）。
+
+    S088 Q3：SOX 无 push2 secid（走 datacenter 报告），换 datacenter 路线
+    （不需 ut，走 em_get 限流）。返回日频行业指标（REPORT_DATE/INDICATOR_VALUE/CHANGE_RATE），
+    change_rate 即前日涨跌%，report_date=前一交易日——对盘前 T-1 预测语义契合。
+    实测 2026-08-20：indicator_value=11738.23 change_rate=-2.12%。
+    """
+    try:
+        rows = astock.eastmoney_datacenter(
+            "RPT_INDUSTRY_INDEX",
+            filter_str='(INDICATOR_ID="EMI00055562")',
+            page_size=1, sort_columns="REPORT_DATE", sort_types="-1",
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        cr = r.get("CHANGE_RATE")
+        return {
+            "key": "sox", "name": "费城半导体", "region": "外围半导体",
+            "price": r.get("INDICATOR_VALUE"),
+            "change_pct": round(float(cr), 2) if isinstance(cr, (int, float)) else None,
+        }
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def global_indices() -> list[dict]:
-    """全球指数快照（道指 / 标普500 / 纳斯达克 / 恒生 / 恒生科技）。源无的档跳过。"""
+    """全球指数快照（道指/标普500/纳斯达克/恒生/恒生科技/A50/日经/KOSPI/SOX）。
+
+    push2 stock/get 取前 8 个；SOX 走 datacenter（非 push2 secid，S088 Q3）。
+    源无的档跳过——调用方（storm_predictor._collect_global_factor）做 per-index missing
+    标注 + 缺失项权重再归一，不静默归零。
+    """
     out = []
     for idx in _INDICES:
         d = _push2_stock_get(idx["secid"], "f43,f57,f58,f59,f60,f170")
@@ -92,6 +125,9 @@ def global_indices() -> list[dict]:
             "price": _price(d, "f43"),
             "change_pct": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
         })
+    sox = _fetch_sox_datacenter()
+    if sox:
+        out.append(sox)
     return out
 
 

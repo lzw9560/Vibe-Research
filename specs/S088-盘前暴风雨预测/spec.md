@@ -1,6 +1,6 @@
 # Spec: S088 — 盘前暴风雨预测模型
 
-> 状态：grill 对抗性核实完成（2026-08-20）——Q6 done；Q1/Q2/Q3 partial（done 被高估）；Q4 partial（补丁就绪待落地）；Q5 pending（种子低估阻塞性取数 bug）。待实施 Q1/Q4/Q5 承重修复，Q2/Q3 live 探测 + R10 推迟。见 §10。
+> 状态：Q1/Q4/Q5/Q2/Q3 已实施（commit b29afa6 承重修复 + 本轮 Q2/Q3 探测落地），待 push。Q6 done。R10 blocking（scheduled_tasks 并发重构中）。见 §10/§11。
 > 作者：lzw9560　日期：2026-08-20
 > 关联：S063（SentimentContext 事后 STI 检测）/ S087（语境 tab 接入）/ S086（战法 pipeline）
 >
@@ -135,9 +135,13 @@
 
 种子称已 done。核实**反驳**：`gstock.py:32` 注释"试 secid 确认"=作者自认未验证；`gstock.py:24`"均已实测"只覆盖原 6 指数。akshare 证 `100.N225` 在 **clist/get 批量端点**有效，但 `gstock._push2_stock_get` 用的是 **stock/get 单引端点**（端点不同，不保证可用）。fetch 空则 `storm_predictor.py:96` `n225_chg=0.0` 静默归零、0.15 权重白给无再归一、detail 显示"日经 +0.00%"缺失与平盘不可区分。成立：commit+权重和=1.0。**待办**（live_emoney_block 推迟）：跑一次 live em_get 确认 stock/get 返 100.N225；加 per-index missing 标志 + 缺失项权重再归一。
 
+**实测落地**（2026-08-20 探测 + 实现，本轮 commit）：100.N225 stock/get 返数据（price=66216 chg+1.36%）确认生效——agent 担心的"未验证"排除；per-index missing 标志 + 缺失项权重再归一已实现（`storm_predictor._collect_global_factor`，缺指数 detail 标"缺 X"、权重 ÷剩余和）。Q2 done。
+
 ### Q3 — SOX/纳指科技/KOSPI secid　状态：partial（三者状态不同）
 
 种子称 PENDING + search 风控。核实**反驳**两点：(1) KOSPI 非真未知——akshare `cons.py:173`+`index_global_em.py:28` 双重佐证 `100.KS11`（返空是错猜 `100.KOSPI` 名而非 `100.KS11` 码）；(2) "search 接口风控"标错对象——`gstock.py:86` 指数走 hardcoded secid + push2 stock/get，不经 search（search 仅个股）。未反驳：SOX 确无 push2 secid（走 datacenter `RPT_INDUSTRY_INDEX/EMI00055562`）、NDXT 全仓无证据（`100.NDXT` 仅规律猜）。**待办**（live_emoney_block 推迟）：KOSPI 可照 N225 先例加 `100.KS11` 后 live 验；SOX 换 datacenter 路线（不需 ut、走 em_get）；NDXT 需破"国外源不并入"约束或 yahoo/stooq。安全探测：≥10min 间隔、push2→push2delay 降级、照 `tools/first_board_quote_source_probe.py` 范式。
+
+**实测落地**（2026-08-20 探测 + 实现，本轮 commit）：KOSPI `100.KS11` push2 返数据（price=6852 chg+5.89%，已加 `_INDICES`）；SOX datacenter `RPT_INDUSTRY_INDEX/EMI00055562` 返数据（report_date=08-19 value=11738 chg=-2.12%，已加 `_fetch_sox_datacenter` 分流进 `global_indices`）；NDXT `100.NDXT` push2 返空，**放弃**（SOX 已覆盖半导体周期同维度）。探测脚本 `tools/s088_secid_probe.py` + matrix 落 `.vibe-research/s088-secid-probe/`。Q3 done（NDXT 放弃）。
 
 ### Q4 — 八项 ④⑤ missing 补全　状态：partial（认知成立，补丁就绪）
 
@@ -173,9 +177,9 @@ eight = check_eight_standards(ind, eight_ctx)
 ## 11. 实施状态
 
 - [x] push 9 commit（develop→origin，df0bd90..6cf9ecb）
-- [ ] Q5 取数 bug 修复（storm_predictor + storm_daemon）
-- [ ] Q1 T-1 计算 + lifespan 接入 + test_s088 回测
-- [ ] Q4 八项 ④⑤ 补全（diagnosis.py）
-- [推迟] Q2 日经 secid live 验证 + 静默失败修复（live_emoney_block）
-- [推迟] Q3 KOSPI/SOX/NDXT（live_emoney_block）
-- [blocking] R10 storm 定时任务（scheduled_tasks 并发重构中）
+- [x] Q5 取数 bug 修复（storm_predictor + storm_daemon）— commit b29afa6
+- [x] Q1 T-1 计算 + lifespan 接入 + test_s088 回测 — commit b29afa6
+- [x] Q4 八项 ④⑤ 补全（diagnosis.py）— commit b29afa6
+- [x] Q2 日经 secid 实测生效 + 静默失败修复（per-index missing + 权重再归一）— 本轮
+- [x] Q3 KOSPI(100.KS11)/SOX(datacenter) 实测加入；NDXT(100.NDXT) 返空放弃 — 本轮
+- [blocking] R10 storm 定时任务（scheduled_tasks 并发重构中，待并发编辑器 commit 后补）

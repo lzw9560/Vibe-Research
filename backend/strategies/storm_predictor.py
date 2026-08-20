@@ -65,19 +65,24 @@ def _prev_trading_day(date: str) -> str:
 
 
 def _collect_global_factor(date: str) -> StormFactor:
-    """外围隔夜因子（美股三大 + A50 + 港股，T-1 夜间快照）。权重 0.35。
+    """外围隔夜因子（美股三大+A50+港股+日经+KOSPI+SOX，T-1 夜间快照）。权重 0.35。
 
     美股隔夜大跌 + A50 夜盘跌 → 暴风雨概率升高（A 股跟跌关联）。
-    S088 Q1 daemon：读 T-1 夜间快照（get_t1_global_snapshot），无则 fallback 当前 + 标。
+    S088 Q1 daemon：读前一交易日夜间快照（get_t1_global_snapshot），无则 fallback 当前 + 标。
+    S088 Q2/Q3：N225(100.N225)/KOSPI(100.KS11) 走 push2 stock/get，SOX 走 datacenter
+    （RPT_INDUSTRY_INDEX/EMI00055562），三指数实测 2026-08-20 加入。
+    S088 Q2 修静默失败：缺指数不再静默归零，标 missing + 权重再归一（剩余项权重÷剩余权重和），
+    避免缺失项权重白给致 combined 偏向 50 中性、低估外围动量。
+    权重 6 项：美股0.35/A500.20/港股0.15/日经0.10/KOSPI0.10/SOX0.10=1.0。
     """
     from strategies.storm_daemon import get_t1_global_snapshot  # noqa: PLC0415
 
-    # 优先读 T-1 夜间快照（修历史 bug——0819 预测取 0818 夜间而非 0820 当前）
+    # 优先读前一交易日夜间快照（修历史 bug——预测交易日读前日夜间而非当日当前）
     snap = get_t1_global_snapshot(date)
     indices = (snap or {}).get("global_indices") if snap else None
     data_status = "ok"
     if not indices:
-        # fallback 当前（无 T-1 快照，标 fallback_current）
+        # fallback 当前（无前日快照，标 fallback_current）
         try:
             import market  # noqa: PLC0415
 
@@ -89,21 +94,48 @@ def _collect_global_factor(date: str) -> StormFactor:
     if not indices:
         return StormFactor("外围隔夜", 50.0, "外盘数据未取得", "missing")
 
-    us = [i for i in indices if i.get("name") in ("道琼斯", "标普500", "纳斯达克")]
-    a50 = next((i for i in indices if "富时A50" in (i.get("name") or "")), None)
+    by_name = {i.get("name"): i for i in indices if isinstance(i, dict)}
+    us = [by_name.get(n) for n in ("道琼斯", "标普500", "纳斯达克") if by_name.get(n)]
+    a50 = by_name.get("富时A50") or next(
+        (i for i in indices if "富时A50" in (i.get("name") or "")), None)
     hk = [i for i in indices if "恒生" in (i.get("name") or "")]
-    n225 = next((i for i in indices if "日经" in (i.get("name") or "")), None)
+    n225 = by_name.get("日经225") or next(
+        (i for i in indices if "日经" in (i.get("name") or "")), None)
+    kospi = by_name.get("韩国KOSPI") or next(
+        (i for i in indices if "KOSPI" in (i.get("name") or "")), None)
+    sox = by_name.get("费城半导体") or next(
+        (i for i in indices if "费城" in (i.get("name") or "")), None)
 
-    us_avg = sum(float(i.get("change_pct") or 0) for i in us) / max(len(us), 1)
-    a50_chg = float(a50.get("change_pct") or 0) if a50 else 0.0
-    hk_avg = sum(float(i.get("change_pct") or 0) for i in hk) / max(len(hk), 1)
-    n225_chg = float(n225.get("change_pct") or 0) if n225 else 0.0
+    def _chg(i: dict | None) -> float | None:
+        v = i.get("change_pct") if i else None
+        return float(v) if isinstance(v, (int, float)) else None
 
-    # 综合涨跌 → 概率分（美股0.4+A50 0.25+港股0.2+日经0.15）
-    combined = us_avg * 0.40 + a50_chg * 0.25 + hk_avg * 0.20 + n225_chg * 0.15
+    def _avg(idxs: list[dict | None]) -> float | None:
+        vals = [v for v in (_chg(i) for i in idxs) if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    # (显示名, 涨跌%, 权重)；chg=None 该项 missing，权重再归一给在场项
+    items: list[tuple[str, float | None, float]] = [
+        ("美股均", _avg(us), 0.35),
+        ("A50", _chg(a50), 0.20),
+        ("港股均", _avg(hk), 0.15),
+        ("日经", _chg(n225), 0.10),
+        ("KOSPI", _chg(kospi), 0.10),
+        ("SOX", _chg(sox), 0.10),
+    ]
+    present = [(n, c, w) for n, c, w in items if c is not None]
+    missing_names = [n for n, c, _ in items if c is None]
+    if not present:
+        return StormFactor("外围隔夜", 50.0, "外盘涨跌均未取得", "missing")
+    # 权重再归一：缺失项权重重分给在场项（避免白给致低估）
+    w_sum = sum(w for _, _, w in present)
+    combined = sum(c * (w / w_sum) for _, c, w in present) if w_sum > 0 else 0.0
     score = max(0.0, min(100.0, 50 - combined * 15))
     src = "T-1 夜间快照" if data_status == "ok" else "当前(fallback)"
-    detail = f"[{src}] 美股均 {us_avg:+.2f}% / A50 {a50_chg:+.2f}% / 港股均 {hk_avg:+.2f}% / 日经 {n225_chg:+.2f}%"
+    parts = [f"{n}{c:+.2f}%" for n, c, _ in present]
+    detail = f"[{src}] {' / '.join(parts)}"
+    if missing_names:
+        detail += f" / 缺 {','.join(missing_names)}"
     return StormFactor("外围隔夜", round(score, 1), detail, data_status)
 
 

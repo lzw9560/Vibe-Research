@@ -281,3 +281,98 @@ def test_predict_storm_high_risk_clamps_position(monkeypatch):
     # 0.35*90+0.35*80+0.20*80+0.10*80 = 31.5+28+16+8 = 83.5
     assert p.risk_level == "极高"
     assert p.suggested_position == 0.25
+
+
+# ============================================================================
+# Q2/Q3：外围因子 6 指数加权 + per-index missing 再归一 + KOSPI/SOX 接入
+# ============================================================================
+
+def _make_indices(changes: dict[str, float]) -> list[dict]:
+    """构造 global_indices 返回结构：{name: change_pct}。"""
+    return [{"name": n, "change_pct": c, "region": "test", "key": n} for n, c in changes.items()]
+
+
+def test_global_factor_six_indices_weighted(monkeypatch):
+    """Q2/Q3：6 指数在场，权重 0.35/0.20/0.15/0.10/0.10/0.10 加权。
+
+    美股均 -3.0 / A50 -1.0 / 港股均 -2.0 / 日经 -1.0 / KOSPI -2.0 / SOX -2.0
+    combined = -1.05-0.20-0.30-0.10-0.20-0.20 = -2.05 → score = 50+30.75 = 80.75
+    """
+    from strategies import storm_predictor, storm_daemon
+
+    indices = _make_indices({
+        "道琼斯": -3.0, "标普500": -2.0, "纳斯达克": -4.0,
+        "富时A50": -1.0, "恒生指数": -2.0, "恒生科技": -2.0,
+        "日经225": -1.0, "韩国KOSPI": -2.0, "费城半导体": -2.0,
+    })
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"global_indices": indices})
+    f = storm_predictor._collect_global_factor("2026-08-20")
+    assert f.data_status == "ok"
+    assert abs(f.score - 80.75) < 0.3
+    assert "KOSPI" in f.detail and "SOX" in f.detail and "日经" in f.detail
+    assert "缺" not in f.detail  # 全在场无缺失
+
+
+def test_global_factor_missing_index_renormalizes(monkeypatch):
+    """Q2：缺 SOX 不静默归零——权重再归一给在场 5 项，detail 标'缺 SOX'。
+
+    在场 5 项原权重和 0.90，再归一 ÷0.90：
+    combined = (-3*0.35-1*0.20-2*0.15-1*0.10-2*0.10)/0.90 = -1.85/0.90 = -2.056
+    score = 50+30.83 = 80.83（比全在场 80.75 略高，因 SOX -2.0 低于均值，剔除后剩余更悲观）
+    """
+    from strategies import storm_predictor, storm_daemon
+
+    indices = _make_indices({
+        "道琼斯": -3.0, "标普500": -2.0, "纳斯达克": -4.0,
+        "富时A50": -1.0, "恒生指数": -2.0, "恒生科技": -2.0,
+        "日经225": -1.0, "韩国KOSPI": -2.0,
+        # 无费城半导体 SOX
+    })
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"global_indices": indices})
+    f = storm_predictor._collect_global_factor("2026-08-20")
+    assert "缺 SOX" in f.detail
+    assert abs(f.score - 80.83) < 0.4
+
+
+def test_global_factor_all_missing_returns_neutral(monkeypatch):
+    """Q2：全部指数 change_pct 缺→missing 50，不臆造。"""
+    from strategies import storm_predictor, storm_daemon
+
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"global_indices": [{"name": "道琼斯", "change_pct": None}]})
+    f = storm_predictor._collect_global_factor("2026-08-20")
+    assert f.data_status == "missing"
+    assert f.score == 50.0
+
+
+def test_global_factor_fallback_current_when_no_snapshot(monkeypatch):
+    """Q1：无前日快照→fallback market 当前，标 fallback_current。"""
+    from strategies import storm_predictor, storm_daemon
+    import market
+
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot", lambda d: None)
+    monkeypatch.setattr(market, "get_global_indices",
+                        lambda: _make_indices({"道琼斯": -3.0, "标普500": -2.0, "纳斯达克": -4.0,
+                                               "富时A50": -1.0}))
+    f = storm_predictor._collect_global_factor("2026-08-20")
+    assert f.data_status == "fallback_current"
+    assert "美股均" in f.detail
+
+
+def test_global_indices_includes_kospi_and_sox(monkeypatch):
+    """Q3：global_indices 含 KOSPI（_INDICES push2）+ SOX（datacenter 分流）。"""
+    import gstock
+
+    monkeypatch.setattr(gstock, "_push2_stock_get",
+                        lambda secid, fields: {"f58": "x", "f43": 100, "f170": 100, "f59": 2})
+    monkeypatch.setattr(gstock, "_fetch_sox_datacenter",
+                        lambda: {"key": "sox", "name": "费城半导体", "region": "外围半导体",
+                                 "price": 11738, "change_pct": -2.12})
+    out = gstock.global_indices()
+    keys = {i["key"] for i in out}
+    assert "kospi" in keys  # _INDICES 含（push2）
+    assert "sox" in keys  # datacenter 分流
+    sox = next(i for i in out if i["key"] == "sox")
+    assert sox["change_pct"] == -2.12
