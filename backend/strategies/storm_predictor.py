@@ -146,7 +146,7 @@ def _collect_internal_factor(date: str) -> StormFactor:
     数据：T-1 gene_scores + sti_timeline（max_boards/break_rate）。
     """
     try:
-        from limitup_screener.data import load_gene_scores, get_db  # noqa: PLC0415
+        from limitup_screener.data import load_gene_scores  # noqa: PLC0415
 
         t1 = _prev_trading_day(date)
         genes = load_gene_scores(t1) or []
@@ -157,18 +157,26 @@ def _collect_internal_factor(date: str) -> StormFactor:
         avg_rebound = sum(g.factors.get("炸板后溢价", 0) or 0 for g in genes) / len(genes)
 
         # sti_timeline T-1 的连板高度 + 炸板率
+        # S088 R10 分析修：sti_timeline 在 STI_TIMELINE_DB_PATH（非 gene_scores DB），
+        # 原调 limitup_screener.data.get_db()（gene_scores DB）→ no such table → 恒降级 0。
         max_boards = 0.0
         break_rate = 0.0
         try:
-            db = get_db()
-            row = db.execute(
-                "SELECT dimension_max_boards, raw_break_rate FROM sti_timeline WHERE date=?",
-                (t1,),
-            ).fetchone()
-            if row and row["dimension_max_boards"] is not None:
-                max_boards = float(row["dimension_max_boards"])
-            if row and row["raw_break_rate"] is not None:
-                break_rate = float(row["raw_break_rate"])
+            import sqlite3
+            from config import STI_TIMELINE_DB_PATH  # noqa: PLC0415
+            _sti = sqlite3.connect(STI_TIMELINE_DB_PATH)
+            _sti.row_factory = sqlite3.Row
+            try:
+                row = _sti.execute(
+                    "SELECT dimension_max_boards, raw_break_rate FROM sti_timeline WHERE date=?",
+                    (t1,),
+                ).fetchone()
+                if row and row["dimension_max_boards"] is not None:
+                    max_boards = float(row["dimension_max_boards"])
+                if row and row["raw_break_rate"] is not None:
+                    break_rate = float(row["raw_break_rate"])
+            finally:
+                _sti.close()
         except Exception:  # noqa: BLE001 — sti 缺失降级 0
             pass
 

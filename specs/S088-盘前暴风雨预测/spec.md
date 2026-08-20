@@ -183,6 +183,8 @@ eight = check_eight_standards(ind, eight_ctx)
 - [x] Q2 日经 secid 实测生效 + 静默失败修复（per-index missing + 权重再归一）— 本轮
 - [x] Q3 KOSPI(100.KS11)/SOX(datacenter) 实测加入；NDXT(100.NDXT) 返空放弃 — 本轮
 - [obsolete] R10 storm 8:00 scheduled 条目——4 视角对抗分析确认冗余（storm_daemon 30min 已占优定时+输入快照、结果 cache 无消费者、§44 走重算范式非读结果），不实现 8:00 scheduled 条目。改为修 news 口径 bug（见 §12）
+- [x] sti_timeline DB 路径修复（_collect_internal_factor 原调 gene_scores DB 无此表→恒降级0；改 STI_TIMELINE_DB_PATH）— 本轮，production internal 因子修对
+- [x] A7 0819 回测脚本 tools/s088_a7_backtest.py（push2his 真外围+datacenter SOX+真 internal DB）— 本轮；push2his 间歇限流致外围 missing，待恢复重跑；yfinance/stooq 待接入 backup
 
 ## 12. R10 深度分析（2026-08-20，4 视角对抗 + 综合）
 
@@ -203,3 +205,26 @@ R10 拆两职责，均已被覆盖或无消费者：
 `_collect_news_factor(date)` 收 date 参数却全程不用，直接读 `newsradar.get_radar(force=False)`（当前 radar.json，单文件原子覆写、无历史）——与 `_collect_global_factor` 读 T-1 快照、`_collect_internal_factor` 读 T-1 gene_scores 的可复现路径不一致。daemon 写进 T-1 快照的 `news_items`（`storm_daemon.py:51/57`）全仓无任何读者（orphaned 死写）。后果：`predict_storm("2026-08-19")` 回测时新闻因子用今天新闻而非 0819，违 A7（spec.md:89）+ §1.2 可复现。
 
 **修复**（已实施，本轮）：`_collect_news_factor` 镜像 `_collect_global_factor`——优先调 `get_t1_global_snapshot(date)` 读 `news_items`（daemon 已扁平化，直喂计数循环，零重构），无快照 fallback 当前 `newsradar.get_radar` + 标 `fallback_current` + detail 前缀 `[当前(fallback)]`，仍空→missing 50。闭合 orphaned 死写接线 + A7 + §1.2。补 6 测试（读 T-1 快照 / fallback / 中性词 / 无 items / 利好对冲 / 全利空），23 passed。
+
+## 13. sti_timeline DB 路径 bug + A7 真数据回测（2026-08-20，R10 分析延伸）
+
+### sti_timeline DB 路径 bug（production internal 因子失真）
+
+R10 分析延伸发现：`_collect_internal_factor`（storm_predictor.py）调 `limitup_screener.data.get_db()` 返 `GENE_SCORES_DB_PATH`，但 `sti_timeline` 表在 `STI_TIMELINE_DB_PATH`（config 常量）——**两个不同 DB**。故 production predict_storm 的 internal 因子 sti 部分（max_boards/break_rate）一直 `no such table` 异常被 catch 降级 0，internal 因子失真。
+
+修复：`_collect_internal_factor` sti 查询改用 `sqlite3.connect(STI_TIMELINE_DB_PATH)`（不再借 get_db）。真数据验证：`_collect_internal_factor("2026-08-19")` 读到 0818 sti `max_boards=4 / break_rate=22.5%`（之前恒 0），score 51.7。23 测试 passed。
+
+### A7 0819 真数据回测
+
+spec §6 A7：用 0818 数据预测 0819，概率分应高。真数据源（走 em_get 防封，不裸连）：
+- 外围 0818 涨跌：push2his 指数历史K线（道指/纳指/标普/恒生/恒生科技/A50/日经/KOSPI），**不需 ut**（指数 push2his 同 stock/get 指数通道，记忆 eastmoney-push2-ut-token 说的 ut 是针对个股 push2his）
+- SOX 0818：datacenter `RPT_INDUSTRY_INDEX/EMI00055562` report_date=0818
+- 内部 0818：gene_scores DB（106 条）+ sti_timeline DB（修复后 max_boards=4/break_rate=22.5%）
+- 新闻 0818：cache 缺历史（fetch_radar 当前不含 0818 ts），走 fallback 当前 cache + 标 fallback_current（透明降级，待 daemon 跨日积累闭合）
+
+脚本 `tools/s088_a7_backtest.py`。首次跑 push2his 间歇限流致外围 `[]` missing → 概率分 41.9（偏低，非逻辑问题，数据源限流）。internal 51.7 ok + 新闻 16.7 fallback + 日历 30。
+
+### 数据源裂缝（待闭合）
+
+- push2his 间歇限流（记忆 eastmoney-push2-ut-token）：连续打 ~17 次触发 HTTPSConnectionPool 连接失败，≥10min 恢复。A7 重跑待恢复。
+- yfinance/stooq 作 backup 源（用户指令接入）：yfinance 1.6.0 已装，stooq 用 URL CSV。待验证可用性（国外源可能被墙）后接入 A7 脚本作 push2his 限流时降级。
