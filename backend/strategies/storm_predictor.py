@@ -61,32 +61,44 @@ def _prev_trading_day(date: str) -> str:
 
 
 def _collect_global_factor(date: str) -> StormFactor:
-    """外围隔夜因子（美股三大 + A50 + 港股）。权重 0.40。
+    """外围隔夜因子（美股三大 + A50 + 港股，T-1 夜间快照）。权重 0.35。
 
     美股隔夜大跌 + A50 夜盘跌 → 暴风雨概率升高（A 股跟跌关联）。
+    S088 Q1 daemon：读 T-1 夜间快照（get_t1_global_snapshot），无则 fallback 当前 + 标。
     """
-    try:
-        import market  # noqa: PLC0415
+    from strategies.storm_daemon import get_t1_global_snapshot  # noqa: PLC0415
 
-        indices = market.get_global_indices() or []
-        if not indices:
-            return StormFactor("外围隔夜", 50.0, "外盘数据未取得", "missing")
+    # 优先读 T-1 夜间快照（修历史 bug——0819 预测取 0818 夜间而非 0820 当前）
+    snap = get_t1_global_snapshot(date)
+    indices = (snap or {}).get("global_indices") if snap else None
+    data_status = "ok"
+    if not indices:
+        # fallback 当前（无 T-1 快照，标 fallback_current）
+        try:
+            import market  # noqa: PLC0415
 
-        us = [i for i in indices if i.get("name") in ("道琼斯", "标普500", "纳斯达克")]
-        a50 = next((i for i in indices if "富时A50" in (i.get("name") or "")), None)
-        hk = [i for i in indices if "恒生" in (i.get("name") or "")]
+            indices = market.get_global_indices() or []
+            data_status = "fallback_current"
+        except Exception as exc:  # noqa: BLE001
+            return StormFactor("外围隔夜", 50.0, f"采集失败: {exc}", "missing")
 
-        us_avg = sum(float(i.get("change_pct") or 0) for i in us) / max(len(us), 1)
-        a50_chg = float(a50.get("change_pct") or 0) if a50 else 0.0
-        hk_avg = sum(float(i.get("change_pct") or 0) for i in hk) / max(len(hk), 1)
+    if not indices:
+        return StormFactor("外围隔夜", 50.0, "外盘数据未取得", "missing")
 
-        # 综合涨跌 → 概率分（跌 0% = 50 中性，跌 2% = 80 高，涨 2% = 20 低）
-        combined = us_avg * 0.5 + a50_chg * 0.3 + hk_avg * 0.2
-        score = max(0.0, min(100.0, 50 - combined * 15))
-        detail = f"美股均 {us_avg:+.2f}% / A50 {a50_chg:+.2f}% / 港股均 {hk_avg:+.2f}%"
-        return StormFactor("外围隔夜", round(score, 1), detail)
-    except Exception as exc:  # noqa: BLE001
-        return StormFactor("外围隔夜", 50.0, f"采集失败: {exc}", "missing")
+    us = [i for i in indices if i.get("name") in ("道琼斯", "标普500", "纳斯达克")]
+    a50 = next((i for i in indices if "富时A50" in (i.get("name") or "")), None)
+    hk = [i for i in indices if "恒生" in (i.get("name") or "")]
+
+    us_avg = sum(float(i.get("change_pct") or 0) for i in us) / max(len(us), 1)
+    a50_chg = float(a50.get("change_pct") or 0) if a50 else 0.0
+    hk_avg = sum(float(i.get("change_pct") or 0) for i in hk) / max(len(hk), 1)
+
+    # 综合涨跌 → 概率分（跌 0% = 50 中性，跌 2% = 80 高，涨 2% = 20 低）
+    combined = us_avg * 0.5 + a50_chg * 0.3 + hk_avg * 0.2
+    score = max(0.0, min(100.0, 50 - combined * 15))
+    src = "T-1 夜间快照" if data_status == "ok" else "当前(fallback)"
+    detail = f"[{src}] 美股均 {us_avg:+.2f}% / A50 {a50_chg:+.2f}% / 港股均 {hk_avg:+.2f}%"
+    return StormFactor("外围隔夜", round(score, 1), detail, data_status)
 
 
 def _collect_internal_factor(date: str) -> StormFactor:

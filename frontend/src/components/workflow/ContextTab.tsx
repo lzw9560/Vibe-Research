@@ -47,6 +47,8 @@ export function ContextTab({ date }: Props) {
         `/sentiment/storm-predict${date ? `?date=${date}` : ""}`,
       ),
     retry: false,
+    staleTime: 5 * 60_000,  // 5min stale
+    refetchInterval: 30 * 60_000,  // S088 Q1：30min 刷新语境（daemon 跑完拿新外围/新闻快照）
   });
 
   const weather = ctx?.weather_state ?? "未取得";

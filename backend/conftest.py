@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 _TEST_DATA_DIR = tempfile.mkdtemp(prefix="vr-test-data-")
 os.environ["VR_DATA_DIR"] = _TEST_DATA_DIR
 os.environ["VR_REPORTS_DIR"] = os.path.join(_TEST_DATA_DIR, "myreports")
+os.environ["VR_STORM_DAEMON"] = "0"  # S088：测试禁 storm-daemon（不抓外围/新闻网络）
 # HistGradientBoosting 在 Windows 多进程残留时 OpenMP 易死锁；测试统一单线程防 hang
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
