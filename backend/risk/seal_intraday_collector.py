@@ -31,11 +31,9 @@ _logger = logging.getLogger(__name__)
 _DB_PATH = SEAL_INTRADAY_DB_PATH
 _DB_LOCK = threading.Lock()
 
-# S089 A3：模块级单连接复用（check_same_thread=False）。
-# 配合 _DB_LOCK 串行化写入，避免每次 connect 的开销；WAL 模式下单连接软并发读写安全。
-# _DB_CONN_PATH 记录建连接时的路径，_DB_PATH 被改（测试隔离）时 _get_conn 自动重建。
-_DB_CONN: sqlite3.Connection | None = None
-_DB_CONN_PATH: str | None = None
+# S089 A3→fix：回退单连接复用（finally: conn.close() 关掉共享连接致 closed database）。
+# WAL + busy_timeout 核心加固不依赖连接复用——每次 get_healthy_conn 都设 PRAGMA，
+# SQLite connect 是毫秒级，性能开销可忽略。
 
 # 交易时段门控（A 股）：09:25-11:30 + 13:00-15:05（含盘后 5 分钟兜底）
 _TRADING_PERIODS = [
@@ -66,33 +64,13 @@ def run_migrations() -> None:
 
 
 def _get_conn() -> sqlite3.Connection:
-    """S089 A3：复用模块级单连接（check_same_thread=False + WAL + busy_timeout）。
+    """S089 A3→fix：每次新建连接（WAL + busy_timeout），回退单连接复用。
 
-    首次调用时经 ``get_healthy_conn`` 建连接，后续复用。写入由调用方配合
-    ``_DB_LOCK`` 串行化。注意：既有业务函数在 finally 里调 ``conn.close()``
-    ——单连接下 close 会失效该实例，故此处检测 close 后自动重建（不臆造、
-    不改业务函数）。测试隔离靠 ``_DB_PATH`` 被 monkeypatch 后路径不符重建。
+    回退单连接复用——业务函数 finally: conn.close() 会关掉共享连接致
+    ``closed database``。WAL + busy_timeout 核心加固不依赖连接复用。
+    测试隔离靠 ``_DB_PATH`` 被 monkeypatch 后路径自动指向新库。
     """
-    global _DB_CONN, _DB_CONN_PATH
-    # 路径变更（测试隔离或私有目录切换）→ 关闭旧连接，按新路径重建
-    if _DB_CONN is not None and _DB_CONN_PATH != _DB_PATH:
-        try:
-            _DB_CONN.close()
-        except Exception:
-            pass
-        _DB_CONN = None
-        _DB_CONN_PATH = None
-    # 连接已被业务函数 close / 失效 → 重建
-    if _DB_CONN is not None:
-        try:
-            _DB_CONN.execute("SELECT 1").fetchone()
-        except sqlite3.ProgrammingError:
-            _DB_CONN = None
-            _DB_CONN_PATH = None
-    if _DB_CONN is None:
-        _DB_CONN = get_healthy_conn(_DB_PATH, check_same_thread=False)
-        _DB_CONN_PATH = _DB_PATH
-    return _DB_CONN
+    return get_healthy_conn(_DB_PATH, check_same_thread=False)
 
 
 def is_intraday_trading_time(now: datetime | None = None) -> bool:
