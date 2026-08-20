@@ -152,7 +152,18 @@ async def _collect(run_id: str, target_date: str) -> None:
         me = await asyncio.to_thread(_fetch_market_emotion, target_date, ctx)
         logger.info("[_collect] _fetch_market_emotion: %.1fs", _time.time() - _t2)
         _t3 = _time.time()
-        funnel_layers = await asyncio.to_thread(_build_funnel_layers, target_date, ctx)
+        # S049 C4 修复：run_funnel 只调一次，layers + final_candidates 复用同一 result
+        # （原代码 _build_funnel_layers + _save_snapshot 前各跑一次 run_funnel，264s × 2）
+        funnel_result = None
+        try:
+            from routers.candidates import _store  # noqa: PLC0415
+            funnel_result = await asyncio.to_thread(
+                funnel_mod.run_funnel, "all", target_date, _store["config"], ctx
+            )
+            funnel_layers = [l.model_dump(mode="json") for l in funnel_result.layers]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("funnel_layers 构建失败 (%s): %s", target_date, exc)
+            funnel_layers = []
         logger.info("[_collect] _build_funnel_layers: %.1fs layers=%d", _time.time() - _t3, len(funnel_layers or []))
         as_of = _now_iso()
         factors = [_serialize_factor(r) for r in results]
@@ -243,12 +254,11 @@ async def _collect(run_id: str, target_date: str) -> None:
         # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _build_funnel_layers 重建）
         funnel_mod.clear_funnel_cache(target_date)
         try:
-            # S049 C4：快照存 final_candidates 诊断卡（抽屉查看历史快照日期时优先用，无才 live diagnose）
+            # S049 C4：快照存 final_candidates 诊断卡（复用 _build_funnel_layers 的 funnel_result）
             final_cards: list[dict] = []
             try:
-                from routers.candidates import _store  # noqa: PLC0415
-                result = funnel_mod.run_funnel("all", target_date, _store["config"], ctx)
-                final_cards = [c.model_dump(mode="json") for c in result.final_candidates]
+                if funnel_result is not None:
+                    final_cards = [c.model_dump(mode="json") for c in funnel_result.final_candidates]
             except Exception as exc:  # noqa: BLE001 — 诊断卡构建失败不影响快照主态
                 logger.warning("final_candidates 诊断卡构建失败 %s: %s", target_date, exc)
             _save_snapshot({
