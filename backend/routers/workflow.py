@@ -139,12 +139,21 @@ async def _collect(run_id: str, target_date: str) -> None:
     _fetch_market_emotion / _build_funnel_layers / match_strategy / PositionAdvisor。
     """
     try:
+        import time as _time
+        _t0 = _time.time()
         factor_registry.register_default_factors()
         results = await factor_registry.afetch_all(target_date)
+        logger.info("[_collect] factor 采集完成: %.1fs", _time.time() - _t0)
         # S063 T4：管线头部一次采集 SentimentContext（T-1 硬标准）
+        _t1 = _time.time()
         ctx = await asyncio.to_thread(build_context, target_date)
+        logger.info("[_collect] build_context: %.1fs weather=%s", _time.time() - _t1, ctx.weather_state if ctx else None)
+        _t2 = _time.time()
         me = await asyncio.to_thread(_fetch_market_emotion, target_date, ctx)
+        logger.info("[_collect] _fetch_market_emotion: %.1fs", _time.time() - _t2)
+        _t3 = _time.time()
         funnel_layers = await asyncio.to_thread(_build_funnel_layers, target_date, ctx)
+        logger.info("[_collect] _build_funnel_layers: %.1fs layers=%d", _time.time() - _t3, len(funnel_layers or []))
         as_of = _now_iso()
         factors = [_serialize_factor(r) for r in results]
         # B-lite：战法打分接入 briefing 响应供前端 tab 过滤。
@@ -156,9 +165,11 @@ async def _collect(run_id: str, target_date: str) -> None:
         # 此处直接透传 g.factors（中文键名 dict，score_candidates/test_strategy_funnel_registry 同款口径）。
         scored_candidates: list[dict] = []
         try:
+            _t4 = _time.time()
             from limitup_screener.data import load_gene_scores
             from strategies.strategy_funnel_registry import score_candidates
             genes = await asyncio.to_thread(load_gene_scores, target_date)
+            logger.info("[_collect] load_gene_scores: %.1fs genes=%d", _time.time() - _t4, len(genes) if genes else 0)
             if genes:
                 # S073 修数据链断：scored 用 R3 幸存者（非 DB 全量），R3→scored 真串联
                 r3_layer = next((l for l in (funnel_layers or []) if l.get("layer_id") == "R3"), None)
@@ -187,16 +198,20 @@ async def _collect(run_id: str, target_date: str) -> None:
                 pool_item_map: dict[str, dict] = {}
                 try:
                     from strategies.first_board_filter import fetch_zt_pool  # noqa: PLC0415
+                    _t5 = _time.time()
                     zt_pool = await asyncio.to_thread(fetch_zt_pool, target_date)
+                    logger.info("[_collect] fetch_zt_pool: %.1fs pool=%d", _time.time() - _t5, len(zt_pool) if zt_pool else 0)
                     for p in zt_pool or []:
                         code = str(p.get("c", "") or "").strip()
                         if code:
                             pool_item_map[code] = p
                 except Exception as exc:  # noqa: BLE001 — 取池失败降级空 map，不阻断 briefing
                     logger.warning("scored 取涨停池建 pool_item_map 失败 %s: %s", target_date, exc)
+                _t6 = _time.time()
                 scored = await asyncio.to_thread(
                     score_candidates, cand_input, weather_state, target_date, pool_item_map,
                 )
+                logger.info("[_collect] score_candidates: %.1fs scored=%d", _time.time() - _t6, len(scored))
                 # 过滤"无符合条件标的"占位项（strategy_code="none"）
                 scored_candidates = [s for s in scored if s.get("strategy_code") != "none"]
         except Exception as exc:  # noqa: BLE001 — 打分失败不影响 briefing 主态
@@ -435,8 +450,13 @@ def _serialize(obj: Any) -> Any:
         return obj.model_dump()
     if hasattr(obj, "dict"):
         return obj.dict()
+    if hasattr(obj, "to_dict"):
+        return _serialize(obj.to_dict())
     if hasattr(obj, "__dict__"):
-        return asdict(obj)
+        try:
+            return _serialize(asdict(obj))
+        except TypeError:
+            return _serialize({k: getattr(obj, k) for k in vars(obj)})
     if isinstance(obj, dict):
         return {k: _serialize(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
