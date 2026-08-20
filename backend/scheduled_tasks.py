@@ -455,6 +455,7 @@ class TaskExecutor:
             "zt_history_snapshot": self._execute_zt_history_snapshot,  # S078：涨停历史 snapshot 数据地基
             "derived_precompute": self._execute_derived_precompute,  # S084 C1：盘后 derived 异步预采集
             "monthly_vacuum": self._execute_monthly_vacuum,  # S089 D2：月度 VACUUM + wal_checkpoint
+            "kline_refresh": self._execute_kline_refresh,  # S090 B：baostock_kline_cache 日更
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -1440,6 +1441,29 @@ class TaskExecutor:
             "status": "ok" if not errors else "partial",
         }
 
+    def _execute_kline_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S090 B：baostock_kline_cache 日更——盘后增量刷新当日新 bar。
+
+        调 ``tools/refresh_kline_cache.main`` 增量刷新（从各股最新 bar 后拉到
+        last_trading_date，原子写 temp→rename）。baostock 非东财不被 IP 限流
+        （§44 grill 资金流被 push2his 限流，kline 不受影响），可每日跑。
+
+        payload 可选：``max_stocks``（None=全量，debug 用）。
+        返回 ``{"status": "ok"|"degraded", "return_code": int}``。baostock 未装 /
+        cache 不存在 / login 失败标 degraded 不崩（main 内部返 1）。
+        """
+        max_stocks = payload.get("max_stocks")
+        try:
+            from tools.refresh_kline_cache import main as _refresh_kline  # noqa: PLC0415
+            ret = _refresh_kline(max_stocks)
+            return {"status": "ok" if ret == 0 else "degraded", "return_code": ret}
+        except ImportError as e:  # noqa: BLE001
+            logger.warning("[kline_refresh] baostock 未安装: %s", e)
+            return {"status": "degraded", "reason": f"baostock 未安装: {e}"}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[kline_refresh] 刷新失败（不阻塞）: %s", exc)
+            return {"status": "degraded", "reason": str(exc)}
+
 
 _manager = ScheduledTaskManager()
 
@@ -1701,6 +1725,19 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 first_board_filter 已创建（cron 15 16 * * 0-4）")
+
+    # S090 B：kline 日更——盘后 16:30 增量刷新 baostock_kline_cache（premarket breakout 数据源）。
+    # baostock 非东财不被限流；晚 first_board_filter 16:15 +15min，盘后拉当日新 bar。
+    if "kline_refresh" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="kline_refresh",
+            description="S090 B：盘后 baostock_kline_cache 增量刷新（premarket breakout 数据源日更）",
+            task_type="kline_refresh",
+            cron_expr="30 16 * * 0-4",  # 16:30（晚 first_board_filter 16:15 +15min）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 kline_refresh 已创建（cron 30 16 * * 0-4）")
 
     # §44 60 天复验检查点（提醒任务）：周一 18:00 数 eastmoney_live 日数，达 60 →
     # 写 s066_60day_due.json + WARNING + notify_on_success 推送（通道未配则静默）。
