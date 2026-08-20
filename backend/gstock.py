@@ -41,12 +41,16 @@ _QUOTE_FIELDS = "f43,f44,f45,f46,f48,f57,f58,f59,f60,f116,f170"
 
 
 def _push2_stock_get(secid: str, fields: str) -> dict | None:
-    """东财 push2 stock/get：push2 优先、失败降级 push2delay；latch 可用主机。空数据返回 None。"""
+    """东财 push2 stock/get：push2 优先、失败降级 push2delay；latch 可用主机。空数据返回 None。
+
+    S091：timeout 10→5——push2 间歇限流时 fast-fail（global_indices 8 指数串行，
+    限流致 daily-review 卡 9.75s；缩 5 后限流指数 5s 失败降级 push2delay，整体 <5s）。
+    """
     params = {"secid": secid, "fields": fields}
     for i in range(_gs_host[0], len(_GS_HOSTS)):
         try:
             r = astock.em_get(f"https://{_GS_HOSTS[i]}/api/qt/stock/get",
-                              params=params, headers=_UA_H, timeout=10)
+                              params=params, headers=_UA_H, timeout=5)
             d = r.json().get("data")
         except Exception:
             continue
