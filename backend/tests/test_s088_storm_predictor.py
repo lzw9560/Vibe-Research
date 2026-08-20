@@ -16,14 +16,17 @@ from unittest.mock import patch
 
 
 # ============================================================================
-# Q5：新闻因子 industries 聚合 + 利好对冲
+# Q5：新闻因子 T-1 快照接线 + industries 聚合 + 利好对冲
+# （R10 深度分析：_collect_news_factor 读 T-1 快照 news_items，对齐 global 口径）
 # ============================================================================
 
-def _make_radar(titles: list[str]) -> dict:
-    """构造 fetch_radar 返回结构：industries 嵌套 items（顶层无 items 键）。
+def _make_news_items(titles: list[str]) -> list[dict]:
+    """构造快照 news_items 扁平结构（storm_daemon 已扁平化存入）。"""
+    return [{"title": t, "summary": ""} for t in titles]
 
-    复刻真实 fetch_radar 顶层 keys=generated_at/recent_days/industries/stats。
-    """
+
+def _make_radar(titles: list[str]) -> dict:
+    """构造 fetch_radar 返回结构：industries 嵌套 items（顶层无 items 键，用于 fallback 测试）。"""
     items = [{"title": t, "summary": ""} for t in titles]
     return {
         "generated_at": "2026-08-20 09:00",
@@ -35,59 +38,76 @@ def _make_radar(titles: list[str]) -> dict:
     }
 
 
-def test_news_factor_aggregates_industries_items_not_top_level():
-    """Q5：原 radar.get('items') 取不到顶层键→恒 missing。改后 industries 聚合应取到并计分。"""
-    from strategies import storm_predictor
+def test_news_factor_reads_t1_snapshot_news_items(monkeypatch):
+    """R10分析/Q5：优先读前一交易日夜间快照 news_items（对齐 global 口径），data_status=ok。"""
+    from strategies import storm_predictor, storm_daemon
 
-    radar = _make_radar(["暴跌", "大涨", "退市"])
-    with patch("newsradar.get_radar", return_value=radar):
-        f = storm_predictor._collect_news_factor("2026-08-20")
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"news_items": _make_news_items(["暴跌", "大涨", "退市"])})
+    f = storm_predictor._collect_news_factor("2026-08-20")
     assert f.data_status == "ok"
-    assert "利空 2" in f.detail
-    assert "利好 1" in f.detail
-    # 利空占比 2/3 → score ≈ 66.7
+    assert "T-1 夜间快照" in f.detail
+    assert "利空 2" in f.detail and "利好 1" in f.detail
+    assert 60 <= f.score <= 70  # 2/3 ≈ 66.7
+
+
+def test_news_factor_fallback_current_when_no_snapshot(monkeypatch):
+    """R10分析：无前日快照→fallback 当前 newsradar cache（industries 聚合）+ 标 fallback_current。"""
+    from strategies import storm_predictor, storm_daemon
+    import newsradar
+
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot", lambda d: None)
+    monkeypatch.setattr(newsradar, "get_radar",
+                        lambda force=False: _make_radar(["暴跌", "大涨", "退市"]))
+    f = storm_predictor._collect_news_factor("2026-08-20")
+    assert f.data_status == "fallback_current"
+    assert "当前(fallback)" in f.detail
     assert 60 <= f.score <= 70
 
 
-def test_news_factor_neutral_words_not_counted():
-    """Q5：增长/合作等中性高频词不计入（原 bearish_kw 含'风险/增长'致利好噪声大）。"""
-    from strategies import storm_predictor
+def test_news_factor_neutral_words_not_counted(monkeypatch):
+    """Q5：增长/合作等中性高频词不计入（强情绪复合词口径）。"""
+    from strategies import storm_predictor, storm_daemon
 
-    radar = _make_radar(["增长5%", "合作协议", "风险提示"])
-    with patch("newsradar.get_radar", return_value=radar):
-        f = storm_predictor._collect_news_factor("2026-08-20")
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"news_items": _make_news_items(["增长5%", "合作协议", "风险提示"])})
+    f = storm_predictor._collect_news_factor("2026-08-20")
+    assert f.data_status == "missing"  # 无强情绪命中→因子无信号
+    assert f.score == 50.0
+
+
+def test_news_factor_missing_when_no_items(monkeypatch):
+    """R10分析：快照 news_items 空→fallback newsradar，仍空→missing 50。"""
+    from strategies import storm_predictor, storm_daemon
+    import newsradar
+
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"news_items": []})
+    monkeypatch.setattr(newsradar, "get_radar", lambda force=False: {"industries": []})
+    f = storm_predictor._collect_news_factor("2026-08-20")
     assert f.data_status == "missing"
     assert f.score == 50.0
 
 
-def test_news_factor_missing_when_no_items():
-    """Q5：industries 空时返 missing 50（缺数据不臆造）。"""
-    from strategies import storm_predictor
-
-    with patch("newsradar.get_radar", return_value={"industries": []}):
-        f = storm_predictor._collect_news_factor("2026-08-20")
-    assert f.data_status == "missing"
-    assert f.score == 50.0
-
-
-def test_news_factor_bullish_dominant_lowers_score():
+def test_news_factor_bullish_dominant_lowers_score(monkeypatch):
     """Q5：利好远多于利空→低分（暴风雨概率低）。"""
-    from strategies import storm_predictor
+    from strategies import storm_predictor, storm_daemon
 
-    radar = _make_radar(["退市", "涨停", "大涨", "暴涨", "回购", "增持"])
-    with patch("newsradar.get_radar", return_value=radar):
-        f = storm_predictor._collect_news_factor("2026-08-20")
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"news_items": _make_news_items(["退市", "涨停", "大涨", "暴涨", "回购", "增持"])})
+    f = storm_predictor._collect_news_factor("2026-08-20")
     assert f.score < 25  # 利空 1/6 ≈ 16.7
 
 
-def test_news_factor_all_bearish_max_score():
+def test_news_factor_all_bearish_max_score(monkeypatch):
     """Q5：全利空→100 分。"""
-    from strategies import storm_predictor
+    from strategies import storm_predictor, storm_daemon
 
-    radar = _make_radar(["暴跌", "崩盘", "跌停"])
-    with patch("newsradar.get_radar", return_value=radar):
-        f = storm_predictor._collect_news_factor("2026-08-20")
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                       lambda d: {"news_items": _make_news_items(["暴跌", "崩盘", "跌停"])})
+    f = storm_predictor._collect_news_factor("2026-08-20")
     assert f.score == 100.0
+
 
 
 # ============================================================================

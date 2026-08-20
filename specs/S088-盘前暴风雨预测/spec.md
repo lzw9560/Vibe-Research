@@ -182,4 +182,24 @@ eight = check_eight_standards(ind, eight_ctx)
 - [x] Q4 八项 ④⑤ 补全（diagnosis.py）— commit b29afa6
 - [x] Q2 日经 secid 实测生效 + 静默失败修复（per-index missing + 权重再归一）— 本轮
 - [x] Q3 KOSPI(100.KS11)/SOX(datacenter) 实测加入；NDXT(100.NDXT) 返空放弃 — 本轮
-- [blocking] R10 storm 定时任务（scheduled_tasks 并发重构中，待并发编辑器 commit 后补）
+- [obsolete] R10 storm 8:00 scheduled 条目——4 视角对抗分析确认冗余（storm_daemon 30min 已占优定时+输入快照、结果 cache 无消费者、§44 走重算范式非读结果），不实现 8:00 scheduled 条目。改为修 news 口径 bug（见 §12）
+
+## 12. R10 深度分析（2026-08-20，4 视角对抗 + 综合）
+
+> 用户问"R10 是否必要"。起 4 视角 workflow（回测§44 / 工程YAGNI / 历史复盘 / 口径一致性）对抗验证，主动反驳"冗余"倾向找反例。
+
+### R10 决议：skip（obsolete）
+
+R10 拆两职责，均已被覆盖或无消费者：
+- **定时职责**：`storm_daemon` `_INTERVAL=1800`（30min）严格占优 8:00 一次，且模块级 `start()` + app lifespan 接入冷启动即跑；8:00-once 反而更差（盘前 8:00→开盘间新外围/新闻 30min 能抓、8:00 单触发抓不到）。
+- **写 cache 职责**：(A) 输入 cache daemon 已每 30min 写 `storm_snapshots/*.json`（含 global_indices+news_items）=冗余；(B) 结果 cache 端点 `sentiment_weather.py:1210` 实时算返无 cache_response，前端 `ContextTab.tsx:43-51` refetchInterval 30min 拉 fresh 重算，无任何结果落盘消费者（YAGNI）。
+
+最强反例（外围 fallback_current 时间敏感：0819 早 fallback 读 0818 隔夜美股=正确，T+1 重算读 T+1 当下外围=错日期）属输入快照冷启动积累问题（daemon 0820 才启、0818 快照当时不存在），向前走快照会攒够，且 R10 落盘结果不解决输入复现——它只冻结一个当时还半坏的 prediction（news 读当前/sti 查错库恒 0），治标不治本。
+
+§44 一贯走重算范式：S066 `screener_edge_validation` 从 DB 重算 Pearson r+Fisher CI 非读结果 cache；storm 测试 `test_s088:308` 也 monkeypatch 快照重算非读结果。真要保留决策时刻结果，正确机制是扩 `storm_daemon.fetch_snapshot` 写完输入后顺带调 `predict_storm()` 存入同日快照（~5 行），非单开 scheduled_tasks 8:00 任务。
+
+### news 口径 bug（HIGH，必修，4 视角一致确认）
+
+`_collect_news_factor(date)` 收 date 参数却全程不用，直接读 `newsradar.get_radar(force=False)`（当前 radar.json，单文件原子覆写、无历史）——与 `_collect_global_factor` 读 T-1 快照、`_collect_internal_factor` 读 T-1 gene_scores 的可复现路径不一致。daemon 写进 T-1 快照的 `news_items`（`storm_daemon.py:51/57`）全仓无任何读者（orphaned 死写）。后果：`predict_storm("2026-08-19")` 回测时新闻因子用今天新闻而非 0819，违 A7（spec.md:89）+ §1.2 可复现。
+
+**修复**（已实施，本轮）：`_collect_news_factor` 镜像 `_collect_global_factor`——优先调 `get_t1_global_snapshot(date)` 读 `news_items`（daemon 已扁平化，直喂计数循环，零重构），无快照 fallback 当前 `newsradar.get_radar` + 标 `fallback_current` + detail 前缀 `[当前(fallback)]`，仍空→missing 50。闭合 orphaned 死写接线 + A7 + §1.2。补 6 测试（读 T-1 快照 / fallback / 中性词 / 无 items / 利好对冲 / 全利空），23 passed。

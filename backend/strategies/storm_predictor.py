@@ -186,48 +186,63 @@ def _collect_internal_factor(date: str) -> StormFactor:
 
 
 def _collect_news_factor(date: str) -> StormFactor:
-    """新闻利空/利好对比（newsradar 盘后）。权重 0.20。
+    """新闻利空/利好对比（newsradar 盘后，前一交易日夜间快照）。权重 0.20。
 
     S088 grill Q5：原 radar.get("items") 取不存在的顶层键致因子恒 missing、0.20 权重失效；
-    fetch_radar 返回 dict 顶层是 industries 嵌套 items（无顶层 items 键），须扁平化聚合。
-    加利好对冲：收窄关键词到强情绪复合词（剔除增长/合作/风险等中性高频词，否则利好噪声比利空大），
-    占比口径（非差值）避免总量膨胀失真。不臆造、缺数据标 missing。
+    fetch_radar 顶层是 industries 嵌套 items（无顶层 items 键），须扁平化聚合。
+    S088 R10 深度分析（2026-08-20，4 视角对抗）：口径对齐 _collect_global_factor——优先读
+    前一交易日夜间快照的 news_items（storm_daemon 已扁平化存入，原 orphaned 死写无读者，
+    现接线），无快照 fallback 当前 newsradar cache + 标 fallback_current。闭合"用今日新闻
+    预测历史日"违 A7/§1.2 可复现 bug。加利好对冲：强情绪复合词 + 占比口径（非差值）避免
+    总量膨胀失真。不臆造、缺数据标 missing。
     """
-    try:
-        import newsradar  # noqa: PLC0415
+    from strategies.storm_daemon import get_t1_global_snapshot  # noqa: PLC0415
 
-        radar = newsradar.get_radar(force=False) or {}
-        # fetch_radar 顶层是 industries 嵌套 items（无顶层 items 键）；扁平化聚合
-        items = (
-            [it for ind in (radar.get("industries", []) or [])
-             for it in (ind.get("items", []) or [])]
-            if isinstance(radar, dict) else []
-        )
-        if not items:
-            return StormFactor("新闻密度", 50.0, "新闻未取得", "missing")
+    # 优先读前一交易日夜间快照的 news_items（daemon 已扁平化，对齐 global 口径）
+    snap = get_t1_global_snapshot(date)
+    items = (snap or {}).get("news_items") if snap else None
+    data_status = "ok"
+    src = "T-1 夜间快照"
+    if not items:
+        # fallback 当前 newsradar cache（无前日快照，标 fallback_current）
+        try:
+            import newsradar  # noqa: PLC0415
 
-        bearish_kw = ["暴跌", "崩盘", "跌停", "退市", "爆雷", "违约", "大利空", "重挫", "闪崩", "熔断"]
-        bullish_kw = ["涨停", "大涨", "暴涨", "突破新高", "超预期", "大订单", "增持", "回购", "大利好"]
-
-        def _text(it: dict) -> str:
-            return str(it.get("title", "")) + str(it.get("summary", ""))
-
-        bearish_count = sum(1 for it in items if any(k in _text(it) for k in bearish_kw))
-        bullish_count = sum(1 for it in items if any(k in _text(it) for k in bullish_kw))
-
-        total = bearish_count + bullish_count
-        if total == 0:
-            return StormFactor(
-                "新闻密度", 50.0,
-                f"总 {len(items)} 条 / 无强情绪词命中", "missing",
+            radar = newsradar.get_radar(force=False) or {}
+            # fetch_radar 顶层是 industries 嵌套 items（无顶层 items 键）；扁平化聚合
+            items = (
+                [it for ind in (radar.get("industries", []) or [])
+                 for it in (ind.get("items", []) or [])]
+                if isinstance(radar, dict) else []
             )
-        # 利空占比 → 分（利空越多概率越高）；占比口径非差值，免总量膨胀失真
-        ratio = bearish_count / total
-        score = ratio * 100.0
-        detail = f"总 {len(items)} 条 / 利空 {bearish_count} / 利好 {bullish_count} / 利空占比 {ratio:.0%}"
-        return StormFactor("新闻密度", round(score, 1), detail)
-    except Exception as exc:  # noqa: BLE001
-        return StormFactor("新闻密度", 50.0, f"采集失败: {exc}", "missing")
+            data_status = "fallback_current"
+            src = "当前(fallback)"
+        except Exception as exc:  # noqa: BLE001
+            return StormFactor("新闻密度", 50.0, f"采集失败: {exc}", "missing")
+
+    if not items:
+        return StormFactor("新闻密度", 50.0, "新闻未取得", "missing")
+
+    bearish_kw = ["暴跌", "崩盘", "跌停", "退市", "爆雷", "违约", "大利空", "重挫", "闪崩", "熔断"]
+    bullish_kw = ["涨停", "大涨", "暴涨", "突破新高", "超预期", "大订单", "增持", "回购", "大利好"]
+
+    def _text(it: dict) -> str:
+        return str(it.get("title", "")) + str(it.get("summary", ""))
+
+    bearish_count = sum(1 for it in items if any(k in _text(it) for k in bearish_kw))
+    bullish_count = sum(1 for it in items if any(k in _text(it) for k in bullish_kw))
+
+    total = bearish_count + bullish_count
+    if total == 0:
+        return StormFactor(
+            "新闻密度", 50.0,
+            f"[{src}] 总 {len(items)} 条 / 无强情绪词命中", "missing",
+        )
+    # 利空占比 → 分（利空越多概率越高）；占比口径非差值，免总量膨胀失真
+    ratio = bearish_count / total
+    score = ratio * 100.0
+    detail = f"[{src}] 总 {len(items)} 条 / 利空 {bearish_count} / 利好 {bullish_count} / 利空占比 {ratio:.0%}"
+    return StormFactor("新闻密度", round(score, 1), detail, data_status)
 
 
 def _collect_calendar_factor(date: str) -> StormFactor:
