@@ -431,7 +431,6 @@ def get_backtest_snapshots(days: int = 90) -> List[Dict[str, Any]]:
         conn.close()
 
 
-
 class TaskExecutor:
     """内置任务执行器。"""
 
@@ -816,568 +815,539 @@ class TaskExecutor:
         return results
 
 
-# ============================================================================
-# S055：盘中封单时序采集
-# ============================================================================
+    # ============================================================================
+    # S055：盘中封单时序采集
+    # ============================================================================
 
-def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S055：盘中封单时序采集——交易时段每 60s 轮询 em_zt_topic_pool 写快照。
+    def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S055：盘中封单时序采集——交易时段每 60s 轮询 em_zt_topic_pool 写快照。
 
-    采集后对每只票跑规则引擎（C1-C6）→ 去重落库 bomb_alert_history。
-    非交易时段不落库、不请求东财（门控）。采集前先 prune 旧数据（保留期外）。
-    缺数据诚实标注，不臆造。
+        采集后对每只票跑规则引擎（C1-C6）→ 去重落库 bomb_alert_history。
+        非交易时段不落库、不请求东财（门控）。采集前先 prune 旧数据（保留期外）。
+        缺数据诚实标注，不臆造。
 
-    S070 R3 扩展：采集成功后对每只票跑 R1 trajectory + R7 派生计算 → 落库
-    intraday_features / seal_derived_features。派生失败不阻塞主采集
-    （标 degraded，不抛异常）。
-    """
-    from risk.seal_intraday_collector import collect_once, prune_old_snapshots, get_latest_snapshots
-    from risk.bomb_alert_rules import check_all_rules
-    from risk.bomb_alert_dispatcher import process_alerts
+        S070 R3 扩展：采集成功后对每只票跑 R1 trajectory + R7 派生计算 → 落库
+        intraday_features / seal_derived_features。派生失败不阻塞主采集
+        （标 degraded，不抛异常）。
+        """
+        from risk.seal_intraday_collector import collect_once, prune_old_snapshots, get_latest_snapshots
+        from risk.bomb_alert_rules import check_all_rules
+        from risk.bomb_alert_dispatcher import process_alerts
 
-    # 每日首调 prune（payload 带 prune=True 触发，默认只采集）
-    if payload.get("prune"):
-        retention = int(payload.get("retention_days", 30))
-        pruned = prune_old_snapshots(retention)
-    else:
-        pruned = 0
-
-    result = collect_once()
-    result["pruned"] = pruned
-    # 补写 date（collect_once 内部用 datetime.now()，executor 回填便于追溯）
-    from datetime import datetime
-    _now = datetime.now()
-    if "date" not in result:
-        result["date"] = _now.strftime("%Y-%m-%d")
-
-    # 采集成功后跑规则引擎（仅对本次采集的票）
-    if result.get("written", 0) > 0:
-        from datetime import datetime
-        now = datetime.now()
-        date_str = result.get("date") or now.strftime("%Y-%m-%d")
-        latest_snaps = get_latest_snapshots(date_str)
-        triggered_total = 0
-        for snap in latest_snaps:
-            code = snap.get("code")
-            name = snap.get("name") or code
-            if not code:
-                continue
-            # 取该 code 全部时序（规则需窗口）
-            from risk.seal_intraday_collector import get_snapshots_by_code
-            snaps = get_snapshots_by_code(code, date_str)
-            results = check_all_rules(snaps, code, name, now=now)
-            active = process_alerts(code, name, results, now=now)
-            triggered_total += len(active)
-        result["alerts_triggered"] = triggered_total
-
-        # S070 R3：R1 trajectory + R7 派生计算落库（采集成功后、return 前）
-        # 派生失败不阻塞主采集（try/except，标 degraded，不抛异常）
-        traj_written = 0
-        derived_written = 0
-        try:
-            from strategies.intraday_features import (
-                compute_trajectory, persist_trajectory,
-                compute_derived_features, persist_derived_features,
-            )
-            from risk.seal_intraday_collector import _get_conn, _DB_LOCK, get_snapshots_by_code
-            conn = _get_conn()
-            try:
-                with _DB_LOCK:
-                    for snap in latest_snaps:
-                        code = snap.get("code")
-                        name = snap.get("name") or code
-                        if not code:
-                            continue
-                        snaps = get_snapshots_by_code(code, date_str)
-                        if not snaps:
-                            continue  # 缺快照跳过派生，不臆造
-                        # R1 trajectory
-                        traj = compute_trajectory(snaps)
-                        persist_trajectory(date_str, code, name, traj, conn)
-                        traj_written += 1
-                        # R7 派生
-                        derived = compute_derived_features(snaps)
-                        persist_derived_features(date_str, code, name, derived, conn)
-                        derived_written += 1
-                    conn.commit()
-            finally:
-                conn.close()
-        except Exception as exc:
-            logger.warning("[seal_intraday] S070 派生计算落库失败（不阻塞主采集）: %s", exc)
-            # 标 degraded 但不改写已成功的 collect_once data_status
-            result["derived_status"] = "degraded"
+        # 每日首调 prune（payload 带 prune=True 触发，默认只采集）
+        if payload.get("prune"):
+            retention = int(payload.get("retention_days", 30))
+            pruned = prune_old_snapshots(retention)
         else:
-            result["derived_status"] = "ok"
-        result["trajectory_written"] = traj_written
-        result["derived_written"] = derived_written
+            pruned = 0
 
-    return result
+        result = collect_once()
+        result["pruned"] = pruned
+        # 补写 date（collect_once 内部用 datetime.now()，executor 回填便于追溯）
+        from datetime import datetime
+        _now = datetime.now()
+        if "date" not in result:
+            result["date"] = _now.strftime("%Y-%m-%d")
 
+        # 采集成功后跑规则引擎（仅对本次采集的票）
+        if result.get("written", 0) > 0:
+            from datetime import datetime
+            now = datetime.now()
+            date_str = result.get("date") or now.strftime("%Y-%m-%d")
+            latest_snaps = get_latest_snapshots(date_str)
+            triggered_total = 0
+            for snap in latest_snaps:
+                code = snap.get("code")
+                name = snap.get("name") or code
+                if not code:
+                    continue
+                # 取该 code 全部时序（规则需窗口）
+                from risk.seal_intraday_collector import get_snapshots_by_code
+                snaps = get_snapshots_by_code(code, date_str)
+                results = check_all_rules(snaps, code, name, now=now)
+                active = process_alerts(code, name, results, now=now)
+                triggered_total += len(active)
+            result["alerts_triggered"] = triggered_total
 
-# 绑定到 TaskExecutor 类（方法定义在类后，用 setattr 绑定）
-TaskExecutor._execute_seal_intraday_collect = _execute_seal_intraday_collect
+            # S070 R3：R1 trajectory + R7 派生计算落库（采集成功后、return 前）
+            # 派生失败不阻塞主采集（try/except，标 degraded，不抛异常）
+            traj_written = 0
+            derived_written = 0
+            try:
+                from strategies.intraday_features import (
+                    compute_trajectory, persist_trajectory,
+                    compute_derived_features, persist_derived_features,
+                )
+                from risk.seal_intraday_collector import _get_conn, _DB_LOCK, get_snapshots_by_code
+                conn = _get_conn()
+                try:
+                    with _DB_LOCK:
+                        for snap in latest_snaps:
+                            code = snap.get("code")
+                            name = snap.get("name") or code
+                            if not code:
+                                continue
+                            snaps = get_snapshots_by_code(code, date_str)
+                            if not snaps:
+                                continue  # 缺快照跳过派生，不臆造
+                            # R1 trajectory
+                            traj = compute_trajectory(snaps)
+                            persist_trajectory(date_str, code, name, traj, conn)
+                            traj_written += 1
+                            # R7 派生
+                            derived = compute_derived_features(snaps)
+                            persist_derived_features(date_str, code, name, derived, conn)
+                            derived_written += 1
+                        conn.commit()
+                finally:
+                    conn.close()
+            except Exception as exc:
+                logger.warning("[seal_intraday] S070 派生计算落库失败（不阻塞主采集）: %s", exc)
+                # 标 degraded 但不改写已成功的 collect_once data_status
+                result["derived_status"] = "degraded"
+            else:
+                result["derived_status"] = "ok"
+            result["trajectory_written"] = traj_written
+            result["derived_written"] = derived_written
 
+        return result
 
-def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S004 R5：盘后漏斗预计算——预热 _FUNNEL_CACHE，盘后复盘页即时读缓存。
+    def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S004 R5：盘后漏斗预计算——预热 _FUNNEL_CACHE，盘后复盘页即时读缓存。
 
-    取 date（默认最近交易日）→ run_funnel("all", date, live_config) →
-    结果落 _FUNNEL_CACHE（TTL 由 config.CANDIDATE_FUNNEL_CACHE_TTL 控制，默认 3600s）。
-    失败 catch 不抛，返 status=error（预计算是增强，不阻塞主流程）。
-    """
-    try:
-        from candidate_funnel import funnel as funnel_mod
-        from candidate_funnel.models import ThresholdConfig
-        from vr_paths import last_trading_date_str
-        target = payload.get("date") or last_trading_date_str()
-        # 复用 candidates 路由的 live config（用户调参后一致）
+        取 date（默认最近交易日）→ run_funnel("all", date, live_config) →
+        结果落 _FUNNEL_CACHE（TTL 由 config.CANDIDATE_FUNNEL_CACHE_TTL 控制，默认 3600s）。
+        失败 catch 不抛，返 status=error（预计算是增强，不阻塞主流程）。
+        """
         try:
-            from routers.candidates import _store
-            cfg = _store["config"]
-            if not isinstance(cfg, ThresholdConfig):
-                cfg = ThresholdConfig(**cfg) if isinstance(cfg, dict) else ThresholdConfig()
-        except Exception:
-            cfg = ThresholdConfig()
-        funnel_mod.run_funnel("all", target, cfg)
-        logger.info("[candidate_funnel_precompute] %s 漏斗预计算完成（缓存已预热）", target)
-        return {"date": target, "status": "ok"}
-    except Exception as e:
-        logger.warning("[candidate_funnel_precompute] 预计算失败: %s", e)
-        return {"status": f"error: {e}"}
+            from candidate_funnel import funnel as funnel_mod
+            from candidate_funnel.models import ThresholdConfig
+            from vr_paths import last_trading_date_str
+            target = payload.get("date") or last_trading_date_str()
+            # 复用 candidates 路由的 live config（用户调参后一致）
+            try:
+                from routers.candidates import _store
+                cfg = _store["config"]
+                if not isinstance(cfg, ThresholdConfig):
+                    cfg = ThresholdConfig(**cfg) if isinstance(cfg, dict) else ThresholdConfig()
+            except Exception:
+                cfg = ThresholdConfig()
+            result = funnel_mod.run_funnel("all", target, cfg)
+            # S087 R10：落库 funnel_cache（前端 tab 读缓存秒开，进程重启不丢）
+            from candidate_funnel.funnel_cache import save_funnel_result
+            save_funnel_result(target, "all", result)
+            logger.info("[candidate_funnel_precompute] %s 漏斗预计算完成（缓存已预热+落库）", target)
+            return {"date": target, "status": "ok"}
+        except Exception as e:
+            logger.warning("[candidate_funnel_precompute] 预计算失败: %s", e)
+            return {"status": f"error: {e}"}
 
 
-TaskExecutor._execute_candidate_funnel_precompute = _execute_candidate_funnel_precompute
+    def _execute_first_board_filter(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S075 盘后首板流筛选——首板过滤+三层剔除+9维度评分+落盘。
+
+        取 date（默认最近交易日）→ run_first_board_filter → 候选池+评分存快照。
+        失败 catch 不抛，返 status=error（筛选是增强，不阻塞主流程）。
+        """
+        try:
+            from strategies.first_board_filter import run_first_board_filter
+            from vr_paths import last_trading_date_str
+            target = payload.get("date") or last_trading_date_str()
+            result = run_first_board_filter(target)
+            logger.info("[first_board_filter] %s 首板流筛选完成：涨停%s/首板%s/候选%s",
+                        target, result["zt_pool_count"], result["first_board_count"],
+                        len(result["candidates"]))
+            return {
+                "date": target,
+                "status": "ok",
+                "zt_pool_count": result["zt_pool_count"],
+                "first_board_count": result["first_board_count"],
+                "candidate_count": len(result["candidates"]),
+            }
+        except Exception as e:
+            logger.warning("[first_board_filter] 筛选失败: %s", e)
+            return {"status": f"error: {e}"}
 
 
-def _execute_first_board_filter(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S075 盘后首板流筛选——首板过滤+三层剔除+9维度评分+落盘。
+    def _execute_s066_validation_checkpoint(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """§44 60 天复验检查点（提醒任务，spec §13 ①/§44）。
 
-    取 date（默认最近交易日）→ run_first_board_filter → 候选池+评分存快照。
-    失败 catch 不抛，返 status=error（筛选是增强，不阻塞主流程）。
-    """
-    try:
-        from strategies.first_board_filter import run_first_board_filter
-        from vr_paths import last_trading_date_str
-        target = payload.get("date") or last_trading_date_str()
-        result = run_first_board_filter(target)
-        logger.info("[first_board_filter] %s 首板流筛选完成：涨停%s/首板%s/候选%s",
-                    target, result["zt_pool_count"], result["first_board_count"],
-                    len(result["candidates"]))
-        return {
-            "date": target,
-            "status": "ok",
-            "zt_pool_count": result["zt_pool_count"],
-            "first_board_count": result["first_board_count"],
-            "candidate_count": len(result["candidates"]),
-        }
-    except Exception as e:
-        logger.warning("[first_board_filter] 筛选失败: %s", e)
-        return {"status": f"error: {e}"}
+        数 eastmoney_live 信号日；达 threshold（默认 60）→ 写 checkpoint 文件 + WARNING 日志
+        + 返 DUE+操作指引（notify_on_success 兜底推送，若通道已配）；未到期 → 返进度（静默）。
+        到点由人/会话跑 `tools/forward_test_backfill.py --weather` 查 lift——本任务只提醒不自动验证。
+        """
+        from config import GENE_SCORES_DB_PATH
+        from vr_paths import resolve_data_dir
 
-
-TaskExecutor._execute_first_board_filter = _execute_first_board_filter
-
-
-def _execute_s066_validation_checkpoint(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """§44 60 天复验检查点（提醒任务，spec §13 ①/§44）。
-
-    数 eastmoney_live 信号日；达 threshold（默认 60）→ 写 checkpoint 文件 + WARNING 日志
-    + 返 DUE+操作指引（notify_on_success 兜底推送，若通道已配）；未到期 → 返进度（静默）。
-    到点由人/会话跑 `tools/forward_test_backfill.py --weather` 查 lift——本任务只提醒不自动验证。
-    """
-    from config import GENE_SCORES_DB_PATH
-    from vr_paths import resolve_data_dir
-
-    threshold = int(payload.get("threshold", 60))
-    conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
-    try:
-        days = conn.execute(
-            "SELECT COUNT(DISTINCT date) FROM gene_scores WHERE data_source='eastmoney_live'"
-        ).fetchone()[0]
-    finally:
-        conn.close()
-
-    if days < threshold:
-        return {"status": "not_due", "eastmoney_live_days": days, "target": threshold,
-                "note": f"积累中 {days}/{threshold} 日，到点自动提醒 §44 复验"}
-
-    # 到期：写 checkpoint + WARNING + 返操作指引
-    ckpt = {"status": "due", "eastmoney_live_days": days, "target": threshold,
-            "action": "cd backend && .venv/bin/python tools/forward_test_backfill.py --weather "
-                      "→ 查 get_forward_test_summary 的 lift：破 2x + within-day r 显著 → alpha 成立；"
-                      "否则确认无 edge（spec §13 ①/§44）",
-            "checked_at": datetime.now().isoformat()}
-    try:
-        ckpt_path = Path(resolve_data_dir()) / "s066_60day_due.json"
-        ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-    logger.warning(
-        "[s066_checkpoint] §44 60 天复验 DUE：eastmoney_live=%d 日 → 跑 backfill --weather 查 lift", days)
-    return ckpt
-
-
-TaskExecutor._execute_s066_validation_checkpoint = _execute_s066_validation_checkpoint
-
-
-def _execute_forward_test_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S069 R1：每日 post-market 记当日 forward_test picks + universe codes（收益 NULL，R2 次日回填）。
-
-    晚 limitup_precompute（gene_scores 已写 15:30）。weather 用 build_context（完整架构非退化）。
-    信号日 = last_trading_date_str（当日交易日；周末跑记最近交易日，幂等）。
-    """
-    from vr_paths import last_trading_date_str
-    from sentiment_context import build_context
-    from strategies.forward_test import run_daily_forward_test
-
-    signal_date = last_trading_date_str()
-    try:
-        weather = build_context(signal_date).weather_state
-    except Exception:
-        weather = None
-    r = run_daily_forward_test(signal_date, weather_state=weather)
-    logger.info("[forward_test_daily] %s picks=%s universe=%s weather=%s",
-               signal_date, r.get("recommendations", 0), r.get("universe_codes", 0), weather)
-    return {"signal_date": signal_date, "weather": weather,
-            "picks": r.get("recommendations", 0), "universe_codes": r.get("universe_codes", 0)}
-
-
-TaskExecutor._execute_forward_test_daily = _execute_forward_test_daily
-
-
-def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S069 R2：回填最近未结算 signal_date 的 T+1 收益（baostock kline→return_open2close）。
-
-    每日 post-market 跑。处理 newest 3 个 signal_date<今日 且 return_open2close IS NULL 的
-    （其 next_bar 今日收盘后可得）→ compute_returns_for_codes → record_actual_returns（picks）+
-    record_universe_returns（universe）。缺 next_bar 的 code 留 NULL（下次重试）。
-    **stuck-date 处理**：0-settle 的日期（如调休补班 baostock 无 bar）标 no_bar（JSON，7 日后重试），
-    避免每日卡死循环在同一 stuck date。
-    """
-    import json as _json
-    import sqlite3
-    from config import GENE_SCORES_DB_PATH
-    from datetime import datetime, timedelta
-    from vr_paths import last_trading_date_str, resolve_data_dir
-    from strategies.forward_test import record_actual_returns, record_universe_returns
-    from strategies.kline_returns import compute_returns_for_codes
-
-    today = last_trading_date_str()
-    # stuck-mark：7 日内 0-settle 的日期不重试（避免卡死；7 日后重试，防 baostock 暂态）
-    stuck_path = Path(resolve_data_dir()) / "t1_stuck_dates.json"
-    stuck: dict[str, str] = {}
-    try:
-        stuck = _json.loads(stuck_path.read_text(encoding="utf-8"))
-    except Exception:
-        stuck = {}
-    cutoff = (datetime.now() - timedelta(days=7)).isoformat()
-    stuck = {d: t for d, t in stuck.items() if t >= cutoff}  # 清 7 日前的 stuck（重试）
-
-    conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
-    try:
-        rows = conn.execute(
-            "SELECT DISTINCT signal_date FROM forward_test_records "
-            "WHERE return_open2close IS NULL AND signal_date < ? "
-            "ORDER BY signal_date DESC LIMIT 3", (today,)
-        ).fetchall()
-        dates = [r[0] for r in rows if r[0] not in stuck]
-    finally:
-        conn.close()
-    if not dates:
-        return {"status": "nothing_to_settle", "today": today, "stuck": len(stuck)}
-
-    summary = []
-    for signal_date in dates:
+        threshold = int(payload.get("threshold", 60))
         conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
         try:
-            pick_codes = [r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM forward_test_records "
-                "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
-            uni_codes = [r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM universe_returns "
-                "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+            days = conn.execute(
+                "SELECT COUNT(DISTINCT date) FROM gene_scores WHERE data_source='eastmoney_live'"
+            ).fetchone()[0]
         finally:
             conn.close()
-        all_codes = list(dict.fromkeys(pick_codes + uni_codes))
-        if not all_codes:
-            continue
-        returns_map = compute_returns_for_codes(signal_date, all_codes)
-        if not returns_map:
-            summary.append({"signal_date": signal_date, "status": "baostock_unavailable"})
-            break  # baostock 不可用，后续日也跑不了
-        picks_returns = {c: returns_map[c] for c in pick_codes
-                         if c in returns_map and returns_map[c]["return_open2close"] is not None}
-        uni_returns = {c: returns_map[c] for c in uni_codes
-                       if c in returns_map and returns_map[c]["return_open2close"] is not None}
-        n_picks = record_actual_returns(signal_date, picks_returns)
-        n_uni = record_universe_returns(signal_date, uni_returns)
-        settled = n_picks + n_uni
-        # 0-settle → 标 stuck（如调休补班 baostock 无 bar），7 日内不重试
-        if settled == 0:
-            stuck[signal_date] = datetime.now().isoformat()
-        logger.info("[forward_test_t1_settle] %s settled picks=%s/%s universe=%s/%s%s",
-                   signal_date, n_picks, len(pick_codes), n_uni, len(uni_codes),
-                   " [stuck-mark]" if settled == 0 else "")
-        summary.append({"signal_date": signal_date, "settled_picks": n_picks,
-                        "settled_universe": n_uni, "total": settled})
 
-    try:
-        stuck_path.write_text(_json.dumps(stuck, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-    return {"today": today, "dates_processed": summary, "stuck": len(stuck)}
+        if days < threshold:
+            return {"status": "not_due", "eastmoney_live_days": days, "target": threshold,
+                    "note": f"积累中 {days}/{threshold} 日，到点自动提醒 §44 复验"}
 
-
-TaskExecutor._execute_forward_test_t1_settle = _execute_forward_test_t1_settle
-
-
-def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S075 T+1 溢价评分 + 复盘报告 + 飞书通知（盘后对 T-1 候选做收益评价）。
-
-    流程：
-    1. 取 T-1（最近有快照的交易日）候选
-    2. 跑 run_t1_premium_review：baostock T 日 K 线算标的收益 + lift 四态判定
-    3. build_review_report 构造 Markdown 复盘报告
-    4. 飞书推送（NotificationService，route_type=alert/severity=info）
-
-    无快照 / 无 T+1 数据 / 通道未配 → 不崩，返对应状态。
-    失败 catch 不抛，返 status=error（评价是增强，不阻塞主流程）。
-    """
-    try:
-        from strategies.first_board_settlement import (
-            run_t1_premium_review,
-            build_review_report,
-        )
-        from strategies.first_board_filter import list_score_dates
-        from notification.notification_service import NotificationService
-
-        # 取 T-1：优先用 payload.date，否则取最近的快照日
-        signal_date = payload.get("date") if payload else None
-        if not signal_date:
-            dates = list_score_dates()
-            if not dates:
-                return {"status": "error", "msg": "无历史快照"}
-            signal_date = dates[0]  # 最近的快照日
-
-        # 跑 T+1 评价
-        review = run_t1_premium_review(signal_date)
-        report = build_review_report(review)
-
-        # 飞书推送
-        ns = NotificationService()
-        notified = False
-        if ns.is_available():
-            notified = ns.send(report, route_type="alert", severity="info")
-
-        stats = review.get("stats", {}) if not review.get("error") else {}
-        logger.info(
-            "[first_board_t1_review] %s 候选%d 只 mean=%s%% notified=%s verdict=%s",
-            signal_date,
-            stats.get("n", 0),
-            stats.get("mean_return_pct", 0),
-            notified,
-            review.get("verdict", review.get("error", "")),
-        )
-        return {
-            "signal_date": signal_date,
-            "status": "ok",
-            "candidates": stats.get("n", 0),
-            "mean_return": stats.get("mean_return_pct", 0),
-            "verdict": review.get("verdict", ""),
-            "error": review.get("error"),
-            "notified": notified,
-        }
-    except Exception as e:
-        logger.warning("[first_board_t1_review] 失败: %s", e)
-        return {"status": f"error: {e}"}
-
-
-TaskExecutor._execute_first_board_t1_review = _execute_first_board_t1_review
-
-
-# ===========================================================================
-# S076：盘中多源行情探查 executor（临时研究任务）
-# ===========================================================================
-
-def _execute_first_board_quote_probe(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S076 盘中多源行情探查——9:20-9:36 每分钟探 tencent/mootdx/东财 push2。
-
-    临时研究任务：产出 .scratch/s076-quote-probe/matrix_{date}.json，收 3-5 个交易日稳定
-    结论后 disable。东财 push2 ≥10min 状态文件门控（R6 限流，per-minute cron 跨进程用文件持久化）。
-    需 app 进程在 9:20-9:36 运行（无 catch-up，错过即缺）。失败 catch 不抛，返 error。
-    """
-    try:
-        from tools.first_board_quote_source_probe import (
-            probe_once, _append_row, OUT_DIR, EM_PUSH2_MIN_INTERVAL_S, DEFAULT_CODES,
-        )
-        import time as _time
-        import json as _json
-
-        codes = [c for c in (payload.get("codes") or DEFAULT_CODES) if c]
-
-        # 东财 push2 ≥10min 状态文件门控（per-minute cron 跨进程，用文件持久化上次时间）
-        state_path = OUT_DIR / "push2_state.json"
-        last_push2 = 0.0
+        # 到期：写 checkpoint + WARNING + 返操作指引
+        ckpt = {"status": "due", "eastmoney_live_days": days, "target": threshold,
+                "action": "cd backend && .venv/bin/python tools/forward_test_backfill.py --weather "
+                          "→ 查 get_forward_test_summary 的 lift：破 2x + within-day r 显著 → alpha 成立；"
+                          "否则确认无 edge（spec §13 ①/§44）",
+                "checked_at": datetime.now().isoformat()}
         try:
-            if state_path.exists():
-                last_push2 = float(
-                    _json.loads(state_path.read_text(encoding="utf-8")).get("last_push2_ts", 0.0)
-                )
+            ckpt_path = Path(resolve_data_dir()) / "s066_60day_due.json"
+            ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
-            last_push2 = 0.0
-
-        srcs = ["tencent", "mootdx"]
-        if _time.time() - last_push2 >= EM_PUSH2_MIN_INTERVAL_S:
-            srcs.append("em_push2")
-
-        row = probe_once(codes, sources=srcs)
-        path = _append_row(row)
-
-        if "em_push2" in srcs:
-            try:
-                OUT_DIR.mkdir(parents=True, exist_ok=True)
-                state_path.write_text(
-                    _json.dumps({"last_push2_ts": _time.time()}), encoding="utf-8"
-                )
-            except Exception as e:
-                logger.warning("[first_board_quote_probe] push2 状态写失败: %s", e)
-
-        return {
-            "time": row.get("time"),
-            "sources": srcs,
-            "codes": codes,
-            "matrix_path": str(path),
-            "tencent_ok": row.get("tencent", {}).get("ok"),
-            "mootdx_ok": row.get("mootdx", {}).get("ok"),
-            "em_push2_ok": row.get("em_push2", {}).get("ok") if "em_push2" in row else None,
-        }
-    except Exception as e:
-        logger.warning("[first_board_quote_probe] 探查失败: %s", e)
-        return {"status": f"error: {e}"}
+            pass
+        logger.warning(
+            "[s066_checkpoint] §44 60 天复验 DUE：eastmoney_live=%d 日 → 跑 backfill --weather 查 lift", days)
+        return ckpt
 
 
-TaskExecutor._execute_first_board_quote_probe = _execute_first_board_quote_probe
+    def _execute_forward_test_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S069 R1：每日 post-market 记当日 forward_test picks + universe codes（收益 NULL，R2 次日回填）。
 
-
-# ===========================================================================
-# S078：涨停历史 snapshot executor（数据地基）
-# ===========================================================================
-
-def _execute_zt_history_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S078 涨停历史 snapshot——盘后 snapshot 当日涨停池 → zt_history.db（不 prune 累积）。
-
-    数据地基：涨停池历史 >1 月无源（em/ths/akshare 均 ~1 月），每日累积供长窗 §44 复验。
-    失败 catch 不抛，返 error（采集是增强，不阻塞主流程）。
-    """
-    try:
-        from data.zt_history_store import snapshot_zt_pool
+        晚 limitup_precompute（gene_scores 已写 15:30）。weather 用 build_context（完整架构非退化）。
+        信号日 = last_trading_date_str（当日交易日；周末跑记最近交易日，幂等）。
+        """
         from vr_paths import last_trading_date_str
-        target = payload.get("date") or last_trading_date_str()
-        written = snapshot_zt_pool(target)
-        logger.info("[zt_history_snapshot] %s 涨停池 snapshot 写入 %s 行", target, written)
-        return {"date": target, "written": written, "status": "ok"}
-    except Exception as e:
-        logger.warning("[zt_history_snapshot] 采集失败: %s", e)
-        return {"status": f"error: {e}"}
+        from sentiment_context import build_context
+        from strategies.forward_test import run_daily_forward_test
+
+        signal_date = last_trading_date_str()
+        try:
+            weather = build_context(signal_date).weather_state
+        except Exception:
+            weather = None
+        r = run_daily_forward_test(signal_date, weather_state=weather)
+        logger.info("[forward_test_daily] %s picks=%s universe=%s weather=%s",
+                   signal_date, r.get("recommendations", 0), r.get("universe_codes", 0), weather)
+        return {"signal_date": signal_date, "weather": weather,
+                "picks": r.get("recommendations", 0), "universe_codes": r.get("universe_codes", 0)}
 
 
-TaskExecutor._execute_zt_history_snapshot = _execute_zt_history_snapshot
+    def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S069 R2：回填最近未结算 signal_date 的 T+1 收益（baostock kline→return_open2close）。
+
+        每日 post-market 跑。处理 newest 3 个 signal_date<今日 且 return_open2close IS NULL 的
+        （其 next_bar 今日收盘后可得）→ compute_returns_for_codes → record_actual_returns（picks）+
+        record_universe_returns（universe）。缺 next_bar 的 code 留 NULL（下次重试）。
+        **stuck-date 处理**：0-settle 的日期（如调休补班 baostock 无 bar）标 no_bar（JSON，7 日后重试），
+        避免每日卡死循环在同一 stuck date。
+        """
+        import json as _json
+        import sqlite3
+        from config import GENE_SCORES_DB_PATH
+        from datetime import datetime, timedelta
+        from vr_paths import last_trading_date_str, resolve_data_dir
+        from strategies.forward_test import record_actual_returns, record_universe_returns
+        from strategies.kline_returns import compute_returns_for_codes
+
+        today = last_trading_date_str()
+        # stuck-mark：7 日内 0-settle 的日期不重试（避免卡死；7 日后重试，防 baostock 暂态）
+        stuck_path = Path(resolve_data_dir()) / "t1_stuck_dates.json"
+        stuck: dict[str, str] = {}
+        try:
+            stuck = _json.loads(stuck_path.read_text(encoding="utf-8"))
+        except Exception:
+            stuck = {}
+        cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+        stuck = {d: t for d, t in stuck.items() if t >= cutoff}  # 清 7 日前的 stuck（重试）
+
+        conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT signal_date FROM forward_test_records "
+                "WHERE return_open2close IS NULL AND signal_date < ? "
+                "ORDER BY signal_date DESC LIMIT 3", (today,)
+            ).fetchall()
+            dates = [r[0] for r in rows if r[0] not in stuck]
+        finally:
+            conn.close()
+        if not dates:
+            return {"status": "nothing_to_settle", "today": today, "stuck": len(stuck)}
+
+        summary = []
+        for signal_date in dates:
+            conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+            try:
+                pick_codes = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT code FROM forward_test_records "
+                    "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+                uni_codes = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT code FROM universe_returns "
+                    "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+            finally:
+                conn.close()
+            all_codes = list(dict.fromkeys(pick_codes + uni_codes))
+            if not all_codes:
+                continue
+            returns_map = compute_returns_for_codes(signal_date, all_codes)
+            if not returns_map:
+                summary.append({"signal_date": signal_date, "status": "baostock_unavailable"})
+                break  # baostock 不可用，后续日也跑不了
+            picks_returns = {c: returns_map[c] for c in pick_codes
+                             if c in returns_map and returns_map[c]["return_open2close"] is not None}
+            uni_returns = {c: returns_map[c] for c in uni_codes
+                           if c in returns_map and returns_map[c]["return_open2close"] is not None}
+            n_picks = record_actual_returns(signal_date, picks_returns)
+            n_uni = record_universe_returns(signal_date, uni_returns)
+            settled = n_picks + n_uni
+            # 0-settle → 标 stuck（如调休补班 baostock 无 bar），7 日内不重试
+            if settled == 0:
+                stuck[signal_date] = datetime.now().isoformat()
+            logger.info("[forward_test_t1_settle] %s settled picks=%s/%s universe=%s/%s%s",
+                       signal_date, n_picks, len(pick_codes), n_uni, len(uni_codes),
+                       " [stuck-mark]" if settled == 0 else "")
+            summary.append({"signal_date": signal_date, "settled_picks": n_picks,
+                            "settled_universe": n_uni, "total": settled})
+
+        try:
+            stuck_path.write_text(_json.dumps(stuck, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        return {"today": today, "dates_processed": summary, "stuck": len(stuck)}
 
 
-# ===========================================================================
-# S084 C1/C2：盘后 derived 异步预采集 executor（17:00 工作日，龙虎榜 16:30 更新后）
-# ===========================================================================
+    def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S075 T+1 溢价评分 + 复盘报告 + 飞书通知（盘后对 T-1 候选做收益评价）。
 
-def _execute_derived_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S084 C2：17:00 盘后异步预采集——对昨日涨停股全量算 derived 落 seal_derived_features 表。
+        流程：
+        1. 取 T-1（最近有快照的交易日）候选
+        2. 跑 run_t1_premium_review：baostock T 日 K 线算标的收益 + lift 四态判定
+        3. build_review_report 构造 Markdown 复盘报告
+        4. 飞书推送（NotificationService，route_type=alert/severity=info）
 
-    取 yesterday（默认 last_trading_date(today-1)，与 funnel 的 yesterday_date 同口径）→
-    zt_pool_source.fetch_zt_pool_map(yesterday) 取昨日涨停 codes → 对每只
-    get_snapshots_by_code(code, yesterday) + compute_derived_features →
-    persist_derived_features 写 seal_derived_features(date=yesterday)。选股池
-    derived_source 后续读 seal_derived_features（不 per-code 实时算）。
+        无快照 / 无 T+1 数据 / 通道未配 → 不崩，返对应状态。
+        失败 catch 不抛，返 status=error（评价是增强，不阻塞主流程）。
+        """
+        try:
+            from strategies.first_board_settlement import (
+                run_t1_premium_review,
+                build_review_report,
+            )
+            from strategies.first_board_filter import list_score_dates
+            from notification.notification_service import NotificationService
 
-    缺快照 / data_status='missing' → 跳过（不臆造）。单只失败不阻塞其余（catch 跳过）。
-    整体失败 catch 不抛，返 status=error（预采集是增强，不阻塞主流程）。
-    S084 follow-up：原 derived_results 表合并入 seal_derived_features（字段子集），
-    复用 persist_derived_features 持久化（DRY，与盘中 collect 同写路径）。
-    """
-    from datetime import date as _date, timedelta as _td
-    from vr_paths import last_trading_date as _last_td
+            # 取 T-1：优先用 payload.date，否则取最近的快照日
+            signal_date = payload.get("date") if payload else None
+            if not signal_date:
+                dates = list_score_dates()
+                if not dates:
+                    return {"status": "error", "msg": "无历史快照"}
+                signal_date = dates[0]  # 最近的快照日
 
-    try:
-        from candidate_funnel.sources import zt_pool_source
-        from risk.seal_intraday_collector import (
-            run_migrations, get_snapshots_by_code, _get_conn, _DB_LOCK,
-        )
-        from strategies.intraday_features import (
-            compute_derived_features, persist_derived_features,
-        )
-    except Exception as e:
-        logger.warning("[derived_precompute] 依赖导入失败: %s", e)
-        return {"status": f"error: {e}"}
+            # 跑 T+1 评价
+            review = run_t1_premium_review(signal_date)
+            report = build_review_report(review)
 
-    # yesterday：与 funnel._run_funnel_impl 同口径（last_trading_date(today-1)），
-    # payload.get("date") 允许指定回填昨日日期。
-    yesterday = payload.get("date") or _last_td(_date.today() - _td(days=1)).isoformat()
+            # 飞书推送
+            ns = NotificationService()
+            notified = False
+            if ns.is_available():
+                notified = ns.send(report, route_type="alert", severity="info")
 
-    # 幂等建表（fresh env 自愈；已应用则 no-op），避免 seal_derived_features 缺表致写失败
-    try:
-        run_migrations()
-    except Exception as e:
-        logger.warning("[derived_precompute] 迁移失败（继续，首行写可能失败）: %s", e)
+            stats = review.get("stats", {}) if not review.get("error") else {}
+            logger.info(
+                "[first_board_t1_review] %s 候选%d 只 mean=%s%% notified=%s verdict=%s",
+                signal_date,
+                stats.get("n", 0),
+                stats.get("mean_return_pct", 0),
+                notified,
+                review.get("verdict", review.get("error", "")),
+            )
+            return {
+                "signal_date": signal_date,
+                "status": "ok",
+                "candidates": stats.get("n", 0),
+                "mean_return": stats.get("mean_return_pct", 0),
+                "verdict": review.get("verdict", ""),
+                "error": review.get("error"),
+                "notified": notified,
+            }
+        except Exception as e:
+            logger.warning("[first_board_t1_review] 失败: %s", e)
+            return {"status": f"error: {e}"}
 
-    try:
-        zt_map = zt_pool_source.fetch_zt_pool_map(yesterday)
-    except Exception as e:
-        logger.warning("[derived_precompute] %s 涨停池取数失败: %s", yesterday, e)
-        return {"date": yesterday, "status": f"error: {e}", "codes": 0, "written": 0}
 
-    codes = list(zt_map.keys())
-    if not codes:
-        logger.info("[derived_precompute] %s 昨日涨停池为空（非交易日或采集失败）", yesterday)
-        return {"date": yesterday, "status": "ok", "codes": 0, "written": 0, "skipped": 0}
+    # ===========================================================================
+    # S076：盘中多源行情探查 executor（临时研究任务）
+    # ===========================================================================
 
-    written = 0
-    skipped = 0
-    conn = _get_conn()
-    try:
-        with _DB_LOCK:
-            for code in codes:
-                try:
-                    snaps = get_snapshots_by_code(code, yesterday)
-                    if not snaps:
-                        skipped += 1
-                        continue  # 缺快照跳过，不臆造
-                    derived = compute_derived_features(snaps)
-                    if derived.get("data_status") == "missing":
-                        skipped += 1
-                        continue
-                    # 复用 persist_derived_features 写 seal_derived_features
-                    # （INSERT OR REPLACE 幂等，同 (date,code) 重跑覆盖；S084 follow-up：
-                    #   合并自 derived_results，DRY 复用战法层持久化函数，与盘中 collect 同路径）
-                    name = (zt_map.get(code) or {}).get("n")
-                    persist_derived_features(yesterday, code, name, derived, conn)
-                    written += 1
-                except Exception as exc:
-                    logger.warning(
-                        "[derived_precompute] %s %s 派生落库失败（跳过）: %s",
-                        yesterday, code, exc,
+    def _execute_first_board_quote_probe(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S076 盘中多源行情探查——9:20-9:36 每分钟探 tencent/mootdx/东财 push2。
+
+        临时研究任务：产出 .scratch/s076-quote-probe/matrix_{date}.json，收 3-5 个交易日稳定
+        结论后 disable。东财 push2 ≥10min 状态文件门控（R6 限流，per-minute cron 跨进程用文件持久化）。
+        需 app 进程在 9:20-9:36 运行（无 catch-up，错过即缺）。失败 catch 不抛，返 error。
+        """
+        try:
+            from tools.first_board_quote_source_probe import (
+                probe_once, _append_row, OUT_DIR, EM_PUSH2_MIN_INTERVAL_S, DEFAULT_CODES,
+            )
+            import time as _time
+            import json as _json
+
+            codes = [c for c in (payload.get("codes") or DEFAULT_CODES) if c]
+
+            # 东财 push2 ≥10min 状态文件门控（per-minute cron 跨进程，用文件持久化上次时间）
+            state_path = OUT_DIR / "push2_state.json"
+            last_push2 = 0.0
+            try:
+                if state_path.exists():
+                    last_push2 = float(
+                        _json.loads(state_path.read_text(encoding="utf-8")).get("last_push2_ts", 0.0)
                     )
-                    skipped += 1
-            conn.commit()
-    finally:
-        conn.close()
+            except Exception:
+                last_push2 = 0.0
 
-    logger.info(
-        "[derived_precompute] %s derived 预采集完成：涨停%s/写入%s/跳过%s",
-        yesterday, len(codes), written, skipped,
-    )
-    return {"date": yesterday, "status": "ok", "codes": len(codes),
-            "written": written, "skipped": skipped}
+            srcs = ["tencent", "mootdx"]
+            if _time.time() - last_push2 >= EM_PUSH2_MIN_INTERVAL_S:
+                srcs.append("em_push2")
+
+            row = probe_once(codes, sources=srcs)
+            path = _append_row(row)
+
+            if "em_push2" in srcs:
+                try:
+                    OUT_DIR.mkdir(parents=True, exist_ok=True)
+                    state_path.write_text(
+                        _json.dumps({"last_push2_ts": _time.time()}), encoding="utf-8"
+                    )
+                except Exception as e:
+                    logger.warning("[first_board_quote_probe] push2 状态写失败: %s", e)
+
+            return {
+                "time": row.get("time"),
+                "sources": srcs,
+                "codes": codes,
+                "matrix_path": str(path),
+                "tencent_ok": row.get("tencent", {}).get("ok"),
+                "mootdx_ok": row.get("mootdx", {}).get("ok"),
+                "em_push2_ok": row.get("em_push2", {}).get("ok") if "em_push2" in row else None,
+            }
+        except Exception as e:
+            logger.warning("[first_board_quote_probe] 探查失败: %s", e)
+            return {"status": f"error: {e}"}
 
 
-TaskExecutor._execute_derived_precompute = _execute_derived_precompute
+    # ===========================================================================
+    # S078：涨停历史 snapshot executor（数据地基）
+    # ===========================================================================
+
+    def _execute_zt_history_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S078 涨停历史 snapshot——盘后 snapshot 当日涨停池 → zt_history.db（不 prune 累积）。
+
+        数据地基：涨停池历史 >1 月无源（em/ths/akshare 均 ~1 月），每日累积供长窗 §44 复验。
+        失败 catch 不抛，返 error（采集是增强，不阻塞主流程）。
+        """
+        try:
+            from data.zt_history_store import snapshot_zt_pool
+            from vr_paths import last_trading_date_str
+            target = payload.get("date") or last_trading_date_str()
+            written = snapshot_zt_pool(target)
+            logger.info("[zt_history_snapshot] %s 涨停池 snapshot 写入 %s 行", target, written)
+            return {"date": target, "written": written, "status": "ok"}
+        except Exception as e:
+            logger.warning("[zt_history_snapshot] 采集失败: %s", e)
+            return {"status": f"error: {e}"}
+
+
+    # ===========================================================================
+    # S084 C1/C2：盘后 derived 异步预采集 executor（17:00 工作日，龙虎榜 16:30 更新后）
+    # ===========================================================================
+
+    def _execute_derived_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S084 C2：17:00 盘后异步预采集——对昨日涨停股全量算 derived 落 seal_derived_features 表。
+
+        取 yesterday（默认 last_trading_date(today-1)，与 funnel 的 yesterday_date 同口径）→
+        zt_pool_source.fetch_zt_pool_map(yesterday) 取昨日涨停 codes → 对每只
+        get_snapshots_by_code(code, yesterday) + compute_derived_features →
+        persist_derived_features 写 seal_derived_features(date=yesterday)。选股池
+        derived_source 后续读 seal_derived_features（不 per-code 实时算）。
+
+        缺快照 / data_status='missing' → 跳过（不臆造）。单只失败不阻塞其余（catch 跳过）。
+        整体失败 catch 不抛，返 status=error（预采集是增强，不阻塞主流程）。
+        S084 follow-up：原 derived_results 表合并入 seal_derived_features（字段子集），
+        复用 persist_derived_features 持久化（DRY，与盘中 collect 同写路径）。
+        """
+        from datetime import date as _date, timedelta as _td
+        from vr_paths import last_trading_date as _last_td
+
+        try:
+            from candidate_funnel.sources import zt_pool_source
+            from risk.seal_intraday_collector import (
+                run_migrations, get_snapshots_by_code, _get_conn, _DB_LOCK,
+            )
+            from strategies.intraday_features import (
+                compute_derived_features, persist_derived_features,
+            )
+        except Exception as e:
+            logger.warning("[derived_precompute] 依赖导入失败: %s", e)
+            return {"status": f"error: {e}"}
+
+        # yesterday：与 funnel._run_funnel_impl 同口径（last_trading_date(today-1)），
+        # payload.get("date") 允许指定回填昨日日期。
+        yesterday = payload.get("date") or _last_td(_date.today() - _td(days=1)).isoformat()
+
+        # 幂等建表（fresh env 自愈；已应用则 no-op），避免 seal_derived_features 缺表致写失败
+        try:
+            run_migrations()
+        except Exception as e:
+            logger.warning("[derived_precompute] 迁移失败（继续，首行写可能失败）: %s", e)
+
+        try:
+            zt_map = zt_pool_source.fetch_zt_pool_map(yesterday)
+        except Exception as e:
+            logger.warning("[derived_precompute] %s 涨停池取数失败: %s", yesterday, e)
+            return {"date": yesterday, "status": f"error: {e}", "codes": 0, "written": 0}
+
+        codes = list(zt_map.keys())
+        if not codes:
+            logger.info("[derived_precompute] %s 昨日涨停池为空（非交易日或采集失败）", yesterday)
+            return {"date": yesterday, "status": "ok", "codes": 0, "written": 0, "skipped": 0}
+
+        written = 0
+        skipped = 0
+        conn = _get_conn()
+        try:
+            with _DB_LOCK:
+                for code in codes:
+                    try:
+                        snaps = get_snapshots_by_code(code, yesterday)
+                        if not snaps:
+                            skipped += 1
+                            continue  # 缺快照跳过，不臆造
+                        derived = compute_derived_features(snaps)
+                        if derived.get("data_status") == "missing":
+                            skipped += 1
+                            continue
+                        # 复用 persist_derived_features 写 seal_derived_features
+                        # （INSERT OR REPLACE 幂等，同 (date,code) 重跑覆盖；S084 follow-up：
+                        #   合并自 derived_results，DRY 复用战法层持久化函数，与盘中 collect 同路径）
+                        name = (zt_map.get(code) or {}).get("n")
+                        persist_derived_features(yesterday, code, name, derived, conn)
+                        written += 1
+                    except Exception as exc:
+                        logger.warning(
+                            "[derived_precompute] %s %s 派生落库失败（跳过）: %s",
+                            yesterday, code, exc,
+                        )
+                        skipped += 1
+                conn.commit()
+        finally:
+            conn.close()
+
+        logger.info(
+            "[derived_precompute] %s derived 预采集完成：涨停%s/写入%s/跳过%s",
+            yesterday, len(codes), written, skipped,
+        )
+        return {"date": yesterday, "status": "ok", "codes": len(codes),
+                "written": written, "skipped": skipped}
 
 
 _manager = ScheduledTaskManager()

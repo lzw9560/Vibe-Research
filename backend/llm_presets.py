@@ -29,6 +29,13 @@ _PRESETS_META: list[dict] = [
         "defaultModel": "auto/best-coding",
     },
     {
+        "id": "bailian",
+        "name": "Bailian 100.89.194.96",
+        "baseURL": "http://100.89.194.96/v1",
+        "models": ["deepseek-chat", "deepseek-v4-flash-0731", "deepseek-v4-pro", "glm-5", "glm-5.2", "kimi-k2.6", "qwen3-coder-plus", "qwen3.7-max", "qwen3.8-max"],
+        "defaultModel": "deepseek-v4-pro",
+    },
+    {
         "id": "sense-nova",
         "name": "Sense Nova",
         "baseURL": "https://token.sensenova.cn/v1",
