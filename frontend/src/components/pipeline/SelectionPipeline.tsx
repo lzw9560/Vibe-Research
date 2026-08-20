@@ -300,6 +300,8 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date }: {
   const [expanded, setExpanded] = useState(false);
   const mismatch = next != null && layer.output_count !== next.input_count;
   const missing = layer.data_status === "未取得";
+  // S090 折叠态醒目选股数：input(次) → output(主,大字醒目) + 滤除 pill
+  const filteredOut = layer.filtered_out?.length ?? Math.max(layer.input_count - layer.output_count, 0);
   return (
     <div className="space-y-1">
       <button
@@ -313,9 +315,16 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date }: {
             {missing && <span className="text-[10px] text-warning">未取得</span>}
             {mismatch && next && <span className="text-[10px] text-warning">失配</span>}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{layer.input_count}→{layer.output_count}</span>
-            <span className="text-[10px] text-muted-foreground">{expanded ? "▼" : "▶"}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs tabular-nums text-muted-foreground">{layer.input_count}</span>
+            <span className="text-muted-foreground/50">→</span>
+            <span className="text-base font-bold tabular-nums text-primary">{layer.output_count}</span>
+            {filteredOut > 0 && (
+              <span className="rounded bg-muted/30 px-1 text-[10px] tabular-nums text-muted-foreground">
+                ↓{filteredOut}
+              </span>
+            )}
+            <span className="ml-0.5 text-[10px] text-muted-foreground">{expanded ? "▼" : "▶"}</span>
           </div>
         </div>
       </button>
