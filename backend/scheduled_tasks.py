@@ -454,6 +454,7 @@ class TaskExecutor:
             "first_board_quote_probe": self._execute_first_board_quote_probe,  # S076：盘中多源行情探查（临时研究）
             "zt_history_snapshot": self._execute_zt_history_snapshot,  # S078：涨停历史 snapshot 数据地基
             "derived_precompute": self._execute_derived_precompute,  # S084 C1：盘后 derived 异步预采集
+            "monthly_vacuum": self._execute_monthly_vacuum,  # S089 D2：月度 VACUUM + wal_checkpoint
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -830,19 +831,22 @@ class TaskExecutor:
         intraday_features / seal_derived_features。派生失败不阻塞主采集
         （标 degraded，不抛异常）。
         """
-        from risk.seal_intraday_collector import collect_once, prune_old_snapshots, get_latest_snapshots
+        from risk.seal_intraday_collector import collect_once, archive_old_partitions, get_latest_snapshots
         from risk.bomb_alert_rules import check_all_rules
         from risk.bomb_alert_dispatcher import process_alerts
 
-        # 每日首调 prune（payload 带 prune=True 触发，默认只采集）
+        # S089 C4：每日首调归档（payload 带 prune=True 触发）。
+        # 废弃旧 prune 删除逻辑，改为 archive_old_partitions 标记冷热（不删数据）。
+        # 保留 result["pruned"] = 0 字段向后兼容（= 未删除行数）。
         if payload.get("prune"):
             retention = int(payload.get("retention_days", 30))
-            pruned = prune_old_snapshots(retention)
+            archive_result = archive_old_partitions(retention)
+            pruned = archive_result.get("archived", 0)
         else:
             pruned = 0
 
         result = collect_once()
-        result["pruned"] = pruned
+        result["pruned"] = pruned  # 向后兼容（archive 后恒 0，未删行）
         # 补写 date（collect_once 内部用 datetime.now()，executor 回填便于追溯）
         from datetime import datetime
         _now = datetime.now()
@@ -1349,6 +1353,93 @@ class TaskExecutor:
         return {"date": yesterday, "status": "ok", "codes": len(codes),
                 "written": written, "skipped": skipped}
 
+    def _execute_monthly_vacuum(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S089 D2：月度 VACUUM + wal_checkpoint(TRUNCATE)——热库（当年）月初触发。
+
+        遍历 ``.vibe-research/`` 下的 ``seal_intraday_YYYY.db``，对当年库执行
+        ``VACUUM``（回收碎片）+ ``PRAGMA wal_checkpoint(TRUNCATE)``（截断 -wal 文件，
+        防止长期累积膨胀）。历史年冷库默认不 VACUUM（归档时单独跑一次，spec §R6.2）。
+
+        payload 可选字段：
+        - ``year``: 指定年（默认当年），debug/补跑用
+        - ``include_cold``: True 时连历史年冷库一起 VACUUM（默认 False）
+
+        返回 ``{"vacuumed": [db...], "checkpointed": [db...]}``。单库失败不阻塞其余
+        （catch 记 error，标 status）。
+        """
+        import os
+        import sqlite3
+        from datetime import date as _date
+        from config import SEAL_INTRADAY_DIR
+        from db_health import get_healthy_conn
+
+        target_year = str(payload.get("year", _date.today().year))
+        include_cold = bool(payload.get("include_cold", False))
+
+        if not os.path.isdir(SEAL_INTRADAY_DIR):
+            logger.info("[monthly_vacuum] SEAL_INTRADAY_DIR=%s 不存在，跳过", SEAL_INTRADAY_DIR)
+            return {"vacuumed": [], "checkpointed": [], "status": "no_dir"}
+
+        vacuumed: list[str] = []
+        checkpointed: list[str] = []
+        errors: list[str] = []
+        for fname in sorted(os.listdir(SEAL_INTRADAY_DIR)):
+            # seal_intraday_YYYY.db（排除 .bak / -wal / -shm）
+            if not fname.startswith("seal_intraday_") or not fname.endswith(".db"):
+                continue
+            if fname.endswith(".bak"):
+                continue
+            year = fname[len("seal_intraday_"):-len(".db")]
+            if len(year) != 4 or not year.isdigit():
+                continue
+            is_hot = year == target_year
+            if not is_hot and not include_cold:
+                continue  # 冷库默认跳过
+
+            db_path = os.path.join(SEAL_INTRADAY_DIR, fname)
+            try:
+                # VACUUM 需独占连接（WAL 模式下 VACUUM 仍要求无并发写）；用裸 connect
+                # 避免 get_healthy_conn 的 row_factory 干扰 VACUUM（VACUUM 不返行）。
+                # wal_checkpoint 在 get_healthy_conn 已开 WAL 的连接上执行。
+                vconn = sqlite3.connect(db_path)
+                try:
+                    vconn.execute("PRAGMA journal_mode=WAL")
+                    vconn.execute("PRAGMA busy_timeout=5000")
+                    vconn.execute("VACUUM")
+                    vacuumed.append(fname)
+                finally:
+                    vconn.close()
+
+                cconn = get_healthy_conn(db_path)
+                try:
+                    # TRUNCATE 模式：checkpoint 后将 -wal 截断为 0（防膨胀）
+                    row = cconn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                    # row = (busy, log, checkpointed_frames)；busy=1 表示有并发写未完成
+                    if row and row[0] == 0:
+                        checkpointed.append(fname)
+                    elif row:
+                        logger.warning(
+                            "[monthly_vacuum] %s wal_checkpoint busy（有并发写，未截断）: %s",
+                            fname, tuple(row),
+                        )
+                        checkpointed.append(fname)  # 仍记（已尽力）
+                finally:
+                    cconn.close()
+            except Exception as e:
+                logger.warning("[monthly_vacuum] %s VACUUM/checkpoint 失败: %s", fname, e)
+                errors.append(f"{fname}: {e}")
+
+        logger.info(
+            "[monthly_vacuum] year=%s vacuumed=%s checkpointed=%s errors=%s",
+            target_year, vacuumed, checkpointed, errors,
+        )
+        return {
+            "vacuumed": vacuumed,
+            "checkpointed": checkpointed,
+            "errors": errors,
+            "status": "ok" if not errors else "partial",
+        }
+
 
 _manager = ScheduledTaskManager()
 
@@ -1677,6 +1768,19 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 derived_precompute 已创建（cron 0 17 * * 0-4）")
+
+    # S089 D2：月度 VACUUM + wal_checkpoint(TRUNCATE)——月初 02:00 跑（低负载时段，
+    # 避开盘后批处理 15:30-17:15）。当年热库 VACUUM 回收碎片 + 截断 -wal 防膨胀。
+    if "monthly_vacuum" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="monthly_vacuum",
+            description="S089 月度 VACUUM + wal_checkpoint(TRUNCATE)——当年热库回收碎片+截断 -wal 防膨胀",
+            task_type="monthly_vacuum",
+            cron_expr="0 2 1 * *",  # 每月 1 日 02:00
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 monthly_vacuum 已创建（cron 0 2 1 * *，月初 02:00）")
 
 
 async def stop_scheduler() -> None:

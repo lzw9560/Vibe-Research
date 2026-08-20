@@ -52,6 +52,24 @@ STI_TIMELINE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, STI_TIMELINE_DB)
 WINRATE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, WINRATE_DB)
 SEAL_INTRADAY_DB_PATH = os.path.join(PRIVATE_DATA_DIR, SEAL_INTRADAY_DB)
 
+# S089 B4：seal_intraday 分库目录 + 年库路径函数。
+# 分库文件 ``seal_intraday_YYYY.db`` 与既有私有数据放同目录（PRIVATE_DATA_DIR），
+# 不改动 S037 已有常量（PRIVATE_DATA_DIR / GENE_SCORES_DB / STI_TIMELINE_DB / WINRATE_DB）。
+SEAL_INTRADAY_DIR: str = PRIVATE_DATA_DIR
+
+
+def seal_intraday_db_path(year: str) -> str:
+    """返回指定年的 seal_intraday 分库全路径。
+
+    Args:
+        year: 4 位年字符串，如 ``'2026'``。
+
+    Returns:
+        ``os.path.join(SEAL_INTRADAY_DIR, f"seal_intraday_{year}.db")``。
+    """
+    return os.path.join(SEAL_INTRADAY_DIR, f"seal_intraday_{year}.db")
+
+
 os.makedirs(PRIVATE_DATA_DIR, exist_ok=True)
 
 

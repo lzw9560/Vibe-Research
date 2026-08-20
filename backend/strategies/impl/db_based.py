@@ -20,21 +20,33 @@ class ReversePackageStrategy(BaseStrategy):
 
     def match(self, ctx) -> list[ConditionMatch]:
         # grill Q1-Q2：候选池从涨停池改为 S055 炸板池（open_count >= 2 = 反复开板的真炸板）
-        # 数据来源：seal_intraday_snapshots 最近交易日 open_count >= 2 的票
+        # 数据来源：seal_intraday_snapshots 分表最近交易日 open_count >= 2 的票
+        # S089 C6：路由到当年最新月表（get_latest_partition → (db_path, table)），
+        # 先查该月表 MAX(date)（最新交易日），再查 open_count >= 2 的票。
         # 数据缺失时空集，不命中任何票（诚实降级，不臆造候选）
         import sqlite3  # noqa: PLC0415
-        from config import PRIVATE_DATA_DIR  # noqa: PLC0415
-        from pathlib import Path  # noqa: PLC0415
+        from db_partition_router import get_latest_partition  # noqa: PLC0415
 
-        zb_db = str(Path(PRIVATE_DATA_DIR) / "seal_intraday.db")
+        zb_stocks: set[str] = set()
         try:
-            zb_conn = sqlite3.connect(zb_db, timeout=5)
-            zb_stocks = {r[0] for r in zb_conn.execute(
-                "SELECT DISTINCT code FROM seal_intraday_snapshots "
-                "WHERE open_count >= 2 "
-                "AND date = (SELECT MAX(date) FROM seal_intraday_snapshots)"
-            ).fetchall()}
-            zb_conn.close()
+            latest = get_latest_partition()
+            if latest is not None:
+                zb_db, zb_table = latest
+                zb_conn = sqlite3.connect(zb_db, timeout=5)
+                try:
+                    # 先取该月表最新交易日
+                    row = zb_conn.execute(
+                        f"SELECT MAX(date) FROM {zb_table}"
+                    ).fetchone()
+                    max_date = row[0] if row else None
+                    if max_date:
+                        zb_stocks = {r[0] for r in zb_conn.execute(
+                            f"SELECT DISTINCT code FROM {zb_table} "
+                            "WHERE open_count >= 2 AND date = ?",
+                            (max_date,),
+                        ).fetchall()}
+                finally:
+                    zb_conn.close()
         except Exception:  # noqa: BLE001 - 数据缺失时空集，不命中任何票
             zb_stocks = set()
 

@@ -20,13 +20,32 @@ import pytest
 
 @pytest.fixture
 def isolated_seal_db(tmp_path, monkeypatch):
-    """临时 SEAL_INTRADAY_DB_PATH + 触发迁移。"""
+    """临时 SEAL_INTRADAY_DB_PATH + 触发迁移 + S089 路由层分表感知。
+
+    主库 seal_intraday.db 存 intraday_features / seal_derived_features（非分区），
+    seal_intraday_snapshots 时序数据走 S089 路由层到 seal_intraday_YYYY.db 月分表。
+    故需 patch collector._DB_PATH（主库）+ db_partition_router 路由常量/函数（分库）。
+    """
+    # 主库：存 intraday_features / seal_derived_features（非分区）
     db_path = tmp_path / "seal_intraday.db"
     monkeypatch.setattr("risk.seal_intraday_collector._DB_PATH", str(db_path))
     monkeypatch.setattr("risk.seal_intraday_collector.SEAL_INTRADAY_DB_PATH", str(db_path))
-    # 重新导入以触发迁移（_DB_PATH 已 patch）
     from risk.seal_intraday_collector import run_migrations
     run_migrations()
+
+    # S089：分库路由层重定向到 tmp_path（seal_intraday_snapshots 时序走分表）
+    import db_partition_router as router
+    import os
+    monkeypatch.setattr(router, "PRIVATE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(router, "SEAL_INTRADAY_DIR", str(tmp_path))
+
+    def _fake_db_path(year: str) -> str:
+        return os.path.join(str(tmp_path), f"seal_intraday_{year}.db")
+
+    monkeypatch.setattr(router, "seal_intraday_db_path", _fake_db_path)
+    # collector 从 router 导入的 resolve_partition/ensure_partition 是同一函数对象，
+    # 其内部调 seal_intraday_db_path 走 router 全局命名空间 → 自动生效，无需额外 patch。
+
     return str(db_path)
 
 
@@ -65,18 +84,14 @@ class TestMigrations:
 
     def test_s070_existing_rows_low_price_null(self, isolated_seal_db):
         """S070 R6.1：既有数据行 low_price/limit_pct 为 NULL（不臆造历史）。"""
-        from risk.seal_intraday_collector import save_snapshots
+        from risk.seal_intraday_collector import save_snapshots, get_snapshots_by_code
         # 写一条不含 low_price/limit_pct 的旧格式行（模拟 S055 历史数据）
         save_snapshots([{"ts": "2026-08-10T10:00:00", "date": "2026-08-10", "code": "000001"}])
-        conn = sqlite3.connect(isolated_seal_db)
-        try:
-            row = conn.execute(
-                "SELECT low_price, limit_pct FROM seal_intraday_snapshots WHERE code='000001'"
-            ).fetchone()
-            assert row[0] is None  # low_price 不臆造
-            assert row[1] is None  # limit_pct 不臆造
-        finally:
-            conn.close()
+        # S089：save_snapshots 走路由层到分表，读也走 get_snapshots_by_code（路由）。
+        rows = get_snapshots_by_code("000001", "2026-08-10")
+        assert len(rows) == 1
+        assert rows[0]["low_price"] is None  # low_price 不臆造
+        assert rows[0]["limit_pct"] is None  # limit_pct 不臆造
 
 
 class TestTradingTimeGate:
@@ -190,12 +205,20 @@ class TestCollectOnce:
 
 class TestPrune:
     def test_prune_deletes_old(self, isolated_seal_db):
-        from risk.seal_intraday_collector import save_snapshots, prune_old_snapshots
+        """S089 C4：prune 废弃删除，改归档标记——返回 0（不删数据）。
+
+        旧数据永久保留（分表后单月表粒度合适，不删）。
+        """
+        from risk.seal_intraday_collector import save_snapshots, prune_old_snapshots, get_snapshots_by_code
         old_date = (datetime.now() - timedelta(days=35)).strftime("%Y-%m-%d")
         rows = [{"ts": "old", "date": old_date, "code": "000001"}]
         save_snapshots(rows)
         deleted = prune_old_snapshots(30)
-        assert deleted >= 1
+        # S089 C4：archive 模式不删数据，返回 0
+        assert deleted == 0
+        # 数据仍在（归档未删）
+        still_there = get_snapshots_by_code("000001", old_date)
+        assert len(still_there) == 1
 
 
 class TestQueries:

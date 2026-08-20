@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 import threading
 from datetime import datetime, time as dtime, timedelta
@@ -21,12 +22,20 @@ from pathlib import Path
 from typing import Any
 
 from config import SEAL_INTRADAY_DB_PATH
+from db_health import get_healthy_conn
+from db_partition_router import ensure_partition, resolve_partition
 from vr_paths import is_trading_day
 
 _logger = logging.getLogger(__name__)
 
 _DB_PATH = SEAL_INTRADAY_DB_PATH
 _DB_LOCK = threading.Lock()
+
+# S089 A3：模块级单连接复用（check_same_thread=False）。
+# 配合 _DB_LOCK 串行化写入，避免每次 connect 的开销；WAL 模式下单连接软并发读写安全。
+# _DB_CONN_PATH 记录建连接时的路径，_DB_PATH 被改（测试隔离）时 _get_conn 自动重建。
+_DB_CONN: sqlite3.Connection | None = None
+_DB_CONN_PATH: str | None = None
 
 # 交易时段门控（A 股）：09:25-11:30 + 13:00-15:05（含盘后 5 分钟兜底）
 _TRADING_PERIODS = [
@@ -57,9 +66,33 @@ def run_migrations() -> None:
 
 
 def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(_DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """S089 A3：复用模块级单连接（check_same_thread=False + WAL + busy_timeout）。
+
+    首次调用时经 ``get_healthy_conn`` 建连接，后续复用。写入由调用方配合
+    ``_DB_LOCK`` 串行化。注意：既有业务函数在 finally 里调 ``conn.close()``
+    ——单连接下 close 会失效该实例，故此处检测 close 后自动重建（不臆造、
+    不改业务函数）。测试隔离靠 ``_DB_PATH`` 被 monkeypatch 后路径不符重建。
+    """
+    global _DB_CONN, _DB_CONN_PATH
+    # 路径变更（测试隔离或私有目录切换）→ 关闭旧连接，按新路径重建
+    if _DB_CONN is not None and _DB_CONN_PATH != _DB_PATH:
+        try:
+            _DB_CONN.close()
+        except Exception:
+            pass
+        _DB_CONN = None
+        _DB_CONN_PATH = None
+    # 连接已被业务函数 close / 失效 → 重建
+    if _DB_CONN is not None:
+        try:
+            _DB_CONN.execute("SELECT 1").fetchone()
+        except sqlite3.ProgrammingError:
+            _DB_CONN = None
+            _DB_CONN_PATH = None
+    if _DB_CONN is None:
+        _DB_CONN = get_healthy_conn(_DB_PATH, check_same_thread=False)
+        _DB_CONN_PATH = _DB_PATH
+    return _DB_CONN
 
 
 def is_intraday_trading_time(now: datetime | None = None) -> bool:
@@ -77,26 +110,62 @@ def is_intraday_trading_time(now: datetime | None = None) -> bool:
     return False
 
 
+def archive_old_partitions(retention_days: int = 30) -> dict[str, Any]:
+    """S089 C4：归档旧分表——不删除数据，只标记冷热（当年=热，历史年=冷）。
+
+    废弃旧 ``prune_old_snapshots`` 的删除逻辑（永久保留，行数 3 年 ~10.8M，
+    分表后单月表 ~300K 行粒度合适，不删）。本函数遍历
+    ``.vibe-research/`` 下的 ``seal_intraday_YYYY.db``，当年库标记热、非当年
+    标记冷（仅 log，无额外存储；冷热语义供未来冷库 VACUUM 策略用）。
+
+    Args:
+        retention_days: 保留期（S089 后语义失效，保留入参兼容旧调用点不报错）。
+
+    Returns:
+        ``{hot: [year...], cold: [year...], archived: int}``。``archived`` 始终 0
+        （不删数据，仅标记；兼容旧 result.pruned >= 0 断言）。
+    """
+    import os as _os
+    from config import SEAL_INTRADAY_DIR
+    current_year = str(datetime.now().year)
+    hot: list[str] = []
+    cold: list[str] = []
+    if _os.path.isdir(SEAL_INTRADAY_DIR):
+        for fname in _os.listdir(SEAL_INTRADAY_DIR):
+            # seal_intraday_YYYY.db
+            if not fname.startswith("seal_intraday_") or not fname.endswith(".db"):
+                continue
+            year = fname[len("seal_intraday_"):-len(".db")]
+            if len(year) != 4 or not year.isdigit():
+                continue
+            (hot if year == current_year else cold).append(year)
+    _logger.info(
+        "[seal_intraday] archive_old_partitions: hot=%s cold=%s（不删数据，仅标记）",
+        hot, cold,
+    )
+    return {"hot": hot, "cold": cold, "archived": 0}
+
+
 def prune_old_snapshots(retention_days: int = 30) -> int:
-    """删除超过保留期的快照行。返回删除行数。"""
-    cutoff = (datetime.now() - timedelta(days=retention_days)).strftime("%Y-%m-%d")
-    conn = _get_conn()
-    try:
-        with _DB_LOCK:
-            cur = conn.execute(
-                "DELETE FROM seal_intraday_snapshots WHERE date < ?",
-                (cutoff,),
-            )
-            conn.commit()
-            return cur.rowcount
-    finally:
-        conn.close()
+    """[DEPRECATED S089 C4] 旧删除逻辑废弃，委托 ``archive_old_partitions``。
+
+    永久保留不删数据；本函数仅保留签名兼容旧调用点（返回 0 = "未删除行数"）。
+    新代码应直接调 ``archive_old_partitions``。
+    """
+    archive_old_partitions(retention_days)
+    return 0
 
 
 def save_snapshots(rows: list[dict[str, Any]]) -> int:
-    """批量写入快照行。rows 字段对齐 seal_intraday_snapshots 表。返回写入行数。
+    """批量写入快照行。rows 字段对齐 seal_intraday_snapshots 分表。返回写入行数。
 
-    缺失字段填 None（不臆造，允许部分字段空）。
+    S089 C1：按 row["date"] 分桶，调 ``resolve_partition`` / ``ensure_partition``
+    路由到对应年库 + 月分表写入。跨月批量分桶（defaultdict 按 (db_path, table) 聚合），
+    每桶单独开连接（``get_healthy_conn`` check_same_thread=False），用 ``_DB_LOCK``
+    串行化写入。缺失字段填 None（不臆造，允许部分字段空）。
+
+    注：表名 ``seal_intraday_snapshots_YYYYMM`` 由 ``resolve_partition`` 内部从
+    YYYY-MM-DD 生成（非用户输入），动态拼 SQL 安全。
     """
     if not rows:
         return 0
@@ -106,69 +175,117 @@ def save_snapshots(rows: list[dict[str, Any]]) -> int:
               "float_market_cap", "index_5min_change",
               "low_price", "limit_pct"]
     normalized = [{k: r.get(k) for k in fields} for r in rows]
-    conn = _get_conn()
-    try:
-        with _DB_LOCK:
-            cur = conn.executemany(
-                """INSERT INTO seal_intraday_snapshots
-                (ts, date, code, name, pool, price, seal_amount, open_count,
-                 first_seal_time, consec_boards, sector, float_market_cap, index_5min_change,
-                 low_price, limit_pct)
-                VALUES (:ts, :date, :code, :name, :pool, :price, :seal_amount,
-                 :open_count, :first_seal_time, :consec_boards, :sector,
-                 :float_market_cap, :index_5min_change,
-                 :low_price, :limit_pct)""",
-                normalized,
-            )
-            conn.commit()
-            return cur.rowcount
-    finally:
-        conn.close()
+
+    # 按 (db_path, table) 分桶——跨月分表、跨年分库各成独立桶
+    from collections import defaultdict
+    buckets: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in normalized:
+        date = row.get("date")
+        if not date:
+            _logger.warning("[seal_intraday] save_snapshots 跳过缺 date 的行: %s", row)
+            continue
+        db_path, table = resolve_partition(date)
+        buckets[(db_path, table)].append(row)
+
+    total = 0
+    for (db_path, table), batch in buckets.items():
+        # 建表建索引（幂等）——首次写某月表时 ensure
+        ensure_partition(batch[0]["date"])
+        conn = get_healthy_conn(db_path, check_same_thread=False)
+        try:
+            with _DB_LOCK:
+                cur = conn.executemany(
+                    f"""INSERT INTO {table}
+                    (ts, date, code, name, pool, price, seal_amount, open_count,
+                     first_seal_time, consec_boards, sector, float_market_cap, index_5min_change,
+                     low_price, limit_pct)
+                    VALUES (:ts, :date, :code, :name, :pool, :price, :seal_amount,
+                     :open_count, :first_seal_time, :consec_boards, :sector,
+                     :float_market_cap, :index_5min_change,
+                     :low_price, :limit_pct)""",
+                    batch,
+                )
+                conn.commit()
+                total += cur.rowcount
+        finally:
+            conn.close()
+    return total
 
 
 def get_snapshots_by_code(code: str, date: str | None = None) -> list[dict[str, Any]]:
-    """查单股封单时序（sparkline 用）。date 缺省取最近交易日。"""
+    """查单股封单时序（sparkline 用）。date 缺省取最近交易日。
+
+    S089 C2：调 ``resolve_partition(date)`` 路由到对应月分表查询。分表不存在
+    （ensure 未跑 / fresh env）时返回空列表（不报错、不臆造）。
+    """
     date = date or datetime.now().strftime("%Y-%m-%d")
-    conn = _get_conn()
+    db_path, table = resolve_partition(date)
+    if not os.path.exists(db_path):
+        return []  # 当年库不存在 → 空集（不臆造）
+    conn = get_healthy_conn(db_path)
     try:
-        rows = conn.execute(
-            "SELECT * FROM seal_intraday_snapshots WHERE code = ? AND date = ? ORDER BY ts",
-            (code, date),
-        ).fetchall()
+        # 分表不存在时 SELECT 报 OperationalError → 返空（不臆造）
+        try:
+            rows = conn.execute(
+                f"SELECT * FROM {table} WHERE code = ? AND date = ? ORDER BY ts",
+                (code, date),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
         return [dict(r) for r in rows]
     finally:
         conn.close()
 
 
 def get_latest_snapshots(date: str | None = None) -> list[dict[str, Any]]:
-    """查当日全部最新快照（按 code 取最近一条）。"""
+    """查当日全部最新快照（按 code 取最近一条）。
+
+    S089 C3：调 ``resolve_partition(date)`` 路由到对应月分表查询。分表不存在
+    时返回空列表（不报错、不臆造）。
+    """
     date = date or datetime.now().strftime("%Y-%m-%d")
-    conn = _get_conn()
+    db_path, table = resolve_partition(date)
+    if not os.path.exists(db_path):
+        return []  # 当年库不存在 → 空集（不臆造）
+    conn = get_healthy_conn(db_path)
     try:
-        rows = conn.execute(
-            """SELECT * FROM seal_intraday_snapshots s
-            WHERE date = ? AND ts = (
-                SELECT MAX(ts) FROM seal_intraday_snapshots WHERE date = ? AND code = s.code
-            )
-            ORDER BY code""",
-            (date, date),
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                f"""SELECT * FROM {table} s
+                WHERE date = ? AND ts = (
+                    SELECT MAX(ts) FROM {table} WHERE date = ? AND code = s.code
+                )
+                ORDER BY code""",
+                (date, date),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []  # 分表不存在 → 空集（不臆造）
         return [dict(r) for r in rows]
     finally:
         conn.close()
 
 
 def get_recent_window(code: str, date: str, minutes: int = 5) -> list[dict[str, Any]]:
-    """取近 N 分钟的快照窗口（C1/C5 规则输入）。"""
+    """取近 N 分钟的快照窗口（C1/C5 规则输入）。
+
+    S089 C2-C3：调 ``resolve_partition(date)`` 路由到对应月分表。分表不存在
+    时返回空列表（不报错、不臆造）。
+    """
     cutoff = (datetime.now() - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%S")
-    conn = _get_conn()
+    db_path, table = resolve_partition(date)
+    if not os.path.exists(db_path):
+        return []
+    conn = get_healthy_conn(db_path)
     try:
-        rows = conn.execute(
-            """SELECT * FROM seal_intraday_snapshots
-            WHERE code = ? AND date = ? AND ts >= ?
-            ORDER BY ts""",
-            (code, date, cutoff),
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                f"""SELECT * FROM {table}
+                WHERE code = ? AND date = ? AND ts >= ?
+                ORDER BY ts""",
+                (code, date, cutoff),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
         return [dict(r) for r in rows]
     finally:
         conn.close()

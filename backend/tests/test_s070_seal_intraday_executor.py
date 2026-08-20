@@ -16,9 +16,12 @@ import pytest
 
 @pytest.fixture
 def isolated_seal_executor_env(tmp_path, monkeypatch):
-    """隔离 seal_intraday.db + market_data.db + 强制交易时段。
+    """隔离 seal_intraday.db + market_data.db + 强制交易时段 + S089 路由层分表感知。
 
     返回 (db_path, date_str) 供测试落库断言。
+
+    主库 seal_intraday.db 存 intraday_features / seal_derived_features（非分区），
+    seal_intraday_snapshots 时序数据走 S089 路由层到 seal_intraday_YYYY.db 月分表。
     """
     # 1. 隔离 seal_intraday.db（collector + 派生落库共用）
     seal_db = tmp_path / "seal_intraday.db"
@@ -26,6 +29,17 @@ def isolated_seal_executor_env(tmp_path, monkeypatch):
     monkeypatch.setattr("risk.seal_intraday_collector.SEAL_INTRADAY_DB_PATH", str(seal_db))
     from risk.seal_intraday_collector import run_migrations
     run_migrations()
+
+    # S089：分库路由层重定向到 tmp_path（seal_intraday_snapshots 时序走分表）
+    import db_partition_router as router
+    import os
+    monkeypatch.setattr(router, "PRIVATE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(router, "SEAL_INTRADAY_DIR", str(tmp_path))
+
+    def _fake_db_path(year: str) -> str:
+        return os.path.join(str(tmp_path), f"seal_intraday_{year}.db")
+
+    monkeypatch.setattr(router, "seal_intraday_db_path", _fake_db_path)
 
     # 2. 隔离 market_data.db（TaskExecutor 依赖 scheduled_tasks._DB_PATH）
     import scheduled_tasks as st

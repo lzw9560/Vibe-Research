@@ -28,11 +28,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from vr_paths import resolve_data_dir
-
 _logger = logging.getLogger(__name__)
-
-_SEAL_DB = Path(resolve_data_dir()) / "seal_intraday.db"
 
 # 60s 粒度近似标注（AC7：broken_duration_min 可能漏 <60s 短时炸板）
 _GRANULARITY_NOTE = "60s粒度近似"
@@ -244,21 +240,30 @@ def _parse_ts_minute(ts: str) -> float:
 
 def compute_seal_trajectory(date: str, code: str,
                             db_path: Path | str | None = None) -> SealTrajectory | None:
-    """从 seal_intraday_snapshots 算 (date,code) 的封单 trajectory（DB 便利函数）。
+    """从 seal_intraday_snapshots 分表算 (date,code) 的封单 trajectory（DB 便利函数）。
 
     遗留接口，内部委托纯函数 compute_trajectory 计算 core 特征，
     额外保留 first/last/mean/break_count（遗留 dataclass 字段）。
     无数据返 None。
+
+    S089 C7：调 ``resolve_partition(date)`` 路由到对应月分表。``db_path`` 入参
+    仅在分库存在时覆盖（遗留调用方传单库路径场景）；分表不存在返 None。
     """
-    db = Path(db_path) if db_path else _SEAL_DB
+    from db_partition_router import resolve_partition
+    resolved_db, table = resolve_partition(date)
+    # 调用方显式传 db_path 时优先用之（遗留兼容），否则用路由结果
+    db = Path(db_path) if db_path else Path(resolved_db)
     if not db.exists():
         return None
     conn = sqlite3.connect(str(db), timeout=10)
     try:
         rows = conn.execute(
-            "SELECT ts, seal_amount FROM seal_intraday_snapshots WHERE date=? AND code=? ORDER BY ts",
+            f"SELECT ts, seal_amount FROM {table} WHERE date=? AND code=? ORDER BY ts",
             (date, code),
         ).fetchall()
+    except sqlite3.OperationalError:
+        # 分表不存在 → None（不臆造）
+        return None
     finally:
         conn.close()
     if not rows:
@@ -294,14 +299,23 @@ def compute_seal_trajectory(date: str, code: str,
 
 def compute_all_trajectories(date: str,
                              db_path: Path | str | None = None) -> list[SealTrajectory]:
-    """某日全部 code 的 trajectory（从 snapshots distinct code）。遗留便利函数。"""
-    db = Path(db_path) if db_path else _SEAL_DB
+    """某日全部 code 的 trajectory（从 snapshots distinct code）。遗留便利函数。
+
+    S089 C7：调 ``resolve_partition(date)`` 路由到对应月分表。``db_path`` 入参
+    仅在分库存在时覆盖（遗留兼容）；分表不存在返 []。
+    """
+    from db_partition_router import resolve_partition
+    resolved_db, table = resolve_partition(date)
+    db = Path(db_path) if db_path else Path(resolved_db)
     if not db.exists():
         return []
     conn = sqlite3.connect(str(db), timeout=10)
     try:
         codes = [r[0] for r in conn.execute(
-            "SELECT DISTINCT code FROM seal_intraday_snapshots WHERE date=?", (date,)).fetchall()]
+            f"SELECT DISTINCT code FROM {table} WHERE date=?", (date,)).fetchall()]
+    except sqlite3.OperationalError:
+        # 分表不存在 → 空集（不臆造）
+        return []
     finally:
         conn.close()
     return [t for c in codes if (t := compute_seal_trajectory(date, c, db)) is not None]

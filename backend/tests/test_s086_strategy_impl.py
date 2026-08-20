@@ -331,6 +331,10 @@ class _FakeCursor:
     def fetchall(self):
         return self._rows
 
+    def fetchone(self):
+        # S089 C6：match() 调 SELECT MAX(date) → fetchone。返首行或 None。
+        return self._rows[0] if self._rows else None
+
 
 class _FakeConn:
     def __init__(self, rows):
@@ -345,8 +349,19 @@ class _FakeConn:
 
 class TestReversePackage:
     def test_hit_when_code_in_zb_pool(self, monkeypatch):
-        """seal_intraday.db open_count>=2 的票含 gene.code → 命中，confidence=0.4。"""
+        """seal_intraday.db open_count>=2 的票含 gene.code → 命中，confidence=0.4。
+
+        S089 C6：路由层 get_latest_partition 返 (db_path, table)，sqlite3.connect
+        mock 返 FakeConn，MAX(date)/DISTINCT code 两查询都返同一 FakeCursor。
+        """
         s = ReversePackageStrategy()
+        # get_latest_partition 在 match() 内 from db_partition_router 导入，
+        # 走 db_partition_router 模块命名空间 → patch 该模块属性生效。
+        import db_partition_router
+        monkeypatch.setattr(
+            db_partition_router, "get_latest_partition",
+            lambda: ("fake.db", "seal_intraday_snapshots_202608"),
+        )
         monkeypatch.setattr("sqlite3.connect", lambda *a, **kw: _FakeConn([("000001",)]))
         ctx = _ctx(gene=_gene())  # code=000001
         m = s.match(ctx)
@@ -355,14 +370,38 @@ class TestReversePackage:
 
     def test_miss_when_code_not_in_zb_pool(self, monkeypatch):
         s = ReversePackageStrategy()
+        import db_partition_router
+        monkeypatch.setattr(
+            db_partition_router, "get_latest_partition",
+            lambda: ("fake.db", "seal_intraday_snapshots_202608"),
+        )
         monkeypatch.setattr("sqlite3.connect", lambda *a, **kw: _FakeConn([("999999",)]))
         assert s.match(_ctx(gene=_gene())) == []
 
     def test_miss_on_db_error(self, monkeypatch):
         """sqlite3.connect 异常 → zb_stocks 空集 → 不命中（诚实降级）。"""
         s = ReversePackageStrategy()
+        import db_partition_router
+        monkeypatch.setattr(
+            db_partition_router, "get_latest_partition",
+            lambda: ("fake.db", "seal_intraday_snapshots_202608"),
+        )
 
         def _boom(*a, **kw):
             raise RuntimeError("db gone")
+        monkeypatch.setattr("sqlite3.connect", _boom)
+        assert s.match(_ctx(gene=_gene())) == []
+
+    def test_miss_when_no_partition(self, monkeypatch):
+        """S089 C6：当年库不存在（get_latest_partition 返 None）→ 空集不命中。"""
+        s = ReversePackageStrategy()
+        import db_partition_router
+        monkeypatch.setattr(
+            db_partition_router, "get_latest_partition",
+            lambda: None,
+        )
+        # sqlite3.connect 不应被调（无分区时不连库）
+        def _boom(*a, **kw):
+            raise AssertionError("不应连库")
         monkeypatch.setattr("sqlite3.connect", _boom)
         assert s.match(_ctx(gene=_gene())) == []

@@ -10,9 +10,16 @@ from datetime import datetime
 from pathlib import Path
 
 from config import GENE_SCORES_DB_PATH
+from db_health import get_healthy_conn
 
 _DB_PATH = GENE_SCORES_DB_PATH
 _DB_LOCK = _threading.Lock()
+
+# S089 A4：模块级单连接复用（check_same_thread=False + WAL + busy_timeout）。
+# 配合 _DB_LOCK 串行化写入，避免每次 connect 的开销；WAL 模式下单连接软并发读写安全。
+# _DB_CONN_PATH 记录建连接时的路径，_DB_PATH 被改（测试隔离）时 get_db 自动重建。
+_DB_CONN: sqlite3.Connection | None = None
+_DB_CONN_PATH: str | None = None
 
 
 def run_migrations() -> None:
@@ -70,11 +77,33 @@ def run_migrations() -> None:
 
 
 def get_db() -> sqlite3.Connection:
-    """获取 SQLite 连接（单例，线程安全）。"""
-    with _DB_LOCK:
-        conn = sqlite3.connect(_DB_PATH, timeout=10)
-        conn.row_factory = sqlite3.Row
-        return conn
+    """获取 SQLite 连接（S089 A4：单例复用，线程安全 + WAL + busy_timeout）。
+
+    首次调用经 ``get_healthy_conn`` 建连接（check_same_thread=False），后续复用。
+    写入由调用方配合 ``_DB_LOCK`` 串行化。既有业务函数在 finally 里调
+    ``conn.close()``——单连接下 close 会失效该实例，故此处检测 close 后自动
+    重建（不臆造、不改业务函数）。测试隔离靠 ``_DB_PATH`` 被改后路径不符重建。
+    """
+    global _DB_CONN, _DB_CONN_PATH
+    # 路径变更（测试隔离）→ 关闭旧连接，按新路径重建
+    if _DB_CONN is not None and _DB_CONN_PATH != _DB_PATH:
+        try:
+            _DB_CONN.close()
+        except Exception:
+            pass
+        _DB_CONN = None
+        _DB_CONN_PATH = None
+    # 连接已被业务函数 close / 失效 → 重建
+    if _DB_CONN is not None:
+        try:
+            _DB_CONN.execute("SELECT 1").fetchone()
+        except sqlite3.ProgrammingError:
+            _DB_CONN = None
+            _DB_CONN_PATH = None
+    if _DB_CONN is None:
+        _DB_CONN = get_healthy_conn(_DB_PATH, check_same_thread=False)
+        _DB_CONN_PATH = _DB_PATH
+    return _DB_CONN
 
 
 def save_gene_scores(date: str, scores: list) -> None:
