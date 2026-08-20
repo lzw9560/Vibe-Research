@@ -88,16 +88,18 @@ def _collect_global_factor(date: str) -> StormFactor:
     us = [i for i in indices if i.get("name") in ("道琼斯", "标普500", "纳斯达克")]
     a50 = next((i for i in indices if "富时A50" in (i.get("name") or "")), None)
     hk = [i for i in indices if "恒生" in (i.get("name") or "")]
+    n225 = next((i for i in indices if "日经" in (i.get("name") or "")), None)
 
     us_avg = sum(float(i.get("change_pct") or 0) for i in us) / max(len(us), 1)
     a50_chg = float(a50.get("change_pct") or 0) if a50 else 0.0
     hk_avg = sum(float(i.get("change_pct") or 0) for i in hk) / max(len(hk), 1)
+    n225_chg = float(n225.get("change_pct") or 0) if n225 else 0.0
 
-    # 综合涨跌 → 概率分（跌 0% = 50 中性，跌 2% = 80 高，涨 2% = 20 低）
-    combined = us_avg * 0.5 + a50_chg * 0.3 + hk_avg * 0.2
+    # 综合涨跌 → 概率分（美股0.4+A50 0.25+港股0.2+日经0.15）
+    combined = us_avg * 0.40 + a50_chg * 0.25 + hk_avg * 0.20 + n225_chg * 0.15
     score = max(0.0, min(100.0, 50 - combined * 15))
     src = "T-1 夜间快照" if data_status == "ok" else "当前(fallback)"
-    detail = f"[{src}] 美股均 {us_avg:+.2f}% / A50 {a50_chg:+.2f}% / 港股均 {hk_avg:+.2f}%"
+    detail = f"[{src}] 美股均 {us_avg:+.2f}% / A50 {a50_chg:+.2f}% / 港股均 {hk_avg:+.2f}% / 日经 {n225_chg:+.2f}%"
     return StormFactor("外围隔夜", round(score, 1), detail, data_status)
 
 

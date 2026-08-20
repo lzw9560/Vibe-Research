@@ -29,6 +29,7 @@ _INDICES = (
     {"key": "hsi", "name": "恒生指数", "secid": "100.HSI", "region": "港股"},
     {"key": "hstech", "name": "恒生科技", "secid": "124.HSTECH", "region": "港股"},
     {"key": "a50", "name": "富时A50", "secid": "100.XIN9", "region": "外盘期货"},
+    {"key": "n225", "name": "日经225", "secid": "100.N225", "region": "亚太"},  # S088 Q2：亚太情绪（试 secid 确认）
 )
 
 # 搜索返回的 MktNum → (secucode 后缀, 市场名)
