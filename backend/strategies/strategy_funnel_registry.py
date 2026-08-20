@@ -365,7 +365,7 @@ def compute_strategy_score(
 ) -> tuple[float, dict[str, float]]:
     """按指定权重集计算策略分。
 
-    factors: {factor_name: value}（来自 gene_scores）
+    factors: {factor_name: value}（来自 gene_scores，中文键名）
     weight_set: "limitup" / "non_limitup" / "storm_reversal"
     返回 (score, breakdown)。
 
@@ -374,7 +374,22 @@ def compute_strategy_score(
     反向因子（premium/freq）用 (100-value) 反转。
 
     权重加载失败 → 等权兜底（标注 fallback）。
+
+    因子名映射：权重文件用英文键名（factor_seal_rate 等），
+    gene_scores 用中文键名（封板率 等），需映射查值。
     """
+    # 英文权重键 → 中文 gene_scores 键
+    _FACTOR_NAME_MAP = {
+        "factor_seal_rate": "封板率",
+        "factor_red_rate": "红盘率",
+        "factor_rebound_rate": "炸板后溢价",
+        "factor_freq_score": "涨停频次",
+        "factor_premium": "次日溢价率",
+        "relative_strength": "相对强度",
+        "ma_bullish": "均线多头",
+        "volume_signal": "量能信号",
+        "sector_strength": "板块强度",
+    }
     ws = _get_weight_set(weight_set)
     weights = ws.get("weights", {})
     if not weights:
@@ -393,7 +408,9 @@ def compute_strategy_score(
     for factor_name, w_info in weights.items():
         w = w_info.get("weight", 0)
         reverse = w_info.get("reverse", False)
-        val = factors.get(factor_name, 0)
+        # 英文权重键 → 中文 gene_scores 键映射
+        cn_name = _FACTOR_NAME_MAP.get(factor_name, factor_name)
+        val = factors.get(cn_name, 0)
         if reverse:
             val = 100 - val
         contribution = val * w
