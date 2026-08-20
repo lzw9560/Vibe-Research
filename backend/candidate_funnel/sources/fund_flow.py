@@ -6,89 +6,94 @@ from __future__ import annotations
 import astock
 from data.mappers import dragon_tiger_from_dict
 from predict.features.fund_flow import fetch_dt_hot_money_relay, fetch_northbound
+from concurrent.futures import ThreadPoolExecutor
+
+
+def _fetch_single(c: str, as_of: str, sectors: list[dict] | None, industry_map: dict[str, str] | None) -> tuple[str, dict]:
+    """单只股票的资金流采集（线程安全，无共享状态）。"""
+    entry: dict = {
+        "main_net_inflow": None,
+        "main_net_5d": None,
+        "dragon_tiger_inst_net": None,
+        "dragon_tiger_hot_money_relay": None,
+        "northbound": None,
+        # S084 R4.2：板块资金 3 字段（行业级，从 market.get_overview()['sectors'] 按个股行业匹配）
+        "sector_net_inflow": None,
+        "sector_inflow": None,
+        "sector_outflow": None,
+        "missing": {},
+    }
+    try:
+        flows = astock.stock_fund_flow_120d(c) or []
+        # S085 A6：按 as_of 过滤 flows ≤ as_of——修 replay 误取今日资金流。
+        if as_of:
+            flows = [f for f in flows if (f.get("date") or "")[:10] <= as_of]
+        if flows:
+            # astock 返回 main_net 单位为"元"，模型口径为"万"，需换算。
+            entry["main_net_inflow"] = round((flows[-1].get("main_net") or 0) / 10000.0, 1)
+            last5 = flows[-5:]
+            entry["main_net_5d"] = round(
+                sum((f.get("main_net") or 0) for f in last5) / 10000.0, 1
+            )
+            if len(flows) < 2:
+                entry["main_net_5d"] = None
+                entry["missing"]["main_net_5d"] = "资金流仅 1 天（降级源），5 日累计暂不可得"
+            entry["_as_of"] = (flows[-1].get("date") or "")[:10] or None
+        else:
+            entry["missing"]["main_net_inflow"] = "资金流未取得"
+    except Exception:
+        entry["missing"]["main_net_inflow"] = "资金流取数失败"
+    try:
+        dt = dragon_tiger_from_dict(astock.dragon_tiger_board(c, trade_date=as_of) or {})
+        entry["dragon_tiger_inst_net"] = dt.institution_net
+        if entry["dragon_tiger_inst_net"] is None:
+            entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜待披露"
+    except Exception:
+        entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜未取得"
+    try:
+        relay = fetch_dt_hot_money_relay(c, as_of)
+        entry["dragon_tiger_hot_money_relay"] = relay
+        if relay is None:
+            entry["missing"]["dragon_tiger_hot_money_relay"] = "龙虎榜未上榜"
+    except Exception:
+        entry["missing"]["dragon_tiger_hot_money_relay"] = "游资接力取数失败"
+    try:
+        nb = fetch_northbound(c, as_of)
+        entry["northbound"] = nb
+        if nb is None:
+            entry["missing"]["northbound"] = "北向未取得（2024-08-19 后个股日级北向停更/当日无数据）"
+    except Exception:
+        entry["missing"]["northbound"] = "北向取数失败"
+
+    # S084 R4.2：板块资金（行业级，sectors 外部传入）
+    if sectors:
+        industry = industry_map.get(c) if industry_map else None
+        if industry:
+            match = next((s for s in sectors if s.get("name") == industry), None)
+            if match:
+                entry["sector_net_inflow"] = match.get("net")
+                entry["sector_inflow"] = match.get("inflow")
+                entry["sector_outflow"] = match.get("outflow")
+            else:
+                entry["missing"]["sector_net_inflow"] = "行业未匹配（板块列表无此行业）"
+        else:
+            entry["missing"]["sector_net_inflow"] = "个股行业未取得（zt pool 无 hybk）"
+    else:
+        entry["missing"]["sector_net_inflow"] = "板块资金未采集（sectors 未传入）"
+    return c, entry
 
 
 def fetch_fund_flow(codes: list[str], as_of: str, sectors: list[dict] | None = None, industry_map: dict[str, str] | None = None) -> dict[str, dict]:
-    out: dict[str, dict] = {}
-    for c in codes:
-        entry: dict = {
-            "main_net_inflow": None,
-            "main_net_5d": None,
-            "dragon_tiger_inst_net": None,
-            "dragon_tiger_hot_money_relay": None,
-            "northbound": None,
-            # S084 R4.2：板块资金 3 字段（行业级，从 market.get_overview()['sectors'] 按个股行业匹配）
-            "sector_net_inflow": None,
-            "sector_inflow": None,
-            "sector_outflow": None,
-            "missing": {},
-        }
-        try:
-            flows = astock.stock_fund_flow_120d(c) or []
-            # S085 A6：按 as_of 过滤 flows ≤ as_of——修 replay 误取今日资金流。
-            # 盘前 as_of=T→flows 最后 T-1（T 日未出）；replay as_of=H→flows ≤ H。
-            # 不改 stock_fund_flow_120d 签名（topology/risk_models/前端直调不受影响）。
-            if as_of:
-                flows = [f for f in flows if (f.get("date") or "")[:10] <= as_of]
-            if flows:
-                # astock 返回 main_net 单位为"元"，模型口径为"万"，需换算。
-                entry["main_net_inflow"] = round((flows[-1].get("main_net") or 0) / 10000.0, 1)
-                last5 = flows[-5:]
-                entry["main_net_5d"] = round(
-                    sum((f.get("main_net") or 0) for f in last5) / 10000.0, 1
-                )
-                # S049a：降级源（push2delay）只回最新 1 行——单行时不拿当日
-                # 净流冒充"5 日累计"，标 missing 透明（AC6）；≥2 行沿用既有
-                # 契约"不足 5 天按可用天数求和"（test_main_net_5d_is_sum_of_last_five_in_wan）。
-                if len(flows) < 2:
-                    entry["main_net_5d"] = None
-                    entry["missing"]["main_net_5d"] = "资金流仅 1 天（降级源），5 日累计暂不可得"
-                # S049 C2：暴露数据源最新行日期（供 diagnose as_of 取最早）
-                entry["_as_of"] = (flows[-1].get("date") or "")[:10] or None
-            else:
-                entry["missing"]["main_net_inflow"] = "资金流未取得"
-        except Exception:
-            entry["missing"]["main_net_inflow"] = "资金流取数失败"
-        try:
-            # S085 A2d：传 as_of 给 dragon_tiger_board——修 replay 误取今日龙虎榜
-            # （盘前 as_of=T→T 日未出榜返 T-1 最近；replay as_of=H→查到 H）。
-            dt = dragon_tiger_from_dict(astock.dragon_tiger_board(c, trade_date=as_of) or {})
-            entry["dragon_tiger_inst_net"] = dt.institution_net
-            if entry["dragon_tiger_inst_net"] is None:
-                entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜待披露"
-        except Exception:
-            entry["missing"]["dragon_tiger_inst_net"] = "龙虎榜未取得"
-        try:
-            relay = fetch_dt_hot_money_relay(c, as_of)
-            entry["dragon_tiger_hot_money_relay"] = relay
-            if relay is None:
-                entry["missing"]["dragon_tiger_hot_money_relay"] = "龙虎榜未上榜"
-        except Exception:
-            entry["missing"]["dragon_tiger_hot_money_relay"] = "游资接力取数失败"
-        try:
-            nb = fetch_northbound(c, as_of)
-            entry["northbound"] = nb
-            if nb is None:
-                entry["missing"]["northbound"] = "北向未取得（2024-08-19 后个股日级北向停更/当日无数据）"
-        except Exception:
-            entry["missing"]["northbound"] = "北向取数失败"
+    """并行采集资金流（max_workers=5，防 em_get 限流）。
 
-        # S084 R4.2：板块资金（行业级，sectors 外部传入——由 funnel 调 market.get_overview()['sectors']
-        # 5min 缓存 batch 复用，避免 per-code raw akshare 调用违反防封底线）
-        if sectors:
-            # S084 R4.2：行业从 zt pool hybk 提取（em_get-backed，替代 raw akshare individual_info，防封底线 review HIGH 修复）
-            industry = industry_map.get(c) if industry_map else None
-            if industry:
-                match = next((s for s in sectors if s.get("name") == industry), None)
-                if match:
-                    entry["sector_net_inflow"] = match.get("net")
-                    entry["sector_inflow"] = match.get("inflow")
-                    entry["sector_outflow"] = match.get("outflow")
-                else:
-                    entry["missing"]["sector_net_inflow"] = "行业未匹配（板块列表无此行业）"
-            else:
-                entry["missing"]["sector_net_inflow"] = "个股行业未取得（zt pool 无 hybk）"
-        else:
-            entry["missing"]["sector_net_inflow"] = "板块资金未采集（sectors 未传入）"
-        out[c] = entry
+    原 36 只串行 186s → 并行后预估 ~37s（5 并发 × 36/5 × 2.6s/只）。
+    """
+    if not codes:
+        return {}
+    out: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=min(5, len(codes))) as ex:
+        futures = [ex.submit(_fetch_single, c, as_of, sectors, industry_map) for c in codes]
+        for fu in futures:
+            c, entry = fu.result()
+            out[c] = entry
     return out
