@@ -2,7 +2,7 @@
 // 八项标准作表头列（动态 items label），内容 status+actual，未通过红背景。
 import { Fragment, useState } from "react";
 import { cn } from "@/lib/utils";
-import type { DiagnosisCard, EightStandardItem } from "@/lib/api/types";
+import type { DiagnosisCard, EightStandardItem } from "@/lib/candidates";
 import { GlassCard } from "@/components/ui/GlassCard";
 
 interface Props {

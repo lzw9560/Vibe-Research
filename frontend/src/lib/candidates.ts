@@ -23,6 +23,11 @@ export interface IndicatorSet {
   pe_ttm?: number | null; mcap_yi?: number | null; pb?: number | null;
   sector_net_inflow?: number | null; sector_inflow?: number | null; sector_outflow?: number | null;
   prev_amount_yi?: number | null;
+  // S081 PRD 战法因子（K线派生，后端 build_indicator_set 填）
+  max_high_pct?: number | null;       // 当日最高涨幅 = (high/prev_close - 1)*100
+  shadow_length_pct?: number | null;  // 上影线长度 = (high/close - 1)*100
+  ma_5_status?: string | null;        // MA5 状态
+  prev_turnover_pct?: number | null;  // 前日换手率（供 vol_ratio_1d 计算）
   missing: Record<string, string>;
 }
 export type ActivityTier = "冷" | "活跃" | "热";
