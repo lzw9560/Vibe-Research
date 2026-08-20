@@ -23,6 +23,7 @@ import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candida
 import { Link, useSearchParams } from "react-router-dom";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
+import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
 import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
 
 function formatRelativeTime(generatedAt: string): string {
@@ -193,6 +194,8 @@ export default function PreMarketBriefing() {
         <>
           {/* S072 §44 诚实标注层（forward verdict + 各信号无 edge，盘前决策前置可见） */}
           <HonestyBanner />
+          {/* S090 A：盘前选股（S071 breakout 弱信号 + 风控 + honest）——独立选股视角，date 感知 */}
+          <PremarketSelectionSection date={date} />
           {/* S079 P2 仓位闸 + 龙虎榜风控面板（R9-R10，spec §3.3） */}
           <P2RiskPanel briefing={briefing} />
           {/* S072 去天气决策条（STI/天气无 §44 edge）；保留熔断 + 日历（风控非情绪） */}

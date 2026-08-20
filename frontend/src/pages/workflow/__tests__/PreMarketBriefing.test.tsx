@@ -39,6 +39,10 @@ vi.mock("@/lib/query/strategy", () => ({
   // S075：SelectionPipeline 的 NonLimitupLane 调 useNonLimitupFunnel，补 mock
   useNonLimitupFunnel: () => ({ data: undefined, isLoading: false }),
 }));
+// S090 A：PremarketSelectionSection 调 usePremarketSelection，补 mock 避免真请求
+vi.mock("@/lib/query/premarket", () => ({
+  usePremarketSelection: () => ({ isLoading: true }),
+}));
 vi.mock("@/pages/workflow/CandidateDetail", () => ({ CandidateDetailPanel: () => null }));
 vi.mock("@/components/candidate/FunnelLayers", () => ({
   FunnelLayers: ({ layers }: { layers: unknown[] }) => (
