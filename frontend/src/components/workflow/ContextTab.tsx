@@ -39,6 +39,16 @@ export function ContextTab({ date }: Props) {
   });
   const sectors = sectorRot?.strength_rank ?? [];
 
+  // S088 盘前暴风雨预测（独立于事后 STI 检测）
+  const { data: storm } = useQuery({
+    queryKey: ["storm-predict", date ?? "latest"],
+    queryFn: () =>
+      request<{ date: string; probability: number; risk_level: string; suggested_position: number; factors: Array<{ name: string; score: number; detail: string; data_status: string }>; disclaimer?: string }>(
+        `/sentiment/storm-predict${date ? `?date=${date}` : ""}`,
+      ),
+    retry: false,
+  });
+
   const weather = ctx?.weather_state ?? "未取得";
   const fuse = ctx?.fuse_state;
   const fuseState = (fuse as { fuse_state?: string } | null)?.fuse_state ?? "未取得";
@@ -52,7 +62,8 @@ export function ContextTab({ date }: Props) {
   const promotionRate = (me as { promotion_rate?: number } | null)?.promotion_rate;
 
   const askAiContext = [
-    `当前页面：语境（SentimentContext）`,
+    `当前页面：语境（SentimentContext + S088 盘前暴风雨预测）`,
+    `暴风雨预测：概率 ${storm?.probability ?? "—"}/100 风险 ${storm?.risk_level ?? "—"} 建议仓位 ${storm ? `${(storm.suggested_position * 100).toFixed(0)}%` : "—"}`,
     `天气：${weather} | 熔断：${fuseState} | 综合分：${composite ?? "—"}`,
     `allowed_styles：${allowed.join("、") || "全 12 战法"} | forbidden：${forbidden.join("、") || "无"}`,
     `市场 4 率：涨停${ztCount ?? "—"}/跌停${dtCount ?? "—"}/最高连板${maxBoards ?? "—"}/晋级率${promotionRate ?? "—"}`,
@@ -62,6 +73,32 @@ export function ContextTab({ date }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* S088 盘前暴风雨预测 */}
+      <GlassCard className={"p-4 " + ((storm?.risk_level === "高" || storm?.risk_level === "极高") ? "ring-2 ring-red-500/30" : "")}>
+        <div className="mb-2 flex items-center gap-2">
+          <h3 className="font-semibold">盘前暴风雨预测</h3>
+          <Badge variant={storm?.risk_level === "极高" || storm?.risk_level === "高" ? "warning" : storm?.risk_level === "中" ? "default" : "success"}>
+            {storm?.risk_level ?? "—"}
+          </Badge>
+        </div>
+        <div className="flex items-baseline gap-3">
+          <span className="text-3xl font-bold font-mono text-red-400">{storm?.probability ?? "—"}</span>
+          <span className="text-sm text-muted-foreground/70">/100 暴风雨概率</span>
+          <span className="ml-auto text-sm text-muted-foreground">建议仓位 {storm ? `${(storm.suggested_position * 100).toFixed(0)}%` : "—"}</span>
+        </div>
+        {storm?.factors && storm.factors.length > 0 && (
+          <div className="mt-2 space-y-1 text-xs">
+            {storm.factors.map((f) => (
+              <div key={f.name} className="flex justify-between">
+                <span className="text-muted-foreground/70">{f.name}</span>
+                <span className={f.data_status === "missing" ? "text-muted-foreground/40" : "text-foreground"}>{f.score} ({f.detail})</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {storm?.disclaimer && <p className="mt-2 text-[10px] text-muted-foreground/40">{storm.disclaimer}</p>}
+      </GlassCard>
+
       <GlassCard className="p-4">
         <div className="mb-3 flex items-center gap-2">
           <h3 className="font-semibold">决策语境</h3>

@@ -9,6 +9,7 @@ import sqlite3
 import json
 import os
 import time
+import asyncio
 from config import GENE_SCORES_DB_PATH, STI_TIMELINE_DB_PATH, default_config
 
 router = APIRouter(tags=["sentiment-weather"])
@@ -1196,6 +1197,27 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
         }
     except Exception as e:
         raise HTTPException(502, f"离场信号查询异常：{e}") from e
+
+
+@router.get("/api/sentiment/storm-predict")
+async def get_storm_predict(date: Optional[str] = Query(None, description="T 日期 YYYY-MM-DD，默认今日")) -> Dict[str, Any]:
+    """S088 盘前暴风雨预测——外围隔夜+内部先行+新闻密度 → 概率分+仓位。
+
+    独立于事后 STI 检测（盘前预测 vs 盘后验证）。概率预测非确定，市场有风险。
+    """
+    from strategies.storm_predictor import predict_storm  # noqa: PLC0415
+    try:
+        r = await asyncio.to_thread(predict_storm, date)
+        return {
+            "date": r.date,
+            "probability": r.probability,
+            "risk_level": r.risk_level,
+            "suggested_position": r.suggested_position,
+            "factors": [{"name": f.name, "score": f.score, "detail": f.detail, "data_status": f.data_status} for f in r.factors],
+            "disclaimer": r.disclaimer,
+        }
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"暴风雨预测异常：{e}") from e
 
 
 __all__ = ["router"]
