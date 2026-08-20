@@ -353,3 +353,24 @@ def test_dates_lists_snapshot_dates_desc(monkeypatch):
 
     r = wf.get_pre_market_dates()  # sync 函数直接调（原 asyncio.run 调 sync 返 dict 致 TypeError）
     assert r["dates"] == ["2026-08-03", "2026-07-15", "2026-07-01"]
+
+
+def test_save_snapshot_with_dataclass_payload(tmp_path, monkeypatch):
+    """payload 含裸 dataclass 实例时 _save_snapshot 不崩，落盘为 dict。
+
+    regression for PositionParams serialization bug (log-patrol 告警)。
+    """
+    import dataclasses
+
+    @dataclasses.dataclass(frozen=True)
+    class _FakeParams:
+        stop_loss_pct: float
+        take_profit_pct: float
+
+    monkeypatch.setattr(wf, "_snapshot_dir", lambda: tmp_path)
+    # _is_valid_date 若在模块级，按既有测试范式 mock；参考文件内其他用例怎么 mock 的
+    payload = {"data_date": "2026-08-20", "position_params": _FakeParams(-3.0, 8.0)}
+    wf._save_snapshot(payload)  # 改前会抛 TypeError，改后应成功
+    import json
+    loaded = json.loads((tmp_path / "2026-08-20.json").read_text(encoding="utf-8"))
+    assert loaded["position_params"] == {"stop_loss_pct": -3.0, "take_profit_pct": 8.0}

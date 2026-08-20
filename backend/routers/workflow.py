@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
+import dataclasses
 from dataclasses import asdict
 from pydantic import BaseModel
 
@@ -82,6 +83,18 @@ def _is_valid_date(d: str) -> bool:
         return False
 
 
+def _json_default(obj):
+    """json.dumps 兜底：裸 Pydantic/dataclass 对象降级为 dict，避免整体写盘失败。
+
+    防御纵深——源头已剥 dataclass（strategy_funnel_registry），此层兜未来其他混入。
+    """
+    if hasattr(obj, "model_dump"):       # Pydantic v2（项目既有范式 workflow.py:418）
+        return obj.model_dump(mode="json")
+    if dataclasses.is_dataclass(obj):     # 裸 dataclass（PositionParams 等）
+        return dataclasses.asdict(obj)
+    return str(obj)                       # 末路：防崩，schema 不可控但至少落盘
+
+
 def _save_snapshot(payload: dict) -> None:
     """整体原子写盘（临时文件 rename，避免半截 JSON）；文件名取 payload[data_date]。"""
     date = payload.get("data_date", "")
@@ -90,7 +103,10 @@ def _save_snapshot(payload: dict) -> None:
     d = _snapshot_dir()
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / f".{date}.tmp"
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=1, default=_json_default),
+        encoding="utf-8",
+    )
     tmp.replace(d / f"{date}.json")
 
 

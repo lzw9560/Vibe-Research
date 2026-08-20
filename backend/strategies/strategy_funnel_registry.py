@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import dataclasses
 from dataclasses import field
 from pathlib import Path
 from typing import Literal, Optional
@@ -517,7 +518,7 @@ def score_candidates(
                 "strategy_score": score,
                 "score_breakdown": breakdown,
                 "funnel_type": cfg.funnel_type,
-                "position_params": cfg.position_params,
+                "position_params": dataclasses.asdict(cfg.position_params),
                 "weather_recommended": strat_code in recommendation,  # grill Q7：天气推荐标注（软标注）
                 "hot_money_seat_risk": (
                     {
