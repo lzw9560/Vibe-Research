@@ -86,7 +86,7 @@ export function StrategyMatchMatrix({ date }: Props) {
                 <div className="flex flex-wrap gap-1">
                   {e.hits.map((h) => (
                     <Badge key={h.strategy_code} variant={h.weather_recommended ? "primary" : "default"}>
-                      {h.strategy_name}({h.strategy_score})
+                      {h.strategy_name} 分{h.strategy_score}
                     </Badge>
                   ))}
                 </div>
