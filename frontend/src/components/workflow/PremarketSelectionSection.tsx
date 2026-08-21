@@ -17,7 +17,10 @@ interface Props {
 
 export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: Props) {
   // S092 R15 时区 bug 修复：删除 new Date().toISOString() fallback，
-  // date 由容器（dateTriplet.forward）注入；undefined → 加载态，不臆造日期
+  // date 由容器（dateTriplet.forward）注入；usePremarketSelection 内部 enabled: Boolean(date)
+  // P7 修复：不在 hook 调用前早退（违反 rules-of-hooks）；传空串兜底，hook 内部 enabled: Boolean(date)
+  const { data, isLoading, error, refetch } = usePremarketSelection(date ?? "", topN, minScore);
+
   if (!date) {
     return (
       <GlassCard className="p-4">
@@ -25,7 +28,6 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
       </GlassCard>
     );
   }
-  const { data, isLoading, error, refetch } = usePremarketSelection(date, topN, minScore);
 
   if (isLoading) {
     return (

@@ -80,8 +80,10 @@ describe("PremarketSelectionSection", () => {
   it("date undefined → 显示加载态（等待 dateTriplet），不臆造日期", () => {
     mockUse.mockReturnValue({ isLoading: true });
     render(<PremarketSelectionSection />);
-    // date undefined 时不调 hook（不臆造 toISOString），显示加载态
-    expect(mockUse).not.toHaveBeenCalled();
+    // P7 修复后 hook 总会调用（传空串兜底，内部 enabled: Boolean(date) 不发请求）
+    // 关键：不臆造 toISOString 日期——渲染加载态而非假数据
+    expect(mockUse).toHaveBeenCalledWith("", 20, 0.9);
+    expect(screen.getByText(/等待 dateTriplet/)).toBeInTheDocument();
   });
 
   it("日历倍率 ≠1 时展示倍率 + reason", () => {

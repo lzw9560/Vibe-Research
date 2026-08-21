@@ -339,13 +339,12 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
       {/* S060：昨日验证对账块 */}
       {status === "done" && <VerificationCardBlock />}
 
-      {/* S092 内嵌补全：T-1 数据 + 语境（原 S087 独立 Tab，现折叠内嵌） */}
-      {status === "done" && (
-        <CollapsibleFold title="T-1 数据 · 语境" subtitle="盘前输入检查 + 决策语境" defaultOpen={false}>
-          <T1Tab date={date} />
-          <ContextTab date={date} />
-        </CollapsibleFold>
-      )}
+      {/* S092 内嵌补全：T-1 数据 + 语境（原 S087 独立 Tab，现折叠内嵌）
+          P5 修复：移出 status==="done" 门控——回看无快照日时仍可达（含暴风雨预测） */}
+      <CollapsibleFold title="T-1 数据 · 语境" subtitle="盘前输入检查 + 决策语境" defaultOpen={false}>
+        <T1Tab date={date} />
+        <ContextTab date={date} />
+      </CollapsibleFold>
 
       {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关（S033：传 date 供状态卡/徽标） */}
       <Sheet open={!!drawerCode} onClose={() => setDrawerCode(null)}>

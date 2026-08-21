@@ -67,9 +67,10 @@ function stageLabel(stage: string): { text: string; color: string } {
 }
 
 /** 锚条组件：显示 F + stage + 各视图数据日 */
-function AnchorBar({ triplet }: { triplet: DateTripletResponse }) {
+function AnchorBar({ triplet, isManual }: { triplet: DateTripletResponse; isManual: boolean }) {
   const sl = stageLabel(triplet.stage);
-  const isPending = triplet.stage === "post_transition";
+  // P6 修复：手动回看历史日时前瞻数据已存在，不显"待产出"
+  const isPending = triplet.stage === "post_transition" && !isManual;
   return (
     <GlassCard className="mb-3 grid grid-cols-1 gap-3 p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center">
       {/* 左：F 锚值 */}
@@ -244,7 +245,7 @@ export default function Workflow() {
 
       {/* 锚条 */}
       {triplet ? (
-        <AnchorBar triplet={triplet} />
+        <AnchorBar triplet={triplet} isManual={!!urlDate} />
       ) : (
         <GlassCard className="mb-3 p-4 text-sm text-muted-foreground">dateTriplet 加载中…</GlassCard>
       )}
