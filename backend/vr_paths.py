@@ -38,7 +38,10 @@ def resolve_reports_dir() -> Path:
 
 # ---------- 交易日判断（S023 C1）----------
 
-from datetime import date, datetime as _dt, timedelta as _td
+from datetime import date, datetime as _dt, timedelta as _td, timezone as _tz
+
+#: 北京时区 UTC+8——所有"当前时刻"判断统一用此，杜绝 naive datetime 时区 bug
+BEIJING_TZ = _tz(_td(hours=8))
 
 # A 股法定节假日（YYYY-MM-DD）。仅列固定日期节假日，调休补班日单独标。
 # 此列表保守列举已知节假日，后续可接交易日历库扩展（留扩展位）。
