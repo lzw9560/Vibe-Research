@@ -13,7 +13,18 @@ from typing import Any
 
 from fastapi import APIRouter, Query, HTTPException
 
-from app import cache_response
+# cache_response 定义在 app.py，但 candidates.py 模块级 import 会触发 circular import
+# （app.py 加载时 include_router(candidates.router) ← candidates 还没加载完）。
+# 生产环境 app.py 先加载无循环；测试环境直接 import routers.workflow 触发循环。
+# 方案 B：try/except 回退，测试环境用 noop decorator（参照 topology.py:24-31 同款做法）。
+try:
+    from app import cache_response
+except (ImportError, AttributeError):  # noqa: PLC0415 — 测试环境 app 未加载时回退
+    def cache_response(ttl: int = 300):  # type: ignore[misc]
+        """noop fallback：测试环境无缓存中间件，直接透传。"""
+        def deco(func):
+            return func
+        return deco
 from candidate_funnel import funnel as funnel_mod
 from candidate_funnel.funnel_cache import (  # S087 R10：run_funnel 结果落库缓存
     list_cached_dates,

@@ -8,10 +8,9 @@ import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBa
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { T1Tab } from "@/components/workflow/T1Tab";
 import { ContextTab } from "@/components/workflow/ContextTab";
-import { StrategyMatchMatrix } from "@/components/workflow/StrategyMatchMatrix";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button } from "@/components/ui/Button";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
@@ -298,11 +297,6 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
             scoredCandidates={briefing.scored_candidates}
             ztPoolSize={briefing.market_emotion?.zt_count ?? undefined}
           />
-
-          {/* ③' 战法匹配矩阵——短线 pipeline 核心：票×战法命中（原 S087 盘前②，S092 提到主流程） */}
-          <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分 strategy_score）" defaultOpen={true}>
-            <StrategyMatchMatrix date={date} />
-          </CollapsibleFold>
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
           <WinRateCompareSection factors={factors} onPick={setDrawerCode} />

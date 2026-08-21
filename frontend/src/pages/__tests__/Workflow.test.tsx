@@ -66,6 +66,14 @@ vi.mock("@/components/workflow/PremarketSelectionSection", () => ({
   ),
 }));
 
+vi.mock("@/components/workflow/StrategyMatchMatrix", () => ({
+  StrategyMatchMatrix: ({ date }: { date: string }) => (
+    <div data-testid="strategy-match-matrix" data-date={date}>
+      StrategyMatchMatrix
+    </div>
+  ),
+}));
+
 import Workflow from "@/pages/Workflow";
 
 // ---- dateTriplet 假数据 ----

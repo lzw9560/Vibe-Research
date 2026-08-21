@@ -20,6 +20,7 @@ import { useDateTriplet, usePreMarketRefresh, usePreMarketDates } from "@/lib/qu
 import { useMarketClock } from "@/lib/useMarketClock";
 import { TaskStatusCard } from "@/components/workflow/TaskStatusCard";
 import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
+import { StrategyMatchMatrix } from "@/components/workflow/StrategyMatchMatrix";
 import type { DateTripletResponse } from "@/lib/api";
 
 // 三视图组件懒加载（已有路由也懒加载，此处统一）
@@ -317,7 +318,11 @@ export default function Workflow() {
         {view === "forward" && triplet && (
           <>
             <PremarketSelectionSection date={triplet.forward} />
-            {/* S092 内嵌补全：战法战绩 + 参数 + 前向测试入口（原 S087 战法 Tab） */}
+            {/* 战法匹配矩阵——短线 pipeline 核心：票×战法命中（数据源 scored_candidates，属选股环节） */}
+            <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分 strategy_score）" defaultOpen={true}>
+              <StrategyMatchMatrix date={triplet.forward} />
+            </CollapsibleFold>
+            {/* 战法战绩 + 参数 + 前向测试入口（原 S087 战法 Tab） */}
             <CollapsibleFold title="战法战绩 · 参数 · 前向测试" subtitle="12 战法胜率/均收益/持有日 + 阈值配置入口" defaultOpen={false}>
               <GlassCard className="p-2">
                 <h3 className="mb-2 px-2 font-semibold">战法战绩 + 参数</h3>
