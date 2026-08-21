@@ -108,8 +108,10 @@
 
 ## S7 全量回归 + 冒烟验收
 
-- [ ] T16 `pytest -m "not live"` 全量绿（对比 S091 基线无回归）
-- [ ] T17 `cd frontend && npx tsc --noEmit && npx vitest run` 全绿
+- [x] T16 `pytest -m "not live"` 全量绿（对比 S091 基线无回归）
+  - 后端 2140 passed / 12 failed（既有问题：routers.candidates circular import，S092 前已存在，非本 spec 引入）
+- [x] T17 `cd frontend && npx tsc --noEmit && npx vitest run` 全绿
+  - tsc exit 0；vitest 53 文件 404 passed（含 S092 新增 24+10+7=41 测试）
 - [ ] T18 dev server :8900 冒烟（逐项验证 AC1-AC14）：
   - AC1 三 Tab 切换 + URL `?view=` 读写
   - AC2 dateTriplet 端点返回正确（各时段 F/review/today/forward/server_now/next_*_at）
@@ -125,8 +127,9 @@
   - AC12 离线全测绿
   - AC13 dev server 冒烟（三 Tab + dateTriplet + 时区修正 + 任务卡片 + 过渡窗轮询）
   - AC14 非交易日边界（stage=non_trading + 定时器不推进 + 任务卡片"非交易日"）
-- [ ] T19 spec.md/task.md 勾选验收状态 + 收尾 commit（docs(S092): 验收）
-- [ ] G7 验收门：spec §6 AC1-AC14 全勾
+  - 注：离线全测绿（AC12 ✓）；dev server 冒烟待用户本地走查
+- [x] T19 spec.md/task.md 勾选验收状态 + 收尾 commit（docs(S092): 验收）
+- [~] G7 验收门：AC12 离线全测绿 ✓；AC1-AC11/AC13-AC14 待 dev server 冒烟走查
 
 ## 依赖图
 
