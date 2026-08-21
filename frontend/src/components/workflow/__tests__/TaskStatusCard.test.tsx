@@ -136,16 +136,16 @@ describe("TaskStatusCard (S092 T8)", () => {
     });
   });
 
-  // 5. 非交易日：显示"非交易日，无采集任务"
-  it("isTradingDay=false 显示非交易日提示", () => {
+  // 5. 非交易日：保持盘后就绪态（不显示空状态）
+  it("非交易日(stage=post_market) 保持折叠摘要条，不显示空状态", () => {
     mockData.current = EIGHT_TASKS;
     renderWithProviders(
-      <TaskStatusCard stage="non_trading" isTradingDay={false} />,
+      <TaskStatusCard stage="post_market" isTradingDay={false} />,
     );
-    expect(screen.getByText("非交易日，无采集任务")).toBeInTheDocument();
-    // 不渲染时间线
-    expect(screen.queryByTestId("task-timeline")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("task-progress")).not.toBeInTheDocument();
+    // 不显示"非交易日，无采集任务"空状态
+    expect(screen.queryByText("非交易日，无采集任务")).not.toBeInTheDocument();
+    // 显示折叠摘要条（盘后就绪态）
+    expect(screen.getByTestId("task-collapsed-summary")).toBeInTheDocument();
   });
 
   // 6. cron 解析：30 15 * * 1-5 → "15:30"

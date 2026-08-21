@@ -13,8 +13,10 @@ import { useScheduledTasksStatus, type ScheduledTaskStatus } from "@/lib/query/s
 interface TaskStatusCardProps {
   /** dateTriplet.stage：决定展开/折叠 + 是否轮询 */
   stage: string;
-  /** 是否交易日：false 时显示"非交易日" */
-  isTradingDay: boolean;
+  /** 是否交易日：非交易日保持盘后就绪态（不显示空状态） */
+  // isTradingDay 保留接口位，当前未使用——非交易日不再显示空状态
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isTradingDay?: boolean;
 }
 
 /** today_status → 颜色语义类名映射（复刻 design-notes §3.1 + 原型 .t-item.{status}） */
@@ -73,7 +75,7 @@ function sortByCronTime(tasks: ScheduledTaskStatus[]): ScheduledTaskStatus[] {
   });
 }
 
-export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
+export function TaskStatusCard({ stage }: TaskStatusCardProps) {
   // 过渡窗启用查询 + 60s 轮询（hook 内部门控）
   const isTransition = stage === "post_transition";
   const { data: tasks } = useScheduledTasksStatus(isTransition);
@@ -82,20 +84,8 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detailCache, setDetailCache] = useState<Record<number, any>>({});
 
-  // ---- 非交易日 ----
-  if (!isTradingDay) {
-    return (
-      <GlassCard className="mb-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-          非交易日，无采集任务
-        </div>
-      </GlassCard>
-    );
-  }
-
-  // 非 post_transition 时段（盘前/盘中/盘后就绪）：折叠摘要条
-  // 但仍渲染卡片骨架，便于过渡窗切换时平滑过渡。tasks 可能为空（hook 未启用查询）。
+  // 非交易日保持盘后就绪态（不显示空状态——用户仍可复盘/看简报/看选股）
+  // tasks 可能为空（hook 未启用查询）。
   const list = tasks ?? [];
   const sorted = sortByCronTime(list);
   const doneCount = list.filter((t) => t.today_status === "done").length;

@@ -83,10 +83,10 @@ class TestPreMarket:
         assert r["non_trading"] is False
 
     def test_pre_market_non_trading_day_skipped(self, monkeypatch):
-        # 周六 09:00 → non_trading，不进 pre_market 分支
+        # 周六 09:00 → stage=post_market（保持盘后就绪态，非空状态）
         _patch_now(monkeypatch, _bj(2026, 8, 22, 9, 0))
         r = resolve_date_triplet()
-        assert r["stage"] == "non_trading"
+        assert r["stage"] == "post_market"  # 非交易日=盘后就绪态
         assert r["is_trading_day"] is False
         assert r["non_trading"] is True
 
@@ -147,7 +147,7 @@ class TestNonTradingDay:
     def test_saturday_stage_non_trading(self, monkeypatch):
         _patch_now(monkeypatch, _bj(2026, 8, 22, 12, 0))  # 周六
         r = resolve_date_triplet()
-        assert r["stage"] == "non_trading"
+        assert r["stage"] == "post_market"  # 非交易日=盘后就绪态（保持上一交易日状态）
         assert r["is_trading_day"] is False
         assert r["non_trading"] is True
         # 周六 → F = 上一交易日（周五 8-21）

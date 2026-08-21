@@ -140,9 +140,9 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
     now_time = now.time()  # naive time（北京时区内 naive 比较足够，不跨时区）
     is_today_trading = is_trading_day(today_bj)
 
-    # 1. stage 判定（非交易日优先，再按时段）
+    # 1. stage 判定（非交易日保持盘后就绪态，不显示空状态——用户仍可复盘/看简报/看选股）
     if not is_today_trading:
-        stage = "non_trading"
+        stage = "post_market"  # 非交易日 = 上一交易日盘后就绪态
     elif now_time < _time(9, 30):
         stage = "pre_market"
     elif now_time < _time(15, 0):
@@ -212,5 +212,5 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
         "server_now": now.isoformat(),
         "next_review_advance_at": next_review_advance_at,
         "next_f_advance_at": next_f_advance_at,
-        "non_trading": stage == "non_trading",
+        "non_trading": not is_today_trading,  # 非交易日 → 定时器不推进（stage 保持 post_market 就绪态）
     }
