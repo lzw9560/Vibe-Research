@@ -299,6 +299,11 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
             ztPoolSize={briefing.market_emotion?.zt_count ?? undefined}
           />
 
+          {/* ③' 战法匹配矩阵——短线 pipeline 核心：票×战法命中（原 S087 盘前②，S092 提到主流程） */}
+          <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分 strategy_score）" defaultOpen={true}>
+            <StrategyMatchMatrix date={date} />
+          </CollapsibleFold>
+
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
           <WinRateCompareSection factors={factors} onPick={setDrawerCode} />
         </>
@@ -334,12 +339,11 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
       {/* S060：昨日验证对账块 */}
       {status === "done" && <VerificationCardBlock />}
 
-      {/* S092 内嵌补全：T-1 数据 + 语境 + 战法匹配（原 S087 独立 Tab，现折叠内嵌） */}
+      {/* S092 内嵌补全：T-1 数据 + 语境（原 S087 独立 Tab，现折叠内嵌） */}
       {status === "done" && (
-        <CollapsibleFold title="T-1 数据 · 语境 · 战法匹配" subtitle="盘前输入检查 + 决策语境 + 票×战法命中" defaultOpen={false}>
+        <CollapsibleFold title="T-1 数据 · 语境" subtitle="盘前输入检查 + 决策语境" defaultOpen={false}>
           <T1Tab date={date} />
           <ContextTab date={date} />
-          <StrategyMatchMatrix date={date} />
         </CollapsibleFold>
       )}
 
