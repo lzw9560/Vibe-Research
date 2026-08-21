@@ -6,6 +6,9 @@ import { StrategyGroupTabs } from "@/components/workflow/StrategyGroupTabs";
 import { CalendarFactorHint } from "@/components/workflow/CalendarFactorHint";
 import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
+import { T1Tab } from "@/components/workflow/T1Tab";
+import { ContextTab } from "@/components/workflow/ContextTab";
+import { StrategyMatchMatrix } from "@/components/workflow/StrategyMatchMatrix";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -14,11 +17,14 @@ import { Button } from "@/components/ui/Button";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { StrategyFilter } from "@/components/ui/StrategyFilter";
 import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
+import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import { useTransitionWorkflowState, usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
 import { useStrategyBacktest } from "@/lib/query/strategy";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import type { TransitionRequest, FactorResult, ScoredCandidate } from "@/lib/api";
 import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
@@ -70,6 +76,15 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
   const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
   const [buyEntry, setBuyEntry] = useState<{ code: string; name: string } | null>(null);
   const transition = useTransitionWorkflowState();
+
+  // S092 内嵌补全：advisory 仓位推荐摘要（原 S087 盘前 tab ③ 仓位建议 StepSection 内嵌）
+  const { data: advisory } = useQuery({
+    queryKey: ["advisory-summary", date ?? "latest"],
+    queryFn: () => api.advisorySummary(5),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const recs = advisory?.recommendations ?? [];
 
   // S054 handleBuy 已移除（CandidateFunnelEmbed onBuy 删，S073）；buyEntry/Sheet 暂 dead 保留
   const handleBuySubmit = (req: TransitionRequest) => {
@@ -226,6 +241,23 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
           {/* S092：PremarketSelectionSection 移出至"前瞻"Tab，此处不再嵌入 */}
           {/* S079 P2 仓位闸 + 龙虎榜风控面板（R9-R10，spec §3.3） */}
           <P2RiskPanel briefing={briefing} />
+          {/* S092 内嵌补全：advisory 仓位推荐摘要（原 S087 盘前 tab ③ 仓位建议） */}
+          {recs.length > 0 && (
+            <GlassCard className="mb-6 p-4">
+              <p className="mb-2 text-sm font-medium">仓位推荐摘要</p>
+              <p className="text-xs text-muted-foreground/70">推荐标的 {recs.length} 只</p>
+              <div className="mt-2 space-y-1">
+                {recs.slice(0, 3).map((r) => (
+                  <div key={r.code} className="flex justify-between text-xs">
+                    <span>{r.name}({r.code})</span>
+                    <span className="text-muted-foreground/60">
+                      {r.matched_strategy ?? "—"} 胜率{r.win_rate != null ? `${(r.win_rate * 100).toFixed(0)}%` : "—"} {r.action}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
           {/* S072 去天气决策条（STI/天气无 §44 edge）；保留熔断 + 日历（风控非情绪） */}
           <div className="mb-6 space-y-3">
             {/* S066 §16.4 市场级熔断横幅（触发时才渲染） */}
@@ -301,6 +333,15 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
 
       {/* S060：昨日验证对账块 */}
       {status === "done" && <VerificationCardBlock />}
+
+      {/* S092 内嵌补全：T-1 数据 + 语境 + 战法匹配（原 S087 独立 Tab，现折叠内嵌） */}
+      {status === "done" && (
+        <CollapsibleFold title="T-1 数据 · 语境 · 战法匹配" subtitle="盘前输入检查 + 决策语境 + 票×战法命中" defaultOpen={false}>
+          <T1Tab date={date} />
+          <ContextTab date={date} />
+          <StrategyMatchMatrix date={date} />
+        </CollapsibleFold>
+      )}
 
       {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关（S033：传 date 供状态卡/徽标） */}
       <Sheet open={!!drawerCode} onClose={() => setDrawerCode(null)}>

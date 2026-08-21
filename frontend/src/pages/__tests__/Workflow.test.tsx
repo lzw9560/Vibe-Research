@@ -10,11 +10,21 @@ import { MemoryRouter } from "react-router-dom";
 const qMocks = vi.hoisted(() => ({
   useDateTriplet: vi.fn(),
   usePreMarketRefresh: vi.fn(),
+  usePreMarketDates: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
   useDateTriplet: qMocks.useDateTriplet,
   usePreMarketRefresh: qMocks.usePreMarketRefresh,
+  usePreMarketDates: qMocks.usePreMarketDates,
+}));
+
+// mock useQuery（registry/backtest 战法战绩表）+ request（避免真请求）
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: undefined }),
+}));
+vi.mock("@/lib/api/client", () => ({
+  request: vi.fn(),
 }));
 
 // useMarketClock mock（避免定时器副作用）
@@ -102,6 +112,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     vi.clearAllMocks();
     qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet() });
     qMocks.usePreMarketRefresh.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    qMocks.usePreMarketDates.mockReturnValue({ data: undefined });
   });
 
   // ---- AC1: 三 Tab 切换 ----

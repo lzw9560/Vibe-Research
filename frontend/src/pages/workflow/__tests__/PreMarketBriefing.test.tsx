@@ -49,6 +49,15 @@ vi.mock("@/components/candidate/FunnelLayers", () => ({
     <div data-testid="funnel-stub" data-count={layers.length} />
   ),
 }));
+// S092 内嵌补全：PreMarketBriefing 新增 useQuery（advisory 摘要）+ api.advisorySummary 调用，补 mock
+vi.mock("@tanstack/react-query", async (importActual) => {
+  const actual = await importActual<typeof import("@tanstack/react-query")>();
+  return { ...actual, useQuery: () => ({ data: undefined }) };
+});
+vi.mock("@/lib/api", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, advisorySummary: vi.fn() } };
+});
 
 import PreMarketBriefing from "@/pages/workflow/PreMarketBriefing";
 

@@ -5,14 +5,18 @@
 // useMarketClock 接入双定时器（15:00 复盘推进 + 17:15 F 推进）。
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Activity, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
+import { EntryCard } from "@/components/workflow/EntryCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
-import { useDateTriplet, usePreMarketRefresh } from "@/lib/query";
+import { useQuery } from "@tanstack/react-query";
+import { request } from "@/lib/api/client";
+import { useDateTriplet, usePreMarketRefresh, usePreMarketDates } from "@/lib/query";
 import { useMarketClock } from "@/lib/useMarketClock";
 import { TaskStatusCard } from "@/components/workflow/TaskStatusCard";
 import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
@@ -158,6 +162,21 @@ export default function Workflow() {
     },
   });
 
+  // S092 内嵌补全：历史快照日期 chips（原 S087 usePreMarketDates）
+  const { data: datesData } = usePreMarketDates();
+
+  // S092 内嵌补全：战法战绩表（原 S087 战法 Tab 内联）——registry + backtest 两 query
+  const { data: registry } = useQuery({
+    queryKey: ["strategy-registry"],
+    queryFn: () => request<{ data: Array<{ code: string; name: string; max_hold_days: number; entry_condition: string }> }>(`/strategy/registry`),
+    staleTime: 5 * 60_000,
+  });
+  const { data: backtest } = useQuery({
+    queryKey: ["strategy-backtest"],
+    queryFn: () => request<{ data: Array<{ strategy_code: string; strategy: string; win_rate: number; avg_return: number; sample_size: number }> }>(`/strategy/backtest?lookback_days=60`),
+    staleTime: 5 * 60_000,
+  });
+
   const handleDateChange = (value: string) => {
     if (value) {
       setSearchParams((p) => {
@@ -235,6 +254,30 @@ export default function Workflow() {
         isTradingDay={triplet?.is_trading_day ?? false}
       />
 
+      {/* S092 内嵌补全：历史快照日期 chips（原 S087 usePreMarketDates） */}
+      {datesData?.dates && datesData.dates.length > 0 && (
+        <GlassCard className="p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground/70">历史快照</span>
+            {datesData.dates.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => handleDateChange(d)}
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-xs",
+                  d === urlDate
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-border/40 bg-muted/10 text-muted-foreground hover:border-primary/30",
+                )}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
       {/* 三 Tab 切换 */}
       <div className="inline-flex gap-1 rounded-xl border border-border/40 bg-muted/30 p-1">
         {TABS.map((t) => (
@@ -272,7 +315,62 @@ export default function Workflow() {
           <PreMarketBriefing date={triplet.today} stage={triplet.stage} />
         )}
         {view === "forward" && triplet && (
-          <PremarketSelectionSection date={triplet.forward} />
+          <>
+            <PremarketSelectionSection date={triplet.forward} />
+            {/* S092 内嵌补全：战法战绩 + 参数 + 前向测试入口（原 S087 战法 Tab） */}
+            <CollapsibleFold title="战法战绩 · 参数 · 前向测试" subtitle="12 战法胜率/均收益/持有日 + 阈值配置入口" defaultOpen={false}>
+              <GlassCard className="p-2">
+                <h3 className="mb-2 px-2 font-semibold">战法战绩 + 参数</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/40 text-muted-foreground/70">
+                        <th className="px-2 py-1 text-left">战法</th>
+                        <th className="px-2 py-1 text-right">胜率</th>
+                        <th className="px-2 py-1 text-right">均收益%</th>
+                        <th className="px-2 py-1 text-right">样本</th>
+                        <th className="px-2 py-1 text-right">持有日</th>
+                        <th className="px-2 py-1 text-left">入场条件</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(registry?.data ?? []).map((r) => {
+                        const bt = (backtest?.data ?? []).find((b) => b.strategy_code === r.code);
+                        return (
+                          <tr key={r.code} className="border-b border-border/20 hover:bg-muted/10">
+                            <td className="px-2 py-1">{r.name}</td>
+                            <td className="px-2 py-1 text-right font-mono">
+                              {bt ? `${(bt.win_rate * 100).toFixed(1)}%` : "—"}
+                            </td>
+                            <td className="px-2 py-1 text-right font-mono">{bt ? bt.avg_return : "—"}</td>
+                            <td className="px-2 py-1 text-right">{bt?.sample_size ?? "—"}</td>
+                            <td className="px-2 py-1 text-right">{r.max_hold_days}</td>
+                            <td className="max-w-[16rem] truncate px-2 py-1 text-muted-foreground/70">
+                              {r.entry_condition}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </GlassCard>
+              <EntryCard
+                to="/strategy/funnel/forward-test"
+                title="前向测试 §44"
+                subtitle="60 日复验 lift/winrate/validation_status"
+                icon={Activity}
+                date={urlDate}
+              />
+              <EntryCard
+                to="/strategy/funnel/config"
+                title="战法阈值配置"
+                subtitle="S081 阈值 + funnel config（可改）"
+                icon={Layers}
+                date={urlDate}
+              />
+            </CollapsibleFold>
+          </>
         )}
       </Suspense>
 

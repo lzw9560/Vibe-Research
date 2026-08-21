@@ -5,11 +5,14 @@
 //       WeatherDecisionBar 移至"当日"Tab（PreMarketBriefing）；过渡窗渐进填充占位横幅。
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Clock, Share2 } from "lucide-react";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
+import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
+import { EntryCard } from "@/components/workflow/EntryCard";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
@@ -329,6 +332,12 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
           <p className="text-[10px] text-muted-foreground/50">
             {review.disclaimer ?? "历史统计特征，市场有风险，研究参考"}
           </p>
+
+          {/* S092 内嵌补全：盘后入口卡片（每日复盘/拓扑展示，原 S087 盘后 Tab EntryCard） */}
+          <CollapsibleFold title="更多盘后工具" subtitle="每日复盘 / 拓扑展示">
+            <EntryCard to="/daily-review" title="每日复盘" subtitle="涨停 / 炸板 / 板块热度" icon={Clock} date={date} />
+            <EntryCard to="/workflow/topology" title="拓扑展示" subtitle="关系网 · 漏斗流程 · 连板梯队" icon={Share2} date={date} />
+          </CollapsibleFold>
         </>
       )}
     </WorkflowStage>
