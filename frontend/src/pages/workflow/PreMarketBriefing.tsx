@@ -236,6 +236,7 @@ export default function PreMarketBriefing() {
             onPick={setDrawerCode}
             snapshotLayers={briefing.from_snapshot ? funnelLayers : funnelLayers}
             scoredCandidates={briefing.scored_candidates}
+            ztPoolSize={briefing.market_emotion?.zt_count ?? undefined}
           />
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
@@ -286,11 +287,13 @@ function CandidateFunnelEmbed({
   onPick,
   snapshotLayers,
   scoredCandidates,
+  ztPoolSize,
 }: {
   date?: string;
   onPick: (code: string) => void;
   snapshotLayers?: FunnelLayer[];
   scoredCandidates?: ScoredCandidate[];
+  ztPoolSize?: number;
 }) {
   // S073 SelectionPipeline 替换 FunnelMatrixSimple/ScoredCandidateTable 互斥：
   // 同图显 R1/R2/R3 + scored（漂移徽标，不臆造串联 R3→scored）；activeStrategy 不再换候选宇宙
@@ -301,6 +304,7 @@ function CandidateFunnelEmbed({
     <SelectionPipeline
       funnelLayers={snapshotLayers}
       scoredCandidatesCount={scoredCandidates?.length}
+      screenerPoolSize={ztPoolSize}
       mode="full"
       date={date}
       onPick={onPick}

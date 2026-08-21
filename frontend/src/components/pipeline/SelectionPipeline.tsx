@@ -40,7 +40,13 @@ export function SelectionPipeline({
   const layers = funnelResult?.layers ?? funnelLayers ?? [];
   const finals = funnelResult?.final_candidates ?? finalCandidates ?? [];
   const r1 = layers.find((l) => l.layer_id === "R1");
+  // 今日涨停总数优先取 screenerPoolSize（briefing.market_emotion.zt_count 传入）；
+  // 缺失时 fallback r1.input_count（采集源输入，非涨停总数）并标注，不冒充涨停数。
+  const hasZtTotal = screenerPoolSize != null;
   const rootSize = screenerPoolSize ?? r1?.input_count;
+  const rootSub = hasZtTotal
+    ? "今日涨停 · screener 选 T+1"
+    : "今日涨停数未取得 · 显 R1 输入（非涨停总数）";
   const hasScored = scoredCandidatesCount != null;
   const showLimitup = fork !== "non-limitup";
   const showNonLimitup = fork !== "limitup";
@@ -50,7 +56,7 @@ export function SelectionPipeline({
     <div className="space-y-1.5">
       {showHonestyBanner !== false && <HonestyBanner />}
 
-      <PipelineNode label="涨停股池" sub="screener · T日涨停 → 选 T+1" count={rootSize} />
+      <PipelineNode label="涨停股池" sub={rootSub} count={rootSize} />
       <ArrowDown />
       {date && <SectorRotationNode date={date} />}
       {date && <ArrowDown label={bothLanes ? "分叉" : undefined} />}
@@ -302,6 +308,13 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date }: {
   const missing = layer.data_status === "未取得";
   // S090 折叠态醒目选股数：input(次) → output(主,大字醒目) + 滤除 pill
   const filteredOut = layer.filtered_out?.length ?? Math.max(layer.input_count - layer.output_count, 0);
+  // conditions 折叠态一行带过（超 2 个用"等"省略）；展开态 FunnelLayerCard 内已显 chips
+  const conditions = layer.conditions ?? [];
+  const condsSummary = conditions.length > 0
+    ? conditions.length <= 2
+      ? conditions.join(" · ")
+      : `${conditions.slice(0, 2).join(" · ")} 等${conditions.length}项`
+    : null;
   return (
     <div className="space-y-1">
       <button
@@ -327,6 +340,12 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date }: {
             <span className="ml-0.5 text-[10px] text-muted-foreground">{expanded ? "▼" : "▶"}</span>
           </div>
         </div>
+        {/* 折叠态：过滤条件一行带过（展开态 FunnelLayerCard 内已显完整 chips） */}
+        {!expanded && condsSummary && (
+          <div className="mt-1 text-[10px] text-muted-foreground/70">
+            过滤：{condsSummary}
+          </div>
+        )}
       </button>
       {expanded && (
         <>
