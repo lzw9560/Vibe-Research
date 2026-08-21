@@ -230,17 +230,17 @@ describe("useMarketClock (T6)", () => {
     spy.mockRestore();
   });
 
-  it("skips timer when delay > 12h (anomalous next_*_at)", () => {
+  it("skips timer when delay > 25h (anomalous next_*_at)", () => {
     const now = 1_000_000; // ms
     fixNow(now);
     const spy = vi.spyOn(global, "setTimeout");
     const { Wrapper } = wrapper();
-    const twelve_hours_sec = 12 * 3600; // 43200 sec
+    const twentyfive_hours_sec = 25 * 3600; // 90000 sec（P8: MAX_DELAY 改 25h）
     renderHook(
       () => useMarketClock({
-        // delay = (now/1000 + twelve_hours_sec + 1)*1000 - now = 12h + 1000ms → 超限跳过
-        next_review_advance_at: now / 1000 + twelve_hours_sec + 1,
-        next_f_advance_at: now / 1000 + twelve_hours_sec + 1,
+        // delay = (now/1000 + twentyfive_hours_sec + 1)*1000 - now = 25h + 1000ms → 超限跳过
+        next_review_advance_at: now / 1000 + twentyfive_hours_sec + 1,
+        next_f_advance_at: now / 1000 + twentyfive_hours_sec + 1,
         non_trading: false,
         is_manual: false,
       }),
