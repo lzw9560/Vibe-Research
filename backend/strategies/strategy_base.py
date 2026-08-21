@@ -325,23 +325,24 @@ def match_strategies(
     pool_item: dict | None = None,
     indicators: Any = None,
     card: Any = None,
+    derived: dict | None = None,  # S081：显式 derived（pre_market_workflow 无 card 时直传 fetch_derived）
 ) -> list:
     """旧签名兼容包装：build StrategyContext → dispatch_match。
 
     保留原签名以兼容所有既有调用方（strategy_matcher / strategy_backtest /
     position_advisor_v2 / prediction_ingest / score_candidates + 测试）。
     card 非空时从 card 子对象 override 读 pool_item/indicators/derived（S084 R5）。
+    S081：derived 参数优先（pre_market_workflow 无 card 时直传 fetch_derived 结果）。
     """
     if card is not None:
         if pool_item is None:
             pool_item = getattr(card, "pool_item", None)
         if indicators is None:
             indicators = getattr(card, "indicators", None)
-        card_derived = getattr(card, "derived", None)
-    else:
-        card_derived = None
+        if derived is None:
+            derived = getattr(card, "derived", None)
 
-    derived = _prepare_derived(card_derived, code)
+    derived = _prepare_derived(derived, code)
     ctx = StrategyContext(
         code=code,
         gene=gene,

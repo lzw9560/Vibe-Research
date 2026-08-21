@@ -40,6 +40,7 @@ class StrategyMatcher:
         pool_item: dict | None = None,
         indicators: Any = None,
         card: Any = None,  # S084 R6：DiagnosisCard
+        derived: dict | None = None,  # S081：显式 derived（pre_market_workflow 无 card 时传）
     ) -> list[StrategySignal]:
         """
         对单只股票匹配所有适用战法。
@@ -65,7 +66,7 @@ class StrategyMatcher:
         取该 code 的 DiagnosisCard.indicators，建 {code: IndicatorSet} 映射传入。
         run_funnel 有缓存兜底，同日多次调不重复取数。
         """
-        signals = match_strategies(gene.code, gene, pool_item, indicators, card=card)
+        signals = match_strategies(gene.code, gene, pool_item, indicators, card=card, derived=derived)
         if weather_state is not None:
             from limitup_strategy import calc_weather_fit  # noqa: PLC0415
             for s in signals:

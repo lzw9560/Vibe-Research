@@ -145,8 +145,14 @@ class PreMarketWorkflow:
         #   缺涨停池数据时 pool_item=None 降级，PRD 战法标"数据缺失"不命中（既有 9 战法不受影响）
         from sentiment_context import build_context  # noqa: PLC0415
         from strategies.first_board_filter import fetch_zt_pool  # noqa: PLC0415
+        # S081：PRD2 战法 derived 接线——fetch_derived(code, T-1) 传 match
+        from candidate_funnel.sources import derived_source as _derived_src  # noqa: PLC0415
+        from vr_paths import prev_trading_date as _prev_td  # noqa: PLC0415
+        from datetime import datetime as _dt, timedelta as _td
 
         ctx = build_context(self.date)
+        # T-1（前交易日）供 derived 取数（PRD2 战法 last_lock/broken_duration/max_drop 是 T-1 派生）
+        _t1 = _prev_td(_dt.strptime(self.date, "%Y-%m-%d") - _td(days=1)).strftime("%Y-%m-%d") if self.date else None
 
         # 取涨停池原始 dict，建 code→pool_item 映射（一次取数，循环内复用）
         pool_item_map: dict[str, dict] = {}
@@ -163,8 +169,10 @@ class PreMarketWorkflow:
         for stock in pool.candidates:
             try:
                 pool_item = pool_item_map.get(stock.code)
+                # S081：PRD2 战法 derived（last_lock/broken_duration/max_drop）从 T-1 派生表取
+                _derived = _derived_src.fetch_derived(stock.code, _t1) if _t1 else None
                 signals = self._strategy_matcher.match(
-                    stock, ctx.weather_state, pool_item=pool_item,
+                    stock, ctx.weather_state, pool_item=pool_item, derived=_derived,
                 )
                 if signals:
                     best = signals[0]
