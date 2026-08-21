@@ -76,12 +76,12 @@ def fetch_sox_0818() -> dict | None:
 
 
 def build_0818_snapshot() -> dict:
-    indices: list[dict] = []
-    for name, secid in IDX_SECID.items():
-        r = fetch_idx_chg_0818(name, secid)
-        if r:
-            indices.append(r)
-        time.sleep(1.5)  # push2his 间隔防限流
+    # S088 A7：并发 8 指数一次请求（串行 8 次 push2his 连打触发间歇限流，
+    # 并发一次请求在限流窗口内同时发出，取到率更高）
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(lambda ns: fetch_idx_chg_0818(*ns), IDX_SECID.items()))
+    indices: list[dict] = [r for r in results if r]
     sox = fetch_sox_0818()
     if sox:
         indices.append(sox)
