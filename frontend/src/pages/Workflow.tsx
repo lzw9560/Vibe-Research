@@ -20,7 +20,6 @@ import { useDateTriplet, usePreMarketRefresh, usePreMarketDates } from "@/lib/qu
 import { useMarketClock } from "@/lib/useMarketClock";
 import { TaskStatusCard } from "@/components/workflow/TaskStatusCard";
 import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
-import { StrategyMatchMatrix } from "@/components/workflow/StrategyMatchMatrix";
 import type { DateTripletResponse } from "@/lib/api";
 
 // 三视图组件懒加载（已有路由也懒加载，此处统一）
@@ -128,7 +127,8 @@ export default function Workflow() {
   // view 状态：从 URL 初始化，用户切 Tab 时更新 URL
   const [view, setView] = useState<TabKey>(urlView ?? "review");
   // 跟踪用户是否手动切过 Tab——未手动切时 stage 变化自动高亮（R12）
-  const userTouchedTab = useRef(false);
+  // P1 修复：URL 显式带 ?view= 时视为用户已选，不被自动高亮覆盖
+  const userTouchedTab = useRef(!!urlView);
 
   // 自动高亮：用户未手动切 Tab 时，stage 变化 → 自动切 Tab
   useEffect(() => {
@@ -318,11 +318,7 @@ export default function Workflow() {
         {view === "forward" && triplet && (
           <>
             <PremarketSelectionSection date={triplet.forward} />
-            {/* 战法匹配矩阵——短线 pipeline 核心：票×战法命中（数据源 scored_candidates，属选股环节） */}
-            <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分 strategy_score）" defaultOpen={true}>
-              <StrategyMatchMatrix date={triplet.forward} />
-            </CollapsibleFold>
-            {/* 战法战绩 + 参数 + 前向测试入口（原 S087 战法 Tab） */}
+            {/* 战法战绩 + 参数 + 前向测试入口（原 S087 战法 Tab，R23 归复盘/前瞻） */}
             <CollapsibleFold title="战法战绩 · 参数 · 前向测试" subtitle="12 战法胜率/均收益/持有日 + 阈值配置入口" defaultOpen={false}>
               <GlassCard className="p-2">
                 <h3 className="mb-2 px-2 font-semibold">战法战绩 + 参数</h3>

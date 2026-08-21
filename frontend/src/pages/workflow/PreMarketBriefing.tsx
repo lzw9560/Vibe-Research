@@ -9,6 +9,7 @@ import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { T1Tab } from "@/components/workflow/T1Tab";
 import { ContextTab } from "@/components/workflow/ContextTab";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { StrategyMatchMatrix } from "@/components/workflow/StrategyMatchMatrix";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Sheet } from "@/components/ui/Sheet";
@@ -297,6 +298,11 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
             scoredCandidates={briefing.scored_candidates}
             ztPoolSize={briefing.market_emotion?.zt_count ?? undefined}
           />
+
+          {/* ③' 战法匹配矩阵——短线 pipeline 核心：票×战法命中（R23 归当日，数据源 scored_candidates=今日 briefing） */}
+          <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分 strategy_score）" defaultOpen={true}>
+            <StrategyMatchMatrix date={date} />
+          </CollapsibleFold>
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
           <WinRateCompareSection factors={factors} onPick={setDrawerCode} />

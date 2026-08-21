@@ -110,12 +110,11 @@ export function TaskStatusCard({ stage }: TaskStatusCardProps) {
     }
   }
 
-  // done 项的"载入"按钮：invalidate 所有 workflow query 触发对应视图 refetch
+  // done 项的"载入"按钮：全量 invalidate 触发所有视图 refetch（P2 修复：原 ["workflow"] key 打不中视图数据）
   function handleLoad(e: React.MouseEvent, taskName: string) {
     e.stopPropagation();
-    // 暂时 console.log + invalidate 所有 workflow query（spec T8 范围）
     console.log("[TaskStatusCard] 载入任务产出:", taskName);
-    void queryClient.invalidateQueries({ queryKey: ["workflow"] });
+    void queryClient.invalidateQueries();  // 全量 invalidate——过渡窗场景成本可忽略
   }
 
   return (

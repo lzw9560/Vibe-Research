@@ -44,6 +44,11 @@ vi.mock("@/lib/query/premarket", () => ({
   usePremarketSelection: () => ({ isLoading: true }),
 }));
 vi.mock("@/pages/workflow/CandidateDetail", () => ({ CandidateDetailPanel: () => null }));
+vi.mock("@/components/workflow/StrategyMatchMatrix", () => ({
+  StrategyMatchMatrix: ({ date }: { date: string }) => (
+    <div data-testid="strategy-match-matrix" data-date={date}>StrategyMatchMatrix</div>
+  ),
+}));
 vi.mock("@/components/candidate/FunnelLayers", () => ({
   FunnelLayers: ({ layers }: { layers: unknown[] }) => (
     <div data-testid="funnel-stub" data-count={layers.length} />
