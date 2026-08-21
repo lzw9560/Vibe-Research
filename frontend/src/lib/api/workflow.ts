@@ -111,3 +111,28 @@ export async function getFirstBoardDates(): Promise<{ dates: string[]; count: nu
     return await get<{ dates: string[]; count: number }>("/workflow/first-board/dates");
   } catch { return null; }
 }
+
+// ============ S092 R9：dateTriplet（交易日锚 F + 时段推断三视图） ============
+// 纯后端日期计算（vr_paths + datetime.now(BEIJING_TZ)），零外部请求。
+// 前端 useMarketClock 用 next_*_at - Date.now() 算 setTimeout 延时（R14），
+// 零本地时区判断。失败直接抛——消费方（useDateTriplet hook）用 react-query
+// retry 处理；与上面"返 null 不抛"约定不同（dateTriplet 是基础设施，失败应让
+// 上层感知而非静默降级为 null 导致整页日期错乱）。
+export interface DateTripletResponse {
+  F: string;
+  review: string;
+  today: string;
+  forward: string;
+  stage: "pre_market" | "intraday" | "post_transition" | "post_market" | "non_trading";
+  is_trading_day: boolean;
+  review_advanced: boolean;
+  server_now: string;
+  next_review_advance_at: number;
+  next_f_advance_at: number;
+  non_trading: boolean;
+}
+
+export async function getDateTriplet(date?: string): Promise<DateTripletResponse> {
+  const path = date ? `/workflow/date-triplet?date=${date}` : "/workflow/date-triplet";
+  return await get<DateTripletResponse>(path);
+}

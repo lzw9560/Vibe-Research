@@ -8,6 +8,7 @@ import {
   getWorkflowStateHistory,
   getWorkflowStates,
   transitionWorkflowState,
+  getDateTriplet,
 } from "@/lib/api";
 import type { Opts } from "./types";
 import type {
@@ -87,5 +88,17 @@ export function useFirstBoardDates(options?: Opts<{ dates: string[]; count: numb
     queryFn: () => getFirstBoardDates(),
     staleTime: 10 * 60 * 1000,
     ...options,
+  });
+}
+
+// ============ S092 R13：dateTriplet hook ============
+// 时段推进由 useMarketClock 双定时器（next_*_at epoch 驱动）到点 invalidate
+// 触发 refetch，不自动 stale——纯日期计算，staleTime: Infinity 防短时重复请求。
+// date 为用户手动选的复盘日（R7）；不传则按时段自动算 F。
+export function useDateTriplet(date?: string) {
+  return useQuery({
+    queryKey: ["workflow", "date-triplet", date ?? "auto"] as const,
+    queryFn: () => getDateTriplet(date),
+    staleTime: Infinity,
   });
 }
