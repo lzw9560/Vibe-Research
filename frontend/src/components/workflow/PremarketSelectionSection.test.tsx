@@ -77,13 +77,11 @@ describe("PremarketSelectionSection", () => {
     expect(screen.getByText("止盈 10%")).toBeInTheDocument();
   });
 
-  it("date undefined → 今日 fallback 传给 hook", () => {
+  it("date undefined → 显示加载态（等待 dateTriplet），不臆造日期", () => {
     mockUse.mockReturnValue({ isLoading: true });
     render(<PremarketSelectionSection />);
-    expect(mockUse).toHaveBeenCalledWith(expect.any(String), 20, 0.9);
-    // 传入的 date 应是今日格式 YYYY-MM-DD
-    const passedDate = mockUse.mock.calls[0][0] as string;
-    expect(passedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // date undefined 时不调 hook（不臆造 toISOString），显示加载态
+    expect(mockUse).not.toHaveBeenCalled();
   });
 
   it("日历倍率 ≠1 时展示倍率 + reason", () => {
