@@ -5,7 +5,7 @@
 
 ## S1 后端 daily-review 端点
 
-- [ ] T1 `backend/routers/win_rate.py` 新增 `GET /api/winrate/daily-review?date=YYYY-MM-DD`（默认今日）：
+- [x] T1 `backend/routers/win_rate.py` 新增 `GET /api/winrate/daily-review?date=YYYY-MM-DD`（默认今日）：
   - `pushed`：当日快照 `final_candidates` 原样透传（code/name/gene_score/strategies/完整性标记）；无快照则 `no_snapshot=true`
   - `bought`：workflow_state 中 `entry_date == date` 的行，逐只带 code/name/entry_price/strategy + **占位标签「待判定」**（Q7：不返 live 临时票根字段，后端不算 `_infer_signal_attribution`）
   - `missed`：pushed − bought 的 code 名单（无收益，留白）
@@ -16,21 +16,21 @@
 
 ## S2 前端研判派生函数抽取（R8）
 
-- [ ] T2 新增 `frontend/src/lib/winrate-assessment.ts`：`deriveAssessmentTips(data: ShadowComparison): string[]` 纯函数
+- [x] T2 新增 `frontend/src/lib/winrate-assessment.ts`：`deriveAssessmentTips(data: ShadowComparison): string[]` 纯函数
   - 从 BehaviorLoop `_deriveAssessmentTips` 原样抽取（follow vs feeling 胜率对比 / 一致率 / missed 影子质量 / 样本不足压低权重 / 全空兜底）
   - 纯函数单测：follow 高于 feeling / feeling 反超 / 两者接近 / 一致率高/低 / missed 胜率高/低 / 样本不足 / 全空
   - commit 门：派生函数单测绿 + tsc 绿
 
-- [ ] T3 `BehaviorLoop.tsx` 改用共享派生函数：删本地 `_deriveAssessmentTips`，import `deriveAssessmentTips`
+- [x] T3 `BehaviorLoop.tsx` 改用共享派生函数：删本地 `_deriveAssessmentTips`，import `deriveAssessmentTips`
   - 行为不变（既有 BehaviorLoop.test.tsx 为回归门）
   - commit 门：BehaviorLoop 既有测试全绿 + tsc 绿
 
 ## S3 盘后复盘页去桩 + 简报行为卡
 
-- [ ] T4 `frontend/src/lib/api/`：DailyReview 类型 + useDailyReview hook（useQuery 模式，参照 useShadowComparison）
+- [x] T4 `frontend/src/lib/api/`：DailyReview 类型 + useDailyReview hook（useQuery 模式，参照 useShadowComparison）
   - commit 门：tsc 过
 
-- [ ] T5 `PostMarketReview.tsx` 去桩重写（`/workflow/post-market`，沿用 WorkflowStage 壳）：
+- [x] T5 `PostMarketReview.tsx` 去桩重写（`/workflow/post-market`，沿用 WorkflowStage 壳）：
   - 日期选择器（默认今日，历史日可查）
   - 三问区三卡：
     - 「系统推了什么」：pushed 列表（code/name/gene_score/strategies）
@@ -43,7 +43,7 @@
   - vitest：三问渲染 / 占位「待判定」/ 空态四类 / 结算入口链接 / 教学点 / 研判
   - commit 门：PostMarketReview vitest 绿 + tsc 绿
 
-- [ ] T6 `PreMarketBriefing.tsx` 加回行为干预卡（**展开不收起**）：
+- [x] T6 `PreMarketBriefing.tsx` 加回行为干预卡（**展开不收起**）：
   - 数据复用 `GET /api/winrate/shadow-comparison?window_days=28`（既有端点，既有 useShadowComparison hook）
   - 三桶算账（follow/feeling/missed：n+胜率+均收益）+ 一致率 + 教学一句 + n<5 caveat + 风险注记 + 「深看」链接 → /behavior-loop
   - **研判**（Q5）：调 `deriveAssessmentTips`（简报卡也嵌方向建议）
