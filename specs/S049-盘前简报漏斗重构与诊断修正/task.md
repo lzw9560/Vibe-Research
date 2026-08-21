@@ -43,7 +43,8 @@
 
 ## S5 后端全量回归
 
-- [ ] T21 `cd backend && ../.venv/bin/python -m pytest -m "not live" --no-cov` 全绿（A1 基线）
+- [x] T21 `cd backend && ../.venv/bin/python -m pytest -m "not live" --no-cov` 全绿（A1 基线）
+  - 后端 2152 passed / 0 failed（含 S092 新增 dateTriplet + today_status 测试 + 修复 11 个既有失败）
 
 ## S6 前端 B（types + 简报页）
 
