@@ -38,7 +38,7 @@ def resolve_reports_dir() -> Path:
 
 # ---------- 交易日判断（S023 C1）----------
 
-from datetime import date, datetime as _dt, timedelta as _td, timezone as _tz
+from datetime import date, datetime as _dt, time as _time, timedelta as _td, timezone as _tz
 
 #: 北京时区 UTC+8——所有"当前时刻"判断统一用此，杜绝 naive datetime 时区 bug
 BEIJING_TZ = _tz(_td(hours=8))
@@ -102,3 +102,115 @@ def prev_trading_date(d: date | None = None) -> date:
 def last_trading_date_str(d: date | None = None) -> str:
     """返回 last_trading_date 的 YYYY-MM-DD 字符串。"""
     return last_trading_date(d).isoformat()
+
+
+def next_trading_date(d: date | None = None) -> date:
+    """返回 d 之后（不含 d）的最近交易日——严格后一交易日。
+
+    与 ``prev_trading_date`` 对称。S092 R8a：手动回看时前瞻=F 的下一交易日
+    （周五→周一、节前→节后），非日历 +1。
+    """
+    d = d or date.today()
+    d = d + _td(days=1)
+    while not is_trading_day(d):
+        d = d + _td(days=1)
+    return d
+
+
+def resolve_date_triplet(date_override: date | None = None) -> dict:
+    """S092 R9：交易日锚 F + 时段推断三视图日期三元组。
+
+    纯本地计算（``vr_paths`` + ``datetime.now(BEIJING_TZ)``），零外部请求。
+    所有时刻判定用北京时区，杜绝 naive datetime 时区 bug
+    （``trading_workflow.py:25`` 踩坑记录）。
+
+    - **F**（交易日锚）：交易日 17:15 后 F=当日；其余 F=上一交易日。
+    - **review**（复盘数据日）：交易日 15:00 后独立推进到当日
+      （``review_advanced=True``），15:00 前 review=F。
+    - **today**（当日数据日）：盘前/盘中=F 的下一交易日（今早简报/实时盯盘）；
+      盘后/非交易日=F（简报快照，R4 降级——不臆造 F+1 简报）。
+    - **forward**（前瞻数据日）：= F 的下一交易日（非日历 +1，周五→周一）。
+
+    手动 ``date_override`` 覆盖 F（R7），但 stage 仍按当前时刻算、定时器不推进
+    （``review_advanced=False``）。R8a 特例：过渡窗内手动选"今天"（== 今日交易日）
+    等价于不选，复用自动态（防前瞻拿到陈旧 kline 算错）。
+    """
+    now = _dt.now(BEIJING_TZ)
+    today_bj = now.date()
+    now_time = now.time()  # naive time（北京时区内 naive 比较足够，不跨时区）
+    is_today_trading = is_trading_day(today_bj)
+
+    # 1. stage 判定（非交易日优先，再按时段）
+    if not is_today_trading:
+        stage = "non_trading"
+    elif now_time < _time(9, 30):
+        stage = "pre_market"
+    elif now_time < _time(15, 0):
+        stage = "intraday"
+    elif now_time < _time(17, 15):
+        stage = "post_transition"
+    else:
+        stage = "post_market"
+
+    # R8a：过渡窗内手动选"今天"(== today_bj 且交易日) → 复用自动态
+    # （选今天等于没选；防前瞻拿到 T+1 用陈旧 kline 算错）
+    if date_override is not None and date_override == today_bj and is_today_trading:
+        date_override = None
+    is_manual = date_override is not None
+
+    # 2. F 推进逻辑（17:15 时间驱动，不因 cron 失败阻塞——M4 闭合）
+    if is_manual:
+        F = date_override  # type: ignore[assignment]
+    elif is_today_trading and now_time >= _time(17, 15):
+        F = last_trading_date(today_bj)  # 今日交易日 = T
+    else:
+        F = prev_trading_date(today_bj)  # 上一交易日 = T-1
+
+    # 3. review 独立推进（15:00 收盘后立即推进到 T，已有实时数据先看）
+    if is_manual:
+        review_advanced = False  # 手动模式定时器不推进
+        review = F
+    elif is_today_trading and now_time >= _time(15, 0):
+        review_advanced = True
+        review = last_trading_date(today_bj)  # 今日交易日 = T
+    else:
+        review_advanced = False
+        review = F
+
+    # 4. today（当日数据日）—— R3 表格 + R4：盘后/非交易日当日=F 简报快照
+    if is_manual:
+        today = F  # 当日=F 简报快照
+    elif is_today_trading and stage in ("pre_market", "intraday"):
+        today = next_trading_date(F)  # F 的下一交易日 = T（今早简报/实时盯盘）
+    else:
+        today = F  # 盘后/非交易日：简报快照（R4 降级）
+
+    # 5. forward（前瞻数据日）= F 的下一交易日（周五→周一，非日历 +1）
+    forward = next_trading_date(F)
+
+    # 6. next_*_at：下次 15:00 / 17:15 推进的 epoch 时间戳（秒）
+    #    前端用 next_*_at - Date.now() 算 setTimeout，零本地时区判断（R14）
+    def _next_advance_epoch(target_hour: int, target_minute: int) -> float:
+        target_t = _time(target_hour, target_minute)
+        if is_today_trading and now_time < target_t:
+            d = today_bj  # 今日该时刻
+        else:
+            d = next_trading_date(today_bj)  # 下一交易日该时刻
+        return _dt.combine(d, target_t, tzinfo=BEIJING_TZ).timestamp()
+
+    next_review_advance_at = _next_advance_epoch(15, 0)
+    next_f_advance_at = _next_advance_epoch(17, 15)
+
+    return {
+        "F": F.isoformat(),
+        "review": review.isoformat(),
+        "today": today.isoformat(),
+        "forward": forward.isoformat(),
+        "stage": stage,
+        "is_trading_day": is_today_trading,
+        "review_advanced": review_advanced,
+        "server_now": now.isoformat(),
+        "next_review_advance_at": next_review_advance_at,
+        "next_f_advance_at": next_f_advance_at,
+        "non_trading": stage == "non_trading",
+    }

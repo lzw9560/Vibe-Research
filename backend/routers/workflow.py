@@ -625,6 +625,22 @@ def get_pre_market_dates() -> Dict[str, Any]:
     return {"dates": _list_snapshot_dates()}
 
 
+@router.get("/api/workflow/date-triplet")
+async def get_date_triplet(date: str | None = Query(None)) -> Dict[str, Any]:
+    """S092 R9：交易日锚 F + 时段推断三视图日期三元组。
+
+    返回 ``{F, review, today, forward, stage, is_trading_day,
+    review_advanced, server_now, next_review_advance_at,
+    next_f_advance_at, non_trading}``。纯 ``vr_paths`` 计算 +
+    ``datetime.now(BEIJING_TZ)``，零外部请求。前端用 ``next_*_at - Date.now()``
+    算 setTimeout 延时（R14 双定时器），零本地时区判断。
+    """
+    from datetime import date as _date
+    from vr_paths import resolve_date_triplet
+    d = _date.fromisoformat(date) if date else None
+    return resolve_date_triplet(d)
+
+
 @router.post("/api/workflow/pre-market/refresh")
 async def refresh_pre_market(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
     """触发后台异步采集（S026）：立即返回 run_id+status=running，不阻塞。
