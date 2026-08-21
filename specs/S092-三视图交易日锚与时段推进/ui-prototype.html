@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>S092 · 三视图交易日锚 — UI 原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     Vibe-Research · 科技玻璃暖橙主题（复刻 frontend/src/index.css）
+     ============================================================ */
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 30% 92%;
+    --card: 222 40% 9%;
+    --primary: 15 89% 56%;        /* 暖橙红 #F35D2B */
+    --accent: 25 95% 58%;
+    --muted: 220 28% 15%;
+    --muted-foreground: 215 18% 62%;
+    --destructive: 0 72% 58%;
+    --border: 210 30% 22%;
+    --radius: 1rem;
+    --success: 145 62% 47%;
+    --danger: 0 74% 60%;
+    --warning: 38 92% 55%;
+    --info: 15 89% 56%;
+    /* running 蓝脉冲专用色（与品牌橙区分） */
+    --running: 199 89% 58%;
+
+    --glass-fill-top: rgba(255, 255, 255, 0.055);
+    --glass-fill-bot: rgba(255, 255, 255, 0.012);
+    --glass-stroke: rgba(255, 232, 214, 0.10);
+    --glass-hi: rgba(255, 255, 255, 0.06);
+
+    --bg-glow-1: hsl(15 89% 56% / 0.11);
+    --bg-glow-2: hsl(220 60% 45% / 0.08);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: "Noto Sans SC", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(1100px 620px at 12% -12%, var(--bg-glow-1), transparent 60%),
+      radial-gradient(980px 720px at 108% 112%, var(--bg-glow-2), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  .serif { font-family: "Noto Serif SC", serif; }
+  .mono { font-family: "JetBrains Mono", "Noto Sans SC", monospace; font-feature-settings: "tnum"; }
+
+  /* 玻璃卡（复刻 .glass） */
+  .glass {
+    background-image: linear-gradient(162deg, var(--glass-fill-top), var(--glass-fill-bot));
+    border: 1px solid var(--glass-stroke);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 var(--glass-hi);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .glass-glow { position: relative; overflow: hidden; }
+  .glass-glow::before {
+    content: "";
+    position: absolute; top: -40%; right: -20%;
+    width: 240px; height: 240px;
+    background: radial-gradient(circle, hsl(var(--primary) / 0.16), transparent 70%);
+    pointer-events: none;
+  }
+  .text-glow { text-shadow: 0 0 18px hsl(var(--primary) / 0.45); }
+
+  .page-enter { animation: page-enter 0.45s ease-out both; }
+  @keyframes page-enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 容器 */
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 18px 60px; }
+
+  /* ---- 原型时段切换器（仅原型用，模拟 dateTriplet.stage） ---- */
+  .proto-switch {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 8px 12px;
+    background: hsl(var(--card) / 0.85);
+    border-bottom: 1px solid hsl(var(--border) / 0.6);
+    backdrop-filter: blur(10px);
+    font-size: 12px;
+  }
+  .proto-switch .lbl { color: hsl(var(--muted-foreground)); }
+  .proto-switch button {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px; font-weight: 500;
+    padding: 5px 12px; border-radius: 8px;
+    border: 1px solid hsl(var(--border));
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer; transition: all .2s;
+  }
+  .proto-switch button.active {
+    background: hsl(var(--primary) / 0.15);
+    border-color: hsl(var(--primary) / 0.5);
+    color: hsl(var(--primary));
+    box-shadow: 0 0 12px hsl(var(--primary) / 0.25);
+  }
+  .proto-switch .hint { color: hsl(var(--muted-foreground) / 0.6); font-size: 11px; margin-left: 8px; }
+
+  /* ---- PageHeader ---- */
+  .ph { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 18px 0 14px; }
+  .ph h1 { font-family: "Noto Serif SC", serif; font-size: 26px; font-weight: 900; letter-spacing: -0.01em; margin: 0; }
+  .ph .sub { margin: 4px 0 0; font-size: 13px; color: hsl(var(--muted-foreground)); }
+  .ph-actions { display: flex; align-items: center; gap: 8px; }
+  .date-input {
+    font-family: "JetBrains Mono", monospace; font-size: 12px;
+    padding: 6px 10px; border-radius: 8px;
+    border: 1px solid hsl(var(--border) / 0.5);
+    background: hsl(var(--muted) / 0.3);
+    color: hsl(var(--foreground));
+  }
+  .btn {
+    font-family: "Noto Sans SC", sans-serif; font-size: 13px; font-weight: 500;
+    padding: 6px 12px; border-radius: 8px; border: 1px solid transparent;
+    cursor: pointer; transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-ghost { background: transparent; color: hsl(var(--muted-foreground)); border-color: hsl(var(--border) / 0.5); }
+  .btn-ghost:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.3); }
+  .btn-primary { background: hsl(var(--primary)); color: hsl(var(--background)); font-weight: 700; }
+  .btn-primary:hover { box-shadow: 0 0 16px hsl(var(--primary) / 0.45); }
+  .btn-sm { font-size: 11px; padding: 4px 8px; }
+
+  /* ---- 锚条 AnchorBar ---- */
+  .anchor {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 14px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .anchor .f-box { display: flex; flex-direction: column; gap: 2px; }
+  .anchor .f-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: hsl(var(--muted-foreground) / 0.7); }
+  .anchor .f-value { font-family: "JetBrains Mono", monospace; font-size: 17px; font-weight: 700; color: hsl(var(--primary)); }
+  .anchor .f-weekday { font-size: 11px; color: hsl(var(--muted-foreground)); }
+
+  .anchor .triplet {
+    display: flex; align-items: center; gap: 0; justify-content: center;
+    font-size: 12px;
+  }
+  .anchor .triplet .node {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 10px;
+  }
+  .anchor .triplet .node .role { font-size: 10px; color: hsl(var(--muted-foreground)); }
+  .anchor .triplet .node .day { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 13px; }
+  .anchor .triplet .node.review .day { color: hsl(var(--foreground)); }
+  .anchor .triplet .node.today .day { color: hsl(var(--muted-foreground)); }
+  .anchor .triplet .node.forward .day { color: hsl(var(--muted-foreground)); }
+  .anchor .triplet .node.forward.pending .day { color: hsl(var(--warning)); }
+  .anchor .triplet .sep { width: 40px; height: 1px; background: hsl(var(--border)); margin: 0 -6px; align-self: center; }
+
+  .anchor .phase-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .phase-transition { background: hsl(var(--warning) / 0.12); color: hsl(var(--warning)); border: 1px solid hsl(var(--warning) / 0.35); }
+  .phase-ready { background: hsl(var(--success) / 0.12); color: hsl(var(--success)); border: 1px solid hsl(var(--success) / 0.35); }
+  .anchor .phase-tag .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .phase-transition .dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: .4; transform: scale(.7);} }
+
+  /* ---- 任务状态卡片 ---- */
+  .task-card { padding: 14px 18px; margin-bottom: 14px; }
+  .task-card .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .task-card .head h3 { font-family: "Noto Serif SC", serif; font-size: 15px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px; }
+  .task-card .summary { display: flex; align-items: center; gap: 10px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+  .task-card .summary .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-family: "JetBrains Mono", monospace; }
+  .pill.done { background: hsl(var(--success) / 0.12); color: hsl(var(--success)); }
+  .pill.pending { background: hsl(var(--muted) / 0.5); color: hsl(var(--muted-foreground)); }
+  .pill.running { background: hsl(var(--running) / 0.12); color: hsl(var(--running)); }
+  .pill.error { background: hsl(var(--danger) / 0.12); color: hsl(var(--danger)); }
+  .chev { transition: transform .2s; color: hsl(var(--muted-foreground)); }
+  .task-card.collapsed .chev { transform: rotate(-90deg); }
+  .task-card .body { margin-top: 12px; }
+  .task-card.collapsed .body { display: none; }
+
+  /* 任务时间线 */
+  .timeline { position: relative; padding-left: 22px; }
+  .timeline::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: hsl(var(--border)); }
+  .t-item { position: relative; padding: 6px 0 6px 14px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; }
+  .t-item::before {
+    content: ""; position: absolute; left: -19px; top: 50%; transform: translateY(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    background: hsl(var(--card)); border: 2px solid hsl(var(--border));
+  }
+  .t-item.pending::before { border-color: hsl(var(--muted-foreground) / 0.5); background: hsl(var(--muted) / 0.5); }
+  .t-item.running::before { border-color: hsl(var(--running)); background: hsl(var(--running) / 0.2); box-shadow: 0 0 10px hsl(var(--running) / 0.6); animation: pulse-node 1.4s ease-in-out infinite; }
+  .t-item.done::before { border-color: hsl(var(--success)); background: hsl(var(--success)); }
+  .t-item.error::before { border-color: hsl(var(--danger)); background: hsl(var(--danger) / 0.3); }
+  @keyframes pulse-node { 0%,100% { box-shadow: 0 0 8px hsl(var(--running) / 0.5);} 50% { box-shadow: 0 0 16px hsl(var(--running) / 0.9);} }
+
+  .t-item .t-time { font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); min-width: 42px; }
+  .t-item .t-name { font-size: 13px; }
+  .t-item .t-eta { font-size: 11px; color: hsl(var(--muted-foreground) / 0.7); font-family: "JetBrains Mono", monospace; }
+  .t-item .load-btn { font-size: 11px; padding: 3px 8px; }
+
+  .t-item.expanded .t-detail { grid-column: 1 / -1; margin-top: 6px; padding: 8px 10px; border-radius: 6px; background: hsl(var(--muted) / 0.25); font-size: 11px; color: hsl(var(--muted-foreground)); }
+  .t-detail { display: none; }
+  .t-item.expanded .t-detail { display: block; }
+
+  /* ---- TabBar ---- */
+  .tabbar { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: hsl(var(--muted) / 0.3); border: 1px solid hsl(var(--border) / 0.4); margin-bottom: 16px; }
+  .tabbar .tab {
+    font-family: "Noto Sans SC", sans-serif; font-size: 14px; font-weight: 600;
+    padding: 8px 22px; border-radius: 9px; border: none; background: transparent;
+    color: hsl(var(--muted-foreground)); cursor: pointer; transition: all .25s;
+    display: inline-flex; align-items: center; gap: 7px; position: relative;
+  }
+  .tabbar .tab:hover { color: hsl(var(--foreground)); }
+  .tabbar .tab.active {
+    background: hsl(var(--primary) / 0.16);
+    color: hsl(var(--primary));
+    box-shadow: 0 0 18px hsl(var(--primary) / 0.2), inset 0 1px 0 hsl(var(--glass-hi));
+  }
+  .tabbar .tab .tab-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0; transition: opacity .2s; }
+  .tabbar .tab.active .tab-dot { opacity: 1; }
+
+  /* ---- Tab 内容区 ---- */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: page-enter 0.4s ease-out both; }
+
+  /* 通用 metric 卡 */
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .metric { padding: 12px; border-radius: 10px; background: hsl(var(--muted) / 0.25); }
+  .metric .m-label { font-size: 11px; color: hsl(var(--muted-foreground)); }
+  .metric .m-val { font-family: "JetBrains Mono", monospace; font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .metric .m-sub { font-size: 11px; color: hsl(var(--muted-foreground) / 0.6); margin-top: 1px; }
+
+  /* badge */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+  .badge-default { background: hsl(var(--muted) / 0.4); color: hsl(var(--muted-foreground)); }
+  .badge-primary { background: hsl(var(--primary) / 0.12); color: hsl(var(--primary)); }
+  .badge-success { background: hsl(var(--success) / 0.12); color: hsl(var(--success)); }
+  .badge-warning { background: hsl(var(--warning) / 0.12); color: hsl(var(--warning)); }
+  .badge-danger { background: hsl(var(--danger) / 0.12); color: hsl(var(--danger)); }
+  .badge-info { background: hsl(199 89% 58% / 0.12); color: hsl(199 89% 58%); }
+
+  /* 待产出占位 */
+  .placeholder {
+    border: 1.5px dashed hsl(var(--warning) / 0.4);
+    border-radius: 12px;
+    padding: 24px 20px;
+    text-align: center;
+    background: hsl(var(--warning) / 0.04);
+  }
+  .placeholder .ph-icon { font-size: 22px; margin-bottom: 6px; opacity: 0.7; }
+  .placeholder .ph-text { font-size: 13px; color: hsl(var(--warning)); font-weight: 500; }
+  .placeholder .ph-time { font-family: "JetBrains Mono", monospace; font-size: 12px; color: hsl(var(--muted-foreground)); margin-top: 4px; }
+
+  /* 区块标题 */
+  .sec-title { font-family: "Noto Serif SC", serif; font-size: 16px; font-weight: 700; margin: 18px 0 10px; display: flex; align-items: center; gap: 8px; }
+  .sec-title .idx { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: hsl(var(--primary) / 0.18); color: hsl(var(--primary)); font-size: 11px; font-family: "JetBrains Mono", monospace; font-weight: 700; }
+  .sec-title .desc { font-size: 12px; color: hsl(var(--muted-foreground) / 0.7); font-weight: 400; font-family: "Noto Sans SC", sans-serif; }
+
+  /* 候选标的行 */
+  .cand-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: hsl(var(--muted) / 0.2); margin-bottom: 6px; transition: background .2s; }
+  .cand-row:hover { background: hsl(var(--muted) / 0.35); }
+  .cand-row .c-rank { font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 700; color: hsl(var(--primary)); width: 24px; text-align: center; }
+  .cand-row .c-name { font-size: 14px; font-weight: 500; }
+  .cand-row .c-code { font-family: "JetBrains Mono", monospace; font-size: 11px; color: hsl(var(--muted-foreground)); margin-left: 6px; }
+  .cand-row .c-score { font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 700; }
+  .cand-row .c-price { font-family: "JetBrains Mono", monospace; font-size: 12px; color: hsl(var(--muted-foreground)); text-align: right; }
+
+  /* 情绪天气条 */
+  .weather { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 12px 16px; }
+  .weather .w-icon { font-size: 28px; }
+  .weather .w-info .w-label { font-size: 11px; color: hsl(var(--muted-foreground)); }
+  .weather .w-info .w-name { font-family: "Noto Serif SC", serif; font-size: 17px; font-weight: 700; }
+  .weather .w-detail { font-size: 12px; color: hsl(var(--muted-foreground)); text-align: right; }
+
+  /* 盯盘入口卡 */
+  .entry-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer; transition: all .2s; border: 1px solid hsl(var(--border) / 0.3); }
+  .entry-card:hover { border-color: hsl(var(--primary) / 0.4); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+  .entry-card .e-icon { width: 40px; height: 40px; border-radius: 12px; background: hsl(var(--primary) / 0.12); border: 1px solid hsl(var(--primary) / 0.3); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .entry-card .e-title { font-size: 14px; font-weight: 600; }
+  .entry-card .e-sub { font-size: 12px; color: hsl(var(--muted-foreground)); }
+  .entry-card .e-arrow { color: hsl(var(--muted-foreground) / 0.5); }
+
+  /* 折叠分区 */
+  .collapsible-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; padding: 2px 0; }
+  .collapsible-head .c-idx { width: 24px; height: 24px; border-radius: 50%; background: hsl(var(--primary) / 0.2); color: hsl(var(--primary)); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-family: "JetBrains Mono", monospace; font-weight: 600; }
+  .collapsible-head .c-title { font-size: 14px; font-weight: 600; }
+
+  /* divider */
+  .div { height: 1px; background: hsl(var(--border) / 0.5); margin: 14px 0; }
+
+  /* note banner */
+  .note { padding: 10px 14px; border-radius: 10px; background: hsl(var(--info) / 0.08); border: 1px solid hsl(var(--info) / 0.25); font-size: 12px; color: hsl(var(--muted-foreground)); display: flex; gap: 8px; align-items: flex-start; }
+  .note .n-icon { color: hsl(var(--info)); flex-shrink: 0; margin-top: 1px; }
+
+  @media (max-width: 720px) {
+    .anchor { grid-template-columns: 1fr; gap: 10px; }
+    .anchor .triplet { justify-content: flex-start; }
+    .anchor .phase-tag { justify-self: start; }
+    .t-item { grid-template-columns: 1fr auto; }
+    .t-item .t-eta { display: none; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    .cand-row { grid-template-columns: auto 1fr auto; }
+    .cand-row .c-price { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 原型时段切换器（模拟 dateTriplet.stage，真实实现由后端推算） -->
+<div class="proto-switch">
+  <span class="lbl">原型时段切换 ▸</span>
+  <button id="btn-transition" class="active" onclick="switchPhase('transition')">盘后过渡窗 15:00-17:15</button>
+  <button id="btn-ready" onclick="switchPhase('ready')">盘后就绪 17:15+</button>
+  <span class="hint">点击对比两个时段的 UI 差异</span>
+</div>
+
+<div class="wrap">
+
+  <!-- ========== PageHeader ========== -->
+  <div class="ph">
+    <div>
+      <h1 class="text-glow">交易工作流</h1>
+      <p class="sub">单一交易日锚 F · 时段推断三视图 · 复盘 / 当日 / 前瞻</p>
+    </div>
+    <div class="ph-actions">
+      <input type="date" value="2026-08-21" class="date-input" aria-label="选择复盘日 F" />
+      <button class="btn btn-ghost btn-sm" onclick="alert('清除手动日期，恢复自动态')">清除日期</button>
+      <button class="btn btn-ghost" aria-label="刷新" title="手动刷新">↻ 刷新</button>
+    </div>
+  </div>
+
+  <!-- ========== 锚条 AnchorBar ========== -->
+  <div class="glass glass-glow anchor" id="anchor">
+    <!-- 左：F 锚 -->
+    <div class="f-box">
+      <span class="f-label">锚定交易日 F</span>
+      <span class="f-value mono" id="f-value">2026-08-21</span>
+      <span class="f-weekday">周四</span>
+    </div>
+    <!-- 中：三视图数据日 -->
+    <div class="triplet" id="triplet">
+      <div class="node review">
+        <span class="role">复盘</span>
+        <span class="day" id="d-review">T(08-21)</span>
+      </div>
+      <div class="sep"></div>
+      <div class="node today">
+        <span class="role">当日</span>
+        <span class="day" id="d-today">T-1(08-20)</span>
+      </div>
+      <div class="sep"></div>
+      <div class="node forward" id="node-forward">
+        <span class="role">前瞻</span>
+        <span class="day" id="d-forward">待 17:15 产出</span>
+      </div>
+    </div>
+    <!-- 右：时段状态 -->
+    <div id="phase-tag-wrap"></div>
+  </div>
+
+  <!-- ========== 任务状态卡片 TaskStatusCard ========== -->
+  <div class="glass task-card" id="task-card">
+    <div class="head" onclick="toggleTaskCard()">
+      <h3>
+        <span>盘后采集任务</span>
+        <span class="badge badge-default mono" id="task-progress">2/8</span>
+      </h3>
+      <div class="summary">
+        <span id="task-summary-text">15:30 基因得分 · 15:35 STI 已完成，16:30 kline 日更待跑</span>
+        <span class="chev">▾</span>
+      </div>
+    </div>
+    <div class="body" id="task-body">
+      <div class="timeline" id="timeline"><!-- JS 填充 --></div>
+    </div>
+  </div>
+
+  <!-- ========== TabBar ========== -->
+  <div class="tabbar" id="tabbar">
+    <button class="tab active" data-tab="review" onclick="switchTab('review')">
+      <span class="tab-dot"></span>复盘
+    </button>
+    <button class="tab" data-tab="today" onclick="switchTab('today')">
+      <span class="tab-dot"></span>当日
+    </button>
+    <button class="tab" data-tab="forward" onclick="switchTab('forward')">
+      <span class="tab-dot"></span>前瞻
+    </button>
+  </div>
+
+  <!-- ===================== 复盘 Tab ===================== -->
+  <div class="tab-panel active" id="panel-review">
+    <div class="glass glass-glow" style="padding:18px">
+      <h2 class="serif" style="font-size:18px;font-weight:700;margin:0 0 4px">T 日收盘复盘</h2>
+      <p style="font-size:12px;color:hsl(var(--muted-foreground));margin:0 0 16px" id="review-sub">15:00 后实时数据先看，未产出区占位 · 17:15 后全量刷新</p>
+
+      <!-- 实时可得部分 -->
+      <div class="sec-title">
+        <span class="idx">①</span>涨停池 / 情绪 / 梯队
+        <span class="desc">15:00 收盘后即时可得</span>
+      </div>
+      <div class="metric-grid">
+        <div class="metric"><div class="m-label">涨停数</div><div class="m-val mono">42</div><div class="m-sub">较昨日 +8</div></div>
+        <div class="metric"><div class="m-label">炸板数</div><div class="m-val mono">7</div><div class="m-sub">炸板率 14.3%</div></div>
+        <div class="metric"><div class="m-label">连板高度</div><div class="m-val mono">5</div><div class="m-sub">华塑控股 5 板</div></div>
+        <div class="metric"><div class="m-label">市场情绪</div><div class="m-val">回暖</div><div class="m-sub">STI 待 15:35 产出</div></div>
+      </div>
+
+      <div class="div"></div>
+
+      <!-- 渐进填充占位区（仅过渡窗显示） -->
+      <div id="review-placeholder">
+        <div class="sec-title">
+          <span class="idx">②</span>基因得分 / STI / 漏斗候选
+          <span class="desc">盘后 cron 渐进产出</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          <div class="placeholder">
+            <div class="ph-icon">⏳</div>
+            <div class="ph-text">基因得分</div>
+            <div class="ph-time">待 15:30 产出</div>
+          </div>
+          <div class="placeholder">
+            <div class="ph-icon">⏳</div>
+            <div class="ph-text">STI 情绪指数</div>
+            <div class="ph-time">待 15:35 产出</div>
+          </div>
+          <div class="placeholder">
+            <div class="ph-icon">⏳</div>
+            <div class="ph-text">前向结算</div>
+            <div class="ph-time">待 15:45 产出</div>
+          </div>
+          <div class="placeholder">
+            <div class="ph-icon">⏳</div>
+            <div class="ph-text">漏斗候选池</div>
+            <div class="ph-time">待 17:15 产出</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 17:15 后的完整数据区（默认隐藏） -->
+      <div id="review-full" style="display:none">
+        <div class="sec-title">
+          <span class="idx">②</span>基因得分 / STI / 漏斗候选
+          <span class="desc">完整 T 日收盘数据</span>
+        </div>
+        <div class="metric-grid">
+          <div class="metric"><div class="m-label">基因均分</div><div class="m-val mono">68.2</div><div class="m-sub">全市场 4821 只</div></div>
+          <div class="metric"><div class="m-label">STI 情绪</div><div class="m-val">62.4</div><div class="m-sub">中性偏热</div></div>
+          <div class="metric"><div class="m-label">前向结算</div><div class="m-val mono">+1.82%</div><div class="m-sub">均收益</div></div>
+          <div class="metric"><div class="m-label">漏斗候选</div><div class="m-val mono">18</div><div class="m-sub">final 层</div></div>
+        </div>
+      </div>
+
+      <div class="div"></div>
+
+      <!-- S054 盘后三问 -->
+      <div class="sec-title">
+        <span class="idx">③</span>盘后三问
+        <span class="desc">今日哪只最强 · 明日关注什么 · 仓位怎么调</span>
+      </div>
+      <div class="glass" style="padding:14px;background:hsl(var(--muted)/0.2)">
+        <div style="font-size:13px;line-height:1.7;color:hsl(var(--foreground)/0.9)">
+          <strong style="color:hsl(var(--primary))">Q1 今日最强：</strong>华塑控股 5 连板领涨，梯队完整度回升，资金围绕新能源主线。<br/>
+          <strong style="color:hsl(var(--primary))">Q2 明日关注：</strong>关注首板溢价评分（R1）破 80 的标的，STI 回暖环境下首板次日溢价有统计支撑。<br/>
+          <strong style="color:hsl(var(--primary))">Q3 仓位建议：</strong>市场情绪回暖但未到满仓档位，建议 50%-60% 仓位，单标的不超过 15%。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 当日 Tab ===================== -->
+  <div class="tab-panel" id="panel-today">
+    <div class="glass glass-glow" style="padding:18px">
+      <h2 class="serif" style="font-size:18px;font-weight:700;margin:0 0 4px">盘前简报管线</h2>
+      <p style="font-size:12px;color:hsl(var(--muted-foreground));margin:0 0 16px" id="today-sub">情绪天气 → 漏斗 → 候选池 · 盘后显示今早简报快照</p>
+
+      <!-- S063 WeatherDecisionBar -->
+      <div class="glass" style="padding:0;overflow:hidden;margin-bottom:14px">
+        <div class="weather">
+          <div class="w-icon">⛅</div>
+          <div class="w-info">
+            <div class="w-label">情绪天气决策条 · S063</div>
+            <div class="w-name">多云转晴 · 中性偏热</div>
+          </div>
+          <div class="w-detail">
+            <div>STI <span class="mono">62.4</span></div>
+            <div>仓位上限 <span class="mono">60%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 简报快照标注（盘后） -->
+      <div class="note" id="today-note">
+        <span class="n-icon">ⓘ</span>
+        <span>数据为今早 08-20 盘前采集口径（T-1 简报快照）。盘后最终收盘数据 17:15 后可点 <strong style="color:hsl(var(--primary))">刷新快照</strong> 更新为收盘口径。</span>
+      </div>
+
+      <div class="div"></div>
+
+      <!-- 情绪→漏斗→候选池 管线 -->
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:hsl(var(--muted-foreground));margin-bottom:12px">
+        <span class="badge badge-primary">① 情绪天气</span><span>→</span>
+        <span class="badge badge-primary">② 漏斗筛选</span><span>→</span>
+        <span class="badge badge-primary">③ 候选池</span>
+      </div>
+
+      <div class="metric-grid" style="margin-bottom:14px">
+        <div class="metric"><div class="m-label">候选池</div><div class="m-val mono">18</div><div class="m-sub">final 层</div></div>
+        <div class="metric"><div class="m-label">观察池</div><div class="m-val mono">34</div><div class="m-sub">watching</div></div>
+        <div class="metric"><div class="m-label">持仓</div><div class="m-val mono">3</div><div class="m-sub">holding</div></div>
+        <div class="metric"><div class="m-label">已结</div><div class="m-val mono">5</div><div class="m-sub">settled</div></div>
+      </div>
+
+      <!-- S050 行为对照卡 -->
+      <div class="sec-title">
+        <span class="idx">④</span>行为对照 · ShadowComparison
+        <span class="desc">S050 票根 vs 影子收益</span>
+      </div>
+      <div class="glass" style="padding:12px;background:hsl(var(--muted)/0.2);margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+          <div>
+            <div style="color:hsl(var(--muted-foreground));margin-bottom:4px">票根（实盘）</div>
+            <div class="mono" style="font-size:16px;font-weight:700;color:hsl(var(--success))">+2.31%</div>
+            <div style="color:hsl(var(--muted-foreground)/0.7);font-size:11px">3 笔 · 均收益</div>
+          </div>
+          <div>
+            <div style="color:hsl(var(--muted-foreground));margin-bottom:4px">影子（同标的不操作）</div>
+            <div class="mono" style="font-size:16px;font-weight:700;color:hsl(var(--danger))">+0.87%</div>
+            <div style="color:hsl(var(--muted-foreground)/0.7);font-size:11px">lift <span style="color:hsl(var(--success))">2.65x</span> 优于不操作</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- S088 暴风雨预测 -->
+      <div class="sec-title">
+        <span class="idx">⑤</span>暴风雨预测 · S088
+        <span class="desc">极端行情预警</span>
+      </div>
+      <div class="glass" style="padding:12px;background:hsl(var(--muted)/0.2);margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;font-weight:600">当前无暴风雨信号</div>
+            <div style="font-size:11px;color:hsl(var(--muted-foreground));margin-top:2px">炸板率 14.3% 低于阈值 25%，连板梯队稳定</div>
+          </div>
+          <span class="badge badge-success">安全</span>
+        </div>
+      </div>
+
+      <!-- 盘中盯盘链接卡 -->
+      <div class="sec-title">
+        <span class="idx">⑥</span>盘中盯盘
+        <span class="desc">跳转独立路由 /workflow/intraday</span>
+      </div>
+      <div class="glass entry-card" onclick="location.href='#/workflow/intraday'">
+        <div class="e-icon">📈</div>
+        <div style="flex:1">
+          <div class="e-title">实时盯盘监控</div>
+          <div class="e-sub">持仓 + 命中标的地盯盘 · 炸板预警 C1-C6 · 独立路由保留</div>
+        </div>
+        <span class="e-arrow">→</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 前瞻 Tab ===================== -->
+  <div class="tab-panel" id="panel-forward">
+    <div class="glass glass-glow" style="padding:18px">
+      <h2 class="serif" style="font-size:18px;font-weight:700;margin:0 0 4px">前瞻选股 · T+1 标的池</h2>
+      <p style="font-size:12px;color:hsl(var(--muted-foreground));margin:0 0 16px" id="forward-sub">breakout 弱信号选股 + 风控价</p>
+
+      <!-- 过渡窗采集中占位 -->
+      <div id="forward-collecting">
+        <div class="placeholder" style="padding:36px 20px">
+          <div class="ph-icon" style="font-size:30px">📡</div>
+          <div class="ph-text" style="font-size:15px">盘后选股采集中</div>
+          <div class="ph-time" style="margin-top:8px">kline 日更 16:30 完成后产出 · 任务卡片已标红 kline</div>
+          <div style="margin-top:12px;font-size:11px;color:hsl(var(--muted-foreground)/0.7)">实际就绪时机 = 16:30 kline_refresh success · 17:15 F 推进时全量刷新</div>
+        </div>
+      </div>
+
+      <!-- 17:15 后完整标的池 -->
+      <div id="forward-full" style="display:none">
+        <div class="metric-grid" style="margin-bottom:14px">
+          <div class="metric"><div class="m-label">候选数</div><div class="m-val mono">12</div><div class="m-sub">breakout 命中</div></div>
+          <div class="metric"><div class="m-label">均得分</div><div class="m-val mono">72.4</div><div class="m-sub">9 维度加权</div></div>
+          <div class="metric"><div class="m-label">风控触发</div><div class="m-val mono">2</div><div class="m-sub">已剔除</div></div>
+          <div class="metric"><div class="m-label">生成时间</div><div class="m-val mono">17:15</div><div class="m-sub">漏斗预计算</div></div>
+        </div>
+
+        <div class="sec-title">
+          <span class="idx">①</span>T+1 标的池
+          <span class="desc">08-22 周五 · 按综合得分排序</span>
+        </div>
+
+        <div class="cand-row">
+          <span class="c-rank">01</span>
+          <div><span class="c-name">华塑控股</span><span class="c-code">000922</span><br/><span style="font-size:11px;color:hsl(var(--muted-foreground))">新能源 · 连板梯队 · 首板溢价 86</span></div>
+          <span class="c-score">88.4</span>
+          <span class="c-price">买入价 12.40<br/>止损 11.28</span>
+        </div>
+        <div class="cand-row">
+          <span class="c-rank">02</span>
+          <div><span class="c-name">宁德时代</span><span class="c-code">300750</span><br/><span style="font-size:11px;color:hsl(var(--muted-foreground))">储能 · 放量突破 · 首板溢价 81</span></div>
+          <span class="c-score">84.1</span>
+          <span class="c-price">买入价 245.6<br/>止损 229.8</span>
+        </div>
+        <div class="cand-row">
+          <span class="c-rank">03</span>
+          <div><span class="c-name">隆基绿能</span><span class="c-code">601012</span><br/><span style="font-size:11px;color:hsl(var(--muted-foreground))">光伏 · 底部反转 · 基因得分 79</span></div>
+          <span class="c-score">81.7</span>
+          <span class="c-price">买入价 18.92<br/>止损 17.78</span>
+        </div>
+        <div class="cand-row">
+          <span class="c-rank">04</span>
+          <div><span class="c-name">阳光电源</span><span class="c-code">300274</span><br/><span style="font-size:11px;color:hsl(var(--muted-foreground))">储能 · 量价齐升 · 首板溢价 78</span></div>
+          <span class="c-score">79.3</span>
+          <span class="c-price">买入价 82.5<br/>止损 77.4</span>
+        </div>
+        <div class="cand-row">
+          <span class="c-rank">05</span>
+          <div><span class="c-name">通威股份</span><span class="c-code">600438</span><br/><span style="font-size:11px;color:hsl(var(--muted-foreground))">光伏 · 梯队完整 · 基因得分 76</span></div>
+          <span class="c-score">76.8</span>
+          <span class="c-price">买入价 23.1<br/>止损 21.7</span>
+        </div>
+
+        <div style="text-align:center;margin-top:10px">
+          <button class="btn btn-ghost btn-sm">查看全部 12 只 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ========== 数据 ==========
+  const TASKS = [
+    { time: "15:30", name: "基因得分", cron: "15:30" },
+    { time: "15:35", name: "STI 计算", cron: "15:35" },
+    { time: "15:45", name: "前向结算", cron: "15:45" },
+    { time: "15:50", name: "R1 溢价评分", cron: "15:50" },
+    { time: "16:15", name: "首板9维度评分", cron: "16:15" },
+    { time: "16:30", name: "kline日更+复盘报告", cron: "16:30" },
+    { time: "17:00", name: "derived预采集", cron: "17:00" },
+    { time: "17:15", name: "漏斗预计算", cron: "17:15" },
+  ];
+
+  // 过渡窗状态（模拟 16:20 时刻：前 4 个 done，kline running，后面 pending）
+  const STATUS_TRANSITION = ["done","done","done","done","running","pending","pending","pending"];
+  // 就绪状态：全 done
+  const STATUS_READY = ["done","done","done","done","done","done","done","done"];
+
+  let currentPhase = "transition";
+  let currentTab = "review";
+
+  // ========== 渲染任务时间线 ==========
+  function renderTimeline() {
+    const statuses = currentPhase === "transition" ? STATUS_TRANSITION : STATUS_READY;
+    const tl = document.getElementById("timeline");
+    tl.innerHTML = TASKS.map((t, i) => {
+      const s = statuses[i];
+      const eta = s === "pending" ? `预计 ${t.time}` : s === "running" ? "运行中" : s === "done" ? "已完成" : "错误";
+      const loadBtn = s === "done" ? `<button class="btn btn-primary btn-sm load-btn" onclick="event.stopPropagation();loadTask('${t.name}')">载入</button>` : "";
+      return `
+        <div class="t-item ${s}" onclick="this.classList.toggle('expanded')">
+          <div>
+            <span class="t-time mono">${t.time}</span>
+            <span class="t-name">${t.name}</span>
+          </div>
+          <span class="t-eta">${eta}</span>
+          ${loadBtn}
+          <div class="t-detail">
+            <strong>${t.name}</strong> · cron: <span class="mono">${t.cron}</span> · 状态: <span class="badge badge-${s==='done'?'success':s==='running'?'info':s==='error'?'danger':'default'}">${s}</span><br/>
+            上次执行: <span class="mono">${s==='pending'?'—':t.time + ':12'}</span> · 耗时 ${s==='done'?'8s':s==='running'?'…':'—'}
+          </div>
+        </div>`;
+    }).join("");
+
+    // 更新摘要
+    const done = statuses.filter(s => s === "done").length;
+    document.getElementById("task-progress").textContent = `${done}/8`;
+    const runningIdx = statuses.indexOf("running");
+    const summaryText = currentPhase === "transition"
+      ? `${done} 项已完成，${runningIdx >= 0 ? TASKS[runningIdx].name + " 运行中" : "kline 日更待跑"}`
+      : "全部 8 项已完成 · 17:15 F 已推进";
+    document.getElementById("task-summary-text").textContent = summaryText;
+  }
+
+  // ========== 渲染锚条 ==========
+  function renderAnchor() {
+    const fv = document.getElementById("f-value");
+    const dReview = document.getElementById("d-review");
+    const dToday = document.getElementById("d-today");
+    const dForward = document.getElementById("d-forward");
+    const nodeForward = document.getElementById("node-forward");
+    const phaseWrap = document.getElementById("phase-tag-wrap");
+
+    if (currentPhase === "transition") {
+      // F=T-1，复盘独立推进到 T
+      fv.textContent = "2026-08-20";
+      dReview.textContent = "T(08-21)";
+      dToday.textContent = "T-1(08-20)";
+      dForward.textContent = "待 17:15 产出";
+      nodeForward.classList.add("pending");
+      phaseWrap.innerHTML = `<div class="phase-tag phase-transition"><span class="dot"></span>数据采集中 · 15:00-17:15</div>`;
+    } else {
+      // F=T，三视图完整
+      fv.textContent = "2026-08-21";
+      dReview.textContent = "T(08-21)";
+      dToday.textContent = "T(08-21)";
+      dForward.textContent = "T+1(08-22)";
+      nodeForward.classList.remove("pending");
+      phaseWrap.innerHTML = `<div class="phase-tag phase-ready"><span class="dot"></span>数据就绪 · 17:15 后</div>`;
+    }
+  }
+
+  // ========== 渲染 Tab 内容 ==========
+  function renderPanels() {
+    const reviewSub = document.getElementById("review-sub");
+    const reviewPh = document.getElementById("review-placeholder");
+    const reviewFull = document.getElementById("review-full");
+    const todaySub = document.getElementById("today-sub");
+    const todayNote = document.getElementById("today-note");
+    const forwardSub = document.getElementById("forward-sub");
+    const forwardCollecting = document.getElementById("forward-collecting");
+    const forwardFull = document.getElementById("forward-full");
+
+    if (currentPhase === "transition") {
+      reviewSub.textContent = "15:00 后实时数据先看，未产出区占位 · 17:15 后全量刷新";
+      reviewPh.style.display = "block";
+      reviewFull.style.display = "none";
+
+      todaySub.textContent = "盘后显示今早简报快照（T-1 口径）· 17:15 后可刷新";
+      todayNote.style.display = "flex";
+
+      forwardSub.textContent = "breakout 弱信号选股 + 风控价 · 采集中";
+      forwardCollecting.style.display = "block";
+      forwardFull.style.display = "none";
+    } else {
+      reviewSub.textContent = "完整 T 日收盘数据 · 17:15 全量刷新";
+      reviewPh.style.display = "none";
+      reviewFull.style.display = "block";
+
+      todaySub.textContent = "盘前简报管线 · 情绪天气→漏斗→候选池";
+      todayNote.style.display = "none";
+
+      forwardSub.textContent = "breakout 弱信号选股 + 风控价 · T+1 完整标的池";
+      forwardCollecting.style.display = "none";
+      forwardFull.style.display = "block";
+    }
+  }
+
+  // ========== 切换时段 ==========
+  function switchPhase(phase) {
+    currentPhase = phase;
+    document.getElementById("btn-transition").classList.toggle("active", phase === "transition");
+    document.getElementById("btn-ready").classList.toggle("active", phase === "ready");
+
+    // 时段自动高亮 Tab
+    // transition → 复盘高亮；ready → 前瞻高亮
+    const autoTab = phase === "transition" ? "review" : "forward";
+    switchTab(autoTab);
+
+    // 任务卡片：过渡窗展开，就绪折叠
+    const card = document.getElementById("task-card");
+    if (phase === "transition") {
+      card.classList.remove("collapsed");
+    } else {
+      card.classList.add("collapsed");
+    }
+
+    renderAnchor();
+    renderTimeline();
+    renderPanels();
+  }
+
+  // ========== 切换 Tab ==========
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll("#tabbar .tab").forEach(t => {
+      t.classList.toggle("active", t.dataset.tab === tab);
+    });
+    document.querySelectorAll(".tab-panel").forEach(p => {
+      p.classList.toggle("active", p.id === "panel-" + tab);
+    });
+  }
+
+  // ========== 任务卡片折叠 ==========
+  function toggleTaskCard() {
+    document.getElementById("task-card").classList.toggle("collapsed");
+  }
+
+  // ========== 载入任务（模拟） ==========
+  function loadTask(name) {
+    alert(`触发对应视图 refetch：${name} 已完成，载入最新数据`);
+  }
+
+  // 初始化
+  renderAnchor();
+  renderTimeline();
+  renderPanels();
+</script>
+
+</body>
+</html>
