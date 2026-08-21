@@ -115,8 +115,8 @@ describe("TaskStatusCard (S092 T8)", () => {
     expect(screen.getByTestId("task-collapsed-summary")).toBeInTheDocument();
   });
 
-  // 4. 载入按钮：done 项有，点击触发 invalidateQueries
-  it("done 项有载入按钮，点击触发 invalidateQueries(['workflow'])", async () => {
+  // 4. 载入按钮：done 项有，点击触发全量 invalidateQueries（P2 修复：原 ['workflow'] 打不中视图数据）
+  it("done 项有载入按钮，点击触发 invalidateQueries（全量）", async () => {
     mockData.current = EIGHT_TASKS;
     const { spyInvalidate } = renderWithProviders(
       <TaskStatusCard stage="post_transition" isTradingDay={true} />,
@@ -129,10 +129,10 @@ describe("TaskStatusCard (S092 T8)", () => {
     expect(screen.queryByTestId("load-btn-6")).not.toBeInTheDocument();
     expect(screen.queryByTestId("load-btn-8")).not.toBeInTheDocument();
 
-    // 点击载入 → invalidateQueries 被调用
+    // 点击载入 → 全量 invalidateQueries 被调用
     fireEvent.click(loadBtn);
     await waitFor(() => {
-      expect(spyInvalidate).toHaveBeenCalledWith({ queryKey: ["workflow"] });
+      expect(spyInvalidate).toHaveBeenCalled();
     });
   });
 
