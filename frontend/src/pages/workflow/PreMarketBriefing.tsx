@@ -1,11 +1,11 @@
 import { useEffect, useCallback, useState } from "react";
 import { TrendingUp } from "lucide-react";
+import { Link } from "react-router-dom";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { StrategyGroupTabs } from "@/components/workflow/StrategyGroupTabs";
 import { CalendarFactorHint } from "@/components/workflow/CalendarFactorHint";
 import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
-import { usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
-import { useStrategyBacktest } from "@/lib/query/strategy";
+import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -17,14 +17,22 @@ import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
-import { useTransitionWorkflowState } from "@/lib/query";
+import { useTransitionWorkflowState, usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
+import { useStrategyBacktest } from "@/lib/query/strategy";
 import type { TransitionRequest, FactorResult, ScoredCandidate } from "@/lib/api";
 import type { FunnelLayer, PassedItem as FunnelPassedEntry } from "@/lib/candidates";
-import { Link, useSearchParams } from "react-router-dom";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
-import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
 import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
+
+// S092 R4：PreMarketBriefing 改受控 date prop（=dateTriplet.today）+ 接收 stage prop。
+// PremarketSelectionSection 移出至"前瞻"Tab；WeatherDecisionBar 从 PostMarketReview 移入。
+interface PreMarketBriefingProps {
+  /** 当日数据日（=dateTriplet.today），受控 prop */
+  date: string;
+  /** 时段（dateTriplet.stage），盘后标注"数据为今早盘前采集口径" */
+  stage: string;
+}
 
 function formatRelativeTime(generatedAt: string): string {
   try {
@@ -39,25 +47,27 @@ function formatRelativeTime(generatedAt: string): string {
   }
 }
 
-export default function PreMarketBriefing() {
-  // S048 R2：date 来自 URL query（Workflow 首页日期选择器写入；无参数=今日实时）
-  const [searchParams] = useSearchParams();
-  const date = searchParams.get("date") ?? undefined;
-  const isHistorical = !!date;
+export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProps) {
+  // S092 R4：date 来自 props（dateTriplet.today），不再从 URL ?date= 取。
+  // S092：盘后时段（stage=post_market）标注"数据为今早盘前采集口径"
+  const isPostMarket = stage === "post_market";
+  // S092：盘中时段（stage=intraday）显示盯盘链接卡片
+  const isIntraday = stage === "intraday";
 
   // S026: running 5s 轮询；S048 R8: staleTime 由 hook 按 date/status 动态处理
   const { data: briefing, isLoading, refetch } = usePreMarketBriefing(date, {
     refetchInterval: (query) => (query.state.data?.status === "running" ? 5_000 : false),
   });
   const refresh = usePreMarketRefresh();
+  // S092：isHistorical 语义变更——date 始终有值（容器传入 dateTriplet.today），
+  //   原 !!date 判断不再有效。改用 briefing.from_snapshot 判断"历史快照"（不可变）。
+  //   历史 done = from_snapshot && status==="done"（旧逻辑：date 非空且 done）。
+  const isHistorical = !!briefing?.from_snapshot;
   // S031 R18：候选诊断抽屉（点候选不整页跳，弹侧边抽屉）
   const [drawerCode, setDrawerCode] = useState<string | null>(null);
-  // B-lite：当前选中战法 tab（null=显示全量漏斗矩阵；非空=按战法过滤 scored_candidates）
-  // 战法流入口卡片通过 ?strategy= query param 指定初始选中战法
-  const [activeStrategy, setActiveStrategy] = useState<string | null>(
-    searchParams.get("strategy") ?? null,
-  );
   // S054：盘前录入建仓入口（候选矩阵「买入」按钮 → 弹 TransitionForm）
+  // B-lite：当前选中战法 tab（null=显示全量漏斗矩阵；非空=按战法过滤 scored_candidates）
+  const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
   const [buyEntry, setBuyEntry] = useState<{ code: string; name: string } | null>(null);
   const transition = useTransitionWorkflowState();
 
@@ -189,13 +199,31 @@ export default function PreMarketBriefing() {
         </GlassCard>
       )}
 
-      {/* S031 R23：done 纵向流——诚实标注 → 熔断/日历 → 策略组 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉（S072 去天气/情绪） */}
+      {/* S031 R23：done 纵向流——诚实标注 → 熔断/日历 → 策略组 → 因子漏斗 → 候选池漏斗 → 战法胜率对比 → 抽屉
+          S092 R4：盘后标注"数据为今早盘前采集口径" + WeatherDecisionBar 移入（从 PostMarketReview） */}
+
+      {/* S092 R4：盘后时段标注——数据为今早盘前采集口径，17:15 后可刷新 */}
+      {isPostMarket && (
+        <div className="mb-4 rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm text-primary">
+          ⓘ 数据为今早盘前采集口径，17:15 后可刷新为最终收盘口径。
+        </div>
+      )}
+
+      {/* S092 R21：WeatherDecisionBar 从 PostMarketReview 移入"当日"Tab（情绪天气决策语境） */}
+      {briefing.sentiment_context && (
+        <div className="mb-6">
+          <SectionHeader title="情绪天气决策" subtitle="S063 情绪天气 → 战法推荐/不推荐" />
+          <div className="mt-2">
+            <WeatherDecisionBar ctx={briefing.sentiment_context} />
+          </div>
+        </div>
+      )}
+
       {status === "done" && (
         <>
           {/* S072 §44 诚实标注层（forward verdict + 各信号无 edge，盘前决策前置可见） */}
           <HonestyBanner />
-          {/* S090 A：盘前选股（S071 breakout 弱信号 + 风控 + honest）——独立选股视角，date 感知 */}
-          <PremarketSelectionSection date={date} />
+          {/* S092：PremarketSelectionSection 移出至"前瞻"Tab，此处不再嵌入 */}
           {/* S079 P2 仓位闸 + 龙虎榜风控面板（R9-R10，spec §3.3） */}
           <P2RiskPanel briefing={briefing} />
           {/* S072 去天气决策条（STI/天气无 §44 edge）；保留熔断 + 日历（风控非情绪） */}
@@ -246,6 +274,26 @@ export default function PreMarketBriefing() {
 
       {briefing.as_of && status === "done" && (
         <p className="mt-4 text-xs text-muted-foreground/50">更新于 {formatRelativeTime(briefing.as_of)}</p>
+      )}
+
+      {/* S092 GR3：盘中时段显示盯盘链接卡片——跳转独立路由 /workflow/intraday（不进三 Tab） */}
+      {isIntraday && (
+        <div className="mb-6">
+          <Link to="/workflow/intraday" className="block">
+            <GlassCard className="flex cursor-pointer items-center gap-4 p-4 transition-all hover:ring-2 hover:ring-primary/30">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10">
+                <TrendingUp className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">实时盯盘监控</h3>
+                  <span className="text-muted-foreground/50">→</span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground/70">持仓 + 命中标的地盯盘 · 炸板预警 C1-C6 · 独立路由保留</p>
+              </div>
+            </GlassCard>
+          </Link>
+        </div>
       )}
 
       {/* S054 R4：盘前行为干预卡（展开不收起）——三桶算账 + 研判 + 深看链接 */}

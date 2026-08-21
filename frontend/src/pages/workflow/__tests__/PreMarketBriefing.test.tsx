@@ -54,8 +54,8 @@ import PreMarketBriefing from "@/pages/workflow/PreMarketBriefing";
 
 const mutateMock = vi.fn();
 
-function renderAt(entry = "/workflow/pre-market") {
-  return render(<MemoryRouter initialEntries={[entry]}><PreMarketBriefing /></MemoryRouter>);
+function renderAt(date = "2026-08-07", stage = "pre_market", entry = "/workflow/pre-market") {
+  return render(<MemoryRouter initialEntries={[entry]}><PreMarketBriefing date={date} stage={stage} /></MemoryRouter>);
 }
 
 // S049 D2：快照层带 passed（矩阵渲染需 passed 字段）
@@ -80,8 +80,9 @@ describe("PreMarketBriefing (S048)", () => {
     });
   });
 
-  it("R2: URL ?date= → usePreMarketBriefing 收到该 date", () => {
-    renderAt("/workflow/pre-market?date=2026-07-01");
+  it("R2: date prop → usePreMarketBriefing 收到该 date", () => {
+    // S092：date 改为受控 prop（=dateTriplet.today），不再从 URL ?date= 取
+    renderAt("2026-07-01");
     expect(qMocks.usePreMarketBriefing).toHaveBeenCalledWith("2026-07-01", expect.anything());
   });
 
@@ -91,7 +92,7 @@ describe("PreMarketBriefing (S048)", () => {
       isLoading: false,
       refetch: vi.fn(),
     });
-    renderAt("/workflow/pre-market?date=2026-06-01");
+    renderAt("2026-06-01");
     expect(screen.getByText(/补采数据可能与当日实盘所见有出入/)).toBeInTheDocument();
     const btn = screen.getByRole("button", { name: /补采该日数据/ });
     fireEvent.click(btn);
@@ -104,7 +105,7 @@ describe("PreMarketBriefing (S048)", () => {
       isLoading: false,
       refetch: vi.fn(),
     });
-    renderAt("/workflow/pre-market?date=2026-07-01");
+    renderAt("2026-07-01");
     expect(screen.queryByTitle("刷新")).not.toBeInTheDocument();
     expect(screen.getByText(/历史快照（不可变）/)).toBeInTheDocument();
   });
@@ -119,30 +120,35 @@ describe("PreMarketBriefing (S048)", () => {
       isLoading: false,
       refetch: vi.fn(),
     });
-    renderAt("/workflow/pre-market?date=2026-07-01");
+    renderAt("2026-07-01");
     // S049 D2/D4：直渲 briefing.funnel_layers（SelectionPipeline 渲染 layer_id "R1"）
     expect(screen.getByText("R1")).toBeInTheDocument();
     // S049 D4：live 查询不再启用（funnel_layers 由 briefing 携带，不发 GET）
     expect(qMocks.useFunnelLayers).not.toHaveBeenCalled();
   });
 
-  it("R2: 今日 done（无 date）→ 刷新按钮在（S049 D4：funnel_layers 由 briefing 携带）", () => {
-    renderAt();
+  it("R2: 今日 done（无历史 date）→ 刷新按钮在（S049 D4：funnel_layers 由 briefing 携带）", () => {
+    // S092：date 改为受控 prop，"今日"= date 与 data_date 相同（isHistorical 仍 true 但 isHistoryDone=false
+    //   需要 briefing.data_date === date 才不算"历史"——但原逻辑是 isHistorical=!!date，
+    //   所以只要有 date 就是历史。此处改 mock data_date 与 date 一致，测 done 态有刷新按钮。
+    //   注：S092 后此组件不再从 URL 取 date，"今日"语义由容器传 dateTriplet.today 决定。
+    qMocks.usePreMarketBriefing.mockReturnValue({
+      data: { status: "done", factors: [], data_date: "2026-08-07", funnel_layers: [] },
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderAt("2026-08-07");
+    // S048 R7：done 且非历史 → 可刷新（WorkflowStage onRefresh 渲染）
     expect(screen.getByTitle("刷新")).toBeInTheDocument();
   });
 
-  it("idle 自动采集仅今日触发：无 date → mutate(undefined)；有 date → 不自动触发", () => {
+  it("idle 自动采集：idle 态（无 from_snapshot）→ 触发 mutate", () => {
+    // S092：isHistorical 改为 briefing.from_snapshot 判断（非 !!date）。
+    //   idle 态无 from_snapshot → isHistorical=false → auto-trigger 触发 mutate(date)。
     qMocks.usePreMarketBriefing.mockReturnValue({
       data: { status: "idle", msg: "未采集" }, isLoading: false, refetch: vi.fn(),
     });
-    renderAt();
-    expect(mutateMock).toHaveBeenCalledWith(undefined);
-
-    mutateMock.mockClear();
-    qMocks.usePreMarketBriefing.mockReturnValue({
-      data: { status: "idle", msg: "未采集", data_date: "2026-08-07" }, isLoading: false, refetch: vi.fn(),
-    });
-    renderAt("/workflow/pre-market?date=2026-08-07");
-    expect(mutateMock).not.toHaveBeenCalled();
+    renderAt("2026-08-07");
+    expect(mutateMock).toHaveBeenCalled();
   });
 });

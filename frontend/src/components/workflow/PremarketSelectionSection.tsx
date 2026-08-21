@@ -9,16 +9,23 @@ import { cn } from "@/lib/utils";
 import { RefreshCw } from "lucide-react";
 
 interface Props {
-  /** T 目标日（YYYY-MM-DD）。undefined → 今日（实时预测）。 */
+  /** T 目标日（YYYY-MM-DD）。由三 Tab 容器传入 dateTriplet.forward，不臆造今日。 */
   date?: string;
   topN?: number;
   minScore?: number;
 }
 
 export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: Props) {
-  // date undefined → 今日（premarket-selection 端点 date required）
-  const targetDate = date ?? new Date().toISOString().slice(0, 10);
-  const { data, isLoading, error, refetch } = usePremarketSelection(targetDate, topN, minScore);
+  // S092 R15 时区 bug 修复：删除 new Date().toISOString() fallback，
+  // date 由容器（dateTriplet.forward）注入；undefined → 加载态，不臆造日期
+  if (!date) {
+    return (
+      <GlassCard className="p-4">
+        <p className="text-sm text-muted-foreground">等待 dateTriplet 加载…</p>
+      </GlassCard>
+    );
+  }
+  const { data, isLoading, error, refetch } = usePremarketSelection(date, topN, minScore);
 
   if (isLoading) {
     return (

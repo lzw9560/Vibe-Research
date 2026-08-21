@@ -12,7 +12,9 @@ import { ScenarioCards } from "@/components/intraday/ScenarioCards";
 import { T1ProjectionPanel } from "@/components/intraday/T1ProjectionPanel";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { AskAiButton } from "@/components/ui/AskAiButton";
+import { useDateTriplet } from "@/lib/query";
 import {
   useIntradayLatest,
   useIntradayHoldings,
@@ -67,6 +69,9 @@ function buildIntradayContext(
 }
 
 export default function IntradayMonitor() {
+  // S092 R15 时区 bug 修复：CalendarFactorHint 的 date 不再用 new Date().toISOString()，
+  // 改从 dateTriplet.today 取（后端北京时区锚定）。
+  const { data: triplet } = useDateTriplet();
   const latestQ = useIntradayLatest();
   const holdingsQ = useIntradayHoldings();
   const scenariosQ = useIntradayScenarios();
@@ -88,9 +93,14 @@ export default function IntradayMonitor() {
         <MarketKillSwitchBanner />
       </div>
 
-      {/* S066 §6 盘中日历因子标注（周五/节前降仓提示） */}
+      {/* S066 §6 盘中日历因子标注（周五/节前降仓提示）。
+          S092 R15：date 从 dateTriplet.today 取，不用 new Date().toISOString() */}
       <div className="mb-4">
-        <CalendarFactorHint date={new Date().toISOString().slice(0, 10)} />
+        {triplet?.today ? (
+          <CalendarFactorHint date={triplet.today} />
+        ) : (
+          <Skeleton className="h-8 w-full" />
+        )}
       </div>
 
       {/* 状态机看板 */}

@@ -1,6 +1,8 @@
 // S054 R3：盘后复盘去桩重写——三问（推了什么/买了什么/漏了什么）+ 昨日漏单结算 + 结算入口。
 // 沿用 WorkflowStage 壳；调 useDailyWinReview + deriveAssessmentTips 研判嵌入。
 // Q7：bought 占位「待判定」，不展示 live 临时票根；Q5：三问页嵌方向建议。
+// S092：改受控 date prop（=dateTriplet.review）+ 删内部 date picker + 修 toISOString bug；
+//       WeatherDecisionBar 移至"当日"Tab（PreMarketBriefing）；过渡窗渐进填充占位横幅。
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { WorkflowStage } from "./components/WorkflowStage";
@@ -11,9 +13,8 @@ import { Button } from "@/components/ui/Button";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
-import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { ForwardTestPanel } from "@/components/workflow/ForwardTestPanel";
-import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState, usePreMarketBriefing } from "@/lib/query";
+import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState } from "@/lib/query";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { TransitionRequest } from "@/lib/api";
 
@@ -40,12 +41,19 @@ function fmtSigned(v: number | null | undefined): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
-export default function PostMarketReview() {
-  const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate] = useState(today);
+interface PostMarketReviewProps {
+  /** 复盘数据日（=dateTriplet.review），受控 prop */
+  date: string;
+  /** 复盘是否已独立推进到 T（15:00 后 true），dateTriplet.review_advanced */
+  reviewAdvanced: boolean;
+  /** 时段（dateTriplet.stage），用于判断过渡窗渐进填充占位 */
+  stage: string;
+}
+
+export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMarketReviewProps) {
+  // S092 R15：date 来自 props（dateTriplet.review），不再用 new Date().toISOString()。
+  // S092：删除内部 date picker + useState date，日期权威收敛到容器级。
   const { data: review, isLoading } = useDailyWinReview(date);
-  // S063 T27：读盘前简报取 sentiment_context（T+1 准备面板复用 T-1 天气）
-  const { data: briefing } = usePreMarketBriefing(date);
   // 研判用 shadow-comparison window=28（daily-review 无 shadow 数据时兜底）
   const { data: shadow } = useShadowComparison(28);
   const transition = useTransitionWorkflowState();
@@ -53,25 +61,25 @@ export default function PostMarketReview() {
 
   const tips = shadow ? deriveAssessmentTips(shadow) : [];
 
+  // 过渡窗渐进填充：15:00-17:15 且复盘已推进到 T，但 cron 数据未全产出
+  const isTransition = stage === "post_transition" && reviewAdvanced;
+
   const handleEntrySubmit = (req: TransitionRequest) => {
     transition.mutate(req);
     setEntryCode(null);
   };
 
   // 问 AI 上下文——注入盘后复盘真实数据
-  const pmrCtx = briefing?.sentiment_context;
   const askAiContext = [
     `当前页面：盘后复盘`,
     `日期：${review?.date ?? date ?? "未取得"}`,
+    `时段：${stage}（${isTransition ? "过渡窗渐进填充" : "完整"}）`,
     review?.no_snapshot
       ? `三问：无盘前快照`
       : `三问：推了${review?.pushed.length ?? 0}只（${(review?.pushed ?? []).map((p) => p.code).join("、") || "无"}）/买了${review?.bought.length ?? 0}只（${(review?.bought ?? []).map((b) => b.code).join("、") || "无"}）/漏了${review?.missed.length ?? 0}只（${(review?.missed ?? []).map((m) => m.code).join("、") || "无"}）`,
     review?.prev_day_missed
       ? `昨日漏单：${review.prev_day_missed.items.length}只${review.prev_day_missed.summary ? `（胜率${review.prev_day_missed.summary.win_rate}%/均收益${review.prev_day_missed.summary.avg_return}）` : ""}`
       : `昨日漏单：未取得`,
-    pmrCtx
-      ? `情绪天气：${pmrCtx.weather_state}，STI=${pmrCtx.sti_score ?? "--"}（${pmrCtx.sti_phase ?? "--"}）`
-      : `情绪天气：未取得`,
     shadow
       ? `影子对照（${shadow.window_days}日）：跟随${shadow.follow.n}笔胜率${shadow.follow.win_rate ?? "--"}%/感觉${shadow.feeling.n}笔/漏单${shadow.missed.n}笔，独立一致率${shadow.independence.agreement_rate ?? "--"}%`
       : `影子对照：未取得`,
@@ -84,32 +92,23 @@ export default function PostMarketReview() {
         <PipelineProgressBar current="post" />
       </div>
 
-      {/* S063 T27：当日 STI 结算条（T vs T-1 天气对比） */}
-      {briefing?.sentiment_context && (
-        <div className="mb-4">
-          <SectionHeader title="当日情绪结算" subtitle="T-1 天气硬标准（次日硬标准已生成）" />
-          <div className="mt-2">
-            <WeatherDecisionBar ctx={briefing.sentiment_context} />
-          </div>
+      {/* S092 R3a：过渡窗渐进填充占位横幅。
+          reviewAdvanced=true && stage=post_transition 时，数据在渐进产出中，
+          未产出区显示提示横幅（简化版：横幅提示，不逐数据区改）。 */}
+      {isTransition && (
+        <div className="mb-4 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-warning">
+          ⏳ 过渡窗数据采集中（15:00-17:15）——实时数据先看，未产出区域（基因得分/STI/漏斗候选等）待盘后 cron 渐进产出。任务状态卡片可见采集进度。
         </div>
       )}
+
+      {/* S092：WeatherDecisionBar 移至"当日"Tab（PreMarketBriefing），此处删除 */}
 
       {/* S066 §0e 前向测试命中率 + 衰减监控（盘后追踪推荐 vs 实际） */}
       <div className="mb-6">
         <ForwardTestPanel />
       </div>
 
-      {/* 日期选择器 */}
-      <div className="mb-4 flex items-center gap-2">
-        <label className="text-xs text-muted-foreground">日期</label>
-        <input
-          type="date"
-          value={date}
-          max={today}
-          onChange={(e) => setDate(e.target.value || today)}
-          className="rounded border border-border/50 bg-background px-2 py-1 text-sm"
-        />
-      </div>
+      {/* S092：删除内部 date picker，日期权威收敛到容器级（dateTriplet.review） */}
 
       {isLoading || !review ? (
         <div className="space-y-4">

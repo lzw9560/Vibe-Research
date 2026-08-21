@@ -27,7 +27,7 @@ import PostMarketReview from "../PostMarketReview";
 function renderPage() {
   return render(
     <MemoryRouter>
-      <PostMarketReview />
+      <PostMarketReview date="2026-08-11" reviewAdvanced={true} stage="post_market" />
     </MemoryRouter>,
   );
 }

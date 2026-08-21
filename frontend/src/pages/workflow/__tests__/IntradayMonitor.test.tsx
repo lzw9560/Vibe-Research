@@ -11,6 +11,7 @@ const qMocks = vi.hoisted(() => ({
   useIntradayScenarios: vi.fn(),
   useIntradayT1Projection: vi.fn(),
   useWorkflowStates: vi.fn(),
+  useDateTriplet: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
@@ -20,6 +21,8 @@ vi.mock("@/lib/query", () => ({
   useIntradayScenarios: qMocks.useIntradayScenarios,
   useIntradayT1Projection: qMocks.useIntradayT1Projection,
   useWorkflowStates: qMocks.useWorkflowStates,
+  // S092：IntradayMonitor 调 useDateTriplet 取 CalendarFactorHint date
+  useDateTriplet: qMocks.useDateTriplet,
 }));
 
 // S066 MarketKillSwitchBanner + CalendarFactorHint 的 hook mock（返 undefined → 不渲染）
@@ -52,6 +55,8 @@ describe("IntradayMonitor (S063)", () => {
     qMocks.useIntradayScenarios.mockReturnValue({ data: null, isLoading: false });
     qMocks.useIntradayT1Projection.mockReturnValue({ data: null, isLoading: false });
     qMocks.useWorkflowStates.mockReturnValue({ data: null, isLoading: false });
+    // S092：useDateTriplet mock（返空数据 → CalendarFactorHint 不渲染 / 显 Skeleton）
+    qMocks.useDateTriplet.mockReturnValue({ data: undefined });
   });
 
   it("AC12：四层纵向布局标题渲染", () => {
