@@ -4,11 +4,45 @@ Scheduled tasks router.
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
+from datetime import date, datetime
 import asyncio
+
+from vr_paths import BEIJING_TZ
 
 import scheduled_tasks as st
 
 router = APIRouter(tags=["scheduled_tasks"])
+
+
+# ---- today_status 推算（S092 R18：后端算，不前端算）----
+
+def _compute_today_status(task: Any) -> str:
+    """根据 last_run_at/last_run_status 推算今日完成状态。
+
+    返回值：running / done / error / pending
+
+    last_run_at 是 naive ISO 字符串（无时区后缀，假设服务器本地时区=北京，GR5 标注）。
+    今日北京日期与 last_run 日期同为 naive date 比较。
+    """
+    status = task.last_run_status
+    if status == "running":
+        return "running"
+
+    today_bj = datetime.now(BEIJING_TZ).date()
+    last_run_date = None
+    if task.last_run_at:
+        try:
+            parsed = datetime.fromisoformat(task.last_run_at)
+            last_run_date = parsed.date()
+        except ValueError:
+            last_run_date = None
+
+    if last_run_date == today_bj and status == "success":
+        return "done"
+    if last_run_date == today_bj and status == "failed":
+        return "error"
+    # last_run_date != today_bj 或 last_run_at 为 None 或解析失败 → pending
+    return "pending"
 
 
 # ---- Models ----
@@ -55,6 +89,7 @@ async def list_scheduled_tasks() -> Dict[str, Any]:
                 "notify_on_failure": t.notify_on_failure,
                 "last_run_at": t.last_run_at,
                 "last_run_status": t.last_run_status,
+                "today_status": _compute_today_status(t),
                 "created_at": t.created_at,
                 "updated_at": t.updated_at,
             }
@@ -105,6 +140,7 @@ async def get_scheduled_task(task_id: int) -> Dict[str, Any]:
             "notify_on_failure": task.notify_on_failure,
             "last_run_at": task.last_run_at,
             "last_run_status": task.last_run_status,
+            "today_status": _compute_today_status(task),
             "created_at": task.created_at,
             "updated_at": task.updated_at,
         }
