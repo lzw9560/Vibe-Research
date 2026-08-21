@@ -17,7 +17,7 @@ import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlo
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { ForwardTestPanel } from "@/components/workflow/ForwardTestPanel";
-import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState } from "@/lib/query";
+import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState, useDateTriplet } from "@/lib/query";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { TransitionRequest } from "@/lib/api";
 
@@ -45,18 +45,23 @@ function fmtSigned(v: number | null | undefined): string {
 }
 
 interface PostMarketReviewProps {
-  /** 复盘数据日（=dateTriplet.review），受控 prop */
-  date: string;
+  /** 复盘数据日（=dateTriplet.review），受控 prop；深链 /workflow/post-market 时缺省→dateTriplet 兜底 */
+  date?: string;
   /** 复盘是否已独立推进到 T（15:00 后 true），dateTriplet.review_advanced */
-  reviewAdvanced: boolean;
+  reviewAdvanced?: boolean;
   /** 时段（dateTriplet.stage），用于判断过渡窗渐进填充占位 */
-  stage: string;
+  stage?: string;
 }
 
 export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMarketReviewProps) {
+  // P9 修复：深链 /workflow/post-market 时 props 缺省→用 dateTriplet 兜底
+  const { data: triplet } = useDateTriplet();
+  const _date = date ?? triplet?.review ?? "";
+  const _reviewAdvanced = reviewAdvanced ?? triplet?.review_advanced ?? false;
+  const _stage = stage ?? triplet?.stage ?? "post_market";
   // S092 R15：date 来自 props（dateTriplet.review），不再用 new Date().toISOString()。
   // S092：删除内部 date picker + useState date，日期权威收敛到容器级。
-  const { data: review, isLoading } = useDailyWinReview(date);
+  const { data: review, isLoading } = useDailyWinReview(_date);
   // 研判用 shadow-comparison window=28（daily-review 无 shadow 数据时兜底）
   const { data: shadow } = useShadowComparison(28);
   const transition = useTransitionWorkflowState();
@@ -65,7 +70,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
   const tips = shadow ? deriveAssessmentTips(shadow) : [];
 
   // 过渡窗渐进填充：15:00-17:15 且复盘已推进到 T，但 cron 数据未全产出
-  const isTransition = stage === "post_transition" && reviewAdvanced;
+  const isTransition = _stage === "post_transition" && _reviewAdvanced;
 
   const handleEntrySubmit = (req: TransitionRequest) => {
     transition.mutate(req);
@@ -75,8 +80,8 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
   // 问 AI 上下文——注入盘后复盘真实数据
   const askAiContext = [
     `当前页面：盘后复盘`,
-    `日期：${review?.date ?? date ?? "未取得"}`,
-    `时段：${stage}（${isTransition ? "过渡窗渐进填充" : "完整"}）`,
+    `日期：${review?.date ?? _date ?? "未取得"}`,
+    `时段：${_stage}（${isTransition ? "过渡窗渐进填充" : "完整"}）`,
     review?.no_snapshot
       ? `三问：无盘前快照`
       : `三问：推了${review?.pushed.length ?? 0}只（${(review?.pushed ?? []).map((p) => p.code).join("、") || "无"}）/买了${review?.bought.length ?? 0}只（${(review?.bought ?? []).map((b) => b.code).join("、") || "无"}）/漏了${review?.missed.length ?? 0}只（${(review?.missed ?? []).map((m) => m.code).join("、") || "无"}）`,
@@ -198,10 +203,10 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
               {entryCode && (
                 <div className="mt-3">
                   <p className="mb-2 text-xs text-muted-foreground">
-                    录入 {date} 新建仓（target=holding）
+                    录入 {_date} 新建仓（target=holding）
                   </p>
                   <ManualEntryForm
-                    date={date}
+                    date={_date}
                     submitting={transition.isPending}
                     onSubmit={handleEntrySubmit}
                     onCancel={() => setEntryCode(null)}
@@ -279,7 +284,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
                       <span className="font-mono">{b.code}</span>
                       <span className="ml-2">{b.name}</span>
                       <Link
-                        to={`/workflow/intraday?code=${b.code}&date=${date}`}
+                        to={`/workflow/intraday?code=${b.code}&date=${_date}`}
                         className="ml-2 text-primary hover:underline"
                       >
                         去结算 →
@@ -335,8 +340,8 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
 
           {/* S092 内嵌补全：盘后入口卡片（每日复盘/拓扑展示，原 S087 盘后 Tab EntryCard） */}
           <CollapsibleFold title="更多盘后工具" subtitle="每日复盘 / 拓扑展示">
-            <EntryCard to="/daily-review" title="每日复盘" subtitle="涨停 / 炸板 / 板块热度" icon={Clock} date={date} />
-            <EntryCard to="/workflow/topology" title="拓扑展示" subtitle="关系网 · 漏斗流程 · 连板梯队" icon={Share2} date={date} />
+            <EntryCard to="/daily-review" title="每日复盘" subtitle="涨停 / 炸板 / 板块热度" icon={Clock} date={_date} />
+            <EntryCard to="/workflow/topology" title="拓扑展示" subtitle="关系网 · 漏斗流程 · 连板梯队" icon={Share2} date={_date} />
           </CollapsibleFold>
         </>
       )}

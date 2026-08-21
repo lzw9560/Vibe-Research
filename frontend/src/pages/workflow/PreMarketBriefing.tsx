@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from "react";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Zap, Activity, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { WorkflowStage } from "./components/WorkflowStage";
 import { StrategyGroupTabs } from "@/components/workflow/StrategyGroupTabs";
@@ -19,9 +19,10 @@ import { StrategyFilter } from "@/components/ui/StrategyFilter";
 import { WinRateComparePanel } from "@/components/ui/WinRateComparePanel";
 import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
 import { AskAiButton } from "@/components/ui/AskAiButton";
+import { EntryCard } from "@/components/workflow/EntryCard";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import { deriveAssessmentTips } from "@/lib/winrate-assessment";
-import { useTransitionWorkflowState, usePreMarketBriefing, usePreMarketRefresh, useShadowComparison } from "@/lib/query";
+import { useTransitionWorkflowState, usePreMarketBriefing, usePreMarketRefresh, useShadowComparison, useDateTriplet } from "@/lib/query";
 import { useStrategyBacktest } from "@/lib/query/strategy";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -33,11 +34,12 @@ import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
 
 // S092 R4：PreMarketBriefing 改受控 date prop（=dateTriplet.today）+ 接收 stage prop。
 // PremarketSelectionSection 移出至"前瞻"Tab；WeatherDecisionBar 从 PostMarketReview 移入。
+// P9 修复：深链 /workflow/pre-market 时 props 缺省→用 dateTriplet 兜底（同 PostMarketReview 模式）
 interface PreMarketBriefingProps {
-  /** 当日数据日（=dateTriplet.today），受控 prop */
-  date: string;
-  /** 时段（dateTriplet.stage），盘后标注"数据为今早盘前采集口径" */
-  stage: string;
+  /** 当日数据日（=dateTriplet.today），受控 prop；深链缺省→dateTriplet 兜底 */
+  date?: string;
+  /** 时段（dateTriplet.stage），盘后标注"数据为今早盘前采集口径"；深链缺省→dateTriplet 兜底 */
+  stage?: string;
 }
 
 function formatRelativeTime(generatedAt: string): string {
@@ -54,14 +56,18 @@ function formatRelativeTime(generatedAt: string): string {
 }
 
 export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProps) {
+  // P9 修复：深链 /workflow/pre-market 时 props 缺省→用 dateTriplet 兜底（同 PostMarketReview 模式）
+  const { data: triplet } = useDateTriplet();
+  const _date = date ?? triplet?.today ?? "";
+  const _stage = stage ?? triplet?.stage ?? "pre_market";
   // S092 R4：date 来自 props（dateTriplet.today），不再从 URL ?date= 取。
   // S092：盘后时段（stage=post_market）标注"数据为今早盘前采集口径"
-  const isPostMarket = stage === "post_market";
+  const isPostMarket = _stage === "post_market";
   // S092：盘中时段（stage=intraday）显示盯盘链接卡片
-  const isIntraday = stage === "intraday";
+  const isIntraday = _stage === "intraday";
 
   // S026: running 5s 轮询；S048 R8: staleTime 由 hook 按 date/status 动态处理
-  const { data: briefing, isLoading, refetch } = usePreMarketBriefing(date, {
+  const { data: briefing, isLoading, refetch } = usePreMarketBriefing(_date, {
     refetchInterval: (query) => (query.state.data?.status === "running" ? 5_000 : false),
   });
   const refresh = usePreMarketRefresh();
@@ -79,7 +85,7 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
 
   // S092 内嵌补全：advisory 仓位推荐摘要（原 S087 盘前 tab ③ 仓位建议 StepSection 内嵌）
   const { data: advisory } = useQuery({
-    queryKey: ["advisory-summary", date ?? "latest"],
+    queryKey: ["advisory-summary", _date ?? "latest"],
     queryFn: () => api.advisorySummary(5),
     staleTime: 5 * 60_000,
     retry: false,
@@ -114,9 +120,9 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
 
   const handleRefresh = useCallback(() => {
     if (!canRefresh) return;
-    if (status !== "running") refresh.mutate(date);
+    if (status !== "running") refresh.mutate(_date);
     refetch();
-  }, [canRefresh, status, refresh, refetch, date]);
+  }, [canRefresh, status, refresh, refetch, _date]);
 
   if (!briefing) return null;
 
@@ -127,7 +133,7 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
   const pmCtx = briefing.sentiment_context;
   const askAiContext = [
     `当前页面：盘前简报`,
-    `日期：${briefing.data_date ?? date ?? "未取得"}`,
+    `日期：${briefing.data_date ?? _date ?? "未取得"}`,
     // S072 去噪：选股页不注入天气/情绪（STI 无 §44 edge + 天气路由 lift 0.956<1）；保留熔断/战法/漏斗
     pmCtx?.fuse_state
       ? `熔断：${pmCtx.fuse_state.fuse_state}，允许战法：${(pmCtx.allowed_styles ?? []).join("、") || "无"}，禁用：${(pmCtx.forbidden_styles ?? []).join("、") || "无"}`
@@ -201,13 +207,13 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
       {/* S048 R7：历史无快照 → 显式补采入口（不自动触发；外部源历史数据会变，标注出入） */}
       {status === "no_snapshot" && (
         <GlassCard className="space-y-3 p-6">
-          <p className="text-sm text-muted-foreground">{date} 无采集快照。</p>
+          <p className="text-sm text-muted-foreground">{_date} 无采集快照。</p>
           <p className="text-xs text-warning">补采数据可能与当日实盘所见有出入（外部源历史数据会变动）。</p>
           <Button
             variant="primary"
             size="sm"
             disabled={refresh.isPending}
-            onClick={() => refresh.mutate(date)}
+            onClick={() => refresh.mutate(_date)}
           >
             {refresh.isPending ? "补采中…" : "补采该日数据"}
           </Button>
@@ -258,6 +264,8 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
               </div>
             </GlassCard>
           )}
+          {/* P4 修复：advisory 仓位详情入口（S087 EntryCard 在 S092 中丢失，此处补全） */}
+          <EntryCard to="/advisory" title="仓位详情" subtitle="PositionAdvisor 推荐/自选/持仓三场景" icon={BarChart3} date={_date} />
           {/* S072 去天气决策条（STI/天气无 §44 edge）；保留熔断 + 日历（风控非情绪） */}
           <div className="mb-6 space-y-3">
             {/* S066 §16.4 市场级熔断横幅（触发时才渲染） */}
@@ -301,7 +309,7 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
 
           {/* ③' 战法匹配矩阵——短线 pipeline 核心：票×战法命中（R23 归当日，数据源 scored_candidates=今日 briefing） */}
           <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分 strategy_score）" defaultOpen={true}>
-            <StrategyMatchMatrix date={date} />
+            <StrategyMatchMatrix date={_date} />
           </CollapsibleFold>
 
           {/* ④ 战法胜率对比（真实回测 vs 合成估算） */}
@@ -313,23 +321,13 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
         <p className="mt-4 text-xs text-muted-foreground/50">更新于 {formatRelativeTime(briefing.as_of)}</p>
       )}
 
-      {/* S092 GR3：盘中时段显示盯盘链接卡片——跳转独立路由 /workflow/intraday（不进三 Tab） */}
+      {/* S092 GR3：盘中时段显示盯盘链接卡片——跳转独立路由 /workflow/intraday（不进三 Tab）
+          P4 修复：扩展为三个 EntryCard（alerts/coach/advisory 入口在 S092 中丢失，此处补全） */}
       {isIntraday && (
-        <div className="mb-6">
-          <Link to="/workflow/intraday" className="block">
-            <GlassCard className="flex cursor-pointer items-center gap-4 p-4 transition-all hover:ring-2 hover:ring-primary/30">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10">
-                <TrendingUp className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold">实时盯盘监控</h3>
-                  <span className="text-muted-foreground/50">→</span>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground/70">持仓 + 命中标的地盯盘 · 炸板预警 C1-C6 · 独立路由保留</p>
-              </div>
-            </GlassCard>
-          </Link>
+        <div className="mb-6 space-y-2">
+          <EntryCard to="/workflow/intraday" title="实时盯盘" subtitle="持仓+命中标的盯盘·炸板预警C1-C6" icon={TrendingUp} date={_date} />
+          <EntryCard to="/workflow/alerts" title="炸板预警" subtitle="炸板规则C1-C6全市场统一" icon={Zap} date={_date} />
+          <EntryCard to="/workflow/coach" title="盯盘教练" subtitle="时刻表+条件清单+attention_mode" icon={Activity} date={_date} />
         </div>
       )}
 
@@ -342,8 +340,8 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
       {/* S092 内嵌补全：T-1 数据 + 语境（原 S087 独立 Tab，现折叠内嵌）
           P5 修复：移出 status==="done" 门控——回看无快照日时仍可达（含暴风雨预测） */}
       <CollapsibleFold title="T-1 数据 · 语境" subtitle="盘前输入检查 + 决策语境" defaultOpen={false}>
-        <T1Tab date={date} />
-        <ContextTab date={date} />
+        <T1Tab date={_date} />
+        <ContextTab date={_date} />
       </CollapsibleFold>
 
       {/* ⑤ 候选诊断抽屉——点候选弹侧边卡，不整页跳；Esc/点遮罩关（S033：传 date 供状态卡/徽标） */}

@@ -31,8 +31,8 @@ export interface UseMarketClockOptions {
   onFAdvance?: () => void;
 }
 
-// delay 上限 12h——防 next_*_at 是异常脏数据（如 0 或未来一年）触发即时或超长定时器。
-const MAX_DELAY_MS = 12 * 3600 * 1000;
+// delay 上限 25h——覆盖跨夜挂机到次日 15:00/17:15（P8 修复：原 12h 致连续会话次日定时器不重建）
+const MAX_DELAY_MS = 25 * 3600 * 1000;
 
 export function useMarketClock(opts: UseMarketClockOptions): void {
   const qc = useQueryClient();

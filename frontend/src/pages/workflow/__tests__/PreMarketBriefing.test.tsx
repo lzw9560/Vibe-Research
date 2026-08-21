@@ -15,6 +15,7 @@ const qMocks = vi.hoisted(() => ({
   useFunnelStrategies: vi.fn(),
   useCalendarFactor: vi.fn(),
   useMarketKillSwitch: vi.fn(),
+  useDateTriplet: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
@@ -22,6 +23,7 @@ vi.mock("@/lib/query", () => ({
   usePreMarketRefresh: qMocks.usePreMarketRefresh,
   useShadowComparison: qMocks.useShadowComparison,
   useTransitionWorkflowState: qMocks.useTransitionWorkflowState,
+  useDateTriplet: qMocks.useDateTriplet,
 }));
 vi.mock("@/lib/query/topology", () => ({ useFunnelLayers: qMocks.useFunnelLayers }));
 vi.mock("@/lib/query/strategy", () => ({
@@ -82,6 +84,7 @@ const snapshotLayer = {
 describe("PreMarketBriefing (S048)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    qMocks.useDateTriplet.mockReturnValue({ data: undefined });
     qMocks.usePreMarketRefresh.mockReturnValue({ mutate: mutateMock, isPending: false });
     qMocks.useFunnelLayers.mockReturnValue({ data: undefined, isLoading: false });
     qMocks.useStrategyBacktest.mockReturnValue({ data: [], isLoading: false });

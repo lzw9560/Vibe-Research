@@ -8,6 +8,7 @@ const qMock = vi.hoisted(() => ({
   useShadowComparison: vi.fn(),
   useTransitionWorkflowState: vi.fn(),
   usePreMarketBriefing: vi.fn(),
+  useDateTriplet: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
@@ -15,6 +16,7 @@ vi.mock("@/lib/query", () => ({
   useShadowComparison: qMock.useShadowComparison,
   useTransitionWorkflowState: qMock.useTransitionWorkflowState,
   usePreMarketBriefing: qMock.usePreMarketBriefing,
+  useDateTriplet: qMock.useDateTriplet,
 }));
 
 // S066 ForwardTestPanel 的 hook mock（返 undefined → 不渲染面板数据）
@@ -35,6 +37,7 @@ function renderPage() {
 describe("PostMarketReview S054", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    qMock.useDateTriplet.mockReturnValue({ data: undefined });
     qMock.useShadowComparison.mockReturnValue({ data: null });
     qMock.useTransitionWorkflowState.mockReturnValue({ mutate: vi.fn(), isPending: false });
     qMock.usePreMarketBriefing.mockReturnValue({ data: null });

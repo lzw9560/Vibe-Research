@@ -13,9 +13,7 @@ import { useScheduledTasksStatus, type ScheduledTaskStatus } from "@/lib/query/s
 interface TaskStatusCardProps {
   /** dateTriplet.stage：决定展开/折叠 + 是否轮询 */
   stage: string;
-  /** 是否交易日：非交易日保持盘后就绪态（不显示空状态） */
-  // isTradingDay 保留接口位，当前未使用——非交易日不再显示空状态
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  /** 是否交易日：非交易日显示"盘后采集任务休眠" */
   isTradingDay?: boolean;
 }
 
@@ -75,7 +73,7 @@ function sortByCronTime(tasks: ScheduledTaskStatus[]): ScheduledTaskStatus[] {
   });
 }
 
-export function TaskStatusCard({ stage }: TaskStatusCardProps) {
+export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
   // 过渡窗启用查询 + 60s 轮询（hook 内部门控）
   const isTransition = stage === "post_transition";
   const { data: tasks } = useScheduledTasksStatus(isTransition);
@@ -255,10 +253,13 @@ export function TaskStatusCard({ stage }: TaskStatusCardProps) {
         </div>
       )}
 
-      {/* 折叠态（非过渡窗）：摘要条，无时间线 */}
-      {!isTransition && total > 0 && (
+      {/* 折叠态（非过渡窗）：摘要条，无时间线
+          P10 修复：非交易日显示"盘后采集任务休眠"文案（design-notes §3.2） */}
+      {!isTransition && (isTradingDay === false || total > 0) && (
         <div className="mt-2 text-[12px] text-muted-foreground" data-testid="task-collapsed-summary">
-          盘后采集 {firstTaskTime ?? ""} 开始 · 已完成 {doneCount}/{total}
+          {isTradingDay === false
+            ? "非交易日 · 盘后采集任务休眠"
+            : `盘后采集 ${firstTaskTime ?? ""} 开始 · 已完成 ${doneCount}/${total}`}
         </div>
       )}
     </GlassCard>
