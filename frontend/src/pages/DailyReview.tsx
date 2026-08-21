@@ -28,7 +28,7 @@ import {
 
 // A股红涨绿跌。全球市场（美股/港股指数）**也沿用红涨**——与整个看板及东财等中国平台一致，
 // 对中国用户最不易看错（Simon 2026-07-05 确认；非国际绿涨惯例，是有意选择，勿改）。
-const fmt = (v: number) => v.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+const fmt = (v: number | null) => (v == null ? "—" : v.toLocaleString("zh-CN", { maximumFractionDigits: 2 }));
 const yi = (v: number | null) => (v == null ? "—" : `${fmt(v / 1e8)} 亿`); // 元 → 亿
 
 // 统一把 hook 抛出的 error 折成文案：ApiError 取其 message，其它兜底。
