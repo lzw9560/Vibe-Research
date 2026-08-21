@@ -67,6 +67,8 @@ class TestScheduledTasksImports(unittest.TestCase):
             "first_board_quote_probe",  # S076：盘中多源行情探查
             "zt_history_snapshot",      # S078：涨停历史 snapshot 数据地基
             "derived_precompute",       # S084 C1：盘后 derived 异步预采集
+            "monthly_vacuum",           # S089 D2：月度 VACUUM + wal_checkpoint
+            "kline_refresh",            # S090 B：baostock_kline_cache 日更
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

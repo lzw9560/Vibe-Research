@@ -153,7 +153,9 @@ class TestComputeStrategyScore:
         from strategies import strategy_funnel_registry as sfr
         monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
         monkeypatch.setattr(sfr, "_WEIGHTS_PATH", Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json")
-        factors = {"factor_seal_rate": 90, "factor_rebound_rate": 80, "factor_red_rate": 70}
+        # factors 来自 gene_scores 用中文键名（见 compute_strategy_score docstring）；
+        # 英文权重键经 _FACTOR_NAME_MAP 映射到中文键查值，故测试须传中文键。
+        factors = {"封板率": 90, "炸板后溢价": 80, "红盘率": 70}
         score, breakdown = compute_strategy_score(factors, "limitup")
         assert score > 0
         assert "factor_seal_rate" in breakdown
@@ -167,7 +169,8 @@ class TestComputeStrategyScore:
         real_weights = Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json"
         monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
         monkeypatch.setattr(sfr, "_WEIGHTS_PATH", real_weights)
-        factors = {"factor_seal_rate": 90, "factor_freq_score": 20}
+        # 中文键名（gene_scores 口径）；英文权重键经 _FACTOR_NAME_MAP 映射查值。
+        factors = {"封板率": 90, "涨停频次": 20}
         score, breakdown = compute_strategy_score(factors, "storm_reversal")
         # seal 90×0.6=54, (100-20)×0.4=32, total=86
         assert score == 86.0
@@ -179,7 +182,8 @@ class TestComputeStrategyScore:
         real_weights = Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json"
         monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
         monkeypatch.setattr(sfr, "_WEIGHTS_PATH", real_weights)
-        factors = {"factor_seal_rate": 90, "factor_freq_score": 20}
+        # 中文键名（gene_scores 口径）
+        factors = {"封板率": 90, "涨停频次": 20}
         _, breakdown = compute_strategy_score(factors, "storm_reversal")
         # freq 反向：100-20=80, 80×0.4=32
         assert breakdown["factor_freq_score"] == 32.0

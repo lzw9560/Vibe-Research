@@ -41,6 +41,17 @@ def _reset_cache(monkeypatch, status="idle", run_id=None, factors=None, data_dat
     )
 
 
+class _FunnelLayer:
+    """测试辅助：_collect 直接调 run_funnel（S049 C4 后不走 _build_funnel_layers），
+    需 mock result.layers 含 model_dump 的对象，否则 .layers 访问抛 AttributeError
+    被 except 捕获 → funnel_layers=[]。"""
+    def __init__(self, layer_id="R1"):
+        self.layer_id = layer_id
+
+    def model_dump(self, mode=None):
+        return {"layer_id": self.layer_id}
+
+
 @pytest.fixture(autouse=True)
 def _clean_snapshot_dir():
     """每个测试前后清空快照目录——VR_DATA_DIR 是全 session 共享临时目录，
@@ -64,7 +75,9 @@ def test_collect_done_writes_snapshot_file(monkeypatch):
     # S048：funnel_layers 构建（真跑会碰外部源）与快照落盘均隔离
     monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [{"layer_id": "R1"}])
     # S049 C4：final_candidates 诊断卡构建隔离（真跑会碰外部源）
-    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[]))
+    # _collect 直接调 funnel_mod.run_funnel 并访问 .layers/.final_candidates（S049 C4 后
+    # 不走 _build_funnel_layers），mock result 必须含 layers 属性 + 可 model_dump 的层对象。
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[], layers=[_FunnelLayer("R1")]))
     monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
     _reset_cache(monkeypatch, status="running", run_id="rid1")
@@ -96,7 +109,7 @@ def test_collect_today_not_backfill(monkeypatch):
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
     monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d, ctx=None: {})
     monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [])
-    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[]))
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[], layers=[]))
     monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
     _reset_cache(monkeypatch, status="running", run_id="rid2")
@@ -119,7 +132,7 @@ def test_collect_snapshot_write_failure_still_done(monkeypatch):
     monkeypatch.setattr(wf.factor_registry, "register_default_factors", lambda: None)
     monkeypatch.setattr(wf, "_fetch_market_emotion", lambda d, ctx=None: {})
     monkeypatch.setattr(wf, "_build_funnel_layers", lambda d, ctx=None: [])
-    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[]))
+    monkeypatch.setattr(wf.funnel_mod, "run_funnel", lambda stage, date, cfg, ctx=None: types.SimpleNamespace(final_candidates=[], layers=[]))
     monkeypatch.setattr(wf.funnel_mod, "clear_funnel_cache", lambda date=None: None)
     monkeypatch.setattr(wf, "last_trading_date_str", lambda: "2026-08-07")
     monkeypatch.setattr(wf, "_save_snapshot", boom)

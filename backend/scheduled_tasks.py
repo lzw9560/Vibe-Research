@@ -1469,6 +1469,28 @@ _manager = ScheduledTaskManager()
 
 
 # ============================================================================
+# 模块级 executor 包装（向后兼容：旧测试/调用方按 st._execute_* 访问）
+# ============================================================================
+# S011-A R2 重构将 executor 方法从模块级函数迁入 TaskExecutor 类，部分旧测试与
+# 调用方仍按 st._execute_xxx(ctx, payload) 访问（ctx 占位，executor 内部不用）。
+# 此处提供向后兼容包装：转调默认 TaskExecutor 实例的对应方法。
+# executor 方法不自持久状态（DB 操作走模块级 _manager），每次 new 实例无副作用。
+def _execute_s066_validation_checkpoint(ctx, payload):
+    """§44 60 天复验检查点（模块级兼容包装；ctx 占位忽略）。"""
+    return TaskExecutor()._execute_s066_validation_checkpoint(payload)
+
+
+def _execute_forward_test_daily(ctx, payload):
+    """S069 R1 每日 forward_test picks 记录（模块级兼容包装；ctx 占位忽略）。"""
+    return TaskExecutor()._execute_forward_test_daily(payload)
+
+
+def _execute_forward_test_t1_settle(ctx, payload):
+    """S069 R2 T+1 收益回填（模块级兼容包装；ctx 占位忽略）。"""
+    return TaskExecutor()._execute_forward_test_t1_settle(payload)
+
+
+# ============================================================================
 # Cron 表达式匹配
 # ============================================================================
 

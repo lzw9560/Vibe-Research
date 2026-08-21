@@ -29,6 +29,8 @@ def _run(coro):
 # S004 新增 candidate_funnel_precompute（盘后漏斗预计算）。
 # S075 新增 first_board_filter（盘后首板流筛选+评分）。
 # S084 新增 derived_precompute（盘后 derived 异步预采集）。
+# S089 新增 monthly_vacuum（月度 VACUUM + wal_checkpoint）。
+# S090 新增 kline_refresh（baostock_kline_cache 日更）。
 _EXPECTED_TASK_TYPES = {
     "daily_data_refresh",
     "daily_review_notify",
@@ -48,6 +50,8 @@ _EXPECTED_TASK_TYPES = {
     "first_board_quote_probe",
     "zt_history_snapshot",
     "derived_precompute",
+    "monthly_vacuum",
+    "kline_refresh",
 }
 
 
