@@ -1,5 +1,6 @@
-// S092 T15：Workflow 三 Tab 容器测试。
-// mock @/lib/query（useDateTriplet/usePreMarketRefresh）、@/lib/useMarketClock、
+// S093 T14：适配前瞻 Tab 重构——ForwardTabSection 调 usePreMarketBriefing + useCrossValidationGroups
+// + 新组件 imports（CandidateFunnelEmbed/CrossValidationBadge/P2RiskPanel/WeatherDecisionBar/T1Tab/ContextTab/FactorSection）。
+// mock @/lib/query（useDateTriplet/usePreMarketRefresh/usePreMarketBriefing）、@/lib/useMarketClock、
 // @/components/workflow/TaskStatusCard + 三个视图组件（避免 lazy import 复杂度）。
 // MemoryRouter 驱动 useSearchParams（?view= + ?date=）。
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -11,20 +12,53 @@ const qMocks = vi.hoisted(() => ({
   useDateTriplet: vi.fn(),
   usePreMarketRefresh: vi.fn(),
   usePreMarketDates: vi.fn(),
+  usePreMarketBriefing: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
   useDateTriplet: qMocks.useDateTriplet,
   usePreMarketRefresh: qMocks.usePreMarketRefresh,
   usePreMarketDates: qMocks.usePreMarketDates,
+  usePreMarketBriefing: qMocks.usePreMarketBriefing,
 }));
 
-// mock useQuery（registry/backtest 战法战绩表）+ request（避免真请求）
+// S093 T14：ForwardTabSection 调 useCrossValidationGroups，mock 避免真 hook 链
+vi.mock("@/lib/query/useCrossValidation", () => ({
+  useCrossValidationGroups: () => ({ dual: [], funnelOnly: [], breakoutOnly: [], isLoading: false }),
+}));
+
+// mock useQuery（advisory 摘要等）+ request（避免真请求）
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: undefined }),
 }));
 vi.mock("@/lib/api/client", () => ({
   request: vi.fn(),
+}));
+
+// S093 T14：mock 前瞻 Tab 新组件 imports（避免复杂内部链）
+vi.mock("@/components/workflow/CandidateFunnelEmbed", () => ({
+  default: () => <div data-testid="candidate-funnel-embed" />,
+}));
+vi.mock("@/components/workflow/CrossValidationBadge", () => ({
+  CrossValidationBadge: () => null,
+}));
+vi.mock("@/components/workflow/P2RiskPanel", () => ({
+  P2RiskPanel: () => null,
+}));
+vi.mock("@/components/workflow/WeatherDecisionBar", () => ({
+  WeatherDecisionBar: () => null,
+}));
+vi.mock("@/components/workflow/T1Tab", () => ({
+  T1Tab: () => null,
+}));
+vi.mock("@/components/workflow/ContextTab", () => ({
+  ContextTab: () => null,
+}));
+vi.mock("@/components/workflow/FactorSection", () => ({
+  FactorSection: () => null,
+}));
+vi.mock("@/components/ui/SectionHeader", () => ({
+  SectionHeader: () => null,
 }));
 
 // useMarketClock mock（避免定时器副作用）
@@ -121,6 +155,8 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet() });
     qMocks.usePreMarketRefresh.mockReturnValue({ mutate: vi.fn(), isPending: false });
     qMocks.usePreMarketDates.mockReturnValue({ data: undefined });
+    // S093 T14：ForwardTabSection 调 usePreMarketBriefing，mock 返空数据避免真请求
+    qMocks.usePreMarketBriefing.mockReturnValue({ data: undefined, isLoading: false });
   });
 
   // ---- AC1: 三 Tab 切换 ----
@@ -180,6 +216,16 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
 
   it("stage=intraday → 默认高亮当日 Tab", async () => {
     qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet({ stage: "intraday" }) });
+    renderAt();
+    await waitFor(() => {
+      const todayBtn = getTabButton("当日");
+      expect(todayBtn?.className).toContain("text-primary");
+    });
+  });
+
+  // S093 R3：pre_open → 当日
+  it("stage=pre_open → 默认高亮当日 Tab", async () => {
+    qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet({ stage: "pre_open" }) });
     renderAt();
     await waitFor(() => {
       const todayBtn = getTabButton("当日");
@@ -267,7 +313,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
   it("过渡窗锚条时段标签显示'数据采集中'", () => {
     qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet({ stage: "post_transition" }) });
     renderAt();
-    expect(screen.getByText("数据采集中 · 15:00-17:15")).toBeInTheDocument();
+    expect(screen.getByText("数据采集中 · 15:30-17:15")).toBeInTheDocument();
   });
 
   it("盘后就绪锚条时段标签显示'数据就绪'", () => {
@@ -282,6 +328,19 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     expect(card).toBeInTheDocument();
     expect(card.getAttribute("data-stage")).toBe("post_market");
     expect(card.getAttribute("data-trading")).toBe("true");
+  });
+
+  // ---- S093 T21：公共区战法入口 EntryCard ----
+  it("公共区渲染战法管理入口卡片（锚条下方常驻）", () => {
+    renderAt();
+    expect(screen.getByText("战法管理")).toBeInTheDocument();
+    expect(screen.getByText("战绩 · 前向测试 · 阈值配置")).toBeInTheDocument();
+  });
+
+  it("战法入口卡片链接指向 /strategy", () => {
+    renderAt();
+    const link = screen.getByText("战法管理").closest("a");
+    expect(link).toHaveAttribute("href", "/strategy");
   });
 
   // ---- dateTriplet 加载态 ----

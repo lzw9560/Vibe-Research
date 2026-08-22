@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""飞书推送 —— 盘前/盘中/盘后推送（节流 + 去重 + 教育性免责）。"""
+"""[DEPRECATED] 飞书推送 —— 盘前/盘中/盘后推送（节流 + 去重 + 教育性免责）。
+
+S093 后通知统一走 ``notification.notification_service.NotificationService.send()``，
+本模块不再被任何新代码引用。保留供历史调用方兼容，不删文件。
+webhook 收敛到 ``config.feishu_webhook_url``（环境变量 ``FEISHU_WEBHOOK_URL``），
+旧环境变量 ``VR_FEISHU_WEBHOOK`` 已废弃。
+"""
 
 from __future__ import annotations
 

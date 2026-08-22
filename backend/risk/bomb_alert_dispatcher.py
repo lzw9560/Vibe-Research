@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""S055 T4：炸板预警去重冷却 + 历史持久化 + 通知接线。
+"""S055 T4 + S093 S2a：炸板预警去重冷却 + 历史持久化 + 飞书通知接线。
 
 - 同股同规则 10 分钟冷却去重（BOMB_ALERT_COOLDOWN_MINUTES，可配）
-- 预警分级黄/红
+- 预警分级 yellow/red/info/medium
 - 预警历史落 bomb_alert_history 表（依据链 + data_status）
-- 通知通道（默认关，BOMB_ALERT_NOTIFY_ENABLE 开启）
+- 通知通道：S093 扩展为接 NotificationService.send() 推飞书卡片（含操作建议+风险提醒）
+- S093 新增 process_market_alerts 处理市场级规则 C8(情绪恶化)/C9(连板断裂)
 """
 
 from __future__ import annotations
@@ -17,10 +18,18 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from config import default_config, SEAL_INTRADAY_DB_PATH
-from risk.bomb_alert_rules import RuleCheckResult
+from risk.bomb_alert_rules import RuleCheckResult, check_market_rules, RISK_DISCLAIMER
 from vr_paths import last_trading_date_str
 
 _logger = logging.getLogger(__name__)
+
+# 预警级别中文映射（飞书卡片展示用）
+_LEVEL_DISPLAY: dict[str, str] = {
+    "yellow": "黄色",
+    "red": "红色",
+    "info": "INFO",
+    "medium": "MEDIUM",
+}
 
 _DB_PATH = SEAL_INTRADAY_DB_PATH
 _DB_LOCK = threading.Lock()
@@ -111,26 +120,77 @@ def get_active_alerts(date: str | None = None) -> list[dict[str, Any]]:
         conn.close()
 
 
+def _build_feishu_card(
+    code: str, name: str, result: RuleCheckResult,
+) -> str:
+    """构建飞书卡片 Markdown 内容（含操作建议 + 风险提醒）。
+
+    历史统计特征标注："参考值，非执行指令；市场有风险"。
+    """
+    alert = result.alert
+    if not alert:
+        return ""
+    level_text = _LEVEL_DISPLAY.get(alert.alert_level, alert.alert_level.upper())
+    rec = alert.recommendation or "参考"
+    lines = [
+        f"## 🚨 炸板预警 {level_text}：{name}({code})",
+        "",
+        alert.condition,
+        "",
+        f"**操作建议**：{rec}（参考值，非执行指令）",
+        "",
+        f"---",
+        f"⚠️ {RISK_DISCLAIMER}",
+    ]
+    return "\n".join(lines)
+
+
 def notify_if_enabled(
     code: str, name: str, result: RuleCheckResult,
 ) -> bool:
-    """通知通道接线（默认关）。返回是否发送。"""
+    """通知通道接线（默认关）。
+
+    S093 扩展：规则触发时接 NotificationService.send() 推飞书卡片
+    （含操作建议 + 风险提醒标注）。通知失败不阻塞落库主流程，只 warning log。
+    """
     if not getattr(default_config, "BOMB_ALERT_NOTIFY_ENABLE", False):
         return False
     if not result.alert:
         return False
-    # 通知通道走 config.notification（复用既有推送链路）
-    try:
-        from config.notification import build_notification_message
-        msg = build_notification_message(
-            title=f"炸板预警 {result.alert.alert_level.upper()}：{name}({code})",
-            content=result.alert.condition,
-        )
-        _logger.info("[bomb_alert] 通知发送：%s", msg)
-        return True
-    except Exception as exc:
-        _logger.warning("[bomb_alert] 通知发送失败: %s", exc)
+
+    content = _build_feishu_card(code, name, result)
+    if not content:
         return False
+
+    try:
+        # 延迟 import 避免循环依赖
+        from notification.notification_service import NotificationService
+        service = NotificationService()
+        ok = service.send(content)
+        if ok:
+            _logger.info("[bomb_alert] 飞书通知已发送：%s %s(%s)", result.rule_id, name, code)
+        else:
+            _logger.warning("[bomb_alert] 飞书通知发送未成功（渠道可能未配置）：%s %s(%s)",
+                            result.rule_id, name, code)
+        return ok
+    except Exception as exc:
+        _logger.warning("[bomb_alert] 通知发送失败（不阻塞落库）：%s %s(%s) %s",
+                        result.rule_id, name, code, exc)
+        return False
+
+
+def process_market_alerts(
+    market_snapshot: dict[str, Any] | None,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """处理市场级规则（C8/C9）：跑规则 + 去重 + 落库 + 通知。
+
+    market_snapshot 为 intraday_sentiment 快照（含 zt_count/zb_count/ladder/max_boards）。
+    返回活跃预警列表。
+    """
+    now = now or datetime.now()
+    results = check_market_rules(market_snapshot, now)
+    return process_alerts("MARKET", "市场", results, now)
 
 
 def process_alerts(

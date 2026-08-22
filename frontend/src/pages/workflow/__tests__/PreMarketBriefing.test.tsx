@@ -9,21 +9,25 @@ const qMocks = vi.hoisted(() => ({
   usePreMarketRefresh: vi.fn(),
   useFunnelLayers: vi.fn(),
   useStrategyBacktest: vi.fn(),
-  useShadowComparison: vi.fn(),
   useTransitionWorkflowState: vi.fn(),
   useWeatherStrategyMap: vi.fn(),
   useFunnelStrategies: vi.fn(),
   useCalendarFactor: vi.fn(),
   useMarketKillSwitch: vi.fn(),
   useDateTriplet: vi.fn(),
+  // S093 T17：新增 hooks
+  useWorkflowStates: vi.fn(),
+  useIntradayLatest: vi.fn(),
 }));
 
 vi.mock("@/lib/query", () => ({
   usePreMarketBriefing: qMocks.usePreMarketBriefing,
   usePreMarketRefresh: qMocks.usePreMarketRefresh,
-  useShadowComparison: qMocks.useShadowComparison,
   useTransitionWorkflowState: qMocks.useTransitionWorkflowState,
   useDateTriplet: qMocks.useDateTriplet,
+  // S093 T17：新增 hooks
+  useWorkflowStates: qMocks.useWorkflowStates,
+  useIntradayLatest: qMocks.useIntradayLatest,
 }));
 vi.mock("@/lib/query/topology", () => ({ useFunnelLayers: qMocks.useFunnelLayers }));
 vi.mock("@/lib/query/strategy", () => ({
@@ -46,6 +50,12 @@ vi.mock("@/lib/query/premarket", () => ({
   usePremarketSelection: () => ({ isLoading: true }),
 }));
 vi.mock("@/pages/workflow/CandidateDetail", () => ({ CandidateDetailPanel: () => null }));
+// S093 T17：mock WatchlistBoard（避免内部 useCrossValidationGroups/useQuote/useWorkflowStates 链）
+vi.mock("@/components/workflow/WatchlistBoard", () => ({
+  WatchlistBoard: ({ F, forward, date }: { F: string; forward: string; date: string }) => (
+    <div data-testid="watchlist-board" data-F={F} data-forward={forward} data-date={date}>WatchlistBoard</div>
+  ),
+}));
 vi.mock("@/components/workflow/StrategyMatchMatrix", () => ({
   StrategyMatchMatrix: ({ date }: { date: string }) => (
     <div data-testid="strategy-match-matrix" data-date={date}>StrategyMatchMatrix</div>
@@ -88,8 +98,10 @@ describe("PreMarketBriefing (S048)", () => {
     qMocks.usePreMarketRefresh.mockReturnValue({ mutate: mutateMock, isPending: false });
     qMocks.useFunnelLayers.mockReturnValue({ data: undefined, isLoading: false });
     qMocks.useStrategyBacktest.mockReturnValue({ data: [], isLoading: false });
-    qMocks.useShadowComparison.mockReturnValue({ data: undefined, isLoading: false });
     qMocks.useTransitionWorkflowState.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    // S093 T17：新增 hooks mock
+    qMocks.useWorkflowStates.mockReturnValue({ data: undefined });
+    qMocks.useIntradayLatest.mockReturnValue({ data: undefined });
     qMocks.usePreMarketBriefing.mockReturnValue({
       data: { status: "done", factors: [], data_date: "2026-08-07", funnel_layers: [] },
       isLoading: false,
@@ -127,7 +139,10 @@ describe("PreMarketBriefing (S048)", () => {
     expect(screen.getByText(/历史快照（不可变）/)).toBeInTheDocument();
   });
 
-  it("R9: from_snapshot → 直渲 briefing.funnel_layers，live 漏斗查询禁用（S049 D4：不发 GET）", () => {
+  it("R9: from_snapshot → done 状态显盯盘执行台（S093 T17：WatchlistBoard 接管）", () => {
+    qMocks.useDateTriplet.mockReturnValue({
+      data: { F: "2026-07-01", today: "2026-07-01", forward: "2026-07-02", stage: "post_market" },
+    });
     qMocks.usePreMarketBriefing.mockReturnValue({
       data: {
         status: "done", from_snapshot: true, data_date: "2026-07-01",
@@ -138,9 +153,9 @@ describe("PreMarketBriefing (S048)", () => {
       refetch: vi.fn(),
     });
     renderAt("2026-07-01");
-    // S049 D2/D4：直渲 briefing.funnel_layers（SelectionPipeline 渲染 layer_id "R1"）
-    expect(screen.getByText("R1")).toBeInTheDocument();
-    // S049 D4：live 查询不再启用（funnel_layers 由 briefing 携带，不发 GET）
+    // S093 T17：done 状态显 WatchlistBoard（替代旧空壳占位）
+    expect(screen.getByTestId("watchlist-board")).toBeInTheDocument();
+    // live 漏斗查询不再启用（CandidateFunnelEmbed 已迁出，不发 GET）
     expect(qMocks.useFunnelLayers).not.toHaveBeenCalled();
   });
 
@@ -167,5 +182,28 @@ describe("PreMarketBriefing (S048)", () => {
     });
     renderAt("2026-08-07");
     expect(mutateMock).toHaveBeenCalled();
+  });
+
+  // ---- S093 T17 R8：盯盘入口全天可见（不门控时段） ----
+  it("R8: 盯盘入口在非盘中时段也可见（post_market → EntryCards 常驻）", () => {
+    qMocks.usePreMarketBriefing.mockReturnValue({
+      data: { status: "done", factors: [], data_date: "2026-08-07", funnel_layers: [] },
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderAt("2026-08-07", "post_market");
+    expect(screen.getByText("实时盯盘")).toBeInTheDocument();
+    expect(screen.getByText("炸板预警")).toBeInTheDocument();
+    expect(screen.getByText("盯盘教练")).toBeInTheDocument();
+  });
+
+  it("R8: 盯盘入口在 pre_market 时段也可见", () => {
+    qMocks.usePreMarketBriefing.mockReturnValue({
+      data: { status: "done", factors: [], data_date: "2026-08-07", funnel_layers: [] },
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderAt("2026-08-07", "pre_market");
+    expect(screen.getByText("实时盯盘")).toBeInTheDocument();
   });
 });

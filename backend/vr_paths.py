@@ -125,10 +125,10 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
     （``trading_workflow.py:25`` 踩坑记录）。
 
     - **F**（交易日锚）：交易日 17:15 后 F=当日；其余 F=上一交易日。
-    - **review**（复盘数据日）：交易日 15:00 后独立推进到当日
-      （``review_advanced=True``），15:00 前 review=F。
-    - **today**（当日数据日）：盘前/盘中=F 的下一交易日（今早简报/实时盯盘）；
-      盘后/非交易日=F（简报快照，R4 降级——不臆造 F+1 简报）。
+    - **review**（复盘数据日）：交易日 15:30 后独立推进到当日
+      （``review_advanced=True``），15:30 前 review=F（S093：盘中延长到 15:30）。
+    - **today**（当日数据日）：盘前/集合竞价(pre_open)/盘中=F 的下一交易日
+      （今早简报/实时盯盘）；盘后/非交易日=F（简报快照，R4 降级——不臆造 F+1 简报）。
     - **forward**（前瞻数据日）：= F 的下一交易日（非日历 +1，周五→周一）。
 
     手动 ``date_override`` 覆盖 F（R7），但 stage 仍按当前时刻算、定时器不推进
@@ -140,17 +140,20 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
     now_time = now.time()  # naive time（北京时区内 naive 比较足够，不跨时区）
     is_today_trading = is_trading_day(today_bj)
 
-    # 1. stage 判定（非交易日保持盘后就绪态，不显示空状态——用户仍可复盘/看简报/看选股）
+    # 1. stage 判定（S093 R1：pre_open 新增 + intraday 延到 15:30 + post_transition 从 15:30）
+    #    非交易日保持盘后就绪态，不显示空状态——用户仍可复盘/看简报/看选股
     if not is_today_trading:
         stage = "post_market"  # 非交易日 = 上一交易日盘后就绪态
+    elif now_time < _time(9, 0):
+        stage = "pre_market"       # 17:15→09:00 跨夜就绪（今日盘后=次日盘前）
     elif now_time < _time(9, 30):
-        stage = "pre_market"
-    elif now_time < _time(15, 0):
-        stage = "intraday"
+        stage = "pre_open"         # 09:00-09:30 集合竞价/开盘准备（S093 新增）
+    elif now_time < _time(15, 30):
+        stage = "intraday"         # 09:30-15:30 盘中交易（最新交易规则延迟到 15:30）
     elif now_time < _time(17, 15):
-        stage = "post_transition"
+        stage = "post_transition"  # 15:30-17:15 数据采集渐进
     else:
-        stage = "post_market"
+        stage = "post_market"      # 17:15→ 跨夜就绪（= 次日 pre_market）
 
     # R8a：过渡窗内手动选"今天"(== today_bj 且交易日) → 复用自动态
     # （选今天等于没选；防前瞻拿到 T+1 用陈旧 kline 算错）
@@ -166,11 +169,11 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
     else:
         F = prev_trading_date(today_bj)  # 上一交易日 = T-1
 
-    # 3. review 独立推进（15:00 收盘后立即推进到 T，已有实时数据先看）
+    # 3. review 独立推进（15:30 收盘后立即推进到 T，已有实时数据先看）
     if is_manual:
         review_advanced = False  # 手动模式定时器不推进
         review = F
-    elif is_today_trading and now_time >= _time(15, 0):
+    elif is_today_trading and now_time >= _time(15, 30):
         review_advanced = True
         review = last_trading_date(today_bj)  # 今日交易日 = T
     else:
@@ -180,7 +183,7 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
     # 4. today（当日数据日）—— R3 表格 + R4：盘后/非交易日当日=F 简报快照
     if is_manual:
         today = F  # 当日=F 简报快照
-    elif is_today_trading and stage in ("pre_market", "intraday"):
+    elif is_today_trading and stage in ("pre_market", "pre_open", "intraday"):
         today = next_trading_date(F)  # F 的下一交易日 = T（今早简报/实时盯盘）
     else:
         today = F  # 盘后/非交易日：简报快照（R4 降级）
@@ -188,7 +191,7 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
     # 5. forward（前瞻数据日）= F 的下一交易日（周五→周一，非日历 +1）
     forward = next_trading_date(F)
 
-    # 6. next_*_at：下次 15:00 / 17:15 推进的 epoch 时间戳（秒）
+    # 6. next_*_at：下次 15:30 / 17:15 推进的 epoch 时间戳（秒）
     #    前端用 next_*_at - Date.now() 算 setTimeout，零本地时区判断（R14）
     def _next_advance_epoch(target_hour: int, target_minute: int) -> float:
         target_t = _time(target_hour, target_minute)
@@ -198,7 +201,7 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
             d = next_trading_date(today_bj)  # 下一交易日该时刻
         return _dt.combine(d, target_t, tzinfo=BEIJING_TZ).timestamp()
 
-    next_review_advance_at = _next_advance_epoch(15, 0)
+    next_review_advance_at = _next_advance_epoch(15, 30)
     next_f_advance_at = _next_advance_epoch(17, 15)
 
     return {

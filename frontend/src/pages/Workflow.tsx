@@ -5,7 +5,7 @@
 // useMarketClock 接入双定时器（15:00 复盘推进 + 17:15 F 推进）。
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw, Activity, Layers } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -15,11 +15,21 @@ import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
 import { EntryCard } from "@/components/workflow/EntryCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { useQuery } from "@tanstack/react-query";
-import { request } from "@/lib/api/client";
-import { useDateTriplet, usePreMarketRefresh, usePreMarketDates } from "@/lib/query";
+import { api } from "@/lib/api";
+import { useDateTriplet, usePreMarketRefresh, usePreMarketDates, usePreMarketBriefing } from "@/lib/query";
+import { useCrossValidationGroups } from "@/lib/query/useCrossValidation";
 import { useMarketClock } from "@/lib/useMarketClock";
 import { TaskStatusCard } from "@/components/workflow/TaskStatusCard";
 import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
+import CandidateFunnelEmbed from "@/components/workflow/CandidateFunnelEmbed";
+import { StrategyMatchMatrix } from "@/components/workflow/StrategyMatchMatrix";
+import { CrossValidationBadge } from "@/components/workflow/CrossValidationBadge";
+import { P2RiskPanel } from "@/components/workflow/P2RiskPanel";
+import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
+import { T1Tab } from "@/components/workflow/T1Tab";
+import { ContextTab } from "@/components/workflow/ContextTab";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { FactorSection } from "@/components/workflow/FactorSection";
 import type { DateTripletResponse } from "@/lib/api";
 
 // 三视图组件懒加载（已有路由也懒加载，此处统一）
@@ -34,12 +44,13 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "forward", label: "前瞻" },
 ];
 
-/** stage → 自动高亮 Tab（R12）：
- *  pre_market → 前瞻 | intraday → 当日 | post_transition → 复盘
+/** stage → 自动高亮 Tab（S093 R3：加 pre_open→当日）：
+ *  pre_market → 前瞻 | pre_open → 当日 | intraday → 当日 | post_transition → 复盘
  *  post_market → 前瞻 | non_trading → 复盘 */
 function stageToDefaultTab(stage: string): TabKey {
   switch (stage) {
     case "pre_market": return "forward";
+    case "pre_open": return "today";
     case "intraday": return "today";
     case "post_transition": return "review";
     case "post_market": return "forward";
@@ -48,15 +59,17 @@ function stageToDefaultTab(stage: string): TabKey {
   }
 }
 
-/** stage → 锚条时段标签文本 + 颜色 */
+/** stage → 锚条时段标签文本 + 颜色（S093 R3：加 pre_open + post_transition 改 15:30） */
 function stageLabel(stage: string): { text: string; color: string } {
   switch (stage) {
     case "pre_market":
       return { text: "盘前", color: "text-muted-foreground" };
+    case "pre_open":
+      return { text: "集合竞价 · 09:00-09:30", color: "text-muted-foreground" };
     case "intraday":
       return { text: "盘中", color: "text-muted-foreground" };
     case "post_transition":
-      return { text: "数据采集中 · 15:00-17:15", color: "text-warning" };
+      return { text: "数据采集中 · 15:30-17:15", color: "text-warning" };
     case "post_market":
       return { text: "数据就绪 · 17:15 后", color: "text-success" };
     case "non_trading":
@@ -167,17 +180,8 @@ export default function Workflow() {
   // S092 内嵌补全：历史快照日期 chips（原 S087 usePreMarketDates）
   const { data: datesData } = usePreMarketDates();
 
-  // S092 内嵌补全：战法战绩表（原 S087 战法 Tab 内联）——registry + backtest 两 query
-  const { data: registry } = useQuery({
-    queryKey: ["strategy-registry"],
-    queryFn: () => request<{ data: Array<{ code: string; name: string; max_hold_days: number; entry_condition: string }> }>(`/strategy/registry`),
-    staleTime: 5 * 60_000,
-  });
-  const { data: backtest } = useQuery({
-    queryKey: ["strategy-backtest"],
-    queryFn: () => request<{ data: Array<{ strategy_code: string; strategy: string; win_rate: number; avg_return: number; sample_size: number }> }>(`/strategy/backtest?lookback_days=60`),
-    staleTime: 5 * 60_000,
-  });
+  // S093 R13：战法战绩表移出三 Tab → /strategy 独立路由（S5 承接）。
+  // 此处不再内联 registry/backtest query——删战法战绩折叠区。
 
   const handleDateChange = (value: string) => {
     if (value) {
@@ -256,6 +260,13 @@ export default function Workflow() {
         isTradingDay={triplet?.is_trading_day ?? false}
       />
 
+      {/* S093 T21：战法入口卡片（公共区常驻，锚条下方）——战法战绩移出三 Tab 后的入口 */}
+      <EntryCard
+        to="/strategy"
+        title="战法管理"
+        subtitle="战绩 · 前向测试 · 阈值配置"
+      />
+
       {/* S092 内嵌补全：历史快照日期 chips（原 S087 usePreMarketDates） */}
       {datesData?.dates && datesData.dates.length > 0 && (
         <GlassCard className="p-3">
@@ -317,66 +328,158 @@ export default function Workflow() {
           <PreMarketBriefing date={triplet.today} stage={triplet.stage} />
         )}
         {view === "forward" && triplet && (
-          <>
-            <PremarketSelectionSection date={triplet.forward} />
-            {/* 战法战绩 + 参数 + 前向测试入口（原 S087 战法 Tab，R23 归复盘/前瞻） */}
-            <CollapsibleFold title="战法战绩 · 参数 · 前向测试" subtitle="12 战法胜率/均收益/持有日 + 阈值配置入口" defaultOpen={false}>
-              <GlassCard className="p-2">
-                <h3 className="mb-2 px-2 font-semibold">战法战绩 + 参数</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border/40 text-muted-foreground/70">
-                        <th className="px-2 py-1 text-left">战法</th>
-                        <th className="px-2 py-1 text-right">胜率</th>
-                        <th className="px-2 py-1 text-right">均收益%</th>
-                        <th className="px-2 py-1 text-right">样本</th>
-                        <th className="px-2 py-1 text-right">持有日</th>
-                        <th className="px-2 py-1 text-left">入场条件</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(registry?.data ?? []).map((r) => {
-                        const bt = (backtest?.data ?? []).find((b) => b.strategy_code === r.code);
-                        return (
-                          <tr key={r.code} className="border-b border-border/20 hover:bg-muted/10">
-                            <td className="px-2 py-1">{r.name}</td>
-                            <td className="px-2 py-1 text-right font-mono">
-                              {bt ? `${(bt.win_rate * 100).toFixed(1)}%` : "—"}
-                            </td>
-                            <td className="px-2 py-1 text-right font-mono">{bt ? bt.avg_return : "—"}</td>
-                            <td className="px-2 py-1 text-right">{bt?.sample_size ?? "—"}</td>
-                            <td className="px-2 py-1 text-right">{r.max_hold_days}</td>
-                            <td className="max-w-[16rem] truncate px-2 py-1 text-muted-foreground/70">
-                              {r.entry_condition}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </GlassCard>
-              <EntryCard
-                to="/strategy/funnel/forward-test"
-                title="前向测试 §44"
-                subtitle="60 日复验 lift/winrate/validation_status"
-                icon={Activity}
-                date={urlDate}
-              />
-              <EntryCard
-                to="/strategy/funnel/config"
-                title="战法阈值配置"
-                subtitle="S081 阈值 + funnel config（可改）"
-                icon={Layers}
-                date={urlDate}
-              />
-            </CollapsibleFold>
-          </>
+          <ForwardTabSection F={triplet.F} forward={triplet.forward} urlDate={urlDate} />
         )}
       </Suspense>
 
       <Disclaimer compact />
     </div>
+  );
+}
+
+// ===========================================================================
+// S093 T14：前瞻 Tab pipeline（spec §3.B R4）+ 辅助折叠区（R5）。
+// ① 漏斗选股（CandidateFunnelEmbed，date=F）
+// ② 战法匹配（StrategyMatchMatrix，date=F）
+// ③ breakout 弱信号（PremarketSelectionSection，date=forward）
+// ④ 交叉验证徽章（useCrossValidationGroups(F, forward)）
+// 辅助折叠区：WeatherDecisionBar + P2RiskPanel + advisory + T1Tab + ContextTab
+// 数据源：usePreMarketBriefing(F) + useCrossValidationGroups(F, forward)
+// 工程底线：不臆造——query 无数据返空数组；组件缺数据返 null / "—"。
+// 历史统计特征标注：参考值，非执行指令；市场有风险。
+// ===========================================================================
+
+function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string; urlDate?: string }) {
+  // 数据源：前瞻简报（F 日收盘数据算出来的选 T+1 标的结果）
+  const { data: briefing, isLoading: briefingLoading } = usePreMarketBriefing(F);
+  // 交叉验证：漏斗 final_candidates ∩ breakout top-N
+  const cv = useCrossValidationGroups(F, forward);
+  // advisory 仓位推荐摘要
+  const { data: advisory } = useQuery({
+    queryKey: ["advisory-summary", F ?? "latest"],
+    queryFn: () => api.advisorySummary(5),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const recs = advisory?.recommendations ?? [];
+
+  const funnelLayers = briefing?.funnel_layers;
+  const factors = briefing?.factors ?? [];
+
+  return (
+    <>
+      {/* 前瞻 pipeline（spec R4） */}
+      {/* ① 漏斗选股（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通 */}
+      <CandidateFunnelEmbed
+        date={briefing?.data_date ?? F}
+        onPick={() => { /* 前瞻 Tab 不开抽屉（S4 WatchlistBoard 接管） */ }}
+        snapshotLayers={briefing?.from_snapshot ? funnelLayers : funnelLayers}
+        scoredCandidates={briefing?.scored_candidates}
+        ztPoolSize={briefing?.market_emotion?.zt_count ?? undefined}
+      />
+
+      {/* ② 战法匹配（StrategyMatchMatrix，date=F）—— 票×战法命中矩阵 */}
+      <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分）" defaultOpen={false}>
+        <StrategyMatchMatrix date={F} />
+      </CollapsibleFold>
+
+      {/* ③ breakout 弱信号（PremarketSelectionSection，date=forward） */}
+      <PremarketSelectionSection date={forward} />
+
+      {/* ④ 交叉验证徽章（漏斗∩breakout 双重确认） */}
+      <CrossValidationSummary groups={cv} />
+
+      {/* 辅助决策折叠区（spec R5） */}
+      <CollapsibleFold title="辅助决策" subtitle="情绪天气 · P2 仓位 · advisory · T-1 · 语境" defaultOpen={false}>
+        {/* 情绪天气（WeatherDecisionBar）— 天气影响选股决策 */}
+        {briefing?.sentiment_context && (
+          <div>
+            <SectionHeader title="情绪天气决策" subtitle="S063 情绪天气 → 战法推荐/不推荐" />
+            <div className="mt-2">
+              <WeatherDecisionBar ctx={briefing.sentiment_context} />
+            </div>
+          </div>
+        )}
+
+        {/* P2 仓位闸 + 龙虎榜风控面板 — 选完股配仓位 */}
+        {briefing && <P2RiskPanel briefing={briefing} />}
+
+        {/* advisory 仓位推荐摘要 */}
+        {recs.length > 0 && (
+          <GlassCard className="p-4">
+            <p className="mb-2 text-sm font-medium">仓位推荐摘要</p>
+            <p className="text-xs text-muted-foreground/70">推荐标的 {recs.length} 只</p>
+            <div className="mt-2 space-y-1">
+              {recs.slice(0, 3).map((r) => (
+                <div key={r.code} className="flex justify-between text-xs">
+                  <span>{r.name}({r.code})</span>
+                  <span className="text-muted-foreground/60">
+                    {r.matched_strategy ?? "—"} 胜率{r.win_rate != null ? `${(r.win_rate * 100).toFixed(0)}%` : "—"} {r.action}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+        )}
+
+        {/* advisory 仓位详情入口 */}
+        <EntryCard to="/advisory" title="仓位详情" subtitle="PositionAdvisor 推荐/自选/持仓三场景" date={urlDate} />
+
+        {/* T-1 数据 + 语境（含暴风雨预测）— 选股 pipeline 输入 */}
+        <T1Tab date={F} />
+        <ContextTab date={F} />
+      </CollapsibleFold>
+
+      {briefingLoading && !briefing && (
+        <GlassCard className="p-4 text-sm text-muted-foreground">前瞻简报加载中…</GlassCard>
+      )}
+
+      {/* 因子漏斗（F 日因子数据，辅助参考） */}
+      {factors.filter((fr) => fr.factor_id !== "candidate_funnel").length > 0 && (
+        <CollapsibleFold title="涨停基因因子漏斗" subtitle="L1 打分 → L2 战法 → L3 仓位" defaultOpen={false}>
+          {factors.filter((fr) => fr.factor_id !== "candidate_funnel").map((fr) => (
+            <FactorSection key={fr.factor_id} factor={fr} onPick={() => {}} />
+          ))}
+        </CollapsibleFold>
+      )}
+    </>
+  );
+}
+
+/** 交叉验证摘要——三组分组 + 徽章（spec R4④ + AC9） */
+function CrossValidationSummary({ groups }: { groups: import("@/lib/query/useCrossValidation").CrossValidationGroups }) {
+  if (groups.isLoading) {
+    return <GlassCard className="mb-3 p-4 text-sm text-muted-foreground">交叉验证计算中…</GlassCard>;
+  }
+  const hasData = groups.dual.length > 0 || groups.funnelOnly.length > 0 || groups.breakoutOnly.length > 0;
+  if (!hasData) return null;
+  return (
+    <GlassCard className="mb-3 p-4">
+      <div className="flex items-center gap-2 border-b border-border/30 pb-2">
+        <span className="text-sm font-semibold">交叉验证</span>
+        <span className="text-xs text-muted-foreground/70">漏斗 ∩ breakout</span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {groups.dual.length > 0 && (
+          <div className="flex items-start gap-2">
+            <CrossValidationBadge group="dual" />
+            <span className="text-xs font-mono text-muted-foreground">{groups.dual.length} 只 · {groups.dual.join(", ")}</span>
+          </div>
+        )}
+        {groups.funnelOnly.length > 0 && (
+          <div className="flex items-start gap-2">
+            <CrossValidationBadge group="funnelOnly" />
+            <span className="text-xs font-mono text-muted-foreground">{groups.funnelOnly.length} 只 · {groups.funnelOnly.join(", ")}</span>
+          </div>
+        )}
+        {groups.breakoutOnly.length > 0 && (
+          <div className="flex items-start gap-2">
+            <CrossValidationBadge group="breakoutOnly" />
+            <span className="text-xs font-mono text-muted-foreground">{groups.breakoutOnly.length} 只 · {groups.breakoutOnly.join(", ")}</span>
+          </div>
+        )}
+      </div>
+      <p className="mt-2 text-[10px] text-muted-foreground/60">参考值，非执行指令；市场有风险</p>
+    </GlassCard>
   );
 }

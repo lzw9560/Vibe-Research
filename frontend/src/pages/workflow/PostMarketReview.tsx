@@ -18,8 +18,8 @@ import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { ForwardTestPanel } from "@/components/workflow/ForwardTestPanel";
 import { useDailyWinReview, useShadowComparison, useTransitionWorkflowState, useDateTriplet } from "@/lib/query";
-import { deriveAssessmentTips } from "@/lib/winrate-assessment";
 import type { TransitionRequest } from "@/lib/api";
+import { BehaviorComparisonCard } from "@/components/workflow/BehaviorComparisonCard";
 
 const TEACHING_POINTS = [
   "复盘的意义是迭代：每天回答三问，漏斗用你的真实数据校准",
@@ -62,12 +62,11 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
   // S092 R15：date 来自 props（dateTriplet.review），不再用 new Date().toISOString()。
   // S092：删除内部 date picker + useState date，日期权威收敛到容器级。
   const { data: review, isLoading } = useDailyWinReview(_date);
-  // 研判用 shadow-comparison window=28（daily-review 无 shadow 数据时兜底）
+  // S093 T18：行为对照卡移入复盘（BehaviorComparisonCard 内部调 useShadowComparison(28)，
+  //   TanStack Query 按 queryKey 去重——此处 shadow 仍用于 askAiContext）
   const { data: shadow } = useShadowComparison(28);
   const transition = useTransitionWorkflowState();
   const [entryCode, setEntryCode] = useState<string | null>(null);
-
-  const tips = shadow ? deriveAssessmentTips(shadow) : [];
 
   // 过渡窗渐进填充：15:00-17:15 且复盘已推进到 T，但 cron 数据未全产出
   const isTransition = _stage === "post_transition" && _reviewAdvanced;
@@ -299,22 +298,8 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
             </GlassCard>
           </div>
 
-          {/* 研判（Q5） */}
-          {tips.length > 0 && (
-            <GlassCard className="mb-6 border border-primary/20 p-4">
-              <p className="mb-2 text-sm font-medium">行为研判</p>
-              <ul className="space-y-1.5">
-                {tips.map((t) => (
-                  <li key={t.slice(0, 20)} className="text-xs text-foreground/90">
-                    · {t}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-[10px] text-muted-foreground/60">
-                研判基于 shadow-comparison window=28 近期行为模式
-              </p>
-            </GlassCard>
-          )}
+          {/* S093 T18：行为对照卡（完整三桶 follow/feeling/missed + 独立性 + 研判 + disclaimer） */}
+          <BehaviorComparisonCard />
 
           {/* 教学点 */}
           <GlassCard className="mb-4 p-4">

@@ -72,6 +72,8 @@ export const router = createBrowserRouter([
       { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
       { path: "/workflow/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },
       // S090 战法 tab 404 修复：前向测试 + 阈值配置独立页（EntryCard 链接原指向 404）
+      // S093 T20：/strategy 父路由（战法独立页），承接 S3 删的战法战绩折叠区
+      { path: "/strategy", element: lazyEl(() => import("@/pages/strategy/StrategyPage")) },
       { path: "/strategy/funnel/forward-test", element: lazyEl(() => import("@/pages/strategy/ForwardTestPage")) },
       { path: "/strategy/funnel/config", element: lazyEl(() => import("@/pages/strategy/StrategyConfigPage")) },
       { path: "/workflow/candidates/:code", element: lazyEl(() => import("@/pages/workflow/CandidateDetail")) },

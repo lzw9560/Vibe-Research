@@ -1209,9 +1209,12 @@ export interface IntradaySnapshot {
   date: string;
   time: string;
   zt_count: number | null;
+  zb_count?: number | null;   // S093：炸板数（后端 intraday_sentiment 透传，C8 规则 + 市场情绪用）
   seal_rate: number | null;
   break_rate: number | null;
   ad_ratio: number | null;
+  dt_count?: number | null;   // S093：跌停数（后端透传，C8 规则用）
+  ladder?: Array<{ boards?: number; count?: number }> | null;  // S093：连板梯队（C9 规则用，渲染留 S094）
   score: number | null;
   trend: "up" | "flat" | "down";
   t1_baseline: number | null;

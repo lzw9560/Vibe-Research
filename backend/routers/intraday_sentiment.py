@@ -7,8 +7,9 @@
 - Layer 3：条件场景推演（主动推理）—— GET /scenarios
 - Layer 4：T+1 预判（14:30 专项）—— GET /t1-projection
 
-后台采样：内存 ring buffer + 定时 asyncio task（仅交易时段 09:25-15:00 运行），
+后台采样：内存 ring buffer + 定时 asyncio task（仅交易时段 09:25-15:30 运行），
 按黄金窗口频率调 market._emotion → 4 维度固定阈值评分 → 存 ring buffer + sti_intraday 表。
+S093：采样快照透传 zb_count/ladder/dt_count（C8 规则要用 zt_count/zb_count，不臆造）。
 
 合规底线：
 - CC1 不臆造数据：历史参照样本不足时标注"样本不足"，不编准确率
@@ -43,7 +44,7 @@ class _IntradaySampler:
     """盘中情绪采样器：内存 ring buffer + 定时采样。
 
     单例（模块级 _sampler）。app startup 注册 asyncio task，shutdown cancel。
-    仅交易日 09:25-15:00 运行；非交易时段 sleep 60s 空转。
+    仅交易日 09:25-15:30 运行；非交易时段 sleep 60s 空转。
     """
 
     def __init__(self) -> None:
@@ -100,6 +101,7 @@ class _IntradaySampler:
                 "time": time_str,
                 "zt_count": None, "seal_rate": None,
                 "break_rate": None, "ad_ratio": None,
+                "zb_count": None, "dt_count": None, "ladder": None,
                 "score": None, "trend": self._last_trend(),
                 "t1_baseline": self._t1_baseline(),
             }
@@ -116,6 +118,10 @@ class _IntradaySampler:
         # 涨跌比：用 lianban_count / max(dt_count,1) 作近似（ad 无直接字段）
         lianban = float(emo.get("lianban_count") or 0)
         ad_ratio = lianban / max(dt_count, 1) if dt_count > 0 else lianban
+        # S093 R11：透传 zb_count/ladder/dt_count 供 C8/C9 规则用（不臆造，取不到标 None）
+        zb_count = emo.get("zb_count")   # int or None（THS 降级时 None）
+        ladder = emo.get("ladder")       # list[dict] or None（连板梯队）
+        dt_count_raw = emo.get("dt_count")  # int or None（原始值，保留 None 语义）
 
         score = _compute_score(zt_count, seal_rate, break_rate, ad_ratio)
         prev_score = self._last_score()
@@ -130,6 +136,9 @@ class _IntradaySampler:
             "seal_rate": seal_rate,
             "break_rate": break_rate,
             "ad_ratio": round(ad_ratio, 2),
+            "zb_count": zb_count,        # S093 透传：炸板数（C8 规则用）
+            "dt_count": dt_count_raw,   # S093 透传：跌停数（保留 None 语义）
+            "ladder": ladder,            # S093 透传：连板梯队（C9 规则用）
             "score": score,
             "trend": trend,
             "t1_baseline": t1_baseline,

@@ -231,6 +231,14 @@ async def _collect(run_id: str, target_date: str) -> None:
         # S079 D1：从 limitup_screener factor 的 config 提取 P2 仓位闸 + 龙虎榜风控字段
         # PreMarketWorkflow.run() 在 LimitupScreenerFactor.fetch 内被调用，P2 字段塞 config_out
         # → _serialize_factor 透传 → 这里提取到 _cache 顶层供响应直接消费
+        # S093 R4：final_candidates 诊断卡提前计算（供 _cache 透传 + 快照落盘复用）
+        final_cards: list[dict] = []
+        try:
+            if funnel_result is not None:
+                final_cards = [c.model_dump(mode="json") for c in funnel_result.final_candidates]
+        except Exception as exc:  # noqa: BLE001 — 诊断卡构建失败不影响快照主态
+            logger.warning("final_candidates 诊断卡构建失败 %s: %s", target_date, exc)
+
         p2_fields = _extract_p2_fields(results)
         _cache.update(
             run_id=run_id,
@@ -242,6 +250,7 @@ async def _collect(run_id: str, target_date: str) -> None:
             as_of=as_of,
             error=None,
             scored_candidates=scored_candidates,
+            final_candidates=final_cards,  # S093 R4：透传到 live-done 响应
             # S079 P2 顶层字段（供 get_pre_market_workflow 响应直接透传）
             market_phase=p2_fields.get("market_phase"),
             market_phase_cap=p2_fields.get("market_phase_cap"),
@@ -254,13 +263,7 @@ async def _collect(run_id: str, target_date: str) -> None:
         # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _build_funnel_layers 重建）
         funnel_mod.clear_funnel_cache(target_date)
         try:
-            # S049 C4：快照存 final_candidates 诊断卡（复用 _build_funnel_layers 的 funnel_result）
-            final_cards: list[dict] = []
-            try:
-                if funnel_result is not None:
-                    final_cards = [c.model_dump(mode="json") for c in funnel_result.final_candidates]
-            except Exception as exc:  # noqa: BLE001 — 诊断卡构建失败不影响快照主态
-                logger.warning("final_candidates 诊断卡构建失败 %s: %s", target_date, exc)
+            # S049 C4/S093 R4：final_candidates 诊断卡已提前算好（复用 funnel_result）
             _save_snapshot({
                 "schema": _SNAPSHOT_SCHEMA,
                 "data_date": target_date,
@@ -543,6 +546,8 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             resp["factors"] = _cache["factors"]
             # B-lite：透传 scored_candidates 供前端战法 tab 过滤
             resp["scored_candidates"] = _cache.get("scored_candidates", [])
+            # S093 R4：透传 final_candidates 供前端前瞻 Tab 漏斗候选 + 交叉验证
+            resp["final_candidates"] = _cache.get("final_candidates", [])
             # S049 D4：live done 透出 funnel_layers（与快照路径对齐；_build_funnel_layers 命中 run_funnel 缓存不重复请求）
             # S063 T4：ctx 下传——live done 时重建 ctx（T-1 硬标准，幂等）
             ctx = await asyncio.to_thread(build_context, d)
@@ -583,6 +588,7 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             "factors": snap.get("factors", []),
             "funnel_layers": snap.get("funnel_layers", []),
             "scored_candidates": snap.get("scored_candidates", []),
+            "final_candidates": snap.get("final_candidates", []),  # S093 R4：透传漏斗最终候选
             "is_backfill": snap.get("is_backfill", False),
             # S079 D1：历史快照同结构透传 P2 字段（旧快照无此字段时降级 None/空）
             "market_phase": snap.get("market_phase"),

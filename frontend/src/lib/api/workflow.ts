@@ -123,7 +123,7 @@ export interface DateTripletResponse {
   review: string;
   today: string;
   forward: string;
-  stage: "pre_market" | "intraday" | "post_transition" | "post_market" | "non_trading";
+  stage: "pre_market" | "pre_open" | "intraday" | "post_transition" | "post_market" | "non_trading";
   is_trading_day: boolean;
   review_advanced: boolean;
   server_now: string;

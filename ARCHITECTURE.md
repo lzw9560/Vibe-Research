@@ -116,7 +116,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 ### 定时调度（`scheduled_tasks.py`）
 - CronScheduler：每 60s tick，5 段 cron 匹配，daemon 线程。
 - SQLite 持久化（`backend/data/market_data.db`）：`scheduled_tasks` + `scheduled_task_runs`。
-- TaskExecutor 内置 6 种任务：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs`。
+- TaskExecutor 内置 10 种任务：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs` / `derived_precompute`（S084 盘后 derived 异步预采集）/ `monthly_vacuum`（S089 月度 VACUUM+wal_checkpoint）/ `kline_refresh`（S090 baostock kline 日更）/ `daily_ai_summary`（S093 AI 盘后总结 stub，cron 15:30，S094 完整实现）。S093：`candidate_funnel_precompute` success 后调 `NotificationService.send()` 发飞书富内容卡片（前瞻选股结果）。
 - `app.py` 启动时 `start_scheduler()`；另 `scheduler.py` 起 `start_portfolio_scheduler(1800)` 与 `start_limitup_scheduler()`。
 
 ### 打板工作流状态机（`workflow_state_machine.py`）

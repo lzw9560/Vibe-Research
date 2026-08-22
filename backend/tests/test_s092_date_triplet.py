@@ -1,7 +1,7 @@
 """S092 T1+T2：dateTriplet 端点测试。
 
 覆盖 spec `specs/S092-三视图交易日锚与时段推进/spec.md` §3-§5 的核心时段逻辑：
-盘前/盘中/盘后过渡/盘后就绪/非交易日/手动覆盖/17:15 边界/15:00 边界。
+盘前/盘中/盘后过渡/盘后就绪/非交易日/手动覆盖/17:15 边界/15:30 边界。
 
 mock 策略：patch `vr_paths._dt`（datetime 模块别名，C extension 不可变，
 不能 setattr `now`，沿用 test_s056 的 FakeDateTime 整体替换惯例）。
@@ -67,16 +67,16 @@ T_next = date(2026, 8, 24)   # 下一交易日（周一）
 # ───────────────────────── 1. 盘前 ─────────────────────────
 
 class TestPreMarket:
-    """交易日盘前（00:00-09:29）。"""
+    """交易日盘前（00:00-08:59）。"""
 
     def test_pre_market_trading_day(self, monkeypatch):
-        # 09:00 盘前
-        _patch_now(monkeypatch, _bj(2026, 8, 21, 9, 0))
+        # 08:30 盘前
+        _patch_now(monkeypatch, _bj(2026, 8, 21, 8, 30))
         r = resolve_date_triplet()
         assert r["stage"] == "pre_market"
         assert r["is_trading_day"] is True
         assert r["F"] == T_prev.isoformat()              # T-1
-        assert r["review"] == r["F"]                     # 15:00 前未推进
+        assert r["review"] == r["F"]                     # 15:30 前未推进
         assert r["review_advanced"] is False
         assert r["today"] == T.isoformat()               # 盘前今日简报（F+1=T）
         assert r["forward"] == T.isoformat()             # 前瞻=F+1=T
@@ -94,7 +94,7 @@ class TestPreMarket:
 # ───────────────────────── 2. 盘中 ─────────────────────────
 
 class TestIntraday:
-    """交易日盘中（09:30-14:59）。"""
+    """交易日盘中（09:30-15:29）。"""
 
     def test_intraday_stage(self, monkeypatch):
         _patch_now(monkeypatch, _bj(2026, 8, 21, 10, 30))
@@ -110,7 +110,7 @@ class TestIntraday:
 # ───────────────────────── 3. 盘后过渡 ─────────────────────────
 
 class TestPostTransition:
-    """盘后过渡窗（15:00-17:15）。"""
+    """盘后过渡窗（15:30-17:15）。"""
 
     def test_post_transition_review_advanced(self, monkeypatch):
         _patch_now(monkeypatch, _bj(2026, 8, 21, 15, 30))
@@ -156,11 +156,11 @@ class TestNonTradingDay:
         assert r["review_advanced"] is False
 
     def test_non_trading_next_advance_points_to_next_trading_day(self, monkeypatch):
-        # 周六 12:00 → 定时器指向下一交易日（周一）的 15:00 / 17:15
+        # 周六 12:00 → 定时器指向下一交易日（周一）的 15:30 / 17:15
         _patch_now(monkeypatch, _bj(2026, 8, 22, 12, 0))
         r = resolve_date_triplet()
         from datetime import time as _time
-        expected_review = _real_dt.combine(T_next, _time(15, 0), tzinfo=BEIJING_TZ).timestamp()
+        expected_review = _real_dt.combine(T_next, _time(15, 30), tzinfo=BEIJING_TZ).timestamp()
         expected_f = _real_dt.combine(T_next, _time(17, 15), tzinfo=BEIJING_TZ).timestamp()
         assert r["next_review_advance_at"] == pytest.approx(expected_review)
         assert r["next_f_advance_at"] == pytest.approx(expected_f)
@@ -219,20 +219,20 @@ class TestFAdvanceBoundary:
         assert r["stage"] == "post_market"
 
 
-# ───────────────────────── 8. 15:00 边界 ─────────────────────────
+# ───────────────────────── 8. 15:30 边界 ─────────────────────────
 
 class TestReviewAdvanceBoundary:
-    """复盘独立推进 15:00 边界。"""
+    """复盘独立推进 15:30 边界。"""
 
-    def test_1459_review_not_advanced(self, monkeypatch):
-        _patch_now(monkeypatch, _bj(2026, 8, 21, 14, 59))
+    def test_1529_review_not_advanced(self, monkeypatch):
+        _patch_now(monkeypatch, _bj(2026, 8, 21, 15, 29))
         r = resolve_date_triplet()
         assert r["review_advanced"] is False
         assert r["review"] == r["F"]                # = T_prev
         assert r["stage"] == "intraday"
 
-    def test_1500_review_advanced(self, monkeypatch):
-        _patch_now(monkeypatch, _bj(2026, 8, 21, 15, 0))
+    def test_1530_review_advanced(self, monkeypatch):
+        _patch_now(monkeypatch, _bj(2026, 8, 21, 15, 30))
         r = resolve_date_triplet()
         assert r["review_advanced"] is True
         assert r["review"] == T.isoformat()          # 推进到 T
@@ -262,11 +262,11 @@ class TestServerNowAndStructure:
         assert set(r.keys()) == expected_keys
 
     def test_next_advance_at_is_epoch_seconds(self, monkeypatch):
-        _patch_now(monkeypatch, _bj(2026, 8, 21, 9, 0))  # 盘前，今日 15:00 还没到
+        _patch_now(monkeypatch, _bj(2026, 8, 21, 9, 0))  # pre_open，今日 15:30 还没到
         r = resolve_date_triplet()
-        # 今日 15:00 / 17:15 的 epoch
+        # 今日 15:30 / 17:15 的 epoch
         from datetime import time as _time
-        exp_review = _real_dt.combine(T, _time(15, 0), tzinfo=BEIJING_TZ).timestamp()
+        exp_review = _real_dt.combine(T, _time(15, 30), tzinfo=BEIJING_TZ).timestamp()
         exp_f = _real_dt.combine(T, _time(17, 15), tzinfo=BEIJING_TZ).timestamp()
         assert r["next_review_advance_at"] == pytest.approx(exp_review)
         assert r["next_f_advance_at"] == pytest.approx(exp_f)
@@ -276,7 +276,7 @@ class TestServerNowAndStructure:
         _patch_now(monkeypatch, _bj(2026, 8, 21, 18, 0))
         r = resolve_date_triplet()
         from datetime import time as _time
-        exp_review = _real_dt.combine(T_next, _time(15, 0), tzinfo=BEIJING_TZ).timestamp()
+        exp_review = _real_dt.combine(T_next, _time(15, 30), tzinfo=BEIJING_TZ).timestamp()
         exp_f = _real_dt.combine(T_next, _time(17, 15), tzinfo=BEIJING_TZ).timestamp()
         assert r["next_review_advance_at"] == pytest.approx(exp_review)
         assert r["next_f_advance_at"] == pytest.approx(exp_f)

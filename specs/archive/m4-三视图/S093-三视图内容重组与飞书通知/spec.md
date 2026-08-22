@@ -1,6 +1,6 @@
 # Spec: S093 — 三视图内容重组与飞书通知
 
-> 状态：审查闭合（Oracle 4 轮 + grill 自查 1 轮，全部阻断项/歧义已消除），可进 plan
+> 状态：✅已实现（2026-08-22）——6 阶段全闭合，后端 2215 passed + 前端 428 passed + tsc/vite build 绿；AC1-AC10 全过，AC11 用 TestClient+vite build 替代 dev server 冒烟（:8900 被用户旧进程占）
 > 作者：Codex 会话  日期：2026-08-22
 > 级别：**large**（跨层 + 碰外部数据源（tencent_quote 实时行情）+ 复用既有通知渠道（飞书）+ 新增 AI 工具（盘后 LLM 总结）+ 涉及操作建议/风险提示信号）
 > 流程门：spec.md + plan + task；feature 分支 `feature/S093-内容重组与飞书通知`；完整 grill；playwright 验收

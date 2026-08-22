@@ -31,6 +31,7 @@ def _run(coro):
 # S084 新增 derived_precompute（盘后 derived 异步预采集）。
 # S089 新增 monthly_vacuum（月度 VACUUM + wal_checkpoint）。
 # S090 新增 kline_refresh（baostock_kline_cache 日更）。
+# S093 新增 daily_ai_summary（AI 盘后总结 stub）。
 _EXPECTED_TASK_TYPES = {
     "daily_data_refresh",
     "daily_review_notify",
@@ -52,6 +53,7 @@ _EXPECTED_TASK_TYPES = {
     "derived_precompute",
     "monthly_vacuum",
     "kline_refresh",
+    "daily_ai_summary",
 }
 
 

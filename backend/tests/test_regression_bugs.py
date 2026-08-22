@@ -69,6 +69,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "derived_precompute",       # S084 C1：盘后 derived 异步预采集
             "monthly_vacuum",           # S089 D2：月度 VACUUM + wal_checkpoint
             "kline_refresh",            # S090 B：baostock_kline_cache 日更
+            "daily_ai_summary",         # S093 R12：AI 盘后总结 stub
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

@@ -191,11 +191,8 @@ def load_config() -> AssistantDefaultConfig:
     if os.getenv("VR_RECOMMEND_MEDIUM_THRESHOLD"):
         cfg.RECOMMEND_MEDIUM_THRESHOLD = float(os.getenv("VR_RECOMMEND_MEDIUM_THRESHOLD"))
 
-    # 推送
-    if os.getenv("VR_FEISHU_WEBHOOK"):
-        cfg.PUSH_CHANNELS = ["feishu"]
-
-    # 通知渠道环境变量映射
+    # 通知渠道环境变量映射（S093：VR_FEISHU_WEBHOOK 已废弃，webhook 收敛到
+    # FEISHU_WEBHOOK_URL → config.feishu_webhook_url；通知统一走 NotificationService.send()）
     _FEISHU_ENV_MAP = {
         "FEISHU_WEBHOOK_URL": "feishu_webhook_url",
         "FEISHU_APP_ID": "feishu_app_id",

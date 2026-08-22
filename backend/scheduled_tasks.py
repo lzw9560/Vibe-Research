@@ -456,6 +456,7 @@ class TaskExecutor:
             "derived_precompute": self._execute_derived_precompute,  # S084 C1：盘后 derived 异步预采集
             "monthly_vacuum": self._execute_monthly_vacuum,  # S089 D2：月度 VACUUM + wal_checkpoint
             "kline_refresh": self._execute_kline_refresh,  # S090 B：baostock_kline_cache 日更
+            "daily_ai_summary": self._execute_daily_ai_summary,  # S093 R12：AI 盘后总结 stub
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -923,6 +924,10 @@ class TaskExecutor:
         取 date（默认最近交易日）→ run_funnel("all", date, live_config) →
         结果落 _FUNNEL_CACHE（TTL 由 config.CANDIDATE_FUNNEL_CACHE_TTL 控制，默认 3600s）。
         失败 catch 不抛，返 status=error（预计算是增强，不阻塞主流程）。
+
+        S093 R10：success 后调 NotificationService.send() 发富内容卡片
+        （F 日期 + final_candidates 数 + 双重确认数 + top5 标的），扩返候选统计。
+        通知失败不阻断预计算（增强，catch 不抛）。
         """
         try:
             from candidate_funnel import funnel as funnel_mod
@@ -941,11 +946,59 @@ class TaskExecutor:
             # S087 R10：落库 funnel_cache（前端 tab 读缓存秒开，进程重启不丢）
             from candidate_funnel.funnel_cache import save_funnel_result
             save_funnel_result(target, "all", result)
+
+            # S093 R10：final_candidates 诊断卡 + 双重确认 + 战法映射
+            final_cards: list[dict] = []
+            try:
+                final_cards = [c.model_dump(mode="json") for c in result.final_candidates]
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[candidate_funnel_precompute] final_cards 构建失败: %s", exc)
+
+            dual_count = _compute_dual_confirmation(target, final_cards)
+            strategy_map = _compute_strategy_map(target)
+
+            # S093 R10：发飞书富内容卡片（直接调 NotificationService.send()，
+            # 不走 _send_notification——后者只产固定格式任务状态文本，不支持富内容）
+            try:
+                from notification.notification_service import NotificationService
+                content = _build_premarket_notification_content(
+                    target, final_cards, dual_count, strategy_map,
+                )
+                ns = NotificationService()
+                if ns.is_available():
+                    ns.send(content, route_type="alert", severity="info")
+                    logger.info("[candidate_funnel_precompute] 飞书通知已发送")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[candidate_funnel_precompute] 飞书通知发送失败: %s", exc)
+
             logger.info("[candidate_funnel_precompute] %s 漏斗预计算完成（缓存已预热+落库）", target)
-            return {"date": target, "status": "ok"}
+            return {
+                "date": target,
+                "status": "ok",
+                "final_candidates_count": len(final_cards),
+                "dual_confirmation_count": dual_count,
+            }
         except Exception as e:
             logger.warning("[candidate_funnel_precompute] 预计算失败: %s", e)
             return {"status": f"error: {e}"}
+
+    def _execute_daily_ai_summary(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S093 R12：AI 盘后总结 stub（cron 15:30，与 stage 推进点 15:30 对齐）。
+
+        S094 完整实现：LLM 汇总当日信号 + 持仓表现 + 市场数据，生成
+        "今日操作回顾 + 明日建议"自然语言总结。本 stub 调 generate_daily_summary
+        返空串 + 落存储位（.vibe-research/daily_summaries/{date}.txt）。
+        """
+        from vr_paths import last_trading_date_str
+
+        target = payload.get("date") or last_trading_date_str()
+        summary = generate_daily_summary(target)
+        return {
+            "date": target,
+            "status": "ok",
+            "summary_length": len(summary),
+            "note": "S094 TODO：AI 盘后总结 stub，返空串",
+        }
 
 
     def _execute_first_board_filter(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -1469,6 +1522,125 @@ _manager = ScheduledTaskManager()
 
 
 # ============================================================================
+# S093 R10/R12：通知内容构建 + AI 盘后总结 stub
+# ============================================================================
+
+
+def _compute_dual_confirmation(target: str, final_cards: list[dict]) -> int:
+    """计算双重确认数（漏斗 final_candidates ∩ breakout candidates，spec R10）。
+
+    调 ``select_premarket_with_risk(forward)`` 读本地 kline 算交集，成本低。
+    forward = F 的下一交易日（vr_paths.next_trading_date）。失败返 0（不臆造）。
+    """
+    try:
+        from datetime import date as _date
+        from vr_paths import next_trading_date
+        from strategies.premarket_selection import select_premarket_with_risk
+
+        forward = next_trading_date(_date.fromisoformat(target)).isoformat()
+        selection = select_premarket_with_risk(forward)
+        breakout_codes = {c.code for c in selection.candidates}
+        funnel_codes = {c.get("code", "") for c in final_cards if c.get("code")}
+        return len(funnel_codes & breakout_codes)
+    except Exception as e:
+        logger.warning("[candidate_funnel_precompute] 双重确认计算失败: %s", e)
+        return 0
+
+
+def _compute_strategy_map(target: str) -> dict[str, list[str]]:
+    """从 scored_candidates 构建 code→[strategy_name] 映射（通知 top5 命中战法用）。
+
+    轻量：load_gene_scores(DB 读) + score_candidates(CPU)，skip fetch_zt_pool
+    （pool_item_map=None 降级——storm_reversal/PRD 不命中，既有战法不受影响）。
+    失败返空 dict（不臆造战法命中）。
+    """
+    try:
+        from limitup_screener.data import load_gene_scores
+        from strategies.strategy_funnel_registry import score_candidates
+        from sentiment_context import build_context
+
+        genes = load_gene_scores(target)
+        if not genes:
+            return {}
+        weather = build_context(target).weather_state
+        cand_input = [
+            {
+                "code": g.code,
+                "name": getattr(g, "name", ""),
+                "factors": getattr(g, "factors", {}) or {},
+                "total_score": getattr(g, "total_score", 0) or 0,
+                "zt_count_250d": getattr(g, "zt_count_250d", 0) or 0,
+            }
+            for g in genes
+        ]
+        scored = score_candidates(cand_input, weather, target, None)
+        scored = [s for s in scored if s.get("strategy_code") != "none"]
+        out: dict[str, list[str]] = {}
+        for s in scored:
+            code = s.get("code", "")
+            sn = s.get("strategy_name", "")
+            if code and sn:
+                out.setdefault(code, []).append(sn)
+        return out
+    except Exception as e:
+        logger.warning("[candidate_funnel_precompute] 战法映射计算失败: %s", e)
+        return {}
+
+
+def _build_premarket_notification_content(
+    f_date: str,
+    final_cards: list[dict],
+    dual_count: int,
+    strategy_map: dict[str, list[str]],
+) -> str:
+    """构建前瞻选股通知内容（spec R10 富内容卡片 Markdown）。
+
+    内容：F 日期 + final_candidates 数 + 双重确认数 + top5 标的（code/name/基因分/命中战法）。
+    标注历史统计特征风险提醒（CLAUDE.md §1.2 工程底线 + §7 合规自查）。
+    """
+    lines: list[str] = [
+        f"📊 前瞻选股结果 {f_date}",
+        "",
+        f"漏斗最终候选: {len(final_cards)} 只",
+        f"双重确认（漏斗∩breakout）: {dual_count} 只",
+        "",
+    ]
+    top5 = final_cards[:5]
+    if top5:
+        lines.append("Top 5 标的:")
+        for c in top5:
+            code = c.get("code", "")
+            name = c.get("name", "")
+            gs = c.get("gene_score") or {}
+            gene_score = gs.get("total_score", "—")
+            strategies = strategy_map.get(code, [])
+            strat_str = "、".join(strategies) if strategies else "—"
+            lines.append(f"  - {name}({code}) 基因分:{gene_score} 战法:{strat_str}")
+        lines.append("")
+    lines.append("历史统计特征，参考值，非执行指令；市场有风险")
+    return "\n".join(lines)
+
+
+def generate_daily_summary(date: str) -> str:
+    """S093 R12 AI 盘后总结 stub — 返空串 + 落存储位。
+
+    S094 完整实现：LLM 汇总当日信号 + 持仓表现 + 市场数据，生成
+    "今日操作回顾 + 明日建议"自然语言总结。本 stub 只返空串 + 创建存储位文件
+    （接口最小定义，spec R12 / Oracle 非阻断 #14）。
+    """
+    summary = ""  # stub：空串，S094 完整实现
+    try:
+        from vr_paths import resolve_data_dir
+
+        d = Path(resolve_data_dir()) / "daily_summaries"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{date}.txt").write_text(summary, encoding="utf-8")
+    except Exception as e:
+        logger.warning("[daily_ai_summary] 存储位写入失败: %s", e)
+    return summary
+
+
+# ============================================================================
 # 模块级 executor 包装（向后兼容：旧测试/调用方按 st._execute_* 访问）
 # ============================================================================
 # S011-A R2 重构将 executor 方法从模块级函数迁入 TaskExecutor 类，部分旧测试与
@@ -1840,6 +2012,19 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 monthly_vacuum 已创建（cron 0 2 1 * *，月初 02:00）")
+
+    # S093 R12：AI 盘后总结 stub——15:30（与 stage 推进点 intraday→post_transition 15:30 对齐）。
+    # S094 完整实现：LLM 汇总当日信号 + 持仓表现。本 stub 返空串 + 落存储位。
+    if "daily_ai_summary" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="daily_ai_summary",
+            description="S093 R12：AI 盘后总结 stub（cron 15:30，S094 完整实现 LLM 汇总）",
+            task_type="daily_ai_summary",
+            cron_expr="30 15 * * 0-4",  # 15:30（与 limitup_precompute 同刻，stub 无 DB 写不抢锁）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 daily_ai_summary 已创建（cron 30 15 * * 0-4）")
 
 
 async def stop_scheduler() -> None:

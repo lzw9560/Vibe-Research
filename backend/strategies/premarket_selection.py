@@ -21,6 +21,30 @@ sys.path.insert(0, str(ROOT))
 
 KLINE_CACHE = ROOT.parent / ".vibe-research" / "baostock_kline_cache.json"
 
+
+def _load_code_name_map() -> dict[str, str]:
+    """从 gene_scores 表加载 code→name 映射（spec §8 盲点 #6：breakout name 补名）。
+
+    baostock kline bar 无 ``name`` 字段，breakout 候选 name 恒空。从 gene_scores 表
+    按 code 查最近一次涨停的 name 补全。查不到的 code 仍返空串（不臆造）。
+    """
+    try:
+        from config import GENE_SCORES_DB_PATH  # noqa: PLC0415
+        from db_health import get_healthy_conn  # noqa: PLC0415
+        conn = get_healthy_conn(GENE_SCORES_DB_PATH, check_same_thread=False)
+        try:
+            rows = conn.execute(
+                "SELECT code, name FROM gene_scores "
+                "WHERE name IS NOT NULL AND name != '' "
+                "ORDER BY date DESC"
+            ).fetchall()
+        finally:
+            conn.close()
+        # ORDER BY date DESC → 首次出现 = 最新日期的 name
+        return {row["code"]: row["name"] for row in rows}
+    except Exception:
+        return {}
+
 # 诚实标签（不改不撒谎）——数值随 §44 重验更新（2026-08-16 cache 08-14 重验）
 HONEST_LABEL = (
     "弱信号（§44 day-cluster lift=1.72x <2x 非 validated edge，"
@@ -70,6 +94,8 @@ def select_premarket_candidates(
     返回 top-N candidates（breakout 分数降序）。
     """
     cache = json.loads(KLINE_CACHE.read_bytes())
+    # spec §8 盲点 #6：baostock kline bar 无 name 字段，从 gene_scores 表补名
+    code_names = _load_code_name_map()
     candidates: list[PreMarketCandidate] = []
     for code, bars in cache.items():
         if not bars:
@@ -80,8 +106,8 @@ def select_premarket_candidates(
         score, binary, t1_close, t1_date = r
         if score < min_score:
             continue
-        # name from the last bar (approximate)
-        name = bars[t1_idx]["name"] if (t1_idx := _find_t1_idx(bars, target_date)) is not None and "name" in bars[t1_idx] else ""
+        # name 从 gene_scores 表补全（bar 无 name 字段，spec §8 盲点 #6）
+        name = code_names.get(code, "")
         candidates.append(PreMarketCandidate(
             code=code, name=name, breakout_score=score,
             breakout_binary=binary, t1_close=t1_close, t1_date=t1_date,

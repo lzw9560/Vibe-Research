@@ -152,13 +152,13 @@ class TestC6SealBelowFloatRatio:
 
 
 class TestCheckAllRules:
-    def test_all_six_rules_checked(self):
+    def test_all_seven_rules_checked(self):
         snaps = [_snap(5, seal=1e8, open_count=0, float_cap=1e9, idx=0.0),
                  _snap(0, seal=0.6e8, open_count=0, float_cap=1e9, idx=0.0)]
         results = check_all_rules(snaps, "000001", "测试", set(), _NOW)
-        assert len(results) == 6
+        assert len(results) == 7
         rule_ids = [r.rule_id for r in results]
-        assert rule_ids == ["C1", "C2", "C3", "C4", "C5", "C6"]
+        assert rule_ids == ["C1", "C2", "C3", "C4", "C5", "C6", "C7"]
 
     def test_missing_data_does_not_trigger(self):
         snaps = [_snap(0)]  # 只一条，缺大多字段
