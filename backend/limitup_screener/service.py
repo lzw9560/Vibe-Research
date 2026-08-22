@@ -15,7 +15,7 @@ import astock
 from data.mappers import zt_pool_item_from_dict
 from limitup_screener.data import run_migrations, save_gene_scores, load_gene_scores
 from models.market_snapshot import ZTPoolItem
-from vr_paths import is_trading_day
+from vr_paths import is_trading_day, last_trading_date_str
 from limitup_screener.models import (
     GeneScore,
     ScreenerResult,
@@ -62,6 +62,86 @@ def _empty_screener_result(date_str: str, *, reason: str = "") -> ScreenerResult
         data_freshness="expired",
         data_age_seconds=0.0,
     )
+
+
+def _assert_not_future_date(target_date: str) -> bool:
+    """S095 R1/R2：写路径未来日期守卫。
+
+    target_date 为 YYYYMMDD 或 YYYY-MM-DD（兼容两种格式——_resolve_date 返 YYYYMMDD，
+    但 precompute_daily_async 的早期未格式化参数亦可能传带 - 形式）。
+    > last_trading_date_str()（最近交易日，纯本地零请求）→ 返 False（未来日期含
+    周六/周日/节假日之后：周六 > 最近交易日周五，归入拒绝）。
+
+    返 True 表示放行（target_date ≤ 最近交易日）；返 False 表示拒绝写入。
+    """
+    # 归一 YYYYMMDD → YYYY-MM-DD，与 last_trading_date_str() 的 ISO 形式可比
+    s = str(target_date).strip()
+    if "-" not in s and len(s) == 8 and s.isdigit():
+        cmp = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+    else:
+        cmp = s
+    try:
+        return cmp <= last_trading_date_str()
+    except Exception:
+        # 日期解析异常：保守放行，交由下游 _resolve_date / is_trading_day 处理
+        return True
+
+
+def _cross_check_zt_history(target_date: str, zt_pool_len: int) -> bool:
+    """S095 R4：交叉校验 zt_history final 快照与请求池行数。
+
+    target_date 为 YYYYMMDD 或 YYYY-MM-DD。返回 True 表示放行写入，False 表示拒绝。
+
+    - zt_history 存在同日 final 快照（is_final=1）且 count 与 zt_pool_len 不一致 → 拒绝（final 权威）
+    - 非 final 或快照不存在 → 只告警（盘中收缩合法），放行
+    - DB 查询异常 → 降级放行（不阻塞写路径，与降级风格一致）
+    """
+    import sqlite3
+    from vr_paths import resolve_data_dir
+
+    s = str(target_date).strip()
+    if "-" not in s and len(s) == 8 and s.isdigit():
+        d_iso = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+    else:
+        d_iso = s
+
+    db_path = resolve_data_dir() / "zt_history.db"
+    if not db_path.exists():
+        # zt_history 尚未落库（全新环境 / 历史日无快照）→ 无 final 可校验，放行
+        return True
+
+    try:
+        conn = sqlite3.connect(db_path, timeout=5)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt, MAX(is_final) AS mx FROM zt_history WHERE date = ?",
+                (d_iso,),
+            ).fetchone()
+        finally:
+            conn.close()
+    except Exception as e:
+        _logger.warning("[s095] 交叉校验 zt_history 查询失败 date=%s err=%s", d_iso, e)
+        return True
+
+    if row is None:
+        return True
+    count = row[0] or 0
+    max_final = row[1]
+    if count == 0:
+        # 当日无快照（盘中 / 历史 DB 未覆盖）→ 只告警，放行
+        return True
+    if max_final == 1 and count != zt_pool_len:
+        _logger.error(
+            "[s095] 交叉校验拒绝写入 date=%s：zt_history final 快照行数=%d 与请求 zt_pool 行数=%d 不一致",
+            d_iso, count, zt_pool_len,
+        )
+        return False
+    if max_final != 1:
+        _logger.warning(
+            "[s095] 交叉校验告警 date=%s：zt_history 非 final 快照（行数=%d，pool=%d，盘中收缩合法）",
+            d_iso, count, zt_pool_len,
+        )
+    return True
 
 
 async def _resolve_date(date: str | None) -> str:
@@ -187,6 +267,14 @@ async def _collect_zt_history_batch(codes: set[str], date: str, lookback: int = 
 
 async def _compute_and_cache_async(target_date: str, cache_key: str) -> ScreenerResult:
     """执行基因得分计算并缓存结果（异步版本）。"""
+    # S095 R1/R2：未来日期硬闸门——target_date > 最近交易日 → 拒写返空（不查东财）
+    if not _assert_not_future_date(target_date):
+        _logger.warning(
+            "[s095] 未来日期拒绝写入 target_date=%s > last_trading_date=%s",
+            target_date, last_trading_date_str(),
+        )
+        return _empty_screener_result(target_date, reason="未来日期拒绝写入")
+
     now = time.time()
 
     zt_pool, yzt_pool, zb_pool = await _fetch_zt_pool(target_date)
@@ -204,6 +292,10 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
         )
         _CACHE[cache_key] = (now, result)
         return result
+
+    # S095 R4：交叉校验钩子——zt_history final 快照与请求池行数不一致 → 拒绝写入
+    if not _cross_check_zt_history(target_date, len(zt_pool)):
+        return _empty_screener_result(target_date, reason="交叉校验不一致拒绝写入")
 
     # S053 R2：拉 T+1 日 zt 池算 zb 次日回封率（路径 C：service 层预算回填因子）
     zt_next_pool = await asyncio.to_thread(_fetch_zt_next_pool, target_date)
@@ -433,6 +525,14 @@ async def precompute_daily_async(date: str | None = None) -> ScreenerResult:
         # 日期格式异常无法判定，交由下游 _resolve_date 处理
         pass
 
+    # S095 R2：未来日期硬闸门——is_trading_day 拦非交易日，本闸门拦"交易日但
+    # 比最近交易日还未来"的边界情况（例如今天周五盘中请求下周一）。
+    if not _assert_not_future_date(date_fmt):
+        _logger.warning(
+            "[s095] %s 未来日期拒绝写入（precompute_daily_async）", date_fmt,
+        )
+        return _empty_screener_result(date_fmt, reason="未来日期拒绝写入")
+
     target_date = await _resolve_date(date_fmt)
     cache_key = f"limitup_screener_{target_date}"
     return await _compute_and_cache_async(target_date, cache_key)
@@ -458,6 +558,13 @@ def precompute_daily(date: str | None = None) -> ScreenerResult:
             return _empty_screener_result(date_fmt, reason="非交易日不预计算")
     except (ValueError, TypeError):
         pass
+
+    # S095 R2：未来日期硬闸门（同步通道），同 precompute_daily_async。
+    if not _assert_not_future_date(date_fmt):
+        _logger.warning(
+            "[s095] %s 未来日期拒绝写入（precompute_daily）", date_fmt,
+        )
+        return _empty_screener_result(date_fmt, reason="未来日期拒绝写入")
 
     target_date = asyncio.run(_resolve_date(date_fmt))
     cache_key = f"limitup_screener_{target_date}"
