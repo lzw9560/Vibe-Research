@@ -42,9 +42,21 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS zt_history (
     fundamt REAL,                -- 成交额
     hybk TEXT,                   -- 行业
     snapshot_at TEXT,            -- 采集时间戳
+    is_final INTEGER DEFAULT 0,  -- 1=终盘稳定版（采集时间>=17:15）；每日唯一行级标记
     PRIMARY KEY (date, code)     -- 幂等：同日同 code 重写覆盖
 )"""
 _INDEX = "CREATE INDEX IF NOT EXISTS idx_zt_history_date ON zt_history(date)"
+
+
+def _ensure_final_column(conn: sqlite3.Connection) -> None:
+    """幂等加 is_final 列（存量 DB 老表无此列，ALTER TABLE ADD COLUMN 若已存在则跳过）。
+
+    PRAGMA table_info 取列名集合，缺则 ALTER TABLE ADD COLUMN is_final INTEGER DEFAULT 0。
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(zt_history)")}
+    if "is_final" not in cols:
+        conn.execute("ALTER TABLE zt_history ADD COLUMN is_final INTEGER DEFAULT 0")
+        conn.commit()
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -54,7 +66,7 @@ def _get_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute(_SCHEMA)
     conn.execute(_INDEX)
-    conn.commit()
+    _ensure_final_column(conn)
     return conn
 
 
@@ -100,15 +112,26 @@ def _to_iso(d: str) -> str:
 # 采集 + 读取
 # ─────────────────────────────────────────────────────────────────────────────
 
-def snapshot_zt_pool(date: str | None = None, pool: list[dict] | None = None) -> int:
+def snapshot_zt_pool(
+    date: str | None = None,
+    pool: list[dict] | None = None,
+    is_final: bool = False,
+) -> int:
     """snapshot 当日涨停池 → zt_history。返回写入行数。
 
     Args:
         date: YYYY-MM-DD 或 YYYYMMDD。None=最近交易日（vr_paths.last_trading_date_str）。
         pool: 预填涨停池（测试/复用，跳过 em 调用）；None=调 astock.em_zt_topic_pool 取。
+        is_final: True=终盘稳定版（采集时间>=17:15，东财池已稳定）。final 一旦落定，
+            后续 is_final=False 的写入被**拒绝覆盖**（保守，避免旧时点快照污染终盘）。
 
-    幂等：同 (date, code) INSERT OR REPLACE 覆盖（重跑同日不重复）。
-    缺字段填 None（不臆造）。空池→返回 0（非交易日/端点空）。
+    **每日唯一 + final 标记（2026-08-23 落地）**：
+    单事务内 DELETE 同 date 全行 → INSERT 新池。解决"INSERT OR REPLACE 只覆盖同 code 行，
+    新旧快照 code 集合不同时残行混入"（实证 2026-08-21 同日存 16:00 68 条 + 08-23 00:08 54 条
+    两个时点混合 122 行）。
+
+    幂等：同日重跑覆盖（DELETE+INSERT，不翻倍）。缺字段填 None（不臆造）。空池→返回 0
+    （非交易日/端点空；空池不触发 DELETE 旧数据，避免误清已落定终盘）。
     """
     d_iso = _to_iso(date) if date else ""
     if not d_iso:
@@ -148,12 +171,23 @@ def snapshot_zt_pool(date: str | None = None, pool: list[dict] | None = None) ->
     conn = _get_conn()
     try:
         with _DB_LOCK:
+            # final 保护：旧行已 is_final=1 且新数据 is_final=False → 拒绝覆盖
+            prev = conn.execute(
+                "SELECT is_final FROM zt_history WHERE date = ? LIMIT 1", (d_iso,)
+            ).fetchone()
+            if prev is not None and prev["is_final"] == 1 and not is_final:
+                _logger.warning(
+                    "snapshot_zt_pool date=%s 拒绝覆盖：旧行已 is_final=1，新数据非 final", d_iso)
+                return 0
+            # UPSERT 同日行：单事务 DELETE 旧日全行 + INSERT 新池（每日唯一，不残留旧时点残行）
+            conn.execute("DELETE FROM zt_history WHERE date = ?", (d_iso,))
             cur = conn.executemany(
-                """INSERT OR REPLACE INTO zt_history
-                (date, code, name, lbc, zbc, fbt, fund, zje, p, ltsz, fundamt, hybk, snapshot_at)
+                """INSERT INTO zt_history
+                (date, code, name, lbc, zbc, fbt, fund, zje, p, ltsz, fundamt, hybk,
+                 snapshot_at, is_final)
                 VALUES (:date, :code, :name, :lbc, :zbc, :fbt, :fund, :zje, :p,
-                        :ltsz, :fundamt, :hybk, :snapshot_at)""",
-                rows,
+                        :ltsz, :fundamt, :hybk, :snapshot_at, :is_final)""",
+                [{**r, "is_final": 1 if is_final else 0} for r in rows],
             )
             conn.commit()
             return cur.rowcount

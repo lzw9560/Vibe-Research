@@ -111,3 +111,99 @@ def test_snapshot_date_format_compact_and_iso(monkeypatch, tmp_path):
     rows = zth.load_zt_history("20260814", "20260814")
     assert len(rows) == 1
     assert rows[0]["date"] == "2026-08-14"
+
+
+# ── S078 follow-up：每日唯一 + final 标记（2026-08-23 落地）──────────────────────
+
+
+def test_snapshot_same_day_new_pool_overwrites_old_no_residue(monkeypatch, tmp_path):
+    """同日二次写入不同 code 集合，旧池残行不应残留（修 INSERT OR REPLACE 只覆盖同 code 的 bug）。"""
+    monkeypatch.setattr(zth, "_DB_PATH", tmp_path / "zt_history.db")
+
+    # Act：16:00 写 2 只，后续写 1 只（不同 code 集合）
+    zth.snapshot_zt_pool("2026-08-21", pool=_POOL)  # 600127, 001358
+    zth.snapshot_zt_pool("2026-08-21", pool=[
+        {"c": "300999", "n": "新妖", "lbc": 1}])  # 全新 code
+
+    # Assert：只剩 1 行（300999），旧 2 行不应残留
+    rows = zth.load_zt_history("2026-08-21", "2026-08-21")
+    assert len(rows) == 1
+    assert rows[0]["code"] == "300999"
+
+
+def test_snapshot_final_overwrites_non_final(monkeypatch, tmp_path):
+    """is_final=True 可覆盖非 final 旧行。"""
+    monkeypatch.setattr(zth, "_DB_PATH", tmp_path / "zt_history.db")
+
+    # Arrange：先写非 final
+    zth.snapshot_zt_pool("2026-08-21", pool=_POOL, is_final=False)
+    # Act：再写 final（不同 code 集合也行）
+    zth.snapshot_zt_pool("2026-08-21", pool=[
+        {"c": "300999", "n": "终盘版", "lbc": 1}], is_final=True)
+
+    # Assert：终盘版覆盖成功，is_final=1
+    rows = zth.load_zt_history("2026-08-21", "2026-08-21")
+    assert len(rows) == 1
+    assert rows[0]["code"] == "300999"
+    assert rows[0]["is_final"] == 1
+
+
+def test_snapshot_non_final_rejected_after_final_locked(monkeypatch, tmp_path):
+    """旧行已 is_final=1，后续 is_final=False 写入应被拒绝（final 一旦落定不可被覆盖）。"""
+    monkeypatch.setattr(zth, "_DB_PATH", tmp_path / "zt_history.db")
+
+    # Arrange：先落定 final
+    zth.snapshot_zt_pool("2026-08-21", pool=_POOL, is_final=True)
+    assert len(zth.load_zt_history("2026-08-21", "2026-08-21")) == 2
+
+    # Act：试图用非 final 覆盖（不同 code）
+    written = zth.snapshot_zt_pool("2026-08-21", pool=[
+        {"c": "300999", "n": "旧时点", "lbc": 1}], is_final=False)
+
+    # Assert：拒绝，0 行写入，旧 final 数据保留
+    assert written == 0
+    rows = zth.load_zt_history("2026-08-21", "2026-08-21")
+    assert len(rows) == 2  # 仍是原 final 的 2 行
+    assert all(r["is_final"] == 1 for r in rows)
+
+
+def test_snapshot_final_replaces_final_allowed(monkeypatch, tmp_path):
+    """final 可被新 final 覆盖（同日重采终盘版允许，如人工补采）。"""
+    monkeypatch.setattr(zth, "_DB_PATH", tmp_path / "zt_history.db")
+
+    zth.snapshot_zt_pool("2026-08-21", pool=_POOL, is_final=True)
+    zth.snapshot_zt_pool("2026-08-21", pool=[
+        {"c": "300999", "n": "补采终盘", "lbc": 1}], is_final=True)
+
+    rows = zth.load_zt_history("2026-08-21", "2026-08-21")
+    assert len(rows) == 1
+    assert rows[0]["code"] == "300999"
+    assert rows[0]["is_final"] == 1
+
+
+def test_ensure_final_column_idempotent_on_legacy_db(monkeypatch, tmp_path):
+    """存量老表（无 is_final 列）首连自动 ALTER 加列，二次连不报错。"""
+    monkeypatch.setattr(zth, "_DB_PATH", tmp_path / "zt_history.db")
+
+    # Arrange：手动建老表（无 is_final 列），模拟 2026-08-23 迁移前的生产 DB
+    import sqlite3
+    conn = sqlite3.connect(tmp_path / "zt_history.db")
+    conn.execute("""CREATE TABLE zt_history (
+        date TEXT NOT NULL, code TEXT NOT NULL, name TEXT,
+        lbc INTEGER, zbc REAL, fbt REAL, fund REAL, zje REAL, p REAL,
+        ltsz REAL, fundamt REAL, hybk TEXT, snapshot_at TEXT,
+        PRIMARY KEY (date, code))""")
+    conn.execute("INSERT INTO zt_history (date, code, snapshot_at) VALUES ('2026-08-01', '000001', 'x')")
+    conn.commit()
+    conn.close()
+
+    # Act：通过 _get_conn 触发 _ensure_final_column
+    conn = zth._get_conn()
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(zt_history)")}
+    conn.close()
+
+    # Assert：列已加
+    assert "is_final" in cols
+    # 二次连不报错（幂等）
+    conn = zth._get_conn()
+    conn.close()

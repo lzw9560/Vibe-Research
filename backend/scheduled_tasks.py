@@ -1302,14 +1302,28 @@ class TaskExecutor:
 
         数据地基：涨停池历史 >1 月无源（em/ths/akshare 均 ~1 月），每日累积供长窗 §44 复验。
         失败 catch 不抛，返 error（采集是增强，不阻塞主流程）。
+
+        **每日唯一 + final 标记（2026-08-23 落地）**：
+        is_final 按采集时点（北京时间）判定——>= 17:15 → True（东财池已稳定终盘），
+        < 17:15 → False（中间快照，可被后续 final 覆盖）。final 一旦落定不可被非 final 覆盖。
         """
         try:
             from data.zt_history_store import snapshot_zt_pool
             from vr_paths import last_trading_date_str
             target = payload.get("date") or last_trading_date_str()
-            written = snapshot_zt_pool(target)
-            logger.info("[zt_history_snapshot] %s 涨停池 snapshot 写入 %s 行", target, written)
-            return {"date": target, "written": written, "status": "ok"}
+            # 采集时点判定：北京时间 17:15 后视为终盘稳定版（东财涨停池盘后持续收缩，
+            # 17:15 后已稳定）。dateutil 不可用则回退 zoneinfo（3.9+ stdlib）。
+            import datetime as _dt
+            try:
+                from zoneinfo import ZoneInfo
+                now_bj = _dt.datetime.now(ZoneInfo("Asia/Shanghai"))
+            except Exception:  # noqa: BLE001
+                now_bj = _dt.datetime.now()  # fallback：无 tz 信息，按本地（开发机通常 CST）
+            is_final = now_bj.hour > 17 or (now_bj.hour == 17 and now_bj.minute >= 15)
+            written = snapshot_zt_pool(target, is_final=is_final)
+            logger.info("[zt_history_snapshot] %s 涨停池 snapshot 写入 %s 行 (is_final=%s)",
+                        target, written, is_final)
+            return {"date": target, "written": written, "is_final": is_final, "status": "ok"}
         except Exception as e:
             logger.warning("[zt_history_snapshot] 采集失败: %s", e)
             return {"status": f"error: {e}"}
