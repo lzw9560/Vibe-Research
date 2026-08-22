@@ -6,7 +6,7 @@
 
 ## 阶段（ora-6 B4 重排：消除 S2 依赖 S3 倒置 + R26-R28 归属）
 
-### S0 前置硬门：gene_scores 错位修复（S094-P0，独立 spec/分支）
+### S0 前置硬门：gene_scores 错位修复（S095，spec 已立项 `specs/S095-gene_scores写路径修复与日期守卫/`）
 - 写路径根因修复：_fetch_zt_pool 对历史日请求加 code 集合校验（返回池实际日期 != 请求日期 → 拒绝写入）
 - 历史行重算已完成（fix-18：08-13~08-21 code 集合 5/5 全等，备份 .vibe-research/gene_scores.db.bak-recompute-offset-2026-08-23）
 - **S2/S4 合并前必须完成写路径修复**

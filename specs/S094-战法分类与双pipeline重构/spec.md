@@ -4,7 +4,7 @@
 > 作者：Claude 会话  日期：2026-08-23
 > 级别：**large**（跨层 + 双 pipeline 统一底座 + score_candidates 分流 + confidence 统一 + kline 扩容 + 5 根因修复 + UI 重设计）
 > 流程门：spec.md + plan + task；feature 分支 `feature/S094-战法分类与双pipeline重构`；完整 grill；playwright 验收
-> 依赖：S093 已合并（M4 归档）；**前置硬门：gene_scores 错位修复（S094-P0，见 §0.7）——进行中（数据重算已完成，写路径根因修复未落地，需单独立 spec 承接）**
+> 依赖：S093 已合并（M4 归档）；**前置硬门：gene_scores 错位修复（S095，见 §0.7）——进行中（数据重算已完成，写路径守卫实施中）**
 > Oracle 第一轮：ora-6 完成，6 阻断 + 7 歧义，逐项吸收中
 
 ## 0. 起因
@@ -19,7 +19,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 4. **zt_real 定位错**：不在 market._emotion（L272 len(zt) 东财 push2ex），在 _sentiment（L76 akshare legu "真实涨停"）；_sentiment 历史日返 {}（P0-1）。
 5. **板块轮动修错对象**：前端 ContextTab 用 /api/strategy/funnel/sector-rotation（sector_cycle），非 /api/sector/rotation（sector_divergence 已弃用）；"未取得"根因**非 aggregate_sectors industry 缺**（ora-6 实测每个历史日 industry 满值），而是端点 date 必填无默认值 + 前端未传 date → 端点返空（ora-6 B5 修正）。
 6. **kline cache 无非涨停股**：1121 只全涨停股 + FIELDS 无 ma5/ma10/ma20。
-7. **🔴 gene_scores 历史行系统性错位一天**（Oracle 独立复现，08-13 起每一天）：写入时刻在 T 日晚，用盘中口径的东财池值算了 T+1 的基因标 T+1——每天偏移一个交易日。已用 code 集合相等验证（gs(08-18)=106 == zh(08-17)=106，全等；gs(08-19)=79 == zh(08-18)=79，全等；以此类推）。**FLOW A 候选输入（workflow.py L182 load_gene_scores）、R12 confidence 复用、R18 aggregate_sectors、backtest_lite/forward_test 全部坐在这份错位数据上。** 今天的 is_trading_day 守卫只防非交易日，防不住"交易日拿前一天池"这种错位。**前置硬门：S094 的 S2/S4 合并前必须完成 gene_scores 写路径修复（S094-P0）+ 历史行重算**。
+7. **🔴 gene_scores 历史行系统性错位一天**（Oracle 独立复现，08-13 起每一天）：写入时刻在 T 日晚，用盘中口径的东财池值算了 T+1 的基因标 T+1——每天偏移一个交易日。已用 code 集合相等验证（gs(08-18)=106 == zh(08-17)=106，全等；gs(08-19)=79 == zh(08-18)=79，全等；以此类推）。**FLOW A 候选输入（workflow.py L182 load_gene_scores）、R12 confidence 复用、R18 aggregate_sectors、backtest_lite/forward_test 全部坐在这份错位数据上。** 今天的 is_trading_day 守卫只防非交易日，防不住"交易日拿前一天池"这种错位。**前置硬门：S094 的 S2/S4 合并前必须完成 gene_scores 写路径修复（S095，spec 已立项实施）+ 历史行重算**。
 
 用户要坚实工程底座（不修补，重构架构），避免返工。
 
@@ -210,7 +210,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 
 ## 10. 阶段划分（ora-6 B4 重排：消除 S2 依赖 S3 倒置 + R26-R28 归属）
 
-### S0 前置硬门：gene_scores 错位修复（S094-P0，独立 spec/分支）
+### S0 前置硬门：gene_scores 错位修复（S095，spec 已立项 `specs/S095-gene_scores写路径修复与日期守卫/`）
 - 写路径根因修复（_fetch_zt_pool 对历史日请求加 code 集合校验 / 换源校验）+ 历史行重算
 - **S2/S4 合并前必须完成**
 

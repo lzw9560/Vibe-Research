@@ -4,7 +4,7 @@
 > 测试基线：后端 2215 passed（1 pre-existing S066 归档债）+ 前端 428 passed。
 > 阶段与 spec §10 / plan.md 同步（ora-6 B4 重排）。
 
-## S0 前置硬门：gene_scores 错位修复（S094-P0，独立 spec/分支）
+## S0 前置硬门：gene_scores 错位修复（S095，spec 已立项 `specs/S095-gene_scores写路径修复与日期守卫/`）
 - [ ] T0a `_fetch_zt_pool` 对历史日请求加 code 集合校验（返回池实际日期 != 请求日期 → 拒绝写入，返空降级）
 - [ ] T0b 历史行重算已完成（fix-18：08-13~08-21 code 集合 5/5 全等）——**写路径修复前 S2/S4 不可合并**
 - [ ] G0 commit 门：写路径校验测试绿
