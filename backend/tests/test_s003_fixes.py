@@ -90,6 +90,10 @@ def test_limitup_metrics_returns_200(monkeypatch):
 
     monkeypatch.setattr(ls, "get_screener_result", _fake_screener)
     monkeypatch.setattr(astock, "em_zt_topic_pool", lambda *a, **k: [])
+    # 交易日守卫（日期语义完整性 P2）：测试在非交易日跑会被守卫拦截返空，
+    # 但本测验证 ScreenerResult 字段映射逻辑，须放行（mock is_trading_day=True）。
+    import routers.limitup.metrics as _metrics_mod
+    monkeypatch.setattr(_metrics_mod, "is_trading_day", lambda d=None: True)
 
     res = client.get("/api/limitup/metrics")
     assert res.status_code == 200, f"metrics 502: {res.status_code} {res.text[:300]}"

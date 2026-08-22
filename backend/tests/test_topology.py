@@ -200,6 +200,7 @@ def _pool_item(code, name, lbc, hybk):
 
 def test_ladder_provider_same_height(monkeypatch):
     """同连板高度候选 → ladder 边；同行业额外加权。"""
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
@@ -230,6 +231,7 @@ def test_ladder_provider_no_selfloop_on_dup_code(monkeypatch):
 
     未修前 cand_codes 不去重 → 重复 code 在 i/i+1 配对产自环边。
     """
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
@@ -394,6 +396,7 @@ def test_relation_graph_degree_cap():
 
 def test_board_ladder_tree_structure(monkeypatch):
     """梯队树：根=当日涨停 → 按连板高度分层 → 同题材归枝 → 叶=个股(code/name 如实呈现)。"""
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
@@ -486,6 +489,7 @@ def test_endpoint_board_ladder_wired(monkeypatch):
     from fastapi.testclient import TestClient
     import app as app_module
 
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
@@ -540,6 +544,7 @@ def test_endpoint_relation_all_four_edge_types(monkeypatch):
     from fastapi.testclient import TestClient
     import app as app_module
 
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
     monkeypatch.setattr(
         topology,
         "_load_candidates",

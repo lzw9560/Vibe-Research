@@ -70,6 +70,13 @@ class TestFuseEndpoint:
             "vr_paths.is_trading_day",
             lambda d: False,
         )
+        # carry-forward 修复后 _get_latest_sti 调 last_trading_date_str() 做
+        # WHERE date <= ? 锚点；is_trading_day 被恒置 False 会触发无限回退，
+        # 故同款 patch last_trading_date_str 返回固定锚点（空 DB 命不中 → 默认）
+        monkeypatch.setattr(
+            "vr_paths.last_trading_date_str",
+            lambda: "2026-08-14",
+        )
         client = TestClient(appmod.app)
         r = client.get("/api/sentiment/weather/fuse")
         data = r.json()["data"]
