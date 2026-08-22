@@ -4,7 +4,7 @@
 > 作者：Claude 会话  日期：2026-08-23
 > 级别：**large**（跨层 + 双 pipeline 统一底座 + score_candidates 分流 + confidence 统一 + kline 扩容 + 5 根因修复 + UI 重设计）
 > 流程门：spec.md + plan + task；feature 分支 `feature/S094-战法分类与双pipeline重构`；完整 grill；playwright 验收
-> 依赖：S093 已合并（M4 归档）；**前置硬门：gene_scores 错位修复（S094-P0，见 §0.7）已合并**
+> 依赖：S093 已合并（M4 归档）；**前置硬门：gene_scores 错位修复（S094-P0，见 §0.7）——进行中（数据重算已完成，写路径根因修复未落地，需单独立 spec 承接）**
 > Oracle 第一轮：ora-6 完成，6 阻断 + 7 歧义，逐项吸收中
 
 ## 0. 起因
@@ -48,13 +48,13 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 
 ### B. 统一因子层 + 权重源（修 RC3）
 - [ ] R3 删 non_limitup_funnel.py L48 NON_LIMITUP_WEIGHTS 硬编码
-- [ ] R4 compute_non_limitup_score 委托 compute_strategy_score(weight_set="non_limitup")（strategy_weights.json 已存），消灭两套权重源
+- [ ] R4 ~~compute_non_limitup_score 委托 compute_strategy_score(weight_set="non_limitup")~~ **（ora-6 B6 + ora-7 N3 拍板：不委托，下沉 match 层）**：per-strategy volume_signal 计算下沉到各战法 match() 内部——`compute_volume_signal_score`（non_limitup_funnel.py L86-120）按战法分支逻辑迁入对应 Strategy.match()，match 返回时把 volume_signal 填入 signals 的 confidence/signal_strength 字段（dispatch_match 已产这两个字段，strategy_base.py L252-253）。候选 factors 仍用**单一一份 PatternScan factors dict**（中文键 `{相对强度, 均线多头, 量能信号, 板块强度}`，0-100 值，复用既有 compute_relative_strength_score 等 4 个映射函数 non_limitup_funnel.py L60-137），per-strategy 差异在 match 层处理，不在候选层。**R14 候选 shape 不加 strategy_factors 字段**（单一 factors 够用，per-strategy 逻辑在 match 层）
 - [ ] R5 PatternScan 升为 market_scan 唯一因子事实源，indicator_based PatternReversalStrategy 改读 PatternScan（不读 ctx.indicators）
 
 ### C. StrategyContext 扩展 + match 分流（修 RC4，R5/R6/R7）
 - [ ] R6 StrategyContext L47 加可选 market_scan_ctx：{pattern: PatternScan, sector_rank: int, rel_strength_vs_sector: float}
 - [ ] R7 score_candidates 加 funnel_type 参数：limitup 用 gene ctx 跑 7 涨停战法；market_scan 用 market_scan_ctx 跑 5 非涨停战法，二者不交叉
-- [ ] R8 既有调用点传 funnel_type：workflow.py _collect（涨停候选 limitup + 非涨停候选 market_scan 两次调）+ scheduled_tasks.py L1605（limitup）+ pre_market_workflow
+- [ ] R8 既有调用点传 funnel_type：workflow.py _collect（涨停候选 limitup + 非涨停候选 market_scan 两次调）+ scheduled_tasks.py L1605（limitup）——**ora-7 N8：删 pre_market_workflow（走 StrategyMatcher 不调 score_candidates）；补 forward_test.py L491（调 score_candidates，传 limitup）**
 - [ ] R9 DragonHeadStrategy.match L180 删无条件放行，改读 market_scan_ctx.rel_strength_vs_sector + sector_rank（板块内排名≤3 才命中）——**ora-6 A3：dispatch_match 经共享，波及所有 match_strategies 消费方（pre_market_workflow L174、workflow.py L860、strategy_backtest L145/L236、prediction_ingest L99、position_advisor_v2 L196），这些上下文无 market_scan_ctx → dragon_head + 4 形态战法从"可能命中"变"永不命中"——涨停股场景本就不该命中这 5 个非涨停战法，方向大概率对，但 spec 须显式声明行为变化面而非默认**。另注意 **pre_market_workflow 不调 score_candidates**（走 StrategyMatcher），R8 里"pre_market_workflow 传 funnel_type"表述有误，删
 - [ ] R10 3 K线形态战法（low_absorption/platform_breakout/pattern_reversal）match 改读 PatternScan（consolidation_days/ma5_proximity/volume_breakout）——**reverse_package 不在 R10**（ora-6 A6：reverse_package 注册在 market_scan 但 match 在 db_based.py 读炸板池，本质是涨停生态战法，保留 db-based 不改读 PatternScan；§4 受影响文件 db_based.py 补列）**
 
@@ -66,7 +66,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 - [ ] R13 ~~run_non_limitup_funnel 输出对齐 scored_candidates schema~~ **（ora-6 A4：R27 把 run_non_limitup_funnel 拆成"只产候选不打分"后，独立端点 /api/strategy/non-limitup-funnel 的输出契约会断——前端 NonLimitupLane 消费它拿打分结果。R13 与 R27 互相矛盾。拍板：独立端点同步切换为"产候选 → score_candidates(market_scan)"，R13 改为对齐该新路径的输出 schema：加 name + confidence + signal_strength，字段名统一 strategy_score）**
 
 ### F. 候选输入统一（修 RC6）
-- [ ] R14 FLOW B 候选扩为 {code,name,bars,sector,sector_rank,close}，与 FLOW A cand_input 对齐，score_candidates 单一入口服务两 funnel_type
+- [ ] R14 FLOW B 候选扩为 {code,name,bars,sector,sector_rank,close}，与 FLOW A cand_input 对齐，score_candidates 单一入口服务两 funnel_type——**ora-7 N6：name 来源 = 从 `code_industry` 表反查（code→name 字段已存在，load_industry_map 已在产），kline cache FIELDS 无 name 字段故不从 bar 取**
 
 ### G. zt_real 显示层修（根因 4）
 - [ ] R15 ~~前端读 briefing.market_emotion.zt_count 正确字段~~ **（ora-6 B2 阻断：market_emotion 无 zt_real 字段，zt_count 是东财池 len 非"真实涨停"，方案不可行——删）**
@@ -79,7 +79,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 
 ### H. 板块轮动修对对象（根因 5）
 - [ ] R18 板块轮动根因=date=None 默认 localTodayStr（非交易日空，**非 industry 缺**——08-21 industry 54/54 有值端点返 10 板块），修：后端 /api/strategy/funnel/sector-rotation 端点 date=None 默认 last_trading_date_str（routers/strategy.py）+ 前端 ContextTab 传 triplet.today
-- [ ] R19 ~~删 sector_divergence calculate_sector_rotation L207-209 prev_sectors.copy() TODO，接入前一交易日历史板块排名~~ **（ora-6 非阻断 #4：前端已弃用 sector_divergence（ContextTab L31 注释实锤），残留消费仅 api.ts L212 + test_s008_t13e + smoke_test_apis；R19 有 YAGNI 嫌疑——砍掉或写明谁消费。若保留，"接前一交易日历史板块排名"也无历史板块数据源（sector_divergence 用东财 industry_comparison 实时接口，历史无存），需先回答数据从哪来）**
+- [ ] R19 ~~删 sector_divergence calculate_sector_rotation L207-209 prev_sectors.copy() TODO~~ **（ora-7 N5 拍板：砍掉——前端已弃用 sector_divergence（ContextTab L31 注释实锤），残留消费仅 api.ts L212 + test_s008_t13e + smoke_test_apis，无消费方值得保留；§4 表 sector_divergence.py 行删 R19、§10 S4 删 R19、§7 删 R19 引用）**
 
 ### I. kline cache 扩容（根因 6）
 - [ ] R20 baostock 全 A ~5500 刷新任务（非增量 list(cache.keys())，扩容到非涨停股）——**ora-6 非阻断 #1：全 A 代码可直接复用 `load_industry_map()`（5540 条已在产），不必调 baostock `query_stock_basic`（已式微）；扩容后 cache ~150MB，routers/strategy.py:267 每请求 json.loads 全量需配套模块级 memo 或迁 sqlite/parquet；"1-2h"改"预估 2-3h 实测为准"**
@@ -99,11 +99,15 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 ### L. 各 R 细节定稿（grill 收敛）
 - R1 `_compute_ma(bars, n)` = SMA（close[-n:]/n），n=5/10/20，bars<20 返 None（诚实降级）；放 pattern_scan.py，PatternScan 自持 TA
 - R2 `sector_bars` = 板块成分股等权平均日K（close/high/low/volume 简单平均），compute_relative_strength 真为相对值（个股5日涨幅-板块5日涨幅）——**ora-6 A5：成分股集合=板块全成分（有 bar 者参与），停牌/缺 bar 按日期对齐取交集，写进定稿**
-- R5 PatternReversal 沿用"长上影洗盘修复"形态（上影线>=4%+未封涨停+放量1.2x+5日线向上）——**ora-6 B3：PatternScan 现有 7 字段无 shadow_length_pct，须先扩 compute_shadow_length_pct(bars) + compute_ma5_slope(bars) 两个新 compute_\*，不能假装从 PatternScan 取不存在的字段**；改读 PatternScan 不读 ctx.indicators；spec §3"突破昨日最高"作废；放量口径变更（现 indicator_based 是今量/昨量≥1.2，PatternScan 是今量/前5日均量）须显式声明并说明阈值沿用理由（按数据支撑优先，口径变阈值不能默认不变）
+- R5 PatternReversal 沿用"长上影洗盘修复"形态——**ora-7 N2 完整定义**：
+  - **新增 compute_\* 函数签名**：`compute_shadow_length_pct(bars) -> float` = `(high[-1] / close[-1] - 1) * 100`（复用既有先例 `candidate_funnel/sources/activity.py` L112-114 口径）；`compute_ma5_slope(bars) -> float` = `(ma5[-1] - ma5[-2]) / ma5[-2]`（ma5 用 R1 的 `_compute_ma(bars, 5)` 算，slope>0 即"向上"，阈值 0——零定义补齐）
+  - **5 因子→3 字段删减显式声明**：原 5 因子（未封涨停 + 最高≥7% + 上影≥4% + 放量1.2x + 5日线向上）→ PatternScan 3 字段（shadow_length_pct≥4 + volume_breakout_ratio≥1.2 + ma5_slope>0），"未封涨停"和"最高≥7%"删减——理由：PatternScan 是 K线形态层不包含涨停判定（涨停判定在战法 match 层用 pool_item.lbc/zbc），"最高≥7%"与"上影≥4%"语义重叠（上影大则最高也大），保留上影更精确
+  - **放量口径变更结论**：现 indicator_based 今量/昨量≥1.2 改为 PatternScan volume_breakout_ratio 今量/前5日均量≥1.2——阈值沿用 1.2（数据支撑优先：口径变但 1.2 是保守值，前5日均量比昨量更稳定，阈值不变是保守选择，实现后回测验证调参）
+  - 改读 PatternScan 不读 ctx.indicators；spec §3"突破昨日最高"作废
 - R16 zt_real 持久化：sti_timeline schema 加 zt_real 列 + `_execute_sti_post_market`（scheduled_tasks L672-690）存 zt_real（latest 日算）+ `_market_emotion_from_ctx` 读 zt_real 维度（历史日读 DB，不依赖 akshare 历史源）
 - R18 板块轮动根因修正（ora-6 B5 收敛三处矛盾）：根因**非 aggregate_sectors industry 缺**（ora-6 实测每个历史日 industry 都是满值，save_gene_scores L112 code_industry 兜底），真正根因是端点 `/api/strategy/funnel/sector-rotation` date 参数必填无默认值 + 前端未传 date → 端点返空。修法：后端端点 date 默认 `last_trading_date_str()`（routers/strategy.py 改），前端 ContextTab 传 `triplet.today`（非交易日=F=最近交易日）。叠加 B1 错位影响：历史日聚合的是前一天的池（错位修复后自动消解）
-- R4 委托 compute_strategy_score 须保留 per-strategy volume_signal 语义（ora-6 B6）：现 `compute_volume_signal_score`（non_limitup_funnel.py L86-120）按战法分支（platform_breakout volume_breakout_ratio>2 / reverse_package 成交额>15亿 / low_absorption >5亿 / dragon_head >10亿），而 `compute_strategy_score`（registry L362-420）是"候选一份 factors × weight_set"——score_candidates 循环里同一候选对所有命中战法用**同一份 factors**（L514-522），per-(候选,战法) 的 volume_signal 无处安放。**修法**：在 R14/R26 候选生产中引入"每战法一份 factors"（或把 volume_signal 计算下沉到 match 层）——这是打分语义变更，须在 spec 里显式定义，不能"实现时定"
-- R20 kline cache 扩容：baostock `query_stock_basic` 取全 A ~5500 代码 + 一次性扩容（后台 scheduled_tasks kline_refresh 扩容版，周末/盘后跑 1-2h）+ 后续增量维护（5500 append 新 bar）
+- R4 per-strategy volume_signal 下沉 match 层（ora-7 N3 拍板，与 §3.R4 一致）：`compute_volume_signal_score`（non_limitup_funnel.py L86-120）按战法分支逻辑（platform_breakout volume_breakout_ratio>2 / reverse_package 成交额>15亿 / low_absorption >5亿 / dragon_head >10亿）迁入对应 Strategy.match()，match 返回时填入 signals 的 confidence/signal_strength 字段。候选 factors 仍用单一一份 PatternScan factors dict（中文键 `{相对强度, 均线多头, 量能信号, 板块强度}`，0-100 值，复用既有 compute_relative_strength_score 等 4 个映射函数 non_limitup_funnel.py L60-137）。R14 候选 shape 不加 strategy_factors 字段
+- R20 kline cache 扩容：**ora-6 非阻断 #1 已吸收——复用 `load_industry_map()`（5540 条已在产）取全 A 代码（非 baostock `query_stock_basic` 已式微）+ 一次性扩容（周末/盘后跑，预估 2-3h 实测为准）+ 后续增量维护；扩容后 cache ~150MB 需配套模块级 memo 或迁 sqlite/parquet** + 后续增量维护（5500 append 新 bar）
 
 ### M. 实施细节定稿（grill 第 2 轮收敛）
 - **12 战法归组表**（STRATEGIES_BY_FUNNEL_TYPE）：
@@ -112,7 +116,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 - **funnel_type 默认**：必填（无默认 None=全跑）——None=全跑与 R7"不交叉"矛盾 + market_scan_ctx 缺失 crash。既有调用（workflow/scheduled_tasks L1605）传 limitup；market_scan 调用传 market_scan
 - **模块归属**：新建 `market_scan.py`（因子层+形态子+领涨子 compute_sector_stock_rank）；`non_limitup_funnel.py` 保留 `run_non_limitup_funnel` 瘦身为"调 market_scan 产候选"入口（R27 拆分后只产候选不打分）。删 §4"或"字样
 - **PatternScan 字段清单**（R10 + R5 对齐）：
-  - pattern_reversal = shadow_length_pct / volume_breakout / ma_bullish（长上影洗盘修复）
+  - pattern_reversal = shadow_length_pct / volume_breakout_ratio / ma5_slope（长上影洗盘修复）——**ora-7 N2：统一用 ma5_slope（非 ma_bullish），与 R5 一致**
   - low_absorption = ma5_proximity（均线回调）/ ma_bullish
   - reverse_package = 保留炸板池 db-based（open_count>=2，非 K线形态子——口径修正，单列 db 子）
   - platform_breakout = consolidation_days / volume_breakout（突破平台）
@@ -130,13 +134,14 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 | `strategies/impl/gene_based.py` | R9 DragonHead 条件化 + ~~R10 4 战法 match 改读 PatternScan~~（R10 改 3 战法，reverse_package 不在，ora-6 A6） |
 | `strategies/impl/db_based.py` | R10 reverse_package 保留 db-based 不改读 PatternScan（ora-6 A6 补列，§4 漏列修复） |
 | `strategies/impl/indicator_based.py` | R5 PatternReversal 改读 PatternScan |
-| `strategies/sector_cycle.py` | R11 compute_sector_stock_rank + R18 端点 date 默认值修复（非 aggregate_sectors industry 修，ora-6 B5） |
+| `strategies/sector_cycle.py` | R11 compute_sector_stock_rank |
+| `routers/strategy.py` | R18 端点 date 默认 `last_trading_date_str()` + /api/strategy/non-limitup-funnel 对齐新 schema（ora-7 N7 归属修正） |
 | `strategies/non_limitup_funnel.py` 或新建 `market_scan.py` | R11 板块领涨子（复用既有函数，非重写） |
 | `routers/workflow.py` | R8 传 funnel_type + 双 pipeline 响应 |
 | `routers/strategy.py` | /api/strategy/non-limitup-funnel 对齐新 schema |
 | `scheduled_tasks.py` | R8 L1605 传 funnel_type |
 | `market.py` | R16 _emotion 加 zt_real 字段（可选） |
-| `sector_divergence.py` | R19 删 prev_sectors TODO |
+| ~~`sector_divergence.py`~~ | ~~R19 删 prev_sectors TODO~~ **（ora-7 N5 砍掉，前端已弃用，§4 行删）** |
 | `tools/refresh_kline_cache.py` | R20 扩容全 A |
 
 ### 前端
@@ -170,13 +175,13 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 2. **复用既有函数**（pattern_scan compute_* / sector_cycle / compute_strategy_score），不重写算法
 3. **PatternScan 升 market_scan 唯一因子源**——消灭 indicator_based 第三条算路
 4. **confidence 复用 dispatch_match**（不派生 strategy_score/100，保留 per-strategy 语义）
-5. **zt_real 显示层修**（不改 _emotion 破坏内部一致性）或加字段保留 zt_count
+5. **zt_real 持久化+显示层修**（R16 变体：_emotion 加 zt_real 字段 + sti_timeline 持久化 + 历史日读 DB，ora-7 A1 拍板；不改 _emotion 内部 zt_count）
 6. **kline cache 扩容 + MA 消费侧算**（不依赖 cache 字段）
 7. **UI 上下分区+折叠**（涨停主/非涨停次）
 
 ## 7. 合规自查
 
-- [x] 不臆造：score_candidates 分流 + match 条件化，数据缺标 None 不命中；板块轮动 rotation_speed 不造假值（R19 接前日历史）
+- [x] 不臆造：score_candidates 分流 + match 条件化，数据缺标 None 不命中；板块轮动 rotation_speed 不造假值（R19 已砍，ora-7 N5）
 - [x] 私有数据 .vibe-research/ 不进 git
 - [x] em_get 防封：kline 用 baostock（非东财不被限流）；板块用 sector/industry（既有防封）
 - [x] 历史统计特征标注
@@ -184,10 +189,10 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 ## 8. 已知盲点（基于摸清已收敛大部分）
 
 1. ~~market_scan 新建工作量~~→复用既有 non_limitup_funnel/pattern_scan/sector_cycle（不重写）
-2. K线形态 4 战法 match 改读 PatternScan——R10 给 consolidation_days/ma5_proximity/volume_breakout 阈值（实现时定，复用既有 compute_*）
+2. K线形态 3 战法 match 改读 PatternScan——R10 给 consolidation_days/ma5_proximity/volume_breakout_ratio 阈值（复用既有 compute_*，阈值沿用既有默认值，实现后回测验证调参，按数据支撑优先规则）
 3. 板块领涨 compute_sector_stock_rank——个股内排名（R11，复用 relative_strength）
 4. confidence 口径——复用 compute_confidence（R12，不派生，收敛）
-5. zt_real akshare legu "真实涨停"口径——R15/R16 显示层或加字段（不改 _emotion 内部）
+5. zt_real akshare legu "真实涨停"口径——R16 持久化+显示层（R15 已删，ora-6 B2；不改 _emotion 内部 zt_count）
 6. 板块轮动端点 date 默认值缺失——R18 修端点 date 默认 `last_trading_date_str()` + 前端传 triplet.today（非 aggregate_sectors industry 缺，ora-6 B5 修正）
 7. kline cache 扩容——R20 baostock 全 A 刷新任务
 
@@ -219,7 +224,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 - StrategyContext market_scan_ctx + score_candidates funnel_type + 既有调用传（含 forward_test L491，ora-6 A2）+ dragon_head 条件化 + 4 战法 match 改 PatternScan + confidence 复用 + R26 workflow._collect 调 gather_non_limitup_candidates + R28 briefing 分区透传
 
 ### S4 5 根因修复（R16-R21）
-- zt_real 持久化 + 板块轮动端点 date 默认 + sector_divergence TODO + kline cache 扩容（R20 全 A 代码复用 load_industry_map 5540 条，ora-6 非阻断 #1）
+- zt_real 持久化 + 板块轮动端点 date 默认 + kline cache 扩容（R20 全 A 代码复用 load_industry_map 5540 条，ora-6 非阻断 #1）
 
 ### S5 前端 UI（R22-R25）
 - 双 pipeline 分区+折叠 + 卡片流转 + StrategyMatchMatrix 分区 + UI bug
