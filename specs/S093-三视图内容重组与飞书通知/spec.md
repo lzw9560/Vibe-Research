@@ -1,11 +1,11 @@
 # Spec: S093 — 三视图内容重组与飞书通知
 
-> 状态：修订中（Oracle 审查 6 阻断项 + 8 非阻断项吸收，待第二轮 grill）
+> 状态：审查闭合（Oracle 4 轮 + grill 自查 1 轮，全部阻断项/歧义已消除），可进 plan
 > 作者：Codex 会话  日期：2026-08-22
 > 级别：**large**（跨层 + 碰外部数据源（tencent_quote 实时行情）+ 复用既有通知渠道（飞书）+ 新增 AI 工具（盘后 LLM 总结）+ 涉及操作建议/风险提示信号）
 > 流程门：spec.md + plan + task；feature 分支 `feature/S093-内容重组与飞书通知`；完整 grill；playwright 验收
 > 依赖：S092 已合并（三视图交易日锚 + dateTriplet + today_status + TaskStatusCard + useMarketClock 已在 develop）
-> Oracle 审查：ora-3 完成，6 阻断项全部吸收（通知复用/bomb_alert 复用/删北向/补 final_candidates/修 stage 矛盾/采样窗口）
+> Oracle 审查：ora-3(6阻断)+ora-4(2阻断+6文本+3矛盾)+ora-5(4 HIGH+6 MEDIUM+5 LOW) 全部修正闭合，关键词反向扫描零残留
 
 ## 0. 起因
 
@@ -103,7 +103,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
   - P2 仓位闸（P2RiskPanel）+ advisory 仓位摘要 — 选完股配仓位
   - 行为对照卡（ShadowComparisonSection）→ 移到复盘（见 R14）
   - T-1 数据（T1Tab）+ 语境（ContextTab，含暴风雨预测）— 选股 pipeline 输入
-  - 战法胜率对比（WinRateCompareSection）→ 移到战法独立页（见 R11）
+  - 战法胜率对比（WinRateCompareSection）→ 移到战法独立页（见 R13）
 
 ### C. 当日 Tab 重新定义为盯盘执行台（前端重构 + 后端新增）
 
@@ -147,13 +147,11 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
   - 复用 `config.feishu_webhook_url`（环境变量 `FEISHU_WEBHOOK_URL`，已映射 config.py:200）
   - 盘后选股通知（R10）无标的级冷却需求；盘中风险提示（R11）复用 `bomb_alert_dispatcher` 冷却（10 分钟，`config.BOMB_ALERT_COOLDOWN_MINUTES`）
   - **不新建** `backend/notifications/feishu.py`——直接调既有 `NotificationService.send()`
-  - webhook URL 收敛到 `config.feishu_webhook_url` 环境变量方案（`FEISHU_WEBHOOK_URL`），废弃 `VR_FEISHU_WEBHOOK`（Oracle 阻断项 #7：两套环境变量收敛为一套）
+  - webhook URL 收敛到 `config.feishu_webhook_url` 环境变量方案（`FEISHU_WEBHOOK_URL`），废弃 `VR_FEISHU_WEBHOOK`（具体动作：`config.py:195` 和 `config/__init__.py:298` 删除 `VR_FEISHU_WEBHOOK` 读取逻辑，`feishu_notifier.py` 标记为 deprecated 不删但不再被任何新代码引用）
 
 - [ ] R10 **前瞻选股结果通知**（17:15 漏斗预计算完成后触发）：
   - 触发点：`candidate_funnel_precompute` 任务 success 后
   - **直接调 `NotificationService.send()`**（不走 `_send_notification`——后者只产固定格式任务状态文本，不支持富内容卡片；Oracle 矛盾 A 闭合）
-  - 内容：F 日期 + final_candidates 数 + 双重确认数 + top5 标的（code/name/基因分/命中战法）
-  - 飞书卡片标题："📊 前瞻选股结果 {F日期}"
   - 内容：F 日期 + final_candidates 数 + 双重确认数 + top5 标的（code/name/基因分/命中战法）
   - 飞书卡片标题："📊 前瞻选股结果 {F日期}"
   - R10 依赖：通知内容含"双重确认数"→后端需在 17:15 算交集（`candidate_funnel_precompute` success 后跑一次 `select_premarket_with_risk(forward)` 读本地 kline，成本低）+ 当前 `_execute_candidate_funnel_precompute` 只返 `{date, status}` 需扩返候选统计（Oracle 非阻断 #11）
@@ -168,11 +166,11 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
   - **不新建** `backend/notifications/rules.py`——在 bomb_alert 体系内扩展通知接线
   - 新增规则（bomb_alert 没有的）：
     - "涨停"（前瞻标的涨停）→ 新增规则 C7（INFO 级）
-    - "情绪恶化"（STI 评分连降 2 级）→ 新增规则 C8（MEDIUM 级）
+    - "情绪恶化"（天气状态降 1 档即触发）→ 新增规则 C8（MEDIUM 级）
     - "连板梯队断裂"（最高板 >3 且无 2 板接力）→ 新增规则 C9（MEDIUM 级）
   - **删除"北向大幅流出>50亿"规则**（Oracle 阻断项 #2：北向个股日级数据 2024-08-19 停更，无真实数据源，违反不臆造底线）
-  - **修正"涨跌比<0.5"口径**（Oracle 阻断项 #3）：当前 `ad_ratio` 是连板数/跌停数代理，非涨跌家数比。**拍板**：C8 触发条件改为"涨停数<5 且炸板数>涨停数"（用 `intraday_sentiment` 的 zt_count/dt_count，语义明确，不依赖 ad_ratio）
-  - **明确"STI 连降 2 级"定义**（Oracle 阻断项 #3）：**拍板**：天气状态从晴→阴或阴→暴风雨连续降 1 档即触发（不要求连降 2 档——降 1 档已信号显著）
+  - **修正"涨跌比<0.5"口径**（Oracle 阻断项 #3）：当前 `ad_ratio` 是连板数/跌停数代理，非涨跌家数比。**拍板**：C8 触发条件改为"涨停数<5 且炸板数>涨停数"（用 `intraday_sentiment` 的 zt_count/zb_count，语义明确——**注意：当前采样快照不落 zb_count/dt_count/ladder，§4 补"intraday_sentiment 快照扩字段透传 zb_count/ladder"**）
+  - **明确"STI 连降 2 级"定义**（Oracle 阻断项 #3）：**拍板**：天气状态从晴→阴或阴→暴风雨连续降 1 档即触发（不要求连降 2 档——降 1 档已信号显著；极端反弹/未知状态不触发 C8）
   - 去重：复用 bomb_alert_dispatcher 的冷却逻辑（同一信号同一标的 **10 分钟**内不重复，对齐 `config.BOMB_ALERT_COOLDOWN_MINUTES=10`）
 
 - [ ] R12 **操作建议**：
@@ -184,7 +182,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 ### F. 战法战绩移出三 Tab
 
 - [ ] R13 **战法独立路由**：
-  - 新建 `/strategy` 路由（或复用已有 `/strategy/funnel/forward-test`）
+  - 新建 `/strategy` 路由（`/strategy/funnel/forward-test` 保留为其子页面）
   - 内容：战法战绩表（registry+backtest）+ 前向测试入口 + 阈值配置入口
   - 公共区入口卡片：`<EntryCard to="/strategy" title="战法管理" />`（锚条下方常驻）
   - 从前瞻 Tab 删除战法战绩折叠区
@@ -211,7 +209,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 | `backend/vr_paths.py` | resolve_date_triplet stage 边界修订（pre_open 新增 + intraday→15:30 + post_transition→15:30 + today 条件加 pre_open + 定时器推进点 15:00→15:30） |
 | `backend/risk/bomb_alert_rules.py` | 扩展：加 C7(涨停)/C8(情绪恶化)/C9(连板断裂) 规则 + 删北向规则 + 修涨跌比口径 |
 | `backend/risk/bomb_alert_dispatcher.py` | 扩展：规则触发时接 NotificationService.send() 推飞书 |
-| `backend/scheduled_tasks.py` | candidate_funnel_precompute success 后触发飞书通知（R10）+ 扩返候选统计 |
+| `backend/scheduled_tasks.py` | candidate_funnel_precompute success 后触发飞书通知（R10）+ 扩返候选统计 + 新 task type `daily_ai_summary`（R12 AI stub，cron 15:30） |
 | `backend/routers/intraday_sentiment.py` | 采样后检查 bomb_alert 规则触发飞书通知（R11） |
 | `backend/routers/workflow.py` | 快照路径补透传 `final_candidates`（一行，Oracle 阻断项 #4） |
 | `backend/config/__init__.py` | INTRADAY_SAMPLE_INTERVALS 末窗 15:00→15:30（Oracle 阻断项 #6） |
@@ -242,7 +240,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 - [ ] AC5 行为对照卡在复盘 Tab（不在当日）
 - [ ] AC6 盯盘入口全天可见（不门控时段）
 - [ ] AC7 飞书通知：前瞻选股结果 17:15 后推送 + 盘中风险提示规则触发推送
-- [ ] AC8 规则引擎：封板跌破/炸板/涨停/情绪恶化/连板断裂 5 条规则触发正确（北向已删——无真实数据源）
+- [ ] AC8 规则引擎：C1-C6（封板/炸板/大盘急跌等既有规则）+ C7(涨停)/C8(情绪恶化)/C9(连板断裂) 新增规则触发正确（北向已删——无真实数据源）
 - [ ] AC9 交叉验证徽章：漏斗∩breakout 双重确认标的标绿
 - [ ] AC10 离线全测绿（pytest + vitest + tsc）
 - [ ] AC11 dev server 冒烟（三 Tab 内容重组 + stage 修订 + 飞书通知发送）
@@ -272,7 +270,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 3. **AI 盘后总结成本**：LLM 调用成本 + 延迟。盘后异步生成不阻塞，但需控制 token 用量。S094 完整设计。
 4. **`last_run_at` 时区**（GR5 遗留）：naive datetime 假设服务器=北京时区。云部署另立 spec。
 5. **采样窗口 15:00 vs intraday 15:30 冲突**（Oracle 阻断项 #6）：`INTRADAY_SAMPLE_INTERVALS` 末窗 `14:30-15:00`，intraday 延长到 15:30 后最后 30 分钟无采样→无规则检查→无通知。修正：config `__init__.py:161` 末窗改为 `("14:30", "15:30", 5)`，采样器注释 `09:25-15:00` 改为 `09:25-15:30`。
-6. **breakout 候选 name 恒为空**（Oracle 非阻断 #8）：`premarket_selection.py:84` 从 kline bar dict 取 `"name"` 字段，但 bar 无此字段。S093 顺手修（从 gene_scores 表补名）或标注已知。
+6. **breakout 候选 name 恒为空**（Oracle 非阻断 #8）：`premarket_selection.py:84` 从 kline bar dict 取 `"name"` 字段，但 bar 无此字段。S093 从 gene_scores 表补名（已在 §4 列明修复行）。
 7. **kline cache 新鲜度守卫**（Oracle 非阻断 #9）：breakout(forward) 正确性依赖 16:30 kline_refresh 已写入 F 日 bar。kline_refresh 失败时 breakout 会静默用 T-2 当 T-1 算。守卫：返回的 `t1_date != F` 时前端标"数据滞后"。
 8. **S092 旧测试适配**（Oracle 阻断项）：`test_s092_date_triplet.py` ~20 处断言旧边界（09:30/15:00），S093 stage 修订后必破，需适配——纳入 §4 受影响文件。
 
@@ -296,7 +294,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 | S092 R18 | today_status 后端推算 | 保持不变 | 共存 | 无迁移 |
 | S055 bomb_alert C1-C6 | 炸板预警规则+冷却去重+落库 | 扩展：接飞书通知 + 新增 C7/C8/C9 规则 | 共存+扩展 | bomb_alert_rules.py 加 C7-C9 + dispatcher 接 NotificationService |
 | 既有 notification/ | NotificationService + FeishuSender（14 渠道） | 复用不新建 | 共存 | 直接调 NotificationService.send() |
-| 既有 feishu_notifier.py | 300s 节流 + 每日 20 条 + 静默时段 | 复用不新建 | 共存 | 直接调既有方法 |
+| 既有 feishu_notifier.py | 300s 节流 + 每日 20 条 + 静默时段 | 不复用（读旧环境变量 VR_FEISHU_WEBHOOK，无调用方） | 废弃 | 通知统一走 NotificationService.send()，不经 feishu_notifier |
 | 既有 config.feishu_webhook_url | 环境变量 FEISHU_WEBHOOK_URL | 复用不新建 | 共存 | webhook URL 收敛到 config 环境变量 |
 
 **处置原则**：替换项在 S093 实现时直接改代码，S092 代码作为基线被覆盖；共存项不改。冲突审查表是实现时的权威参考——不需要翻 S092 spec。
@@ -308,7 +306,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 - 测试覆盖
 
 ### S2 后端飞书通知 + 规则引擎（复用既有基础设施）
-- 复用 NotificationService + feishu_notifier + config.feishu_webhook_url（不新建 notifications/ 模块）
+- 复用 NotificationService + config.feishu_webhook_url（不新建 notifications/ 模块，不经 feishu_notifier）
 - 扩展 bomb_alert_rules.py C7-C9 + bomb_alert_dispatcher 接 NotificationService.send()
 - candidate_funnel_precompute success 后触发飞书通知 + 扩返候选统计
 - intraday_sentiment 采样后检查 bomb_alert 规则触发飞书通知
