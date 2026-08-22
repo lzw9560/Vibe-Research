@@ -67,7 +67,7 @@
 
 ---
 
-## 2. 开发环境（Windows 本机）
+## 2. 开发环境
 
 - **仓库**：`E:\python\projects\Vibe-Research`（develop 分支）
 - **Python**：系统默认 `python` 是 3.7（太旧）；项目用 **3.10+**，venv 在 `backend/.venv`，解释器 `backend/.venv/Scripts/python.exe`。本机 `python3` 是 shim→`python`（见 §5）。
