@@ -45,12 +45,14 @@ GENE_SCORES_DB = "gene_scores.db"
 STI_TIMELINE_DB = "sti_timeline.db"
 WINRATE_DB = "winrate.db"
 SEAL_INTRADAY_DB = "seal_intraday.db"  # S055：盘中封单时序快照
+SEAT_PROFILES_DB = "seat_profiles.db"  # S094：席位画像宽表（合并 A/B 两链路）
 
 # 全路径便捷常量
 GENE_SCORES_DB_PATH = os.path.join(PRIVATE_DATA_DIR, GENE_SCORES_DB)
 STI_TIMELINE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, STI_TIMELINE_DB)
 WINRATE_DB_PATH = os.path.join(PRIVATE_DATA_DIR, WINRATE_DB)
 SEAL_INTRADAY_DB_PATH = os.path.join(PRIVATE_DATA_DIR, SEAL_INTRADAY_DB)
+SEAT_PROFILES_DB_PATH = os.path.join(PRIVATE_DATA_DIR, SEAT_PROFILES_DB)
 
 # S089 B4：seal_intraday 分库目录 + 年库路径函数。
 # 分库文件 ``seal_intraday_YYYY.db`` 与既有私有数据放同目录（PRIVATE_DATA_DIR），

@@ -16,13 +16,15 @@ spec §9 设计：
 - 不输出个体席位名（S018 R11：个体席位标签 alpha 已衰减，只用聚合分类）
 
 输出：
-- hot_money_seats.json：60 日聚合画像（周更）
+- seat_profiles.db 的 next_day_sell_rate/appearance_count/confidence/source/note 列（周更）
+  S094：原 hot_money_seats.json 已废弃，与 seat_engine 合并到同一 SQLite 宽表。
 - hot_money_seat_risk 因子 → 策略分修饰（一日游占比高 → ×0.7 扣分）
 """
 from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -30,11 +32,12 @@ from pathlib import Path
 from typing import Any
 
 import astock
+from config import SEAT_PROFILES_DB_PATH
 from vr_paths import resolve_data_dir
 
 _DATA_DIR = resolve_data_dir()
 _PRESET_PATH = Path(__file__).resolve().parent.parent / "data" / "hot_money_seats_preset.json"
-_AGGREGATE_PATH = _DATA_DIR / "hot_money_seats.json"
+_DB_PATH = SEAT_PROFILES_DB_PATH
 
 _DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 _UA = {"User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com/"}
@@ -241,49 +244,72 @@ def merge_with_presets(data_profiles: list[SeatProfile]) -> list[SeatProfile]:
 
 
 def save_aggregate_profiles(profiles: list[SeatProfile]) -> None:
-    """保存聚合画像到 hot_money_seats.json（周更）。"""
-    data = {
-        "_meta": {
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "source": "60d_billboard_aggregate",
-            "total_seats": len(profiles),
-        },
-        "profiles": [
-            {
-                "seat_name": p.seat_name,
-                "seat_type": p.seat_type,
-                "next_day_sell_rate": p.next_day_sell_rate,
-                "appearance_count": p.appearance_count,
-                "confidence": p.confidence,
-                "source": p.source,
-                "note": p.note,
-            }
-            for p in profiles
-        ],
-    }
-    _AGGREGATE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    """保存聚合画像到 seat_profiles.db 的 B 字段列（周更，S094：JSON → SQLite 宽表）。
+
+    UPDATE next_day_sell_rate/appearance_count/confidence/source/note；
+    若 seat_name 不存在则 INSERT（A 字段全 NULL，待 seat_engine 冷启动回填）。
+    """
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(_DB_PATH, timeout=30)
+    try:
+        for p in profiles:
+            # 先 UPDATE；不存在则 INSERT（A 字段留空，seat_engine 冷启动时回填）
+            cur = conn.execute(
+                """UPDATE seat_profiles SET
+                       next_day_sell_rate=?, appearance_count=?, confidence=?,
+                       source=?, note=?, updated_at=?
+                   WHERE seat_name=?""",
+                (p.next_day_sell_rate, p.appearance_count, p.confidence,
+                 p.source, p.note, now, p.seat_name),
+            )
+            if cur.rowcount == 0:
+                conn.execute(
+                    """INSERT INTO seat_profiles (
+                           seat_name, next_day_sell_rate, appearance_count,
+                           confidence, source, note, updated_at
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (p.seat_name, p.next_day_sell_rate, p.appearance_count,
+                     p.confidence, p.source, p.note, now),
+                )
+        conn.commit()
+    except sqlite3.Error:
+        conn.rollback()
+    finally:
+        conn.close()
 
 
 def load_aggregate_profiles() -> list[SeatProfile]:
-    """加载已保存的聚合画像。文件不存在返空列表。"""
-    if not _AGGREGATE_PATH.exists():
+    """加载已保存的聚合画像（B 字段）。表不存在或空库返空列表。"""
+    if not Path(_DB_PATH).exists():
         return []
     try:
-        data = json.loads(_AGGREGATE_PATH.read_text(encoding="utf-8"))
-    except Exception:
+        conn = sqlite3.connect(_DB_PATH, timeout=30)
+        conn.row_factory = sqlite3.Row
+    except sqlite3.Error:
         return []
-    return [
-        SeatProfile(
-            seat_name=p["seat_name"],
-            seat_type=p["seat_type"],
-            next_day_sell_rate=p.get("next_day_sell_rate", 0.0),
-            appearance_count=p.get("appearance_count", 0),
-            confidence=p.get("confidence", "low"),
-            source=p.get("source", "data"),
-            note=p.get("note", ""),
+    try:
+        cursor = conn.execute(
+            "SELECT seat_name, seat_type, next_day_sell_rate, appearance_count, "
+            "confidence, source, note FROM seat_profiles "
+            "WHERE next_day_sell_rate IS NOT NULL OR appearance_count IS NOT NULL"
         )
-        for p in data.get("profiles", [])
-    ]
+        return [
+            SeatProfile(
+                seat_name=row["seat_name"],
+                seat_type=row["seat_type"] or "样本不足",
+                next_day_sell_rate=row["next_day_sell_rate"] or 0.0,
+                appearance_count=row["appearance_count"] or 0,
+                confidence=row["confidence"] or "low",
+                source=row["source"] or "data",
+                note=row["note"] or "",
+            )
+            for row in cursor.fetchall()
+        ]
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
 
 
 # ===========================================================================

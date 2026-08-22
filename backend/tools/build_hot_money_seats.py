@@ -1,4 +1,4 @@
-"""S073 §9 游资画像构建——60 日龙虎榜聚合 → hot_money_seats.json。
+"""S073 §9 游资画像构建——60 日龙虎榜聚合 → seat_profiles.db 宽表（B 字段）。
 
 datacenter direct fetch（绕 em_get，spec §8.1）；60 日 × 2 report/日（buy+sell）。
 跑：.venv/bin/python tools/build_hot_money_seats.py
@@ -43,7 +43,7 @@ def main() -> None:
     profiles = build_seat_profiles(all_data)
     merged = merge_with_presets(profiles)
     save_aggregate_profiles(merged)
-    print(f"✅ 画像构建：{len(merged)} 席位 → hot_money_seats.json")
+    print(f"✅ 画像构建：{len(merged)} 席位 → seat_profiles.db")
 
     by_type: dict[str, int] = {}
     for p in merged:

@@ -22,7 +22,7 @@ from seat_engine.models import (
     SEAT_LARGE_POS,
     SEAT_SMALL_POS,
 )
-from seat_engine.data import load_profiles_from_disk, save_profiles_to_disk
+from seat_engine.data import load_profiles_from_db, save_profiles_to_db
 
 BEIJING_TZ = datetime.now().astimezone().tzinfo
 
@@ -47,7 +47,7 @@ class SeatEngine:
         self._profiles: dict[str, SeatProfile] = {}
         self._lock = threading.Lock()
 
-        raw = load_profiles_from_disk()
+        raw = load_profiles_from_db()
         if raw:
             for name, data in raw.items():
                 try:
@@ -210,7 +210,7 @@ class SeatEngine:
                 pd.pop("_stocks_traded", None)
                 pd.pop("_stock_buy_sell_pairs", None)
                 save_dict[name] = pd
-            save_profiles_to_disk(save_dict)
+            save_profiles_to_db(save_dict)
 
         return result
 
@@ -459,7 +459,7 @@ class SeatEngine:
                 pd.pop("_stocks_traded", None)
                 pd.pop("_stock_buy_sell_pairs", None)
                 save_dict[name] = pd
-            save_profiles_to_disk(save_dict)
+            save_profiles_to_db(save_dict)
 
         return {
             "date": date,
