@@ -82,23 +82,34 @@ def _calculate_weather_state(sti_score: Optional[float], risk_score: float,
 
 
 def _get_latest_sti() -> Dict[str, Any]:
-    """Get latest STI data from database."""
+    """Get latest STI data from database（carry-forward：非交易日取最近交易日行）。
+
+    用 ``last_trading_date_str()`` 做 ``WHERE date <= ?`` 锚点：交易日取当日行，
+    非交易日回退到最近交易日行。``score IS NOT NULL`` 排除守卫降级时写入的空行
+    （source_ok=False 的行 score 为 NULL）。响应里 ``as_of_date`` 显式声明实际数据
+    日期，前端据此识别 carry-forward 数据（可能 != 今天）。
+    """
     try:
+        from vr_paths import last_trading_date_str  # noqa: PLC0415
+        _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline ORDER BY date DESC LIMIT 1"
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
+            "ORDER BY date DESC LIMIT 1",
+            (_as_of,),
         ).fetchone()
         if row is None:
-            return {"score": None, "phase": None, "date": None}
+            return {"score": None, "phase": None, "date": None, "as_of_date": None}
 
         return {
             "score": float(row["score"]) if row["score"] is not None else None,
             "phase": row["phase"],
             "date": row["date"],
+            "as_of_date": row["date"],  # 实际数据日期（可能 != 今天，carry-forward）
             "change_from_yesterday": float(row["change_from_yesterday"]) if row["change_from_yesterday"] else 0.0,
         }
     except Exception:
-        return {"score": None, "phase": None, "date": None}
+        return {"score": None, "phase": None, "date": None, "as_of_date": None}
     finally:
         db.close()
 
@@ -109,9 +120,13 @@ def _calculate_risk_score() -> float:
     Based on: 炸板率, 跌停家数, 连板高度, 大盘宽度
     """
     try:
+        from vr_paths import last_trading_date_str  # noqa: PLC0415
+        _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline ORDER BY date DESC LIMIT 1"
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
+            "ORDER BY date DESC LIMIT 1",
+            (_as_of,),
         ).fetchone()
         if row is None:
             return 50.0
@@ -142,9 +157,13 @@ def _calculate_sector_continuity() -> float:
     # Placeholder: integrate with sector flow data
     # For now, use STI advance/decline ratio as proxy
     try:
+        from vr_paths import last_trading_date_str  # noqa: PLC0415
+        _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline ORDER BY date DESC LIMIT 1"
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
+            "ORDER BY date DESC LIMIT 1",
+            (_as_of,),
         ).fetchone()
         if row is None:
             return 50.0
@@ -165,9 +184,13 @@ def _calculate_capital_momentum() -> float:
     Based on: 成交额变化, 资金流向, 龙虎榜数据
     """
     try:
+        from vr_paths import last_trading_date_str  # noqa: PLC0415
+        _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline ORDER BY date DESC LIMIT 1"
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
+            "ORDER BY date DESC LIMIT 1",
+            (_as_of,),
         ).fetchone()
         if row is None:
             return 50.0
@@ -193,9 +216,13 @@ def _calculate_public_sentiment() -> float:
     Based on: 舆情数据, 社交媒体情绪, 新闻情绪
     """
     try:
+        from vr_paths import last_trading_date_str  # noqa: PLC0415
+        _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline ORDER BY date DESC LIMIT 1"
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
+            "ORDER BY date DESC LIMIT 1",
+            (_as_of,),
         ).fetchone()
         if row is None:
             return 50.0
@@ -241,6 +268,7 @@ def get_weather_latest() -> Dict[str, Any]:
                 "sti_score": sti_score,
                 "sti_phase": sti_data.get("phase"),
                 "sti_date": sti_data.get("date"),
+                "as_of_date": sti_data.get("as_of_date"),  # 实际数据日期（carry-forward 透明声明，可能 != today）
                 "sti_change": sti_data.get("change_from_yesterday"),
                 "factors": {
                     "sti": {"score": sti_score, "weight": 0.40, "name": "STI 情绪温度"},
@@ -293,6 +321,7 @@ def get_weather_factors() -> Dict[str, Any]:
             "data": {
                 "weather_state": weather["weather_state"],
                 "composite_score": weather["composite_score"],
+                "as_of_date": sti_data.get("as_of_date"),  # 实际数据日期（carry-forward 透明声明，可能 != today）
                 "factors": [
                     {
                         "id": "sti",
@@ -430,6 +459,7 @@ def get_weather_strategy() -> Dict[str, Any]:
         return {
             "data": {
                 "weather_state": weather_state,
+                "as_of_date": sti_data.get("as_of_date"),  # 实际数据日期（carry-forward 透明声明，可能 != today）
                 "strategies": strategies.get(weather_state, []),
                 "driver": f"综合评分 {weather['composite_score']} 分，主要驱动：{_get_driver_explanation(weather_state)}",
                 "risk_note": _get_risk_note(weather_state),
@@ -476,9 +506,12 @@ def get_weather_fuse() -> Dict[str, Any]:
         # 取当前天气状态判定 R1
         try:
             weather = get_weather_latest()
-            weather_state = (weather.get("data") or {}).get("weather_state", "未知")
+            _weather_data = weather.get("data") or {}
+            weather_state = _weather_data.get("weather_state", "未知")
+            as_of_date = _weather_data.get("as_of_date")  # carry-forward 透明声明（来自 latest）
         except Exception:
             weather_state = "未知"
+            as_of_date = None
 
         # R1 仓位熔断：暴风雨 → triggered
         r1_triggered = weather_state == "暴风雨"
@@ -530,6 +563,7 @@ def get_weather_fuse() -> Dict[str, Any]:
                 "rules": rules,
                 "fuse_state": fuse_state,
                 "weather_state": weather_state,
+                "as_of_date": as_of_date,  # 实际数据日期（carry-forward 透明声明，可能 != today）
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
         }
@@ -609,11 +643,13 @@ def _evaluate_cancel_fuse() -> dict:
 def get_weather_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
     """获取天气历史趋势（近N天）。"""
     try:
+        from vr_paths import last_trading_date_str  # noqa: PLC0415
+        _as_of = last_trading_date_str()
         db = _get_db()
         rows = db.execute(
             "SELECT date, score, phase, change_from_yesterday FROM sti_timeline "
-            "WHERE score IS NOT NULL ORDER BY date DESC LIMIT ?",
-            (days,),
+            "WHERE score IS NOT NULL AND date <= ? ORDER BY date DESC LIMIT ?",
+            (_as_of, days),
         ).fetchall()
 
         timeline = []
