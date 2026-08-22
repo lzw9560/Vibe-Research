@@ -375,7 +375,9 @@ async def daily_review(date: Optional[str] = Query(None, description="YYYY-MM-DD
     无快照诚实返回 no_snapshot=true；零外部调用。
     """
     from datetime import datetime as _dt
-    target = date or _dt.now().strftime("%Y-%m-%d")
+    from vr_paths import last_trading_date_str  # noqa: PLC0415
+    # 非交易日（周末/节假日）回退到最近交易日——周六默认显示周五数据（语义正确）。
+    target = date or last_trading_date_str()
     try:
         return _daily_review_impl(target, _tracker)
     except Exception as e:  # noqa: BLE001

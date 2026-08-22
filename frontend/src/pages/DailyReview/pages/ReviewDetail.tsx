@@ -1,6 +1,6 @@
 /** 复盘报告详情页 - 下沉子页 */
-import { useState } from "react";
-import { useDailyReview } from "@/lib/query";
+import { useState, useEffect } from "react";
+import { useDailyReview, useDateTriplet } from "@/lib/query";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { pctColor, cn } from "@/lib/utils";
@@ -10,9 +10,17 @@ import { ApiError } from "@/lib/api";
 const errMsg = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
 export function ReviewDetail() {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // 初始空串，等 dateTriplet（最近交易日锚）加载后再填——非交易日不再误用日历今日。
+  // 仅在 date 仍为空时填充，用户手动选日后不覆盖。对齐 DailyReview.tsx 的修复模式。
+  const [date, setDate] = useState("");
+  const { data: triplet } = useDateTriplet();
+  useEffect(() => {
+    if (triplet?.review && !date) {
+      setDate(triplet.review);
+    }
+  }, [triplet?.review, date]);
+  const { data: report, isLoading, error, refetch } = useDailyReview(date, { enabled: !!date });
   const [tab, setTab] = useState<"sector" | "zt" | "auction">("sector");
-  const { data: report, isLoading, error, refetch } = useDailyReview(date);
 
   const askAiContext = [
     `当前页面：复盘报告详情`,

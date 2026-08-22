@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { STICard } from "@/components/sti/StiCard";
 import { STIDetailView } from "@/components/sti/StiDetailView";
 import {
   useIndices, useGlobalIndices, useMarketOverview,
-  useEmotion, useTurnoverTop, useStiLatest, useQuote, useDailyReview,
+  useEmotion, useTurnoverTop, useStiLatest, useQuote, useDailyReview, useDateTriplet,
 } from "@/lib/query";
 import { ApiError } from "@/lib/api";
 import { IndexCards } from "./components/IndexCards";
@@ -29,8 +29,16 @@ export function DailyReview() {
     try { return JSON.parse(localStorage.getItem("watchCodes") || "[]"); } catch { return []; }
   });
   const quoteQ = useQuote(watchCodes.join(","));
-  const [reviewDate, setReviewDate] = useState(new Date().toISOString().slice(0, 10));
-  const reviewQ = useDailyReview(reviewDate);
+  // 初始空串，等 dateTriplet（最近交易日锚）加载后再填——非交易日不再误用日历今日。
+  // 仅在 reviewDate 仍为空时填充，用户手动选日后不覆盖。对齐 DailyReview.tsx 的修复模式。
+  const [reviewDate, setReviewDate] = useState("");
+  const { data: triplet } = useDateTriplet();
+  useEffect(() => {
+    if (triplet?.review && !reviewDate) {
+      setReviewDate(triplet.review);
+    }
+  }, [triplet?.review, reviewDate]);
+  const reviewQ = useDailyReview(reviewDate, { enabled: !!reviewDate });
   const [showStiDetail, setShowStiDetail] = useState(false);
 
   const indices = indicesQ.data ?? [];
