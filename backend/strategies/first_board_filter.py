@@ -1546,6 +1546,31 @@ def run_first_board_filter(date: str) -> dict:
 
     print(f"[fb_filter] 开始 date={compact_date}", flush=True)
 
+    # 交易日守卫（日期语义完整性 P2）：东财涨停池对非交易日请求静默回退返回
+    # 最近交易日数据，导致首板过滤结果标错日期（违反"不臆造数据"底线）。
+    # 非交易日 → 直接返回空结果（与 fetch_zt_pool 返空 → 全链路空候选一致），
+    # 不打东财、不重复在内部 3 处 em_zt_topic_pool 加守卫（避免散落）。
+    # 显式历史交易日照常放行。
+    from vr_paths import is_trading_day as _is_trading_day  # noqa: PLC0415
+    try:
+        from datetime import date as _fb_date
+        _parsed = _fb_date.fromisoformat(date) if "-" in date else _fb_date(
+            int(compact_date[:4]), int(compact_date[4:6]), int(compact_date[6:8])
+        )
+    except (ValueError, TypeError):
+        _parsed = _fb_date.today()
+    if not _is_trading_day(_parsed):
+        _logger.warning("run_first_board_filter: 非交易日 %s 跳过 em_zt_topic_pool", compact_date)
+        return {
+            "date": compact_date,
+            "zt_pool_count": 0,
+            "first_board_count": 0,
+            "candidates": [],
+            "scored_candidates": [],
+            "excluded": [],
+            "env_flags": {},
+        }
+
     # 003 取涨停池
     pool = fetch_zt_pool(compact_date)
     zt_pool_count = len(pool)

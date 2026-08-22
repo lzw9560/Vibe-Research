@@ -17,6 +17,7 @@ from typing import Any, Callable, Protocol
 from fastapi import APIRouter, Query
 
 import astock
+from vr_paths import is_trading_day
 # cache_response 定义在 app.py（cache_response 段之后才 include 本路由）。
 # 用守卫 import：app 先加载（生产/uvicorn）时拿到真装饰器；topology 被单独
 # import（单测）时触发循环 import，回退到透传装饰器，纯逻辑仍可独立测试。
@@ -123,6 +124,16 @@ class LadderEdgeProvider:
 
     def build_edges(self, candidates: list[dict], *, date: str | None = None) -> list[dict]:
         pool_date = _compact(date or _today_iso())
+        # 交易日守卫（日期语义完整性 P2）：东财涨停池对非交易日请求静默回退返回
+        # 最近交易日数据，导致边指向错误日期的连板梯队。非交易日 → 空边（与
+        # em_zt_topic_pool 异常时 return [] 一致）。显式历史交易日照常放行。
+        try:
+            parsed = _date.fromisoformat(date) if date else _date.today()
+        except ValueError:
+            parsed = _date.today()
+        if not is_trading_day(parsed):
+            logger.warning("ladder provider: 非交易日 %s 跳过 em_zt_topic_pool", parsed.isoformat())
+            return []
         try:
             pool = astock.em_zt_topic_pool("getTopicZTPool", pool_date, "fbt:asc")
         except Exception as exc:  # noqa: BLE001
@@ -309,6 +320,17 @@ def build_board_ladder_tree(date: str | None = None) -> dict:
     叶节点如实呈现 code/name（公开榜单客观事实）。
     """
     pool_date = _compact(date or _today_iso())
+    # 交易日守卫（日期语义完整性 P2）：东财涨停池对非交易日请求静默回退返回
+    # 最近交易日数据，导致梯队树标错日期。非交易日 → 空树（与 em_zt_topic_pool
+    # 异常时 pool=[] 最终返回 {"name":"当日涨停","children":[]} 一致）。
+    # 显式历史交易日照常放行（用户手动选历史日查梯队是合法场景）。
+    try:
+        parsed = _date.fromisoformat(date) if date else _date.today()
+    except ValueError:
+        parsed = _date.today()
+    if not is_trading_day(parsed):
+        logger.warning("board-ladder: 非交易日 %s 跳过 em_zt_topic_pool", parsed.isoformat())
+        return {"name": "当日涨停", "children": []}
     try:
         pool = astock.em_zt_topic_pool("getTopicZTPool", pool_date, "fbt:asc")
     except Exception as exc:  # noqa: BLE001

@@ -9,6 +9,9 @@ import asyncio
 import astock
 import limitup_screener as _ls
 import time
+from datetime import date as _date
+
+from vr_paths import is_trading_day
 
 router = APIRouter(tags=["limitup"])
 
@@ -40,6 +43,26 @@ async def _compute_limitup_metrics(date: str | None) -> Dict[str, Any]:
             return data
 
     date_fmt = trade_date.replace("-", "") if "-" in trade_date else trade_date
+
+    # 交易日守卫（日期语义完整性 P2）：东财涨停池对非交易日请求静默回退返回
+    # 最近交易日数据，导致 metrics.date 标错。非交易日 → 返回空结果（与
+    # em_zt_topic_pool 返空时 total=0 一致），不打东财。显式历史交易日照常放行。
+    try:
+        parsed = _date.fromisoformat(trade_date)
+    except ValueError:
+        parsed = _date.today()
+    if not is_trading_day(parsed):
+        result = {
+            "date": trade_date,
+            "total_zt": 0,
+            "gene_distribution": {"high": 0, "mid": 0, "low": 0},
+            "avg_gene_score": 0.0,
+            "backtest_win_rate": 0.0,
+            "updated": datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+            "disclaimer": "免责声明：客观公开数据，非投资建议。",
+        }
+        _METRICS_CACHE[cache_key] = (result, now)
+        return result
 
     # 获取当日涨停池
     zt_pool = await asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", date_fmt, "fbt:asc")
