@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 import astock
 from data.mappers import zt_pool_item_from_dict
+from vr_paths import is_trading_day
 
 BEIJING_TZ = datetime.now().astimezone().tzinfo
 
@@ -121,6 +122,21 @@ class DailyReviewer:
         6. 获取竞价回顾
         7. 组装报告
         """
+        # ── 交易日守门（S0xx 数据错位防护）──────────────────────────
+        # 东财 em_zt_topic_pool 对非交易日请求会静默回退返回最近交易日数据，
+        # 导致 ReviewReport.date 标错（周五数据标成周六）违反"不臆造数据"底线。
+        # fail fast：在所有外部数据调用之前拒绝，不打东财。
+        try:
+            parsed_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError(
+                f"非交易日 {trade_date} 无市场数据，数据源会静默回退造成日期错位——拒绝生成"
+            )
+        if not is_trading_day(parsed_date):
+            raise ValueError(
+                f"非交易日 {trade_date} 无市场数据，数据源会静默回退造成日期错位——拒绝生成"
+            )
+
         date_fmt = trade_date.replace("-", "") if "-" in trade_date else trade_date
         
         # 1. 获取 STI 情绪分数
@@ -319,12 +335,17 @@ class DailyReviewer:
         
         while current_dt <= end_dt:
             date_str = current_dt.strftime("%Y-%m-%d")
+            # 跳过非交易日（周末/节假日）——避免 generate_review 守门抛 ValueError
+            # + 避免东财静默回退造成日期错位。
+            if not is_trading_day(current_dt.date()):
+                current_dt += timedelta(days=1)
+                continue
             try:
                 result = self.precompute_daily(date_str)
                 results.append(result)
             except Exception as e:
                 logging.getLogger("vibe-research").warning("[%s] 复盘报告生成失败: %s", date_str, e)
-            
+
             current_dt += timedelta(days=1)
             time.sleep(0.5)  # 节流
         

@@ -5,11 +5,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 import os
 import json
+import asyncio
 from datetime import datetime
 from typing import Any, Dict
 
 import limitup_screener as _ls
 import daily_review as dr
+from vr_paths import last_trading_date_str
 
 router = APIRouter(tags=["review"])
 
@@ -45,11 +47,13 @@ async def get_daily_review(date: str = Query(None, description="交易日期 YYY
     包含：市场情绪总结、板块热度排名、涨停股统计、昨日涨停表现、竞价回顾。
     """
     if date is None:
-        date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
+        date = last_trading_date_str()
+
     try:
         reviewer = dr.get_reviewer()
-        result = reviewer.generate_review(date)
+        # generate_review 同步打东财外部 API，阻塞事件循环 → 用 asyncio.to_thread 卸到线程池。
+        # 参考 routers/strategy.py:72 既有模式。
+        result = await asyncio.to_thread(reviewer.generate_review, date)
         return result.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"复盘报告生成失败: {str(e)}")

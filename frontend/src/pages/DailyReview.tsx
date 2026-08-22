@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Loader2, AlertCircle, RefreshCw, Gauge, ArrowDownUp, TrendingUp, TrendingDown, Plus, X, Flame, BarChart3, Globe } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -24,6 +24,7 @@ import {
   useStiLatest,
   useQuote,
   useDailyReview,
+  useDateTriplet,
 } from "@/lib/query";
 
 // A股红涨绿跌。全球市场（美股/港股指数）**也沿用红涨**——与整个看板及东财等中国平台一致，
@@ -51,8 +52,16 @@ export function DailyReview() {
   const quoteQ = useQuote(watchCodes.join(","));
 
   // 每日复盘报告（日期由用户控制 —— 改日期即改 queryKey，自动重查）
-  const [reviewReportDate, setReviewReportDate] = useState(new Date().toISOString().slice(0, 10));
-  const reviewQ = useDailyReview(reviewReportDate);
+  // 初始空串，等 dateTriplet（最近交易日锚）加载后再填——非交易日不再误用日历今日。
+  // 仅在 reviewReportDate 仍为空时填充，用户手动选日后不覆盖。
+  const [reviewReportDate, setReviewReportDate] = useState("");
+  const { data: triplet } = useDateTriplet();
+  useEffect(() => {
+    if (triplet?.review && !reviewReportDate) {
+      setReviewReportDate(triplet.review);
+    }
+  }, [triplet?.review, reviewReportDate]);
+  const reviewQ = useDailyReview(reviewReportDate, { enabled: !!reviewReportDate });
 
   // AI 当日复盘（chatStream 写流，非只读端点，不走 hook）
   const [review, setReview] = useState("");
