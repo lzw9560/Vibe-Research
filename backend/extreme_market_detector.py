@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import astock
+from vr_paths import is_trading_day
 
 
 @dataclass
@@ -90,6 +91,16 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
             target_date = await ls._resolve_date(None)
 
         display_date = f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:8]}"
+
+        # 交易日守卫：东财涨停池对非交易日请求静默回退到最近交易日数据（不报错），
+        # 传入非交易日会拿错位数据。先用纯本地 is_trading_day 校验，非交易日直接走
+        # 该函数既有的"无数据"降级路径（与东财故障时返回 None 一致）。
+        try:
+            _d = datetime.strptime(target_date, "%Y%m%d")
+            if not is_trading_day(_d.date()):
+                return None
+        except ValueError:
+            return None
 
         # 获取涨停池、跌停池、炸板池（带降级）
         from fallback import get_with_fallback

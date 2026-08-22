@@ -600,14 +600,25 @@ class TaskExecutor:
 
         # 异步预计算逻辑在线程中运行
         async def _precompute_async() -> None:
+            # 交易日守卫（P1·日期语义完整性第4通道）：本闭包按自然日回溯遍历，
+            # 非交易日（周末/节假日）下调东财相关接口会因静默回退拿到最近交易日数据，
+            # 错位入库。daily_review.generate_review 现对非交易日抛 ValueError，
+            # 跳过非交易日还能避免异常日志。统一用 vr_paths.is_trading_day 判断。
+            from vr_paths import is_trading_day as _is_trading_day  # noqa: PLC0415
+
             for back in range(back_days):
                 d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
+                if not _is_trading_day(datetime.strptime(d, "%Y-%m-%d").date()):
+                    logger.info("[limitup_precompute] %s 非交易日，跳过涨停板基因得分预计算", d)
+                    continue
                 await _ls.get_screener_result(d)
 
             try:
                 engine = _ls_sti.get_sti_engine()
                 for back in range(back_days):
                     d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
+                    if not _is_trading_day(datetime.strptime(d, "%Y-%m-%d").date()):
+                        continue
                     engine.precompute_daily(d)
             except Exception as e:
                 logger.warning("[limitup_precompute] STI 预计算失败: %s", e)
@@ -616,6 +627,8 @@ class TaskExecutor:
                 screener = _asc.get_screener()
                 for back in range(back_days):
                     d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
+                    if not _is_trading_day(datetime.strptime(d, "%Y-%m-%d").date()):
+                        continue
                     screener.precompute_daily(d)
             except Exception as e:
                 logger.warning("[limitup_precompute] 竞价选股预计算失败: %s", e)
@@ -624,6 +637,8 @@ class TaskExecutor:
                 reviewer = _dr.get_reviewer()
                 for back in range(back_days):
                     d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
+                    if not _is_trading_day(datetime.strptime(d, "%Y-%m-%d").date()):
+                        continue
                     reviewer.precompute_daily(d)
             except Exception as e:
                 logger.warning("[limitup_precompute] 复盘报告预计算失败: %s", e)

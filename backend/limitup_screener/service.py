@@ -15,6 +15,7 @@ import astock
 from data.mappers import zt_pool_item_from_dict
 from limitup_screener.data import run_migrations, save_gene_scores, load_gene_scores
 from models.market_snapshot import ZTPoolItem
+from vr_paths import is_trading_day
 from limitup_screener.models import (
     GeneScore,
     ScreenerResult,
@@ -46,6 +47,21 @@ def _assess_freshness(age_seconds: float) -> str:
     if age_seconds <= _DATA_EXPIRED_THRESHOLD:
         return "stale"
     return "expired"
+
+
+def _empty_screener_result(date_str: str, *, reason: str = "") -> ScreenerResult:
+    """非交易日 / 降级空结果（S098 Fix A）。"""
+    display_date = date_str[:4] + "-" + date_str[4:6] + "-" + date_str[6:]
+    return ScreenerResult(
+        date=display_date,
+        gene_scores=[],
+        qualified=[],
+        high_gene=[],
+        updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+        disclaimer=DISCLAIMER + (f" （{reason}）" if reason else ""),
+        data_freshness="expired",
+        data_age_seconds=0.0,
+    )
 
 
 async def _resolve_date(date: str | None) -> str:
@@ -397,6 +413,26 @@ async def precompute_daily_async(date: str | None = None) -> ScreenerResult:
     if date is None:
         date = datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d")
     date_fmt = date.replace("-", "") if "-" in date else date
+
+    # Fix A：交易日守卫——非交易日（周末/节假日）不预计算。
+    # 根因：东财涨停池对非交易日请求静默回退返回最近交易日池，
+    # 基因得分预计算会把上一交易日池标成非交易日入库，造成日期错位。
+    # 同款模式见 limitup_sti/service.py 的 precompute_daily。
+    from datetime import date as _date_cls
+    try:
+        _parsed = _date_cls.fromisoformat(
+            f"{date_fmt[:4]}-{date_fmt[4:6]}-{date_fmt[6:8]}"
+        )
+        if not is_trading_day(_parsed):
+            _logger.warning(
+                "[screener] %s 非交易日，跳过基因得分预计算（防周末污染）",
+                date_fmt,
+            )
+            return _empty_screener_result(date_fmt, reason="非交易日不预计算")
+    except (ValueError, TypeError):
+        # 日期格式异常无法判定，交由下游 _resolve_date 处理
+        pass
+
     target_date = await _resolve_date(date_fmt)
     cache_key = f"limitup_screener_{target_date}"
     return await _compute_and_cache_async(target_date, cache_key)
@@ -407,6 +443,22 @@ def precompute_daily(date: str | None = None) -> ScreenerResult:
     if date is None:
         date = datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d")
     date_fmt = date.replace("-", "") if "-" in date else date
+
+    # Fix A：交易日守卫（同步通道），同 precompute_daily_async。
+    from datetime import date as _date_cls
+    try:
+        _parsed = _date_cls.fromisoformat(
+            f"{date_fmt[:4]}-{date_fmt[4:6]}-{date_fmt[6:8]}"
+        )
+        if not is_trading_day(_parsed):
+            _logger.warning(
+                "[screener] %s 非交易日，跳过基因得分预计算（防周末污染）",
+                date_fmt,
+            )
+            return _empty_screener_result(date_fmt, reason="非交易日不预计算")
+    except (ValueError, TypeError):
+        pass
+
     target_date = asyncio.run(_resolve_date(date_fmt))
     cache_key = f"limitup_screener_{target_date}"
     return _compute_and_cache(target_date, cache_key)

@@ -70,6 +70,20 @@ def main() -> None:
     failed: list[str] = []
 
     for i, d in enumerate(dates, start=1):
+        # 交易日守卫（P1·日期语义完整性第4通道）：market._emotion(d) 对非交易日
+        # 依赖东财涨停池，后者会静默回退到最近交易日返回错位数据。非交易日直接跳过，
+        # 不打东财，不入库。DB 中残留的非交易日行（历史静默回退写入）由守卫拦住不再回填。
+        try:
+            from vr_paths import is_trading_day as _is_trading_day
+            from datetime import datetime as _dt
+            if not _is_trading_day(_dt.strptime(d, "%Y-%m-%d").date()):
+                print(f"  {d}: skip（非交易日：周末/节假日，守卫拦截）")
+                skipped += 1
+                continue
+        except Exception:
+            # vr_paths 不可用时不阻断回填；交由 _emotion 返回空兜底
+            pass
+
         try:
             emotion = _emotion(d)
         except Exception as exc:

@@ -158,6 +158,20 @@ async def backfill_dates(
             print(f"[{i + 1}/{len(dates)}] {date} 已有数据，跳过（--force 强制重算）")
             continue
 
+        # 交易日守卫（P0-3）：东财涨停池对非交易日请求静默回退返回最近交易日数据，
+        # 不报错不返空，会误判"该日有数据"并把错位数据入库。这里独立校验，
+        # 即便上游 trading_days_* 节假日表与 vr_paths 不同步也能拦住。非交易日直接跳过，不打东财。
+        try:
+            from vr_paths import is_trading_day as _is_trading_day
+            d_obj = datetime.strptime(date, "%Y-%m-%d").date()
+            if not _is_trading_day(d_obj):
+                stats["empty_pool"] += 1
+                print(f"[{i + 1}/{len(dates)}] {date} 非交易日（周末/节假日），跳过")
+                continue
+        except Exception:
+            # vr_paths 不可用时不阻断回填（保守：仅日志），交由上游预过滤兜底
+            pass
+
         start_ts = time.time()
         try:
             if dry_run:

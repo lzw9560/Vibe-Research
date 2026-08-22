@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT))
 
 from astock import em_zt_topic_pool, index_quote  # noqa: E402
 from market import _emotion  # noqa: E402  私有函数，任务要求；后续可升级公开接口
+from vr_paths import is_trading_day, prev_trading_date  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +166,20 @@ def fetch_zt_count_compare(date: str) -> dict:
         d = datetime.strptime(compact_date, "%Y%m%d")
     except ValueError:
         return {"zt_count_t1": 0, "zt_count_t": None, "ratio": None, "note": "日期格式错误"}
-    t1_date = (d - timedelta(days=1)).strftime("%Y%m%d")
+
+    # 交易日守卫 + T-1 语义修正：
+    # - T 日非交易日 → 东财涨停池静默回退到最近交易日，会拿错位数据。直接走该函数
+    #   既有降级（T 日竞价数 None，与盘前 9:25 涨停池未生成时一致）。
+    # - T-1 用 prev_trading_date 取真实上一交易日，避免 T-1 落在周末时东财回退错位
+    #   （原硬编码 d-1 在 T=周一时取到周日，东财回退到上周五，日期语义错乱）。
+    if not is_trading_day(d.date()):
+        return {
+            "zt_count_t1": 0,
+            "zt_count_t": None,
+            "ratio": None,
+            "note": "T日非交易日，待交易日更新",
+        }
+    t1_date = prev_trading_date(d.date()).strftime("%Y%m%d")
 
     # T-1 全天涨停数（必取）
     zt_count_t1 = 0
@@ -229,16 +243,21 @@ def fetch_max_boards(date: str) -> dict:
         d = datetime.strptime(compact_date, "%Y%m%d")
     except ValueError:
         return {"max_boards": None, "source_date": "", "is_t1_fallback": False, "note": "日期格式错误"}
-    t1_date = (d - timedelta(days=1)).strftime("%Y%m%d")
+    # T-1 用 prev_trading_date 取真实上一交易日，避免 T-1 落在周末时东财回退错位
+    # （原硬编码 d-1 在 T=周一时取到周日，_emotion 内部回溯会取到上周五，日期语义错乱）
+    t1_date = prev_trading_date(d.date()).strftime("%Y%m%d")
     t1_iso = f"{t1_date[:4]}-{t1_date[4:6]}-{t1_date[6:8]}"
     t_iso = f"{compact_date[:4]}-{compact_date[4:6]}-{compact_date[6:8]}"
 
-    # 先取 T日
+    # 交易日守卫：T 日非交易日时 _emotion 会静默回退到最近交易日（错位数据）。
+    # 直接走该函数既有的 T-1 降级分支（与 T 日盘前涨停池未生成时一致），不调
+    # _emotion 浪费请求。
     emotion = {}
-    try:
-        emotion = _emotion(t_iso) or {}
-    except Exception as e:
-        logger.warning("fetch_max_boards T日 _emotion 失败 t=%s err=%s", t_iso, e)
+    if is_trading_day(d.date()):
+        try:
+            emotion = _emotion(t_iso) or {}
+        except Exception as e:
+            logger.warning("fetch_max_boards T日 _emotion 失败 t=%s err=%s", t_iso, e)
 
     if emotion:  # T日有数据
         mb = emotion.get("max_boards")

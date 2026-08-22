@@ -42,7 +42,30 @@ def _sentiment(date: str | None = None) -> dict:
 
     Args:
         date: 可选日期字符串 YYYY-MM-DD。不传则取当前日期。
+
+    ⚠️ 数据源语义陷阱（P0-1，2026-08-23 修复）：
+        akshare ``stock_market_activity_legu()`` **只能查最新日，无法查历史**。
+        历史 date 传入会被原实现静默忽略并返回最新日数据，导致"用今天的涨跌家数
+        标在昨天的复盘上"的数据错位。此修复采用**诚实降级**：
+
+        - date != 最近交易日 → 直接返回 ``{}``（不打 akshare，不拿今天数据错标历史日）
+        - date=None 或 date == 最近交易日 → 保持原逻辑调 akshare 取最新数据
+
+        历史 date 传入后调用方拿到空 dict，语义为"该日涨跌家数无源"，诚实缺失而非
+        静默给最新日数据。已知 6 个调用方（daily_review/scheduled_tasks/workflow/
+        limitup_sti）均用 ``.get("up", 0)`` / ``or {}`` / ``if not sentiment_data``
+        等模式处理空返回，降级为 0 或兜底默认值。
     """
+    # P0-1：历史日 akshare 无源，诚实返回空而非拿最新日数据错标历史
+    if date is not None:
+        try:
+            from vr_paths import last_trading_date_str
+            if date != last_trading_date_str():
+                return {}
+        except Exception:
+            # vr_paths 取不到（极端故障）→ 不阻断，走原 akshare 流程
+            # （宁可可能错位也不彻底打挂，下游有空返回兜底）
+            pass
     try:
         # akshare 惰性导入（同 astock 模式）：未装时降级返回空，不挡整个服务启动
         df = astock._akshare().stock_market_activity_legu()
@@ -118,9 +141,34 @@ def _emotion(date: str | None = None) -> dict:
     - 降级：东财 zt 为空时，用同花顺重建 zt_count/max_boards（zb/dt/yzt 保持 None，不臆造）
     - 交叉验证：东财正常时，用同花顺 zt_count 做交叉验证，差异>5% 标注「数据源分歧」
 
+    ⚠️ 数据源语义陷阱（P0-2，2026-08-23 修复）：
+        东财 push2ex 池子在非交易日请求时会**静默回退**返回最近交易日数据，
+        但返回的 ``date`` 字段标原始传入的非交易日（实测 08-21/22/23 三天字节级
+        相同的 54 条涨停池）。东财池子 item 无日期字段，无法事后校验，故用
+        **事前校验**：
+
+        - date 显式传入且 ``not is_trading_day(date)`` → 直接返回 ``{}``
+          （不查东财，避免静默回退错位）
+        - date=None 的回溯定位模式（从今天往前回溯找最近交易日）保持不动——
+          该路径本身只在有数据的交易日 resolve，不触发回退问题
+
     Args:
         date: 可选日期字符串 YYYY-MM-DD。不传则自动定位最近交易日。
     """
+    # P0-2：显式传入非交易日 → 不查东财，避免静默回退错位
+    if date is not None:
+        try:
+            from vr_paths import is_trading_day
+            from datetime import date as _date_cls
+            if not is_trading_day(_date_cls.fromisoformat(date)):
+                return {}
+        except (ValueError, TypeError):
+            # 日期格式异常 → 走原流程的格式校验分支处理（不在此重复）
+            pass
+        except Exception:
+            # vr_paths 取不到 → 不阻断，走原流程（宁可可能错位也不彻底打挂）
+            pass
+
     # S049 同花顺交叉验证 / 降级源标识（默认主源正常、未交叉验证）
     cross_source = None
     data_source = "eastmoney"

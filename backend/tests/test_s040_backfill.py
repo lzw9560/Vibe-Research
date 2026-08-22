@@ -218,9 +218,9 @@ def test_backfill_skips_existing_dates(monkeypatch, tmp_path):
                         lambda ep, d, sort="": calls.append(d) or [{"c": "x"}])
 
     stats = asyncio.run(bf.backfill_dates(
-        ["2026-07-09", "2026-07-11"], dry_run=True, db_path=db_path,
+        ["2026-07-09", "2026-07-07"], dry_run=True, db_path=db_path,
     ))
-    # 2026-07-09 已有 → skipped；2026-07-11 无 → success
+    # 2026-07-09 已有 → skipped；2026-07-07（周二，交易日）无 → success
     assert stats["skipped_existing"] == 1
     assert stats["success"] == 1
     assert "20260709" not in [c for c in calls]  # 未探测已有日期

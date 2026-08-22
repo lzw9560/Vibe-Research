@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 import astock
 from data.mappers import zt_pool_item_from_dict
+from vr_paths import is_trading_day
 
 BEIJING_TZ = datetime.now().astimezone().tzinfo
 
@@ -133,7 +134,31 @@ class AuctionScreener:
         """
         # 转换日期格式
         date_fmt = trade_date.replace("-", "") if "-" in trade_date else trade_date
-        
+
+        # 交易日守卫：东财涨停池对非交易日请求静默回退到最近交易日数据（不报错），
+        # 传入非交易日会拿错位数据。先用纯本地 is_trading_day 校验，非交易日直接走
+        # 该函数既有的"无涨停池数据"降级路径（与 zt_pool 为空时返回一致）。
+        try:
+            _d = datetime.strptime(date_fmt, "%Y%m%d")
+            if not is_trading_day(_d.date()):
+                return AuctionScreenerResult(
+                    date=trade_date,
+                    candidates=[],
+                    sti_score=None,
+                    sti_phase=None,
+                    total_analyzed=0,
+                    updated=datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+                )
+        except ValueError:
+            return AuctionScreenerResult(
+                date=trade_date,
+                candidates=[],
+                sti_score=None,
+                sti_phase=None,
+                total_analyzed=0,
+                updated=datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+            )
+
         # 1. 获取涨停池数据
         zt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc")]
         yzt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc")]
