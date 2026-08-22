@@ -36,9 +36,8 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 - 复盘 Tab 当前：PostMarketReview（三问/昨日漏单/结算入口/验证卡/盘后工具入口）
 - 战法组件：StrategyMatchMatrix（数据源 `usePreMarketBriefing(date).scored_candidates`）、CandidateFunnelEmbed（数据源 `briefing.funnel_layers`）
 - 实时数据源：`tencent_quote`（个股实时价格，sentiment_weather.py:1114 已在用）、`intraday_sentiment`（市场级 5min 采样，09:25-15:00 运行）
-- 通知：scheduled_tasks 有 `notify_on_success`/`notify_on_failure` 字段但未实现实际推送；前端有 `toast`（sonner）+ `BombAlertBanner`
-- 飞书 webhook：需新建通知模块，飞书机器人 webhook 发 card 消息
-- 规则引擎：需新建规则定义 + 触发逻辑（if-then 确定性信号）
+- 通知：既有 `backend/notification/`（NotificationService + FeishuSender，14 渠道已就位）+ `backend/feishu_notifier.py`（带节流/静默）+ `config.feishu_webhook_url`（环境变量 `FEISHU_WEBHOOK_URL`）；`scheduled_tasks._send_notification` 已实现通知调用（调 `NotificationService.send()`）；前端有 `toast`（sonner）+ `BombAlertBanner`
+- 既有炸板预警：`backend/risk/bomb_alert_rules.py` C1-C6 + `bomb_alert_dispatcher.py` 冷却去重 + 落库（冷却 10 分钟，`config.BOMB_ALERT_COOLDOWN_MINUTES`）
 - AI 总结：盘后调 LLM 生成"今日操作回顾 + 明日建议"，异步生成不阻塞盘中
 
 ## 3. 需求清单
@@ -102,7 +101,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 - [ ] R5 **前瞻辅助决策折叠区**（从 PreMarketBriefing 迁移）：
   - 情绪天气（WeatherDecisionBar）— 天气影响选股决策
   - P2 仓位闸（P2RiskPanel）+ advisory 仓位摘要 — 选完股配仓位
-  - 行为对照卡（ShadowComparisonSection）→ 移到复盘（见 R12）
+  - 行为对照卡（ShadowComparisonSection）→ 移到复盘（见 R14）
   - T-1 数据（T1Tab）+ 语境（ContextTab，含暴风雨预测）— 选股 pipeline 输入
   - 战法胜率对比（WinRateCompareSection）→ 移到战法独立页（见 R11）
 
@@ -121,12 +120,10 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
   
   第三层：盘中因子变化（待办 S094，本 spec 仅留位）
     - 战法相关因子实时变化，按战法分类匹配
-    - 市场级：涨停数/炸板数/涨跌比/连板梯队/板块轮动/北向资金
+    - 市场级：涨停数/炸板数/涨跌比/连板梯队/板块轮动
     - 个股级：价格/涨跌幅/封板状态/量比/换手
-  
-- [ ] R6 第三层盘中因子列表中"北向资金"已删（2024-08-19 停更，无真实数据源）
 
-  盯盘入口卡片（全天可见，不门控时段——Oracle 非阻断 #12：当前仍门控 isIntraday，S093 要新做不是确认）
+  盯盘入口卡片（全天可见，不门控时段——S093 新做，当前仍门控 isIntraday）
     - /workflow/intraday（实时盯盘）
     - /workflow/alerts（炸板预警）
     - /workflow/coach（盯盘教练）
@@ -140,21 +137,23 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 
 - [ ] R7 **持仓状态 chips**：`useWorkflowStates` 取候选/观察/监控/持仓/已结计数
 
-- [ ] R8 **盯盘入口全天可见**：取消 `isIntraday` 门控，三个 EntryCard 常驻（S092 已补，需确认）
+- [ ] R8 **盯盘入口全天可见**：取消 `isIntraday` 门控，三个 EntryCard 常驻（当前仍门控，S093 新做）
 
 ### D. 飞书通知（后端新增 + 配置）
 
 - [ ] R9 **飞书通知复用既有基础设施**（Oracle 阻断项 #6：通知模块已存在，不新建）：
-  - 复用 `backend/notification/`（NotificationService + FeishuSender，14 个 sender 已就位）
-  - 复用 `backend/feishu_notifier.py`（已带 300s/票节流、每日 20 条上限、静默时段）
+  - 复用 `backend/notification/`（NotificationService + FeishuSender，14 个 sender 已就位，读 `config.feishu_webhook_url`）
+  - `feishu_notifier.py` 的节流/静默语义不在新链路上（它读旧环境变量 `VR_FEISHU_WEBHOOK`，无调用方）——不复用 feishu_notifier，通知统一走 `NotificationService.send()`
   - 复用 `config.feishu_webhook_url`（环境变量 `FEISHU_WEBHOOK_URL`，已映射 config.py:200）
-  - 复用 `scheduled_tasks._send_notification`（已实现通知调用）
+  - 盘后选股通知（R10）无标的级冷却需求；盘中风险提示（R11）复用 `bomb_alert_dispatcher` 冷却（10 分钟，`config.BOMB_ALERT_COOLDOWN_MINUTES`）
   - **不新建** `backend/notifications/feishu.py`——直接调既有 `NotificationService.send()`
-  - webhook URL 收敛到 `config.feishu_webhook_url` 环境变量方案，删除 `.vibe-research/feishu_webhook.txt` 方案（Oracle 阻断项 #7：三套 webhook 约定收敛为一套）
+  - webhook URL 收敛到 `config.feishu_webhook_url` 环境变量方案（`FEISHU_WEBHOOK_URL`），废弃 `VR_FEISHU_WEBHOOK`（Oracle 阻断项 #7：两套环境变量收敛为一套）
 
 - [ ] R10 **前瞻选股结果通知**（17:15 漏斗预计算完成后触发）：
   - 触发点：`candidate_funnel_precompute` 任务 success 后
-  - 调 `scheduled_tasks._send_notification`（既有方法）发飞书卡片
+  - **直接调 `NotificationService.send()`**（不走 `_send_notification`——后者只产固定格式任务状态文本，不支持富内容卡片；Oracle 矛盾 A 闭合）
+  - 内容：F 日期 + final_candidates 数 + 双重确认数 + top5 标的（code/name/基因分/命中战法）
+  - 飞书卡片标题："📊 前瞻选股结果 {F日期}"
   - 内容：F 日期 + final_candidates 数 + 双重确认数 + top5 标的（code/name/基因分/命中战法）
   - 飞书卡片标题："📊 前瞻选股结果 {F日期}"
   - R10 依赖：通知内容含"双重确认数"→后端需在 17:15 算交集（`candidate_funnel_precompute` success 后跑一次 `select_premarket_with_risk(forward)` 读本地 kline，成本低）+ 当前 `_execute_candidate_funnel_precompute` 只返 `{date, status}` 需扩返候选统计（Oracle 非阻断 #11）
@@ -172,9 +171,9 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
     - "情绪恶化"（STI 评分连降 2 级）→ 新增规则 C8（MEDIUM 级）
     - "连板梯队断裂"（最高板 >3 且无 2 板接力）→ 新增规则 C9（MEDIUM 级）
   - **删除"北向大幅流出>50亿"规则**（Oracle 阻断项 #2：北向个股日级数据 2024-08-19 停更，无真实数据源，违反不臆造底线）
-  - **修正"涨跌比<0.5"口径**（Oracle 阻断项 #3：当前 `ad_ratio` 是连板数/跌停数代理，非涨跌家数比。改用 `intraday_sentiment` 的 zt_count/dt_count 明确语义，或换"涨停数<5 且炸板数>涨停数"条件）
-  - **明确"STI 连降 2 级"定义**（Oracle 阻断项 #3：天气状态从晴→阴→暴风雨连续降 2 档，或 STI 评分环比降 20 分以上——选一种写明）
-  - 去重：复用 bomb_alert_dispatcher 的冷却逻辑（同一信号同一标的 5 分钟内不重复）
+  - **修正"涨跌比<0.5"口径**（Oracle 阻断项 #3）：当前 `ad_ratio` 是连板数/跌停数代理，非涨跌家数比。**拍板**：C8 触发条件改为"涨停数<5 且炸板数>涨停数"（用 `intraday_sentiment` 的 zt_count/dt_count，语义明确，不依赖 ad_ratio）
+  - **明确"STI 连降 2 级"定义**（Oracle 阻断项 #3）：**拍板**：天气状态从晴→阴或阴→暴风雨连续降 1 档即触发（不要求连降 2 档——降 1 档已信号显著）
+  - 去重：复用 bomb_alert_dispatcher 的冷却逻辑（同一信号同一标的 **10 分钟**内不重复，对齐 `config.BOMB_ALERT_COOLDOWN_MINUTES=10`）
 
 - [ ] R12 **操作建议**：
   - **规则引擎实时**（盘中）：bomb_alert 规则触发时附带操作建议（如 C5 开板未回封→"建议止损"、C1 封单降幅→"建议关注"），推飞书卡片
@@ -254,7 +253,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
  2. **pre_market = post_market**：今日盘后（17:15）= 次日盘前（到 09:00）。后端返回两个不同枚举值（区分语义来源），前端映射同一 Tab（前瞻）。语义自洽——"为次日选股做准备"的时段。
  3. **盘中延长到 15:30**：最新交易规则收盘延迟到 15:30（原 15:00）。post_transition 从 15:30 开始。
  4. **规则引擎 + AI 分层**：盘中确定性信号用规则引擎（毫秒级响应），盘后综合分析用 AI（异步不阻塞）。不在盘中调 AI——成本高 + 延迟大 + 盘中需要即时性。
- 5. **飞书复用既有基础设施**：复用 `backend/notification/`（NotificationService + FeishuSender）+ `feishu_notifier.py`（节流/上限/静默）+ `config.feishu_webhook_url`（环境变量）。不新建通知模块。其他渠道（桌面/邮件/discord/telegram）入待办。
+ 5. **飞书复用既有基础设施**：复用 `backend/notification/`（NotificationService + FeishuSender，读 `config.feishu_webhook_url` 环境变量 `FEISHU_WEBHOOK_URL`）。不复用 `feishu_notifier.py`（读旧环境变量 `VR_FEISHU_WEBHOOK`，无调用方，节流语义不在新链路上）。废弃 `VR_FEISHU_WEBHOOK`，收敛为一套环境变量。其他渠道（桌面/邮件/discord/telegram）入待办。
  6. **当日不做选股 pipeline**：选股决策全在前瞻完成，当日只做"拿着前瞻结论盯盘执行"。避免重复工作。
  7. **交叉验证前端做**：漏斗∩breakout 交集在前端取（两个列表 code 交集），O(1) 成本，不需要新端点。后端 R10 通知也需算交集——复用 `select_premarket_with_risk(forward)` 读本地 kline。
 
@@ -268,7 +267,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 
 ## 8. 已知盲点
 
-1. **飞书 webhook 频率限制**：飞书机器人有消息频率限制（每分钟约 5 条），盘中高频信号需去重（5 分钟内同标的同信号不重复）。复用 bomb_alert_dispatcher 冷却逻辑。
+1. **飞书 webhook 频率限制**：飞书机器人有消息频率限制（每分钟约 5 条），盘中高频信号需去重（10 分钟内同标的同信号不重复，对齐 `config.BOMB_ALERT_COOLDOWN_MINUTES=10`）。复用 bomb_alert_dispatcher 冷却逻辑。
 2. **tencent_quote 轮询频率**：盘中按需轮询持仓标的实时价格，频率不宜过高（防 IP 限流）。建议 30s-60s 轮询，仅在 pre_open+intraday 时段。
 3. **AI 盘后总结成本**：LLM 调用成本 + 延迟。盘后异步生成不阻塞，但需控制 token 用量。S094 完整设计。
 4. **`last_run_at` 时区**（GR5 遗留）：naive datetime 假设服务器=北京时区。云部署另立 spec。
