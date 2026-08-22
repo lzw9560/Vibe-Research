@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S092 前瞻 pipeline + 战法入口迁移 + 盯盘入口 预览</title>
+<style>
+:root {
+  --bg: #0a0e1a;
+  --card: rgba(255,255,255,0.04);
+  --card-hover: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.15);
+  --primary: hsl(15 89% 56%);
+  --primary-glow: hsl(15 89% 56% / 0.2);
+  --success: hsl(145 62% 47%);
+  --warning: hsl(38 92% 50%);
+  --muted: rgba(255,255,255,0.45);
+  --muted-strong: rgba(255,255,255,0.65);
+  --text: rgba(255,255,255,0.92);
+  --serif: 'Noto Serif SC', 'Songti SC', serif;
+  --mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --sans: 'Noto Sans SC', -apple-system, sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 20px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+h1 { font-family: var(--serif); font-size: 22px; margin-bottom: 4px; }
+h2 { font-family: var(--serif); font-size: 18px; margin: 20px 0 10px; }
+h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.subtitle { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  backdrop-filter: blur(12px);
+}
+.card:hover { background: var(--card-hover); }
+.section { margin-bottom: 24px; }
+.section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+/* Tabs */
+.tabs {
+  display: inline-flex;
+  gap: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  padding: 4px;
+  margin-bottom: 16px;
+}
+.tab {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+.tab.active {
+  background: hsl(15 89% 56% / 0.16);
+  color: var(--primary);
+  box-shadow: 0 0 18px var(--primary-glow);
+}
+.tab .dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
+  opacity: 0;
+}
+.tab.active .dot { opacity: 1; }
+/* Anchor bar */
+.anchor-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 18px;
+}
+.anchor-f { display: flex; flex-direction: column; gap: 2px; }
+.anchor-f .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.anchor-f .value { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--primary); }
+.anchor-views { display: flex; align-items: center; justify-content: center; gap: 0; }
+.anchor-view { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 8px; }
+.anchor-view .label { font-size: 9px; color: var(--muted); }
+.anchor-view .value { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.anchor-view .value.muted { color: var(--muted); }
+.anchor-view .value.warning { color: var(--warning); }
+.anchor-sep { width: 24px; height: 1px; background: var(--border-strong); }
+.anchor-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.anchor-stage .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.stage-post_market { color: var(--success); border-color: hsl(145 62% 47% / 0.35); background: hsl(145 62% 47% / 0.1); }
+/* Strategy entry (公共区) */
+.strategy-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 12px;
+}
+.strategy-entry:hover { border-color: var(--primary); background: var(--card-hover); }
+.strategy-entry .icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: hsl(15 89% 56% / 0.1);
+  border: 1px solid hsl(15 89% 56% / 0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.strategy-entry .title { font-weight: 600; font-size: 14px; }
+.strategy-entry .sub { font-size: 11px; color: var(--muted); }
+.strategy-entry .arrow { margin-left: auto; color: var(--muted); }
+/* Pipeline steps */
+.pipeline-flow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+.pipeline-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: hsl(15 89% 56% / 0.12);
+  color: var(--primary);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.pipeline-arrow { color: var(--muted); }
+/* Funnel candidates */
+.funnel-table { width: 100%; font-size: 12px; }
+.funnel-table th { text-align: left; padding: 6px 8px; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500; }
+.funnel-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.badge-cross {
+  display: inline-block;
+  background: hsl(145 62% 47% / 0.15);
+  color: var(--success);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.badge-funnel-only {
+  display: inline-block;
+  background: rgba(255,255,255,0.06);
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+/* Breakout table */
+.breakout-table { width: 100%; font-size: 12px; }
+.breakout-table th { text-align: left; padding: 6px 8px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.breakout-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+/* Intraday entry (全天可见) */
+.intraday-entry-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.intraday-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
+}
+.intraday-entry:hover { border-color: var(--primary); background: var(--card-hover); }
+.intraday-entry .icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.intraday-entry .title { font-weight: 600; font-size: 13px; }
+.intraday-entry .sub { font-size: 10px; color: var(--muted); }
+/* Stage badge */
+.stage-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.stage-pre_open { background: hsl(38 92% 50% / 0.12); color: var(--warning); }
+.stage-intraday { background: hsl(199 89% 58% / 0.12); color: hsl(199 89% 58%); }
+/* Divider */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+/* Collapsible */
+.collapsible {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: var(--card);
+}
+.collapsible-header:hover { background: var(--card-hover); }
+.collapsible-header .chevron { margin-left: auto; color: var(--muted); transition: transform 0.2s; }
+.collapsible.open .chevron { transform: rotate(90deg); }
+.collapsible-body { padding: 12px 16px; display: none; }
+.collapsible.open .collapsible-body { display: block; }
+/* Strategy stats table */
+.strategy-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+.strategy-table th { text-align: left; padding: 4px 6px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.strategy-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.mono { font-family: var(--mono); }
+/* Notes */
+.note {
+  background: hsl(38 92% 50% / 0.06);
+  border: 1px solid hsl(38 92% 50% / 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--muted-strong);
+  margin-bottom: 16px;
+}
+.note strong { color: var(--warning); }
+/* Preview sections */
+.preview-section {
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+.preview-section h2 { margin-top: 0; }
+.preview-label {
+  position: absolute;
+  background: var(--primary);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transform: translateY(-10px) translateX(-16px);
+}
+</style>
+</head>
+<body>
+
+<h1>S092 前瞻 pipeline 重构预览</h1>
+<p class="subtitle">战法战绩移出三 Tab · 前瞻补入漏斗+战法匹配 · 盯盘入口全天可见 · 9:00-9:29 pre_open 新 stage</p>
+
+<!-- ========== 预览 1：公共区 + 战法战绩入口 ========== -->
+<div class="preview-section">
+  <h2>预览 1：公共区 — 战法战绩入口迁移</h2>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px">战法战绩表 + 前向测试 + 阈值配置 从前瞻 Tab 移出，回归独立路由导航。公共区常驻入口卡片。</p>
+
+  <div class="card anchor-bar">
+    <div class="anchor-f">
+      <span class="label">锚定交易日 F</span>
+      <span class="value">2026-08-21</span>
+    </div>
+    <div class="anchor-views">
+      <div class="anchor-view"><span class="label">复盘</span><span class="value">2026-08-21</span></div>
+      <div class="anchor-sep"></div>
+      <div class="anchor-view"><span class="label">当日</span><span class="value muted">2026-08-21</span></div>
+      <div class="anchor-sep"></div>
+      <div class="anchor-view"><span class="label">前瞻</span><span class="value">2026-08-24</span></div>
+    </div>
+    <div class="anchor-stage stage-post_market">
+      <span class="dot"></span>数据就绪 · 17:15 后
+    </div>
+  </div>
+
+  <!-- 战法战绩入口（公共区常驻） -->
+  <a class="strategy-entry" href="/strategy">
+    <div class="icon">⚔️</div>
+    <div>
+      <div class="title">战法管理</div>
+      <div class="sub">12 战法战绩 + 参数 + 前向测试 §44 + 阈值配置</div>
+    </div>
+    <span class="arrow">→</span>
+  </a>
+
+  <div class="note">
+    <strong>变更：</strong> 战法战绩表从前瞻 Tab 折叠区移到公共区入口卡片，点击跳独立路由 <code>/strategy</code>。
+    理由：战法战绩是跨阶段统计维度（60 日回看），不属复盘/当日/前瞻任一时段。
+    S087 原本就是独立 tab，回归独立入口更符合维度统一。
+  </div>
+</div>
+
+<!-- ========== 预览 2：前瞻 Tab pipeline ========== -->
+<div class="preview-section">
+  <h2>预览 2：前瞻 Tab — 完整选股 pipeline</h2>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px">①漏斗选股(F) → ②战法匹配(F) → ③breakout 弱信号(forward) · 交叉验证徽章</p>
+
+  <div class="tabs">
+    <button class="tab"><span class="dot"></span>复盘</button>
+    <button class="tab"><span class="dot"></span>当日</button>
+    <button class="tab active"><span class="dot"></span>前瞻</button>
+  </div>
+
+  <!-- Pipeline 流动箭头 -->
+  <div class="pipeline-flow">
+    <span class="pipeline-step">① 漏斗选股</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">② 战法匹配</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">③ breakout 弱信号</span>
+    <span style="color:var(--muted);font-size:10px;margin-left:8px">数据日：①②=F(08-21) ③=forward(08-24)</span>
+  </div>
+
+  <!-- ① 漏斗选股 -->
+  <div class="card">
+    <h3>① 漏斗选股 — 涨停池 R1→R2→R3 <span style="font-size:10px;color:var(--muted);font-weight:400">数据日 F=2026-08-21</span></h3>
+    <table class="funnel-table">
+      <thead><tr><th>代码</th><th>名称</th><th>涨停基因分</th><th>命中战法</th><th>交叉验证</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">001358</td><td>兴欣新材</td><td class="mono">63.4</td><td>首板流</td><td><span class="badge-cross">✓ breakout 确认</span></td></tr>
+        <tr><td class="mono">002567</td><td>唐人神</td><td class="mono">58.2</td><td>首板流</td><td><span class="badge-funnel-only">仅漏斗</span></td></tr>
+        <tr><td class="mono">600519</td><td>贵州茅台</td><td class="mono">55.0</td><td>动量接力</td><td><span class="badge-funnel-only">仅漏斗</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:10px;color:var(--muted);margin-top:6px">R1 涨停池 79 候选 → R2 换手/北向 → R3 筛码/龙虎榜 → final 候选（§44 多因子 validated edge）</p>
+  </div>
+
+  <!-- ② 战法匹配 -->
+  <div class="card">
+    <h3>② 战法匹配 — 票 × 战法命中矩阵 <span style="font-size:10px;color:var(--muted);font-weight:400">数据日 F=2026-08-21 · 156 条</span></h3>
+    <table class="funnel-table">
+      <thead><tr><th>代码</th><th>名称</th><th>命中战法</th><th>策略分</th><th>交叉验证</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">001358</td><td>兴欣新材</td><td>首板流 · 动量</td><td class="mono">72</td><td><span class="badge-cross">✓ breakout 确认</span></td></tr>
+        <tr><td class="mono">002567</td><td>唐人神</td><td>首板流</td><td class="mono">65</td><td><span class="badge-funnel-only">仅漏斗</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:10px;color:var(--muted);margin-top:6px">每候选 × 每命中战法一行（括号=策略分 strategy_score）</p>
+  </div>
+
+  <!-- ③ breakout 弱信号 -->
+  <div class="card">
+    <h3>③ breakout 弱信号选股 <span style="font-size:10px;color:var(--muted);font-weight:400">数据日 forward=2026-08-24 · T-1=F close 算 breakout</span></h3>
+    <table class="breakout-table">
+      <thead><tr><th>代码</th><th>名称</th><th>breakout 分</th><th>止损</th><th>止盈</th><th>仓位</th><th>交叉验证</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">001358</td><td>兴欣新材</td><td class="mono">0.95</td><td class="mono">-5%</td><td class="mono">+10%</td><td class="mono">30%</td><td><span class="badge-cross">✓ 漏斗确认</span></td></tr>
+        <tr><td class="mono">300888</td><td>稳健医疗</td><td class="mono">0.92</td><td class="mono">-5%</td><td class="mono">+10%</td><td class="mono">30%</td><td><span class="badge-funnel-only">仅 breakout</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:10px;color:var(--warning);margin-top:6px">§44 day-cluster lift=1.67x <2x 非 validated edge · 前向测试不投真金 · max_hold=3 日</p>
+  </div>
+
+  <div class="note">
+    <strong>交叉验证：</strong> 漏斗 final_candidates ∩ breakout top-N 的票打"双重确认"绿色徽章。
+    前端取两个列表 code 交集，O(1) 成本。只有漏斗有的打"仅漏斗"，只有 breakout 有的打"仅 breakout"。
+    帮用户快速识别双重信号确认的标的。
+  </div>
+</div>
+
+<!-- ========== 预览 3：当日 Tab — 盯盘入口全天可见 ========== -->
+<div class="preview-section">
+  <h2>预览 3：当日 Tab — 盯盘入口全天可见 + pre_open 新 stage</h2>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px">盯盘入口不再门控 isIntraday，全天常驻。9:00-9:29 新增 pre_open stage（集合竞价/开盘准备）。</p>
+
+  <div class="tabs">
+    <button class="tab"><span class="dot"></span>复盘</button>
+    <button class="tab active"><span class="dot"></span>当日</button>
+    <button class="tab"><span class="dot"></span>前瞻</button>
+  </div>
+
+  <!-- 盯盘入口（全天可见，不门控时段） -->
+  <div class="intraday-entry-group">
+    <a class="intraday-entry" href="/workflow/intraday">
+      <div class="icon" style="background:hsl(15 89% 56% / 0.1);border:1px solid hsl(15 89% 56% / 0.3)">📈</div>
+      <div>
+        <div class="title">实时盯盘 <span class="stage-badge stage-intraday">09:30+</span></div>
+        <div class="sub">持仓 + 命中标的地盯盘 · 独立路由</div>
+      </div>
+    </a>
+    <a class="intraday-entry" href="/workflow/alerts">
+      <div class="icon" style="background:hsl(0 74% 60% / 0.1);border:1px solid hsl(0 74% 60% / 0.3)">⚠️</div>
+      <div>
+        <div class="title">炸板预警</div>
+        <div class="sub">炸板规则 C1-C6 全市场统一</div>
+      </div>
+    </a>
+    <a class="intraday-entry" href="/workflow/coach">
+      <div class="icon" style="background:hsl(199 89% 58% / 0.1);border:1px solid hsl(199 89% 58% / 0.3)">🎯</div>
+      <div>
+        <div class="title">盯盘教练</div>
+        <div class="sub">时刻表 + 条件清单 + attention_mode</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="note">
+    <strong>变更：</strong> 盯盘入口从 <code>isIntraday &&</code> 门控改为全天常驻。三个 EntryCard 始终可见。
+    <br><strong>pre_open 新 stage：</strong> 09:00-09:29 从 <code>pre_market</code> 拆出为 <code>pre_open</code>（集合竞价/开盘准备）。
+    此时段自动高亮"当日"Tab，盯盘入口可见且标注"集合竞价中"。
+  </div>
+
+  <!-- stage 枚举对照 -->
+  <div class="card">
+    <h3>stage 枚举变更</h3>
+    <table class="strategy-table">
+      <thead><tr><th>时段</th><th>旧 stage</th><th>新 stage</th><th>自动高亮 Tab</th><th>盯盘入口</th></tr></thead>
+      <tbody>
+        <tr><td>00:00-08:59</td><td>pre_market</td><td class="mono">pre_market</td><td>前瞻</td><td>可见</td></tr>
+        <tr><td>09:00-09:29</td><td>pre_market</td><td class="mono">pre_open <span style="color:var(--warning)">★新增</span></td><td>当日</td><td>可见（集合竞价）</td></tr>
+        <tr><td>09:30-14:59</td><td>intraday</td><td class="mono">intraday</td><td>当日</td><td>可见</td></tr>
+        <tr><td>15:00-17:15</td><td>post_transition</td><td class="mono">post_transition</td><td>复盘</td><td>可见</td></tr>
+        <tr><td>17:15-24:00</td><td>post_market</td><td class="mono">post_market</td><td>前瞻</td><td>可见</td></tr>
+        <tr><td>非交易日</td><td>post_market</td><td class="mono">post_market</td><td>复盘</td><td>可见</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========== 预览 4：战法独立页 ========== -->
+<div class="preview-section">
+  <h2>预览 4：战法独立页 — /strategy</h2>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px">公共区"战法管理"入口卡片点击后跳转。跨阶段统计，不绑交易时段。</p>
+
+  <div class="card">
+    <h3>战法战绩 + 参数（12 战法）</h3>
+    <table class="strategy-table">
+      <thead><tr><th>战法</th><th>胜率</th><th>均收益%</th><th>样本</th><th>持有日</th><th>入场条件</th></tr></thead>
+      <tbody>
+        <tr><td>首板流</td><td class="mono">52.3%</td><td class="mono">1.82</td><td>89</td><td>3</td><td>涨停首板·基因分>50</td></tr>
+        <tr><td>动量接力</td><td class="mono">48.7%</td><td class="mono">1.35</td><td>67</td><td>5</td><td>连板≥2·换手>5%</td></tr>
+        <tr><td>均值回归</td><td class="mono">55.1%</td><td class="mono">0.92</td><td>45</td><td>20</td><td>跌超5%·PE<30</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="intraday-entry-group" style="grid-template-columns:1fr 1fr">
+    <a class="intraday-entry" href="/strategy/funnel/forward-test">
+      <div class="icon" style="background:hsl(145 62% 47% / 0.1);border:1px solid hsl(145 62% 47% / 0.3)">📊</div>
+      <div><div class="title">前向测试 §44</div><div class="sub">60 日复验 lift / winrate / validation_status</div></div>
+    </a>
+    <a class="intraday-entry" href="/strategy/funnel/config">
+      <div class="icon" style="background:hsl(199 89% 58% / 0.1);border:1px solid hsl(199 89% 58% / 0.3)">⚙️</div>
+      <div><div class="title">战法阈值配置</div><div class="sub">S081 阈值 + funnel config</div></div>
+    </a>
+  </div>
+
+  <div class="note">
+    <strong>路由：</strong> <code>/strategy</code> 展示战绩表 + 两个入口卡片（前向测试 + 阈值配置）。
+    原 S087 战法 tab 内容完整保留，只是从三 Tab 容器中独立出来。
+  </div>
+</div>
+
+</body>
+</html>
