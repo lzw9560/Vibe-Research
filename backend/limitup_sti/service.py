@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as _date_cls
 from typing import Optional
 
 import market
+
+from vr_paths import is_trading_day
 
 from limitup_sti.models import (
     STIPhase,
@@ -130,6 +132,28 @@ class STIEngine:
                 change_from_yesterday=None,
                 data_updated=None,
             )
+
+        # Fix C：防御性断言——非交易日（周末/节假日）直接降级返回，
+        # 即使调度层漏了守卫也不会产生垃圾行。emotion_data["date"] 形如 "2026-08-22"。
+        _raw_date = emotion_data.get("date", "")
+        try:
+            _parsed = _date_cls.fromisoformat(str(_raw_date))
+            if not is_trading_day(_parsed):
+                return STIResult(
+                    date=str(_raw_date),
+                    score=None,
+                    phase=None,
+                    dimensions=None,
+                    source_ok=False,
+                    confidence="low",
+                    change_from_yesterday=None,
+                    data_updated=None,
+                    data_freshness="expired",
+                    data_age_seconds=0.0,
+                )
+        except (ValueError, TypeError):
+            # 日期格式异常无法判定，交由下游正常流程处理（空串走原 if not emotion_data 分支）
+            pass
 
         if not sentiment_data:
             sentiment_data = {"up": 0, "down": 1, "active": "中性"}
@@ -255,6 +279,39 @@ class STIEngine:
 
     def precompute_daily(self, date: str) -> STIResult:
         """预计算指定日期的 STI。"""
+        # Fix A：交易日守卫——非交易日（周末/节假日）无交易数据输入通道，
+        # 拒绝计算，防周末垃圾行污染 timeline（影响 phase 分类 + change_from_yesterday）。
+        # STI 保持纯交易日指标，周末信息不进 STI。
+        try:
+            parsed = _date_cls.fromisoformat(date)
+        except (ValueError, TypeError):
+            return STIResult(
+                date=date,
+                score=None,
+                phase=None,
+                dimensions=None,
+                source_ok=False,
+                confidence="low",
+                change_from_yesterday=None,
+                data_updated=None,
+                data_freshness="expired",
+                data_age_seconds=0.0,
+            )
+        if not is_trading_day(parsed):
+            # 非交易日无交易数据，拒绝计算（防周末垃圾行污染 timeline）
+            return STIResult(
+                date=date,
+                score=None,
+                phase=None,
+                dimensions=None,
+                source_ok=False,
+                confidence="low",
+                change_from_yesterday=None,
+                data_updated=None,
+                data_freshness="expired",
+                data_age_seconds=0.0,
+            )
+
         emotion_data = market._emotion(date)
         sentiment_data = market._sentiment(date)
 
