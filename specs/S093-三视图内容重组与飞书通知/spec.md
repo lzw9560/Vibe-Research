@@ -124,7 +124,9 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
     - 市场级：涨停数/炸板数/涨跌比/连板梯队/板块轮动/北向资金
     - 个股级：价格/涨跌幅/封板状态/量比/换手
   
-  盯盘入口卡片（全天可见，不门控时段）
+- [ ] R6 第三层盘中因子列表中"北向资金"已删（2024-08-19 停更，无真实数据源）
+
+  盯盘入口卡片（全天可见，不门控时段——Oracle 非阻断 #12：当前仍门控 isIntraday，S093 要新做不是确认）
     - /workflow/intraday（实时盯盘）
     - /workflow/alerts（炸板预警）
     - /workflow/coach（盯盘教练）
@@ -241,7 +243,7 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 - [ ] AC5 行为对照卡在复盘 Tab（不在当日）
 - [ ] AC6 盯盘入口全天可见（不门控时段）
 - [ ] AC7 飞书通知：前瞻选股结果 17:15 后推送 + 盘中风险提示规则触发推送
-- [ ] AC8 规则引擎：封板跌破/炸板/涨停/情绪恶化/连板断裂/北向流出 6 条规则触发正确
+- [ ] AC8 规则引擎：封板跌破/炸板/涨停/情绪恶化/连板断裂 5 条规则触发正确（北向已删——无真实数据源）
 - [ ] AC9 交叉验证徽章：漏斗∩breakout 双重确认标的标绿
 - [ ] AC10 离线全测绿（pytest + vitest + tsc）
 - [ ] AC11 dev server 冒烟（三 Tab 内容重组 + stage 修订 + 飞书通知发送）
@@ -249,17 +251,17 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 ## 6. 设计取舍
 
 1. **S092 不改不动**：S092 是已实现基线，spec 文件保留作历史决策记录。S093 在 S092 基线上做内容重组 + stage 修订 + 通知新增。S092 的 R3 时段表/R23 内容归属被 S093 替换，冲突审查表见 §9。
-2. **pre_market = post_market**：今日盘后（17:15）= 次日盘前（到 09:00）。后端返回同一个 stage 值，前端高亮同一 Tab（前瞻）。语义自洽——"为次日选股做准备"的时段。
-3. **盘中延长到 15:30**：最新交易规则收盘延迟到 15:30（原 15:00）。post_transition 从 15:30 开始。
-4. **规则引擎 + AI 分层**：盘中确定性信号用规则引擎（毫秒级响应），盘后综合分析用 AI（异步不阻塞）。不在盘中调 AI——成本高 + 延迟大 + 盘中需要即时性。
-5. **飞书先行**：通知渠道先做飞书 webhook（简单 POST），其他渠道（桌面/邮件/discord/telegram）入待办。
-6. **当日不做选股 pipeline**：选股决策全在前瞻完成，当日只做"拿着前瞻结论盯盘执行"。避免重复工作。
-7. **交叉验证前端做**：漏斗∩breakout 交集在前端取（两个列表 code 交集），O(1) 成本，不需要新端点。
+ 2. **pre_market = post_market**：今日盘后（17:15）= 次日盘前（到 09:00）。后端返回两个不同枚举值（区分语义来源），前端映射同一 Tab（前瞻）。语义自洽——"为次日选股做准备"的时段。
+ 3. **盘中延长到 15:30**：最新交易规则收盘延迟到 15:30（原 15:00）。post_transition 从 15:30 开始。
+ 4. **规则引擎 + AI 分层**：盘中确定性信号用规则引擎（毫秒级响应），盘后综合分析用 AI（异步不阻塞）。不在盘中调 AI——成本高 + 延迟大 + 盘中需要即时性。
+ 5. **飞书复用既有基础设施**：复用 `backend/notification/`（NotificationService + FeishuSender）+ `feishu_notifier.py`（节流/上限/静默）+ `config.feishu_webhook_url`（环境变量）。不新建通知模块。其他渠道（桌面/邮件/discord/telegram）入待办。
+ 6. **当日不做选股 pipeline**：选股决策全在前瞻完成，当日只做"拿着前瞻结论盯盘执行"。避免重复工作。
+ 7. **交叉验证前端做**：漏斗∩breakout 交集在前端取（两个列表 code 交集），O(1) 成本，不需要新端点。后端 R10 通知也需算交集——复用 `select_premarket_with_risk(forward)` 读本地 kline。
 
 ## 7. 合规自查
 
 - [x] 不臆造数据：前瞻选股结果来自真实漏斗+breakout 数据；操作建议基于规则引擎确定性信号，不臆造
-- [x] 私有数据隔离：飞书 webhook URL 存 `.vibe-research/`（gitignored），不进 git
+- [x] 私有数据隔离：飞书 webhook URL 走 `config.feishu_webhook_url` 环境变量 `FEISHU_WEBHOOK_URL`（不落文件，不进 git）
 - [x] em_get 防封：tencent_quote 不走 em_get（走 tencent API），intraday_sentiment 已有防封
 - [x] 涉及操作建议/风险提示的改动过合规自查：规则引擎只给"建议"和"提示"，不自动下单（软 gate）
 - [x] 历史统计特征标注：飞书通知卡片标注"历史统计特征，市场有风险，研究参考"
@@ -306,10 +308,14 @@ S092 实现了三视图交易日锚模型（复盘/当日/前瞻 + dateTriplet +
 - resolve_date_triplet stage 边界修订 + pre_open 新增
 - 测试覆盖
 
-### S2 后端飞书通知 + 规则引擎
-- notifications/feishu.py + rules.py + __init__.py
-- candidate_funnel_precompute success 后触发通知
-- intraday_sentiment 采样后检查规则触发通知
+### S2 后端飞书通知 + 规则引擎（复用既有基础设施）
+- 复用 NotificationService + feishu_notifier + config.feishu_webhook_url（不新建 notifications/ 模块）
+- 扩展 bomb_alert_rules.py C7-C9 + bomb_alert_dispatcher 接 NotificationService.send()
+- candidate_funnel_precompute success 后触发飞书通知 + 扩返候选统计
+- intraday_sentiment 采样后检查 bomb_alert 规则触发飞书通知
+- workflow.py 快照路径补透传 final_candidates
+- config 采样窗口末窗 15:00→15:30
+- premarket_selection breakout name 空值修复
 - 测试覆盖
 
 ### S3 前端前瞻 Tab 重构
