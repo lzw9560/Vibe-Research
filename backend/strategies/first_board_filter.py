@@ -49,6 +49,7 @@ _HS300_PCT_CACHE: dict[str, float | None] = {}
 # baostock_kline_cache 模块级缓存（code → bars list）。
 # 31MB JSON 只读一次到内存，extract_chip_structure 复用，避免每只候选重读全文件（2s/只 → 0ms）。
 _KLINE_CACHE: dict[str, list[dict]] | None = None
+_KLINE_CACHE_MTIME: float = 0.0  # S094 audit fix: 追踪文件 mtime，refresh 脚本重写盘后下次调用重载（防进程内 memo 吐 stale bars）
 
 # ===========================================================================
 # 阈值配置（待回测校准，30 天后用实际数据调）
@@ -351,20 +352,27 @@ def _get_kline_cache() -> dict[str, list[dict]]:
     31MB JSON 首次读约 2s，后续 0ms。run_first_board_filter 跑 52 只首板
     时只读一次，避免每只重读全文件（旧实现 52×2s=100s+ 卡死）。
     """
-    global _KLINE_CACHE
-    if _KLINE_CACHE is not None:
-        return _KLINE_CACHE
+    global _KLINE_CACHE, _KLINE_CACHE_MTIME
+    from vr_paths import resolve_data_dir
+    cache_path = resolve_data_dir() / "baostock_kline_cache.json"
+    # S094 audit fix: 文件 mtime 变（refresh 脚本原子重写盘）→ 重载，防进程内 memo 吐 stale bars
     try:
-        from vr_paths import resolve_data_dir
-        cache_path = resolve_data_dir() / "baostock_kline_cache.json"
+        cur_mtime = cache_path.stat().st_mtime if cache_path.exists() else 0.0
+    except Exception:
+        cur_mtime = 0.0
+    if _KLINE_CACHE is not None and cur_mtime == _KLINE_CACHE_MTIME:
+        return _KLINE_CACHE  # memo 新鲜（mtime 未变）
+    try:
         if not cache_path.exists():
             _KLINE_CACHE = {}
+            _KLINE_CACHE_MTIME = 0.0
             return _KLINE_CACHE
         cache = json.loads(cache_path.read_bytes())
     except Exception as e:
         _logger.warning("_get_kline_cache 读取失败 err=%s", e)
         cache = {}
     _KLINE_CACHE = cache
+    _KLINE_CACHE_MTIME = cur_mtime
     return cache
 
 
