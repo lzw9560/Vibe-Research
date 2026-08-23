@@ -98,6 +98,9 @@ class PreMarketReport:
     market_phase: str | None = None           # _market_phase 返回值（冰点/普通/活跃/亢奋/红期）
     market_phase_cap: float | None = None     # 绿1.0/黄0.5/红0.2
     position_cap_tier: str | None = None      # green/yellow/red
+    # S096：P2 现象判据（fired_rule + factors，P2RiskPanel 显"为何此 tier"）
+    p2_factors: dict | None = None            # {zt_count/big_loss/floor/ladder_success/ladder_height}
+    p2_fired_rule: str | None = None          # fired_rule（完整链+红期override+数据降级）
     seat_risk_flags: dict[str, list[str]] = field(default_factory=dict)  # {code: [【拒绝介入】/独食独大/散户霸榜]}
     data_missing_flags: dict[str, str] = field(default_factory=dict)     # {code: 警示字符串}
     execution_checklist: list[str] = field(default_factory=list)
@@ -210,6 +213,10 @@ class PreMarketWorkflow:
         report.market_phase = p2_result.get("market_phase")
         report.market_phase_cap = p2_result.get("market_phase_cap")
         report.position_cap_tier = p2_result.get("position_cap_tier")
+        # S096：P2 现象判据 propagate——_apply_p2_post_filters 算了 p2_factors/p2_fired_rule，
+        # 此处必须 set 到 report，否则 config_out→briefing→P2RiskPanel 拿不到（CRITICAL：原实现漏这步致 fired_rule 永不显）
+        report.p2_factors = p2_result.get("p2_factors")
+        report.p2_fired_rule = p2_result.get("p2_fired_rule")
         report.seat_risk_flags = p2_result.get("seat_risk_flags", {})
         report.data_missing_flags = p2_result.get("data_missing_flags", {})
         report.execution_checklist = p2_result.get("execution_checklist", [])

@@ -180,6 +180,9 @@ class LimitupScreenerFactor:
             "market_phase": getattr(report, "market_phase", None),
             "market_phase_cap": getattr(report, "market_phase_cap", None),
             "position_cap_tier": getattr(report, "position_cap_tier", None),
+            # S096：P2 现象判据（fired_rule + factors，P2RiskPanel 显"为何此 tier"）
+            "p2_factors": getattr(report, "p2_factors", None),
+            "p2_fired_rule": getattr(report, "p2_fired_rule", None),
             "seat_risk_flags": getattr(report, "seat_risk_flags", None) or {},
             "data_missing_flags": getattr(report, "data_missing_flags", None) or {},
             "execution_checklist": getattr(report, "execution_checklist", None) or [],
