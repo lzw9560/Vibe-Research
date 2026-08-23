@@ -147,6 +147,19 @@ def test_ac3_current_trading_day_allowed(monkeypatch):
     assert fetch_calls["count"] == 1, "当天请求应放行走到 _fetch_zt_pool"
 
 
+def test_ac3b_future_trading_day_rejected_by_guard(monkeypatch):
+    """AC3b（ora-8 MEDIUM #3 补）：未来交易日被 _assert_not_future_date 拒绝。
+
+    08-24 是周一（交易日，不会被 is_trading_day 放行），但晚于最近交易日
+    08-21 → 应由 S095 守卫拒绝。此前 AC1/AC4 用周末日期会被 is_trading_day
+    先拦，S095 守卫拒绝分支零覆盖——本测直接打拒绝方向。
+    """
+    _patch_last_trading(monkeypatch, "2026-08-21")
+
+    assert _assert_not_future_date("20260824") is False
+    assert _assert_not_future_date("2026-08-24") is False
+
+
 # ─── AC4：远期未来返空 ────────────────────────────────────────────────
 
 def test_ac4_far_future_returns_empty(monkeypatch):
