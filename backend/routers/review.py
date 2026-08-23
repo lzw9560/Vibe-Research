@@ -55,6 +55,10 @@ async def get_daily_review(date: str = Query(None, description="交易日期 YYY
         # 参考 routers/strategy.py:72 既有模式。
         result = await asyncio.to_thread(reviewer.generate_review, date)
         return result.model_dump()
+    except ValueError as e:
+        # 非交易日/日期格式错误 → 422（客户端输入语义错，非服务器故障）
+        # daily_review.generate_review 的交易日守门抛 ValueError，不应误报为 500。
+        raise HTTPException(status_code=422, detail=f"复盘报告生成失败: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"复盘报告生成失败: {str(e)}")
 
@@ -76,6 +80,9 @@ async def backfill_review(start_date: str = Query(..., description="起始日期
             "start_date": start_date,
             "end_date": end_date,
         }
+    except ValueError as e:
+        # 非交易日/日期格式错误 → 422（与 get_daily_review 一致）
+        raise HTTPException(status_code=422, detail=f"复盘报告回填失败: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"复盘报告回填失败: {str(e)}")
 
