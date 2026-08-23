@@ -15,6 +15,9 @@ from migrations import MigrationManager
 
 from limitup_sti.models import STIResult, DISCLAIMER
 
+import logging
+_logger = logging.getLogger(__name__)
+
 DB_PATH = STI_TIMELINE_DB_PATH
 
 
@@ -159,8 +162,8 @@ def save_result(result: STIResult) -> None:
             ),
         )
         db.commit()
-    except Exception:
-        pass
+    except Exception as e:  # S094 audit: 旧 bare except:pass 吞 "no such column" 等致整行静默丢（T18 加 zt_real 列放大）；现 log
+        _logger.warning("save_result 写 sti_timeline 失败 date=%s: %s", result.date, e)
 
 
 def load_last_score() -> float | None:
@@ -223,8 +226,8 @@ def save_intraday(snapshot: dict) -> None:
             ),
         )
         db.commit()
-    except Exception:
-        pass
+    except Exception as e:  # S094 audit: 旧 bare except:pass 吞错致盘中 snapshot 静默丢；现 log
+        _logger.warning("save_intraday 写 sti_intraday 失败 date=%s time=%s: %s", snapshot.get("date"), snapshot.get("time"), e)
 
 
 def load_intraday_day(date: str) -> list[dict]:
