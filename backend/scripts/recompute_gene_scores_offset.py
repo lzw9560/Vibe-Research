@@ -22,7 +22,7 @@ gene_scores 表历史行存在系统性错位：写入时刻在 T 日晚，用"�
   2. 清 ``_CACHE`` 对应 ``limitup_screener_{YYYYMMDD}`` 键 + ``_RESOLVED_DATE_CACHE``
      ——独立进程 import 后本为空，防御性清除（成本零）
   3. ``await precompute_daily_async(date)`` 显式传日期 —— 绕 ``_resolve_date`` 缓存；
-     传历史交易日，``is_trading_day`` 守卫不拦（08-17~08-21 均为周一~周五非节假日）
+      传历史交易日，``is_trading_day`` 守卫不拦（08-13/08-14 均为周三/周四非节假日）
   4. 每日之间 ``time.sleep(2)`` —— em_get 防封纪律
   5. 内置验证：行数对照 + code 集合对照（gs(d) == zh(d)）+ updated_at
 
@@ -32,6 +32,13 @@ gene_scores 表历史行存在系统性错位：写入时刻在 T 日晚，用"�
     cd backend && ../.venv/bin/python -m scripts.recompute_gene_scores_offset --apply   # 实跑
 
 注意：不改任何运行时代码，只写 ``.vibe-research/gene_scores.db``（私有数据）。
+
+2026-08-23 追加重算
+-------------------
+fix-18 上轮重算 08-17~08-21 后，发现 08-13/08-14 仍偏移一天：
+    gene_scores 08-13(92) = zt_history 08-12 的池  ← 错位
+    gene_scores 08-14(59) = zt_history 08-13 的池  ← 错位
+本次把 ``TARGET_DATES`` 改为 ``['2026-08-13','2026-08-14']`` 重算对齐。
 """
 from __future__ import annotations
 
@@ -48,16 +55,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import GENE_SCORES_DB_PATH  # noqa: E402
 from vr_paths import is_trading_day  # noqa: E402
 
-# 重算目标日（仅上周，08-17 前不在本次范围）
-TARGET_DATES = ["2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21"]
+# 重算目标日（2026-08-23 追加：08-13/08-14 偏移一天，需对齐 zt_history 同日）
+TARGET_DATES = ["2026-08-13", "2026-08-14"]
 
 # 东财历史交易日池稳定后的最终行数（与 zt_history 最终表 is_final=1 对照一致）
 EXPECTED_ROWS = {
-    "2026-08-17": 106,
-    "2026-08-18": 79,
-    "2026-08-19": 36,
-    "2026-08-20": 79,
-    "2026-08-21": 54,
+    "2026-08-13": 59,
+    "2026-08-14": 63,
 }
 
 # zt_history.db 路径（与 gene_scores.db 同目录）
@@ -271,7 +275,7 @@ def _dry_run() -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="重算 gene_scores 表历史行日期错位（08-17~08-21）"
+        description="重算 gene_scores 表历史行日期错位（08-13/08-14）"
     )
     parser.add_argument(
         "--apply",
