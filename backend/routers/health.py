@@ -135,7 +135,9 @@ async def _check_extreme_market() -> Dict[str, Any]:
 
         signal = await get_extreme_market_signal()
         if signal is None:
-            return {"ok": False, "detail": "extreme_market_detector_unavailable"}
+            # 无信号（非交易日/无数据/降级）≠ detector 坏：detector 可调用即 ok=true。
+            # 旧实现把 None 当 "unavailable"(ok=false)致 health 整体 ok=false 卡 smoke e2e——语义错。
+            return {"ok": True, "detail": "extreme_market_no_signal（非交易日或无数据，detector 健康）"}
 
         return {
             "ok": True,
