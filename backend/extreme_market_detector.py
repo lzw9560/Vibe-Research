@@ -10,6 +10,9 @@ from typing import Any
 import astock
 from vr_paths import is_trading_day
 
+import logging
+_logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ExtremeMarketSignal:
@@ -161,8 +164,9 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
             last_updated=datetime.now().isoformat(),
         )
 
-    except Exception:
-        return None
+    except Exception as e:  # S094 audit/#6 over-correction fix: log + re-raise（不再吞→health except 接 ok=false；非交易日/无数据 None L101→ok=true 正确区分 no-signal vs broken）
+        _logger.warning("detect_extreme_market 异常 date=%s: %s", date, e)
+        raise
 
 
 # ===========================================================================
