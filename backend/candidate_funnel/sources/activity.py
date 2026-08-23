@@ -26,6 +26,60 @@ def _is_historical_date(date: str) -> bool:
         return False
 
 
+def _compute_kline_derived(bars: list[dict], idx: int, float_shares: float | None) -> dict:
+    """从 K线 bars 复算战法派生字段 + 前日成交额（S081/S084 口径，历史日与盘前共用）。
+
+    以 ``bars[idx]`` 为"当日"bar、``bars[idx-1]`` 为"前日"bar，复算：
+    - ``max_high_pct`` = (high/prev_close - 1)*100（当日最高涨幅）
+    - ``shadow_length_pct`` = (high/close - 1)*100（上影线长度）
+    - ``ma_5_status`` = Upward/Downward/Flat（最近5日 close 均值 vs 前移一日均值）
+    - ``prev_turnover_pct`` = prev.vol*10000/float_shares（前日换手率）
+    - ``prev_amount_yi`` = prev.amount/1e8（前日成交额，亿）
+
+    任一字段取不到 → 不写入返回 dict（调用方保持 None）。不臆造。
+    与 ``_fetch_activity_from_kline`` 历史日路径口径一字一致（S085 A3 抽出共享，
+    消除历史日与盘前 tencent 路径的计算重复）。
+    """
+    out: dict = {}
+    if idx < 0 or idx >= len(bars):
+        return out
+    bar = bars[idx]
+    prev = bars[idx - 1] if idx > 0 else None
+    close = _f(bar.get("close"))
+    high = _f(bar.get("high"))
+    prev_close = _f(prev.get("close")) if prev else None
+    # max_high_pct：当日最高涨幅 = (high/prev_close - 1)*100
+    if high is not None and prev_close and prev_close > 0:
+        out["max_high_pct"] = round((high / prev_close - 1) * 100, 2)
+    # shadow_length_pct：上影线 = (high/close - 1)*100
+    if high is not None and close and close > 0:
+        out["shadow_length_pct"] = round((high / close - 1) * 100, 2)
+    # ma_5_status：5日均线趋势（最近5日 close 均值 vs 前移一日均值）
+    if idx >= 5:
+        closes_5d = [_f(b.get("close")) for b in bars[idx-5:idx+1]]
+        closes_5d = [c for c in closes_5d if c is not None]
+        if len(closes_5d) >= 6:
+            ma5_today = sum(closes_5d[-5:]) / 5
+            ma5_prev = sum(closes_5d[-6:-1]) / 5
+            if ma5_today > ma5_prev:
+                out["ma_5_status"] = "Upward"
+            elif ma5_today < ma5_prev:
+                out["ma_5_status"] = "Downward"
+            else:
+                out["ma_5_status"] = "Flat"
+    # prev_turnover_pct：前日换手率（前日 bar vol*10000/float_shares）
+    if prev is not None and float_shares and float_shares > 0:
+        prev_vol = _f(prev.get("vol"))
+        if prev_vol is not None:
+            out["prev_turnover_pct"] = round(prev_vol * 10000 / float_shares, 2)
+    # prev_amount_yi：前日成交额（前日 bar amount/1e8，亿）
+    if prev is not None:
+        prev_amount = _f(prev.get("amount"))
+        if prev_amount is not None:
+            out["prev_amount_yi"] = round(prev_amount / 1e8, 4)
+    return out
+
+
 def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
     """历史日活跃度——kline 复算（tencent_quote 仅当日，S044 R7）。
 
@@ -105,37 +159,8 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
         else:
             entry["missing"]["turnover_pct"] = "流通股本近似未取得（individual_data 宕）"
 
-        # S081：PRD 2 战法因子扩展（从已取 K线 bars 算，不重新取数）
-        # max_high_pct：当日最高涨幅 = (high/prev_close - 1)*100
-        if high is not None and prev_close and prev_close > 0:
-            entry["max_high_pct"] = round((high / prev_close - 1) * 100, 2)
-        # shadow_length_pct：上影线 = (high/close - 1)*100
-        if high is not None and close and close > 0:
-            entry["shadow_length_pct"] = round((high / close - 1) * 100, 2)
-        # ma_5_status：5日均线趋势（最近5日 close 均值 vs 前移一日均值）
-        if idx >= 5:
-            closes_5d = [_f(b.get("close")) for b in bars[idx-5:idx+1]]
-            closes_5d = [c for c in closes_5d if c is not None]
-            if len(closes_5d) >= 6:
-                ma5_today = sum(closes_5d[-5:]) / 5
-                ma5_prev = sum(closes_5d[-6:-1]) / 5
-                if ma5_today > ma5_prev:
-                    entry["ma_5_status"] = "Upward"
-                elif ma5_today < ma5_prev:
-                    entry["ma_5_status"] = "Downward"
-                else:
-                    entry["ma_5_status"] = "Flat"
-        # prev_turnover_pct：前日换手率（前日 bar vol*10000/float_shares）
-        if prev is not None and float_shares and float_shares > 0:
-            prev_vol = _f(prev.get("vol"))
-            if prev_vol is not None:
-                entry["prev_turnover_pct"] = round(prev_vol * 10000 / float_shares, 2)
-
-        # S084 R4.3：前日成交额（前日 bar amount/1e8，亿）
-        if prev is not None:
-            prev_amount = _f(prev.get("amount"))
-            if prev_amount is not None:
-                entry["prev_amount_yi"] = round(prev_amount / 1e8, 4)
+        # S081/S084：战法派生字段 + 前日成交额（共享口径，见 _compute_kline_derived）
+        entry.update(_compute_kline_derived(bars, idx, float_shares))
 
         # S084 R4.1：pe_ttm/mcap_yi/pb 历史日无源（tencent_quote 仅当日），标 missing 不臆造
         for _k in ("pe_ttm", "mcap_yi", "pb"):
@@ -183,28 +208,55 @@ def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
                 "limit_down": model.limit_down_price,
                 # S049 C2：当日行情数据源日期=as_of（tencent_quote 仅当日）
                 "_as_of": as_of,
-                # S057：流通市值（元）—— 供八项标准①判定
-                "float_market_cap": model.float_market_cap,
-                # S081：PRD 2 战法因子（当日 tencent_quote 无 K线 bars，降级 None）
-                "max_high_pct": None,
-                "shadow_length_pct": None,
-                "ma_5_status": None,
-                "prev_turnover_pct": None,
-                # S084 R4.1：tencent_quote 扩展（当日路径直接读 Quote 模型字段）
-                "last_close": model.last_close,
-                "open": model.open,
-                "change_amt": model.change_amount,  # Quote 字段 change_amount → entry key change_amt
-                "pe_ttm": model.pe_ttm,
-                "mcap_yi": model.market_cap_yi,  # Quote property（亿）
-                "pb": model.pb,
-                # 当日路径无前日 K线 bar，prev_amount_yi 无源
-                "prev_amount_yi": None,
-            }
+                 # S057：流通市值（元）—— 供八项标准①判定
+                 "float_market_cap": model.float_market_cap,
+                 # S081/S085 A3：战法派生字段——盘前 tencent 无当日 K线，
+                 # 改从 K线 T-1 bar 复算（下方注入），取不到保持 None
+                 "max_high_pct": None,
+                 "shadow_length_pct": None,
+                 "ma_5_status": None,
+                 "prev_turnover_pct": None,
+                 # S084 R4.1：tencent_quote 扩展（当日路径直接读 Quote 模型字段）
+                 "last_close": model.last_close,
+                 "open": model.open,
+                 "change_amt": model.change_amount,  # Quote 字段 change_amount → entry key change_amt
+                 "pe_ttm": model.pe_ttm,
+                 "mcap_yi": model.market_cap_yi,  # Quote property（亿）
+                 "pb": model.pb,
+                 # S085 A3：前日成交额——从 K线 T-2 bar 取（下方注入），取不到保持 None
+                 "prev_amount_yi": None,
+             }
+            # S085 A3：盘前 tencent 路径补 K线派生字段（max_high_pct/shadow/ma5/
+            # prev_turnover_pct/prev_amount_yi）。tencent 盘前取不到这5项，从
+            # K线 T-1 bar 复算（口径与 _fetch_activity_from_kline 完全一致，经
+            # _compute_kline_derived 共享）。失败保持 None + missing，不降级 tencent 字段。
+            derived: dict = {}
+            try:
+                bars = astock.kline(c, 4, 10) or []
+            except Exception:
+                bars = []
+            if bars:
+                # T-1 bar：今日无 K线 → bars[-1]；今日已有一根 → bars[-2]
+                idx_t1 = len(bars) - 2 if len(bars) >= 2 and \
+                    (bars[-1].get("datetime") or bars[-1].get("date") or "")[:10] >= \
+                    as_of[:10] else len(bars) - 1
+                if idx_t1 >= 0:
+                    # float_shares：从 tencent 流通市值/价格近似（与历史日路径一致）
+                    float_shares = None
+                    if model.float_market_cap and model.price:
+                        float_shares = model.float_market_cap / model.price
+                    derived = _compute_kline_derived(bars, idx_t1, float_shares)
+                    for _k, _v in derived.items():
+                        entry[_k] = _v
             missing: dict[str, str] = {}
             for k in ("turnover_pct", "vol_ratio", "amount_yi", "amplitude_pct"):
                 if entry[k] is None:
                     missing[k] = "行情字段未取得"
-            missing["prev_amount_yi"] = "当日路径无前日 K线（需历史日 kline 复算）"
+            # S085 A3：K线派生取不到标 missing（盘前非交易时段 K线可能为空，诚实标注）
+            if not derived:
+                missing["kline_derived"] = "盘前K线未取得"
+            elif entry["prev_amount_yi"] is None:
+                missing["prev_amount_yi"] = "当日路径无前日 K线（需历史日 kline 复算）"
             if missing:
                 entry["missing"] = missing
             out[c] = entry

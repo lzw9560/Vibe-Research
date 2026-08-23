@@ -121,3 +121,37 @@ def valuation_percentile(code: str, period: str = "近五年") -> dict:
         except Exception:
             continue
     return {"period": "近5年", "metrics": metrics}
+
+
+def chip_distribution(code: str) -> dict:
+    """筹码分布（东财 stock_cyq_em，最新交易日）—— 获利比例 / 平均成本 / 集中度 / 90%&70%成本。
+
+    S085 D3：接通 IndicatorSet.chip_profit_ratio（此前恒 None）。
+    返回字段映射：
+      - chip_profit_ratio: 获利比例（0-100）
+      - avg_cost: 平均成本
+      - concentration: 集中度
+      - 90_cost / 70_cost: 90%成本-70%成本区间上下沿
+    akshare 缺失抛 DependencyMissing；取数异常返回空 dict {}（不臆造，遵循项目红线 AC6）。
+    """
+    ak = _akshare()
+    try:
+        df = ak.stock_cyq_em(symbol=code)
+    except Exception as e:
+        logging.getLogger("astock").warning("chip_distribution(%s) akshare 取数失败: %s", code, e)
+        return {}
+    if df is None or df.empty:
+        return {}
+    row = df.iloc[-1].to_dict()
+
+    def g(k):
+        v = row.get(k)
+        return None if v in (False, "false", "", None, "-", "--") else v
+
+    return {
+        "chip_profit_ratio": g("获利比例"),
+        "avg_cost": g("平均成本"),
+        "concentration": g("集中度"),
+        "90_cost": g("90成本-70成本"),
+        "70_cost": g("70成本-90成本"),
+    }

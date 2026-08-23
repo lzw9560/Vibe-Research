@@ -200,6 +200,17 @@ def build_indicator_set(
             ind.missing["ma_boll"] = "kline cache 未取得"
     except Exception:
         ind.missing["ma_boll"] = "MA/BOLL 计算失败"
+    # S085 D3：筹码分布（akshare stock_cyq_em）——chip_profit_ratio 此前恒 None
+    # 仿 MA/BOLL inline 模式：惰性导入，取不到标 None + missing 原因（AC6 红线）
+    try:
+        from data.sources.akshare_src import chip_distribution  # noqa: PLC0415 — 惰性导入
+        _result = chip_distribution(code)
+        if _result:
+            ind.chip_profit_ratio = _result.get("chip_profit_ratio")
+        else:
+            ind.missing["chip_profit_ratio"] = "筹码分布未取得（akshare stock_cyq_em）"
+    except Exception:
+        ind.missing["chip_profit_ratio"] = "筹码分布未取得（akshare stock_cyq_em）"
     return ind
 
 
