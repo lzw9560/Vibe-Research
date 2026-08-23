@@ -465,6 +465,28 @@ def _cand_to_gene(cand: dict):
     )
 
 
+def _build_market_scan_factors(pattern, cand: dict, strat_code: str) -> dict:
+    """S094 audit fix: market_scan 候选从 PatternScan + strat_code 建 factors dict（4 因子 0-100）。
+
+    run_non_limitup_funnel（R27/T9-full）产 pattern（PatternScan）不产 factors dict →
+    score_candidates 拿 cand["factors"]={} 空 → compute_strategy_score 全 0（非涨停侧 scoring 废）。
+    此处补建：相对强度/均线多头/板块强度（candidate-level，compute_*_score）+
+    量能信号（per-strategy，compute_volume_signal_score(pattern, strat_code)，R4 下沉 match 层算）。
+    pattern None → 各因子降级 50（不臆造 0）。
+    """
+    from strategies.non_limitup_funnel import (  # 懒 import 防 circular
+        compute_relative_strength_score, compute_ma_bullish_score,
+        compute_volume_signal_score, compute_sector_strength_score,
+    )
+    sector_rank = cand.get("sector_rank")
+    return {
+        "相对强度": compute_relative_strength_score(pattern) if pattern is not None else 50.0,
+        "均线多头": compute_ma_bullish_score(pattern) if pattern is not None else 50.0,
+        "量能信号": compute_volume_signal_score(pattern, strat_code) if pattern is not None else 50.0,
+        "板块强度": compute_sector_strength_score(sector_rank),
+    }
+
+
 def score_candidates(
     candidates: list[dict],
     weather_state: str | None,
@@ -567,7 +589,10 @@ def score_candidates(
                 market_data = _build_market_data(cand.get("pattern"), cand)
                 if not passes_hard_standards(check_quality_standards({"code": code}, strat_code, market_data)):
                     continue
-            score, breakdown = compute_strategy_score(factors, cfg.weight_set)
+            # S094 audit fix: market_scan 候选无 factors dict（run_non_limitup_funnel 产 pattern 不产 factors）
+            # → 从 PatternScan+strat_code 建 per-strategy factors（量能信号 per-strategy R4），否则 score=0.0
+            _factors_for_score = _build_market_scan_factors(cand.get("pattern"), cand, strat_code) if funnel_type == "market_scan" else factors
+            score, breakdown = compute_strategy_score(_factors_for_score, cfg.weight_set)
             # S073 §9.4 游资画像修饰（画像未建→modifier 1.0 不扣分，标 risk_label）
             seat_risk = None
             if trade_date and billboard is not None:

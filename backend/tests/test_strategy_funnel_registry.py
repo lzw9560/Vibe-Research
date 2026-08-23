@@ -310,6 +310,9 @@ class TestScoreCandidatesMarketScan:
         assert any(s["strategy_code"] == "dragon_head" for s in scored)
         # S094 R12/T15: scored 复用 dispatch_match confidence（dragon_head 固定 0.5）
         assert any(s["strategy_code"] == "dragon_head" and s.get("confidence") == 0.5 for s in scored)
+        # S094 audit fix: market_scan score 非零（_build_market_scan_factors 从 PatternScan 建 factors，原 cand 无 factors dict→0.0 bug）
+        assert any(s["strategy_code"] == "dragon_head" and s.get("strategy_score", 0) > 0 for s in scored), \
+            f"strategy_score 应 >0（非涨停 factors 已建），got: {[(s.get('strategy_code'), s.get('strategy_score')) for s in scored]}"
 
     def test_dragon_head_no_match_when_sector_rank_gt3(self):
         cands = [self._cand("000001", 5, self._pattern())]
