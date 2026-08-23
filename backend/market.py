@@ -152,6 +152,15 @@ def _emotion(date: str | None = None) -> dict:
         - date=None 的回溯定位模式（从今天往前回溯找最近交易日）保持不动——
           该路径本身只在有数据的交易日 resolve，不触发回退问题
 
+        ⚠️ 盘前回退陷阱（P0-3，2026-08-23 修复）：
+        东财 push2ex 在交易日盘前（< 15:00）当日数据尚未生成，对当日请求会
+        **静默回退**到前一交易日数据（实测 08-21 盘前请求返 08-20 的 79 条
+        涨停池），导致 ``_cache`` 存错日期的 zt_count。守卫：
+
+        - date 显式传入 + 是今日交易日 + 当前时刻盘前（< 15:00）→ 返回 ``{}``
+          （当日盘后数据未生成，不查东财；盘后 15:00+ 放行）
+        - 历史交易日显式传入照常放行（盘后已生成，不触发回退）
+
     Args:
         date: 可选日期字符串 YYYY-MM-DD。不传则自动定位最近交易日。
     """
@@ -167,6 +176,18 @@ def _emotion(date: str | None = None) -> dict:
             pass
         except Exception:
             # vr_paths 取不到 → 不阻断，走原流程（宁可可能错位也不彻底打挂）
+            pass
+
+    # P0-3：交易日盘前当日请求 → 不查东财，避免 push2ex 盘前回退到 T-1
+    # 东财 push2ex 盘前（< 15:00）当日涨停池未生成，返 T-1 数据致 _cache 存错日期。
+    # 盘后（15:00+）当日数据已确定，放行。历史交易日显式传入不受限（已生成）。
+    if date is not None:
+        try:
+            _now = datetime.now(BEIJING)
+            _today_str = _now.strftime("%Y-%m-%d")
+            if date == _today_str and _now.hour < 15:
+                return {}
+        except Exception:
             pass
 
     # S049 同花顺交叉验证 / 降级源标识（默认主源正常、未交叉验证）
