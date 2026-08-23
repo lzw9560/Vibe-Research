@@ -69,6 +69,17 @@ try:
             ])
         except Exception as _re:
             _logger.warning("[limitup_sti] raw_break_rate 迁移失败（不影响主流程）: %s", _re)
+        # T18（S094 S4）：sti_timeline 加 zt_real 列（真实涨停数，akshare legu 源）
+        try:
+            _zt_real_sql = (
+                _Path(__file__).resolve().parent.parent
+                / "migrations" / "sti" / "20260823-001_add_zt_real.sql"
+            ).read_text(encoding="utf-8")
+            _MM(db_path=_STI_DB).upgrade([
+                {"version": "20260823-001", "name": "add_zt_real", "sql": _zt_real_sql},
+            ])
+        except Exception as _ze:
+            _logger.warning("[limitup_sti] zt_real 迁移失败（不影响主流程）: %s", _ze)
     except Exception as _e:
         _logger.warning("[limitup_sti] sti_intraday 迁移失败（不影响主流程）: %s", _e)
 except Exception as e:

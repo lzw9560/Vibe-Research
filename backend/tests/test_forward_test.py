@@ -397,7 +397,7 @@ def test_run_daily_forward_test_passes_pool_item_map(monkeypatch):
     """S086 R7：run_daily_forward_test 取涨停池建 pool_item_map 传给 score_candidates。
 
     验证：fetch_zt_pool 的原始池（按 "c" 字段）建 {code: pool_item} 映射，
-    作为第 4 个位置参传给 score_candidates（供 storm_reversal fbt / R2 真实入场价）。
+    作为第 5 个位置参传给 score_candidates（funnel_type 第 3，S094 T11 必填；供 storm_reversal fbt / R2 真实入场价）。
     fetch_zt_pool 失败 → 空 map 降级（A7 fallback），不阻断。
     """
     from strategies import forward_test as ft
@@ -419,7 +419,7 @@ def test_run_daily_forward_test_passes_pool_item_map(monkeypatch):
 
     captured: dict = {}
 
-    def _fake_score(cands, weather, trade_date, pool_item_map=None):
+    def _fake_score(cands, weather, funnel_type, trade_date=None, pool_item_map=None):
         captured["pool_item_map"] = pool_item_map
         captured["n_cands"] = len(cands)
         return [{"code": "000001", "name": "X", "strategy_code": "first_plate",
@@ -459,7 +459,7 @@ def test_run_daily_forward_test_degrades_when_fetch_zt_pool_fails(monkeypatch):
 
     captured: dict = {}
 
-    def _fake_score(cands, weather, trade_date, pool_item_map=None):
+    def _fake_score(cands, weather, funnel_type, trade_date=None, pool_item_map=None):
         captured["pool_item_map"] = pool_item_map
         return []
     monkeypatch.setattr("strategies.strategy_funnel_registry.score_candidates", _fake_score)

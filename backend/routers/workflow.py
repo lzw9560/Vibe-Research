@@ -220,13 +220,28 @@ async def _collect(run_id: str, target_date: str) -> None:
                     logger.warning("scored 取涨停池建 pool_item_map 失败 %s: %s", target_date, exc)
                 _t6 = _time.time()
                 scored = await asyncio.to_thread(
-                    score_candidates, cand_input, weather_state, target_date, pool_item_map,
+                    score_candidates, cand_input, weather_state, "limitup", target_date, pool_item_map,
                 )
                 logger.info("[_collect] score_candidates: %.1fs scored=%d", _time.time() - _t6, len(scored))
                 # 过滤"无符合条件标的"占位项（strategy_code="none"）
                 scored_candidates = [s for s in scored if s.get("strategy_code") != "none"]
         except Exception as exc:  # noqa: BLE001 — 打分失败不影响 briefing 主态
             logger.warning("scored_candidates 构建失败 %s: %s", target_date, exc)
+
+        # S094 T17/R26：非涨停 pipeline 采集（briefing 双 pipeline 分区透传，R28）
+        # 数据依赖 baostock_kline_cache 全 A 扩容（T21-run）；未扩容前 market_scan_scored 恒空。
+        market_scan_scored: list[dict] = []
+        try:
+            _t7 = _time.time()
+            from strategies.market_scan import gather_non_limitup_candidates
+            ms_result = await asyncio.to_thread(gather_non_limitup_candidates, target_date)
+            market_scan_scored = [
+                s for s in ms_result.get("candidates", []) if s.get("strategy_code") != "none"
+            ]
+            logger.info("[_collect] gather_non_limitup_candidates: %.1fs ms_scored=%d",
+                        _time.time() - _t7, len(market_scan_scored))
+        except Exception as exc:  # noqa: BLE001 — 非涨停采集失败不影响涨停 briefing 主态
+            logger.warning("market_scan_scored 构建失败 %s: %s", target_date, exc)
 
         # S079 D1：从 limitup_screener factor 的 config 提取 P2 仓位闸 + 龙虎榜风控字段
         # PreMarketWorkflow.run() 在 LimitupScreenerFactor.fetch 内被调用，P2 字段塞 config_out
@@ -250,11 +265,14 @@ async def _collect(run_id: str, target_date: str) -> None:
             as_of=as_of,
             error=None,
             scored_candidates=scored_candidates,
+            market_scan_scored=market_scan_scored,  # S094 T17/R28：非涨停 pipeline 透传
             final_candidates=final_cards,  # S093 R4：透传到 live-done 响应
             # S079 P2 顶层字段（供 get_pre_market_workflow 响应直接透传）
             market_phase=p2_fields.get("market_phase"),
             market_phase_cap=p2_fields.get("market_phase_cap"),
             position_cap_tier=p2_fields.get("position_cap_tier"),
+            p2_factors=p2_fields.get("p2_factors"),  # S096
+            p2_fired_rule=p2_fields.get("p2_fired_rule"),  # S096
             seat_risk_flags=p2_fields.get("seat_risk_flags", {}),
             data_missing_flags=p2_fields.get("data_missing_flags", {}),
             execution_checklist=p2_fields.get("execution_checklist", []),
@@ -275,12 +293,15 @@ async def _collect(run_id: str, target_date: str) -> None:
                 "funnel_layers": funnel_layers,
                 "final_candidates": final_cards,
                 "scored_candidates": scored_candidates,
+                "market_scan_scored": market_scan_scored,  # S094 T17/R28
                 # 补采标记：采集时刻 target_date 早于最近交易日
                 "is_backfill": target_date < last_trading_date_str(),
                 # S079 P2 仓位闸 + 龙虎榜风控字段（历史快照同结构）
                 "market_phase": p2_fields.get("market_phase"),
                 "market_phase_cap": p2_fields.get("market_phase_cap"),
                 "position_cap_tier": p2_fields.get("position_cap_tier"),
+                "p2_factors": p2_fields.get("p2_factors"),  # S096
+                "p2_fired_rule": p2_fields.get("p2_fired_rule"),  # S096
                 "seat_risk_flags": p2_fields.get("seat_risk_flags", {}),
                 "data_missing_flags": p2_fields.get("data_missing_flags", {}),
                 "execution_checklist": p2_fields.get("execution_checklist", []),
@@ -309,6 +330,7 @@ def _extract_p2_fields(results: list) -> dict[str, Any]:
     """
     p2_keys = (
         "market_phase", "market_phase_cap", "position_cap_tier",
+        "p2_factors", "p2_fired_rule",  # S096
         "seat_risk_flags", "data_missing_flags", "execution_checklist",
         "param_disclaimer",
     )
@@ -347,7 +369,7 @@ def _fetch_market_emotion(date: str, ctx: "SentimentContext | None" = None) -> d
     out: dict[str, Any] = {
         "sti_score": None, "sti_phase": None,
         "seal_rate": None, "break_rate": None, "promotion_rate": None,
-        "ladder": [], "zt_count": None, "dt_count": None,
+        "ladder": [], "zt_count": None, "dt_count": None, "zt_real": None,
         "weather_state": None, "sentiment_source": None,
     }
     from candidate_funnel.sources.board_ladder import get_market_emotion_raw  # noqa: PLC0415
@@ -359,6 +381,7 @@ def _fetch_market_emotion(date: str, ctx: "SentimentContext | None" = None) -> d
         out["ladder"] = emo.get("ladder") or []
         out["zt_count"] = emo.get("zt_count")
         out["dt_count"] = emo.get("dt_count")
+        out["zt_real"] = emo.get("zt_real")
     # STI 复用同一份 emotion（不重复外调），失败降级 None
     try:
         from limitup_sti.service import get_sti_engine  # noqa: PLC0415
@@ -385,7 +408,7 @@ def _market_emotion_from_ctx(date: str, ctx: "SentimentContext") -> dict[str, An
         "sti_score": ctx.sti_score,
         "sti_phase": ctx.sti_phase,
         "seal_rate": None, "break_rate": None, "promotion_rate": None,
-        "ladder": [], "zt_count": None, "dt_count": None,
+        "ladder": [], "zt_count": None, "dt_count": None, "zt_real": None,
         "weather_state": ctx.weather_state,
         "sentiment_source": f"T-1({ctx.source_date})" if ctx.source_date else "T-1(missing)",
     }
@@ -414,11 +437,13 @@ def _market_emotion_from_ctx(date: str, ctx: "SentimentContext") -> dict[str, An
         promo = _dim("dimension_promotion_rate")
         zt = _dim("dimension_limit_up_count")
         dt = _dim("dimension_limit_down_count")
+        zt_real = _dim("zt_real")  # T18：raw 计数（非 0-100 维度），不 /100
 
         out["seal_rate"] = round(seal / 100, 3) if seal is not None else None
         out["promotion_rate"] = round(promo / 100, 3) if promo is not None else None
         out["zt_count"] = zt
         out["dt_count"] = dt
+        out["zt_real"] = zt_real
         # S063 T4 补齐：raw_break_rate 由 compute 落库（market._emotion 算出的原始 0-1 比率），
         # 历史行无此列 → _dim 返 None → 简报显示 "--"（诚实标注而非臆造 0）。
         raw_br = _dim("raw_break_rate")
@@ -546,6 +571,8 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             resp["factors"] = _cache["factors"]
             # B-lite：透传 scored_candidates 供前端战法 tab 过滤
             resp["scored_candidates"] = _cache.get("scored_candidates", [])
+            # S094 T17/R28：非涨停 pipeline 透传（前端双 pipeline 分区消费）
+            resp["market_scan_scored"] = _cache.get("market_scan_scored", [])
             # S093 R4：透传 final_candidates 供前端前瞻 Tab 漏斗候选 + 交叉验证
             resp["final_candidates"] = _cache.get("final_candidates", [])
             # S049 D4：live done 透出 funnel_layers（与快照路径对齐；_build_funnel_layers 命中 run_funnel 缓存不重复请求）
@@ -559,6 +586,8 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             resp["market_phase"] = _cache.get("market_phase")
             resp["market_phase_cap"] = _cache.get("market_phase_cap")
             resp["position_cap_tier"] = _cache.get("position_cap_tier")
+            resp["p2_factors"] = _cache.get("p2_factors")  # S096
+            resp["p2_fired_rule"] = _cache.get("p2_fired_rule")  # S096
             resp["seat_risk_flags"] = _cache.get("seat_risk_flags", {})
             resp["data_missing_flags"] = _cache.get("data_missing_flags", {})
             resp["execution_checklist"] = _cache.get("execution_checklist", [])
@@ -588,12 +617,15 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             "factors": snap.get("factors", []),
             "funnel_layers": snap.get("funnel_layers", []),
             "scored_candidates": snap.get("scored_candidates", []),
+            "market_scan_scored": snap.get("market_scan_scored", []),  # S094 T17/R28
             "final_candidates": snap.get("final_candidates", []),  # S093 R4：透传漏斗最终候选
             "is_backfill": snap.get("is_backfill", False),
             # S079 D1：历史快照同结构透传 P2 字段（旧快照无此字段时降级 None/空）
             "market_phase": snap.get("market_phase"),
             "market_phase_cap": snap.get("market_phase_cap"),
             "position_cap_tier": snap.get("position_cap_tier"),
+            "p2_factors": snap.get("p2_factors"),  # S096
+            "p2_fired_rule": snap.get("p2_fired_rule"),  # S096
             "seat_risk_flags": snap.get("seat_risk_flags", {}),
             "data_missing_flags": snap.get("data_missing_flags", {}),
             "execution_checklist": snap.get("execution_checklist", []),

@@ -35,22 +35,74 @@ from strategies.pattern_scan import (
     compute_amount_yi,
 )
 from strategies.strategy_funnel_registry import (
-    StrategyFunnelConfig,
     get_strategy_config,
-    get_strategies_for_weather,
     compute_strategy_score,
-    check_quality_standards,
-    passes_hard_standards,
 )
 
 
-# 非涨停类因子权重（等权起步，spec §4.2）
-NON_LIMITUP_WEIGHTS: dict[str, float] = {
-    "relative_strength": 0.25,
-    "ma_bullish": 0.25,
-    "volume_signal": 0.25,
-    "sector_strength": 0.25,
-}
+# ===========================================================================
+# 板块等权平均日K聚合（S094 R2）
+# ===========================================================================
+
+def _aggregate_sector_bars(stock_bars_list: list[list[dict]]) -> list[dict]:
+    """板块成分股等权平均日K（S094 R2）。
+
+    spec §3.L ora-6 A5：成分股集合=板块全成分（有 bar 者参与），
+    停牌/缺 bar 按日期对齐取交集。
+
+    返回 list[dict]（{date, close, high, low, volume, amount} 简单平均），
+    按日期升序。无数据返 []。
+    """
+    if not stock_bars_list:
+        return []
+    # 按日期聚合：{date: {field: [vals across stocks]}}
+    by_date: dict[str, dict[str, list[float]]] = {}
+    for bars in stock_bars_list:
+        for b in bars:
+            d = b.get("date")
+            if not d:
+                continue
+            by_date.setdefault(d, {})
+            for field in ("close", "high", "low", "volume", "amount"):
+                v = b.get(field)
+                if v is not None:
+                    try:
+                        by_date[d].setdefault(field, []).append(float(v))
+                    except (ValueError, TypeError):
+                        pass
+    result: list[dict] = []
+    for d in sorted(by_date.keys()):
+        agg = by_date[d]
+        row: dict[str, Any] = {"date": d}
+        # 仅对至少 1 只成分股有值的字段取平均（等权，有 bar 者参与）
+        for field in ("close", "high", "low", "volume", "amount"):
+            vals = agg.get(field, [])
+            if vals:
+                row[field] = round(sum(vals) / len(vals), 4)
+        result.append(row)
+    return result
+
+
+def _build_sector_bars_map(
+    candidates: list[dict],
+    sector_bars_map: dict[str, list[dict]] | None = None,
+) -> dict[str, list[dict]]:
+    """从 candidates 聚合每个 sector 的等权平均日K（S094 R2）。
+
+    调用方可显式传 sector_bars_map 覆盖（S2 R14 候选扩字段后统一传）；
+    不传则内部从 candidates 同 sector 的 bars 聚合兜底。
+    """
+    if sector_bars_map:
+        return sector_bars_map
+    sector_to_bars: dict[str, list[list[dict]]] = {}
+    for cand in candidates:
+        sector = cand.get("sector")
+        if not sector:
+            continue
+        bars = cand.get("bars") or []
+        if bars:
+            sector_to_bars.setdefault(sector, []).append(bars)
+    return {sector: _aggregate_sector_bars(bars_list) for sector, bars_list in sector_to_bars.items()}
 
 
 # ===========================================================================
@@ -160,8 +212,11 @@ def compute_non_limitup_score(
 ) -> NonLimitupScore:
     """非涨停类策略分计算（spec §4.2）。
 
-    score = relative_strength × W1 + ma_bullish × W2 + volume_signal × W3 + sector_strength × W4
-    W1 = W2 = W3 = W4 = 0.25（等权起步）
+    S094 R3：删硬编码 NON_LIMITUP_WEIGHTS，委托 compute_strategy_score
+    读 strategy_weights.json 的 non_limitup 权重集（等权兜底，与旧硬编码值一致）。
+    S094 R4：per-strategy volume_signal 下沉 match 层后，候选 factors 用单一一份
+    PatternScan factors dict（中文键 {相对强度,均线多头,量能信号,板块强度} 0-100），
+    此处仍用 compute_volume_signal_score 产 volume_signal 因子值（S2 R27 拆打分后删）。
     """
     cfg = get_strategy_config(strategy_code)
     if not cfg or cfg.funnel_type != "market_scan":
@@ -170,18 +225,21 @@ def compute_non_limitup_score(
             strategy_score=0.0, score_breakdown={}, pattern=pattern,
         )
 
+    # S094 R4：单一 PatternScan factors dict（中文键，0-100 值，复用 4 个映射函数）
     rs_score = compute_relative_strength_score(pattern)
     ma_score = compute_ma_bullish_score(pattern)
     vol_score = compute_volume_signal_score(pattern, strategy_code)
     sec_score = compute_sector_strength_score(sector_rank)
 
-    breakdown = {
-        "relative_strength": round(rs_score * NON_LIMITUP_WEIGHTS["relative_strength"], 4),
-        "ma_bullish": round(ma_score * NON_LIMITUP_WEIGHTS["ma_bullish"], 4),
-        "volume_signal": round(vol_score * NON_LIMITUP_WEIGHTS["volume_signal"], 4),
-        "sector_strength": round(sec_score * NON_LIMITUP_WEIGHTS["sector_strength"], 4),
+    factors = {
+        "相对强度": rs_score,
+        "均线多头": ma_score,
+        "量能信号": vol_score,
+        "板块强度": sec_score,
     }
-    score = sum(breakdown.values())
+
+    # S094 R3：委托 compute_strategy_score（读 strategy_weights.json non_limitup 权重集）
+    score, breakdown = compute_strategy_score(factors, "non_limitup")
 
     return NonLimitupScore(
         code=code,
@@ -201,93 +259,35 @@ def run_non_limitup_funnel(
     candidates: list[dict],
     weather_state: str | None,
     sector_rank_map: dict[str, int] | None = None,
+    sector_bars_map: dict[str, list[dict]] | None = None,
 ) -> list[dict]:
-    """非涨停类漏斗：形态扫描 → 策略分排序 → 质量标准过滤。
+    """S094 R27/T9-full：只产非涨停候选（scan_patterns + 挂 pattern/sector_rank/close/name）。
 
-    candidates: [{code, bars: [{...kline}], sector: industry_name}]
-    weather_state: 天气状态（硬开关选策略组）
-    sector_rank_map: {industry_name: rank} 板块排名（可选）
+    不自打分（删 compute_non_limitup_score 调用 + check_quality 过滤 + 排序）——打分 +
+    硬剔除归 score_candidates(market_scan) 统一入口（T16 端点接线、check_quality 闸前移在 2b-i-c）。
+    weather_state/sector_rank_map 保留签名兼容（现 unused：只产候选不做策略选择/打分）；
+    板块内 sector_rank 在 candidate 上（build_non_limitup_candidates T8 算）。
 
-    流程（spec §3.1）：
-    1. 天气硬开关 → 非涨停类策略组
-    2. 对每个候选 × 每个适用策略：扫描形态 → 计算策略分 → 检查质量标准
-    3. 过滤未通过硬标准的候选
-    4. 按策略分降序排序
+    返回 [{code,name,bars,sector,sector_rank(板块内),close,pattern: PatternScan}, ...]。
     """
-    primary_codes, _ = get_strategies_for_weather(weather_state)
-
-    # 过滤出非涨停类策略
-    non_limitup_codes = [
-        code for code in primary_codes
-        if get_strategy_config(code) and get_strategy_config(code).funnel_type == "market_scan"
-    ]
-
-    if not non_limitup_codes:
-        # 未知天气降级时可能无非涨停类，用 fallback
-        _, fallback_codes = get_strategies_for_weather(weather_state)
-        non_limitup_codes = [
-            code for code in fallback_codes
-            if get_strategy_config(code) and get_strategy_config(code).funnel_type == "market_scan"
-        ]
-
-    scored: list[dict] = []
+    sb_map = _build_sector_bars_map(candidates, sector_bars_map)
+    produced: list[dict] = []
     for cand in candidates:
         code = cand.get("code", "")
         bars = cand.get("bars", [])
         sector = cand.get("sector", "")
-        sector_rank = sector_rank_map.get(sector) if sector_rank_map else None
-
-        # 扫描形态
+        # 扫描形态（S094 R2：传 sector_bars，compute_relative_strength 真相对值）
         from strategies.pattern_scan import scan_patterns
-        pattern = scan_patterns(code, bars)
-
-        for strat_code in non_limitup_codes:
-            score_result = compute_non_limitup_score(code, pattern, strat_code, sector_rank)
-
-            # 检查质量标准
-            market_data = _build_market_data(pattern, cand)
-            quality_results = check_quality_standards({"code": code}, strat_code, market_data)
-            passes = passes_hard_standards(quality_results)
-
-            scored.append({
-                "code": code,
-                "sector": sector,
-                "strategy_code": score_result.strategy_code,
-                "strategy_name": score_result.strategy_name,
-                "strategy_score": score_result.strategy_score,
-                "score_breakdown": score_result.score_breakdown,
-                "quality_results": quality_results,
-                "passes_hard_standards": passes,
-                "relative_strength": pattern.relative_strength,
-                "ma_bullish": pattern.ma_bullish,
-                "volume_breakout_ratio": pattern.volume_breakout_ratio,
-                "amount_yi": pattern.amount_yi,
-                "ma5_proximity": pattern.ma5_proximity,
-                "consolidation_days": pattern.consolidation_days,
-            })
-
-    # 过滤未通过硬标准的候选
-    passed = [s for s in scored if s["passes_hard_standards"]]
-
-    # 按策略分降序排序
-    passed.sort(key=lambda x: x.get("strategy_score", 0), reverse=True)
-    return passed
+        pattern = scan_patterns(code, bars, sb_map.get(sector))
+        produced.append({
+            **cand,
+            "pattern": pattern,
+            "name": cand.get("name", ""),
+            "sector_rank": cand.get("sector_rank"),
+            "close": cand.get("close") if cand.get("close") is not None else (bars[-1].get("close") if bars else None),
+        })
+    return produced
 
 
-def _build_market_data(pattern: PatternScan, candidate: dict) -> dict:
-    """从 PatternScan + candidate 构建 check_quality_standards 所需的 market_data。"""
-    return {
-        "close": candidate.get("close"),
-        "ma5": pattern.ma5_proximity,  # 注意：这是接近度不是 MA5 值，需要从 bars 取
-        "ma10": candidate.get("ma10"),
-        "ma20": candidate.get("ma20"),
-        "vol_ratio": pattern.volume_breakout_ratio,
-        "amount_yi": pattern.amount_yi,
-        "consecutive_boards": candidate.get("consecutive_boards"),
-        "consolidation_days": pattern.consolidation_days,
-        "vol_breakout_ratio": pattern.volume_breakout_ratio,
-        "sector_rank": candidate.get("sector_rank"),
-        "turnover_rate": candidate.get("turnover_rate"),
-        "recent_zt_days": candidate.get("recent_zt_days"),
-        "t1_limit_up": candidate.get("t1_limit_up"),
-    }
+# S094 2b-i-c：_build_market_data 迁至 strategies/market_scan.py（因子层 home，§3.M；
+# 供 score_candidates(market_scan) check_quality 闸前移用，避循环 import）。T9-full 后本模块不再调它。

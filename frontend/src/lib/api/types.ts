@@ -1086,10 +1086,15 @@ export interface PreMarketBriefing {
   final_candidates?: import("@/lib/candidates").DiagnosisCard[];
   // B-lite：战法打分候选（score_candidates 产出，供前端战法 tab 过滤）
   scored_candidates?: ScoredCandidate[];
+  // S094 T17/R28：非涨停 pipeline 打分候选（market_scan funnel_type，briefing 分区透传）
+  market_scan_scored?: ScoredCandidate[];
   // S079 P2 仓位闸 + 龙虎榜风控字段（D1-D3 透传，spec R9-R10）
   market_phase?: string;            // 冰点/普通/活跃/亢奋/红期
   market_phase_cap?: number;        // 绿1.0/黄0.5/红0.2
   position_cap_tier?: "green" | "yellow" | "red";
+  // S096：P2 现象判据（完整链 + 红期 override + 数据降级）
+  p2_factors?: { zt_count?: number | null; big_loss?: number | null; floor?: number | null; ladder_success?: number | null; ladder_height?: number | null };
+  p2_fired_rule?: string;
   seat_risk_flags?: Record<string, string[]>;  // {code: ["【拒绝介入】..."/"独食独大"/"散户霸榜"]}
   data_missing_flags?: Record<string, string>; // {code: 警示字符串}
   execution_checklist?: string[];   // 人工执行 checklist

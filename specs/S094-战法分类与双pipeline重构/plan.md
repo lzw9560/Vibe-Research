@@ -6,10 +6,11 @@
 
 ## 阶段（ora-6 B4 重排：消除 S2 依赖 S3 倒置 + R26-R28 归属）
 
-### S0 前置硬门：gene_scores 错位修复（S095，spec 已立项 `specs/S095-gene_scores写路径修复与日期守卫/`）
-- 写路径根因修复：_fetch_zt_pool 对历史日请求加 code 集合校验（返回池实际日期 != 请求日期 → 拒绝写入）
-- 历史行重算已完成（fix-18：08-13~08-21 code 集合 5/5 全等，备份 .vibe-research/gene_scores.db.bak-recompute-offset-2026-08-23）
-- **S2/S4 合并前必须完成写路径修复**
+### S0 前置硬门：gene_scores 错位修复（S095）——✅ 已闭合
+- 写路径守卫已实施（commit a6618df）：`_assert_not_future_date` 未来日期硬闸门（三入口统一，拒写不查东财）+ `_cross_check_zt_history` final 快照交叉校验（不一致拒写）
+- 历史行重算已完成（fix-18 + fix-20，commit ac22bac）：08-13~08-21 七日全覆盖，7/7 code 集合严格相等，备份 `.bak-recompute-offset-2026-08-23` + `.bak-recompute-0813-2026-08-23`
+- 测试：S095 新增 5 测试全绿，全量回归 2225 passed（1 pre-existing S066 失败无关）
+- **S2/S4 合并门禁已解除**
 
 ### S1 统一 K线契约 + 因子层 + 权重源（R1-R5）
 - pattern_scan.py：R1 `_compute_ma(bars,n)` SMA n=5/10/20，bars<20 返 None；**R5 扩 compute_shadow_length_pct(bars)=(high/close-1)*100 + compute_ma5_slope(bars)=(ma5[-1]-ma5[-2])/ma5[-2]**（复用 activity.py L112 先例）
@@ -35,6 +36,7 @@
 ### S4 5 根因修复（R16-R20）
 - market.py：R16 _emotion 加 zt_real 字段（latest 日从 _sentiment 拉 akshare legu "真实涨停"；历史日返 None）+ sti_timeline schema 加 zt_real 列（migration 先例 20260817-001_add_raw_break_rate.sql）+ _execute_sti_post_market 存 zt_real + _market_emotion_from_ctx 读 zt_real（历史日读 DB，不依赖 akshare 历史源）——保留 zt_count=len(zt) 供内部
 - ~~R15 前端读 zt_count 方案删~~（ora-6 B2：market_emotion 无 zt_real 字段，zt_count 是东财池 len 非"真实涨停"）
+- `routers/workflow.py`：R17 pre-market/refresh 调 _collect 重算 market_emotion（R16 zt_real 持久化后快照需刷新）——ora-8 A3 补入
 - routers/strategy.py：R18 sector-rotation 端点 date 必填改 date=None 默认 last_trading_date_str + 前端 ContextTab 传 triplet.today（非 aggregate_sectors industry 缺——ora-6 实测 industry 54/54 满值）
 - ~~R19 sector_divergence 砍掉~~（ora-7 N5：前端已弃用，无消费方值得保留；§4/§10/§7 同步删 R19 引用）
 - tools/refresh_kline_cache.py：R20 全 A 扩容——**复用 load_industry_map()（5540 条已在产，非 baostock query_stock_basic 已式微）+ 预估 2-3h 实测为准 + cache ~150MB 需配套模块级 memo 或迁 sqlite/parquet**

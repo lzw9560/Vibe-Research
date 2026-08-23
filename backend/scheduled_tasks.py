@@ -1602,7 +1602,7 @@ def _compute_strategy_map(target: str) -> dict[str, list[str]]:
             }
             for g in genes
         ]
-        scored = score_candidates(cand_input, weather, target, None)
+        scored = score_candidates(cand_input, weather, "limitup", target, None)
         scored = [s for s in scored if s.get("strategy_code") != "none"]
         out: dict[str, list[str]] = {}
         for s in scored:

@@ -205,16 +205,25 @@ class TestScoreCandidates:
     """候选评分排序。"""
 
     def test_sunny_day_scores_and_sorts(self):
-        """晴天候选按策略分降序排序。"""
+        """晴天 limitup 候选按策略分降序排序。
+
+        S094 T11：funnel_type 必填——limitup 路径只跑 7 涨停战法（dragon_head 等
+        market_scan 战法不再在 limitup 路径命中，R9 行为变化）。给候选配 limitup 因子
+        （total_score/zt_count/封板率/涨停频次）使 first_plate/n_shape 等命中。
+        """
         cands = [
-            {"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_rebound_rate": 80, "factor_red_rate": 70}},
-            {"code": "B", "name": "B", "factors": {"factor_seal_rate": 60, "factor_rebound_rate": 50, "factor_red_rate": 40}},
+            {"code": "A", "name": "A", "factors": {"封板率": 90, "涨停频次": 40, "次日溢价率": 50},
+             "total_score": 70, "zt_count_250d": 3},
+            {"code": "B", "name": "B", "factors": {"封板率": 60, "涨停频次": 25, "次日溢价率": 30},
+             "total_score": 55, "zt_count_250d": 2},
         ]
-        scored = score_candidates(cands, "晴天")
+        scored = score_candidates(cands, "晴天", "limitup")
         assert len(scored) > 0
         # 第一个应该是高分候选
         assert scored[0]["code"] == "A"
         assert scored[0]["strategy_score"] > scored[-1]["strategy_score"]
+        # S094 R12/T15: scored 复用 dispatch_match 产的 confidence（不派生 strategy_score/100）
+        assert all(s.get("confidence") is not None for s in scored)
 
     def test_storm_reversal_scores_by_fbt_any_weather(self):
         """S086 R3/A9：storm_reversal 评分由 fbt（封板≤10:30）决定，不限天气。
@@ -226,17 +235,17 @@ class TestScoreCandidates:
         cands = [{"code": "A", "name": "A", "factors": {"factor_seal_rate": 90, "factor_freq_score": 20}}]
 
         # 无 pool_item_map → storm_reversal 无 fbt 不命中（晴天/暴风雨均不出现）
-        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "晴天"))
-        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "暴风雨"))
+        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "晴天", "limitup"))
+        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "暴风雨", "limitup"))
 
         # 提供 fbt≤10:30 的 pool_item_map → storm_reversal 命中（暴风雨/晴天均评分）
         pool_early = {"A": {"c": "A", "fbt": 93000, "p": 10.0}}
-        assert any(s["strategy_code"] == "storm_reversal" for s in score_candidates(cands, "暴风雨", pool_item_map=pool_early))
-        assert any(s["strategy_code"] == "storm_reversal" for s in score_candidates(cands, "晴天", pool_item_map=pool_early))
+        assert any(s["strategy_code"] == "storm_reversal" for s in score_candidates(cands, "暴风雨", "limitup", pool_item_map=pool_early))
+        assert any(s["strategy_code"] == "storm_reversal" for s in score_candidates(cands, "晴天", "limitup", pool_item_map=pool_early))
 
         # fbt>10:30 → 不命中
         pool_late = {"A": {"c": "A", "fbt": 140000, "p": 10.0}}
-        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "暴风雨", pool_item_map=pool_late))
+        assert all(s["strategy_code"] != "storm_reversal" for s in score_candidates(cands, "暴风雨", "limitup", pool_item_map=pool_late))
 
     def test_unknown_weather_uses_conservative(self):
         """未知天气 → 保守降级（首板+连板）。
@@ -251,7 +260,7 @@ class TestScoreCandidates:
             "total_score": 70,
             "zt_count_250d": 3,
         }]
-        scored = score_candidates(cands, None)
+        scored = score_candidates(cands, None, "limitup")
         strategy_codes = {s["strategy_code"] for s in scored}
         assert "first_plate" in strategy_codes or "consecutive_relay" in strategy_codes
 
@@ -262,9 +271,10 @@ class TestScoreCandidates:
         且 封板率>=80。给 zt_count=3 但封板率=10 的候选 → break_reseal 应被
         过滤掉。
 
-        grill Q7 注：阴天不再硬过滤 primary_codes（所有战法可用），所以
-        dragon_head（无 match 条件）会放行产出结果——不再断言 =={"none"}，
-        只断言 grill Q6 的核心验收点：break_reseal 被过滤。
+        grill Q7 注：阴天不再硬过滤 primary_codes（所有战法可用）。
+        S094 T11 注：funnel_type="limitup" 后 dragon_head（market_scan 战法）不再在
+        limitup 路径跑（R9 行为变化）——本测断言 grill Q6 核心验收点 break_reseal 被过滤，
+        与 dragon_head 是否命中无关（dragon_head 已移出 limitup 路径）。
         """
         cands = [{
             "code": "000001", "name": "X",
@@ -272,10 +282,58 @@ class TestScoreCandidates:
             "total_score": 30,
             "zt_count_250d": 3,
         }]
-        scored = score_candidates(cands, "阴天")
+        scored = score_candidates(cands, "阴天", "limitup")
         strategy_codes = {s["strategy_code"] for s in scored}
         # grill Q6 核心验收点：break_reseal 因封板率不满足被过滤
         assert "break_reseal" not in strategy_codes
+
+
+class TestScoreCandidatesMarketScan:
+    """S094 T10+T13：market_scan 分支构造 market_scan_ctx，dragon_head 条件化命中（R9）。"""
+
+    def _cand(self, code, sector_rank, pattern=None):
+        return {"code": code, "name": code, "sector": "电子",
+                "sector_rank": sector_rank, "close": 10.0, "pattern": pattern}
+
+    def _pattern(self):
+        from strategies.pattern_scan import PatternScan
+        return PatternScan(
+            code="000001", relative_strength=5.0, ma_bullish=True, ma5_proximity=2.0,
+            consolidation_days=0, consolidation_amplitude=None,
+            volume_breakout_ratio=2.5, amount_yi=20.0,
+            shadow_length_pct=5.0, ma5_slope=0.01,
+        )
+
+    def test_dragon_head_matches_when_sector_rank_le3(self):
+        cands = [self._cand("000001", 2, self._pattern())]
+        scored = score_candidates(cands, "晴天", "market_scan")
+        assert any(s["strategy_code"] == "dragon_head" for s in scored)
+        # S094 R12/T15: scored 复用 dispatch_match confidence（dragon_head 固定 0.5）
+        assert any(s["strategy_code"] == "dragon_head" and s.get("confidence") == 0.5 for s in scored)
+
+    def test_dragon_head_no_match_when_sector_rank_gt3(self):
+        cands = [self._cand("000001", 5, self._pattern())]
+        scored = score_candidates(cands, "晴天", "market_scan")
+        assert all(s["strategy_code"] != "dragon_head" for s in scored)
+
+    def test_dragon_head_no_match_without_pattern(self):
+        # 无 pattern → market_scan_ctx.pattern=None → dragon_head 不命中（R9 诚实降级）
+        cands = [self._cand("000001", 2, None)]
+        scored = score_candidates(cands, "晴天", "market_scan")
+        assert all(s["strategy_code"] != "dragon_head" for s in scored)
+
+    def test_check_quality_drops_failing_hard_standard(self):
+        # S094 R27: market_scan check_quality 闸前移——dragon_head matches(sector_rank=2)
+        # 但 turnover_rate=3<5 → "换手>5%" 硬标准 fail → 丢弃（match sector_rank 与 quality turnover 维度分歧）
+        cands = [{**self._cand("000001", 2, self._pattern()), "turnover_rate": 3.0}]
+        scored = score_candidates(cands, "晴天", "market_scan")
+        assert all(s["strategy_code"] != "dragon_head" for s in scored)
+
+    def test_check_quality_keeps_passing_candidate(self):
+        # dragon_head matches + turnover_rate=10>5 → "换手>5%" pass → 保留
+        cands = [{**self._cand("000001", 2, self._pattern()), "turnover_rate": 10.0}]
+        scored = score_candidates(cands, "晴天", "market_scan")
+        assert any(s["strategy_code"] == "dragon_head" for s in scored)
 
 
 class TestQualityStandards:

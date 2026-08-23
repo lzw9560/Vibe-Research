@@ -34,15 +34,22 @@ _INDUSTRY_CACHE_TTL = 86400  # 24h（日级更新）
 
 @dataclass(frozen=True)
 class PatternScan:
-    """个股形态扫描结果（spec §5.5/P2-2）。"""
+    """个股形态扫描结果（spec §5.5/P2-2）。
+
+    S094 R5：升为 market_scan 唯一因子源，新增 shadow_length_pct/ma5_slope
+    （PatternReversal 长上影洗盘修复形态用）。
+    """
     code: str
     relative_strength: float | None     # 个股 5 日涨幅 - 板块 5 日涨幅
     ma_bullish: bool                     # MA5 > MA10 > MA20
     ma5_proximity: float | None         # |close - MA5| / MA5 * 100（低吸龙头用）
     consolidation_days: int | None     # 横盘天数（振幅 < 阈值）
     consolidation_amplitude: float | None  # N 日振幅 %
-    volume_breakout_ratio: float | None  # 量比放大倍数
+    volume_breakout_ratio: float | None  # 量比放大倍数（今量/前5日均量）
     amount_yi: float | None             # 成交额（亿）
+    # S094 R5 新增（PatternReversal 长上影洗盘修复形态）
+    shadow_length_pct: float | None = None   # 上影线长度 = (high/close - 1)*100
+    ma5_slope: float | None = None           # MA5 斜率 = (ma5_now - ma5_prev)/ma5_prev
 
 
 # ===========================================================================
@@ -182,44 +189,108 @@ def _pct_change(bars: list[dict], days: int) -> float | None:
         return None
 
 
+def _compute_ma(bars: list[dict], n: int) -> float | None:
+    """S094 R1：SMA(close[-n:]/n)，消费侧自算 MA，不依赖 cache ma5/ma10/ma20 字段。
+
+    baostock cache FIELDS 无 ma5/ma10/ma20 → check_ma_bullish 旧实现读 last.get('ma5')
+    恒 None 致恒 False。本函数从 close 序列自算修复。
+
+    bars<20 返 None（诚实降级，不臆造）。
+    """
+    if not bars or len(bars) < 20:
+        return None
+    try:
+        closes = [float(b.get("close", 0)) for b in bars[-n:]]
+        if len(closes) < n or any(c <= 0 for c in closes if c is not None):
+            return None
+        return round(sum(closes) / n, 4)
+    except (ValueError, TypeError):
+        return None
+
+
 def check_ma_bullish(bars: list[dict]) -> bool:
     """均线多头排列：MA5 > MA10 > MA20（spec §5.5）。
 
-    bars 最后一根的 ma5/ma10/ma20 字段（kline_multi 已返回）。
+    S094 R1：改用 _compute_ma 自算（不依赖 cache ma5/ma10/ma20 字段——
+    baostock cache 无此字段致旧实现恒 False 的 bug 一并修复）。
     """
-    if not bars:
+    if not bars or len(bars) < 20:
         return False
-    last = bars[-1]
-    ma5 = last.get("ma5")
-    ma10 = last.get("ma10")
-    ma20 = last.get("ma20")
+    ma5 = _compute_ma(bars, 5)
+    ma10 = _compute_ma(bars, 10)
+    ma20 = _compute_ma(bars, 20)
     if None in (ma5, ma10, ma20):
         return False
-    try:
-        return float(ma5) > float(ma10) > float(ma20)
-    except (ValueError, TypeError):
-        return False
+    return ma5 > ma10 > ma20
 
 
 def compute_ma5_proximity(bars: list[dict]) -> float | None:
     """MA5 接近度：|close - MA5| / MA5 * 100（spec §5.5 低吸龙头用）。
 
+    S094 R1：MA5 改用 _compute_ma 自算（不依赖 cache ma5 字段）。
     值越小 → 股价越接近 MA5（低吸入场点）。
+    """
+    if not bars or len(bars) < 20:
+        return None
+    last = bars[-1]
+    close = last.get("close")
+    if close is None:
+        return None
+    ma5 = _compute_ma(bars, 5)
+    if ma5 is None:
+        return None
+    try:
+        close_f = float(close)
+        if ma5 <= 0:
+            return None
+        return round(abs(close_f - ma5) / ma5 * 100, 4)
+    except (ValueError, TypeError):
+        return None
+
+
+def compute_shadow_length_pct(bars: list[dict]) -> float | None:
+    """S094 R5：上影线长度 = (high[-1] / close[-1] - 1) * 100。
+
+    复用 candidate_funnel/sources/activity.py L112-114 同款口径。
+    PatternReversal 长上影洗盘修复形态用（shadow_length_pct>=4 命中）。
     """
     if not bars:
         return None
     last = bars[-1]
+    high = last.get("high")
     close = last.get("close")
-    ma5 = last.get("ma5")
-    if None in (close, ma5):
+    if None in (high, close):
         return None
     try:
+        high_f = float(high)
         close_f = float(close)
-        ma5_f = float(ma5)
-        if ma5_f <= 0:
+        if close_f <= 0:
             return None
-        return round(abs(close_f - ma5_f) / ma5_f * 100, 4)
+        return round((high_f / close_f - 1) * 100, 4)
     except (ValueError, TypeError):
+        return None
+
+
+def compute_ma5_slope(bars: list[dict]) -> float | None:
+    """S094 R5：MA5 斜率 = (ma5[-1] - ma5[-2]) / ma5[-2]。
+
+    ma5 用 _compute_ma 自算（R1）。slope>0 即"5 日线向上"。
+    PatternReversal 形态用（ma5_slope>0 命中）。
+    """
+    if not bars or len(bars) < 21:  # 需 [-1] 与 [-2] 各 5 根，重叠可取，但需 ≥20 根
+        return None
+    # 昨日截止的 5 日均线 = bars[-6:-1] 的 SMA
+    try:
+        closes_prev = [float(b.get("close", 0)) for b in bars[-6:-1]]
+        closes_now = [float(b.get("close", 0)) for b in bars[-5:]]
+        if len(closes_prev) < 5 or len(closes_now) < 5:
+            return None
+        ma5_prev = sum(closes_prev) / 5
+        ma5_now = sum(closes_now) / 5
+        if ma5_prev <= 0:
+            return None
+        return round((ma5_now - ma5_prev) / ma5_prev, 6)
+    except (ValueError, TypeError, IndexError):
         return None
 
 
@@ -311,6 +382,9 @@ def scan_patterns(code: str, bars: list[dict], sector_bars: list[dict] | None = 
     cons_days, cons_amp = compute_consolidation(bars)
     vol_breakout = compute_volume_breakout(bars)
     amt_yi = compute_amount_yi(bars)
+    # S094 R5：PatternReversal 长上影洗盘修复形态因子
+    shadow_pct = compute_shadow_length_pct(bars)
+    ma5_slp = compute_ma5_slope(bars)
 
     return PatternScan(
         code=code,
@@ -321,4 +395,6 @@ def scan_patterns(code: str, bars: list[dict], sector_bars: list[dict] | None = 
         consolidation_amplitude=cons_amp,
         volume_breakout_ratio=vol_breakout,
         amount_yi=amt_yi,
+        shadow_length_pct=shadow_pct,
+        ma5_slope=ma5_slp,
     )

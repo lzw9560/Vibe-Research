@@ -169,6 +169,11 @@ class STIEngine:
         # 不能用 _safe_float（默认 0.0 会把 None 误存为 0.0 → 简报误显 "0.000"）。
         _br_raw = emotion_data.get("break_rate")
         raw_break_rate = float(_br_raw) if _br_raw is not None else None
+        # T18：真实涨停数（akshare legu 源）——非加权维度，仅落库供盘前简报 T-1 直读。
+        # 显式区分 None（历史日 _sentiment 返 {} → DB NULL → 简报 "--"）vs 数值（valid），
+        # 不用 _safe_float（默认 0.0 会把 None 误存为 0.0），镜像 raw_break_rate 处理范式。
+        _zt_real_raw = sentiment_data.get("zt_real")
+        zt_real = float(_zt_real_raw) if _zt_real_raw is not None else None
         up = _safe_float(sentiment_data.get("up"))
         down = _safe_float(sentiment_data.get("down"))
         dims.advance_decline_ratio = up / max(down, 1)
@@ -248,6 +253,7 @@ class STIEngine:
             data_freshness="fresh",
             data_age_seconds=0.0,
             raw_break_rate=raw_break_rate,
+            zt_real=zt_real,
         )
 
         self._save_result(result)

@@ -190,7 +190,7 @@ export function useNonLimitupFunnel(date: string | undefined, options?: Opts<Non
 }
 
 export interface NonLimitupFunnelResult {
-  candidates: { code: string; name?: string; strategy_code?: string; score?: number; sector?: string }[];
+  candidates: { code: string; name?: string; strategy_code?: string; strategy_score?: number; sector?: string }[];
   count: number;
   sectors_scanned: number;
   candidates_input: number;

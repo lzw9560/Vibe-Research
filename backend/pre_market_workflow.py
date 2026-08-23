@@ -297,6 +297,16 @@ class PreMarketWorkflow:
         tier = PHASE_TO_CAP_TIER.get(phase, "yellow")
         market_phase_cap = MARKET_PHASE_CAP[tier]
 
+        # S096：P2 现象判据——fired_rule（完整链 + 红期 override 显覆盖 + 数据降级标注）
+        # would_be_phase = 纯四档（big_loss/floor=None 跳过硬熔断），看硬熔断覆盖了什么
+        would_be_phase = _market_phase(
+            zt_count=factors["zt_count"],
+            big_loss=None, floor=None,
+            ladder_success=factors.get("ladder_success"),
+            ladder_height=factors.get("ladder_height"),
+        )
+        p2_fired_rule = self._format_p2_fired_rule(factors, phase, would_be_phase)
+
         # ---------------------------------------------------------------
         # R9.1 仓位参数 + R10 execution_checklist
         # ---------------------------------------------------------------
@@ -314,10 +324,29 @@ class PreMarketWorkflow:
             "market_phase": phase,
             "market_phase_cap": market_phase_cap,
             "position_cap_tier": tier,
+            "p2_factors": factors,  # S096：5 因子值（zt_count/big_loss/floor/ladder_success/ladder_height）
+            "p2_fired_rule": p2_fired_rule,  # S096：fired_rule（完整链+override+降级）
             "seat_risk_flags": seat_risk_flags,
             "data_missing_flags": data_missing_flags,
             "execution_checklist": checklist,
         }
+
+    def _format_p2_fired_rule(self, factors: dict, phase: str, would_be_phase: str) -> str:
+        """S096：P2 fired_rule 字符串（完整链 + 红期 override 显覆盖 + 数据降级标注）。
+
+        - 红期硬熔断 fired（phase==红期，floor≥20；big_loss 恒 None 不可能 fired）→ 显触发 + 覆盖了什么四档。
+        - floor 缺（big_loss 恒缺）→ 红期硬熔断未检，仅四档。
+        - 正常四档（floor checked 未 fired）→ 四档 zt→phase。
+        big_loss 恒 None（_emotion 无大面股字段）→ big_loss≥8 硬熔断永不 fired，P2RiskPanel 静态标注。
+        """
+        zt = factors.get("zt_count")
+        floor = factors.get("floor")
+        if phase == "红期":
+            trigger = f"floor={floor}≥20" if floor is not None else "触发因子缺（异常）"
+            return f"红期硬熔断 {trigger}（覆盖：四档 zt={zt}→{would_be_phase}）"
+        if floor is None:
+            return f"红期硬熔断未检（floor 数据缺），仅四档 zt={zt}→{phase}"
+        return f"四档 zt={zt}→{phase}"
 
     def _compute_market_phase_factors(self, trade_date: str) -> dict[str, Any]:
         """S079 R6.4 从 T-1 盘后市场数据计算 _market_phase 4 因子。

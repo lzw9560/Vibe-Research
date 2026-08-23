@@ -12,6 +12,14 @@ from __future__ import annotations
 from strategies.strategy_base import BaseStrategy, ConditionMatch
 
 
+def _get_pattern(ctx):
+    """S094 R4 辅助：从 ctx.market_scan_ctx 取 PatternScan（S1 阶段涨停 pipeline 无此字段，None 降级）。"""
+    msc = getattr(ctx, "market_scan_ctx", None)
+    if not msc:
+        return None
+    return msc.get("pattern") if isinstance(msc, dict) else None
+
+
 class ReversePackageStrategy(BaseStrategy):
     """反包战法：seal_intraday.db open_count>=2 的票包含 gene.code，confidence=固定 0.4。"""
 
@@ -60,3 +68,10 @@ class ReversePackageStrategy(BaseStrategy):
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.4
+
+    def compute_volume_signal(self, ctx) -> bool | None:
+        """S094 R4：反包成交额 > 15亿（spec §3.R4）。"""
+        pattern = _get_pattern(ctx)
+        if pattern is None or pattern.amount_yi is None:
+            return None
+        return pattern.amount_yi > 15

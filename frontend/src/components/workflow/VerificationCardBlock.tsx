@@ -93,7 +93,7 @@ export function VerificationCardBlock({ date }: { date?: string }) {
         ))}
       </div>
       <div className="mt-2 text-[11px] text-muted-foreground/50">
-        条件句式为「若…则确认…」，无涨跌预测；历史统计特征，市场有风险
+        条件句式为「若…则确认…」，无涨跌预测；对齐 S060 验证条件卡 spec；历史统计特征，市场有风险
       </div>
     </div>
   );

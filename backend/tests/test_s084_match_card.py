@@ -122,10 +122,16 @@ class TestWeakTurnStrongCard(unittest.TestCase):
 
 
 class TestPatternReversalCard(unittest.TestCase):
-    """AC6：pattern_reversal card 非空从 pool_item/indicators 读；f4 从 amount_yi/prev_amount_yi 补活。"""
+    """S094 R5/R9：pattern_reversal 改读 PatternScan（via ctx.market_scan_ctx），不再读 card 的
+    pool_item/indicators。match_strategies 涨停 pipeline 路径不构造 market_scan_ctx（=None）→
+    pattern_reversal 不命中（R9 预期行为变化：4 形态战法从"可能命中"变"永不命中"）。
+    真 3 因子 match 逻辑（shadow/vol_ratio/ma5_slope）由 test_s081 TestPatternReversal 用
+    mocked market_scan_ctx 直接测 s.match(ctx)；本类仅守 match_strategies 路径的 R9 不命中。"""
 
-    def test_card_volume_f4_hits_5of5(self):
-        # f1 zdp<9.5, f2 max_high>=7, f3 shadow>=4, f4 volume_1d>volume_2d*1.2, f5 ma5=Upward 全命中
+    def test_card_pattern_reversal_no_hit_limitup_path(self):
+        # S094 R9：card 即便带满旧 indicators（max_high/shadow/ma5/amount），pattern_reversal
+        # 也不命中——S1 R5 后它读 PatternScan（market_scan_ctx），match_strategies 涨停
+        # pipeline 路径 market_scan_ctx=None → 诚实降级不命中（不再读 card indicators）。
         g = _gene(total=50.0, freq=0, factors={"涨停频次": 0})
         ind = IndicatorSet(code="000001", name="X", max_high_pct=8.0, shadow_length_pct=5.0,
                            ma_5_status="Upward", amount_yi=20.0, prev_amount_yi=10.0)
@@ -133,15 +139,14 @@ class TestPatternReversalCard(unittest.TestCase):
         card = _card(indicators=ind, pool_item=pool)
         sigs = match_strategies(g.code, g, card=card)
         pr = [s for s in sigs if s.strategy_code == "pattern_reversal"]
-        self.assertTrue(pr, "pattern_reversal 应 5/5 命中")
-        self.assertEqual(pr[0].confidence, 1.0)  # f4 补活后全命中
+        self.assertEqual(pr, [], "R9：match_strategies 涨停路径 market_scan_ctx=None → pattern_reversal 不命中")
 
     def test_card_none_no_pattern_reversal(self):
-        # card=None + pool_item=None → close_pct=None → f1 不命中
+        # S094 R9：无 card/pool_item 时 pattern_reversal 不命中（market_scan_ctx=None 降级）。
         g = _gene(total=50.0, freq=0, factors={"涨停频次": 0})
         sigs = match_strategies(g.code, g)  # 无 pool_item/card
         pr = [s for s in sigs if s.strategy_code == "pattern_reversal"]
-        self.assertEqual(pr, [], "无 pool_item → pattern_reversal 不命中")
+        self.assertEqual(pr, [], "R9：market_scan_ctx=None → pattern_reversal 不命中")
 
 
 class TestStrategyMatcherCard(unittest.TestCase):

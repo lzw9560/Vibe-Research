@@ -1,10 +1,10 @@
 # Spec: S094 — 战法分类与双 pipeline 统一底座重构
 
-> 状态：第一轮 Oracle 审查后大修（6 阻断 + 7 歧义吸收中）
+> 状态：**主体已实现**（S0-S5 功能核心 done；G4 backend pytest 2269 passed 0回归 + G5 frontend vitest 428 + tsc + vite build 双绿门）—— 2026-08-23 会话。Follow-up：T25 剩 4 polish bug（代码2次/P2判据/验证对齐/仓位摘要截断）/ T28 playwright e2e（需后端重启 + 可选写 s094 AC e2e spec）/ T19 前端 ContextTab 传 triplet.today。**判状态看 git log 不看本行。**
 > 作者：Claude 会话  日期：2026-08-23
 > 级别：**large**（跨层 + 双 pipeline 统一底座 + score_candidates 分流 + confidence 统一 + kline 扩容 + 5 根因修复 + UI 重设计）
 > 流程门：spec.md + plan + task；feature 分支 `feature/S094-战法分类与双pipeline重构`；完整 grill；playwright 验收
-> 依赖：S093 已合并（M4 归档）；**前置硬门：gene_scores 错位修复（S095，见 §0.7）——进行中（数据重算已完成，写路径守卫实施中）**
+> 依赖：S093 已合并（M4 归档）；**前置硬门：gene_scores 错位修复（S095）——✅ 已闭合（写路径守卫+交叉校验已实施 commit a6618df；08-13~08-21 七日重算 7/7 code 集合全等 commit ac22bac；2225 passed）**
 > Oracle 第一轮：ora-6 完成，6 阻断 + 7 歧义，逐项吸收中
 
 ## 0. 起因
@@ -128,17 +128,16 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 | 文件 | 改动 |
 |---|---|
 | `strategies/pattern_scan.py` | R1 自算 MA + R2 传 sector_bars + R5 因子事实源 |
-| `strategies/non_limitup_funnel.py` | R3 删硬编码权重 + R4 委托 compute_strategy_score + R14 候选扩字段 |
+| `strategies/non_limitup_funnel.py` | R3 删硬编码权重 + R4 ~~委托~~**不委托**（volume_signal 下沉 match 层）+ R14 候选扩字段 |
 | `strategies/strategy_base.py` | R6 StrategyContext 加 market_scan_ctx |
 | `strategies/strategy_funnel_registry.py` | R7 score_candidates 加 funnel_type + R12 复用 confidence + R13 输出对齐 |
 | `strategies/impl/gene_based.py` | R9 DragonHead 条件化 + ~~R10 4 战法 match 改读 PatternScan~~（R10 改 3 战法，reverse_package 不在，ora-6 A6） |
 | `strategies/impl/db_based.py` | R10 reverse_package 保留 db-based 不改读 PatternScan（ora-6 A6 补列，§4 漏列修复） |
 | `strategies/impl/indicator_based.py` | R5 PatternReversal 改读 PatternScan |
 | `strategies/sector_cycle.py` | R11 compute_sector_stock_rank |
-| `routers/strategy.py` | R18 端点 date 默认 `last_trading_date_str()` + /api/strategy/non-limitup-funnel 对齐新 schema（ora-7 N7 归属修正） |
-| `strategies/non_limitup_funnel.py` 或新建 `market_scan.py` | R11 板块领涨子（复用既有函数，非重写） |
+| `routers/strategy.py` | R18 端点 date 默认 `last_trading_date_str()` + R13 /api/strategy/non-limitup-funnel 对齐新 schema（ora-7 N7 归属修正，合并为一行） |
+| `strategies/market_scan.py`（新建） | R11 板块领涨子 compute_sector_stock_rank（复用既有函数，非重写） |
 | `routers/workflow.py` | R8 传 funnel_type + 双 pipeline 响应 |
-| `routers/strategy.py` | /api/strategy/non-limitup-funnel 对齐新 schema |
 | `scheduled_tasks.py` | R8 L1605 传 funnel_type |
 | `market.py` | R16 _emotion 加 zt_real 字段（可选） |
 | ~~`sector_divergence.py`~~ | ~~R19 删 prev_sectors TODO~~ **（ora-7 N5 砍掉，前端已弃用，§4 行删）** |
@@ -202,7 +201,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 |---|---|---|---|---|
 | S093 R4 前瞻 pipeline | 涨停单 pipeline | 双 pipeline 统一底座 | 替换 | Workflow.tsx 双分区 + FLOW A+B 收敛 |
 | S086 score_candidates | 跑全 12 战法 | funnel_type 分流 | 替换 | strategy_funnel_registry.py 加 funnel_type |
-| S066 non_limitup_funnel | 独立端点 FLOW B | 接入主 pipeline + 统一底座 | 共存+重构 | non_limitup_funnel.py 委托 compute_strategy_score + 输出对齐 |
+| S066 non_limitup_funnel | 独立端点 FLOW B | 接入主 pipeline + 统一底座 | 共存+重构 | non_limitup_funnel.py volume_signal 下沉 match 层 + 输出对齐 |
 | NON_LIMITUP_WEIGHTS 硬编码 | L48 硬编码 | 删，委托 strategy_weights.json | 替换 | non_limitup_funnel.py L48 删 |
 | market zt_count | len(zt) 东财 | 显示层 zt_real / _emotion 加字段 | 共存 | market.py 加 zt_real + 前端读 |
 | sector_divergence 板块轮动 | 前端用 | 前端弃用，改 sector_cycle | 替换 | ContextTab 已改，R18 修 sector_cycle |
@@ -210,12 +209,10 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 
 ## 10. 阶段划分（ora-6 B4 重排：消除 S2 依赖 S3 倒置 + R26-R28 归属）
 
-### S0 前置硬门：gene_scores 错位修复（S095，spec 已立项 `specs/S095-gene_scores写路径修复与日期守卫/`）
-- 写路径根因修复（_fetch_zt_pool 对历史日请求加 code 集合校验 / 换源校验）+ 历史行重算
-- **S2/S4 合并前必须完成**
+### S0 前置硬门：gene_scores 错位修复（S095）——✅ 已闭合，见 `specs/S095-gene_scores写路径修复与日期守卫/`
 
 ### S1 统一 K线契约 + 因子层 + 权重源（R1-R5）
-- pattern_scan 自算 MA + 扩 compute_shadow_length_pct/compute_ma5_slope（B3）+ 传 sector_bars + 删 NON_LIMITUP_WEIGHTS + 委托 compute_strategy_score（B6 保留 per-strategy volume_signal）+ PatternScan 升唯一源
+- pattern_scan 自算 MA + 扩 compute_shadow_length_pct/compute_ma5_slope（B3）+ 传 sector_bars + 删 NON_LIMITUP_WEIGHTS + **不委托**（volume_signal 下沉 match 层，B6）+ PatternScan 升唯一源
 
 ### S2 候选生产拆分 + sector_rank（R11/R14/R27）← ora-6 重排：sector_rank 前置
 - compute_sector_stock_rank（R11）+ FLOW B 候选扩字段（R14）+ run_non_limitup_funnel 拆"只产候选"（R27）+ market_scan.py 新建（因子层+形态子+领涨子）
@@ -223,7 +220,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 ### S3 StrategyContext 扩展 + match 分流 + confidence（R6-R13/R26/R28）
 - StrategyContext market_scan_ctx + score_candidates funnel_type + 既有调用传（含 forward_test L491，ora-6 A2）+ dragon_head 条件化 + 4 战法 match 改 PatternScan + confidence 复用 + R26 workflow._collect 调 gather_non_limitup_candidates + R28 briefing 分区透传
 
-### S4 5 根因修复（R16-R21）
+### S4 5 根因修复（R16-R20）← ora-8 A5：R15/R19/R21 已删，区间收拢
 - zt_real 持久化 + 板块轮动端点 date 默认 + kline cache 扩容（R20 全 A 代码复用 load_industry_map 5540 条，ora-6 非阻断 #1）
 
 ### S5 前端 UI（R22-R25）

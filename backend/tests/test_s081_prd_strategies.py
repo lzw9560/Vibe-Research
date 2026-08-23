@@ -193,69 +193,85 @@ class TestWeakTurnStrong:
 # ============================================================
 
 class TestPatternReversal:
-    def _mock_bar(self, high=10.7, close=10.3, volume=1000, date="2026-08-11"):
-        from models.kline import KLineBar
-        return KLineBar(date=date, open=10.0, close=close, high=high, low=10.0, volume=volume)
+    """S094 R5：PatternReversal 改读 PatternScan（不读 ctx.indicators）。
 
-    def _mock_pool(self, zdp=8.0):
-        return {"zdp": zdp, "fundamt": 1.2e8, "lbc": 1, "hs": 3.0, "p": 10.3}
+    5 因子→3 字段删减（删未封涨停 + 删最高≥7%），3 字段：shadow_length_pct>=4 +
+    volume_breakout_ratio>=1.2 + ma5_slope>0。confidence=1.0(3命中)/0.7(2命中)。
+    """
+
+    def _pattern(self, shadow=5.0, vol_ratio=2.5, ma5_slope=0.01):
+        """构造 PatternScan（含 S094 R5 新增 shadow_length_pct/ma5_slope 字段）。"""
+        from strategies.pattern_scan import PatternScan
+        return PatternScan(
+            code="000001",
+            relative_strength=5.0,
+            ma_bullish=True,
+            ma5_proximity=2.0,
+            consolidation_days=0,
+            consolidation_amplitude=None,
+            volume_breakout_ratio=vol_ratio,
+            amount_yi=20.0,
+            shadow_length_pct=shadow,
+            ma5_slope=ma5_slope,
+        )
 
     def test_5_factors_all_hit(self, gene_factory, monkeypatch):
-        """B6: 5 因子全命中 → confidence=1.0。
+        """S094 R5：3 因子全命中 → confidence=1.0。
 
-        close_pct=8% (<9.5) + max_high=7% (≥7) + shadow=4% (≥4)
-        + volume_1d > volume_2d*1.2 + ma5 Upward
+        shadow=5%(>=4) + vol_ratio=2.5(>=1.2) + ma5_slope=0.01(>0) → 3/3 → 1.0。
+        旧 5 因子（close_pct/max_high/shadow/vol/ma5）已删减为 3 字段
+        （删未封涨停=涨停判定在 match 层 pool_item.lbc/zbc；删最高≥7%=与上影≥4% 重叠）。
         """
+        from strategies.strategy_base import StrategyContext
+        from strategies.impl import PatternReversalStrategy
         gene = gene_factory()
-        pool_item = self._mock_pool(zdp=8.0)
-
-        # S083 重构：K线派生因子从 indicators 读（不调 _get_kline_bars）
-        # 构造 indicators 含满足阈值的 K线派生字段：
-        # max_high=7.5% (≥7) + shadow=4% (≥4) + ma5 Upward
-        from types import SimpleNamespace
-        indicators = SimpleNamespace(
-            max_high_pct=7.5,
-            shadow_length_pct=4.0,
-            ma_5_status="Upward",
-            prev_turnover_pct=None,
-            turnover_pct=3.0,
-            amount_yi=1.2,
+        ctx = StrategyContext(
+            code="000001", gene=gene,
+            pool_item={"zdp": 8.0, "p": 10.3, "lbc": 1, "hs": 3.0},
+            indicators=None,  # S094 R5：不再读 indicators
+            derived=None, weather_state=None,
+            market_scan_ctx={"pattern": self._pattern(), "sector_rank": 1, "rel_strength_vs_sector": 5.0},
         )
-        # volume_1d/volume_2d 仍从 pool_item.fundamt 近似（indicators 无 volume 字段）
-        # 注：当前代码 volume 因子降级 None → 4 因子命中 = medium（不是 5 因子 high）
-        # 待漏斗扩展 volume 字段后补全 5 因子
-
-        from limitup_strategy import match_strategies
-        signals = match_strategies("000001", gene, pool_item, indicators=indicators)
-        pr = [s for s in signals if s.strategy_code == "pattern_reversal"]
-        assert len(pr) >= 1
-        # 4 因子命中（volume 降级）= medium confidence（非 1.0 high）
-        assert pr[0].confidence >= 0.5  # medium or high
+        s = PatternReversalStrategy()
+        m = s.match(ctx)
+        assert len(m) == 3
+        assert s.compute_confidence(m, ctx) == 1.0  # 3 命中 high
 
     def test_kline_missing_degrades(self, gene_factory, monkeypatch):
-        """B4: K线取不到 → 各因子 None 降级，不命中。"""
+        """S094 R5：无 market_scan_ctx.pattern → 不命中（诚实降级，不臆造）。
+
+        旧测验证"无 K线 → 因子 None → 不命中"；新路径验证"无 market_scan_ctx
+        → pattern None → 不命中"（S1 阶段涨停 pipeline 不构造 market_scan_ctx）。
+        """
+        from strategies.strategy_base import StrategyContext
+        from strategies.impl import PatternReversalStrategy
         gene = gene_factory()
-        pool_item = self._mock_pool()
-        monkeypatch.setattr("limitup_screener.kline_rebuild._get_kline_bars", lambda code, end, lookback_days=10: [])
+        ctx = StrategyContext(
+            code="000001", gene=gene,
+            pool_item={"zdp": 8.0, "p": 10.3},
+            indicators=None, derived=None, weather_state=None,
+            # market_scan_ctx 不设置 → None → 不命中
+        )
+        s = PatternReversalStrategy()
+        assert s.match(ctx) == []
 
-        from limitup_strategy import match_strategies
-        signals = match_strategies("000001", gene, pool_item)
-        pr = [s for s in signals if s.strategy_code == "pattern_reversal"]
-        assert len(pr) == 0  # 无 K线 → 因子 None → 不命中
+    def test_entry_price_uses_pool_item_p_plus_tick(self, gene_factory, monkeypatch):
+        """S094 R5：触发价 = _round_to_tick_size(pool_item.p + 0.01)。
 
-    def test_entry_price_uses_prev_high_plus_tick(self, gene_factory, monkeypatch):
-        """B7: 触发价 = _round_to_tick_size(昨日最高价 + 0.01)。"""
+        spec §3.R5 明确"突破昨日最高"形态作废，触发价改用 pool_item.p（涨停价）+0.01。
+        """
+        from strategies.strategy_base import StrategyContext
+        from strategies.impl import PatternReversalStrategy
         gene = gene_factory()
-        pool_item = self._mock_pool()
-        bars = [self._mock_bar(high=10.7, close=10.3, volume=1200)]
-        monkeypatch.setattr("limitup_screener.kline_rebuild._get_kline_bars", lambda code, end, lookback_days=10: bars)
-
-        from limitup_strategy import match_strategies
-        signals = match_strategies("000001", gene, pool_item)
-        pr = [s for s in signals if s.strategy_code == "pattern_reversal"]
-        if pr:
-            # 10.7 + 0.01 = 10.71
-            assert pr[0].entry_price == 10.71
+        ctx = StrategyContext(
+            code="000001", gene=gene,
+            pool_item={"zdp": 8.0, "p": 10.3, "lbc": 1, "hs": 3.0},
+            indicators=None, derived=None, weather_state=None,
+            market_scan_ctx={"pattern": self._pattern(), "sector_rank": 1, "rel_strength_vs_sector": 5.0},
+        )
+        s = PatternReversalStrategy()
+        # 10.3 + 0.01 = 10.31
+        assert s.compute_entry_price(ctx) == 10.31
 
 
 # ============================================================

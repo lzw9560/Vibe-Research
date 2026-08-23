@@ -488,7 +488,7 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
         logging.getLogger("vibe-research").warning(
             "forward_test 取涨停池建 pool_item_map 失败 %s: %s", signal_date, exc,
         )
-    scored = score_candidates(candidates, weather_state, signal_date, pool_item_map)
+    scored = score_candidates(candidates, weather_state, "limitup", signal_date, pool_item_map)
     mult, _ = calendar_factor(signal_date)
 
     recommendations = [

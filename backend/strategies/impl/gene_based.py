@@ -14,6 +14,14 @@ from __future__ import annotations
 from strategies.strategy_base import BaseStrategy, ConditionMatch
 
 
+def _get_pattern(ctx):
+    """S094 R4 辅助：从 ctx.market_scan_ctx 取 PatternScan（S1 阶段涨停 pipeline 无此字段，None 降级）。"""
+    msc = getattr(ctx, "market_scan_ctx", None)
+    if not msc:
+        return None
+    return msc.get("pattern") if isinstance(msc, dict) else None
+
+
 class FirstPlateStrategy(BaseStrategy):
     """首板挖掘：score≥60 ∧ 涨停频次>20，confidence=动态 score/100。"""
 
@@ -81,24 +89,40 @@ class BreakResealStrategy(BaseStrategy):
 
 
 class LowAbsorptionStrategy(BaseStrategy):
-    """低吸龙头：score≥65 ∧ 溢价率>50%，confidence=固定 0.5。"""
+    """低吸龙头：ma5_proximity≤3（回调至MA5）∧ ma_bullish（多头），confidence=固定 0.5。
+
+    S094 R10/T14：改读 PatternScan（不读 gene.total_score/次日溢价率）。阈值 ma5_proximity≤3
+    与 check_quality_standards "回调至MA5"（close-MA5/MA5*100<3）一致；探索性，待回测调参。
+    无 market_scan_ctx（limitup/match_strategies 路径）→ 不命中（R9 行为变化）。
+    """
 
     code = "low_absorption"
     name = "低吸龙头"
 
     def match(self, ctx) -> list[ConditionMatch]:
-        gene = ctx.gene
-        premium = gene.factors.get("次日溢价率", 0)
-        if gene.total_score >= 65 and premium > 50:
-            return [ConditionMatch(
-                condition="龙头回调+资金关注",
-                value=f"次日溢价率 {premium:.1f}%",
-                description="策略逻辑上，该股属于高关注度标的，存在回调低吸机会",
-            )]
-        return []
+        # S094 R10/T14：改读 PatternScan（ma5_proximity 回调至MA5 + ma_bullish 多头），不读 gene 因子
+        pattern = _get_pattern(ctx)
+        if pattern is None:
+            return []
+        ma5_prox = pattern.ma5_proximity
+        ma_bull = pattern.ma_bullish
+        if ma5_prox is None or ma5_prox > 3 or not ma_bull:
+            return []
+        return [ConditionMatch(
+            condition="回调至MA5+均线多头",
+            value=f"ma5_proximity={ma5_prox:.2f}%",
+            description=f"策略逻辑上，股价回调至 5 日线附近（接近度 {ma5_prox:.2f}%，≤3%）且均线多头排列，存在低吸机会",
+        )]
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.5
+
+    def compute_volume_signal(self, ctx) -> bool | None:
+        """S094 R4：低吸龙头成交额 > 5亿（spec §3.R4）。"""
+        pattern = _get_pattern(ctx)
+        if pattern is None or pattern.amount_yi is None:
+            return None
+        return pattern.amount_yi > 5
 
 
 class NShapeCounterattackStrategy(BaseStrategy):
@@ -126,23 +150,40 @@ class NShapeCounterattackStrategy(BaseStrategy):
 
 
 class PlatformBreakoutStrategy(BaseStrategy):
-    """平台突破：score≥60 ∧ 涨停频次>40，confidence=固定 0.5。"""
+    """平台突破：consolidation_days≥5（横盘）∧ volume_breakout_ratio>2（放量突破），confidence=固定 0.5。
+
+    S094 R10/T14：改读 PatternScan（不读 gene.total_score/涨停频次）。阈值横盘≥5 + 量比>2
+    与 check_quality_standards "横盘≥5日"/"成交额放大2倍" 一致；探索性，待回测调参。
+    无 market_scan_ctx（limitup/match_strategies 路径）→ 不命中（R9 行为变化）。
+    """
 
     code = "platform_breakout"
     name = "平台突破"
 
     def match(self, ctx) -> list[ConditionMatch]:
-        gene = ctx.gene
-        if gene.total_score >= 60 and gene.factors.get("涨停频次", 0) > 40:
-            return [ConditionMatch(
-                condition="平台整理+突破",
-                value=f"基因得分 {gene.total_score}",
-                description="策略逻辑上，该股具备平台突破的量价特征",
-            )]
-        return []
+        # S094 R10/T14：改读 PatternScan（consolidation_days 横盘≥5 + volume_breakout_ratio 放量>2），不读 gene 因子
+        pattern = _get_pattern(ctx)
+        if pattern is None:
+            return []
+        cons = pattern.consolidation_days
+        vol_brk = pattern.volume_breakout_ratio
+        if cons is None or cons < 5 or vol_brk is None or vol_brk <= 2:
+            return []
+        return [ConditionMatch(
+            condition="横盘+放量突破",
+            value=f"横盘{cons}日 量比{vol_brk:.2f}",
+            description=f"策略逻辑上，横盘 {cons} 日（≥5）后今日放量突破（量比 {vol_brk:.2f}，>2）",
+        )]
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.5
+
+    def compute_volume_signal(self, ctx) -> bool | None:
+        """S094 R4：平台突破 volume_breakout_ratio > 2（spec §3.R4）。"""
+        pattern = _get_pattern(ctx)
+        if pattern is None or pattern.volume_breakout_ratio is None:
+            return None
+        return pattern.volume_breakout_ratio > 2
 
 
 class EndOfDaySneakStrategy(BaseStrategy):
@@ -167,22 +208,38 @@ class EndOfDaySneakStrategy(BaseStrategy):
 
 
 class DragonHeadStrategy(BaseStrategy):
-    """龙头战法：无条件放行（spec B1.7/§5.4，match 返回单条"无条件"+ confidence=0.5）。
+    """龙头战法：板块内领涨（S094 R9 条件化——读 market_scan_ctx.sector_rank≤3 命中）。
 
-    旧 match_strategies 无 dragon_head 分支（永不命中，backtest sample_size=0），
-    spec §2.1 将"无 match 条件"列为 bug 不是设计；本实现显式无条件放行，
-    令 score_candidates 的 dragon_head 过滤豁免与 dispatch 输出一致。
+    旧 S086 无条件放行（backtest sample_size=1）；S094 R9 删无条件放行：
+    读 market_scan_ctx.sector_rank（板块内个股排名，T7）+ pattern（PatternScan），
+    板块内排名≤3 才命中。无 market_scan_ctx（limitup/match_strategies 路径）→ 不命中
+    （R9 行为变化：从无条件放行变永不命中——涨停股本不该命中非涨停龙头战法，方向对）。
+    confidence=0.5（固定）；compute_volume_signal 读 market_scan_ctx.pattern.amount_yi>10亿。
     """
 
     code = "dragon_head"
     name = "龙头战法"
 
     def match(self, ctx) -> list[ConditionMatch]:
+        # S094 R9：删无条件放行——读 market_scan_ctx（板块内排名≤3 + 有 PatternScan 才命中）。
+        # 无 market_scan_ctx（limitup/match_strategies 路径）→ 不命中（R9 行为变化）。
+        msc = getattr(ctx, "market_scan_ctx", None) or {}
+        pattern = msc.get("pattern") if isinstance(msc, dict) else None
+        sector_rank = msc.get("sector_rank")
+        if pattern is None or sector_rank is None or sector_rank > 3:
+            return []
         return [ConditionMatch(
-            condition="无条件放行",
-            value="龙头战法",
-            description="策略逻辑上，该股作为板块龙头，具备龙头战法的统计特征（无条件放行）",
+            condition="板块内领涨",
+            value=f"板块内排名={sector_rank}",
+            description=f"策略逻辑上，该股板块内相对强度排名前 3（rank={sector_rank}），具备龙头地位",
         )]
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.5
+
+    def compute_volume_signal(self, ctx) -> bool | None:
+        """S094 R4：龙头成交额 > 10亿（spec §3.R4，换手>5% 用成交额代理）。"""
+        pattern = _get_pattern(ctx)
+        if pattern is None or pattern.amount_yi is None:
+            return None
+        return pattern.amount_yi > 10

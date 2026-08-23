@@ -5,8 +5,10 @@ import { useState } from "react";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
 import { useMultiRotation } from "@/lib/query/strategy";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
+import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
 import { NonLimitupLane } from "./NonLimitupPlaceholder";
 import type { FunnelLayer, FunnelResult, DiagnosisCard } from "@/lib/candidates";
+import type { ScoredCandidate } from "@/lib/api";
 import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
 
 interface RerunHandlers {
@@ -20,6 +22,8 @@ interface Props {
   finalCandidates?: DiagnosisCard[];
   scoredCandidatesCount?: number;
   screenerPoolSize?: number;
+  /** S094 T17/R28：briefing 透传的 market_scan_scored（喂非涨停叉，免独立端点调用）。 */
+  nonLimitupCandidates?: ScoredCandidate[];
   date?: string;
   mode?: "full" | "funnel-only";
   fork?: "limitup" | "non-limitup" | "both";
@@ -34,7 +38,7 @@ const NODE_DASHED = "rounded-lg border border-dashed p-3";
 
 export function SelectionPipeline({
   funnelResult, funnelLayers, finalCandidates, scoredCandidatesCount,
-  screenerPoolSize, date, mode = "funnel-only", fork = "both", onPick, rerunHandlers,
+  screenerPoolSize, nonLimitupCandidates, date, mode = "funnel-only", fork = "both", onPick, rerunHandlers,
   showHonestyBanner = true,
 }: Props) {
   const layers = funnelResult?.layers ?? funnelLayers ?? [];
@@ -59,10 +63,11 @@ export function SelectionPipeline({
       <PipelineNode label="涨停股池" sub={rootSub} count={rootSize} />
       <ArrowDown />
       {date && <SectorRotationNode date={date} />}
-      {date && <ArrowDown label={bothLanes ? "分叉" : undefined} />}
-      {!date && <ArrowDown label={bothLanes ? "分叉" : undefined} />}
+      {date && <ArrowDown label={bothLanes ? "非涨停 ↓" : undefined} />}
+      {!date && <ArrowDown label={bothLanes ? "非涨停 ↓" : undefined} />}
 
-      <div className={bothLanes ? "grid gap-3 sm:grid-cols-2" : "space-y-1.5"}>
+      {/* S094 R22：双 pipeline 上下分区（涨停叉主展开 / 非涨停叉折叠）——旧 grid-cols-2 side-by-side 改 vertical */}
+      <div className={bothLanes ? "space-y-3" : "space-y-1.5"}>
         {showLimitup && (
           <div className="space-y-1.5">
             <LaneHeader title="涨停叉" sub="已实现" />
@@ -88,7 +93,11 @@ export function SelectionPipeline({
             <RiskNode />
           </div>
         )}
-        {showNonLimitup && <NonLimitupLane date={date} />}
+        {showNonLimitup && (
+          <CollapsibleFold title="非涨停叉" subtitle="板块领涨 · K线形态 · 非涨停战法（§44 未验证）" defaultOpen={false}>
+            <NonLimitupLane date={date} candidates={nonLimitupCandidates} />
+          </CollapsibleFold>
+        )}
       </div>
     </div>
   );

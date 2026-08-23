@@ -44,11 +44,31 @@ def _gene(total=70.0, zt=1, factors=None) -> GeneScore:
     )
 
 
-def _ctx(gene=None, pool_item=None, indicators=None, derived=None) -> StrategyContext:
+def _ctx(gene=None, pool_item=None, indicators=None, derived=None, market_scan_ctx=None) -> StrategyContext:
     return StrategyContext(
         code="000001", gene=gene or _gene(), pool_item=pool_item,
         indicators=indicators, derived=derived, weather_state=None,
+        market_scan_ctx=market_scan_ctx,
     )
+
+
+def _pat(**kw):
+    """S094：构造 PatternScan（默认值满足多数 market_scan 战法命中条件，kw 覆盖）。"""
+    from strategies.pattern_scan import PatternScan
+    defaults = dict(
+        code="000001", relative_strength=5.0, ma_bullish=True, ma5_proximity=2.0,
+        consolidation_days=6, consolidation_amplitude=None,
+        volume_breakout_ratio=2.5, amount_yi=20.0,
+        shadow_length_pct=5.0, ma5_slope=0.01,
+    )
+    defaults.update(kw)
+    return PatternScan(**defaults)
+
+
+def _msc(sector_rank: int = 1, pattern=None, **kw) -> dict:
+    """S094：构造 market_scan_ctx（pattern 默认 _pat，kw 透传 _pat）。"""
+    return {"pattern": pattern if pattern is not None else _pat(**kw),
+            "sector_rank": sector_rank, "rel_strength_vs_sector": 5.0}
 
 
 # ===========================================================================
@@ -117,20 +137,25 @@ class TestBreakReseal:
 
 
 class TestLowAbsorption:
-    def test_hit(self):
-        s = LowAbsorptionStrategy()
-        gene = _gene(total=70, factors={"次日溢价率": 55})
-        m = s.match(_ctx(gene=gene))
-        assert len(m) == 1 and m[0].condition == "龙头回调+资金关注"
-        assert s.compute_confidence(m, _ctx(gene=gene)) == 0.5
+    """S094 R10/T14：改读 PatternScan（ma5_proximity≤3 + ma_bullish）。"""
 
-    def test_miss_low_premium(self):
+    def test_hit_near_ma5_and_bullish(self):
         s = LowAbsorptionStrategy()
-        assert s.match(_ctx(gene=_gene(total=70, factors={"次日溢价率": 40}))) == []
+        m = s.match(_ctx(market_scan_ctx=_msc(ma5_proximity=2.0, ma_bullish=True)))
+        assert len(m) == 1 and m[0].condition == "回调至MA5+均线多头"
+        assert s.compute_confidence(m, _ctx(market_scan_ctx=_msc())) == 0.5
 
-    def test_miss_low_score(self):
+    def test_miss_far_from_ma5(self):
         s = LowAbsorptionStrategy()
-        assert s.match(_ctx(gene=_gene(total=60, factors={"次日溢价率": 55}))) == []
+        assert s.match(_ctx(market_scan_ctx=_msc(ma5_proximity=5.0))) == []
+
+    def test_miss_not_bullish(self):
+        s = LowAbsorptionStrategy()
+        assert s.match(_ctx(market_scan_ctx=_msc(ma_bullish=False))) == []
+
+    def test_miss_without_market_scan_ctx(self):
+        s = LowAbsorptionStrategy()
+        assert s.match(_ctx(gene=_gene())) == []
 
 
 class TestNShapeCounterattack:
@@ -148,16 +173,25 @@ class TestNShapeCounterattack:
 
 
 class TestPlatformBreakout:
-    def test_hit(self):
-        s = PlatformBreakoutStrategy()
-        gene = _gene(total=70, factors={"涨停频次": 45})
-        m = s.match(_ctx(gene=gene))
-        assert len(m) == 1 and m[0].condition == "平台整理+突破"
-        assert s.compute_confidence(m, _ctx(gene=gene)) == 0.5
+    """S094 R10/T14：改读 PatternScan（consolidation_days≥5 + volume_breakout_ratio>2）。"""
 
-    def test_miss_low_freq(self):
+    def test_hit_consolidation_and_volume_breakout(self):
         s = PlatformBreakoutStrategy()
-        assert s.match(_ctx(gene=_gene(total=70, factors={"涨停频次": 30}))) == []
+        m = s.match(_ctx(market_scan_ctx=_msc(consolidation_days=6, volume_breakout_ratio=2.5)))
+        assert len(m) == 1 and m[0].condition == "横盘+放量突破"
+        assert s.compute_confidence(m, _ctx(market_scan_ctx=_msc())) == 0.5
+
+    def test_miss_low_consolidation(self):
+        s = PlatformBreakoutStrategy()
+        assert s.match(_ctx(market_scan_ctx=_msc(consolidation_days=3, volume_breakout_ratio=2.5))) == []
+
+    def test_miss_low_volume(self):
+        s = PlatformBreakoutStrategy()
+        assert s.match(_ctx(market_scan_ctx=_msc(consolidation_days=6, volume_breakout_ratio=1.5))) == []
+
+    def test_miss_without_market_scan_ctx(self):
+        s = PlatformBreakoutStrategy()
+        assert s.match(_ctx(gene=_gene())) == []
 
 
 class TestEndOfDaySneak:
@@ -174,13 +208,25 @@ class TestEndOfDaySneak:
 
 
 class TestDragonHead:
-    def test_always_matches(self):
-        """无条件放行——任意 gene 都命中，confidence=0.5。"""
+    """S094 R9：条件化——读 market_scan_ctx.sector_rank（板块内≤3）+ pattern 命中。
+
+    旧 S086 无条件放行已删；无 market_scan_ctx（limitup/match_strategies 路径）→ 不命中。
+    """
+
+    def test_matches_when_sector_rank_le3(self):
         s = DragonHeadStrategy()
-        for gene in [_gene(total=10, zt=0), _gene(total=90, zt=5)]:
-            m = s.match(_ctx(gene=gene))
-            assert len(m) == 1 and m[0].condition == "无条件放行"
-            assert s.compute_confidence(m, _ctx(gene=gene)) == 0.5
+        m = s.match(_ctx(market_scan_ctx=_msc(2)))
+        assert len(m) == 1 and m[0].condition == "板块内领涨"
+        assert s.compute_confidence(m, _ctx(market_scan_ctx=_msc(2))) == 0.5
+
+    def test_no_match_when_sector_rank_gt3(self):
+        s = DragonHeadStrategy()
+        assert s.match(_ctx(market_scan_ctx=_msc(5))) == []
+
+    def test_no_match_without_market_scan_ctx(self):
+        # R9 行为变化：无 market_scan_ctx（limitup/match_strategies 路径）→ 不命中
+        s = DragonHeadStrategy()
+        assert s.match(_ctx(gene=_gene(total=90, zt=5))) == []
 
 
 # ===========================================================================
@@ -271,53 +317,76 @@ class TestWeakTurnStrong:
 
 
 class TestPatternReversal:
-    def _ind(self, max_high=8.0, shadow=5.0, ma5="Upward", amt=20.0, prev_amt=10.0):
-        return SimpleNamespace(
-            max_high_pct=max_high, shadow_length_pct=shadow, ma_5_status=ma5,
-            amount_yi=amt, prev_amount_yi=prev_amt,
+    """S094 R5：PatternReversal 改读 PatternScan（不读 ctx.indicators）。
+
+    5 因子→3 字段删减：删"未封涨停"（涨停判定在 match 层 pool_item.lbc/zbc）+
+    删"最高≥7%"（与上影≥4% 重叠）。3 字段：shadow_length_pct>=4 +
+    volume_breakout_ratio>=1.2 + ma5_slope>0。confidence=1.0(3命中)/0.7(2命中)。
+    """
+
+    def _pattern(self, shadow=5.0, vol_ratio=2.5, ma5_slope=0.01):
+        """构造 PatternScan（含 S094 R5 新增 shadow_length_pct/ma5_slope 字段）。"""
+        from strategies.pattern_scan import PatternScan
+        return PatternScan(
+            code="000001",
+            relative_strength=5.0,
+            ma_bullish=True,
+            ma5_proximity=2.0,
+            consolidation_days=0,
+            consolidation_amplitude=None,
+            volume_breakout_ratio=vol_ratio,
+            amount_yi=20.0,
+            shadow_length_pct=shadow,  # S094 R5 新增
+            ma5_slope=ma5_slope,       # S094 R5 新增
         )
 
-    def test_5of5_high_confidence(self):
-        """close_pct<9.5 + max_high≥7 + shadow≥4 + 放量≥1.2 + ma5 Upward → 5/5 → 1.0。"""
-        s = PatternReversalStrategy()
+    def _ctx_with_pattern(self, pattern):
         ctx = _ctx(
             gene=_gene(total=50, factors={"涨停频次": 0}),
             pool_item={"zdp": 5.0, "p": 10.0},
-            indicators=self._ind(),
+            indicators=None,  # S094 R5：不再读 indicators
         )
+        ctx.market_scan_ctx = {"pattern": pattern, "sector_rank": 1, "rel_strength_vs_sector": 5.0}
+        return ctx
+
+    def test_3of3_high_confidence(self):
+        """shadow>=4 + vol_ratio>=1.2 + ma5_slope>0 → 3/3 → 1.0。"""
+        s = PatternReversalStrategy()
+        ctx = self._ctx_with_pattern(self._pattern(shadow=5.0, vol_ratio=2.5, ma5_slope=0.01))
         m = s.match(ctx)
-        assert len(m) == 5
+        assert len(m) == 3
         assert s.compute_confidence(m, ctx) == 1.0
 
     def test_entry_price_override_p_plus_tick(self):
         """override compute_entry_price = tick(pool_item.p + 0.01)。"""
         s = PatternReversalStrategy()
-        ctx = _ctx(
-            gene=_gene(total=50, factors={"涨停频次": 0}),
-            pool_item={"zdp": 5.0, "p": 10.0},
-            indicators=self._ind(),
-        )
+        ctx = self._ctx_with_pattern(self._pattern())
         assert s.compute_entry_price(ctx) == 10.01  # 10.0 + 0.01
 
-    def test_no_indicators_no_match(self):
-        """无 indicators → K线因子 None → 不命中。"""
+    def test_no_pattern_no_match(self):
+        """S094 R5：无 market_scan_ctx.pattern → 不命中（诚实降级，不臆造）。"""
         s = PatternReversalStrategy()
         ctx = _ctx(
             gene=_gene(total=50, factors={"涨停频次": 0}),
             pool_item={"zdp": 5.0, "p": 10.0},
-            indicators=None,
+            indicators=None,  # 旧路径 indicators 已不读
         )
+        # market_scan_ctx 未设置 → None → 不命中
         assert s.match(ctx) == []
 
-    def test_no_pool_item_no_indicators_no_match(self):
-        """无 pool_item 且无 indicators → close_pct None + K线因子 None → 0 命中 → 不输出。
-
-        注：pattern_reversal 仅需 4/5 命中；有 indicators 时即便无 pool_item（close_pct=None，
-        f1 不命中）仍可由 f2-f5 凑足 4 命中——此为既有行为（不改阈值）。本测验证
-        pool_item + indicators 全无时确不命中。
-        """
+    def test_2of3_medium_confidence(self):
+        """2 因子命中 → 0.7（medium）。shadow 命中 + vol_ratio 命中，ma5_slope<=0 不命中。"""
         s = PatternReversalStrategy()
-        assert s.match(_ctx(gene=_gene(), pool_item=None, indicators=None)) == []
+        ctx = self._ctx_with_pattern(self._pattern(shadow=5.0, vol_ratio=2.5, ma5_slope=-0.01))
+        m = s.match(ctx)
+        assert len(m) == 2
+        assert s.compute_confidence(m, ctx) == 0.7
+
+    def test_lt_2_no_match(self):
+        """<2 命中 → 不输出。"""
+        s = PatternReversalStrategy()
+        ctx = self._ctx_with_pattern(self._pattern(shadow=2.0, vol_ratio=1.0, ma5_slope=-0.01))
+        assert s.match(ctx) == []
 
 
 # ===========================================================================

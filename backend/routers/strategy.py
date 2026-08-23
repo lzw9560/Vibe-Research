@@ -217,10 +217,15 @@ async def get_sector_cycle(
 
 
 @router.get("/api/strategy/funnel/sector-rotation")
-async def get_sector_rotation(date: str = Query(..., description="交易日 YYYY-MM-DD")) -> Dict[str, Any]:
+async def get_sector_rotation(date: str | None = Query(None, description="交易日 YYYY-MM-DD（默认最近交易日 last_trading_date_str）")) -> Dict[str, Any]:
     """S066 §5.4.1 板块强度排名 TOP10 + §5.4.3 跨板块轮动检测（纯 label，§5.4 Q2 不接策略分）。
-    fund_flow 阻断降级 0（§44 push2his IP限流）。"""
+    fund_flow 阻断降级 0（§44 push2his IP限流）。
+    S094 R18/T19：date 必填改默认 None→last_trading_date_str（非交易日/未传 date 默认最近交易日，
+    修前端 ContextTab 未传 date→端点返空"未取得"的根因；非 aggregate_sectors industry 缺——ora-6 B5 实测 industry 满值）。"""
     from strategies.sector_cycle import sector_rotation
+    from vr_paths import last_trading_date_str
+    if date is None:
+        date = last_trading_date_str()
     return {"data": sector_rotation(date)}
 
 
@@ -251,11 +256,15 @@ async def get_non_limitup_funnel(
     """S066 §4.2 非涨停类漏斗（Phase 2，§44 未验证因子，标"§44未验证"）。
     热门板块 → 板块成分股 → 形态扫描(bars) → run_non_limitup_funnel 策略分 → 候选。
     数据本地（baostock industry_map + kline cache），不依赖 datacenter。"""
-    import json
     from strategies.sector_cycle import sector_rotation
-    from strategies.pattern_scan import get_sector_stocks, load_industry_map
+    from strategies.pattern_scan import load_industry_map
+    from strategies.market_scan import build_non_limitup_candidates
     from strategies.non_limitup_funnel import run_non_limitup_funnel
-    from vr_paths import resolve_data_dir
+    from strategies.strategy_funnel_registry import score_candidates
+    # S094 T21：复用 first_board_filter._get_kline_cache 模块级 memo（只读一次后续复用），
+    # 替代每请求 json.loads 全量 cache（T21 扩容到全 A ~150MB 后是 perf 悬崖）。
+    # build_non_limitup_candidates 只读 cache（cache.get，不 mutate）→ 共享 memo 安全。
+    from strategies.first_board_filter import _get_kline_cache
 
     rot = sector_rotation(date)
     top = [s for s in rot.get("strength_rank", []) if s.get("zt_count_today", 0) > 0][:top_sectors]
@@ -263,20 +272,17 @@ async def get_non_limitup_funnel(
         return {"data": {"candidates": [], "count": 0, "sectors_scanned": 0, "note": "无热门板块（当日无涨停板块）"}}
 
     industry_map = load_industry_map()
-    kc_path = resolve_data_dir() / "baostock_kline_cache.json"
-    cache = json.loads(kc_path.read_bytes()) if kc_path.exists() else {}
+    cache = _get_kline_cache()
 
-    candidates: list[dict] = []
-    for s in top:
-        ind = s["industry"]
-        stocks = get_sector_stocks(ind, industry_map)[:per_sector]
-        for code in stocks:
-            bars = cache.get(code, [])
-            if len(bars) >= 20:
-                candidates.append({"code": code, "bars": bars, "sector": ind})
+    # S094 T8：候选生产抽到 market_scan.build_non_limitup_candidates——统一 shape
+    # {code,name,bars,sector,sector_rank,close}（name 从 code_industry 反查，sector_rank=板块内 T7，
+    # close=bars[-1]）。S3 R26 gather_non_limitup_candidates(date) 会在此外包 sector_rotation。
+    candidates = build_non_limitup_candidates(top, industry_map, cache, per_sector)
 
-    sector_rank_map = {s["industry"]: s.get("rank", 99) for s in top}
-    scored = run_non_limitup_funnel(candidates, weather_state=None, sector_rank_map=sector_rank_map)
+    sector_rank_map = {s["industry"]: s.get("rank", 99) for s in top}  # 板块间
+    # S094 T16: run_non_limitup_funnel 只产候选(with pattern) → score_candidates(market_scan) 打分+check_quality 闸
+    produced = run_non_limitup_funnel(candidates, weather_state=None, sector_rank_map=sector_rank_map)
+    scored = score_candidates(produced, None, "market_scan")
     return {
         "data": {
             "candidates": scored[:50],

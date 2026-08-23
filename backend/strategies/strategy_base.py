@@ -53,6 +53,11 @@ class StrategyContext:
     indicators: Any | None      # candidate_funnel.IndicatorSet（K线派生）
     derived: dict | None        # S070 R7 分时派生（broken_duration_min/max_drop_pct/last_lock_time）
     weather_state: str | None   # 天气（软标注，不做硬开关）
+    # S094 R5/R6：market_scan 战法（pattern_reversal/low_absorption/platform_breakout/
+    # dragon_head）的 PatternScan 因子上下文。S1 阶段 score_candidates 涨停 pipeline
+    # 不构造此字段（None），4 战法 getattr 安全读降级不命中；S3 R7 score_candidates
+    # 加 funnel_type 分流后 market_scan 分支构造此字段，4 战法始生效。
+    market_scan_ctx: dict | None = None  # {pattern: PatternScan, sector_rank, rel_strength_vs_sector}
 
 
 class StrategyProtocol(Protocol):
@@ -67,6 +72,8 @@ class StrategyProtocol(Protocol):
     def match(self, ctx: StrategyContext) -> list[ConditionMatch]: ...
 
     def compute_confidence(self, matches: list[ConditionMatch], ctx: StrategyContext) -> float: ...
+
+    def compute_volume_signal(self, ctx: StrategyContext) -> bool | None: ...
 
     def compute_entry_price(self, ctx: StrategyContext) -> float:
         """默认返回 tick 对齐的 pool_item.p（R2 真实涨停价）；
@@ -182,6 +189,21 @@ class BaseStrategy:
     def compute_confidence(self, matches: list[ConditionMatch], ctx: StrategyContext) -> float:
         return 0.0
 
+    def compute_volume_signal(self, ctx: StrategyContext) -> bool | None:
+        """S094 R4：per-strategy volume_signal 量能信号（下沉 match 层，不委托 compute_strategy_score）。
+
+        按战法分支逻辑（spec §3.R4）：
+        - dragon_head：成交额 > 10亿
+        - platform_breakout：volume_breakout_ratio > 2
+        - low_absorption：成交额 > 5亿
+        - reverse_package：成交额 > 15亿
+
+        从 ctx.market_scan_ctx.pattern（PatternScan）取 amount_yi/volume_breakout_ratio。
+        S1 阶段涨停 pipeline 不构造 market_scan_ctx → None（诚实降级，不臆造）。
+        子类按战法 override 此方法实现各自量能阈值。
+        """
+        return None
+
     def compute_entry_price(self, ctx: StrategyContext) -> float:
         """默认入场价 = tick 对齐的 pool_item.p（R2 真实涨停价）；
         pool_item 缺失时 fallback gene.total_score（价格代理，调度器加标注）。"""
@@ -220,6 +242,9 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
         entry_price = impl.compute_entry_price(ctx)
         # R2/A7：pool_item 缺失 → 入场价为基因得分代理，标注"价格代理"
         is_price_proxy = not (ctx.pool_item and ctx.pool_item.get("p"))
+
+        # S094 R4：per-strategy volume_signal 下沉 match 层（不委托 compute_strategy_score）
+        volume_signal = impl.compute_volume_signal(ctx)
 
         stop_loss = round(entry_price * (1 + cfg.stop_loss_pct / 100), 2)
         take_profit = round(entry_price * (1 + cfg.take_profit_pct / 100), 2)
@@ -275,6 +300,7 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
             },
             reasoning=[m.description for m in matches],
             risk_notes=risk_notes,
+            volume_signal=volume_signal,  # S094 R4：per-strategy 量能信号下沉 match 层
         ))
 
     # 按风险收益比 × 历史胜率排序（与旧 match_strategies 一致）

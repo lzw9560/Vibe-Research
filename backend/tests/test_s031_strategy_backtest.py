@@ -49,11 +49,11 @@ def test_run_strategy_backtest_aggregates(mock_dates, mock_load, mock_kline_mapp
     assert first_plate.sample_size == 1
     assert first_plate.win_rate == 1.0  # 1/1
     assert first_plate.avg_return == 8.0  # take_profit_pct=8
-    # S086 B1.7：dragon_head 无条件放行 → 亦命中（sample_size=1）
+    # S094 R9：dragon_head 条件化（读 market_scan_ctx）→ backtest 无 market_scan_ctx 不命中（sample_size=0）
     dragon_head = next(r for r in results if r.strategy_code == "dragon_head")
-    assert dragon_head.sample_size == 1
-    others = [r for r in results if r.strategy_code not in ("first_plate", "dragon_head")]
-    assert all(r.sample_size == 0 for r in others), "其余战法不应命中（dragon_head 无条件放行除外）"
+    assert dragon_head.sample_size == 0  # R9：无条件放行已删，无 market_scan_ctx 不命中
+    others = [r for r in results if r.strategy_code != "first_plate"]
+    assert all(r.sample_size == 0 for r in others), "除 first_plate 外其余战法不应命中"
 
 
 @patch("strategies.strategy_backtest.astock")
@@ -71,7 +71,7 @@ def test_run_strategy_backtest_skips_missing_kline(mock_dates, mock_load, mock_k
     results = run_strategy_backtest(60)
     first_plate = next(r for r in results if r.strategy_code == "first_plate")
     assert first_plate.sample_size == 0
-    assert first_plate.skipped == 2  # first_plate + dragon_head 命中但无 K 线跳过（dragon_head 无条件放行）
+    assert first_plate.skipped == 1  # S094 R9：dragon_head 不再无条件命中，仅 first_plate 命中但无 K 线跳过
 
 
 def test_backtest_endpoint_returns_8_strategies(monkeypatch):

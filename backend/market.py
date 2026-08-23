@@ -207,6 +207,11 @@ def _emotion(date: str | None = None) -> dict:
             if not resolved:
                 return {}
 
+    # T18：真实涨停数（akshare legu 源）——_sentiment 只能查最新日，历史日返 {}→None。
+    # CRITICAL：传 dash-formatted resolved 日期（emotion 实际数据日），别裸调 _sentiment()
+    # （=always-latest），否则今天 zt_real 标到非最新 emotion 日，重犯 P0-1/P0-2 日期错配。
+    zt_real = _sentiment(f"{resolved[:4]}-{resolved[4:6]}-{resolved[6:]}").get("zt_real")
+
     zt = astock.em_zt_topic_pool("getTopicZTPool", resolved, "fbt:asc")
     if not zt and date is None:
         # 主源空 → 同花顺降级（若 ths 已在定位阶段取到则复用，否则现取）
@@ -226,6 +231,7 @@ def _emotion(date: str | None = None) -> dict:
         return {
             "date": f"{resolved[:4]}-{resolved[4:6]}-{resolved[6:]}",
             "zt_count": zt_count,
+            "zt_real": zt_real,
             "dt_count": None,
             "zb_count": None,
             "max_boards": max_boards,
@@ -294,6 +300,7 @@ def _emotion(date: str | None = None) -> dict:
     return {
         "date": f"{resolved[:4]}-{resolved[4:6]}-{resolved[6:]}",
         "zt_count": zt_count,
+        "zt_real": zt_real,
         "dt_count": len(dt),
         "zb_count": zb_count,
         "max_boards": max(boards) if boards else 0,

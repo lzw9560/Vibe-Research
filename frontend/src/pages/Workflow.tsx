@@ -375,6 +375,8 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
         onPick={() => { /* 前瞻 Tab 不开抽屉（S4 WatchlistBoard 接管） */ }}
         snapshotLayers={briefing?.from_snapshot ? funnelLayers : funnelLayers}
         scoredCandidates={briefing?.scored_candidates}
+        marketScanScored={briefing?.market_scan_scored}
+        finalCandidates={briefing?.final_candidates}
         ztPoolSize={briefing?.market_emotion?.zt_count ?? undefined}
       />
 
@@ -411,9 +413,9 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
             <p className="text-xs text-muted-foreground/70">推荐标的 {recs.length} 只</p>
             <div className="mt-2 space-y-1">
               {recs.slice(0, 3).map((r) => (
-                <div key={r.code} className="flex justify-between text-xs">
-                  <span>{r.name}({r.code})</span>
-                  <span className="text-muted-foreground/60">
+                <div key={r.code} className="flex min-w-0 items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 flex-1 truncate">{r.name}({r.code})</span>
+                  <span className="shrink-0 text-right text-muted-foreground/60">
                     {r.matched_strategy ?? "—"} 胜率{r.win_rate != null ? `${(r.win_rate * 100).toFixed(0)}%` : "—"} {r.action}
                   </span>
                 </div>

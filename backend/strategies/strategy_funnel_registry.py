@@ -48,6 +48,7 @@ from strategies.impl import (
     StormReversalStrategy,
     WeakTurnStrongStrategy,
 )
+from strategies.market_scan import _build_market_data  # S094 2b-i-c: market_scan check_quality 闸前移用
 
 # spec §3: weights 由 Phase 0d 全样本回归定稿（.vibe-research/strategy_weights.json）
 # 测试时 VR_DATA_DIR 指向临时目录（conftest），weights 不存在 → 等权兜底
@@ -331,6 +332,22 @@ STRATEGY_REGISTRY: list[StrategyConfig] = [
 # 向后兼容别名：旧 STRATEGY_FUNNEL_REGISTRY 消费方（routers/strategy.py / test）零改动
 STRATEGY_FUNNEL_REGISTRY: list[StrategyConfig] = STRATEGY_REGISTRY
 
+# S094 T11（spec §3.M）：12 战法按 funnel_type 归组——score_candidates 必填 funnel_type，
+# 只跑该组的战法（limitup 7 / market_scan 5），二者不交叉（R7）。
+# limitup：first_plate 首板 / consecutive_relay 连板 / break_reseal 炸板回封 /
+#   n_shape_counterattack N字 / end_of_day_sneak 尾盘 / weak_turn_strong 弱转强 / storm_reversal 暴风暴
+# market_scan：dragon_head 龙头 / low_absorption 低吸 / reverse_package 反包 /
+#   platform_breakout 平台突破 / pattern_reversal 形态反包
+STRATEGIES_BY_FUNNEL_TYPE: dict[str, list[str]] = {
+    "limitup": [
+        "first_plate", "consecutive_relay", "break_reseal", "n_shape_counterattack",
+        "end_of_day_sneak", "weak_turn_strong", "storm_reversal",
+    ],
+    "market_scan": [
+        "dragon_head", "low_absorption", "reverse_package", "platform_breakout", "pattern_reversal",
+    ],
+}
+
 
 def get_strategy_config(code: str) -> StrategyConfig | None:
     """按 code 查策略配置。"""
@@ -451,6 +468,7 @@ def _cand_to_gene(cand: dict):
 def score_candidates(
     candidates: list[dict],
     weather_state: str | None,
+    funnel_type: str,  # S094 R7/T11: 必填 limitup|market_scan（无默认，防 None=全跑 crash，brief 拍板 #3）
     trade_date: str | None = None,
     pool_item_map: dict[str, dict] | None = None,
 ) -> list[dict]:
@@ -476,7 +494,19 @@ def score_candidates(
     grill Q6（match 过滤闭环）：dispatch_match 只返回 match 命中的战法 signals，
     matched_codes 即过滤结果（消灭旧 _MATCHED_STRATEGY_CODES 白名单）。
     """
+    # S094 T11：funnel_type 必填——只跑该 funnel_type 的战法（limitup 7 / market_scan 5，不交叉）。
+    # R9 行为变化面：limitup 路径不再跑 market_scan 战法（dragon_head/low_absorption/platform_breakout/
+    # reverse_package/pattern_reversal 从"可能命中"变"永不命中"——涨停股本不该命中非涨停战法，方向对）。
+    if funnel_type not in STRATEGIES_BY_FUNNEL_TYPE:
+        return [{
+            "strategy_code": "none",
+            "note": f"未知 funnel_type={funnel_type}（必填 limitup|market_scan）",
+            "strategy_score": 0, "strategy": "无符合条件标的", "factors": {},
+        }]
+    funnel_codes = set(STRATEGIES_BY_FUNNEL_TYPE[funnel_type])
+    funnel_registry = [cfg for cfg in STRATEGY_REGISTRY if cfg.code in funnel_codes]
     primary_codes, _ = get_strategies_for_weather(weather_state)
+    primary_codes = [c for c in primary_codes if c in funnel_codes]  # T11: 只本 funnel_type
     # 天气推荐集合（软标注）——用于在候选上标 weather_recommended=True/False
     recommendation = get_weather_recommendation(weather_state)
 
@@ -501,16 +531,29 @@ def score_candidates(
         # S086 R7：从 pool_item_map 构造 ctx.pool_item；derived 走调度器统一 fallback
         pool_item = _prepare_pool_item(pool_item_map, code)
         derived = _prepare_derived(None, code)
+        # S094 T10：market_scan 分支构造 market_scan_ctx（4 战法读 PatternScan 始生效，R6）
+        market_scan_ctx = None
+        if funnel_type == "market_scan":
+            _pat = cand.get("pattern")
+            market_scan_ctx = {
+                "pattern": _pat,
+                "sector_rank": cand.get("sector_rank"),
+                "rel_strength_vs_sector": getattr(_pat, "relative_strength", None) if _pat is not None else None,
+            }
         ctx = StrategyContext(
             code=code, gene=gene, pool_item=pool_item,
             indicators=None, derived=derived, weather_state=weather_state,
+            market_scan_ctx=market_scan_ctx,
         )
-        # dispatch_match 跑全部 12 战法 → 只返回命中的 signals
+        # S094 T11：dispatch_match 跑 funnel_type 过滤后的 registry → 只返回命中的 signals
         try:
-            signals = dispatch_match(ctx, STRATEGY_REGISTRY)
+            signals = dispatch_match(ctx, funnel_registry)
             matched_codes = {s.strategy_code for s in signals}
+            # S094 R4：strategy_code → signal 映射，供 scored 保留 volume_signal
+            sig_by_code = {s.strategy_code: s for s in signals}
         except Exception:  # noqa: BLE001 - match 失败按"不命中"处理，不阻断整体打分
             matched_codes = set()
+            sig_by_code = {}
         for strat_code in primary_codes:
             cfg = get_strategy_config(strat_code)
             if cfg is None:
@@ -519,6 +562,11 @@ def score_candidates(
             # grill Q6 match 过滤：仅对 dispatch 命中的战法打分（matched_codes 即过滤结果）
             if strat_code not in matched_codes:
                 continue
+            # S094 R27: market_scan check_quality 闸前移（硬剔除，不丢 S075 底线）
+            if funnel_type == "market_scan":
+                market_data = _build_market_data(cand.get("pattern"), cand)
+                if not passes_hard_standards(check_quality_standards({"code": code}, strat_code, market_data)):
+                    continue
             score, breakdown = compute_strategy_score(factors, cfg.weight_set)
             # S073 §9.4 游资画像修饰（画像未建→modifier 1.0 不扣分，标 risk_label）
             seat_risk = None
@@ -528,15 +576,24 @@ def score_candidates(
                     score = round(score * seat_risk.score_modifier, 4)
                 except Exception:
                     seat_risk = None
+            # S094 R4/R12: 从 signal 取 volume_signal + confidence + signal_strength
+            # （per-strategy 量能/置信下沉 match 层产，复用 dispatch_match 不派生 strategy_score/100）
+            _sig = sig_by_code.get(strat_code)
+            _volume_signal = getattr(_sig, "volume_signal", None) if _sig else None
+            _confidence = _sig.confidence if _sig else None  # S094 R12/T15
+            _signal_strength = _sig.signal_strength if _sig else None
             scored.append({
                 **cand,
                 "strategy_code": cfg.code,
                 "strategy_name": cfg.name,
                 "strategy_score": score,
                 "score_breakdown": breakdown,
+                "confidence": _confidence,  # S094 R12: 复用 dispatch_match compute_confidence（不派生 strategy_score/100）
+                "signal_strength": _signal_strength,
                 "funnel_type": cfg.funnel_type,
                 "position_params": dataclasses.asdict(cfg.position_params),
                 "weather_recommended": strat_code in recommendation,  # grill Q7：天气推荐标注（软标注）
+                "volume_signal": _volume_signal,  # S094 R4：per-strategy 量能信号（None=未计算/涨停 pipeline 降级）
                 "hot_money_seat_risk": (
                     {
                         "day_trip_ratio": seat_risk.day_trip_ratio,

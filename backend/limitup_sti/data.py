@@ -143,8 +143,8 @@ def save_result(result: STIResult) -> None:
                 dimension_advance_decline_ratio, dimension_promotion_rate,
                 dimension_prev_zt_performance, dimension_max_boards,
                 market_factor, confidence, source_ok,
-                change_from_yesterday, data_updated, raw_break_rate
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                change_from_yesterday, data_updated, raw_break_rate, zt_real
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 result.date,
                 result.score,
@@ -155,6 +155,7 @@ def save_result(result: STIResult) -> None:
                 round(result.change_from_yesterday, 2) if result.change_from_yesterday is not None else None,
                 result.data_updated,
                 result.raw_break_rate,
+                result.zt_real,
             ),
         )
         db.commit()

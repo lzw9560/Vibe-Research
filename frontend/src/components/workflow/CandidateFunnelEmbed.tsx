@@ -4,7 +4,7 @@
 // 同图显 R1/R2/R3 + scored（漂移徽标，不臆造串联 R3→scored）；activeStrategy 不再换候选宇宙
 
 import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
-import type { FunnelLayer } from "@/lib/candidates";
+import type { FunnelLayer, DiagnosisCard } from "@/lib/candidates";
 import type { ScoredCandidate } from "@/lib/api";
 
 interface CandidateFunnelEmbedProps {
@@ -12,6 +12,10 @@ interface CandidateFunnelEmbedProps {
   onPick: (code: string) => void;
   snapshotLayers?: FunnelLayer[];
   scoredCandidates?: ScoredCandidate[];
+  /** S094 T17/R28：briefing 透传的 market_scan_scored（非涨停 pipeline）。 */
+  marketScanScored?: ScoredCandidate[];
+  /** S094 T25：briefing 透传的 final_candidates（定稿节点，R25 定稿失配修复）。 */
+  finalCandidates?: DiagnosisCard[];
   ztPoolSize?: number;
 }
 
@@ -20,11 +24,15 @@ export default function CandidateFunnelEmbed({
   onPick,
   snapshotLayers,
   scoredCandidates,
+  marketScanScored,
+  finalCandidates,
   ztPoolSize,
 }: CandidateFunnelEmbedProps) {
   if (
     (!snapshotLayers || snapshotLayers.length === 0) &&
-    (!scoredCandidates || scoredCandidates.length === 0)
+    (!scoredCandidates || scoredCandidates.length === 0) &&
+    (!marketScanScored || marketScanScored.length === 0) &&
+    (!finalCandidates || finalCandidates.length === 0)
   ) {
     return null;
   }
@@ -33,6 +41,8 @@ export default function CandidateFunnelEmbed({
       funnelLayers={snapshotLayers}
       scoredCandidatesCount={scoredCandidates?.length}
       screenerPoolSize={ztPoolSize}
+      nonLimitupCandidates={marketScanScored}
+      finalCandidates={finalCandidates}
       mode="full"
       date={date}
       onPick={onPick}

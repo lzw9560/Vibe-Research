@@ -1,5 +1,6 @@
 // S087 B4：盘前②战法匹配步——票×战法命中 matrix + 按战法分列双视图。
-// 数据源：usePreMarketBriefing().scored_candidates（每候选×每命中战法一行，ScoredCandidate）。
+// S094 R24：涨停/非涨停分区（②涨停战法 scored_candidates + ⑦非涨停战法 market_scan_scored 两 region）。
+// 数据源：usePreMarketBriefing().scored_candidates + market_scan_scored。
 // R6：双视图切换（默认 matrix，可切按战法分列）。R13：AskAiButton。
 
 import { useState } from "react";
@@ -39,23 +40,24 @@ function groupByStrategy(items: ScoredCandidate[]): Map<string, { name: string; 
 
 export function StrategyMatchMatrix({ date }: Props) {
   const { data: briefing } = usePreMarketBriefing(date);
-  const scored = briefing?.scored_candidates ?? [];
+  // S094 R24：涨停 scored_candidates + 非涨停 market_scan_scored 分两 region
+  const limitup = briefing?.scored_candidates ?? [];
+  const marketScan = briefing?.market_scan_scored ?? [];
   const [view, setView] = useState<"matrix" | "byStrategy">("matrix");
 
-  const byCode = groupByCode(scored);
-  const byStrategy = groupByStrategy(scored);
-  const codes = Array.from(byCode.entries()).sort((a, b) => b[1].topScore - a[1].topScore);
-  const strats = Array.from(byStrategy.entries());
+  const limitupCodes = groupByCode(limitup);
+  const marketScanCodes = groupByCode(marketScan);
+  const allStrats = groupByStrategy([...limitup, ...marketScan]);
 
   const askAiContext = [
     `当前页面：战法匹配（${view === "matrix" ? "票×战法 matrix" : "按战法分列"}）`,
-    `命中记录：${scored.length} 条 | 候选 ${byCode.size} 只 | 战法 ${byStrategy.size} 个`,
+    `涨停战法 ${limitup.length} 条（${limitupCodes.size} 只候选）| 非涨停战法 ${marketScan.length} 条（${marketScanCodes.size} 只）| 共 ${allStrats.size} 战法`,
     view === "matrix"
-      ? `按票 top10：${codes.slice(0, 10).map(([c, e]) => `${c}(${e.hits.map((h) => h.strategy_code).join("+")})`).join("、")}`
-      : `按战法：${strats.map(([s, e]) => `${s}:${e.candidates.length}`).join("、")}`,
+      ? `涨停 top10：${Array.from(limitupCodes.entries()).sort((a, b) => b[1].topScore - a[1].topScore).slice(0, 10).map(([c, e]) => `${c}(${e.hits.map((h) => h.strategy_code).join("+")})`).join("、")}`
+      : `按战法：${Array.from(allStrats.entries()).map(([s, e]) => `${s}:${e.candidates.length}`).join("、")}`,
   ].join("\n");
 
-  if (scored.length === 0) {
+  if (limitup.length === 0 && marketScan.length === 0) {
     return (
       <GlassCard className="p-4">
         <p className="text-sm text-muted-foreground">暂无战法命中数据（briefing 未 done 或无候选），点"重新跑"触发采集</p>
@@ -74,9 +76,44 @@ export function StrategyMatchMatrix({ date }: Props) {
         </Button>
       </div>
 
+      {limitup.length > 0 && (
+        <ScoredRegion title="涨停战法" scored={limitup} view={view} />
+      )}
+      {marketScan.length > 0 && (
+        <ScoredRegion title="非涨停战法" subtitle="§44 未验证" scored={marketScan} view={view} />
+      )}
+
+      <AskAiButton context={askAiContext} />
+    </div>
+  );
+}
+
+/** S094 R24：单个 pipeline 的战法命中区（matrix / byStrategy 双视图）。涨停/非涨停各一实例。 */
+function ScoredRegion({
+  title,
+  subtitle,
+  scored,
+  view,
+}: {
+  title: string;
+  subtitle?: string;
+  scored: ScoredCandidate[];
+  view: "matrix" | "byStrategy";
+}) {
+  const byCode = groupByCode(scored);
+  const byStrategy = groupByStrategy(scored);
+  const codes = Array.from(byCode.entries()).sort((a, b) => b[1].topScore - a[1].topScore);
+  const strats = Array.from(byStrategy.entries());
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h3 className="font-semibold">{title}</h3>
+        {subtitle && <span className="rounded bg-muted/30 px-1 text-[10px] text-muted-foreground">{subtitle}</span>}
+        <Badge variant="info">{byCode.size} 只候选</Badge>
+      </div>
       {view === "matrix" ? (
         <GlassCard className="p-4">
-          <h3 className="mb-1 font-semibold">票×战法命中 matrix（{byCode.size} 只候选）</h3>
           <p className="mb-3 text-xs text-muted-foreground/60">战法后"分N" = 策略分 strategy_score（0-100，权重集加权），非 confidence</p>
           <div className="space-y-1">
             {codes.map(([code, e]) => (
@@ -95,7 +132,7 @@ export function StrategyMatchMatrix({ date }: Props) {
           </div>
         </GlassCard>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {strats.map(([stratCode, e]) => (
             <GlassCard key={stratCode} className="p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -114,8 +151,6 @@ export function StrategyMatchMatrix({ date }: Props) {
           ))}
         </div>
       )}
-
-      <AskAiButton context={askAiContext} />
     </div>
   );
 }

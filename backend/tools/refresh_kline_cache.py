@@ -25,6 +25,8 @@ FIELDS = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
 
 # 每 RELOGIN_BATCH 股 re-login 一次（BaoStock 长会话超时返空）
 RELOGIN_BATCH = 150
+# T21 R20：新股全量拉取起点（扩容到非涨停股时，cache 无此 code 的从此日起拉）
+FULL_START = "2025-12-25"
 
 
 def _bs_code(code: str) -> str:
@@ -74,12 +76,18 @@ def _fetch_since(bs_code: str, start_date: str, end_date: str, bs) -> list[dict]
 
 
 def main(max_stocks: int | None = None) -> int:
-    if not CACHE.exists():
-        print(f"[refresh] cache 不存在: {CACHE}")
-        return 1
-    cache: dict[str, list[dict]] = json.loads(CACHE.read_bytes())
+    # T21 R20：cache 不存在时建空（首次全 A 扩容），不再 return 1
+    cache: dict[str, list[dict]] = (
+        json.loads(CACHE.read_bytes()) if CACHE.exists() else {}
+    )
     end_date = _last_trading_date()
-    codes = list(cache.keys())
+    # T21 R20：universe = load_industry_map() 全 A（~5540），非增量 list(cache.keys())
+    try:
+        from strategies.pattern_scan import load_industry_map
+        codes = list(load_industry_map().keys())
+    except Exception as e:
+        print(f"[refresh] load_industry_map 失败，降级增量 list(cache.keys()): {e}")
+        codes = list(cache.keys())
     if max_stocks:
         codes = codes[:max_stocks]
 
@@ -99,6 +107,7 @@ def main(max_stocks: int | None = None) -> int:
 
     updated = 0
     skipped = 0
+    new_codes_added = 0
     new_bars_total = 0
     t0 = time.time()
 
@@ -114,12 +123,17 @@ def main(max_stocks: int | None = None) -> int:
                     break
                 print(f"[refresh] re-login @ {i}/{len(codes)} elapsed={time.time()-t0:.0f}s")
 
-            bars = cache[code]
-            newest = bars[-1]["date"] if bars else "2025-12-25"
-            if newest >= end_date:
-                skipped += 1
-                continue
-            start = (datetime.strptime(newest, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            existing = cache.get(code)
+            if existing:
+                newest = existing[-1]["date"] if existing else FULL_START
+                if newest >= end_date:
+                    skipped += 1
+                    continue
+                start = (datetime.strptime(newest, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            else:
+                # T21 R20：新股（非涨停股扩容）——cache 无此 code，从 FULL_START 全量拉
+                newest = ""
+                start = FULL_START
             bsc = _bs_code(code)
             if not bsc:
                 continue
@@ -131,16 +145,22 @@ def main(max_stocks: int | None = None) -> int:
                 new_bars = _fetch_since(bsc, start, end_date, bs)
             if not new_bars:
                 continue
-            # 只 append 严格新于 newest 的 bar
-            appended = [b for b in new_bars if b["date"] > newest]
-            if appended:
-                cache[code] = bars + appended
-                new_bars_total += len(appended)
-                updated += 1
+            if existing:
+                # 只 append 严格新于 newest 的 bar
+                appended = [b for b in new_bars if b["date"] > newest]
+                if appended:
+                    cache[code] = existing + appended
+                    new_bars_total += len(appended)
+                    updated += 1
+            else:
+                # T21 R20：新股全量插入
+                cache[code] = new_bars
+                new_bars_total += len(new_bars)
+                new_codes_added += 1
 
             if (i + 1) % 100 == 0:
-                print(f"[refresh] {i+1}/{len(codes)} updated={updated} new_bars={new_bars_total} "
-                      f"elapsed={time.time()-t0:.0f}s", flush=True)
+                print(f"[refresh] {i+1}/{len(codes)} updated={updated} new={new_codes_added} "
+                      f"new_bars={new_bars_total} elapsed={time.time()-t0:.0f}s", flush=True)
     finally:
         try:
             bs.logout()
@@ -152,9 +172,10 @@ def main(max_stocks: int | None = None) -> int:
     tmp.write_bytes(json.dumps(cache, ensure_ascii=False).encode("utf-8"))
     tmp.replace(CACHE)
 
-    print(f"[refresh] done: {updated}/{len(codes)} updated, {new_bars_total} new bars, "
-          f"{skipped} already-fresh, elapsed={time.time()-t0:.0f}s")
-    print(f"[refresh] end_date={end_date} newest now={max((b['date'] for c in cache.values() for b in c[-1:]), default='?')}")
+    print(f"[refresh] done: {updated}/{len(codes)} updated, {new_codes_added} new codes, "
+          f"{new_bars_total} new bars, {skipped} already-fresh, elapsed={time.time()-t0:.0f}s")
+    print(f"[refresh] end_date={end_date} cache_size={len(cache)} "
+          f"newest now={max((b['date'] for c in cache.values() for b in c[-1:]), default='?')}")
     return 0
 
 
