@@ -39,7 +39,7 @@ function groupByStrategy(items: ScoredCandidate[]): Map<string, { name: string; 
 }
 
 export function StrategyMatchMatrix({ date }: Props) {
-  const { data: briefing } = usePreMarketBriefing(date);
+  const { data: briefing, isLoading: briefingLoading } = usePreMarketBriefing(date);
   // S094 R24：涨停 scored_candidates + 非涨停 market_scan_scored 分两 region
   const limitup = briefing?.scored_candidates ?? [];
   const marketScan = briefing?.market_scan_scored ?? [];
@@ -53,14 +53,21 @@ export function StrategyMatchMatrix({ date }: Props) {
     `当前页面：战法匹配（${view === "matrix" ? "票×战法 matrix" : "按战法分列"}）`,
     `涨停战法 ${limitup.length} 条（${limitupCodes.size} 只候选）| 非涨停战法 ${marketScan.length} 条（${marketScanCodes.size} 只）| 共 ${allStrats.size} 战法`,
     view === "matrix"
-      ? `涨停 top10：${Array.from(limitupCodes.entries()).sort((a, b) => b[1].topScore - a[1].topScore).slice(0, 10).map(([c, e]) => `${c}(${e.hits.map((h) => h.strategy_code).join("+")})`).join("、")}`
+      ? `涨停 top10：${Array.from(limitupCodes.entries()).sort((a, b) => b[1].topScore - a[1].topScore).slice(0, 10).map(([c, e]) => `${c}(${e.hits.map((h) => h.strategy_code).join("+")})`).join("、")} | 非涨停 top10：${Array.from(marketScanCodes.entries()).sort((a, b) => b[1].topScore - a[1].topScore).slice(0, 10).map(([c, e]) => `${c}(${e.hits.map((h) => h.strategy_code).join("+")})`).join("、")}`
       : `按战法：${Array.from(allStrats.entries()).map(([s, e]) => `${s}:${e.candidates.length}`).join("、")}`,
   ].join("\n");
 
+  if (briefingLoading) {
+    return (
+      <GlassCard className="p-4">
+        <p className="text-sm text-muted-foreground">战法匹配加载中…</p>
+      </GlassCard>
+    );
+  }
   if (limitup.length === 0 && marketScan.length === 0) {
     return (
       <GlassCard className="p-4">
-        <p className="text-sm text-muted-foreground">暂无战法命中数据（briefing 未 done 或无候选），点"重新跑"触发采集</p>
+        <p className="text-sm text-muted-foreground">暂无战法命中数据（briefing 未 done 或无候选），点右上角刷新按钮触发采集</p>
       </GlassCard>
     );
   }

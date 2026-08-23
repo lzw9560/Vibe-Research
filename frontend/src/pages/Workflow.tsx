@@ -356,7 +356,7 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
   const cv = useCrossValidationGroups(F, forward);
   // advisory 仓位推荐摘要
   const { data: advisory } = useQuery({
-    queryKey: ["advisory-summary", F ?? "latest"],
+    queryKey: ["advisory-summary"],  // S094 audit: advisory 是 latest（backend /advisory/summary 不支持 date），非 per-F；旧 key 带 F 虚假暗示按 F 缓存
     queryFn: () => api.advisorySummary(5),
     staleTime: 5 * 60_000,
     retry: false,

@@ -31,10 +31,11 @@ try:
     from limitup_sti.data import run_initial_migrations
     run_initial_migrations()
     # S063 T1：sti_intraday 盘中采样表迁移（幂等，已应用则跳过）
+    from pathlib import Path as _Path
+    from migrations import MigrationManager as _MM
+    from config import STI_TIMELINE_DB_PATH as _STI_DB
+    # S063 T1：sti_intraday 盘中采样表迁移（幂等，已应用则跳过）——独立 try，失败不影响 weather/raw_break_rate/zt_real（audit: 原全嵌在 sti_intraday try 内,inaday 失败则全跳过）
     try:
-        from pathlib import Path as _Path
-        from migrations import MigrationManager as _MM
-        from config import STI_TIMELINE_DB_PATH as _STI_DB
         _intraday_sql = (
             _Path(__file__).resolve().parent.parent
             / "migrations" / "sti" / "20260813-001_create_sti_intraday.sql"
@@ -47,41 +48,41 @@ try:
             {"version": "20260813-001", "name": "create_sti_intraday", "sql": _intraday_sql},
             {"version": "20260813-002", "name": "add_sti_intraday_zone", "sql": _intraday_zone_sql},
         ])
-        # S065：weather_history 持久化（幂等，W1 证据层前置）
-        try:
-            _weather_sql = (
-                _Path(__file__).resolve().parent.parent
-                / "migrations" / "sti" / "20260813-003_create_weather_history.sql"
-            ).read_text(encoding="utf-8")
-            _MM(db_path=_STI_DB).upgrade([
-                {"version": "20260813-003", "name": "create_weather_history", "sql": _weather_sql},
-            ])
-        except Exception as _we:
-            _logger.warning("[limitup_sti] weather_history 迁移失败（不影响主流程）: %s", _we)
-        # S063 T4 补齐：sti_timeline 加 raw_break_rate 列（盘前简报 T-1 炸板率直读）
-        try:
-            _raw_br_sql = (
-                _Path(__file__).resolve().parent.parent
-                / "migrations" / "sti" / "20260817-001_add_raw_break_rate.sql"
-            ).read_text(encoding="utf-8")
-            _MM(db_path=_STI_DB).upgrade([
-                {"version": "20260817-001", "name": "add_raw_break_rate", "sql": _raw_br_sql},
-            ])
-        except Exception as _re:
-            _logger.warning("[limitup_sti] raw_break_rate 迁移失败（不影响主流程）: %s", _re)
-        # T18（S094 S4）：sti_timeline 加 zt_real 列（真实涨停数，akshare legu 源）
-        try:
-            _zt_real_sql = (
-                _Path(__file__).resolve().parent.parent
-                / "migrations" / "sti" / "20260823-001_add_zt_real.sql"
-            ).read_text(encoding="utf-8")
-            _MM(db_path=_STI_DB).upgrade([
-                {"version": "20260823-001", "name": "add_zt_real", "sql": _zt_real_sql},
-            ])
-        except Exception as _ze:
-            _logger.warning("[limitup_sti] zt_real 迁移失败（不影响主流程）: %s", _ze)
     except Exception as _e:
         _logger.warning("[limitup_sti] sti_intraday 迁移失败（不影响主流程）: %s", _e)
+    # S065：weather_history 持久化（幂等，W1 证据层前置）——独立 try
+    try:
+        _weather_sql = (
+            _Path(__file__).resolve().parent.parent
+            / "migrations" / "sti" / "20260813-003_create_weather_history.sql"
+        ).read_text(encoding="utf-8")
+        _MM(db_path=_STI_DB).upgrade([
+            {"version": "20260813-003", "name": "create_weather_history", "sql": _weather_sql},
+        ])
+    except Exception as _we:
+        _logger.warning("[limitup_sti] weather_history 迁移失败（不影响主流程）: %s", _we)
+    # S063 T4 补齐：sti_timeline 加 raw_break_rate 列（盘前简报 T-1 炸板率直读）——独立 try
+    try:
+        _raw_br_sql = (
+            _Path(__file__).resolve().parent.parent
+            / "migrations" / "sti" / "20260817-001_add_raw_break_rate.sql"
+        ).read_text(encoding="utf-8")
+        _MM(db_path=_STI_DB).upgrade([
+            {"version": "20260817-001", "name": "add_raw_break_rate", "sql": _raw_br_sql},
+        ])
+    except Exception as _re:
+        _logger.warning("[limitup_sti] raw_break_rate 迁移失败（不影响主流程）: %s", _re)
+    # T18（S094 S4）：sti_timeline 加 zt_real 列（真实涨停数，akshare legu 源）——独立 try
+    try:
+        _zt_real_sql = (
+            _Path(__file__).resolve().parent.parent
+            / "migrations" / "sti" / "20260823-001_add_zt_real.sql"
+        ).read_text(encoding="utf-8")
+        _MM(db_path=_STI_DB).upgrade([
+            {"version": "20260823-001", "name": "add_zt_real", "sql": _zt_real_sql},
+        ])
+    except Exception as _ze:
+        _logger.warning("[limitup_sti] zt_real 迁移失败（不影响主流程）: %s", _ze)
 except Exception as e:
     _logger.warning("[limitup_sti] 自动迁移失败（不影响主流程）: %s", e)
 

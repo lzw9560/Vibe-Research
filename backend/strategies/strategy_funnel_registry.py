@@ -608,7 +608,7 @@ def score_candidates(
             _confidence = _sig.confidence if _sig else None  # S094 R12/T15
             _signal_strength = _sig.signal_strength if _sig else None
             scored.append({
-                **cand,
+                **{k: v for k, v in cand.items() if k not in ("bars", "pattern")},  # S094 audit: strip heavy bars/pattern（不进 briefing JSON，前端 NonLimitupLane 只用 code/name/sector/strategy_score）
                 "strategy_code": cfg.code,
                 "strategy_name": cfg.name,
                 "strategy_score": score,

@@ -29,10 +29,13 @@ export function P2RiskPanel({ briefing }: P2RiskPanelProps) {
   const checklist = briefing.execution_checklist ?? [];
   const disclaimer = briefing.param_disclaimer;
 
-  // 无 P2 数据（旧快照或未采集）→ 不渲染
+  // S096 audit fix: guard 加 p2_fired_rule/p2_factors——旧 guard 漏判 S096 字段，
+  // 部分快照/缓存仅含 fired_rule 时整组件 return null（S096 完整链静默消失）
   if (
     !phase &&
     !cap &&
+    !briefing.p2_fired_rule &&
+    !briefing.p2_factors &&
     Object.keys(seatFlags).length === 0 &&
     checklist.length === 0
   ) {

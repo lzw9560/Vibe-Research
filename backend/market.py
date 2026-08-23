@@ -38,6 +38,16 @@ def _num(v) -> int:
 
 
 def _sentiment(date: str | None = None) -> dict:
+    """市场情绪（带 TTL 缓存，复用 _cached 5min）。
+
+    S094 audit fix：防 latest 日双调用打两次 akshare——_emotion step8（T18）调 _sentiment(resolved)
+    + _execute_sti_post_market L678 调 _sentiment(target)，同 15:30 run 内秒级双调。缓存后第二次命中。
+    _cached valid=bool 默认：populated 缓存，空 {}（非 latest P0-1 返空）不缓存（重跑 P0-1 guard 便宜无 akshare）。
+    """
+    return _cached(f"sentiment:{date or 'latest'}", lambda: _sentiment_uncached(date))
+
+
+def _sentiment_uncached(date: str | None = None) -> dict:
     """市场情绪：涨跌家数/涨停跌停/活跃度 + 大盘宽度、题材投机（客观数据机械分档）。
 
     Args:
