@@ -115,12 +115,13 @@ class TestExtractP2Fields:
         assert extracted["position_cap_tier"] is None
 
     def test_extract_all_p2_keys_covered(self):
-        """P2 字段 7 个 key 全覆盖。"""
+        """P2 字段 9 个 key 全覆盖（S096 加 p2_factors/p2_fired_rule）。"""
         p2 = _make_p2_config()
         results = [_make_factor_result("limitup_screener", p2)]
         extracted = _extract_p2_fields(results)
         expected_keys = {
             "market_phase", "market_phase_cap", "position_cap_tier",
+            "p2_factors", "p2_fired_rule",  # S096：P2 现象判据
             "seat_risk_flags", "data_missing_flags", "execution_checklist",
             "param_disclaimer",
         }
