@@ -35,7 +35,8 @@ export default function CandidateFunnelEmbed({
     (!snapshotLayers || snapshotLayers.length === 0) &&
     (!scoredCandidates || scoredCandidates.length === 0) &&
     (!marketScanScored || marketScanScored.length === 0) &&
-    (!finalCandidates || finalCandidates.length === 0)
+    (!finalCandidates || finalCandidates.length === 0) &&
+    !ztPoolSize  // S094 audit LOW: zt_count>0 时显涨停股池根节点,四数组空不藏
   ) {
     return null;
   }

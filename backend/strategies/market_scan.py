@@ -214,4 +214,5 @@ def gather_non_limitup_candidates(
         "count": len(scored),
         "sectors_scanned": len(top),
         "candidates_input": len(candidates),
+        "note": "§44 Phase 2 未验证因子（relative_strength/ma_bullish/volume_signal/sector_strength），briefing 透传；数据本地 baostock",  # S094 audit LOW: 加 note 对齐端点 shape
     }

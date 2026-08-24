@@ -88,6 +88,10 @@ def main(max_stocks: int | None = None) -> int:
     except Exception as e:
         print(f"[refresh] load_industry_map 失败，降级增量 list(cache.keys()): {e}")
         codes = list(cache.keys())
+    # S094 audit LOW: universe 空(load_industry_map 返空 + cache 空,baostock login 失败?)→ 中止不写回,避免伪装成功
+    if not codes:
+        print(f"[refresh] universe 空(load_industry_map+cache 均空),中止不写回(防伪装成功)")
+        return 1
     if max_stocks:
         codes = codes[:max_stocks]
 
