@@ -1,11 +1,11 @@
 // S073 选股 pipeline 可视化（简洁：统一节点 + 箭头 + 分叉，点击展开详情）
-// 涨停股池 root → 板块轮动 → 分叉（涨停叉 lane + 非涨停叉 placeholder lane）
+// 涨停股池 root → 板块轮动 → 双叉（segmented control 切换，一次只显一叉）
+// S094 R22：双叉从"上下分区同显"改为"segmented control 切换"——减页面长度，专注当前 lane
 // §44 诚实：scored 不接 R3 → 虚线漂移；非涨停 Phase 2 → placeholder；STI/天气去噪不展示
 import { useState } from "react";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
 import { useMultiRotation } from "@/lib/query/strategy";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
-import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
 import { NonLimitupLane } from "./NonLimitupPlaceholder";
 import type { FunnelLayer, FunnelResult, DiagnosisCard } from "@/lib/candidates";
 import type { ScoredCandidate } from "@/lib/api";
@@ -26,21 +26,33 @@ interface Props {
   nonLimitupCandidates?: ScoredCandidate[];
   date?: string;
   mode?: "full" | "funnel-only";
+  /** S094 §11 附录 A1：双叉切换提升到 ForwardTabSection 后，lane prop 控制显哪叉。
+   *  fork 兼容旧调用（作初始值），lane 优先；默认涨停。 */
+  lane?: "limitup" | "non-limitup";
+  /** S094 R22 旧 fork prop 兼容——"limitup"/"non-limitup" 映射 lane；"both" 忽略（默认涨停）。 */
   fork?: "limitup" | "non-limitup" | "both";
   onPick?: (code: string) => void;
   rerunHandlers?: RerunHandlers;
   showHonestyBanner?: boolean;
+  /** S094 附录 A2：板块轮动由前置共享区统一渲染时传 true（默认），本组件不再渲染 SectorRotationNode。
+   *  避免双叉切换时前置共享区 + SelectionPipeline 内部两处重复渲染同一数据。 */
+  sharedSectorRotation?: boolean;
 }
+
+type ActiveLane = "limitup" | "non-limitup";
 
 // 统一节点样式（实线/虚线两态，颜色按语义）
 const NODE = "rounded-lg border border-border/40 bg-card/40 p-3";
-const NODE_DASHED = "rounded-lg border border-dashed p-3";
 
 export function SelectionPipeline({
-  funnelResult, funnelLayers, finalCandidates, scoredCandidatesCount,
-  screenerPoolSize, nonLimitupCandidates, date, mode = "funnel-only", fork = "both", onPick, rerunHandlers,
+  funnelResult, funnelLayers, finalCandidates,
+  screenerPoolSize, nonLimitupCandidates, date, lane, fork, onPick, rerunHandlers,
   showHonestyBanner = true,
+  sharedSectorRotation = true,
 }: Props) {
+  // S094 §11 附录 A1：lane prop 优先；fork 兼容旧调用作 fallback；默认涨停。
+  // 内部不再有 LaneSwitcher + activeLane state——切换由父组件（ForwardTabSection）控制。
+  const activeLane: ActiveLane = lane ?? (fork === "non-limitup" ? "non-limitup" : "limitup");
   const layers = funnelResult?.layers ?? funnelLayers ?? [];
   const finals = funnelResult?.final_candidates ?? finalCandidates ?? [];
   const r1 = layers.find((l) => l.layer_id === "R1");
@@ -51,57 +63,51 @@ export function SelectionPipeline({
   const rootSub = hasZtTotal
     ? "今日涨停 · screener 选 T+1"
     : "今日涨停数未取得 · 显 R1 输入（非涨停总数）";
-  const hasScored = scoredCandidatesCount != null;
-  const showLimitup = fork !== "non-limitup";
-  const showNonLimitup = fork !== "limitup";
-  const bothLanes = showLimitup && showNonLimitup;
 
   return (
     <div className="space-y-1.5">
       {showHonestyBanner !== false && <HonestyBanner />}
 
+      {/* S094 §11 附录 A1：LaneSwitcher 已移除——切换由父组件 ForwardTabSection 的 ForwardLaneSwitcher 控制 */}
+
+      {/* 共享节点：涨停股池（两模式都显，不在切换范围） */}
       <PipelineNode label="涨停股池" sub={rootSub} count={rootSize} />
       <ArrowDown />
-      {date && <SectorRotationNode date={date} />}
-      {date && <ArrowDown label={bothLanes ? "非涨停 ↓" : undefined} />}
-      {!date && <ArrowDown label={bothLanes ? "非涨停 ↓" : undefined} />}
+      {/* S094 附录 A2：板块轮动由前置共享区统一渲染（sharedSectorRotation=true），
+           本组件不再渲染 SectorRotationNode，避免双叉切换时两处重复 */}
+      {!sharedSectorRotation && date && <SectorRotationNode date={date} />}
+      {!sharedSectorRotation && date && <ArrowDown />}
+      {!sharedSectorRotation && !date && <ArrowDown />}
+      {sharedSectorRotation && <ArrowDown />}
 
-      {/* S094 R22：双 pipeline 上下分区（涨停叉主展开 / 非涨停叉折叠）——旧 grid-cols-2 side-by-side 改 vertical */}
-      <div className={bothLanes ? "space-y-3" : "space-y-1.5"}>
-        {showLimitup && (
-          <div className="space-y-1.5">
-            <LaneHeader title="涨停叉" sub="已实现" />
-            {layers.map((layer, i) => (
-              <LayerStep
-                key={layer.layer_id}
-                layer={layer}
-                next={layers[i + 1]}
-                onPick={onPick}
-                rerunHandlers={rerunHandlers}
-                date={date}
-              />
-            ))}
-            <ArrowDown />
-            <FinalCandidatesNode finals={finals} />
-            <ArrowDown label="战法分" />
-            {mode === "full" && hasScored ? (
-              <ScoredBranch count={scoredCandidatesCount!} />
-            ) : (
-              <ScoredDegraded />
-            )}
-            <ArrowDown label="风控" />
-            <RiskNode />
-          </div>
-        )}
-        {showNonLimitup && (
-          <CollapsibleFold title="非涨停叉" subtitle="板块领涨 · K线形态 · 非涨停战法（§44 未验证）" defaultOpen={false}>
-            <NonLimitupLane date={date} candidates={nonLimitupCandidates} />
-          </CollapsibleFold>
-        )}
-      </div>
+      {/* S094 §11 附录 A1：根据 lane prop 显对应叉——一次只显一叉，切换由父组件控制 */}
+      {activeLane === "limitup" ? (
+        <div className="space-y-1.5">
+          <LaneHeader title="涨停叉" sub="已实现" />
+          {layers.map((layer, i) => (
+            <LayerStep
+              key={layer.layer_id}
+              layer={layer}
+              next={layers[i + 1]}
+              onPick={onPick}
+              rerunHandlers={rerunHandlers}
+              date={date}
+            />
+          ))}
+          <ArrowDown />
+          <FinalCandidatesNode finals={finals} />
+          {/* S094 §11 附录 A2：涨停叉尾部战法分节点已移除——②战法匹配由 StrategySubPipelineView 在外部渲染（ForwardTabSection 涨停叉②） */}
+          {/* S094 §11 附录 A2：RiskNode 已移至后置共享区（PostSharedRegion 的 RiskAsymmetryCard） */}
+        </div>
+      ) : (
+        // 非涨停叉：NonLimitupLane 自管⑤⑥⑦⑧四节点结构（见 NonLimitupPlaceholder.tsx）
+        <NonLimitupLane date={date} candidates={nonLimitupCandidates} />
+      )}
     </div>
   );
 }
+
+// S094 §11 附录 A1：LaneSwitcher 已删除——双叉切换由父组件 ForwardTabSection 控制
 
 function PipelineNode({ label, sub, count }: { label: string; sub?: string; count?: number }) {
   return (
@@ -222,46 +228,8 @@ function SectorRotationNode({ date }: { date: string }) {
   );
 }
 
-function ScoredBranch({ count }: { count: number }) {
-  return (
-    <div className={`${NODE_DASHED} border-purple-500/40 bg-purple-500/5`}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-purple-300">战法分</span>
-        <span className="rounded bg-purple-500/20 px-1 text-[10px] text-purple-300">漂移</span>
-      </div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground">
-        {count} 只 · 不接 R3（数据链断）· §9.4 游资画像已接（画像未建降级）
-      </div>
-    </div>
-  );
-}
-
-function ScoredDegraded() {
-  return <div className={`${NODE_DASHED} border-muted/40 bg-muted/5 text-xs text-muted-foreground`}>战法分：未取得（仅盘前简报）</div>;
-}
-
-// 风控非对称节点（S071 参数，§44 无 validated edge → 风控是当前唯一盈利 lever：亏小赚大）
-function RiskNode() {
-  return (
-    <div className={`${NODE} border-amber-500/40 bg-amber-500/5`}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-amber-300">风控非对称</span>
-        <span className="rounded bg-amber-500/20 px-1 text-[10px] text-amber-300">唯一 lever</span>
-      </div>
-      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground sm:grid-cols-3">
-        <span>仓位 3% × 日历</span>
-        <span>止损 −4%</span>
-        <span>止盈 +8%</span>
-        <span>max 3 仓</span>
-        <span>max 持 3 日</span>
-        <span>R:R ≈ 1:2</span>
-      </div>
-      <div className="mt-1 text-[10px] text-amber-200/70">
-        §44 信号全无 validated edge → 盈利靠风控非对称（小仓+紧止损+非对称 R:R+短持），非信号
-      </div>
-    </div>
-  );
-}
+// S094 §11 附录 A2：ScoredBranch/ScoredDegraded/RiskNode 已删除——
+// ②战法匹配由 StrategySubPipelineView 渲染，风控移至后置共享区 PostSharedRegion
 
 function FunnelShrinkBar({ input, output }: { input: number; output: number }) {
   const ratio = input > 0 ? Math.max(output / input, 0.12) : 0.12;

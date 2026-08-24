@@ -17,6 +17,8 @@ interface CandidateFunnelEmbedProps {
   /** S094 T25：briefing 透传的 final_candidates（定稿节点，R25 定稿失配修复）。 */
   finalCandidates?: DiagnosisCard[];
   ztPoolSize?: number;
+  /** S094 附录 A2：板块轮动由前置共享区统一渲染时传 true（默认）——SelectionPipeline 内部不再渲染。 */
+  sharedSectorRotation?: boolean;
 }
 
 export default function CandidateFunnelEmbed({
@@ -27,6 +29,7 @@ export default function CandidateFunnelEmbed({
   marketScanScored,
   finalCandidates,
   ztPoolSize,
+  sharedSectorRotation = true,
 }: CandidateFunnelEmbedProps) {
   if (
     (!snapshotLayers || snapshotLayers.length === 0) &&
@@ -47,6 +50,7 @@ export default function CandidateFunnelEmbed({
       date={date}
       onPick={onPick}
       showHonestyBanner={false}
+      sharedSectorRotation={sharedSectorRotation}
     />
   );
 }

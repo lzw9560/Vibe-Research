@@ -22,14 +22,13 @@ import { useMarketClock } from "@/lib/useMarketClock";
 import { TaskStatusCard } from "@/components/workflow/TaskStatusCard";
 import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
 import CandidateFunnelEmbed from "@/components/workflow/CandidateFunnelEmbed";
-import { StrategyMatchMatrix } from "@/components/workflow/StrategyMatchMatrix";
 import { CrossValidationBadge } from "@/components/workflow/CrossValidationBadge";
 import { P2RiskPanel } from "@/components/workflow/P2RiskPanel";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
-import { T1Tab } from "@/components/workflow/T1Tab";
 import { ContextTab } from "@/components/workflow/ContextTab";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { FactorSection } from "@/components/workflow/FactorSection";
+import { StrategySubPipelineView } from "@/components/pipeline/StrategySubPipelineView";
+import { NonLimitupLane } from "@/components/pipeline/NonLimitupPlaceholder";
 import type { DateTripletResponse } from "@/lib/api";
 
 // 三视图组件懒加载（已有路由也懒加载，此处统一）
@@ -338,16 +337,20 @@ export default function Workflow() {
 }
 
 // ===========================================================================
-// S093 T14：前瞻 Tab pipeline（spec §3.B R4）+ 辅助折叠区（R5）。
-// ① 漏斗选股（CandidateFunnelEmbed，date=F）
-// ② 战法匹配（StrategyMatchMatrix，date=F）
-// ③ breakout 弱信号（PremarketSelectionSection，date=forward）
-// ④ 交叉验证徽章（useCrossValidationGroups(F, forward)）
-// 辅助折叠区：WeatherDecisionBar + P2RiskPanel + advisory + T1Tab + ContextTab
+// S094 附录 A：前瞻 Tab 双 pipeline 互斥切换重构。
+// 布局：前置共享区 → [涨停叉 | 非涨停叉] 切换（默认涨停）→ 当前叉内容 → 后置共享区
+// 前置共享区（辅助角色，只显一次）：板块轮动 · 语境(ContextTab) · 情绪天气(WeatherDecisionBar)
+// 涨停叉：① 涨停股池+漏斗 → ② 战法匹配（7战法分组视图）→ ③ breakout → ④ 交叉验证
+// 非涨停叉：⑤ 选股宇宙 → ⑥ K线形态 → ⑦ 非涨停战法分组视图 → ⑧ 候选终选
+// 后置共享区：风控非对称 + P2 仓位（advisory 摘要并入）
+// 删除（附录 A4）：FactorSection（因子漏斗）｜ advisory 仓位详情入口（并入后置共享区）｜ T1Tab ｜ "辅助决策" CollapsibleFold
+// 板块轮动只渲染一个实例（前置共享区）——SelectionPipeline 内部不渲染（sharedSectorRotation=true）
 // 数据源：usePreMarketBriefing(F) + useCrossValidationGroups(F, forward)
 // 工程底线：不臆造——query 无数据返空数组；组件缺数据返 null / "—"。
 // 历史统计特征标注：参考值，非执行指令；市场有风险。
 // ===========================================================================
+
+type ForwardLane = "limitup" | "non-limitup";
 
 function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string; urlDate?: string }) {
   // 数据源：前瞻简报（F 日收盘数据算出来的选 T+1 标的结果）
@@ -356,20 +359,115 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
   const cv = useCrossValidationGroups(F, forward);
   // advisory 仓位推荐摘要
   const { data: advisory } = useQuery({
-    queryKey: ["advisory-summary"],  // S094 audit: advisory 是 latest（backend /advisory/summary 不支持 date），非 per-F；旧 key 带 F 虚假暗示按 F 缓存
+    queryKey: ["advisory-summary"],  // S094 audit: advisory 是 latest（backend /advisory/summary 不支持 date），非 per-F
     queryFn: () => api.advisorySummary(5),
     staleTime: 5 * 60_000,
     retry: false,
   });
   const recs = advisory?.recommendations ?? [];
 
+  // S094 附录 A1：activeLane 切换状态提升到 ForwardTabSection——
+  // 前置/后置共享区在切换两叉时不抖动（前置共享区只渲染一次板块轮动）
+  const [activeLane, setActiveLane] = useState<ForwardLane>("limitup");
+
   const funnelLayers = briefing?.funnel_layers;
-  const factors = briefing?.factors ?? [];
 
   return (
     <>
-      {/* 前瞻 pipeline（spec R4） */}
-      {/* ① 漏斗选股（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通 */}
+      {/* ============ 前置共享区（辅助角色，只显一次） ============ */}
+      <PreSharedRegion F={F} briefing={briefing} />
+
+      {/* ============ [涨停叉 | 非涨停叉] 切换（默认涨停，无"全部"选项） ============ */}
+      <ForwardLaneSwitcher activeLane={activeLane} onChange={setActiveLane} />
+
+      {/* ============ 当前叉内容（互斥，一次只显一叉） ============ */}
+      {activeLane === "limitup" ? (
+        <LimitupLaneContent
+          briefing={briefing}
+          F={F}
+          forward={forward}
+          funnelLayers={funnelLayers}
+          cv={cv}
+        />
+      ) : (
+        <NonLimitupLaneContent
+          briefing={briefing}
+          F={F}
+        />
+      )}
+
+      {/* ============ 后置共享区：风控 + P2 仓位（advisory 摘要并入） ============ */}
+      <PostSharedRegion briefing={briefing} recs={recs} urlDate={urlDate} />
+
+      {briefingLoading && !briefing && (
+        <GlassCard className="p-4 text-sm text-muted-foreground">前瞻简报加载中…</GlassCard>
+      )}
+    </>
+  );
+}
+
+/** 前置共享区：板块轮动 · 语境(ContextTab) · 情绪天气(WeatherDecisionBar) */
+function PreSharedRegion({ F, briefing }: { F: string; briefing: import("@/lib/api").PreMarketBriefing | null | undefined }) {
+  return (
+    <CollapsibleFold title="前置共享区" subtitle="板块轮动 · 语境 · 情绪天气" defaultOpen={true}>
+      {/* 板块轮动（只渲染一个实例，见 SelectionPipeline 内 sharedSectorRotation=true 跳过内部渲染） */}
+      <ContextTab date={F} />
+      {/* 情绪天气（WeatherDecisionBar）— 天气影响选股决策 */}
+      {briefing?.sentiment_context && (
+        <div>
+          <SectionHeader title="情绪天气决策" subtitle="S063 情绪天气 → 战法推荐/不推荐" />
+          <div className="mt-2">
+            <WeatherDecisionBar ctx={briefing.sentiment_context} />
+          </div>
+        </div>
+      )}
+    </CollapsibleFold>
+  );
+}
+
+/** [涨停叉 | 非涨停叉] 切换——原生 button + tailwind，默认涨停，无"全部"选项 */
+function ForwardLaneSwitcher({ activeLane, onChange }: { activeLane: ForwardLane; onChange: (lane: ForwardLane) => void }) {
+  const options: { value: ForwardLane; label: string }[] = [
+    { value: "limitup", label: "涨停叉" },
+    { value: "non-limitup", label: "非涨停叉" },
+  ];
+  return (
+    <div className="my-2 inline-flex rounded-lg border border-border/40 bg-card/30 p-0.5">
+      {options.map((opt) => {
+        const active = activeLane === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={
+              active
+                ? "rounded-md bg-primary/15 px-4 py-1.5 text-sm font-medium text-primary transition-colors"
+                : "rounded-md px-4 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-card/60 hover:text-foreground"
+            }
+            aria-pressed={active}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 涨停叉内容：① 涨停股池+漏斗 → ② 战法匹配（7战法分组视图）→ ③ breakout → ④ 交叉验证 */
+function LimitupLaneContent({
+  briefing, F, forward, funnelLayers, cv,
+}: {
+  briefing: import("@/lib/api").PreMarketBriefing | null | undefined;
+  F: string;
+  forward: string;
+  funnelLayers: import("@/lib/api").FunnelLayer[] | undefined;
+  cv: import("@/lib/query/useCrossValidation").CrossValidationGroups;
+}) {
+  return (
+    <div className="space-y-2">
+      {/* ① 涨停股池+漏斗（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通 */}
       <CandidateFunnelEmbed
         date={briefing?.data_date ?? F}
         onPick={() => { /* 前瞻 Tab 不开抽屉（S4 WatchlistBoard 接管） */ }}
@@ -378,73 +476,104 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
         marketScanScored={briefing?.market_scan_scored}
         finalCandidates={briefing?.final_candidates}
         ztPoolSize={briefing?.market_emotion?.zt_count ?? undefined}
+        sharedSectorRotation={true}  // 附录 A2：板块轮动由前置共享区统一渲染
       />
 
-      {/* ② 战法匹配（StrategyMatchMatrix，date=F）—— 票×战法命中矩阵 */}
-      <CollapsibleFold title="战法匹配" subtitle="票 × 战法命中矩阵（括号=策略分）" defaultOpen={false}>
-        <StrategyMatchMatrix date={F} />
-      </CollapsibleFold>
+      {/* ② 涨停战法匹配（7 战法分组视图）—— 替代原独立 CollapsibleFold(StrategyMatchMatrix) */}
+      <StrategySubPipelineView
+        scoredCandidates={briefing?.scored_candidates}
+        marketScanScored={briefing?.market_scan_scored}
+        lane="limitup"
+      />
 
       {/* ③ breakout 弱信号（PremarketSelectionSection，date=forward） */}
       <PremarketSelectionSection date={forward} />
 
       {/* ④ 交叉验证徽章（漏斗∩breakout 双重确认） */}
       <CrossValidationSummary groups={cv} />
+    </div>
+  );
+}
 
-      {/* 辅助决策折叠区（spec R5） */}
-      <CollapsibleFold title="辅助决策" subtitle="情绪天气 · P2 仓位 · advisory · T-1 · 语境" defaultOpen={false}>
-        {/* 情绪天气（WeatherDecisionBar）— 天气影响选股决策 */}
-        {briefing?.sentiment_context && (
-          <div>
-            <SectionHeader title="情绪天气决策" subtitle="S063 情绪天气 → 战法推荐/不推荐" />
-            <div className="mt-2">
-              <WeatherDecisionBar ctx={briefing.sentiment_context} />
-            </div>
+/** 非涨停叉内容：⑤⑥⑦⑧ 全部在 NonLimitupLane 内部（⑦复用 StrategySubPipelineView） */
+function NonLimitupLaneContent({
+  briefing, F,
+}: {
+  briefing: import("@/lib/api").PreMarketBriefing | null | undefined;
+  F: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {/* ⑤⑥⑦⑧ 选股宇宙 + K线形态 + 战法匹配 + 候选终选（NonLimitupLane 自管四节点结构） */}
+      <NonLimitupLane
+        date={briefing?.data_date ?? F}
+        candidates={briefing?.market_scan_scored}
+      />
+    </div>
+  );
+}
+
+/** 后置共享区：风控非对称 + P2 仓位 + advisory 摘要（并入此区，不重复展示） */
+function PostSharedRegion({
+  briefing, recs, urlDate,
+}: {
+  briefing: import("@/lib/api").PreMarketBriefing | null | undefined;
+  recs: import("@/lib/api").AdvisoryItem[];
+  urlDate?: string;
+}) {
+  return (
+    <CollapsibleFold title="后置共享区" subtitle="风控非对称 · P2 仓位 · 仓位推荐摘要" defaultOpen={true}>
+      {/* 风控非对称（§44 唯一 lever：亏小赚大） */}
+      <RiskAsymmetryCard />
+
+      {/* P2 仓位闸 + 龙虎榜风控面板 */}
+      {briefing && <P2RiskPanel briefing={briefing} />}
+
+      {/* advisory 仓位推荐摘要（并入后置共享区，不单独展示） */}
+      {recs.length > 0 && (
+        <GlassCard className="p-4">
+          <p className="mb-2 text-sm font-medium">仓位推荐摘要</p>
+          <p className="text-xs text-muted-foreground/70">推荐标的 {recs.length} 只</p>
+          <div className="mt-2 space-y-1">
+            {recs.slice(0, 3).map((r) => (
+              <div key={r.code} className="flex min-w-0 items-center justify-between gap-2 text-xs">
+                <span className="min-w-0 flex-1 truncate">{r.name}({r.code})</span>
+                <span className="shrink-0 text-right text-muted-foreground/60">
+                  {r.matched_strategy ?? "—"} 胜率{r.win_rate != null ? `${(r.win_rate * 100).toFixed(0)}%` : "—"} {r.action}
+                </span>
+              </div>
+            ))}
           </div>
-        )}
-
-        {/* P2 仓位闸 + 龙虎榜风控面板 — 选完股配仓位 */}
-        {briefing && <P2RiskPanel briefing={briefing} />}
-
-        {/* advisory 仓位推荐摘要 */}
-        {recs.length > 0 && (
-          <GlassCard className="p-4">
-            <p className="mb-2 text-sm font-medium">仓位推荐摘要</p>
-            <p className="text-xs text-muted-foreground/70">推荐标的 {recs.length} 只</p>
-            <div className="mt-2 space-y-1">
-              {recs.slice(0, 3).map((r) => (
-                <div key={r.code} className="flex min-w-0 items-center justify-between gap-2 text-xs">
-                  <span className="min-w-0 flex-1 truncate">{r.name}({r.code})</span>
-                  <span className="shrink-0 text-right text-muted-foreground/60">
-                    {r.matched_strategy ?? "—"} 胜率{r.win_rate != null ? `${(r.win_rate * 100).toFixed(0)}%` : "—"} {r.action}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-        )}
-
-        {/* advisory 仓位详情入口 */}
-        <EntryCard to="/advisory" title="仓位详情" subtitle="PositionAdvisor 推荐/自选/持仓三场景" date={urlDate} />
-
-        {/* T-1 数据 + 语境（含暴风雨预测）— 选股 pipeline 输入 */}
-        <T1Tab date={F} />
-        <ContextTab date={F} />
-      </CollapsibleFold>
-
-      {briefingLoading && !briefing && (
-        <GlassCard className="p-4 text-sm text-muted-foreground">前瞻简报加载中…</GlassCard>
+          {/* advisory 仓位详情入口（并入后置共享区，独立页 /advisory 保留为详情入口） */}
+          <div className="mt-3">
+            <EntryCard to="/advisory" title="仓位详情" subtitle="PositionAdvisor 推荐/自选/持仓三场景" date={urlDate} />
+          </div>
+        </GlassCard>
       )}
+    </CollapsibleFold>
+  );
+}
 
-      {/* 因子漏斗（F 日因子数据，辅助参考） */}
-      {factors.filter((fr) => fr.factor_id !== "candidate_funnel").length > 0 && (
-        <CollapsibleFold title="涨停基因因子漏斗" subtitle="L1 打分 → L2 战法 → L3 仓位" defaultOpen={false}>
-          {factors.filter((fr) => fr.factor_id !== "candidate_funnel").map((fr) => (
-            <FactorSection key={fr.factor_id} factor={fr} onPick={() => {}} />
-          ))}
-        </CollapsibleFold>
-      )}
-    </>
+/** 风控非对称卡片（§44 唯一 lever） */
+function RiskAsymmetryCard() {
+  return (
+    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-amber-300">风控非对称</span>
+        <span className="rounded bg-amber-500/20 px-1 text-[10px] text-amber-300">唯一 lever</span>
+      </div>
+      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground sm:grid-cols-3">
+        <span>仓位 3% × 日历</span>
+        <span>止损 −4%</span>
+        <span>止盈 +8%</span>
+        <span>max 3 仓</span>
+        <span>max 持 3 日</span>
+        <span>R:R ≈ 1:2</span>
+      </div>
+      <div className="mt-1 text-[10px] text-amber-200/70">
+        §44 信号全无 validated edge → 盈利靠风控非对称（小仓+紧止损+非对称 R:R+短持），非信号
+      </div>
+    </div>
   );
 }
 
