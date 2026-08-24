@@ -374,13 +374,10 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
 
   return (
     <>
-      {/* ============ 前置共享区（辅助角色，只显一次） ============ */}
-      <PreSharedRegion F={F} briefing={briefing} />
-
       {/* ============ [涨停叉 | 非涨停叉] 切换（默认涨停，无"全部"选项） ============ */}
       <ForwardLaneSwitcher activeLane={activeLane} onChange={setActiveLane} />
 
-      {/* ============ 当前叉内容（互斥，一次只显一叉） ============ */}
+      {/* ============ 当前叉内容（互斥，一次只显一叉）——pipeline 在顶部展示 ============ */}
       {activeLane === "limitup" ? (
         <LimitupLaneContent
           briefing={briefing}
@@ -399,6 +396,9 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
       {/* ============ 后置共享区：风控 + P2 仓位（advisory 摘要并入） ============ */}
       <PostSharedRegion briefing={briefing} recs={recs} urlDate={urlDate} />
 
+      {/* ============ 前置共享区（辅助角色，折叠后移——pipeline 优先展示） ============ */}
+      <PreSharedRegion F={F} briefing={briefing} />
+
       {briefingLoading && !briefing && (
         <GlassCard className="p-4 text-sm text-muted-foreground">前瞻简报加载中…</GlassCard>
       )}
@@ -409,7 +409,7 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
 /** 前置共享区：板块轮动 · 语境(ContextTab) · 情绪天气(WeatherDecisionBar) */
 function PreSharedRegion({ F, briefing }: { F: string; briefing: import("@/lib/api").PreMarketBriefing | null | undefined }) {
   return (
-    <CollapsibleFold title="前置共享区" subtitle="板块轮动 · 语境 · 情绪天气" defaultOpen={true}>
+    <CollapsibleFold title="前置共享区" subtitle="板块轮动 · 语境 · 情绪天气" defaultOpen={false}>
       {/* 板块轮动（只渲染一个实例，见 SelectionPipeline 内 sharedSectorRotation=true 跳过内部渲染） */}
       <ContextTab date={F} />
       {/* 情绪天气（WeatherDecisionBar）— 天气影响选股决策 */}
