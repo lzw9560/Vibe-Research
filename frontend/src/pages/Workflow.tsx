@@ -459,7 +459,8 @@ function ForwardLaneSwitcher({ activeLane, onChange }: { activeLane: ForwardLane
 
 /** F4：mini 漏斗概览条——涨停池 → R1 → 终选 → 战法命中，水平横排胶囊数字标签。
  *  数据源：涨停池 = market_emotion.zt_count ?? finals.length（fallback 终选数，诚实标注非涨停总数）；
- *  R1 = funnel_layers 中 layer_id="R1" 的 output_count；终选 = final_candidates.length；战法命中 = scored_candidates.length。
+ *  R1 = funnel_layers 中 layer_id="R1" 的 output_count；终选 = final_candidates.length；
+ *  战法命中 = scored_candidates 按 code 去重后的独立股票数（非股票×战法组合数）。
  *  紧凑一行（高度 ≤28px），text-[10px] 小字。折叠态不显示（只在 LimitupLaneContent 展开时渲染）。 */
 function MiniFunnelOverview({
   briefing,
@@ -471,7 +472,9 @@ function MiniFunnelOverview({
   const ztCount = briefing?.market_emotion?.zt_count ?? briefing?.final_candidates?.length;
   const r1Out = funnelLayers?.find((l) => l.layer_id === "R1")?.output_count;
   const finalsLen = briefing?.final_candidates?.length;
-  const scoredLen = briefing?.scored_candidates?.length;
+  // 去重：一只股票被多战法命中只计一次（82 组合 → 46 独立股票）
+  const scoredUniqueCodes = new Set(briefing?.scored_candidates?.map((s) => s.code) ?? []);
+  const scoredLen = scoredUniqueCodes.size;
   const nodes = [
     { label: "涨停池", value: ztCount },
     { label: "R1", value: r1Out },

@@ -84,12 +84,13 @@ export function SelectionPipeline({
       {activeLane === "limitup" ? (
         <div className="space-y-1.5">
           <LaneHeader title="涨停叉" sub="已实现" />
-          {/* S084 TASK A：R2/R3 已下放战法层（直通透传），只显 R1 + SELF，不显 R2/R3 假漏斗 */}
-          {layers.filter((l) => l.layer_id === "R1" || l.layer_id === "SELF").map((layer, i, arr) => (
+          {/* S084 TASK A：R2/R3 已下放战法层（直通透传），只显 R1 + SELF，不显 R2/R3 假漏斗。
+              R1 与 SELF 是并行旁路（非上下游），不传 next 避免 52≠0 误显"失配"。 */}
+          {layers.filter((l) => l.layer_id === "R1" || l.layer_id === "SELF").map((layer) => (
             <LayerStep
               key={layer.layer_id}
               layer={layer}
-              next={arr[i + 1]}
+              next={undefined}
               onPick={onPick}
               rerunHandlers={rerunHandlers}
               date={date}
