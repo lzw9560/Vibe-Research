@@ -87,8 +87,9 @@ def select_for_entry(open_confirmed: list[dict], market_light: str) -> list[dict
         max_n = POSITION_PARAMS["red_light_max"]
         weight = 0.0
 
-    # open_confirmed 已按 total 降序，取前 max_n 只
-    selected_codes = [c.get("code", "") for c in open_confirmed[:max_n] if c.get("code")]
+    # S098 §44 合规：按确认时间序（timestamp 升序，先确认先买），不按 total auto-rank
+    ordered = sorted(open_confirmed, key=lambda c: c.get("timestamp") or "9999")
+    selected_codes = [c.get("code", "") for c in ordered[:max_n] if c.get("code")]
 
     # 批量取开盘价（tencent_quote 60s 缓存，一次请求）
     entry_prices: dict[str, float | None] = {}
@@ -109,7 +110,7 @@ def select_for_entry(open_confirmed: list[dict], market_light: str) -> list[dict
     tp_pct = POSITION_PARAMS["take_profit_pct"]
 
     out: list[dict] = []
-    for rank, cand in enumerate(open_confirmed[:max_n], start=1):
+    for rank, cand in enumerate(ordered[:max_n], start=1):
         code = cand.get("code", "")
         ep = entry_prices.get(code)
         out.append({
@@ -156,7 +157,7 @@ def notify_entry_ready(selected: list[dict]) -> bool:
     - 摘要：首板流候选已满 N 只，可建仓（绿灯 3-5 只等权/黄灯最多 3 只 15%）
     - 候选名单表格：排名 | 代码 | 名称 | 评分
     - 风控提示：止损 -3% / 止盈 +5% / T+1 必卖
-    - §44 标注：9 维度评分未 validated 仅参考
+    - §44 标注：排名按确认时间序（先确认先买），非质量排序；§44 未验证，评分仅参考
 
     复用 NotificationService（与 first_board_market_env 同款）。
     候选<3 只不推送（spec 2.4：等权 3-5 只，不足 3 只不建仓）。
@@ -175,7 +176,7 @@ def notify_entry_ready(selected: list[dict]) -> bool:
     # 构造 Markdown content（飞书支持 Markdown 表格）
     pct = selected[0].get("position_pct", 0) * 100 if selected else 0
     lines: list[str] = []
-    lines.append(f"**首板流候选已满 {len(selected)} 只，可建仓**（单股仓位 {pct:.0f}%）")
+    lines.append(f"**首板流候选已满 {len(selected)} 只，可建仓**（单股仓位 {pct:.0f}%；确认时间序，非质量排序）")
     lines.append("")
     lines.append("| 排名 | 代码 | 名称 | 评分 |")
     lines.append("|---|---|---|---|")
@@ -189,7 +190,7 @@ def notify_entry_ready(selected: list[dict]) -> bool:
         lines.append(f"| {rank} | {code} | {name} | {total_str} |")
     lines.append("")
     lines.append("⚠ 风控：止损 −3% / 止盈 +5% / T+1 必卖（不赌连板）")
-    lines.append("⚠ §44 未 validated 仅参考；阈值/权重待回测校准")
+    lines.append("⚠ 排名按确认时间序（先确认先买），非质量排序；§44 未验证，评分仅参考；阈值/权重待回测校准")
     content = "\n".join(lines)
 
     try:

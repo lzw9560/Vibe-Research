@@ -110,8 +110,8 @@ class TestSelectForEntry:
         assert len(out) == 2
         assert [s["entry_rank"] for s in out] == [1, 2]
 
-    def test_sorted_by_score(self, monkeypatch):
-        """按评分总分降序排序（open_confirmed 已排序，select 保留顺序）。"""
+    def test_select_preserves_input_order_when_no_timestamp(self, monkeypatch):
+        """S098：无 timestamp 时稳定保留输入序（不按 total auto-rank，§44 合规）。"""
         from strategies.first_board_position import select_for_entry
         cands = [
             {"code": "000003", "name": "C", "total": 55.0},
@@ -123,12 +123,55 @@ class TestSelectForEntry:
             lambda codes: _make_tencent_quote(codes, open_price=10.0)
         )
         out = select_for_entry(cands, "green")
-        # select_for_entry 不重排（假设输入已降序），保留输入顺序
+        # S098：无 timestamp → 稳定保留输入序（不按 total 重排，§44 不 auto-rank）
         assert out[0]["code"] == "000003"
         assert out[1]["code"] == "000001"
         assert out[2]["code"] == "000002"
-        # total_score 透传
+        # total_score 透传（保留作字段，非排序键）
         assert out[0]["total_score"] == 55.0
+
+
+class TestSelectForEntryS098:
+    """S098 §44 合规：select 按确认时间序（timestamp 升序，先确认先买），不按 total auto-rank。"""
+
+    def test_select_by_confirm_timestamp(self, monkeypatch):
+        """S098：按 timestamp 升序取前 N，不按 total 降序。"""
+        from strategies.first_board_position import select_for_entry
+        # total 降序（A>B>C）但 timestamp 乱序（B 先确认，C 最后）
+        cands = [
+            {"code": "000001", "name": "A", "total": 65.0, "timestamp": "2026-08-26 09:32:00"},
+            {"code": "000002", "name": "B", "total": 60.0, "timestamp": "2026-08-26 09:31:00"},
+            {"code": "000003", "name": "C", "total": 55.0, "timestamp": "2026-08-26 09:33:00"},
+        ]
+        monkeypatch.setattr(
+            "strategies.first_board_position.tencent_quote",
+            lambda codes: _make_tencent_quote(codes, open_price=10.0)
+        )
+        out = select_for_entry(cands, "green")
+        # 按 timestamp 升序：B(09:31) → A(09:32) → C(09:33)，非 total 降序(A→B→C)
+        assert [s["code"] for s in out] == ["000002", "000001", "000003"]
+        assert [s["entry_rank"] for s in out] == [1, 2, 3]
+        # total 保留作字段（非排序键）：B 排第1 但 total=60（非最高）
+        assert out[0]["total_score"] == 60.0
+
+    def test_select_not_by_total_auto_rank(self, monkeypatch):
+        """S098 §44：不按 total auto-top-N；timestamp 最晚的即便 total 高也被剔。"""
+        from strategies.first_board_position import select_for_entry
+        # 6 只 total 降序，timestamp 递增（高分先确认，低分后确认——但 max 5 剔第6）
+        cands = [
+            {"code": f"00000{i+1}", "name": f"T{i+1}", "total": 70 - i * 5,
+             "timestamp": f"2026-08-26 09:3{i}:00"}
+            for i in range(6)
+        ]
+        monkeypatch.setattr(
+            "strategies.first_board_position.tencent_quote",
+            lambda codes: _make_tencent_quote(codes, open_price=10.0)
+        )
+        out = select_for_entry(cands, "green")  # 绿灯 max 5
+        assert len(out) == 5
+        # 按 timestamp 升序前 5：000001-000005（000006 timestamp 最晚，被剔）
+        assert "000006" not in [s["code"] for s in out]
+        assert [s["entry_rank"] for s in out] == [1, 2, 3, 4, 5]
 
     def test_stop_loss_take_profit_lines(self, monkeypatch):
         """止盈止损线计算：stop=-3% tp=+5%。"""
