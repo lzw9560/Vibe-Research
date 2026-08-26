@@ -30,6 +30,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StrategySubPipelineView } from "@/components/pipeline/StrategySubPipelineView";
 import { NonLimitupLane } from "@/components/pipeline/NonLimitupPlaceholder";
 import { CandidateFactorTable } from "@/components/workflow/CandidateFactorTable";
+import { WinRateCompareSection } from "@/components/workflow/WinRateCompareSection";
 import type { DateTripletResponse } from "@/lib/api";
 
 // 三视图组件懒加载（已有路由也懒加载，此处统一）
@@ -521,7 +522,7 @@ function NonLimitupLaneContent({
   );
 }
 
-/** 后置共享区：风控非对称 + P2 仓位 + advisory 摘要（并入此区，不重复展示） */
+/** 后置共享区：风控非对称 + P2 仓位 + advisory 摘要 + 战法胜率对比（并入此区，不重复展示） */
 function PostSharedRegion({
   briefing, recs, urlDate,
 }: {
@@ -530,12 +531,17 @@ function PostSharedRegion({
   urlDate?: string;
 }) {
   return (
-    <CollapsibleFold title="后置共享区" subtitle="风控非对称 · P2 仓位 · 仓位推荐摘要" defaultOpen={true}>
+    <CollapsibleFold title="后置共享区" subtitle="风控非对称 · P2 仓位 · 战法胜率 · 仓位推荐" defaultOpen={true}>
       {/* 风控非对称（§44 唯一 lever：亏小赚大） */}
       <RiskAsymmetryCard />
 
       {/* P2 仓位闸 + 龙虎榜风控面板 */}
       {briefing && <P2RiskPanel briefing={briefing} />}
+
+      {/* 战法胜率对比（S093 抽出后首次接入——60 日回测胜率 × 各战法） */}
+      {briefing?.factors && briefing.factors.length > 0 && (
+        <WinRateCompareSection factors={briefing.factors} onPick={() => {}} />
+      )}
 
       {/* advisory 仓位推荐摘要（并入后置共享区，不单独展示） */}
       {recs.length > 0 && (

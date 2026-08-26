@@ -303,6 +303,15 @@ R23 原为两叉纯线性序列，无共享区概念。本次增补：
 
 - **S099 — 逐条件因子过滤**：12 战法 `match()` 重构返回条件级过滤明细（每条件 输入数/过滤后数/条件描述），前端每战法子管线渲染「因子条件 → 过滤数」明细漏斗。**待开独立 spec**（预计 medium，跨层）。
 
+### A7. 待办：孤立组件处置
+
+审计发现两个更早 spec 的遗留组件（与 S094 重构无关），处置如下：
+
+| 组件 | 来源 spec | 处置 | 状态 |
+|---|---|---|---|
+| **WinRateCompareSection** | S093 T11 | 接入后置共享区（战法 60 日胜率对比） | ✅ 已接入（`Workflow.tsx` PostSharedRegion） |
+| **CandidateProgressiveCard** | S066 §11.1 | 保留不删，待后续接入——三层渐进式候选卡（L0决策/L1摘要/L2详情/L3因子子页），UX 优于表格形态，但当前后端 `scored_candidates` 字段不匹配 `CandidateCardData`（缺 one_line_reason/position_pct/risk_label/score_breakdown 等），需后端补字段后接入 | ⏳ 待办：后端补 `CandidateCardData` 格式数据 + 前端接入 |
+
 ### A7. 合规自查
 
 - [x] 因子下沉边界显式写入，不设全局因子预过滤闸（不违反 S084 superset 决议）
