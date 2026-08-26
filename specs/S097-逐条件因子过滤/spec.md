@@ -105,8 +105,8 @@ class StrategyMatchResult(BaseModel):
 
 | 战法 | 条件 | 因子 | 阈值 | 触发规则 | 数据前置 |
 |---|---|---|---|---|---|
-| first_plate | C1 基因合格 | total_score | ≥60 | 全条件命中 | gene |
-| | C2 涨停频次 | 涨停频次 | >20 | | |
+| first_plate | C1 基因合格 | total_score | ≥40 | 全条件命中 | gene |
+| | C2 涨停频次 | 涨停频次 | ≥6 | | |
 | consecutive_relay | C1 连板历史 | zt_count_250d | ≥2 | 全条件命中 | gene |
 | | C2 封板能力 | 封板率 | ≥60 | | |
 | break_reseal | C1 黄金区频次 | zt_count_250d | [3,5] | 全条件命中 | gene |
@@ -117,7 +117,7 @@ class StrategyMatchResult(BaseModel):
 | platform_breakout | C1 横盘 | consolidation_days | ≥5 | 全条件命中 | pattern |
 | | C2 放量突破 | volume_breakout_ratio | >2 | | |
 | end_of_day_sneak | C1 尾盘封板 | 封板率 | ≥40 | 全条件命中 | gene |
-| | C2 溢价能力 | 次日溢价率 | >40 | | |
+| | C2 溢价能力 | 次日溢价率 | >15 | | |
 | dragon_head | C1 板块领涨 | sector_rank | ≤3 | 全条件命中 | pattern+msc |
 | storm_reversal | C1 早盘封板 | fbt | ≤103000 | 全条件命中 | pool_item |
 | reverse_package | C1 前日真炸板 | open_count(池成员) | ≥2 含code | 全条件命中 | 炸板池DB |
@@ -243,3 +243,10 @@ match() 返结构变是承重改动 → 回滚 = `git revert` S097 commit。旧 
   1. dragon_head（low）：pattern 存在但 sector_rank=None 误返 data_ok=False（整战法降级）→ 拆为字段级 data_ok=True + c1=data_unavailable（与 LowAbsorption/PlatformBreakout/StormReversal 一致）。
   2. weak_turn_strong C1（medium）：pool_item=None 时 `int(lbc or 0)` 臆造 lbc=0 → C1 miss（违反 §7 不臆造）→ 改 lbc None → data_unavailable（字段级，data_ok=True）。
   - 补 `test_field_data_unavailable_no_sector_rank` + `test_c1_data_unavailable_no_pool_item`，132 测试全绿。
+
+### 10.1 §5.2 修订记录（2026-08-27，fa4514e；S100 R14 同步）
+
+`fa4514e`（2026-08-27 阈值校准，分位数支撑）改写 first_plate / end_of_day_sneak 两战法 match 阈值，§5.2 条件表已同步：
+- first_plate：C1 total_score ≥60 → ≥40（全量 P75=35.7 / qualify P25=52.4）；C2 涨停频次 >20 → ≥6（全量 P50=6.0）。原阈值远超历史 max（涨停频次 max=39/P95=18，阈值 20 几乎无人能过）。
+- end_of_day_sneak：C2 次日溢价率 >40 → >15（全量 P90=18.9 / qualify P25=30.1）。原 >40 远超 P90（max 才 30.06）。
+- 其余 10 战法阈值未变。match docstring（gene_based.py:28,321）同步修正（S100 R13）。

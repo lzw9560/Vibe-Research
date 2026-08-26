@@ -1,15 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { StrategySubPipelineView } from "../StrategySubPipelineView";
 import type { ScoredCandidate, StrategyFunnelSummary } from "@/lib/api";
 
 // S097 D（R12/R13/R15）前端：逐条件漏斗渲染 + 候选三态标记 + 历史快照兼容。
 // CandidateRow 用 <Link to="/stock/:code"> 跳个股详情，测试需 MemoryRouter 包裹。
+// 卡片默认收缩（懒渲染），测试需先点击展开再断言 FunnelSummary/CandidateRow。
 
 /** 包裹 MemoryRouter 防 Link 报 useContext basename null。 */
 function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
+/** 点击首板挖掘卡片展开（lane=limitup 时第一张卡片是 first_plate）。 */
+function clickFirstCard() {
+  const card = screen.getByText("首板挖掘").closest("[class*='cursor-pointer']") || screen.getByText("首板挖掘");
+  fireEvent.click(card);
 }
 
 /** 同一 first_plate 战法的漏斗（两候选、两条件、含三态 + data_unavailable）。 */
@@ -87,7 +94,10 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
       />,
     );
 
-    // 触发率 2/5 → 40%
+    // 卡片默认收缩——先点击展开再断言 FunnelSummary
+    clickFirstCard();
+
+    // 触发率 2/5 → 40%（展开后 FunnelSummary 内的"触发率"文本）
     expect(screen.getByText(/触发率/)).toBeInTheDocument();
     expect(screen.getByText(/2\/5/)).toBeInTheDocument();
     expect(screen.getByText(/40%/)).toBeInTheDocument();
@@ -110,6 +120,9 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
       />,
     );
 
+    // 卡片默认收缩——先点击展开再断言 CandidateRow 三态标记
+    clickFirstCard();
+
     // 平安银行：c1 hit + c2 hit
     expect(screen.getByTitle("first_plate.c1: hit")).toBeInTheDocument();
     expect(screen.getByTitle("first_plate.c2: hit")).toBeInTheDocument();
@@ -131,13 +144,18 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
       />,
     );
 
-    // 候选名 + 分仍正常显示
+    // 卡正面始终显示：战法名 + 命中数 Badge
+    expect(screen.getByText("首板挖掘")).toBeInTheDocument();
+    expect(screen.getByText("2 只")).toBeInTheDocument();
+    // 漏斗摘要不渲染（无 strategy_funnel → 折叠态不显触发率，展开后 FunnelSummary 返 null）
+    expect(screen.queryByText(/触发率/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle("first_plate.c1: hit")).not.toBeInTheDocument();
+
+    // 点击展开后候选名 + 分可见（CandidateRow 懒渲染）
+    clickFirstCard();
     expect(screen.getByText("平安银行")).toBeInTheDocument();
     expect(screen.getByText("72.5")).toBeInTheDocument();
     expect(screen.getByText("58.0")).toBeInTheDocument();
-    // 漏斗摘要不渲染（无 strategy_funnel → FunnelSummary 返 null）
-    expect(screen.queryByText(/触发率/)).not.toBeInTheDocument();
-    expect(screen.queryByTitle("first_plate.c1: hit")).not.toBeInTheDocument();
   });
 
   it("无候选时显空态标题 + 副标题（0 战法命中），不崩", () => {

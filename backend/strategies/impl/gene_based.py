@@ -25,7 +25,7 @@ def _get_pattern(ctx):
 
 
 class FirstPlateStrategy(BaseStrategy):
-    """首板挖掘：score≥60 ∧ 涨停频次>20，confidence=动态 score/100。"""
+    """首板挖掘：score≥40 ∧ 涨停频次≥6，confidence=动态 score/100（fa4514e 阈值校准，分位数支撑）。"""
 
     code = "first_plate"
     name = "首板挖掘"
@@ -318,7 +318,7 @@ class PlatformBreakoutStrategy(BaseStrategy):
 
 
 class EndOfDaySneakStrategy(BaseStrategy):
-    """尾盘偷袭：封板率≥40% ∧ 溢价率>40%，confidence=固定 0.4。"""
+    """尾盘偷袭：封板率≥40% ∧ 溢价率>15%，confidence=固定 0.4（fa4514e 阈值校准）。"""
 
     code = "end_of_day_sneak"
     name = "尾盘偷袭"

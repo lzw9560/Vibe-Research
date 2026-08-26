@@ -1,27 +1,24 @@
 # 龙头战法（dragon_head）
 
 ## 适用天气
-晴天、阴天
+晴天（软标注，S086 R3 后任意天气可触发）
 
 ## 核心逻辑
-板块轮动中识别龙头股。适用于板块启动或行业催化剂出现时。非追高，属强势识别/追踪型。
+板块轮动中识别龙头股。板块内个股排名 ≤ 3（龙头地位）时命中。非追高，属强势识别/追踪型。无 market_scan_ctx（涨停 pipeline 路径）时不评估（数据降级，非逻辑过滤）。
 
 ## 入场条件
-- 板块领涨地位：所在板块为近期涨幅前列，该股在板块启动周期中率先上涨或涨停
-- 相对强度：上涨日跑赢板块 2% 以上
-- 换手率 > 5%
-- 量比 > 1.5
-- 板块级催化（政策、事件、业绩）
+- 板块内个股排名 ≤ 3（sector_rank，龙头地位）
 
 ## 执行规则
 - 板块启动期确认后介入（非追高）
-- 按板块阶段动态调整仓位使用比例
 - 严格止损，跌破 5 日线减仓，跌破 10 日线清仓
 
 ## 退出参数
-- 止损：跌破 5 日均线（-5% 复核线）
-- 止盈：涨至 +10%~+15% 后回落
+- 止损：跌破 5 日均线（-5% 复核线，入场价基准）
+- 止盈：涨至 +15%（入场价基准）触发减仓锁利
 - 最大持有：5 日
+
+> dragon_head 为非涨停 pipeline，无自动结算 runtime，退出参数为设计值（人工执行）。
 
 ## 风险点
 - 板块退潮时龙头补跌风险
@@ -30,7 +27,7 @@
 
 ## 来源与样本期
 - 参数来源：
-  - [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) `strategies/dragon_head.yaml`（评估标准：板块领涨地位、换手 > 5%、量比 > 1.5、相对强度跑赢板块 2%+、新闻催化）
-  - [attrib2004/a-share-dragon-strategy](https://github.com/attrib2004/a-share-dragon-strategy)（龙头等级划分、综合评分模型、仓位架构）
-- 样本时效声明：源项目未提供连续实盘胜率数字，仅提供识别标准与评分框架；参数为公开方法论，非回测验证的胜率统计。
+  - [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) `strategies/dragon_head.yaml`（识别标准含板块领涨、换手 > 5%、量比 > 1.5、相对强度、新闻催化）
+  - [attrib2004/a-share-dragon-strategy](https://github.com/attrib2004/a-share-dragon-strategy)（龙头等级划分、综合评分模型）
+- 样本时效声明：卡片入场条件以 S097 match 为准（sector_rank ≤ 3），来源的换手/量比/相对强度等为参考，未接入 match 门控。
 - 历史统计特征，市场有风险，研究参考。

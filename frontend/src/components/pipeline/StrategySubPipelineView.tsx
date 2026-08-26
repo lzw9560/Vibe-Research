@@ -142,9 +142,9 @@ export function StrategySubPipelineView({ scoredCandidates = [], marketScanScore
   );
 }
 
-/** 单战法卡片（改造：分组列表 → GlassCard 网格）。
- *  卡正面：战法名 + code + 命中数 Badge + 匹配规则描述 chips + 触发率（仅折叠态显，避免与展开后 FunnelSummary 重复）。
- *  点击卡片展开/折叠：展开后显 FunnelSummary（环形触发率 + 横向条形漏斗）+ CandidateRow 列表 + 顶部三态图例。
+/** 单战法卡片（点击展开，默认收缩，懒渲染避免 DOM 膨胀卡顿）。
+ *  卡正面：战法名 + code + 命中数 Badge + 匹配规则 chips + 触发率。
+ *  点击展开：FunnelSummary（环形触发率 + 横向条形漏斗）+ CandidateRow 列表。
  *  无命中战法显灰卡 + "0 只"，规则描述仍显（若有 strategy_funnel）。 */
 function StrategyGroupCard({
   code,
@@ -158,8 +158,7 @@ function StrategyGroupCard({
   lane: "limitup" | "non-limitup";
 }) {
   const hasHits = hits.length > 0;
-  // 有命中默认展开（测试断言依赖 FunnelSummary/CandidateRow 默认在 DOM）；无命中恒收起
-  const [open, setOpen] = useState(hasHits);
+  const [open, setOpen] = useState(false);
   const funnel = hits[0]?.strategy_funnel;
   const firePct = funnel && funnel.total_count > 0
     ? Math.round((funnel.fired_count / funnel.total_count) * 100)
@@ -167,8 +166,8 @@ function StrategyGroupCard({
 
   return (
     <GlassCard
-      onClick={() => setOpen((v) => !v)}
-      className={`p-3 ${hasHits ? "cursor-pointer transition-transform hover:-translate-y-0.5" : "opacity-60"}`}
+      onClick={() => hasHits && setOpen((v) => !v)}
+      className={`p-3 ${hasHits ? "cursor-pointer" : "opacity-60"}`}
     >
       {/* 卡正面：战法名 + code + §44 未验证标签 + 命中数 Badge */}
       <div className="flex items-start justify-between">
@@ -203,17 +202,16 @@ function StrategyGroupCard({
         )}
       </div>
 
-      {/* 触发率：仅折叠态显（避免与展开后 FunnelSummary 的"触发率"文本重复，测试 getByText 不报 multiple） */}
+      {/* 触发率（折叠态显） */}
       {!open && firePct != null && (
         <div className="mt-1.5 text-[10px] text-muted-foreground/70">
           触发率 {funnel!.fired_count}/{funnel!.total_count}（{firePct}%）
         </div>
       )}
 
-      {/* 展开内容：FunnelSummary + CandidateRow 列表 */}
+      {/* 展开内容：懒渲染——仅 open 时才渲染 FunnelSummary + CandidateRow（避免 DOM 膨胀卡顿） */}
       {hasHits && open && (
         <div className="mt-2 space-y-1.5 border-t border-border/20 pt-2" onClick={(e) => e.stopPropagation()}>
-          {/* S097 D：逐条件漏斗摘要（同战法共享，取首候选 strategy_funnel；R15 旧快照无此字段则不渲染） */}
           <FunnelSummary funnel={funnel} />
           {hits.map((c) => (
             <CandidateRow
