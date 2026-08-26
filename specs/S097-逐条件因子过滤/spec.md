@@ -55,6 +55,7 @@
 - [ ] R15 历史快照兼容：旧 scored_candidates 快照无 conditions/strategy_funnel → 前端降级不显漏斗（只显 score）；新快照含
 - [ ] R16 12 战法 match() 测试更新（返回结构变）
 - [ ] R17 `scored_candidates` 每项加 `strategy_funnel` 字段（`StrategyFunnelSummary`：该战法批次漏斗 input/passed/data_unavailable/pass_rate + 候选命中标记）；`score_candidates` 批次聚合产出
+- [ ] R18 weak_turn_strong C4 比较修复：`last_lock_time[11:16] >= "14:40"`（替代整串 ISO 比较 `>= "2026-01-01T14:40"`，修 C4 恒命中 bug，阈值 14:40 不变）
 
 ## 4. 受影响文件
 
@@ -209,7 +210,7 @@ interface StrategyFunnelSummary {
 - 12 战法 match() 重构面广 → 逐战法 TDD，先 1 战法（first_plate）跑通契约再铺 12
 - compute_confidence 签名变 → 波及 dispatch_match 调用链（S094 已统一，影响可控）
 - 前端漏斗渲染复杂度 → 先静态漏斗，交互后补
-- **C4 pre-existing bug**（weak_turn_strong）：`last_lock_time >= "2026-01-01T14:40"`（indicator_based.py:65）整串 ISO 比较，日期段压倒时间段，C4 近乎恒命中（触发规则从 ≥4/5 退化为 ≥3/4）。S097 拆 C4 后漏斗会显 C4≈100% pass（误导）。处置：S097 不改逻辑（只拆结构），C4 比较修复另开 issue（或 S097 顺手修 `last_lock_time[11:16] >= "14:40"`，待定）
+- **C4 pre-existing bug**（weak_turn_strong）：`last_lock_time >= "2026-01-01T14:40"`（indicator_based.py:65）整串 ISO 比较，日期段压倒时间段，C4 近乎恒命中（触发规则从 ≥4/5 退化为 ≥3/4）。S097 拆 C4 后漏斗会显 C4≈100% pass（误导）。处置：**S097 顺手修（R18）** `last_lock_time[11:16] >= "14:40"`（阈值 14:40 不变，只修比较实现 bug）。
 
 ### 9.3 回滚
 

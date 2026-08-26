@@ -11,7 +11,7 @@ low_absorption 在旧 STRATEGY_REGISTRY（dict）与 STRATEGY_FUNNEL_REGISTRY（
 """
 from __future__ import annotations
 
-from strategies.strategy_base import BaseStrategy, ConditionMatch
+from strategies.strategy_base import BaseStrategy, ConditionMatch, ConditionEval, StrategyMatchResult
 
 
 def _get_pattern(ctx):
@@ -28,15 +28,45 @@ class FirstPlateStrategy(BaseStrategy):
     code = "first_plate"
     name = "首板挖掘"
 
-    def match(self, ctx) -> list[ConditionMatch]:
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：拆 C1 基因合格 + C2 涨停频次，返 StrategyMatchResult（全量条件三态）
         gene = ctx.gene
-        if gene.total_score >= 60 and gene.factors.get("涨停频次", 0) > 20:
-            return [ConditionMatch(
-                condition="首次涨停+基因合格",
-                value=f"基因得分 {gene.total_score}",
-                description="策略逻辑上，该股符合首板挖掘的基因门槛",
-            )]
-        return []
+        freq = gene.factors.get("涨停频次", 0)
+        c1_hit = gene.total_score >= 60
+        c2_hit = freq > 20
+        conditions = [
+            ConditionEval(
+                condition_id="first_plate.c1",
+                condition_name="基因得分合格",
+                factor="total_score",
+                threshold=">= 60",
+                actual_value=str(gene.total_score),
+                state="hit" if c1_hit else "miss",
+                description=f"基因得分 {gene.total_score}（阈值≥60）",
+            ),
+            ConditionEval(
+                condition_id="first_plate.c2",
+                condition_name="涨停频次达标",
+                factor="涨停频次",
+                threshold="> 20",
+                actual_value=str(freq),
+                state="hit" if c2_hit else "miss",
+                description=f"涨停频次 {freq}（阈值>20）",
+            ),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_hit and c2_hit
+        return StrategyMatchResult(
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
+            fire_rule="全条件命中",
+            confidence=min(gene.total_score / 100, 1.0) if fired else None,
+            data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return min(ctx.gene.total_score / 100, 1.0)

@@ -22,7 +22,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime as _dt
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -41,6 +41,45 @@ class ConditionMatch(BaseModel):
     condition: str
     value: str
     description: str
+
+
+# ===========================================================================
+# S097：逐条件因子过滤契约（ConditionEval + StrategyMatchResult）
+# ===========================================================================
+
+class ConditionEval(BaseModel):
+    """单条件评估（S097 三态：hit/miss/data_unavailable）。
+
+    替代旧 ConditionMatch 只记命中项——ConditionEval 记全量条件（命中+未命中+数据降级），
+    供批次聚合「条件→输入数→命中数」漏斗 + 候选行命中标记。
+    """
+
+    condition_id: str        # "first_plate.c1"（战法内唯一）
+    condition_name: str      # "基因得分合格"
+    factor: str              # "total_score"
+    threshold: str          # ">= 60"
+    actual_value: str | None
+    state: Literal["hit", "miss", "data_unavailable"]
+    description: str
+
+
+class StrategyMatchResult(BaseModel):
+    """战法匹配结果（S097：全量条件评估 + 触发判定）。
+
+    替代旧 match() 返 list[ConditionMatch]——返全量条件评估（命中+未命中+数据降级）
+    + 触发判定（fired 按 fire_rule）+ confidence。data_ok=False 时 conditions 全
+    data_unavailable、fired=False（诚实降级，不算逻辑未命中）。
+    """
+
+    strategy_code: str
+    strategy_name: str
+    conditions: list[ConditionEval]   # 全量（命中+未命中+数据降级）
+    hit_count: int                    # state=hit 数
+    total_count: int
+    fired: bool                       # 按触发规则（全条件命中 / ≥N/M）
+    fire_rule: str                    # "全条件命中" / "≥4/5 命中"
+    confidence: float | None
+    data_ok: bool                     # 数据前置可用（False=整战法降级不评估）
 
 
 @dataclass
@@ -230,12 +269,28 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
     for cfg in registry:
         impl = cfg.strategy_impl
         try:
-            matches = impl.match(ctx)
+            result = impl.match(ctx)
         except Exception:  # noqa: BLE001 - 单战法异常不阻断其余
             continue
-        if not matches:
-            continue
-        confidence = impl.compute_confidence(matches, ctx)
+        # S097：兼容 list[ConditionMatch]（旧）+ StrategyMatchResult（新，逐条件三态）
+        if isinstance(result, StrategyMatchResult):
+            if not result.fired:
+                continue
+            matches = [
+                ConditionMatch(
+                    condition=c.condition_name,
+                    value=c.actual_value or "",
+                    description=c.description,
+                )
+                for c in result.conditions
+                if c.state == "hit"
+            ]
+            confidence = result.confidence if result.confidence is not None else 0.0
+        else:
+            matches = result  # 旧 list[ConditionMatch]
+            if not matches:
+                continue
+            confidence = impl.compute_confidence(matches, ctx)
         if confidence == 0.0:
             continue
 
