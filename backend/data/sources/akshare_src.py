@@ -152,25 +152,37 @@ def chip_distribution(code: str) -> dict:
     ak = _akshare()
 
     # S094 修复：akshare 内部 requests 无 timeout，服务端断连时无限挂起。
-    # 用 ThreadPoolExecutor + future.result(timeout=8) 硬截断。
-    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
-    from concurrent.futures import TimeoutError as _FutureTimeout  # noqa: PLC0415
-    try:
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(ak.stock_cyq_em, symbol=code)
-            df = future.result(timeout=8)
-        # 成功——重置失败计数
-        _chip_fail_streak = 0
-    except _FutureTimeout:
+    # 用 daemon 线程 + join(timeout=8) 硬截断——超时后不等待线程退出（daemon 线程
+    # 在主进程退出时自动被杀），避免 ThreadPoolExecutor 的 shutdown(wait=True)
+    # 阻塞等 TCP 超时（~15s/只 × 52 = 780s）。
+    import threading  # noqa: PLC0415
+    result_holder: dict | None = {"df": None}
+    exc_holder: list = []
+
+    def _call():
+        try:
+            result_holder["df"] = ak.stock_cyq_em(symbol=code)
+        except Exception as e:
+            exc_holder.append(e)
+
+    t = threading.Thread(target=_call, daemon=True)
+    t.start()
+    t.join(timeout=8)
+
+    if t.is_alive():
+        # 线程还在跑（超时）——daemon 线程不等待，主进程退出时自动杀
         _chip_fail_streak += 1
         logging.getLogger("astock").warning(
             "chip_distribution(%s) 8s 超时（连续失败 %d/3）", code, _chip_fail_streak)
         return {}
-    except Exception as e:
+    if exc_holder:
         _chip_fail_streak += 1
         logging.getLogger("astock").warning(
-            "chip_distribution(%s) akshare 取数失败（连续 %d/3）: %s", code, _chip_fail_streak, e)
+            "chip_distribution(%s) akshare 取数失败（连续 %d/3）: %s", code, _chip_fail_streak, exc_holder[0])
         return {}
+    # 成功——重置失败计数
+    _chip_fail_streak = 0
+    df = result_holder["df"]
     if df is None or df.empty:
         return {}
     row = df.iloc[-1].to_dict()
