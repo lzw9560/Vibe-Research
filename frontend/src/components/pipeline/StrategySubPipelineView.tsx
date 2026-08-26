@@ -29,6 +29,36 @@ const MARKET_SCAN_STRATEGIES: { code: string; name: string }[] = [
   { code: "pattern_reversal", name: "形态反包" },
 ];
 
+// 无漏斗数据时的具体原因 + 修复指引（让用户知道为什么无数据、怎么修）
+const STRATEGY_DATA_STATUS: Record<string, { reason: string; fix: string }> = {
+  // 涨停战法
+  weak_turn_strong: {
+    reason: "依赖盘中分时派生数据（炸板时长/跌幅度/回封时间）",
+    fix: "交易日 9:25-15:05 保持后端运行，seal_intraday_collect 定时任务自动采集快照 → 盘后 derived_precompute 自动算 derived → 次日有数据",
+  },
+  // 非涨停战法（limitup pipeline 不构造 market_scan_ctx → 整战法降级）
+  dragon_head: {
+    reason: "非涨停战法需 market_scan_ctx（板块内排名），涨停 pipeline 不构造此上下文",
+    fix: "切换到非涨停叉，gather_non_limitup_candidates 采集 market_scan 数据后生效（需 baostock_kline_cache 全 A 扩容 + sti_timeline 数据回填）",
+  },
+  low_absorption: {
+    reason: "非涨停战法需 PatternScan（MA5 回调/均线多头），涨停 pipeline 无此上下文",
+    fix: "切换到非涨停叉，market_scan pipeline 采集 K 线形态因子后生效",
+  },
+  platform_breakout: {
+    reason: "非涨停战法需 PatternScan（横盘天数/放量突破），涨停 pipeline 无此上下文",
+    fix: "切换到非涨停叉，market_scan pipeline 采集 K 线形态因子后生效",
+  },
+  pattern_reversal: {
+    reason: "非涨停战法需 PatternScan（上影线/放量/MA5 斜率），涨停 pipeline 无此上下文",
+    fix: "切换到非涨停叉，market_scan pipeline 采集 K 线形态因子后生效",
+  },
+  reverse_package: {
+    reason: "依赖炸板池 DB（seal_intraday.db，open_count≥2 的炸板股）",
+    fix: "交易日 9:25-15:05 保持后端运行，seal_intraday_collect 自动采集炸板池数据 → 次日有数据",
+  },
+};
+
 interface Props {
   /** 涨停战法命中候选（briefing.scored_candidates）。 */
   scoredCandidates?: ScoredCandidate[];
@@ -169,7 +199,7 @@ function StrategyGroupCard({
             </span>
           ))
         ) : (
-          <span className="text-[10px] text-muted-foreground/50">无漏斗数据（历史快照或无评估）</span>
+          <StrategyDataHint code={code} />
         )}
       </div>
 
@@ -388,6 +418,20 @@ function ConditionLegend() {
           <span>{it.label}</span>
         </span>
       ))}
+    </div>
+  );
+}
+
+/** 无漏斗数据时显示具体原因 + 修复指引（让用户知道为什么无数据、怎么修）。 */
+function StrategyDataHint({ code }: { code: string }) {
+  const status = STRATEGY_DATA_STATUS[code];
+  if (!status) {
+    return <span className="text-[10px] text-muted-foreground/50">无漏斗数据（历史快照或无评估）</span>;
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] text-yellow-500/80">⚠ {status.reason}</span>
+      <span className="text-[10px] text-muted-foreground/50">修复：{status.fix}</span>
     </div>
   );
 }
