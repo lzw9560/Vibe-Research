@@ -120,9 +120,19 @@ COMMIT;
 
 
 def save_result(result: STIResult) -> None:
-    """持久化 STI 结果到 sti_timeline 表。"""
+    """持久化 STI 结果到 sti_timeline 表。
+
+    写入语义（2026-08-26 修复，见 .scratch/sti-fix-timeline/issues/01）：
+    - 首次写入（无 date 冲突）：INSERT，zt_real/raw_break_rate 按原值（None 即 NULL，诚实缺失不臆造 0）。
+    - 重算覆写（同 date 已存在）：ON CONFLICT(date) DO UPDATE——zt_real/raw_break_rate 用
+      COALESCE(excluded.x, sti_timeline.x)：新值非空覆写、新值 None 保留旧值。防历史日重算
+      时 _sentiment 返 {} → zt_real=None 覆盖当天真值。其余字段照常覆写。
+    - 失败 re-raise（不再静默吞）：让调用方感知（compute 内 catch + log，降级返回已算 result）。
+      注意：scheduled_task_runs.status 列仍记 success（execute() 不查 result["status"] payload），
+      仅 result payload + 日志记 error——run.status 改造见 backlog（M1）。
+    """
+    db = get_db()
     try:
-        db = get_db()
         if result.dimensions is None:
             dim_values = [None] * 8
         else:
@@ -139,7 +149,7 @@ def save_result(result: STIResult) -> None:
             ]
 
         db.execute(
-            """INSERT OR REPLACE INTO sti_timeline (
+            """INSERT INTO sti_timeline (
                 date, score, phase,
                 dimension_limit_up_count, dimension_limit_down_count,
                 dimension_seal_rate,
@@ -147,7 +157,23 @@ def save_result(result: STIResult) -> None:
                 dimension_prev_zt_performance, dimension_max_boards,
                 market_factor, confidence, source_ok,
                 change_from_yesterday, data_updated, raw_break_rate, zt_real
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(date) DO UPDATE SET
+                score=excluded.score, phase=excluded.phase,
+                dimension_limit_up_count=excluded.dimension_limit_up_count,
+                dimension_limit_down_count=excluded.dimension_limit_down_count,
+                dimension_seal_rate=excluded.dimension_seal_rate,
+                dimension_advance_decline_ratio=excluded.dimension_advance_decline_ratio,
+                dimension_promotion_rate=excluded.dimension_promotion_rate,
+                dimension_prev_zt_performance=excluded.dimension_prev_zt_performance,
+                dimension_max_boards=excluded.dimension_max_boards,
+                market_factor=excluded.market_factor, confidence=excluded.confidence,
+                source_ok=excluded.source_ok,
+                change_from_yesterday=excluded.change_from_yesterday,
+                data_updated=excluded.data_updated,
+                computed_at=CURRENT_TIMESTAMP,
+                raw_break_rate=COALESCE(excluded.raw_break_rate, sti_timeline.raw_break_rate),
+                zt_real=COALESCE(excluded.zt_real, sti_timeline.zt_real)""",
             (
                 result.date,
                 result.score,
@@ -162,8 +188,11 @@ def save_result(result: STIResult) -> None:
             ),
         )
         db.commit()
-    except Exception as e:  # S094 audit: 旧 bare except:pass 吞 "no such column" 等致整行静默丢（T18 加 zt_real 列放大）；现 log
-        _logger.warning("save_result 写 sti_timeline 失败 date=%s: %s", result.date, e)
+    except Exception as e:  # 不静默吞：让 executor 感知记 error（旧 bare except:pass 致 08-25 静默丢）
+        _logger.warning("save_result 写 sti_timeline 失败 date=%s: %s", result.date, e, exc_info=True)
+        raise
+    finally:
+        db.close()
 
 
 def load_last_score() -> float | None:

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from datetime import datetime, timedelta, date as _date_cls
@@ -35,6 +36,7 @@ from limitup_sti.data import (
 )
 
 _BEIJING_TZ = datetime.now(market.BEIJING).astimezone().tzinfo
+_logger = logging.getLogger(__name__)
 
 
 class STIEngine:
@@ -188,19 +190,26 @@ class STIEngine:
         with self._db_lock:
             hist_scores = self._load_history_scores()
 
+        # 2026-08-26（.scratch/sti-fix-timeline/issues/02）：dim_histories 查询改用 get_db()
+        # 新建连接（不依赖单例 _db——long-lived 进程单例连接坏致查询静默失败→dim_histories
+        # 空→score=50.0）；except log 不静默 pass，降级为空不阻断计算。
         dim_histories: dict[str, list[float]] = {}
         try:
-            db = self._get_db()
-            for dim_name in STI_WEIGHTS:
-                col = f"dimension_{dim_name}"
-                rows = db.execute(
-                    f"SELECT {col} FROM sti_timeline WHERE {col} IS NOT NULL ORDER BY date DESC LIMIT 252"
-                ).fetchall()
-                dim_histories[dim_name] = [
-                    float(r[col]) for r in rows if r[col] is not None
-                ][::-1]
-        except Exception:
-            pass
+            db = get_db()
+            try:
+                for dim_name in STI_WEIGHTS:
+                    col = f"dimension_{dim_name}"
+                    rows = db.execute(
+                        f"SELECT {col} FROM sti_timeline WHERE {col} IS NOT NULL ORDER BY date DESC LIMIT 252"
+                    ).fetchall()
+                    dim_histories[dim_name] = [
+                        float(r[col]) for r in rows if r[col] is not None
+                    ][::-1]
+            finally:
+                db.close()
+        except Exception as e:
+            _logger.warning("compute dim_histories 查询失败（降级为空，不阻断）: %s", e)
+            dim_histories = {}
 
         weighted_sum = 0.0
         total_weight = 0.0
@@ -256,7 +265,13 @@ class STIEngine:
             zt_real=zt_real,
         )
 
-        self._save_result(result)
+        # 2026-08-26（review M2）：save 失败不抛——已算 score 不丢弃，log 降级返回 result。
+        # workflow fallback（routers/workflow.py:391）依赖 compute 返回 sti 拿 score，若 save 抛
+        # 会致 sti_score=None（回归）。run.status 记 save 失败见 backlog（M1，需改 execute()）。
+        try:
+            self._save_result(result)
+        except Exception as e:
+            _logger.warning("compute save_result 失败（已算 score 不丢弃，降级返回）: %s", e, exc_info=True)
         return result
 
     def _compute_confidence(

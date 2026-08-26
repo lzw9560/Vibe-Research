@@ -392,8 +392,8 @@ def _fetch_market_emotion(date: str, ctx: "SentimentContext | None" = None) -> d
         if sti.source_ok:
             out["sti_score"] = sti.score
             out["sti_phase"] = sti.phase.value if sti.phase else None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("_fetch_market_emotion STI 计算降级（不阻断）: %s", e, exc_info=True)
     return out
 
 

@@ -70,7 +70,7 @@ class TestSaveResult(unittest.TestCase):
         self.assertIsNone(row[1])  # raw_break_rate NULL
 
     def test_save_or_replace_upserts(self):
-        """同 date 二次写 → INSERT OR REPLACE 覆写（不重复行）。"""
+        """同 date 二次写 → ON CONFLICT 覆写（非空新值覆盖旧值，不重复行）。"""
         save_result(self._make_result(zt_real=10.0))
         save_result(self._make_result(zt_real=20.0))  # 同 date 覆写
         db = sqlite3.connect(STI_TIMELINE_DB_PATH)
@@ -80,6 +80,35 @@ class TestSaveResult(unittest.TestCase):
         db.close()
         self.assertEqual(len(rows), 1)   # 一行（OR REPLACE）
         self.assertEqual(rows[0][0], 20.0)  # 覆写后的值
+
+    def test_save_zt_real_none_does_not_overwrite(self):
+        """重算历史日 zt_real=None 不覆盖当天真值（COALESCE 保留旧值）。
+
+        场景：15:35 写 zt_real=42（当天最新日有值），次日 limitup_precompute
+        back_days 回溯重算昨日（已非最新日→_sentiment 返 {}→zt_real=None），
+        COALESCE 保留 42 不被 None 覆盖。
+        """
+        save_result(self._make_result(zt_real=42.0))
+        save_result(self._make_result(zt_real=None))  # 重算 None 不覆盖
+        db = sqlite3.connect(STI_TIMELINE_DB_PATH)
+        row = db.execute(
+            "SELECT zt_real FROM sti_timeline WHERE date=?", ("2026-08-23",)
+        ).fetchone()
+        db.close()
+        self.assertEqual(row[0], 42.0)  # 旧值保留
+
+    def test_save_raw_break_rate_none_does_not_overwrite(self):
+        """raw_break_rate=None 重算不覆盖旧值（同 COALESCE 范式）。"""
+        save_result(self._make_result(zt_real=10.0, raw_break_rate=0.15))
+        save_result(self._make_result(zt_real=None, raw_break_rate=None))
+        db = sqlite3.connect(STI_TIMELINE_DB_PATH)
+        row = db.execute(
+            "SELECT raw_break_rate, zt_real FROM sti_timeline WHERE date=?",
+            ("2026-08-23",),
+        ).fetchone()
+        db.close()
+        self.assertEqual(row[0], 0.15)  # raw_break_rate 旧值保留
+        self.assertEqual(row[1], 10.0)  # zt_real 旧值保留（None 不覆盖）
 
 
 if __name__ == "__main__":
