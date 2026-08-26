@@ -4,6 +4,7 @@
 // 空战法显"0 只"（诚实标注，不建假数据）。涨停战法 §44 已验证 / 非涨停战法 §44 未验证。
 // 因子过滤下沉到各战法子管线内部（附录 A3：禁止全局因子预过滤闸）。
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/Badge";
 import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
 import type { ScoredCandidate, StrategyFunnelSummary, StrategyFunnelCandidateCondition, StrategyFunnelCondition } from "@/lib/api";
@@ -163,7 +164,8 @@ function StrategyGroupCard({
   );
 }
 
-/** 候选行：name + code + strategy_score + confidence + sector + 逐条件命中标记（S097） */
+/** 候选行：name + code + strategy_score + confidence + sector + 逐条件命中标记（S097）
+ *  点击跳个股深度页 /stock/:code（12 源聚合详情）。 */
 function CandidateRow({
   c,
   conditionStates,
@@ -174,7 +176,10 @@ function CandidateRow({
   const sector = c.sector as string | undefined;
   const confidence = c.confidence as number | undefined;
   return (
-    <div className="flex items-center justify-between rounded border border-border/30 bg-card/20 px-2 py-1.5">
+    <Link
+      to={`/stock/${c.code}`}
+      className="flex items-center justify-between rounded border border-border/30 bg-card/20 px-2 py-1.5 transition-colors hover:border-primary/40 hover:bg-card/40"
+    >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-xs font-medium text-foreground">{c.name}</span>
@@ -198,7 +203,7 @@ function CandidateRow({
         </span>
         <div className="text-[9px] text-muted-foreground/50">策略分</div>
       </div>
-    </div>
+    </Link>
   );
 }
 

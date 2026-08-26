@@ -1,9 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { StrategySubPipelineView } from "../StrategySubPipelineView";
 import type { ScoredCandidate, StrategyFunnelSummary } from "@/lib/api";
 
 // S097 D（R12/R13/R15）前端：逐条件漏斗渲染 + 候选三态标记 + 历史快照兼容。
+// CandidateRow 用 <Link to="/stock/:code"> 跳个股详情，测试需 MemoryRouter 包裹。
+
+/** 包裹 MemoryRouter 防 Link 报 useContext basename null。 */
+function renderWithRouter(ui: React.ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 /** 同一 first_plate 战法的漏斗（两候选、两条件、含三态 + data_unavailable）。 */
 const funnel: StrategyFunnelSummary = {
@@ -73,7 +80,7 @@ const candidatesWithFunnel: ScoredCandidate[] = [
 
 describe("StrategySubPipelineView · S097 漏斗渲染", () => {
   it("渲染漏斗摘要：触发率 + 逐条件 input→passed + pass_rate", () => {
-    render(
+    renderWithRouter(
       <StrategySubPipelineView
         scoredCandidates={candidatesWithFunnel}
         lane="limitup"
@@ -96,7 +103,7 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
   });
 
   it("候选行渲染三态命中标记（hit ✓ / miss ✗ / data_unavailable —）", () => {
-    render(
+    renderWithRouter(
       <StrategySubPipelineView
         scoredCandidates={candidatesWithFunnel}
         lane="limitup"
@@ -117,7 +124,7 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
       { code: "000002", name: "万科A", strategy_code: "first_plate", strategy_name: "首板挖掘", strategy_score: 58.0 },
     ];
 
-    render(
+    renderWithRouter(
       <StrategySubPipelineView
         scoredCandidates={legacyCandidates}
         lane="limitup"

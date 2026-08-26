@@ -4,7 +4,7 @@
 // 顶部公共区：PageHeader + date picker + 锚条 + TaskStatusCard。
 // useMarketClock 接入双定时器（15:00 复盘推进 + 17:15 F 推进）。
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -505,6 +505,7 @@ function LimitupLaneContent({
   funnelLayers: import("@/lib/api").FunnelLayer[] | undefined;
   cv: import("@/lib/query/useCrossValidation").CrossValidationGroups;
 }) {
+  const navigate = useNavigate();
   return (
     <div className="space-y-2">
       {/* F4：mini 漏斗概览条——涨停池 → R1 → 终选 → 战法命中，水平横排胶囊数字标签 */}
@@ -513,7 +514,7 @@ function LimitupLaneContent({
       {/* ① 涨停股池+漏斗（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通，R2/R3 已下放战法不显 */}
       <CandidateFunnelEmbed
         date={briefing?.data_date ?? F}
-        onPick={() => { /* 前瞻 Tab 不开抽屉（S4 WatchlistBoard 接管） */ }}
+        onPick={(code) => navigate(`/stock/${code}`)}
         snapshotLayers={briefing?.from_snapshot ? funnelLayers : funnelLayers}
         scoredCandidates={briefing?.scored_candidates}
         marketScanScored={briefing?.market_scan_scored}
