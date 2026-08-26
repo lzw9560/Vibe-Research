@@ -166,7 +166,7 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 - [x] AC8 UI 双 pipeline 分区+折叠+卡片流转
 - [x] AC9 UI bug 修（代码2次/摘要/P2/验证/定稿失配）——T25 5/5 done（P2 判据→S096 落地）
 - [x] AC10 离线全测绿（pytest 2269 + vitest 428 + tsc + vite build 双绿门）
-- [ ] AC11 playwright e2e——T28 follow-up 未完（需后端重启 + 可选写 AC e2e spec）
+- [x] AC11 playwright e2e——T28 done（`s094-dual-pipeline.spec.ts` 4 测全绿：涨停叉②/非涨停叉⑦切换/结构不崩/S097 漏斗空态 R15 降级）
 
 ## 6. 设计取舍
 
