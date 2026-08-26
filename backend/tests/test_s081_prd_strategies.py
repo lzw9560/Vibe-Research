@@ -233,9 +233,9 @@ class TestPatternReversal:
             market_scan_ctx={"pattern": self._pattern(), "sector_rank": 1, "rel_strength_vs_sector": 5.0},
         )
         s = PatternReversalStrategy()
-        m = s.match(ctx)
-        assert len(m) == 3
-        assert s.compute_confidence(m, ctx) == 1.0  # 3 命中 high
+        r = s.match(ctx)
+        assert r.fired and r.hit_count == 3  # 3 命中 high
+        assert r.confidence == 1.0
 
     def test_kline_missing_degrades(self, gene_factory, monkeypatch):
         """S094 R5：无 market_scan_ctx.pattern → 不命中（诚实降级，不臆造）。
@@ -253,7 +253,10 @@ class TestPatternReversal:
             # market_scan_ctx 不设置 → None → 不命中
         )
         s = PatternReversalStrategy()
-        assert s.match(ctx) == []
+        r = s.match(ctx)
+        assert not r.fired
+        assert not r.data_ok  # 无 pattern → 整战法降级（data_unavailable，非逻辑 miss）
+        assert all(c.state == "data_unavailable" for c in r.conditions)
 
     def test_entry_price_uses_pool_item_p_plus_tick(self, gene_factory, monkeypatch):
         """S094 R5：触发价 = _round_to_tick_size(pool_item.p + 0.01)。

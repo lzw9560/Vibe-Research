@@ -82,6 +82,34 @@ class StrategyMatchResult(BaseModel):
     data_ok: bool                     # 数据前置可用（False=整战法降级不评估）
 
 
+def make_data_unavailable_result(
+    strategy_code: str,
+    strategy_name: str,
+    condition_specs: list[tuple[str, str, str, str]],
+    fire_rule: str = "全条件命中",
+) -> StrategyMatchResult:
+    """数据前置缺失 → 整战法诚实降级（conditions 全 data_unavailable，fired=False）。
+
+    pattern/DB/pool_item 前置缺失的战法复用（low_absorption/platform_breakout/
+    pattern_reversal/dragon_head 无 market_scan_ctx / reverse_package 炸板池DB缺失 /
+    storm_reversal 无 pool_item）。不算逻辑未命中（miss），独立统计 data_unavailable_count，
+    避免把数据缺失误显为「过滤掉 X 只」（limitup 路径无 market_scan_ctx 的 dragon_head 等）。
+    """
+    conditions = [
+        ConditionEval(
+            condition_id=cid, condition_name=cname, factor=factor,
+            threshold=threshold, actual_value=None,
+            state="data_unavailable", description="数据前置缺失，不可评估",
+        )
+        for cid, cname, factor, threshold in condition_specs
+    ]
+    return StrategyMatchResult(
+        strategy_code=strategy_code, strategy_name=strategy_name,
+        conditions=conditions, hit_count=0, total_count=len(conditions),
+        fired=False, fire_rule=fire_rule, confidence=None, data_ok=False,
+    )
+
+
 @dataclass
 class StrategyContext:
     """调度器统一准备的上下文容器，各 Strategy 按需读字段。"""

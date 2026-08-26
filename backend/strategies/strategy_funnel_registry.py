@@ -30,6 +30,7 @@ from strategies.strategy_base import (
     QualityCheck,
     StrategyConfig,
     StrategyContext,
+    StrategyMatchResult,
     _prepare_derived,
     _prepare_pool_item,
     dispatch_match,
@@ -487,6 +488,68 @@ def _build_market_scan_factors(pattern, cand: dict, strat_code: str) -> dict:
     }
 
 
+def _aggregate_strategy_funnels(
+    funnel_registry: list[StrategyConfig],
+    cand_match_results: list[tuple[dict, dict[str, StrategyMatchResult]]],
+) -> dict[str, dict]:
+    """S097 R10：每战法跨候选批次聚合 StrategyFunnelSummary。
+
+    每条件 input_count=评估候选数 / passed_count=hit 数 / data_unavailable_count=数据缺数 /
+    pass_rate；candidates 存每候选条件命中标记（hit/miss/data_unavailable 三态）。
+    data_ok=False 的战法（无 pattern/DB 等）→ 该候选 conditions 全 data_unavailable，
+    独立统计不算逻辑过滤（R7），避免数据缺失误显为「过滤掉 X 只」。
+    """
+    summaries: dict[str, dict] = {}
+    for cfg in funnel_registry:
+        cond_specs: list[tuple[str, str, str, str]] = []
+        per_cond_hit: dict[str, int] = {}
+        per_cond_du: dict[str, int] = {}
+        fired_count = 0
+        cand_marks: list[dict] = []
+        for cand, results_by_code in cand_match_results:
+            r = results_by_code.get(cfg.code)
+            if r is None:
+                cand_marks.append({
+                    "code": cand.get("code", ""), "name": cand.get("name", ""),
+                    "fired": False, "conditions": [],
+                })
+                continue
+            if not cond_specs:
+                cond_specs = [(c.condition_id, c.condition_name, c.factor, c.threshold)
+                              for c in r.conditions]
+            if r.fired:
+                fired_count += 1
+            cand_marks.append({
+                "code": cand.get("code", ""), "name": cand.get("name", ""),
+                "fired": r.fired,
+                "conditions": [{"condition_id": c.condition_id, "state": c.state}
+                               for c in r.conditions],
+            })
+            for c in r.conditions:
+                if c.state == "hit":
+                    per_cond_hit[c.condition_id] = per_cond_hit.get(c.condition_id, 0) + 1
+                elif c.state == "data_unavailable":
+                    per_cond_du[c.condition_id] = per_cond_du.get(c.condition_id, 0) + 1
+        total = len(cand_match_results)
+        conditions_agg = []
+        for cid, cname, factor, threshold in cond_specs:
+            passed = per_cond_hit.get(cid, 0)
+            du = per_cond_du.get(cid, 0)
+            conditions_agg.append({
+                "condition_id": cid, "condition_name": cname,
+                "factor": factor, "threshold": threshold,
+                "input_count": total, "passed_count": passed,
+                "data_unavailable_count": du,
+                "pass_rate": round(passed / total, 4) if total else 0.0,
+            })
+        summaries[cfg.code] = {
+            "strategy_code": cfg.code, "strategy_name": cfg.name,
+            "fired_count": fired_count, "total_count": total,
+            "conditions": conditions_agg, "candidates": cand_marks,
+        }
+    return summaries
+
+
 def score_candidates(
     candidates: list[dict],
     weather_state: str | None,
@@ -545,6 +608,7 @@ def score_candidates(
             billboard = None
 
     scored: list[dict] = []
+    cand_match_results: list[tuple[dict, dict[str, StrategyMatchResult]]] = []
     for cand in candidates:
         factors = cand.get("factors", {})
         # grill Q6：dict → GeneScore 适配（dispatch_match 的入参类型）
@@ -567,15 +631,18 @@ def score_candidates(
             indicators=None, derived=derived, weather_state=weather_state,
             market_scan_ctx=market_scan_ctx,
         )
-        # S094 T11：dispatch_match 跑 funnel_type 过滤后的 registry → 只返回命中的 signals
-        try:
-            signals = dispatch_match(ctx, funnel_registry)
-            matched_codes = {s.strategy_code for s in signals}
-            # S094 R4：strategy_code → signal 映射，供 scored 保留 volume_signal
-            sig_by_code = {s.strategy_code: s for s in signals}
-        except Exception:  # noqa: BLE001 - match 失败按"不命中"处理，不阻断整体打分
-            matched_codes = set()
-            sig_by_code = {}
+        # S097：直接调 impl.match 收集全量 StrategyMatchResult（含 fired=False/data_unavailable，
+        # 供批次聚合；不经 dispatch_match——后者跳过 fired=False 不够漏斗统计）
+        results_by_code: dict[str, StrategyMatchResult] = {}
+        for _cfg in funnel_registry:
+            try:
+                _r = _cfg.strategy_impl.match(ctx)
+            except Exception:  # noqa: BLE001 - 单战法异常不阻断
+                continue
+            if isinstance(_r, StrategyMatchResult):
+                results_by_code[_cfg.code] = _r
+        cand_match_results.append((cand, results_by_code))
+        matched_codes = {c for c, r in results_by_code.items() if r.fired}
         for strat_code in primary_codes:
             cfg = get_strategy_config(strat_code)
             if cfg is None:
@@ -601,12 +668,11 @@ def score_candidates(
                     score = round(score * seat_risk.score_modifier, 4)
                 except Exception:
                     seat_risk = None
-            # S094 R4/R12: 从 signal 取 volume_signal + confidence + signal_strength
-            # （per-strategy 量能/置信下沉 match 层产，复用 dispatch_match 不派生 strategy_score/100）
-            _sig = sig_by_code.get(strat_code)
-            _volume_signal = getattr(_sig, "volume_signal", None) if _sig else None
-            _confidence = _sig.confidence if _sig else None  # S094 R12/T15
-            _signal_strength = _sig.signal_strength if _sig else None
+            # S097：从 StrategyMatchResult 取 confidence/signal_strength；volume_signal 下沉 match 层
+            _r = results_by_code.get(strat_code)
+            _confidence = _r.confidence if _r else None
+            _signal_strength = int((_r.confidence or 0) * 100) if _r else None
+            _volume_signal = cfg.strategy_impl.compute_volume_signal(ctx) if _r else None
             scored.append({
                 **{k: v for k, v in cand.items() if k not in ("bars", "pattern")},  # S094 audit: strip heavy bars/pattern（不进 briefing JSON，前端 NonLimitupLane 只用 code/name/sector/strategy_score）
                 "strategy_code": cfg.code,
@@ -629,6 +695,12 @@ def score_candidates(
                     if seat_risk else None
                 ),
             })
+
+    # S097 R10/R17：批次聚合 StrategyFunnelSummary（每战法跨候选 input/passed/data_unavailable/
+    # pass_rate + 候选命中标记），回填 scored 每项 strategy_funnel
+    summaries = _aggregate_strategy_funnels(funnel_registry, cand_match_results)
+    for s in scored:
+        s["strategy_funnel"] = summaries.get(s.get("strategy_code"))
 
     scored.sort(key=lambda x: x.get("strategy_score", 0), reverse=True)
     if not scored:

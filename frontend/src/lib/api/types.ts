@@ -1105,6 +1105,42 @@ export interface PreMarketBriefing {
   error?: string;
 }
 
+/** S097 §5.4：逐条件因子过滤漏斗摘要——scored_candidates 每项可选携带（同战法共享）。 */
+export interface StrategyFunnelCondition {
+  condition_id: string;    // "first_plate.c1"
+  condition_name: string;  // "基因得分合格"
+  factor: string;          // "total_score"
+  threshold: string;       // ">= 60"
+  input_count: number;     // 评估候选数
+  passed_count: number;    // 命中数
+  data_unavailable_count: number;  // 数据缺失数（独立于逻辑过滤）
+  pass_rate: number;       // passed/input
+}
+
+/** S097 §5.4：候选逐条件命中状态（三态）。 */
+export interface StrategyFunnelCandidateCondition {
+  condition_id: string;
+  state: "hit" | "miss" | "data_unavailable";
+}
+
+/** S097 §5.4：漏斗内单个候选的逐条件命中明细。 */
+export interface StrategyFunnelCandidate {
+  code: string;
+  name: string;
+  fired: boolean;
+  conditions: StrategyFunnelCandidateCondition[];
+}
+
+/** S097 §5.4：战法逐条件漏斗摘要（fired/total + conditions + candidates 三态明细）。 */
+export interface StrategyFunnelSummary {
+  strategy_code: string;
+  strategy_name: string;
+  fired_count: number;       // 该战法 fired 候选数
+  total_count: number;       // 该战法评估候选总数
+  conditions: StrategyFunnelCondition[];
+  candidates: StrategyFunnelCandidate[];
+}
+
 /** B-lite：score_candidates 返回项（对齐 backend/strategies/strategy_funnel_registry.py:439-448）。 */
 export interface ScoredCandidate {
   code: string;
@@ -1117,6 +1153,8 @@ export interface ScoredCandidate {
   weather_recommended?: boolean;
   position_params?: { stop_loss_pct: number; take_profit_pct: number; max_hold_days: number; position_scale: number };
   note?: string;
+  // S097 D（R12/R13）：逐条件漏斗摘要（同战法共享，仅当后端产 strategy_funnel 时存在）
+  strategy_funnel?: StrategyFunnelSummary;
   // 保留候选原有字段（factors/total_score/zt_count_250d 等）
   [key: string]: unknown;
 }

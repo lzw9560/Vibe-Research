@@ -11,7 +11,9 @@ low_absorption 在旧 STRATEGY_REGISTRY（dict）与 STRATEGY_FUNNEL_REGISTRY（
 """
 from __future__ import annotations
 
-from strategies.strategy_base import BaseStrategy, ConditionMatch, ConditionEval, StrategyMatchResult
+from strategies.strategy_base import (
+    BaseStrategy, ConditionMatch, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
+)
 
 
 def _get_pattern(ctx):
@@ -78,15 +80,35 @@ class ConsecutiveRelayStrategy(BaseStrategy):
     code = "consecutive_relay"
     name = "连板接力"
 
-    def match(self, ctx) -> list[ConditionMatch]:
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：拆 C1 连板历史 + C2 封板能力，返 StrategyMatchResult（全量条件三态）
         gene = ctx.gene
-        if gene.zt_count_250d >= 2 and gene.factors.get("封板率", 0) >= 60:
-            return [ConditionMatch(
-                condition="连板+封板强度",
-                value=f"涨停次数 {gene.zt_count_250d}",
-                description="策略逻辑上，该股具备连板接力的历史统计特征",
-            )]
-        return []
+        zt = gene.zt_count_250d
+        seal = gene.factors.get("封板率", 0)
+        c1_hit = zt >= 2
+        c2_hit = seal >= 60
+        conditions = [
+            ConditionEval(
+                condition_id="consecutive_relay.c1", condition_name="连板历史",
+                factor="zt_count_250d", threshold=">= 2", actual_value=str(zt),
+                state="hit" if c1_hit else "miss",
+                description=f"250日涨停 {zt} 次（阈值≥2）",
+            ),
+            ConditionEval(
+                condition_id="consecutive_relay.c2", condition_name="封板能力",
+                factor="封板率", threshold=">= 60", actual_value=f"{seal:.1f}%",
+                state="hit" if c2_hit else "miss",
+                description=f"封板率 {seal:.1f}%（阈值≥60%）",
+            ),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_hit and c2_hit
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=min(seal / 100, 1.0) if fired else None, data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return min(ctx.gene.factors.get("封板率", 0) / 100, 1.0)
@@ -98,21 +120,35 @@ class BreakResealStrategy(BaseStrategy):
     code = "break_reseal"
     name = "炸板回封"
 
-    def match(self, ctx) -> list[ConditionMatch]:
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：拆 C1 黄金区频次 [3,5] + C2 强封板≥80，返 StrategyMatchResult
         gene = ctx.gene
-        # S053 R3：match 改 zt_count_250d 黄金区 [3,5] + 封板率>=80
-        # 数据证据：zt_count 3-5 区间 89.5% 命中率（19 条样本），6+ 衰减，11+ 反亏
+        zt = gene.zt_count_250d
         seal = gene.factors.get("封板率", 0)
-        if 3 <= gene.zt_count_250d <= 5 and seal >= 80:
-            return [ConditionMatch(
-                condition="炸板回封+历史封板能力",
-                value=f"zt_count_250d={gene.zt_count_250d} 封板率{seal:.1f}%",
-                description=(
-                    f"策略逻辑上，该股 250 日涨停 {gene.zt_count_250d} 次"
-                    f"（黄金区 3-5），历史封板能力强且未过劳"
-                ),
-            )]
-        return []
+        c1_hit = 3 <= zt <= 5
+        c2_hit = seal >= 80
+        conditions = [
+            ConditionEval(
+                condition_id="break_reseal.c1", condition_name="黄金区频次",
+                factor="zt_count_250d", threshold="[3,5]", actual_value=str(zt),
+                state="hit" if c1_hit else "miss",
+                description=f"250日涨停 {zt} 次（黄金区 3-5）",
+            ),
+            ConditionEval(
+                condition_id="break_reseal.c2", condition_name="强封板",
+                factor="封板率", threshold=">= 80", actual_value=f"{seal:.1f}%",
+                state="hit" if c2_hit else "miss",
+                description=f"封板率 {seal:.1f}%（阈值≥80%）",
+            ),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_hit and c2_hit
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.7 if fired else None, data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.7
@@ -129,20 +165,46 @@ class LowAbsorptionStrategy(BaseStrategy):
     code = "low_absorption"
     name = "低吸龙头"
 
-    def match(self, ctx) -> list[ConditionMatch]:
-        # S094 R10/T14：改读 PatternScan（ma5_proximity 回调至MA5 + ma_bullish 多头），不读 gene 因子
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：拆 C1 回调MA5 + C2 均线多头；无 pattern（limitup 路径）→ data_ok=False 整战法降级
         pattern = _get_pattern(ctx)
         if pattern is None:
-            return []
+            return make_data_unavailable_result(self.code, self.name, [
+                ("low_absorption.c1", "回调MA5", "ma5_proximity", "<= 3"),
+                ("low_absorption.c2", "均线多头", "ma_bullish", "True"),
+            ])
         ma5_prox = pattern.ma5_proximity
         ma_bull = pattern.ma_bullish
-        if ma5_prox is None or ma5_prox > 3 or not ma_bull:
-            return []
-        return [ConditionMatch(
-            condition="回调至MA5+均线多头",
-            value=f"ma5_proximity={ma5_prox:.2f}%",
-            description=f"策略逻辑上，股价回调至 5 日线附近（接近度 {ma5_prox:.2f}%，≤3%）且均线多头排列，存在低吸机会",
-        )]
+        if ma5_prox is None:
+            c1_state, c1_desc, c1_val = "data_unavailable", "ma5_proximity 数据缺失", None
+        elif ma5_prox <= 3:
+            c1_state, c1_desc = "hit", f"ma5_proximity={ma5_prox:.2f}%（≤3%，回调至MA5）"
+            c1_val = f"{ma5_prox:.2f}%"
+        else:
+            c1_state, c1_desc = "miss", f"ma5_proximity={ma5_prox:.2f}%（>3%，未回调至MA5）"
+            c1_val = f"{ma5_prox:.2f}%"
+        if ma_bull is None:
+            c2_state, c2_desc, c2_val = "data_unavailable", "ma_bullish 数据缺失", None
+        else:
+            c2_state = "hit" if ma_bull else "miss"
+            c2_desc = f"均线{'多头' if ma_bull else '非多头'}排列"
+            c2_val = str(ma_bull)
+        conditions = [
+            ConditionEval(condition_id="low_absorption.c1", condition_name="回调MA5",
+                factor="ma5_proximity", threshold="<= 3", actual_value=c1_val,
+                state=c1_state, description=c1_desc),
+            ConditionEval(condition_id="low_absorption.c2", condition_name="均线多头",
+                factor="ma_bullish", threshold="True", actual_value=c2_val,
+                state=c2_state, description=c2_desc),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_state == "hit" and c2_state == "hit"
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.5 if fired else None, data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.5
@@ -161,19 +223,27 @@ class NShapeCounterattackStrategy(BaseStrategy):
     code = "n_shape_counterattack"
     name = "N字反击"
 
-    def match(self, ctx) -> list[ConditionMatch]:
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：C1 N字区间 [2,10]；R14 去条件标签"放量"（condition_name="N字区间"，纯基因频次战法）
         gene = ctx.gene
-        # S053 修复：移除矛盾的"涨停频次>30"门槛（与 zt_count_250d<=10 互斥）
-        if 2 <= gene.zt_count_250d <= 10:
-            return [ConditionMatch(
-                condition="N字形态+放量",
-                value=f"zt_count_250d={gene.zt_count_250d}",
-                description=(
-                    f"策略逻辑上，该股 250 日涨停 {gene.zt_count_250d} 次"
-                    f"（[2,10] 区间，有过涨停历史但未过频），呈现 N 字反击的历史统计特征"
-                ),
-            )]
-        return []
+        zt = gene.zt_count_250d
+        c1_hit = 2 <= zt <= 10
+        conditions = [
+            ConditionEval(
+                condition_id="n_shape_counterattack.c1", condition_name="N字区间",
+                factor="zt_count_250d", threshold="[2,10]", actual_value=str(zt),
+                state="hit" if c1_hit else "miss",
+                description=f"250日涨停 {zt} 次（[2,10] 区间，N字反击历史）",
+            ),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_hit
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.5 if fired else None, data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.5
@@ -190,20 +260,46 @@ class PlatformBreakoutStrategy(BaseStrategy):
     code = "platform_breakout"
     name = "平台突破"
 
-    def match(self, ctx) -> list[ConditionMatch]:
-        # S094 R10/T14：改读 PatternScan（consolidation_days 横盘≥5 + volume_breakout_ratio 放量>2），不读 gene 因子
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：拆 C1 横盘≥5 + C2 放量突破>2；无 pattern → data_ok=False 整战法降级
         pattern = _get_pattern(ctx)
         if pattern is None:
-            return []
+            return make_data_unavailable_result(self.code, self.name, [
+                ("platform_breakout.c1", "横盘", "consolidation_days", ">= 5"),
+                ("platform_breakout.c2", "放量突破", "volume_breakout_ratio", "> 2"),
+            ])
         cons = pattern.consolidation_days
         vol_brk = pattern.volume_breakout_ratio
-        if cons is None or cons < 5 or vol_brk is None or vol_brk <= 2:
-            return []
-        return [ConditionMatch(
-            condition="横盘+放量突破",
-            value=f"横盘{cons}日 量比{vol_brk:.2f}",
-            description=f"策略逻辑上，横盘 {cons} 日（≥5）后今日放量突破（量比 {vol_brk:.2f}，>2）",
-        )]
+        if cons is None:
+            c1_state, c1_desc, c1_val = "data_unavailable", "consolidation_days 数据缺失", None
+        elif cons >= 5:
+            c1_state, c1_desc, c1_val = "hit", f"横盘 {cons} 日（≥5）", str(cons)
+        else:
+            c1_state, c1_desc, c1_val = "miss", f"横盘 {cons} 日（<5，未充分横盘）", str(cons)
+        if vol_brk is None:
+            c2_state, c2_desc, c2_val = "data_unavailable", "volume_breakout_ratio 数据缺失", None
+        elif vol_brk > 2:
+            c2_state, c2_desc = "hit", f"量比 {vol_brk:.2f}（>2，放量突破）"
+            c2_val = f"{vol_brk:.2f}"
+        else:
+            c2_state, c2_desc = "miss", f"量比 {vol_brk:.2f}（≤2，未放量）"
+            c2_val = f"{vol_brk:.2f}"
+        conditions = [
+            ConditionEval(condition_id="platform_breakout.c1", condition_name="横盘",
+                factor="consolidation_days", threshold=">= 5", actual_value=c1_val,
+                state=c1_state, description=c1_desc),
+            ConditionEval(condition_id="platform_breakout.c2", condition_name="放量突破",
+                factor="volume_breakout_ratio", threshold="> 2", actual_value=c2_val,
+                state=c2_state, description=c2_desc),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_state == "hit" and c2_state == "hit"
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.5 if fired else None, data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.5
@@ -222,16 +318,35 @@ class EndOfDaySneakStrategy(BaseStrategy):
     code = "end_of_day_sneak"
     name = "尾盘偷袭"
 
-    def match(self, ctx) -> list[ConditionMatch]:
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：拆 C1 尾盘封板率≥40 + C2 溢价能力>40，返 StrategyMatchResult
         gene = ctx.gene
         seal = gene.factors.get("封板率", 0)
-        if seal >= 40 and gene.factors.get("次日溢价率", 0) > 40:
-            return [ConditionMatch(
-                condition="尾盘封板",
-                value=f"封板率 {seal:.1f}%",
-                description="策略逻辑上，该股存在尾盘偷袭的统计特征",
-            )]
-        return []
+        premium = gene.factors.get("次日溢价率", 0)
+        c1_hit = seal >= 40
+        c2_hit = premium > 40
+        conditions = [
+            ConditionEval(
+                condition_id="end_of_day_sneak.c1", condition_name="尾盘封板",
+                factor="封板率", threshold=">= 40", actual_value=f"{seal:.1f}%",
+                state="hit" if c1_hit else "miss",
+                description=f"封板率 {seal:.1f}%（阈值≥40%）",
+            ),
+            ConditionEval(
+                condition_id="end_of_day_sneak.c2", condition_name="溢价能力",
+                factor="次日溢价率", threshold="> 40", actual_value=f"{premium:.1f}%",
+                state="hit" if c2_hit else "miss",
+                description=f"次日溢价率 {premium:.1f}%（阈值>40%）",
+            ),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_hit and c2_hit
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.4 if fired else None, data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.4
@@ -250,19 +365,40 @@ class DragonHeadStrategy(BaseStrategy):
     code = "dragon_head"
     name = "龙头战法"
 
-    def match(self, ctx) -> list[ConditionMatch]:
-        # S094 R9：删无条件放行——读 market_scan_ctx（板块内排名≤3 + 有 PatternScan 才命中）。
-        # 无 market_scan_ctx（limitup/match_strategies 路径）→ 不命中（R9 行为变化）。
+    def match(self, ctx) -> StrategyMatchResult:
+        # S097：C1 板块领涨 sector_rank≤3。
+        # 无 market_scan_ctx/pattern → data_ok=False 整战法降级（limitup 路径无 msc，不算逻辑过滤）；
+        # pattern 存在但 sector_rank None → 字段级 data_unavailable（data_ok=True，非整战法降级，
+        # 与 LowAbsorption/PlatformBreakout/StormReversal 的字段级降级一致）。
         msc = getattr(ctx, "market_scan_ctx", None) or {}
         pattern = msc.get("pattern") if isinstance(msc, dict) else None
         sector_rank = msc.get("sector_rank")
-        if pattern is None or sector_rank is None or sector_rank > 3:
-            return []
-        return [ConditionMatch(
-            condition="板块内领涨",
-            value=f"板块内排名={sector_rank}",
-            description=f"策略逻辑上，该股板块内相对强度排名前 3（rank={sector_rank}），具备龙头地位",
-        )]
+        if pattern is None:
+            return make_data_unavailable_result(self.code, self.name, [
+                ("dragon_head.c1", "板块领涨", "sector_rank", "<= 3"),
+            ])
+        if sector_rank is None:
+            c1_state, c1_desc, c1_val, c1_hit = "data_unavailable", "sector_rank 数据缺失", None, False
+        else:
+            c1_hit = sector_rank <= 3
+            c1_state = "hit" if c1_hit else "miss"
+            c1_desc = f"板块内排名 {sector_rank}（阈值≤3，龙头地位）"
+            c1_val = str(sector_rank)
+        conditions = [
+            ConditionEval(
+                condition_id="dragon_head.c1", condition_name="板块领涨",
+                factor="sector_rank", threshold="<= 3", actual_value=c1_val,
+                state=c1_state, description=c1_desc,
+            ),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_hit
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.5 if fired else None, data_ok=True,
+        )
 
     def compute_confidence(self, matches, ctx) -> float:
         return 0.5

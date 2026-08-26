@@ -1,6 +1,6 @@
 # Spec: S097 — 逐条件因子过滤
 
-> 状态：草案
+> 状态：已实现 + 验收通过（2026-08-26；详见 §10 实现记录）
 > 作者：Claude 会话  日期：2026-08-26
 > 级别：medium（跨层 backend match() + frontend 渲染；不碰外部数据源 / 不新增 AI 工具 / 不涉财务验算）
 > 流程门：spec.md（S094:304 预留"待开独立 spec"）+ issue 层单轮 review；直接 develop（免 feature 分支 / 免完整 grill）
@@ -219,3 +219,27 @@ interface StrategyFunnelSummary {
 ### 9.3 回滚
 
 match() 返结构变是承重改动 → 回滚 = `git revert` S097 commit。旧 `list[ConditionMatch]` 协议可在过渡期共存（dispatch_match 兼容两种返回），降低回滚成本。
+
+## 10. 实现记录（2026-08-26）
+
+**后端 done**：
+- `strategy_base.py`：`ConditionEval` + `StrategyMatchResult` model（S097 范式，452f65b）+ `make_data_unavailable_result` helper（pattern/DB/pool_item 前置缺失整战法降级，DRY）+ `dispatch_match` isinstance 兼容（未改战法返 list 走旧，已改返 result 走新）。
+- 12 战法 `match()` 全改返 `StrategyMatchResult`：拆条件 + 三态 hit/miss/data_unavailable + fired 按 fire_rule（全条件命中 / ≥4/5 / ≥2/3）+ confidence（fired 时算，未 fired / data_ok=False → None）。
+  - R14：n_shape `condition_name="N字区间"`（去"放量"）。
+  - R18：weak_turn C4 `last_lock_time[11:16] >= "14:40"`（修旧 ISO 整串比较恒命中 bug）。
+- `strategy_funnel_registry.py`：`score_candidates` 改直接调 `impl.match` 收集全量 `StrategyMatchResult`（不经 dispatch_match——后者跳过 fired=False 不够漏斗统计）+ `_aggregate_strategy_funnels`（每战法跨候选 input/passed/data_unavailable/pass_rate + 候选命中标记）+ 回填 `scored[].strategy_funnel`。`StrategySignal.matches` 保持 list[ConditionMatch] 兼容（dispatch_match 映射 hit→ConditionMatch shape），7+ 消费方零迁移。
+
+**前端 done**：
+- `types.ts`：`StrategyFunnelCondition` / `CandidateCondition` / `Candidate` / `StrategyFunnelSummary` interface + `ScoredCandidate.strategy_funnel?`（置索引签名前，tsc 零错）。
+- `StrategySubPipelineView.tsx`：`FunnelSummary`（触发率 + 逐条件 input→passed + data_unavailable + pass_rate 重算）+ `CandidateRow` 三态标记（✓/✗/—）+ `findFunnelCandidateConditions` + R15 兼容（无 strategy_funnel → null）。
+
+**测试 done**：
+- `test_s097_first_plate.py`（3）+ `test_s097_funnel_aggregation.py`（4，批次聚合并联 + data_unavailable）+ `test_s086_strategy_impl.py`（48，12 战法三态 + R18 + 字段级 data_unavailable）+ `test_s081_prd_strategies.py`（迁移 2 处）+ `StrategySubPipelineView.test.tsx`（4，vitest）。
+- strategies 子集 203 全绿。
+
+**验收 done**：
+- 全量冒烟 2275 passed + 1 pre-existing failed（`test_spec_consistency::test_plan_tasks_no_bare_stale_markers`，硬编码 `_SPEC=specs/S066`（S066 已归档 archive/m3），**非 S097 引入**，见记忆 `test-plan-tasks-s066-archive-stale`）+ 20 deselected（newsradar/s032 flaky）+ 1 skipped。S097 零回归破坏（spec A6 满足）。
+- 对抗验证 workflow（13 项 review→verify）发现 2 confirmed bug，已修 + 补测试：
+  1. dragon_head（low）：pattern 存在但 sector_rank=None 误返 data_ok=False（整战法降级）→ 拆为字段级 data_ok=True + c1=data_unavailable（与 LowAbsorption/PlatformBreakout/StormReversal 一致）。
+  2. weak_turn_strong C1（medium）：pool_item=None 时 `int(lbc or 0)` 臆造 lbc=0 → C1 miss（违反 §7 不臆造）→ 改 lbc None → data_unavailable（字段级，data_ok=True）。
+  - 补 `test_field_data_unavailable_no_sector_rank` + `test_c1_data_unavailable_no_pool_item`，132 测试全绿。

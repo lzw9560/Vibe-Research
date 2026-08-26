@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
-import type { ScoredCandidate } from "@/lib/api";
+import type { ScoredCandidate, StrategyFunnelSummary, StrategyFunnelCandidateCondition } from "@/lib/api";
 
 // 12 战法归组（spec §3.M STRATEGIES_BY_FUNNEL_TYPE）
 const LIMITUP_STRATEGIES: { code: string; name: string }[] = [
@@ -141,8 +141,14 @@ function StrategyGroupCard({
       </button>
       {hasHits && open && (
         <div className="mt-2 space-y-1.5 border-t border-border/20 pt-2">
+          {/* S097 D：逐条件漏斗摘要（同战法共享，取首候选 strategy_funnel；R15 旧快照无此字段则不渲染） */}
+          <FunnelSummary funnel={hits[0]?.strategy_funnel} />
           {hits.map((c) => (
-            <CandidateRow key={`${c.code}-${c.strategy_code}`} c={c} />
+            <CandidateRow
+              key={`${c.code}-${c.strategy_code}`}
+              c={c}
+              conditionStates={findFunnelCandidateConditions(hits[0]?.strategy_funnel, c.code)}
+            />
           ))}
         </div>
       )}
@@ -150,8 +156,14 @@ function StrategyGroupCard({
   );
 }
 
-/** 候选行：name + code + strategy_score + confidence + sector */
-function CandidateRow({ c }: { c: ScoredCandidate }) {
+/** 候选行：name + code + strategy_score + confidence + sector + 逐条件命中标记（S097） */
+function CandidateRow({
+  c,
+  conditionStates,
+}: {
+  c: ScoredCandidate;
+  conditionStates?: StrategyFunnelCandidateCondition[];
+}) {
   const sector = c.sector as string | undefined;
   const confidence = c.confidence as number | undefined;
   return (
@@ -161,6 +173,13 @@ function CandidateRow({ c }: { c: ScoredCandidate }) {
           <span className="truncate text-xs font-medium text-foreground">{c.name}</span>
           <span className="shrink-0 font-mono text-[10px] text-muted-foreground/60">{c.code}</span>
         </div>
+        {conditionStates && conditionStates.length > 0 && (
+          <div className="mt-0.5 flex flex-wrap gap-0.5">
+            {conditionStates.map((cs) => (
+              <ConditionMarker key={cs.condition_id} state={cs.state} conditionId={cs.condition_id} />
+            ))}
+          </div>
+        )}
         <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-muted-foreground/50">
           {sector && <span>板块 {sector}</span>}
           {confidence != null && <span>置信 {confidence.toFixed(2)}</span>}
@@ -173,5 +192,71 @@ function CandidateRow({ c }: { c: ScoredCandidate }) {
         <div className="text-[9px] text-muted-foreground/50">策略分</div>
       </div>
     </div>
+  );
+}
+
+/** S097 D：从漏斗 candidates 中按 code 取该候选的逐条件命中状态（无则 undefined，不渲染标记）。 */
+function findFunnelCandidateConditions(
+  funnel: StrategyFunnelSummary | undefined,
+  code: string,
+): StrategyFunnelCandidateCondition[] | undefined {
+  if (!funnel) return undefined;
+  return funnel.candidates.find((c) => c.code === code)?.conditions;
+}
+
+/** S097 D：逐条件漏斗摘要（同战法共享）。无 strategy_funnel 时不渲染（R15 历史快照兼容）。 */
+function FunnelSummary({ funnel }: { funnel?: StrategyFunnelSummary }) {
+  if (!funnel) return null;
+  const fireRate = funnel.total_count > 0
+    ? `${funnel.fired_count}/${funnel.total_count}（${Math.round((funnel.fired_count / funnel.total_count) * 100)}%）`
+    : `${funnel.fired_count}/${funnel.total_count}`;
+  return (
+    <div className="rounded border border-border/20 bg-card/10 p-1.5 text-[10px]">
+      <div className="text-muted-foreground/70">
+        <span className="text-foreground/80">触发率</span> {fireRate}
+      </div>
+      <div className="mt-1 flex flex-col gap-1">
+        {funnel.conditions.map((cond) => {
+          const rate = cond.input_count > 0
+            ? Math.round((cond.passed_count / cond.input_count) * 100)
+            : null;
+          return (
+            <div key={cond.condition_id} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <span className="text-muted-foreground/80">{cond.condition_name}</span>
+              <span className="font-mono tabular-nums text-muted-foreground/60">
+                {cond.input_count}→{cond.passed_count}
+              </span>
+              {cond.data_unavailable_count > 0 && (
+                <span className="text-yellow-500/80">数据缺失 {cond.data_unavailable_count}</span>
+              )}
+              <span className="font-mono tabular-nums text-muted-foreground/60">
+                {rate != null ? `${rate}%` : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** S097 D：候选行条件命中标记（三态：✓ 绿 / ✗ 灰 / — 黄）。 */
+function ConditionMarker({
+  state,
+  conditionId,
+}: {
+  state: "hit" | "miss" | "data_unavailable";
+  conditionId: string;
+}) {
+  const config = {
+    hit: { symbol: "✓", cls: "text-green-500" },
+    miss: { symbol: "✗", cls: "text-muted-foreground/30" },
+    data_unavailable: { symbol: "—", cls: "text-yellow-500" },
+  } as const;
+  const { symbol, cls } = config[state];
+  return (
+    <span title={`${conditionId}: ${state}`} className={`text-[11px] leading-none ${cls}`}>
+      {symbol}
+    </span>
   );
 }
