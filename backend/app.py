@@ -9,6 +9,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from dotenv import load_dotenv
+# 仓库根 .env 统一收拢 env（VR_DATA_DIR/VR_LLM_*/飞书 key）——import 前读，让 vr_paths.resolve_data_dir() 能用 VR_DATA_DIR
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 import asyncio
 import hashlib
 import json
