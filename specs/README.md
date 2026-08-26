@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S098。
+`SNNN` 三位递增。下一个新 spec 用 S099。
 
 > 历史里程碑索引见 [`MILESTONES.md`](MILESTONES.md)。已完成的 M0-M3 归档在 `archive/`。
 
