@@ -619,7 +619,7 @@ class TaskExecutor:
                     d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
                     if not _is_trading_day(datetime.strptime(d, "%Y-%m-%d").date()):
                         continue
-                    engine.precompute_daily(d)
+                    await asyncio.to_thread(engine.precompute_daily, d)
             except Exception as e:
                 logger.warning("[limitup_precompute] STI 预计算失败: %s", e)
 
@@ -629,7 +629,7 @@ class TaskExecutor:
                     d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
                     if not _is_trading_day(datetime.strptime(d, "%Y-%m-%d").date()):
                         continue
-                    screener.precompute_daily(d)
+                    await asyncio.to_thread(screener.precompute_daily, d)
             except Exception as e:
                 logger.warning("[limitup_precompute] 竞价选股预计算失败: %s", e)
 
@@ -639,12 +639,12 @@ class TaskExecutor:
                     d = (datetime.now(_ls.BEIJING_TZ) - timedelta(days=back)).strftime("%Y-%m-%d")
                     if not _is_trading_day(datetime.strptime(d, "%Y-%m-%d").date()):
                         continue
-                    reviewer.precompute_daily(d)
+                    await asyncio.to_thread(reviewer.precompute_daily, d)
             except Exception as e:
                 logger.warning("[limitup_precompute] 复盘报告预计算失败: %s", e)
 
         try:
-            asyncio.run(_precompute_async())
+            asyncio.run(asyncio.wait_for(_precompute_async(), timeout=600))
             results["status"] = "ok"
         except Exception as e:
             logger.warning("[limitup_precompute] 预计算失败: %s", e)

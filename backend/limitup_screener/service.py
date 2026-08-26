@@ -438,33 +438,37 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
     result_holder = []
     error_holder = []
 
-    def _compute_with_timeout():
-        try:
-            result_holder.append(_compute_and_cache(target_date, cache_key))
-        except Exception as e:
-            error_holder.append(e)
+    try:
+        def _compute_with_timeout():
+            try:
+                result_holder.append(_compute_and_cache(target_date, cache_key))
+            except Exception as e:
+                error_holder.append(e)
 
-    compute_thread = threading.Thread(target=_compute_with_timeout, daemon=True)
-    compute_thread.start()
-    compute_thread.join(timeout=90)
+        compute_thread = threading.Thread(target=_compute_with_timeout, daemon=True)
+        compute_thread.start()
+        compute_thread.join(timeout=90)
 
-    if error_holder:
-        raise error_holder[0]
+        if error_holder:
+            raise error_holder[0]
 
-    if result_holder:
-        return result_holder[0]
+        if result_holder:
+            return result_holder[0]
 
-    _COMPUTING.pop(cache_key, None)
-    return ScreenerResult(
-        date=target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:],
-        gene_scores=[],
-        qualified=[],
-        high_gene=[],
-        updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
-        disclaimer=DISCLAIMER + " （计算超时，请稍后刷新）",
-        data_freshness="expired",
-        data_age_seconds=0.0,
-    )
+        # 超时（子线程 daemon hang，主 90s 返回）——_COMPUTING 由 finally 统一 pop
+        return ScreenerResult(
+            date=target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:],
+            gene_scores=[],
+            qualified=[],
+            high_gene=[],
+            updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
+            disclaimer=DISCLAIMER + " （计算超时，请稍后刷新）",
+            data_freshness="expired",
+            data_age_seconds=0.0,
+        )
+    finally:
+        # fix: 成功/错误/超时三出口统一 pop _COMPUTING，防泄漏（旧仅超时分支 pop，成功/错误泄漏致后续同 cache_key 卡 60s wait）
+        _COMPUTING.pop(cache_key, None)
 
 
 # ---- 公有接口（供 limitup_strategy 等外部模块调用） ----
