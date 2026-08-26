@@ -7,6 +7,8 @@
 import { useNonLimitupFunnel } from "@/lib/query/strategy";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
 import { StrategySubPipelineView } from "@/components/pipeline/StrategySubPipelineView";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { Clock } from "lucide-react";
 import type { ScoredCandidate } from "@/lib/api";
 
 interface NonLimitupLaneProps {
@@ -132,10 +134,18 @@ function FinalSelectionNode({ candidates }: { candidates: ScoredCandidate[] }) {
   const overflow = candidates.length - shown.length;
 
   if (candidates.length === 0) {
+    // F5：空态引导卡——不显空白，用 GlassCard + Clock 图标暗示"采集中"
     return (
-      <div className={`${NODE} text-[10px] text-muted-foreground/60`}>
-        ⑧ 候选终选：无候选（§44 Phase 2 未验证）
-      </div>
+      <GlassCard className="flex flex-col items-center justify-center gap-1.5 p-4 text-center">
+        <Clock className="h-5 w-5 text-muted-foreground/50" />
+        <div className="text-xs font-medium text-muted-foreground">market_scan 数据采集中</div>
+        <div className="text-[10px] text-muted-foreground/60">
+          K线形态扫描 + 5 战法匹配需盘后数据回填
+        </div>
+        <div className="text-[10px] text-muted-foreground/50">
+          当前状态：0 只候选（sti_timeline 数据库为空，盘后采集任务未跑）
+        </div>
+      </GlassCard>
     );
   }
 

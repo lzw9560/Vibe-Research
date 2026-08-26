@@ -97,6 +97,9 @@ export function SelectionPipeline({
           ))}
           <ArrowDown />
           <FinalCandidatesNode finals={finals} />
+          {/* F1：终选→战法匹配数据流传递节点（消除视觉断流：终选 N 只 → 进入战法匹配）
+              数字取 finals.length，与 FinalCandidatesNode 计数同源；战法评估候选总数见 ② StrategySubPipelineView */}
+          <HandoffNode count={finals.length} label="进入战法匹配" />
           {/* S094 §11 附录 A2：涨停叉尾部战法分节点已移除——②战法匹配由 StrategySubPipelineView 在外部渲染（ForwardTabSection 涨停叉②） */}
           {/* S094 §11 附录 A2：RiskNode 已移至后置共享区（PostSharedRegion 的 RiskAsymmetryCard） */}
         </div>
@@ -162,6 +165,23 @@ function ArrowDown({ label }: { label?: string }) {
       <div className="h-2 w-px bg-border/40" />
       <span className="text-[9px] text-border/50 leading-none">▼</span>
       {label && <span className="text-[10px] text-muted-foreground">{label}</span>}
+    </div>
+  );
+}
+
+/** F1：终选→战法匹配数据流传递节点（胶囊形带数字，消除视觉断流）。
+ *  比 ArrowDown 更醒目：粗箭头 + 数字 pill + 下方标签，让用户看到"终选 N 只 → 进入战法匹配"是连续数据流。 */
+function HandoffNode({ count, label }: { count: number; label: string }) {
+  return (
+    <div className="flex flex-col items-center py-1">
+      {/* 胶囊形数字标签：粗箭头 + N 只 */}
+      <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5">
+        <span className="text-[10px] font-semibold leading-none text-primary">↓</span>
+        <span className="text-[11px] font-bold tabular-nums leading-none text-primary">{count}</span>
+        <span className="text-[9px] leading-none text-primary/70">只</span>
+      </div>
+      {/* 下方标签：流向 */}
+      <span className="mt-0.5 text-[10px] text-muted-foreground/80">{label}</span>
     </div>
   );
 }

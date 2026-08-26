@@ -457,6 +457,44 @@ function ForwardLaneSwitcher({ activeLane, onChange }: { activeLane: ForwardLane
   );
 }
 
+/** F4：mini 漏斗概览条——涨停池 → R1 → 终选 → 战法命中，水平横排胶囊数字标签。
+ *  数据源：涨停池 = market_emotion.zt_count ?? finals.length（fallback 终选数，诚实标注非涨停总数）；
+ *  R1 = funnel_layers 中 layer_id="R1" 的 output_count；终选 = final_candidates.length；战法命中 = scored_candidates.length。
+ *  紧凑一行（高度 ≤28px），text-[10px] 小字。折叠态不显示（只在 LimitupLaneContent 展开时渲染）。 */
+function MiniFunnelOverview({
+  briefing,
+  funnelLayers,
+}: {
+  briefing: import("@/lib/api").PreMarketBriefing | null | undefined;
+  funnelLayers: import("@/lib/api").FunnelLayer[] | undefined;
+}) {
+  const ztCount = briefing?.market_emotion?.zt_count ?? briefing?.final_candidates?.length;
+  const r1Out = funnelLayers?.find((l) => l.layer_id === "R1")?.output_count;
+  const finalsLen = briefing?.final_candidates?.length;
+  const scoredLen = briefing?.scored_candidates?.length;
+  const nodes = [
+    { label: "涨停池", value: ztCount },
+    { label: "R1", value: r1Out },
+    { label: "终选", value: finalsLen },
+    { label: "战法命中", value: scoredLen },
+  ];
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border/30 bg-card/20 px-2 py-1" style={{ height: "28px" }}>
+      {nodes.map((n, i) => (
+        <div key={n.label} className="flex items-center gap-1">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-muted/30 px-1.5 py-0.5">
+            <span className="text-[10px] text-muted-foreground/70">{n.label}</span>
+            <span className="text-[10px] font-bold tabular-nums text-foreground">
+              {n.value ?? "—"}
+            </span>
+          </span>
+          {i < nodes.length - 1 && <span className="text-[10px] text-muted-foreground/40">→</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** 涨停叉内容：① 涨停股池+漏斗 → ② 战法匹配（7战法分组视图）→ ③ breakout → ④ 交叉验证 */
 function LimitupLaneContent({
   briefing, F, forward, funnelLayers, cv,
@@ -469,6 +507,9 @@ function LimitupLaneContent({
 }) {
   return (
     <div className="space-y-2">
+      {/* F4：mini 漏斗概览条——涨停池 → R1 → 终选 → 战法命中，水平横排胶囊数字标签 */}
+      <MiniFunnelOverview briefing={briefing} funnelLayers={funnelLayers} />
+
       {/* ① 涨停股池+漏斗（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通，R2/R3 已下放战法不显 */}
       <CandidateFunnelEmbed
         date={briefing?.data_date ?? F}
@@ -483,7 +524,11 @@ function LimitupLaneContent({
 
       {/* ①b 候选因子表（异步回填的基因分/八项标准/量价/资金/涨停池/分时派生/K线派生） */}
       {briefing?.final_candidates && briefing.final_candidates.length > 0 && (
-        <CollapsibleFold title="候选因子表" subtitle="基因分 · 八项标准 · 量价/资金 · 涨停池原始 · 分时派生 · K线派生" defaultOpen={false}>
+        <CollapsibleFold
+          title="候选因子表"
+          subtitle={`终选 ${briefing.final_candidates.length} 只 · 基因分 · 八项标准 · 量价/资金 · 涨停池原始 · 分时派生 · K线派生`}
+          defaultOpen={false}
+        >
           <CandidateFactorTable candidates={briefing.final_candidates} date={briefing?.data_date ?? F} />
         </CollapsibleFold>
       )}
@@ -493,6 +538,7 @@ function LimitupLaneContent({
         scoredCandidates={briefing?.scored_candidates}
         marketScanScored={briefing?.market_scan_scored}
         lane="limitup"
+        scoredTotal={briefing?.scored_candidates?.length}
       />
 
       {/* ③ breakout 弱信号（PremarketSelectionSection，date=forward） */}

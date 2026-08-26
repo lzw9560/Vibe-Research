@@ -85,16 +85,14 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
     expect(screen.getByText(/2\/5/)).toBeInTheDocument();
     expect(screen.getByText(/40%/)).toBeInTheDocument();
 
-    // 条件 1：基因得分合格 5→3 60%（data_unavailable=0 不显）
+    // 条件 1：基因得分合格 5→3 60%（data_unavailable=0 不显黄条纹）
     expect(screen.getByText("基因得分合格")).toBeInTheDocument();
-    expect(screen.getByText("5→3")).toBeInTheDocument();
-    expect(screen.getByText("60%")).toBeInTheDocument();
+    expect(screen.getByText(/5→3.*60%/)).toBeInTheDocument();
 
-    // 条件 2：量比≥1.5 3→2 67% + 数据缺失 1
+    // 条件 2：量比≥1.5 3→2 67% + 数据缺失 1（F2：黄条纹段 title 标注）
     expect(screen.getByText("量比≥1.5")).toBeInTheDocument();
-    expect(screen.getByText("3→2")).toBeInTheDocument();
-    expect(screen.getByText("67%")).toBeInTheDocument();
-    expect(screen.getByText(/数据缺失 1/)).toBeInTheDocument();
+    expect(screen.getByText(/3→2.*67%/)).toBeInTheDocument();
+    expect(screen.getByTitle("数据缺失 1")).toBeInTheDocument();
   });
 
   it("候选行渲染三态命中标记（hit ✓ / miss ✗ / data_unavailable —）", () => {

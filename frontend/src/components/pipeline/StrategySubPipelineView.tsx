@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
-import type { ScoredCandidate, StrategyFunnelSummary, StrategyFunnelCandidateCondition } from "@/lib/api";
+import type { ScoredCandidate, StrategyFunnelSummary, StrategyFunnelCandidateCondition, StrategyFunnelCondition } from "@/lib/api";
 
 // 12 战法归组（spec §3.M STRATEGIES_BY_FUNNEL_TYPE）
 const LIMITUP_STRATEGIES: { code: string; name: string }[] = [
@@ -34,6 +34,9 @@ interface Props {
   marketScanScored?: ScoredCandidate[];
   /** 渲染哪一叉的战法分组——涨停叉显7战法 / 非涨停叉显5战法。 */
   lane: "limitup" | "non-limitup";
+  /** F6：战法评估候选总数（briefing.scored_candidates.length），subtitle 前缀"战法评估 M 只 ·"。
+   *  让用户一眼区分"终选 N 只"（候选因子表）vs"战法评估 M 只"（战法漏斗）不同数据源。 */
+  scoredTotal?: number;
 }
 
 // 按战法分组：strategy_code -> ScoredCandidate[]
@@ -47,12 +50,14 @@ function groupByStrategyCode(items: ScoredCandidate[]): Map<string, ScoredCandid
   return m;
 }
 
-export function StrategySubPipelineView({ scoredCandidates = [], marketScanScored = [], lane }: Props) {
+export function StrategySubPipelineView({ scoredCandidates = [], marketScanScored = [], lane, scoredTotal }: Props) {
   const strategies = lane === "limitup" ? LIMITUP_STRATEGIES : MARKET_SCAN_STRATEGIES;
   const candidates = lane === "limitup" ? scoredCandidates : marketScanScored;
+  // F6：战法评估 M 只前缀——scoredTotal 传入则显，否则 fallback candidates.length
+  const evalTotal = scoredTotal ?? candidates.length;
   const subtitle = lane === "limitup"
-    ? "7 战法分组 · §44 已验证"
-    : "5 战法分组 · §44 未验证";
+    ? `战法评估 ${evalTotal} 只 · 7 战法分组 · §44 已验证`
+    : `战法评估 ${evalTotal} 只 · 5 战法分组 · §44 未验证`;
 
   // 按战法分组
   const byCode = groupByStrategyCode(candidates);
@@ -81,6 +86,8 @@ export function StrategySubPipelineView({ scoredCandidates = [], marketScanScore
       defaultOpen={true}
     >
       <div className="space-y-2">
+        {/* F3：三态图例（与 ConditionMarker 同色系，首次使用者无需 hover 即懂符号） */}
+        <ConditionLegend />
         {strategies.map((s) => {
           const hits = byCode.get(s.code) ?? [];
           return (
@@ -204,38 +211,104 @@ function findFunnelCandidateConditions(
   return funnel.candidates.find((c) => c.code === code)?.conditions;
 }
 
-/** S097 D：逐条件漏斗摘要（同战法共享）。无 strategy_funnel 时不渲染（R15 历史快照兼容）。 */
+/** S097 D：逐条件漏斗摘要（同战法共享）。无 strategy_funnel 时不渲染（R15 历史快照兼容）。
+ *  F2 改造：触发率环形进度 + 每条件横向条形漏斗（input 满宽底条 → passed 收窄窄条 → data_unavailable 黄条纹段）。 */
 function FunnelSummary({ funnel }: { funnel?: StrategyFunnelSummary }) {
   if (!funnel) return null;
-  const fireRate = funnel.total_count > 0
-    ? `${funnel.fired_count}/${funnel.total_count}（${Math.round((funnel.fired_count / funnel.total_count) * 100)}%）`
-    : `${funnel.fired_count}/${funnel.total_count}`;
+  const firePct = funnel.total_count > 0
+    ? Math.round((funnel.fired_count / funnel.total_count) * 100)
+    : 0;
   return (
     <div className="rounded border border-border/20 bg-card/10 p-1.5 text-[10px]">
-      <div className="text-muted-foreground/70">
-        <span className="text-foreground/80">触发率</span> {fireRate}
+      {/* 触发率：环形进度指示器（fired/total） */}
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground/70">触发率</span>
+        <div className="flex items-center gap-1.5">
+          <FireRing percent={firePct} />
+          <span className="font-mono tabular-nums text-muted-foreground/80">
+            {funnel.fired_count}/{funnel.total_count}（{firePct}%）
+          </span>
+        </div>
       </div>
-      <div className="mt-1 flex flex-col gap-1">
-        {funnel.conditions.map((cond) => {
-          const rate = cond.input_count > 0
-            ? Math.round((cond.passed_count / cond.input_count) * 100)
-            : null;
-          return (
-            <div key={cond.condition_id} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="text-muted-foreground/80">{cond.condition_name}</span>
-              <span className="font-mono tabular-nums text-muted-foreground/60">
-                {cond.input_count}→{cond.passed_count}
-              </span>
-              {cond.data_unavailable_count > 0 && (
-                <span className="text-yellow-500/80">数据缺失 {cond.data_unavailable_count}</span>
-              )}
-              <span className="font-mono tabular-nums text-muted-foreground/60">
-                {rate != null ? `${rate}%` : "—"}
-              </span>
-            </div>
-          );
-        })}
+      {/* 逐条件横向条形漏斗：条件名左 · 条形图中 · 数值右 */}
+      <div className="mt-1.5 flex flex-col gap-1">
+        {funnel.conditions.map((cond) => (
+          <FunnelConditionRow key={cond.condition_id} cond={cond} />
+        ))}
       </div>
+    </div>
+  );
+}
+
+/** F2：环形进度指示器（SVG，32×32，内显百分比数字）。 */
+function FireRing({ percent }: { percent: number }) {
+  const r = 9;
+  const c = 2 * Math.PI * r;
+  const dash = c * (Math.max(0, Math.min(100, percent)) / 100);
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" className="shrink-0">
+      <circle cx="11" cy="11" r={r} fill="none" stroke="currentColor" strokeWidth="2" className="text-muted/30" />
+      <circle
+        cx="11"
+        cy="11"
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        className="text-primary"
+        strokeDasharray={`${dash} ${c}`}
+        strokeLinecap="round"
+        transform="rotate(-90 11 11)"
+      />
+      <text x="11" y="11.5" textAnchor="middle" dominantBaseline="middle" className="fill-current text-[6px] font-bold text-primary">
+        {percent}
+      </text>
+    </svg>
+  );
+}
+
+/** F2：单条件横向条形漏斗行（高度 ≤24px）。
+ *  条形：input_count 满宽底条（灰）→ passed_count 内层窄条（主色，收窄效果）→ data_unavailable 黄条纹覆盖段。
+ *  数值：input→passed + pass_rate% 在右。 */
+function FunnelConditionRow({ cond }: { cond: StrategyFunnelCondition }) {
+  const { condition_name, input_count, passed_count, data_unavailable_count, pass_rate } = cond;
+  // 段宽：以 input_count 为分母（若 0 则全空）。passed + unavailable 不超过 input（unavailable 独立计，视觉上作 overlay）
+  const denom = input_count > 0 ? input_count : 1;
+  const passedW = (passed_count / denom) * 100;
+  const unavailW = (data_unavailable_count / denom) * 100;
+  const ratePct = pass_rate != null ? Math.round(pass_rate * 100) : null;
+  return (
+    <div className="flex items-center gap-1.5" style={{ height: "20px" }}>
+      {/* 条件名（左，truncate 防长名撑开） */}
+      <span className="w-20 shrink-0 truncate text-muted-foreground/80" title={condition_name}>
+        {condition_name}
+      </span>
+      {/* 条形图（中，flex-1 满宽底条 + 内层窄条 + 黄条纹覆盖） */}
+      <div className="relative h-2 flex-1 overflow-hidden rounded bg-muted/30">
+        {/* passed 窄条（收窄效果：从左起，宽 = passed/input） */}
+        <div
+          className="absolute inset-y-0 left-0 rounded bg-primary/50"
+          style={{ width: `${Math.max(passedW, passed_count > 0 ? 6 : 0)}%` }}
+        />
+        {/* data_unavailable 黄条纹覆盖段（叠加在 passed 右侧或独立段，斜纹纹理） */}
+        {data_unavailable_count > 0 && (
+          <div
+            className="absolute inset-y-0 bg-yellow-500/40"
+            style={{
+              left: `${passedW}%`,
+              width: `${unavailW}%`,
+              backgroundImage:
+                "repeating-linear-gradient(135deg, rgba(234,179,8,0.5) 0 2px, rgba(234,179,8,0.15) 2px 4px)",
+            }}
+            title={`数据缺失 ${data_unavailable_count}`}
+          />
+        )}
+      </div>
+      {/* 数值（右：input→passed + rate%） */}
+      <span className="w-16 shrink-0 text-right font-mono tabular-nums text-muted-foreground/70">
+        {input_count}→{passed_count}
+        {ratePct != null ? ` ${ratePct}%` : ""}
+      </span>
     </div>
   );
 }
@@ -258,5 +331,24 @@ function ConditionMarker({
     <span title={`${conditionId}: ${state}`} className={`text-[11px] leading-none ${cls}`}>
       {symbol}
     </span>
+  );
+}
+
+/** F3：三态图例条——与 ConditionMarker 同色系，让首次使用者无需 hover 即懂符号含义。 */
+function ConditionLegend() {
+  const items = [
+    { symbol: "✓", label: "命中", cls: "text-green-500" },
+    { symbol: "✗", label: "未命中", cls: "text-muted-foreground/30" },
+    { symbol: "—", label: "数据缺失", cls: "text-yellow-500" },
+  ] as const;
+  return (
+    <div className="flex items-center justify-end gap-3 text-[10px] text-muted-foreground/70">
+      {items.map((it) => (
+        <span key={it.label} className="inline-flex items-center gap-1">
+          <span className={`leading-none ${it.cls}`}>{it.symbol}</span>
+          <span>{it.label}</span>
+        </span>
+      ))}
+    </div>
   );
 }
