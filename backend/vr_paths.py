@@ -29,14 +29,13 @@ def resolve_data_dir() -> Path:
     env = os.environ.get("VR_DATA_DIR")
     if env:  # 空串视同未设置
         p = Path(env).expanduser()
-        try:
-            p.relative_to(Path.home())  # 在 home 下 → fallback 防分裂
+        # 防 home 分裂：仅当 env 指向 home 直接子目录（如 ~/.vibe-research）→ fallback 项目根
+        # 项目 .vibe-research 虽在 home 下但是项目子目录（合法），不误判；测试临时目录非 home 不受影响
+        if p.parent == Path.home() or p == Path.home() / ".vibe-research":
             import logging
             logging.getLogger("vibe-research").warning(
-                "[vr_paths] VR_DATA_DIR=%s 在 home 目录下，fallback 项目根 .vibe-research（防分裂）", env)
+                "[vr_paths] VR_DATA_DIR=%s 在 home 根下，fallback 项目根 .vibe-research（防分裂）", env)
             return DEFAULT_DATA_DIR
-        except ValueError:
-            pass
         return p
     return DEFAULT_DATA_DIR
 
