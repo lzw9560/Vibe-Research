@@ -17,11 +17,35 @@ from candidate_funnel.models import (
     Announcement,
     BaseThreshold,
     DiagnosisCard,
-    EightStandardResult,
-    IndicatorSet,
+    EightStandardResult,    IndicatorSet,
     StabilizationSignals,
 )
 from candidate_funnel.eight_standards import check_eight_standards
+
+# S094 修复：baostock_kline_cache.json（147MB）模块级缓存——首次读一次解析，
+# 后续从内存 dict 按 code 取。原 per-code read_bytes+json.loads 52 次 = 7.6GB IO，
+# 每只 13-15s × 52 = 780s 卡死 _collect。
+_KLINE_CACHE: dict | None = None
+_KLINE_CACHE_LOADED: bool = False
+
+
+def _get_kline_cache() -> dict:
+    """惰性加载 baostock_kline_cache.json 到模块级单例（首次调用读盘+解析，后续从内存取）。"""
+    global _KLINE_CACHE, _KLINE_CACHE_LOADED
+    if _KLINE_CACHE_LOADED:
+        return _KLINE_CACHE or {}
+    _KLINE_CACHE_LOADED = True
+    try:
+        import json as _json
+        from vr_paths import resolve_data_dir as _resolve_data_dir
+        _kc = _resolve_data_dir() / "baostock_kline_cache.json"
+        if _kc.exists():
+            _KLINE_CACHE = _json.loads(_kc.read_bytes())
+        else:
+            _KLINE_CACHE = {}
+    except Exception:
+        _KLINE_CACHE = {}
+    return _KLINE_CACHE or {}
 
 
 def assess_activity(ind: IndicatorSet, eff: BaseThreshold) -> ActivityAssessment:
@@ -175,13 +199,11 @@ def build_indicator_set(
             ind.missing.update(m)
     # S073 盘前因子"最后评估"：MA/BOLL 补算 from baostock kline cache
     # （§44 未验证因子，接入评估层不硬过滤；数据缺标 missing）
+    # S094 修复：模块级缓存——147MB JSON 首次读一次，后续从内存按 code 取（原 per-code
+    # 重复 read_bytes + json.loads 52 次 = 7.6GB IO，每只 13-15s × 52 = 780s 卡死 _collect）
     try:
-        import json as _json
-        from vr_paths import resolve_data_dir as _resolve_data_dir
-        _kc = _resolve_data_dir() / "baostock_kline_cache.json"
-        if _kc.exists():
-            _cache = _json.loads(_kc.read_bytes())
-            _bars = _cache.get(code, [])
+        _bars = _get_kline_cache().get(code, [])
+        if _bars:
             _closes = [b.get("close", 0) for b in _bars if b.get("close")]
             if len(_closes) >= 20:
                 ind.ma5 = round(sum(_closes[-5:]) / 5, 3)
@@ -197,7 +219,7 @@ def build_indicator_set(
                 ind.ma5 = round(sum(_closes[-5:]) / 5, 3)
             # <5 不填（数据不足）
         else:
-            ind.missing["ma_boll"] = "kline cache 未取得"
+            ind.missing["ma_boll"] = "kline cache 无此 code"
     except Exception:
         ind.missing["ma_boll"] = "MA/BOLL 计算失败"
     # S085 D3：筹码分布（akshare stock_cyq_em）——chip_profit_ratio 此前恒 None
