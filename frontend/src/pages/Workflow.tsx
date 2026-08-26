@@ -593,13 +593,13 @@ function PostSharedRegion({
         <WinRateCompareSection factors={briefing.factors} onPick={() => {}} />
       )}
 
-      {/* advisory 仓位推荐摘要（并入后置共享区，不单独展示） */}
+      {/* advisory 仓位推荐（并入后置共享区，显示全部推荐标的） */}
       {recs.length > 0 && (
         <GlassCard className="p-4">
-          <p className="mb-2 text-sm font-medium">仓位推荐摘要</p>
+          <p className="mb-2 text-sm font-medium">仓位推荐</p>
           <p className="text-xs text-muted-foreground/70">推荐标的 {recs.length} 只</p>
           <div className="mt-2 space-y-1">
-            {recs.slice(0, 3).map((r) => (
+            {recs.map((r) => (
               <div key={r.code} className="flex min-w-0 items-center justify-between gap-2 text-xs">
                 <span className="min-w-0 flex-1 truncate">{r.name}({r.code})</span>
                 <span className="shrink-0 text-right text-muted-foreground/60">
