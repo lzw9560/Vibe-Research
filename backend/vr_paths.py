@@ -21,10 +21,23 @@ DEFAULT_DATA_DIR: Path = _REPO_ROOT / ".vibe-research"
 
 
 def resolve_data_dir() -> Path:
-    """返回生效的私有数据根目录：优先 ``$VR_DATA_DIR``，否则项目内默认。"""
+    """返回生效的私有数据根目录：优先 ``$VR_DATA_DIR``，否则项目内默认。
+
+    防 home 分裂：VR_DATA_DIR 若指向 home 目录（~/...），fallback 到项目根
+    .vibe-research（生产不应写 home；测试 conftest 临时目录非 home 不受影响）。
+    """
     env = os.environ.get("VR_DATA_DIR")
     if env:  # 空串视同未设置
-        return Path(env)
+        p = Path(env).expanduser()
+        try:
+            p.relative_to(Path.home())  # 在 home 下 → fallback 防分裂
+            import logging
+            logging.getLogger("vibe-research").warning(
+                "[vr_paths] VR_DATA_DIR=%s 在 home 目录下，fallback 项目根 .vibe-research（防分裂）", env)
+            return DEFAULT_DATA_DIR
+        except ValueError:
+            pass
+        return p
     return DEFAULT_DATA_DIR
 
 
