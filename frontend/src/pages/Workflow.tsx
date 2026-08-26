@@ -374,10 +374,13 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
 
   return (
     <>
+      {/* ============ 前置共享区（辅助角色，顶部折叠态——展开才看详情） ============ */}
+      <PreSharedRegion F={F} briefing={briefing} />
+
       {/* ============ [涨停叉 | 非涨停叉] 切换（默认涨停，无"全部"选项） ============ */}
       <ForwardLaneSwitcher activeLane={activeLane} onChange={setActiveLane} />
 
-      {/* ============ 当前叉内容（互斥，一次只显一叉）——pipeline 在顶部展示 ============ */}
+      {/* ============ 当前叉内容（互斥，一次只显一叉）——pipeline 主体 ============ */}
       {activeLane === "limitup" ? (
         <LimitupLaneContent
           briefing={briefing}
@@ -395,9 +398,6 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
 
       {/* ============ 后置共享区：风控 + P2 仓位（advisory 摘要并入） ============ */}
       <PostSharedRegion briefing={briefing} recs={recs} urlDate={urlDate} />
-
-      {/* ============ 前置共享区（辅助角色，折叠后移——pipeline 优先展示） ============ */}
-      <PreSharedRegion F={F} briefing={briefing} />
 
       {briefingLoading && !briefing && (
         <GlassCard className="p-4 text-sm text-muted-foreground">前瞻简报加载中…</GlassCard>
