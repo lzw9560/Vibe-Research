@@ -21,7 +21,7 @@
 - **12 战法 impl**：`backend/strategies/impl/{gene_based,indicator_based,db_based,pool_based}.py`，统一协议 `strategy_base.StrategyProtocol.match(ctx) -> list[ConditionMatch]`
 - **ConditionMatch**（`strategy_base.py:34`）：`condition/value/description` 3 字段，仅命中项
 - **dispatch_match**（`strategy_base.py:219`）：遍历注册表调 `impl.match(ctx)`，`if not matches: continue`，组装 `StrategySignal`
-- **compute_confidence**：weak_turn_strong/pattern_reversal 用 `len(matches)`；其他 10 战法固定值
+- **compute_confidence**：weak_turn_strong/pattern_reversal 用 `len(matches)`；first_plate（min(score/100,1)）/consecutive_relay（min(封板率/100,1)）/end_of_day_sneak（0.4）动态或半动态；其余固定
 - **score_candidates**（`strategy_funnel_registry.py:490`）：按 funnel_type 分流，透传 `score_breakdown`/`confidence`/`signal_strength`
 - **S094:304 预留**：明确"12 战法 match() 重构返回条件级过滤明细（每条件 输入数/过滤后数/条件描述），前端每战法子管线渲染因子条件→过滤数明细漏斗。待开独立 spec（预计 medium，跨层）"
 - **S096 p2_fired_rule**：P2 市场情绪"为何此 tier"单字符串——S097 借鉴"给原因"思路，但结构化（每条件 state 而非单字符串）
@@ -52,7 +52,7 @@
 
 ### E. 处置与兼容
 - [ ] R14 n_shape_counterattack `condition` 标签去"放量"（`gene_based.py:139` `condition="N字形态+放量"` → `condition="N字区间"`；description 字段已无放量；§5.2 condition_name="N字区间" 已落地）
-- [ ] R15 历史快照兼容：旧 scored_candidates 快照无 conditions/strategy_funnel → 前端降级不显漏斗（只显 score）；新快照含
+- [ ] R15 历史快照兼容：旧 scored_candidates 快照无 `strategy_funnel` → 前端降级不显漏斗（只显 score）；新快照含 `strategy_funnel`（conditions 落在 `strategy_funnel.conditions` 内，非 scored_candidates 顶层加 conditions）
 - [ ] R16 12 战法 match() 测试更新（返回结构变）
 - [ ] R17 `scored_candidates` 每项加 `strategy_funnel` 字段（`StrategyFunnelSummary`：该战法批次漏斗 input/passed/data_unavailable/pass_rate + 候选命中标记）；`score_candidates` 批次聚合产出
 - [ ] R18 weak_turn_strong C4 比较修复：`last_lock_time[11:16] >= "14:40"`（替代整串 ISO 比较 `>= "2026-01-01T14:40"`，修 C4 恒命中 bug，阈值 14:40 不变）
@@ -67,9 +67,11 @@
 | `backend/strategies/impl/db_based.py` | reverse_package match() 拆 |
 | `backend/strategies/impl/pool_based.py` | storm_reversal match() 拆 |
 | `backend/strategies/strategy_funnel_registry.py` | score_candidates 批次聚合 StrategyFunnelSummary + 透传 |
+| `backend/limitup_strategy.py` | StrategySignal.matches 定义处——**不改结构**（保持 list[ConditionMatch] 兼容，dispatch_match 映射），受影响审查 |
 | `frontend/src/components/pipeline/StrategySubPipelineView.tsx` | 渲染漏斗 + 候选命中标记 |
-| `frontend/src/lib/api/types.ts` | StrategyFunnelSummary TS 类型 |
-| `backend/tests/test_s094_*.py` | match() 返回结构测试更新 |
+| `frontend/src/components/pipeline/StrategyMatchMatrix.tsx` | 并行消费 scored_candidates，漏斗数据源审查（取 strategy_funnel，与 StrategySubPipelineView 一致） |
+| `frontend/src/lib/api/types.ts` | StrategyFunnelSummary TS 类型 + ScoredCandidate 加可选 strategy_funnel |
+| `backend/tests/test_s086_dispatch.py` / `test_s086_strategy_impl.py` / `test_s081_prd_strategies.py` / `test_s084_match_card.py` / `test_s081_strategy_matcher_pool_item.py` | match() 返回 shape 断言更新（真正断言 match shape 的旧测试，非 test_s094_*） |
 
 ## 5. 设计方案
 
@@ -198,12 +200,14 @@ interface StrategyFunnelSummary {
 
 | 旧 spec R-item | 旧决策 | 新决策 | 处置 | 迁移路径 |
 |---|---|---|---|---|
-| S094 R4 match 下沉 volume_signal | match 返 list[ConditionMatch] | 返 StrategyMatchResult（含 conditions） | 共存 | volume_signal 逻辑不变（dispatch_match :247 调 compute_volume_signal，不在 match 返回）；仅返结构扩 |
-| limitup_strategy.StrategySignal.matches | list[ConditionMatch] 类型 | **保持兼容不改类型** | 共存 | dispatch_match 从 result 映射 ConditionMatch shape；7+ 消费方（strategy_matcher/pre_market_workflow/strategy_backtest/prediction_ingest/position_advisor_v2/前端）零迁移 |
-| S094 R9 dragon_head 条件化 | sector_rank≤3 命中 | C1 板块领涨（sector_rank≤3） | 共存 | 逻辑不变，拆为 ConditionEval |
-| S094 R10 3 战法 PatternScan | low_absorption/platform_breakout/pattern_reversal 读 PatternScan | 同 | 共存 | 条件拆为 ConditionEval，因子读 PatternScan 不变 |
+| S086 Protocol match 返回类型（strategy_base.py:72） | match 返 list[ConditionMatch] | 返 StrategyMatchResult（替代） | **替换** | 12 战法 match() 重构返 StrategyMatchResult；dispatch_match isinstance 兼容过渡（回滚手段，见 452f65b）；StrategySignal.matches 保持 list[ConditionMatch] 兼容（dispatch_match 映射 hit→ConditionMatch shape 喂 matches） |
+| S094 R4 match 下沉 volume_signal | volume_signal 在 compute_volume_signal 方法 | 不变 | 共存 | volume_signal 逻辑不变（dispatch_match :247 调 compute_volume_signal，不在 match 返回） |
+| limitup_strategy.StrategySignal.matches | list[ConditionMatch] 类型 | **保持兼容不改类型** | 共存 | dispatch_match 从 result 映射 ConditionMatch shape（condition=condition_name/value=actual_value/description）；7+ 消费方（strategy_matcher/pre_market_workflow/strategy_backtest/prediction_ingest/position_advisor_v2/前端）零迁移；limitup_strategy.py 不改但受影响审查（§4 列） |
+| S094 R14/R28 候选 shape + v1 快照 schema | scored_candidates shape + _SNAPSHOT_SCHEMA="v1" | 加 strategy_funnel 字段 | **扩展（v1 兼容加字段，不 bump v2）** | scored_candidates 每项加可选 strategy_funnel（旧快照无→前端降级 R15）；v1 schema 加字段向前兼容（旧读不破坏） |
+| S094 R9 dragon_head 条件化 | sector_rank≤3 命中，无 market_scan_ctx 返空 list（硬过滤） | C1 板块领涨 + data_unavailable 三态 | **语义变更** | R6：无 market_scan_ctx → data_ok=False/conditions 全 data_unavailable/fired=False（不算逻辑过滤），非旧"空list硬过滤"；前端漏斗 data_unavailable_count 单列 |
+| S094 R10 3 战法 PatternScan | low_absorption/platform_breakout/pattern_reversal 读 PatternScan，无 pattern 返空 | 同 + data_unavailable 三态 | **语义变更** | 同 R9，无 pattern → data_unavailable 非"空list硬过滤" |
 | S096 p2_fired_rule | P2 单字符串"为何此 tier" | S097 结构化 conditions | 借鉴 | 不冲突（P2 市场情绪 tier vs S097 战法条件，不同层） |
-| S066 CandidateProgressiveCard L2 | L2 因子区待接入 | 可消费 S097 conditions | 衔接 | S097 不强制；CandidateProgressiveCard 接入是独立项（本 spec 不实现） |
+| S066 CandidateProgressiveCard L2 | L2 因子区待接入 | 可部分消费 S097 conditions（state 级） | 衔接（低契合） | S097 conditions 是 state 级，CandidateCardData 另需 one_line_reason/position_pct/risk_label/score_breakdown（score_breakdown 已存）；接入独立项（本 spec 不实现） |
 
 ### 9.2 风险
 
