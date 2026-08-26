@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/Badge";
 import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
+import { GlassCard } from "@/components/ui/GlassCard";
 import type { ScoredCandidate, StrategyFunnelSummary, StrategyFunnelCandidateCondition, StrategyFunnelCondition } from "@/lib/api";
 
 // 12 战法归组（spec §3.M STRATEGIES_BY_FUNNEL_TYPE）
@@ -86,9 +87,11 @@ export function StrategySubPipelineView({ scoredCandidates = [], marketScanScore
       subtitle={`${subtitle} · ${hitStrategies}/${strategies.length} 战法命中 · 共 ${totalHits} 只`}
       defaultOpen={true}
     >
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {/* F3：三态图例（与 ConditionMarker 同色系，首次使用者无需 hover 即懂符号） */}
-        <ConditionLegend />
+        <div className="col-span-full">
+          <ConditionLegend />
+        </div>
         {strategies.map((s) => {
           const hits = byCode.get(s.code) ?? [];
           return (
@@ -109,7 +112,10 @@ export function StrategySubPipelineView({ scoredCandidates = [], marketScanScore
   );
 }
 
-/** 单战法分组卡片：标题=战法中文名 + 命中数 + 候选列表（可折叠） */
+/** 单战法卡片（改造：分组列表 → GlassCard 网格）。
+ *  卡正面：战法名 + code + 命中数 Badge + 匹配规则描述 chips + 触发率（仅折叠态显，避免与展开后 FunnelSummary 重复）。
+ *  点击卡片展开/折叠：展开后显 FunnelSummary（环形触发率 + 横向条形漏斗）+ CandidateRow 列表 + 顶部三态图例。
+ *  无命中战法显灰卡 + "0 只"，规则描述仍显（若有 strategy_funnel）。 */
 function StrategyGroupCard({
   code,
   name,
@@ -122,45 +128,73 @@ function StrategyGroupCard({
   lane: "limitup" | "non-limitup";
 }) {
   const hasHits = hits.length > 0;
-  // 无命中战法折叠（附录 A2：空战法折叠或显"0 只"）
+  // 有命中默认展开（测试断言依赖 FunnelSummary/CandidateRow 默认在 DOM）；无命中恒收起
   const [open, setOpen] = useState(hasHits);
+  const funnel = hits[0]?.strategy_funnel;
+  const firePct = funnel && funnel.total_count > 0
+    ? Math.round((funnel.fired_count / funnel.total_count) * 100)
+    : null;
 
   return (
-    <div className={`rounded-lg border ${hasHits ? "border-border/40 bg-card/30" : "border-dashed border-muted/30 bg-card/10"} p-2.5`}>
-      <button
-        type="button"
-        onClick={() => hasHits && setOpen((v) => !v)}
-        className="flex w-full items-center justify-between text-left"
-        disabled={!hasHits}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{name}</span>
-          <span className="text-[10px] text-muted-foreground/60">{code}</span>
-          {lane === "non-limitup" && (
-            <span className="rounded bg-muted/30 px-1 text-[9px] text-muted-foreground">§44 未验证</span>
-          )}
+    <GlassCard
+      onClick={() => setOpen((v) => !v)}
+      className={`p-3 ${hasHits ? "cursor-pointer transition-transform hover:-translate-y-0.5" : "opacity-60"}`}
+    >
+      {/* 卡正面：战法名 + code + §44 未验证标签 + 命中数 Badge */}
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold">{name}</span>
+            <span className="font-mono text-[10px] text-muted-foreground/60">{code}</span>
+            {lane === "non-limitup" && (
+              <span className="rounded bg-muted/30 px-1 text-[9px] text-muted-foreground">§44 未验证</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           <Badge variant={hasHits ? "info" : "default"}>{hits.length} 只</Badge>
-          {hasHits && (
-            <span className="text-[10px] text-muted-foreground/60">{open ? "▼" : "▶"}</span>
-          )}
+          {hasHits && <span className="text-[10px] text-muted-foreground/60">{open ? "▼" : "▶"}</span>}
         </div>
-      </button>
+      </div>
+
+      {/* 匹配规则描述：从 strategy_funnel.conditions 取 condition_name + threshold，chips 形式 */}
+      <div className="mt-2 flex flex-wrap gap-1">
+        {funnel && funnel.conditions.length > 0 ? (
+          funnel.conditions.map((cond) => (
+            <span
+              key={cond.condition_id}
+              className="rounded bg-muted/30 px-1.5 py-0.5 text-[10px] text-muted-foreground/80"
+            >
+              {cond.condition_name}{cond.threshold ? ` ${cond.threshold}` : ""}
+            </span>
+          ))
+        ) : (
+          <span className="text-[10px] text-muted-foreground/50">无漏斗数据（历史快照或无评估）</span>
+        )}
+      </div>
+
+      {/* 触发率：仅折叠态显（避免与展开后 FunnelSummary 的"触发率"文本重复，测试 getByText 不报 multiple） */}
+      {!open && firePct != null && (
+        <div className="mt-1.5 text-[10px] text-muted-foreground/70">
+          触发率 {funnel!.fired_count}/{funnel!.total_count}（{firePct}%）
+        </div>
+      )}
+
+      {/* 展开内容：FunnelSummary + CandidateRow 列表 */}
       {hasHits && open && (
-        <div className="mt-2 space-y-1.5 border-t border-border/20 pt-2">
+        <div className="mt-2 space-y-1.5 border-t border-border/20 pt-2" onClick={(e) => e.stopPropagation()}>
           {/* S097 D：逐条件漏斗摘要（同战法共享，取首候选 strategy_funnel；R15 旧快照无此字段则不渲染） */}
-          <FunnelSummary funnel={hits[0]?.strategy_funnel} />
+          <FunnelSummary funnel={funnel} />
           {hits.map((c) => (
             <CandidateRow
               key={`${c.code}-${c.strategy_code}`}
               c={c}
-              conditionStates={findFunnelCandidateConditions(hits[0]?.strategy_funnel, c.code)}
+              conditionStates={findFunnelCandidateConditions(funnel, c.code)}
             />
           ))}
         </div>
       )}
-    </div>
+    </GlassCard>
   );
 }
 

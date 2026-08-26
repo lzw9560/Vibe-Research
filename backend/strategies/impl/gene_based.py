@@ -32,28 +32,33 @@ class FirstPlateStrategy(BaseStrategy):
 
     def match(self, ctx) -> StrategyMatchResult:
         # S097：拆 C1 基因合格 + C2 涨停频次，返 StrategyMatchResult（全量条件三态）
+        # 阈值校准（2026-08-27，分位数支撑）：
+        #   total_score 全量 P75=35.7 / qualify=1 子集 P25=52.4 → 阈值 40（全量 P75 与 qualify P25 之间）
+        #   涨停频次 全量 P50=6.0 / qualify=1 子集 P50=14.0 → 阈值 6（全量 P50，筛掉 P50 以下低频次股）
+        #   原阈值 60/20 远超历史 max（total_score max=70.6 但涨停当天 T+1 因子为 0 导致系统性偏低，
+        #   实际 max 才 50.46；涨停频次 max=39 但 P95=18，阈值 20 几乎无人能过）
         gene = ctx.gene
         freq = gene.factors.get("涨停频次", 0)
-        c1_hit = gene.total_score >= 60
-        c2_hit = freq > 20
+        c1_hit = gene.total_score >= 40
+        c2_hit = freq >= 6
         conditions = [
             ConditionEval(
                 condition_id="first_plate.c1",
                 condition_name="基因得分合格",
                 factor="total_score",
-                threshold=">= 60",
+                threshold=">= 40",
                 actual_value=str(gene.total_score),
                 state="hit" if c1_hit else "miss",
-                description=f"基因得分 {gene.total_score}（阈值≥60）",
+                description=f"基因得分 {gene.total_score}（阈值≥40，全量P75）",
             ),
             ConditionEval(
                 condition_id="first_plate.c2",
                 condition_name="涨停频次达标",
                 factor="涨停频次",
-                threshold="> 20",
+                threshold=">= 6",
                 actual_value=str(freq),
                 state="hit" if c2_hit else "miss",
-                description=f"涨停频次 {freq}（阈值>20）",
+                description=f"涨停频次 {freq}（阈值≥6，全量P50）",
             ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
@@ -319,12 +324,16 @@ class EndOfDaySneakStrategy(BaseStrategy):
     name = "尾盘偷袭"
 
     def match(self, ctx) -> StrategyMatchResult:
-        # S097：拆 C1 尾盘封板率≥40 + C2 溢价能力>40，返 StrategyMatchResult
+        # S097：拆 C1 尾盘封板率≥40 + C2 溢价能力>15，返 StrategyMatchResult
+        # 阈值校准（2026-08-27，分位数支撑）：
+        #   封板率 全量 P75=83.5 → 阈值 40 合理（涨停股封板率天然高，40 筛掉低封板）
+        #   次日溢价率 全量 P90=18.9 / qualify=1 子集 P25=30.1 → 阈值 15（全量 P75 与 qualify P25 之间）
+        #   原阈值 >40 远超历史 P90（涨停当天 T+1 因子 max 才 30.06，几乎无人能过）
         gene = ctx.gene
         seal = gene.factors.get("封板率", 0)
         premium = gene.factors.get("次日溢价率", 0)
         c1_hit = seal >= 40
-        c2_hit = premium > 40
+        c2_hit = premium > 15
         conditions = [
             ConditionEval(
                 condition_id="end_of_day_sneak.c1", condition_name="尾盘封板",
@@ -334,9 +343,9 @@ class EndOfDaySneakStrategy(BaseStrategy):
             ),
             ConditionEval(
                 condition_id="end_of_day_sneak.c2", condition_name="溢价能力",
-                factor="次日溢价率", threshold="> 40", actual_value=f"{premium:.1f}%",
+                factor="次日溢价率", threshold="> 15", actual_value=f"{premium:.1f}%",
                 state="hit" if c2_hit else "miss",
-                description=f"次日溢价率 {premium:.1f}%（阈值>40%）",
+                description=f"次日溢价率 {premium:.1f}%（阈值>15%，全量P75）",
             ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
