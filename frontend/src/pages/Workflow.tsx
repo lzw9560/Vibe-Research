@@ -29,6 +29,7 @@ import { ContextTab } from "@/components/workflow/ContextTab";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StrategySubPipelineView } from "@/components/pipeline/StrategySubPipelineView";
 import { NonLimitupLane } from "@/components/pipeline/NonLimitupPlaceholder";
+import { CandidateFactorTable } from "@/components/workflow/CandidateFactorTable";
 import type { DateTripletResponse } from "@/lib/api";
 
 // 三视图组件懒加载（已有路由也懒加载，此处统一）
@@ -467,7 +468,7 @@ function LimitupLaneContent({
 }) {
   return (
     <div className="space-y-2">
-      {/* ① 涨停股池+漏斗（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通 */}
+      {/* ① 涨停股池+漏斗（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通，R2/R3 已下放战法不显 */}
       <CandidateFunnelEmbed
         date={briefing?.data_date ?? F}
         onPick={() => { /* 前瞻 Tab 不开抽屉（S4 WatchlistBoard 接管） */ }}
@@ -478,6 +479,13 @@ function LimitupLaneContent({
         ztPoolSize={briefing?.market_emotion?.zt_count ?? undefined}
         sharedSectorRotation={true}  // 附录 A2：板块轮动由前置共享区统一渲染
       />
+
+      {/* ①b 候选因子表（异步回填的基因分/八项标准/量价/资金/涨停池/分时派生/K线派生） */}
+      {briefing?.final_candidates && briefing.final_candidates.length > 0 && (
+        <CollapsibleFold title="候选因子表" subtitle="基因分 · 八项标准 · 量价/资金 · 涨停池原始 · 分时派生 · K线派生" defaultOpen={false}>
+          <CandidateFactorTable candidates={briefing.final_candidates} date={briefing?.data_date ?? F} />
+        </CollapsibleFold>
+      )}
 
       {/* ② 涨停战法匹配（7 战法分组视图）—— 替代原独立 CollapsibleFold(StrategyMatchMatrix) */}
       <StrategySubPipelineView

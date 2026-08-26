@@ -84,11 +84,12 @@ export function SelectionPipeline({
       {activeLane === "limitup" ? (
         <div className="space-y-1.5">
           <LaneHeader title="涨停叉" sub="已实现" />
-          {layers.map((layer, i) => (
+          {/* S084 TASK A：R2/R3 已下放战法层（直通透传），只显 R1 + SELF，不显 R2/R3 假漏斗 */}
+          {layers.filter((l) => l.layer_id === "R1" || l.layer_id === "SELF").map((layer, i, arr) => (
             <LayerStep
               key={layer.layer_id}
               layer={layer}
-              next={layers[i + 1]}
+              next={arr[i + 1]}
               onPick={onPick}
               rerunHandlers={rerunHandlers}
               date={date}
