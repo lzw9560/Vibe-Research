@@ -171,13 +171,13 @@ interface StrategyFunnelSummary {
 
 ## 6. 验收标准
 
-- [ ] A1 12 战法 match() 返 StrategyMatchResult，全量条件（hit+miss+data_unavailable）
-- [ ] A2 dispatch_match 用 result.fired，compute_confidence 用 hit_count
-- [ ] A3 score_candidates 产 StrategyFunnelSummary（每条件 input/passed/data_unavailable/pass_rate）
-- [ ] A4 前端 StrategySubPipelineView 渲染漏斗 + 候选命中标记
-- [ ] A5 数据缺失（limitup 路径）显 data_unavailable 不混 miss
-- [ ] A6 12 战法测试更新全绿；2267+ 回归零破坏
-- [ ] A7 历史快照兼容（旧无 conditions 降级显 score）
+- [x] A1 12 战法 match() 返 StrategyMatchResult，全量条件（hit+miss+data_unavailable）
+- [x] A2 dispatch_match 用 result.fired，compute_confidence 用 hit_count
+- [x] A3 score_candidates 产 StrategyFunnelSummary（每条件 input/passed/data_unavailable/pass_rate）
+- [x] A4 前端 StrategySubPipelineView 渲染漏斗 + 候选命中标记
+- [x] A5 数据缺失（limitup 路径）显 data_unavailable 不混 miss
+- [x] A6 12 战法测试更新全绿；2267+ 回归零破坏
+- [x] A7 历史快照兼容（旧无 conditions 降级显 score）
 
 ## 7. 合规与工程底线自查
 
