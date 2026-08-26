@@ -14,6 +14,10 @@ import logging
 
 from ._common import DependencyMissing
 
+# S094 熔断：chip_distribution 连续失败计数器——3 次失败后直接返 {} 不再请求
+# （akshare 服务端全面断连时逐只 TCP 超时 10-20s，52 只最坏 500s；熔断后降到 ~30s）
+_chip_fail_streak: int = 0
+
 
 def _akshare():
     try:
@@ -137,7 +141,14 @@ def chip_distribution(code: str) -> dict:
     S094 修复：akshare stock_cyq_em 服务端断连时 requests 无 socket 超时会无限挂起，
     52 只逐只调时一只挂住整个 _collect 卡死。加 8s 硬超时（ThreadPoolExecutor 包裹），
     超时返 {}（同异常路径，diagnosis 标 missing 不阻断 pipeline）。
+    S094 补丁：连续 3 次失败熔断——akshare 服务端全面断连时逐只 TCP 超时 10-20s，
+    52 只最坏 500s；3 次失败后直接返 {} 不再请求，降到 ~30s。
     """
+    global _chip_fail_streak
+    # 熔断器：连续失败 3 次后直接返 {}（服务端全面断连时逐只试无意义）
+    if _chip_fail_streak >= 3:
+        return {}
+
     ak = _akshare()
 
     # S094 修复：akshare 内部 requests 无 timeout，服务端断连时无限挂起。
@@ -148,11 +159,17 @@ def chip_distribution(code: str) -> dict:
         with ThreadPoolExecutor(max_workers=1) as ex:
             future = ex.submit(ak.stock_cyq_em, symbol=code)
             df = future.result(timeout=8)
+        # 成功——重置失败计数
+        _chip_fail_streak = 0
     except _FutureTimeout:
-        logging.getLogger("astock").warning("chip_distribution(%s) 8s 超时（akshare 服务端无响应）", code)
+        _chip_fail_streak += 1
+        logging.getLogger("astock").warning(
+            "chip_distribution(%s) 8s 超时（连续失败 %d/3）", code, _chip_fail_streak)
         return {}
     except Exception as e:
-        logging.getLogger("astock").warning("chip_distribution(%s) akshare 取数失败: %s", code, e)
+        _chip_fail_streak += 1
+        logging.getLogger("astock").warning(
+            "chip_distribution(%s) akshare 取数失败（连续 %d/3）: %s", code, _chip_fail_streak, e)
         return {}
     if df is None or df.empty:
         return {}
