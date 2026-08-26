@@ -641,38 +641,57 @@ function RiskAsymmetryCard() {
   );
 }
 
-/** 交叉验证摘要——三组分组 + 徽章（spec R4④ + AC9） */
+/** 交叉验证摘要——三组富对象列表 + 详情行（股票名/战法/分数）+ 徽章（spec R4④ + AC9） */
 function CrossValidationSummary({ groups }: { groups: import("@/lib/query/useCrossValidation").CrossValidationGroups }) {
   if (groups.isLoading) {
     return <GlassCard className="mb-3 p-4 text-sm text-muted-foreground">交叉验证计算中…</GlassCard>;
   }
   const hasData = groups.dual.length > 0 || groups.funnelOnly.length > 0 || groups.breakoutOnly.length > 0;
   if (!hasData) return null;
+
+  const groupConfig = [
+    { key: "dual" as const, items: groups.dual, variant: "success" as const, label: "双重确认", desc: "漏斗 ∩ breakout", icon: "✓✓" },
+    { key: "funnelOnly" as const, items: groups.funnelOnly, variant: "default" as const, label: "仅漏斗", desc: "漏斗有 · breakout 无", icon: "◆" },
+    { key: "breakoutOnly" as const, items: groups.breakoutOnly, variant: "default" as const, label: "仅 breakout", desc: "breakout 有 · 漏斗无", icon: "◇" },
+  ];
+
   return (
     <GlassCard className="mb-3 p-4">
       <div className="flex items-center gap-2 border-b border-border/30 pb-2">
         <span className="text-sm font-semibold">交叉验证</span>
-        <span className="text-xs text-muted-foreground/70">漏斗 ∩ breakout</span>
+        <span className="text-xs text-muted-foreground/70">漏斗 ∩ breakout · {groups.dual.length} 双重确认</span>
       </div>
-      <div className="mt-3 space-y-2">
-        {groups.dual.length > 0 && (
-          <div className="flex items-start gap-2">
-            <CrossValidationBadge group="dual" />
-            <span className="text-xs font-mono text-muted-foreground">{groups.dual.length} 只 · {groups.dual.join(", ")}</span>
+      <div className="mt-3 space-y-3">
+        {groupConfig.map((g) => g.items.length > 0 && (
+          <div key={g.key}>
+            {/* 组标题 */}
+            <div className="mb-1.5 flex items-center gap-2">
+              <CrossValidationBadge group={g.key} />
+              <span className="text-xs text-muted-foreground/70">{g.desc}</span>
+              <span className="text-xs font-bold tabular-nums text-foreground">{g.items.length} 只</span>
+            </div>
+            {/* 详情行列表 */}
+            <div className="space-y-1">
+              {g.items.map((item) => (
+                <div key={item.code} className="flex items-center justify-between gap-2 rounded border border-border/20 bg-card/10 px-2 py-1 text-xs">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className={`shrink-0 ${g.variant === "success" ? "text-green-500" : "text-muted-foreground/50"}`}>{g.icon}</span>
+                    <span className="truncate font-medium text-foreground">{item.name}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground/60">{item.code}</span>
+                    {item.strategyName && (
+                      <span className="shrink-0 rounded bg-muted/30 px-1 text-[10px] text-muted-foreground/80">{item.strategyName}</span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                    {item.geneScore != null && <span>基因 {item.geneScore.toFixed(1)}</span>}
+                    {item.strategyScore != null && <span>战法 {item.strategyScore.toFixed(1)}</span>}
+                    {item.breakoutScore != null && <span>breakout {item.breakoutScore.toFixed(2)}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        )}
-        {groups.funnelOnly.length > 0 && (
-          <div className="flex items-start gap-2">
-            <CrossValidationBadge group="funnelOnly" />
-            <span className="text-xs font-mono text-muted-foreground">{groups.funnelOnly.length} 只 · {groups.funnelOnly.join(", ")}</span>
-          </div>
-        )}
-        {groups.breakoutOnly.length > 0 && (
-          <div className="flex items-start gap-2">
-            <CrossValidationBadge group="breakoutOnly" />
-            <span className="text-xs font-mono text-muted-foreground">{groups.breakoutOnly.length} 只 · {groups.breakoutOnly.join(", ")}</span>
-          </div>
-        )}
+        ))}
       </div>
       <p className="mt-2 text-[10px] text-muted-foreground/60">参考值，非执行指令；市场有风险</p>
     </GlassCard>

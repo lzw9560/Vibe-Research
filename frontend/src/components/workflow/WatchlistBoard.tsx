@@ -25,7 +25,7 @@ interface WatchlistBoardProps {
 export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
   const cv = useCrossValidationGroups(F, forward);
 
-  const allCodes = [...cv.dual, ...cv.funnelOnly, ...cv.breakoutOnly];
+  const allCodes = [...cv.dual, ...cv.funnelOnly, ...cv.breakoutOnly].map((c) => c.code);
   const codesStr = allCodes.join(",");
   const { data: quoteMap } = useQuote(codesStr);
   const { data: workflowStates } = useWorkflowStates(date);
@@ -61,10 +61,10 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
     );
   }
 
-  const groups: { key: "dual" | "funnelOnly" | "breakoutOnly"; codes: string[] }[] = [
-    { key: "dual", codes: cv.dual },
-    { key: "funnelOnly", codes: cv.funnelOnly },
-    { key: "breakoutOnly", codes: cv.breakoutOnly },
+  const groups: { key: "dual" | "funnelOnly" | "breakoutOnly"; items: typeof cv.dual }[] = [
+    { key: "dual", items: cv.dual },
+    { key: "funnelOnly", items: cv.funnelOnly },
+    { key: "breakoutOnly", items: cv.breakoutOnly },
   ];
 
   return (
@@ -76,19 +76,24 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
       <div className="space-y-4">
         {groups.map(
           (g) =>
-            g.codes.length > 0 && (
+            g.items.length > 0 && (
               <div key={g.key}>
                 <div className="mb-2 flex items-center gap-2">
                   <CrossValidationBadge group={g.key} />
-                  <span className="text-xs text-muted-foreground">{g.codes.length} 只</span>
+                  <span className="text-xs text-muted-foreground">{g.items.length} 只</span>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {g.codes.map((code) => (
+                  {g.items.map((item) => (
                     <WatchlistCard
-                      key={code}
-                      code={code}
-                      quote={quoteMap?.[code]}
-                      status={stateMap.get(code)}
+                      key={item.code}
+                      code={item.code}
+                      name={item.name}
+                      strategyName={item.strategyName}
+                      strategyScore={item.strategyScore}
+                      geneScore={item.geneScore}
+                      breakoutScore={item.breakoutScore}
+                      quote={quoteMap?.[item.code]}
+                      status={stateMap.get(item.code)}
                     />
                   ))}
                 </div>
@@ -103,19 +108,28 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
   );
 }
 
-/** 单只票卡片——实时价格/涨跌幅/封板状态/持仓状态徽章。 */
+/** 单只票卡片——股票名/战法/分数 + 实时价格/涨跌幅/封板状态/持仓状态。 */
 function WatchlistCard({
   code,
+  name,
+  strategyName,
+  strategyScore,
+  geneScore,
+  breakoutScore,
   quote,
   status,
 }: {
   code: string;
+  name: string;
+  strategyName?: string;
+  strategyScore?: number;
+  geneScore?: number;
+  breakoutScore?: number;
   quote?: Quote;
   status?: string;
 }) {
   const price = quote?.price;
   const changePct = quote?.change_pct;
-  // 封板判定：price >= limit_up_price（浮点近似比较）
   const isSealed =
     quote != null &&
     quote.limit_up_price != null &&
@@ -124,8 +138,12 @@ function WatchlistCard({
   return (
     <Link to={`/workflow/intraday?code=${code}`} className="block">
       <GlassCard className="p-3 transition-all hover:ring-2 hover:ring-primary/30">
+        {/* 第一行：股票名 + code + 持仓状态 */}
         <div className="flex items-center justify-between">
-          <span className="font-mono text-sm">{code}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium">{name}</span>
+            <span className="font-mono text-[10px] text-muted-foreground/60">{code}</span>
+          </div>
           {status && (
             <span
               className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-white ${
@@ -136,6 +154,14 @@ function WatchlistCard({
             </span>
           )}
         </div>
+        {/* 第二行：战法 + 分数 */}
+        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/70">
+          {strategyName && <span>{strategyName}</span>}
+          {strategyScore != null && <span className="font-mono">战法分 {strategyScore.toFixed(1)}</span>}
+          {geneScore != null && <span className="font-mono">基因 {geneScore.toFixed(1)}</span>}
+          {breakoutScore != null && <span className="font-mono">breakout {breakoutScore.toFixed(2)}</span>}
+        </div>
+        {/* 第三行：价格 + 涨跌幅 */}
         <div className="mt-2 flex items-baseline justify-between">
           <span className="text-lg font-semibold tabular-nums">
             {price != null ? price.toFixed(2) : "—"}
@@ -151,6 +177,7 @@ function WatchlistCard({
             </span>
           )}
         </div>
+        {/* 第四行：封板状态 */}
         <div className="mt-1 text-[10px] text-muted-foreground">
           {quote ? (isSealed ? "封板" : "未封板") : "实时价格待接入"}
           {quote?.limit_up_price ? ` · 涨停 ${quote.limit_up_price.toFixed(2)}` : ""}

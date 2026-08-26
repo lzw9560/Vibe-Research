@@ -48,9 +48,9 @@ describe("WatchlistBoard (S093 T16)", () => {
 
   it("三组分组渲染 + 卡片显示 code", () => {
     cvMock.mockReturnValue({
-      dual: ["600519"],
-      funnelOnly: ["000001"],
-      breakoutOnly: ["300750"],
+      dual: [{ code: "600519", name: "贵州茅台", geneScore: 65.2, strategyName: "连板接力", strategyScore: 72.5, breakoutScore: 0.95, source: "dual" }],
+      funnelOnly: [{ code: "000001", name: "平安银行", geneScore: 50.1, strategyName: "首板挖掘", strategyScore: 40.0, source: "funnelOnly" }],
+      breakoutOnly: [{ code: "300750", name: "宁德时代", breakoutScore: 0.88, source: "breakoutOnly" }],
       isLoading: false,
     });
     quoteMock.mockReturnValue({
@@ -65,15 +65,15 @@ describe("WatchlistBoard (S093 T16)", () => {
     expect(screen.getByText("双重确认")).toBeInTheDocument();
     expect(screen.getAllByText("仅漏斗").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("仅 breakout").length).toBeGreaterThanOrEqual(1);
-    // 卡片 code
-    expect(screen.getByText("600519")).toBeInTheDocument();
-    expect(screen.getByText("000001")).toBeInTheDocument();
-    expect(screen.getByText("300750")).toBeInTheDocument();
+    // 卡片 股票名
+    expect(screen.getByText("贵州茅台")).toBeInTheDocument();
+    expect(screen.getByText("平安银行")).toBeInTheDocument();
+    expect(screen.getByText("宁德时代")).toBeInTheDocument();
   });
 
   it("持仓状态徽章渲染（holding → 绿色徽章）", () => {
     cvMock.mockReturnValue({
-      dual: ["600519"],
+      dual: [{ code: "600519", name: "贵州茅台", source: "dual" }],
       funnelOnly: [],
       breakoutOnly: [],
       isLoading: false,
@@ -88,7 +88,7 @@ describe("WatchlistBoard (S093 T16)", () => {
 
   it("封板状态渲染（price >= limit_up_price → 封板）", () => {
     cvMock.mockReturnValue({
-      dual: ["600519"],
+      dual: [{ code: "600519", name: "贵州茅台", source: "dual" }],
       funnelOnly: [],
       breakoutOnly: [],
       isLoading: false,
@@ -104,7 +104,7 @@ describe("WatchlistBoard (S093 T16)", () => {
 
   it("无 quote 数据 → 标「实时价格待接入」", () => {
     cvMock.mockReturnValue({
-      dual: ["600519"],
+      dual: [{ code: "600519", name: "贵州茅台", source: "dual" }],
       funnelOnly: [],
       breakoutOnly: [],
       isLoading: false,
@@ -116,7 +116,7 @@ describe("WatchlistBoard (S093 T16)", () => {
 
   it("参考值非执行指令标注", () => {
     cvMock.mockReturnValue({
-      dual: ["600519"],
+      dual: [{ code: "600519", name: "贵州茅台", source: "dual" }],
       funnelOnly: [],
       breakoutOnly: [],
       isLoading: false,

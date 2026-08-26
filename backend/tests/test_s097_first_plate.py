@@ -50,7 +50,7 @@ class TestFirstPlateMatchS097(unittest.TestCase):
         self.assertTrue(r.data_ok)
 
     def test_c1_miss_c2_hit_not_fired(self):
-        gene = _make_gene(total_score=50, freq=30)  # C1 基因<60 miss
+        gene = _make_gene(total_score=35, freq=30)  # C1 基因<40 miss（fa4514e 60→40）
         r = FirstPlateStrategy().match(_ctx(gene))
         self.assertFalse(r.fired)
         self.assertEqual(r.hit_count, 1)
@@ -58,7 +58,7 @@ class TestFirstPlateMatchS097(unittest.TestCase):
         self.assertEqual(r.conditions[1].state, "hit")
 
     def test_c1_hit_c2_miss_not_fired(self):
-        gene = _make_gene(total_score=70, freq=10)  # C2 频次<=20 miss
+        gene = _make_gene(total_score=70, freq=3)  # C2 频次<6 miss（fa4514e 20→6）
         r = FirstPlateStrategy().match(_ctx(gene))
         self.assertFalse(r.fired)
         self.assertEqual(r.hit_count, 1)

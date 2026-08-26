@@ -108,7 +108,7 @@ class TestFirstPlate:
 
     def test_miss_low_score(self):
         s = FirstPlateStrategy()
-        gene = _gene(total=55, factors={"涨停频次": 25})  # C1 score<60
+        gene = _gene(total=35, factors={"涨停频次": 25})  # C1 score<40（fa4514e 60→40）
         r = s.match(_ctx(gene=gene))
         assert not r.fired
         assert _state_of(r, "first_plate.c1") == "miss"
@@ -258,7 +258,7 @@ class TestEndOfDaySneak:
 
     def test_miss_low_premium(self):
         s = EndOfDaySneakStrategy()
-        r = s.match(_ctx(gene=_gene(factors={"封板率": 50, "次日溢价率": 30})))
+        r = s.match(_ctx(gene=_gene(factors={"封板率": 50, "次日溢价率": 10})))  # 次日溢价率<15 miss（fa4514e 40→15）
         assert not r.fired
         assert _state_of(r, "end_of_day_sneak.c2") == "miss"
 

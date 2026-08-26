@@ -33,13 +33,11 @@ class TestRegistrySchema:
 
     def test_dragon_head_entry_conditions(self):
         s = _get("dragon_head")
-        # 关键条件字段含板块领涨 + 相对强度 + 换手 + 量比 + 催化
+        # S100：entry_condition 对齐 match（仅 sector_rank≤3，删旧 fanbao 5 关键词）
         ec = s["entry_condition"]
-        assert "板块领涨" in ec
-        assert "相对强度" in ec
-        assert "换手" in ec
-        assert "量比" in ec
-        assert "催化" in ec
+        assert "sector_rank" in ec
+        assert "≤3" in ec or "<=3" in ec
+        assert "板块" in ec
 
     def test_dragon_head_exit_params(self):
         s = _get("dragon_head")
@@ -53,14 +51,13 @@ class TestRegistrySchema:
         assert s["max_hold_days"] == 1
 
     def test_reverse_package_entry_condition_absorbs_fanbao_five(self):
-        """S062 T1：entry_condition 吸收 fanbao 五条件关键字。"""
+        """S100：entry_condition 对齐 match（open_count≥2 炸板池为核心，fanbao 五条件降历史参考）。"""
         ec = _get("reverse_package")["entry_condition"]
-        # fanbao 五条件关键字
-        assert "T-2" in ec and "T-3" in ec  # T-2/T-3 涨停（加分）
-        assert "T-1" in ec  # T-1 未涨停 + T-1 成交额
-        assert "15亿" in ec  # T-1 成交额>15亿
-        assert "M7/M14" in ec or "均线多头" in ec  # 均线多头
-        assert "实体" in ec  # 实体涨跌幅
+        # 核心匹配条件
+        assert "open_count" in ec
+        assert "炸板" in ec
+        # fanbao 五条件降为历史参考（未接入 match）
+        assert "fanbao" in ec or "历史参考" in ec
 
     def test_reverse_package_retains_weather_regimes(self):
         s = _get("reverse_package")
@@ -101,12 +98,12 @@ class TestCardContent:
         assert "历史统计" in card  # 风险提醒
 
     def test_reverse_package_card_has_s053_conclusion(self):
-        """A3：S053 对照结论有文字记录。"""
+        """A3：S053 对照结论有文字记录（S100 更新：S097 已激活）。"""
         from ai.tools.strategy_tools import query_strategy_card
 
         card = query_strategy_card("reverse_package")["card"]
         assert "S053" in card, "reverse_package 卡片缺 S053 对照结论"
-        assert "炸板后溢价" in card or "因子缺供" in card
+        assert "S097 已激活" in card or "open_count" in card
 
 
 class TestRegistryCompleteness:

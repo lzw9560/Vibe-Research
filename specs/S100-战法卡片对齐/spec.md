@@ -1,6 +1,6 @@
 # Spec: S100 — 战法卡片对齐 match 条件（S097 收尾 + fa4514e 阈值同步）
 
-> 状态：草案
+> 状态：已实现 + 验收通过（2026-08-27；详见 §10）
 > 作者：Claude 会话  日期：2026-08-27
 > 关联：S097（match 重构，§5.2 条件表已部分过期）、fa4514e（2026-08-27 阈值校准，漏改 docstring/spec/卡片）、S058（卡片创建时点）、S086（strategy_tools 读卡喂 AI 出口）
 
@@ -114,13 +114,13 @@ S097 重构了 12 战法 `match()` 返回 `StrategyMatchResult`（全量条件 h
 
 ## 6. 验收标准
 
-- [ ] A1 12 张卡片「入场条件」与 §5.1 基准表逐条一致（条件数+因子+阈值+fire_rule）
-- [ ] A2 12 张卡片「退出参数」与 §5.2 registry 真值一致（止损基准=入场价）
-- [ ] A3 first_plate/end_of_day_sneak match docstring 阈值对齐代码（R13）
-- [ ] A4 S097 spec §5.2 两行阈值更新 + fa4514e 修订注记（R14）
-- [ ] A5 registry 12 战法 entry_condition 对齐 match（R15）
-- [ ] A6 一致性测试 R16 全绿（卡片条件数 + 阈值数值双断言）
-- [ ] A7 离线全测绿（全量 ≈2279+1 新增，1 pre-existing `test_spec_consistency` 硬编码 S066 非 S100；S100 零回归破坏）
+- [x] A1 12 张卡片「入场条件」与 §5.1 基准表逐条一致（条件数+因子+阈值+fire_rule）
+- [x] A2 12 张卡片「退出参数」与 §5.2 registry 真值一致（止损基准=入场价）
+- [x] A3 first_plate/end_of_day_sneak match docstring 阈值对齐代码（R13）
+- [x] A4 S097 spec §5.2 两行阈值更新 + fa4514e 修订注记（R14）
+- [x] A5 registry 12 战法 entry_condition 对齐 match（R15）
+- [x] A6 一致性测试 R16 全绿（卡片条件数 + 阈值数值双断言）
+- [x] A7 离线全测绿（全量 2281 passed，1 pre-existing `test_spec_consistency` 硬编码 S066 非 S100；S100 零回归破坏）
 
 ## 7. 合规与工程底线自查（逐条确认）
 
@@ -141,3 +141,25 @@ S097 重构了 12 战法 `match()` 返回 `StrategyMatchResult`（全量条件 h
 - **风险低**：纯文档/字符串字段/测试，不动 match 逻辑、不动数据、不动 AI 提示词结构。最坏情况是卡片措辞调整不当，回滚 `git revert` S100 commit。
 - **一致性测试 brittle 风险**：R16 卡片解析用 bullet 计数 + 阈值数值断言，卡片措辞若不含精确数值（如写「涨停频次达标」不写「6」）会误红——实现时确认每卡片「入场条件」bullet 含数值，或测试用宽松匹配（如 first_plate 含「6」且含「涨停频次」即可）。
 - **registry entry_condition 改动影响前端展示**：entry_condition 喂 routers/strategy.py:32 前端策略列表，改文案前端展示变（变好），无契约破坏（字符串字段）。
+
+## 10. 实现记录（2026-08-27）
+
+**R1-R12 12 卡片对齐**：12 张 `cards/*.md` 入场条件/核心逻辑/退出参数全量重写对齐 match 代码（§5.1 基准表）。一致性测试 `TestCardConditionAlignment`（条件数 + 阈值数值双断言）全绿。
+
+**R13 fa4514e docstring 残局**：first_plate/end_of_day_sneak match docstring（`gene_based.py:28,321`）阈值同步 40/6、>15。
+
+**R14 S097 §5.2 修订**：first_plate/end_of_day_sneak 两行阈值更新 + §10.1 fa4514e 修订注记。
+
+**R15 registry entry_condition**：12 战法 `entry_condition` 字段对齐 match（`quality_standards` 列 follow-up，含 reverse_package「T-1未涨停」与 match 矛盾等优先项）。
+
+**R16 一致性测试**：`test_s058_strategy_cards.py` 补 `TestCardConditionAlignment`（2 测：条件数 + 阈值数值）。
+
+**fa4514e 测试残局（顺手修，A7 要求）**：fa4514e（2026-08-27）改 first_plate/end_of_day_sneak 阈值但漏改 5 处测试 data（用旧边界值 55/50/10/30）：
+- `test_s086_strategy_impl.py`：test_miss_low_score（total 55→35）/test_miss_low_premium（premium 30→10）
+- `test_s097_first_plate.py`：test_c1_miss_c2_hit（total 50→35）/test_c1_hit_c2_miss（freq 10→3）
+- `test_s097_funnel_aggregation.py`：test_limitup_first_plate_funnel_summary（B total 55→35、C freq 10→3 + 注释）
+- S100 一并修（fa4514e 残局完整收拾）。
+
+**test_s062 断言更新**（S100 直接回归）：dragon_head entry_condition 断言旧 5 关键词 → 改为 sector_rank/≤3；reverse_package fanbao 五条件吸收 → 改为 open_count 炸板核心 + fanbao 历史参考；S053 结论断言 → S097 已激活。
+
+**验收**：全量 2281 passed + 1 pre-existing failed（`test_spec_consistency` 硬编码 S066 已归档，非 S100，见 memory `test-plan-tasks-s066-archive-stale`）+ 1 skipped + 39 deselected（newsradar/s032 flaky）。S100 零回归破坏（A7 达成）。

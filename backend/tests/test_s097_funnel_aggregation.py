@@ -32,12 +32,12 @@ class TestFunnelAggregation:
         """3 cand（A 全 hit / B C1 miss / C C2 miss）→ first_plate 漏斗统计。
 
         并联语义：input_count=3（所有 cand 评估 first_plate，非顺序串联）；
-        C1 passed=2（A,C score≥60），C2 passed=2（A,B freq>20），fired=1（仅 A 全 hit）。
+        C1 passed=2（A,C score≥40），C2 passed=2（A,B freq≥6），fired=1（仅 A 全 hit，fa4514e 阈值校准）。
         """
         cands = [
             _cand("A", total=70, freq=40),  # C1 hit C2 hit → fired
-            _cand("B", total=55, freq=40),  # C1 miss(<60) C2 hit → not fired
-            _cand("C", total=70, freq=10),  # C1 hit C2 miss(≤20) → not fired
+            _cand("B", total=35, freq=40),  # C1 miss(<40) C2 hit → not fired（fa4514e 60→40）
+            _cand("C", total=70, freq=3),   # C1 hit C2 miss(<6) → not fired（fa4514e 20→6）
         ]
         scored = score_candidates(cands, "晴天", "limitup")
         fp = [s for s in scored if s["strategy_code"] == "first_plate" and s["code"] == "A"]
