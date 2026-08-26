@@ -55,12 +55,12 @@ P2RiskPanel 当前显示：
 - `frontend/src/lib/api/types.ts`：PreMarketBriefing 加判据字段。
 - `frontend/src/components/workflow/P2RiskPanel.tsx`：显示判据（因子值 + 触发规则）。
 
-## 5. 验收（grill 定稿后细化）
+## 5. 验收（grill 定稿后细化）—— ✅ 全过（2026-08-23 落地）
 
-- briefing 透传判据字段（additive，旧快照 None 不破）。
-- P2RiskPanel 显示"为何此 tier"（因子 + 触发规则）。
-- 红期硬熔断场景显式标注（big_loss≥8/floor≥20 fired）。
-- pytest + vitest + tsc 绿。
+- ✅ briefing 透传判据字段（additive，旧快照 None 不破）。
+- ✅ P2RiskPanel 显示"为何此 tier"（因子 + 触发规则）。
+- ✅ 红期硬熔断场景显式标注（big_loss≥8/floor≥20 fired）。
+- ✅ pytest + vitest + tsc 绿。
 
 ## 6. 合规自查（弱合规）
 

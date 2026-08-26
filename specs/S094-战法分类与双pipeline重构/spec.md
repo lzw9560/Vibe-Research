@@ -156,17 +156,17 @@ S093 验收后 grill 8 轮 + spec 审查 31 issue + 5 维度深度摸清，发�
 
 ## 5. 验收标准
 
-- [ ] AC1 战法分类分流正确（7 limitup + 5 market_scan，各对对应标的跑，dragon_head 不对涨停股跑——条件化 match）
-- [ ] AC2 双 pipeline 统一底座（**ora-6 A7：= AC3+AC6+AC7+AC8 合称，无独立可测判据，降级为合称标注**）
-- [ ] AC3 score_candidates funnel_type 分流 + confidence 复用（不再全 None/0，从 dispatch_match 取）
-- [ ] AC4 zt_real 显示层修（market_emotion 加 zt_real 字段 + sti_timeline 持久化 + 历史日读 DB 值，不破坏 _emotion 内部 zt_count）
-- [ ] AC5 板块轮动不再"未取得"（sector_cycle 端点 date 默认 last_trading_date_str + 前端传 triplet.today；非 aggregate_sectors industry 缺——ora-6 B5 实测 industry 54/54 满值）
-- [ ] AC6 kline cache 扩容非涨停股 + MA 消费侧算
-- [ ] AC7 pattern_scan MA 自算（check_ma_bullish 不恒 False）+ relative_strength 相对值（传 sector_bars）
-- [ ] AC8 UI 双 pipeline 分区+折叠+卡片流转
-- [ ] AC9 UI bug 修（代码2次/摘要/P2/验证/定稿失配）
-- [ ] AC10 离线全测绿（pytest + vitest + tsc + vite build）
-- [ ] AC11 playwright e2e
+- [x] AC1 战法分类分流正确（7 limitup + 5 market_scan，各对对应标的跑，dragon_head 不对涨停股跑——条件化 match）
+- [x] AC2 双 pipeline 统一底座（**ora-6 A7：= AC3+AC6+AC7+AC8 合称，无独立可测判据，降级为合称标注**）
+- [x] AC3 score_candidates funnel_type 分流 + confidence 复用（不再全 None/0，从 dispatch_match 取）
+- [x] AC4 zt_real 显示层修（market_emotion 加 zt_real 字段 + sti_timeline 持久化 + 历史日读 DB 值，不破坏 _emotion 内部 zt_count）
+- [x] AC5 板块轮动不再"未取得"（sector_cycle 端点 date 默认 last_trading_date_str + 前端传 triplet.today；非 aggregate_sectors industry 缺——ora-6 B5 实测 industry 54/54 满值）
+- [x] AC6 kline cache 扩容非涨停股 + MA 消费侧算
+- [x] AC7 pattern_scan MA 自算（check_ma_bullish 不恒 False）+ relative_strength 相对值（传 sector_bars）
+- [x] AC8 UI 双 pipeline 分区+折叠+卡片流转
+- [x] AC9 UI bug 修（代码2次/摘要/P2/验证/定稿失配）——T25 5/5 done（P2 判据→S096 落地）
+- [x] AC10 离线全测绿（pytest 2269 + vitest 428 + tsc + vite build 双绿门）
+- [ ] AC11 playwright e2e——T28 follow-up 未完（需后端重启 + 可选写 AC e2e spec）
 
 ## 6. 设计取舍
 
