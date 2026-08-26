@@ -133,10 +133,24 @@ def chip_distribution(code: str) -> dict:
       - concentration: 集中度
       - 90_cost / 70_cost: 90%成本-70%成本区间上下沿
     akshare 缺失抛 DependencyMissing；取数异常返回空 dict {}（不臆造，遵循项目红线 AC6）。
+
+    S094 修复：akshare stock_cyq_em 服务端断连时 requests 无 socket 超时会无限挂起，
+    52 只逐只调时一只挂住整个 _collect 卡死。加 8s 硬超时（ThreadPoolExecutor 包裹），
+    超时返 {}（同异常路径，diagnosis 标 missing 不阻断 pipeline）。
     """
     ak = _akshare()
+
+    # S094 修复：akshare 内部 requests 无 timeout，服务端断连时无限挂起。
+    # 用 ThreadPoolExecutor + future.result(timeout=8) 硬截断。
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+    from concurrent.futures import TimeoutError as _FutureTimeout  # noqa: PLC0415
     try:
-        df = ak.stock_cyq_em(symbol=code)
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(ak.stock_cyq_em, symbol=code)
+            df = future.result(timeout=8)
+    except _FutureTimeout:
+        logging.getLogger("astock").warning("chip_distribution(%s) 8s 超时（akshare 服务端无响应）", code)
+        return {}
     except Exception as e:
         logging.getLogger("astock").warning("chip_distribution(%s) akshare 取数失败: %s", code, e)
         return {}
