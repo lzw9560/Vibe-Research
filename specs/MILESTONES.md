@@ -186,6 +186,7 @@ S097 match 重构后 cards/*.md 卡片跟上 + fa4514e 阈值残局收拾。
 | 编号 | 一句话 | 状态 | 备注 |
 |---|---|---|---|
 | S100 | 战法卡片对齐 match 条件（S097 收尾 + fa4514e 阈值同步） | ✅已实现 | 12 卡片 + docstring + S097§5.2 + registry entry_condition + 一致性测试；fa4514e 测试残局顺手修；2281 passed |
+| S101 | 飞书多点通知（9:25 竞价 / 9:35 开盘 / T+1 复盘） | ✅已实现 | 第1步修 T-1 通知 cron 17:15 + final=0 guard；第2步 3 新 executor + 内容函数 + seed；2295 passed |
 
 ---
 

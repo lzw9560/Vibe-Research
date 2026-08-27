@@ -54,6 +54,10 @@ _EXPECTED_TASK_TYPES = {
     "monthly_vacuum",
     "kline_refresh",
     "daily_ai_summary",
+    # S101 飞书多点通知
+    "premarket_auction_notify",
+    "premarket_open_notify",
+    "premarket_t1_review",
 }
 
 

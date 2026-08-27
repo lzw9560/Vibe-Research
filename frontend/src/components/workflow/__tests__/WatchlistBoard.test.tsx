@@ -1,6 +1,6 @@
 // S093 T16：WatchlistBoard 渲染测试——三组分组 + 卡片 + 空态 + loading。
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const cvMock = vi.hoisted(() => vi.fn());
@@ -46,7 +46,7 @@ describe("WatchlistBoard (S093 T16)", () => {
     expect(screen.getByText(/前瞻 Tab 尚无选股结论/)).toBeInTheDocument();
   });
 
-  it("三组分组渲染 + 卡片显示 code", () => {
+  it("三组分组渲染 + 卡片显示 code（双重确认默认展开，其余点击展开）", () => {
     cvMock.mockReturnValue({
       dual: [{ code: "600519", name: "贵州茅台", geneScore: 65.2, strategyName: "连板接力", strategyScore: 72.5, breakoutScore: 0.95, source: "dual" }],
       funnelOnly: [{ code: "000001", name: "平安银行", geneScore: 50.1, strategyName: "首板挖掘", strategyScore: 40.0, source: "funnelOnly" }],
@@ -61,14 +61,50 @@ describe("WatchlistBoard (S093 T16)", () => {
       },
     });
     renderBoard();
-    // 三组 label
+    // 三组 label（header 始终显）
     expect(screen.getByText("双重确认")).toBeInTheDocument();
     expect(screen.getAllByText("仅漏斗").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("仅 breakout").length).toBeGreaterThanOrEqual(1);
-    // 卡片 股票名
+    // 双重确认默认展开 → 贵州茅台 立即可见
     expect(screen.getByText("贵州茅台")).toBeInTheDocument();
+    // 仅漏斗 / 仅 breakout 默认收缩 → 懒渲染未出，平安银行/宁德时代 不在 DOM
+    expect(screen.queryByText("平安银行")).not.toBeInTheDocument();
+    expect(screen.queryByText("宁德时代")).not.toBeInTheDocument();
+    // 点击展开 仅漏斗
+    fireEvent.click(screen.getByRole("button", { name: /仅漏斗/ }));
     expect(screen.getByText("平安银行")).toBeInTheDocument();
+    // 点击展开 仅 breakout
+    fireEvent.click(screen.getByRole("button", { name: /仅 breakout/ }));
     expect(screen.getByText("宁德时代")).toBeInTheDocument();
+  });
+
+  it("双重确认组默认展开（▶/▼ 状态）", () => {
+    cvMock.mockReturnValue({
+      dual: [{ code: "600519", name: "贵州茅台", source: "dual" }],
+      funnelOnly: [],
+      breakoutOnly: [],
+      isLoading: false,
+    });
+    quoteMock.mockReturnValue({ data: undefined });
+    renderBoard();
+    // dual 默认展开 → 候选立即渲染
+    expect(screen.getByText("贵州茅台")).toBeInTheDocument();
+  });
+
+  it("仅漏斗默认收缩 → 点击展开后显候选", () => {
+    cvMock.mockReturnValue({
+      dual: [],
+      funnelOnly: [{ code: "000001", name: "平安银行", source: "funnelOnly" }],
+      breakoutOnly: [],
+      isLoading: false,
+    });
+    quoteMock.mockReturnValue({ data: undefined });
+    renderBoard();
+    // 默认收缩 → 不渲染
+    expect(screen.queryByText("平安银行")).not.toBeInTheDocument();
+    // 点击展开
+    fireEvent.click(screen.getByRole("button", { name: /仅漏斗/ }));
+    expect(screen.getByText("平安银行")).toBeInTheDocument();
   });
 
   it("持仓状态徽章渲染（holding → 绿色徽章）", () => {

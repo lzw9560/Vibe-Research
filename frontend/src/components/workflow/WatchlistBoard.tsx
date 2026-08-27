@@ -4,6 +4,7 @@
 // 点击跳 IntradayMonitor 个股详情
 // 工程底线：不臆造——query 无数据返空数组；quote 缺字段标"—"；历史统计特征标注。
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { useCrossValidationGroups } from "@/lib/query/useCrossValidation";
 import { useQuote, useWorkflowStates } from "@/lib/query";
 import { CrossValidationBadge } from "@/components/workflow/CrossValidationBadge";
@@ -12,6 +13,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { STATUS_COLORS, STATUS_LABELS } from "@/components/workflow/statusMeta";
 import type { Quote } from "@/lib/api/types";
+import type { CrossValidationGroup } from "@/lib/query/useCrossValidation";
 
 interface WatchlistBoardProps {
   /** 前瞻数据日（漏斗 final_candidates 数据源） */
@@ -61,7 +63,7 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
     );
   }
 
-  const groups: { key: "dual" | "funnelOnly" | "breakoutOnly"; items: typeof cv.dual }[] = [
+  const groups: { key: CrossValidationGroup; items: typeof cv.dual }[] = [
     { key: "dual", items: cv.dual },
     { key: "funnelOnly", items: cv.funnelOnly },
     { key: "breakoutOnly", items: cv.breakoutOnly },
@@ -71,17 +73,13 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
     <div className="mb-6">
       <SectionHeader
         title="前瞻结论标的看板"
-        subtitle="双重确认 / 仅漏斗 / 仅 breakout · 点击跳个股盯盘"
+        subtitle="双重确认 / 仅漏斗 / 仅 breakout · 点击展开 · 点击标的跳个股盯盘"
       />
-      <div className="space-y-4">
+      <div className="space-y-2">
         {groups.map(
           (g) =>
             g.items.length > 0 && (
-              <div key={g.key}>
-                <div className="mb-2 flex items-center gap-2">
-                  <CrossValidationBadge group={g.key} />
-                  <span className="text-xs text-muted-foreground">{g.items.length} 只</span>
-                </div>
+              <CollapsibleGroup key={g.key} group={g.key} count={g.items.length}>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {g.items.map((item) => (
                     <WatchlistCard
@@ -97,7 +95,7 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
                     />
                   ))}
                 </div>
-              </div>
+              </CollapsibleGroup>
             ),
         )}
       </div>
@@ -105,6 +103,35 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
         参考值，非执行指令；市场有风险
       </p>
     </div>
+  );
+}
+
+/** 可收缩分组——双重确认默认展开，其余默认收缩；懒渲染（仅 open 时渲染候选网格）。 */
+function CollapsibleGroup({
+  group,
+  count,
+  children,
+}: {
+  group: CrossValidationGroup;
+  count: number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(group === "dual");
+  return (
+    <GlassCard className="p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <CrossValidationBadge group={group} />
+        <span className="text-xs text-muted-foreground">{count} 只</span>
+        <span className="ml-auto text-[10px] text-muted-foreground/60">
+          {open ? "▼" : "▶"}
+        </span>
+      </button>
+      {open && <div className="mt-3">{children}</div>}
+    </GlassCard>
   );
 }
 

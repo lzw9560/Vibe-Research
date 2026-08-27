@@ -172,6 +172,35 @@ class TestCandidateFunnelPrecomputeNotification:
         assert result["status"] == "ok"  # 通知失败不阻断
         assert result["final_candidates_count"] == 1
 
+    def test_notification_skipped_when_final_candidates_empty(self, monkeypatch):
+        """S101：final_candidates=0 时不发通知（数据未就绪，推"0 只"误导用户）。
+
+        根因：cron 若抢在 gene_scores 写入前跑则漏斗 R1 宽源输入 0 → final=0。
+        改 cron 17:15 + 此处 guard 双保险。
+        """
+        target = "2026-08-21"
+        funnel_result = _make_funnel_result([])  # final_candidates 空
+
+        import candidate_funnel.funnel as funnel_mod
+        monkeypatch.setattr(funnel_mod, "run_funnel", lambda *a, **kw: funnel_result)
+        import candidate_funnel.funnel_cache as fc_mod
+        monkeypatch.setattr(fc_mod, "save_funnel_result", lambda *a, **kw: None)
+        monkeypatch.setattr(st, "_compute_dual_confirmation", lambda t, fc: 0)
+        monkeypatch.setattr(st, "_compute_strategy_map", lambda t: {})
+
+        mock_ns = _MockNotificationService()
+        monkeypatch.setattr(
+            "notification.notification_service.NotificationService",
+            lambda *a, **kw: mock_ns,
+        )
+
+        executor = st.TaskExecutor()
+        result = executor._execute_candidate_funnel_precompute({"date": target})
+
+        assert result["status"] == "ok"
+        assert result["final_candidates_count"] == 0
+        assert len(mock_ns.sent) == 0, "final=0 时不应发通知"
+
 
 # ── _compute_dual_confirmation 交集逻辑 ──────────────────────────────
 

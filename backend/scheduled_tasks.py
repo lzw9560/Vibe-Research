@@ -457,6 +457,9 @@ class TaskExecutor:
             "monthly_vacuum": self._execute_monthly_vacuum,  # S089 D2：月度 VACUUM + wal_checkpoint
             "kline_refresh": self._execute_kline_refresh,  # S090 B：baostock_kline_cache 日更
             "daily_ai_summary": self._execute_daily_ai_summary,  # S093 R12：AI 盘后总结 stub
+            "premarket_auction_notify": self._execute_premarket_auction_notify,  # S101：9:25 竞价确认通知
+            "premarket_open_notify": self._execute_premarket_open_notify,  # S101：9:35 开盘表现通知
+            "premarket_t1_review": self._execute_premarket_t1_review,  # S101：T+1 复盘通知
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -974,17 +977,25 @@ class TaskExecutor:
 
             # S093 R10：发飞书富内容卡片（直接调 NotificationService.send()，
             # 不走 _send_notification——后者只产固定格式任务状态文本，不支持富内容）
-            try:
-                from notification.notification_service import NotificationService
-                content = _build_premarket_notification_content(
-                    target, final_cards, dual_count, strategy_map,
+            # final_candidates=0 时不发通知（数据未就绪时漏斗空，推"0 只"误导用户；
+            # 根因：cron 若抢在 gene_scores 写入前跑则 R1 宽源输入 0，见 cron 17:15 修订）
+            if final_cards:
+                try:
+                    from notification.notification_service import NotificationService
+                    content = _build_premarket_notification_content(
+                        target, final_cards, dual_count, strategy_map,
+                    )
+                    ns = NotificationService()
+                    if ns.is_available():
+                        ns.send(content, route_type="alert", severity="info")
+                        logger.info("[candidate_funnel_precompute] 飞书通知已发送（%d 候选）", len(final_cards))
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[candidate_funnel_precompute] 飞书通知发送失败: %s", exc)
+            else:
+                logger.warning(
+                    "[candidate_funnel_precompute] final_candidates=0，跳过飞书通知"
+                    "（数据未就绪或漏斗空；cron 17:15 应在 gene_scores 写入后）"
                 )
-                ns = NotificationService()
-                if ns.is_available():
-                    ns.send(content, route_type="alert", severity="info")
-                    logger.info("[candidate_funnel_precompute] 飞书通知已发送")
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[candidate_funnel_precompute] 飞书通知发送失败: %s", exc)
 
             logger.info("[candidate_funnel_precompute] %s 漏斗预计算完成（缓存已预热+落库）", target)
             return {
@@ -1015,6 +1026,87 @@ class TaskExecutor:
             "note": "S094 TODO：AI 盘后总结 stub，返空串",
         }
 
+    # ── S101 飞书多点通知：9:25 竞价 / 9:35 开盘 / T+1 复盘 ──────────────
+
+    def _execute_premarket_auction_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S101：9:25 竞价确认后推送前瞻标的开盘竞价表现。
+
+        读 F 日（上一交易日）funnel_cache final_candidates → tencent_quote 取竞价/开盘价
+        → 算 gap_pct（open vs last_close）→ 推飞书。无缓存/无 quote/NotificationService 不可用
+        → 不崩不推（增强，catch 不抛）。
+        """
+        try:
+            from vr_paths import last_trading_date_str
+            from candidate_funnel.funnel_cache import load_funnel_result
+            from notification.notification_service import NotificationService
+
+            f_date = payload.get("date") or last_trading_date_str()
+            final_cards = _load_final_cards(f_date)
+            if not final_cards:
+                logger.info("[premarket_auction_notify] %s 无 final_candidates，跳过", f_date)
+                return {"date": f_date, "status": "ok", "notified": False, "reason": "no_candidates"}
+
+            codes = [c.get("code") for c in final_cards if c.get("code")]
+            quotes = _fetch_quotes(codes)
+            content = _build_auction_notify_content(f_date, final_cards, quotes)
+            notified = _send_notify(content)
+            logger.info("[premarket_auction_notify] %s 候选%d notified=%s", f_date, len(final_cards), notified)
+            return {"date": f_date, "status": "ok", "candidates": len(final_cards), "notified": notified}
+        except Exception as e:
+            logger.warning("[premarket_auction_notify] 失败: %s", e)
+            return {"status": f"error: {e}"}
+
+    def _execute_premarket_open_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S101：9:35 开盘 5min 后推送前瞻标的开盘表现（现价/涨跌幅/封板）。"""
+        try:
+            from vr_paths import last_trading_date_str
+
+            f_date = payload.get("date") or last_trading_date_str()
+            final_cards = _load_final_cards(f_date)
+            if not final_cards:
+                logger.info("[premarket_open_notify] %s 无 final_candidates，跳过", f_date)
+                return {"date": f_date, "status": "ok", "notified": False, "reason": "no_candidates"}
+
+            codes = [c.get("code") for c in final_cards if c.get("code")]
+            quotes = _fetch_quotes(codes)
+            content = _build_open_notify_content(f_date, final_cards, quotes)
+            notified = _send_notify(content)
+            logger.info("[premarket_open_notify] %s 候选%d notified=%s", f_date, len(final_cards), notified)
+            return {"date": f_date, "status": "ok", "candidates": len(final_cards), "notified": notified}
+        except Exception as e:
+            logger.warning("[premarket_open_notify] 失败: %s", e)
+            return {"status": f"error: {e}"}
+
+    def _execute_premarket_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S101：T+1 复盘——前瞻标的（F 日 final_candidates）在 T 日（F 下一交易日）收益。
+
+        baostock_kline_cache 取 T 日 close vs F 日 close（close2close 口径，简化；open2close
+        见 first_board_settlement 但需 T 日 open，baostock 当日 bar 16:35 可能未更新，故用 close2close）。
+        §44 口径：n<30 标样本不足 / 不宣称 alpha / lift<2x 标无 validated edge。
+        """
+        try:
+            from vr_paths import last_trading_date_str, next_trading_date
+            from datetime import date as _date
+
+            f_date = payload.get("date") or last_trading_date_str()
+            final_cards = _load_final_cards(f_date)
+            if not final_cards:
+                logger.info("[premarket_t1_review] %s 无 final_candidates，跳过", f_date)
+                return {"date": f_date, "status": "ok", "notified": False, "reason": "no_candidates"}
+
+            t_date = next_trading_date(_date.fromisoformat(f_date)).isoformat()
+            returns = _compute_t1_returns(final_cards, f_date, t_date)
+            content = _build_t1_review_content(f_date, t_date, returns)
+            notified = _send_notify(content)
+            n = len(returns)
+            logger.info("[premarket_t1_review] %s→%s n=%d notified=%s", f_date, t_date, n, notified)
+            return {
+                "f_date": f_date, "t_date": t_date, "status": "ok",
+                "candidates": n, "notified": notified,
+            }
+        except Exception as e:
+            logger.warning("[premarket_t1_review] 失败: %s", e)
+            return {"status": f"error: {e}"}
 
     def _execute_first_board_filter(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S075 盘后首板流筛选——首板过滤+三层剔除+9维度评分+落盘。
@@ -1650,6 +1742,194 @@ def _build_premarket_notification_content(
     return "\n".join(lines)
 
 
+# ============================================================================
+# S101 飞书多点通知：辅助函数 + 3 个时点通知内容构建
+# ============================================================================
+
+# §44 raw-shadow 口径风险提醒（所有 S101 通知尾挂）
+_S101_DISCLAIMER = "参考值，非执行指令；§44 未验证，市场有风险"
+
+
+def _load_final_cards(f_date: str) -> list[dict]:
+    """读 F 日 funnel_cache final_candidates（model_dump 列表）。无缓存返空。"""
+    try:
+        from candidate_funnel.funnel_cache import load_funnel_result
+
+        result = load_funnel_result(f_date, "all")
+        if result is None:
+            return []
+        return [c.model_dump(mode="json") for c in result.final_candidates]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[S101] load_final_cards %s 失败: %s", f_date, e)
+        return []
+
+
+def _fetch_quotes(codes: list[str]) -> dict[str, dict]:
+    """批量 tencent_quote 取实时行情。失败返空 dict（不臆造）。"""
+    if not codes:
+        return {}
+    try:
+        import astock
+
+        raw = astock.tencent_quote(codes) or {}
+        # raw[code] = dict with price/change_pct/last_close/open/limit_up 等
+        return {c: raw.get(c, {}) for c in codes if raw.get(c)}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[S101] fetch_quotes 失败: %s", e)
+        return {}
+
+
+def _send_notify(content: str) -> bool:
+    """发飞书通知。不可用/失败返 False（不崩）。"""
+    try:
+        from notification.notification_service import NotificationService
+
+        ns = NotificationService()
+        if not ns.is_available():
+            return False
+        return bool(ns.send(content, route_type="alert", severity="info"))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[S101] send_notify 失败: %s", e)
+        return False
+
+
+def _fmt_pct(v) -> str:
+    """格式化百分比，None/非数 → '—'。"""
+    try:
+        return f"{float(v):+.2f}%"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _build_auction_notify_content(
+    f_date: str, final_cards: list[dict], quotes: dict[str, dict],
+) -> str:
+    """9:25 竞价确认通知：逐只高开/低开/平开（open vs last_close）。"""
+    lines = [f"🔔 9:25 竞价确认 {f_date}", "", f"竞价标的 {len(final_cards)} 只:"]
+    for c in final_cards:
+        code = c.get("code", "")
+        name = c.get("name", "") or code
+        q = quotes.get(code, {})
+        open_p = q.get("open")
+        last_close = q.get("last_close")
+        if open_p and last_close and last_close > 0:
+            gap = (open_p - last_close) / last_close * 100
+            tag = "高开" if gap > 0.1 else ("低开" if gap < -0.1 else "平开")
+            lines.append(f"  - {name}({code}) {tag} {_fmt_pct(gap)}")
+        else:
+            lines.append(f"  - {name}({code}) 竞价数据待接入")
+    lines.append("")
+    lines.append(_S101_DISCLAIMER)
+    return "\n".join(lines)
+
+
+def _build_open_notify_content(
+    f_date: str, final_cards: list[dict], quotes: dict[str, dict],
+) -> str:
+    """9:35 开盘表现通知：逐只现价/涨跌幅/封板状态。"""
+    lines = [f"📈 9:35 开盘表现 {f_date}", "", f"开盘标的 {len(final_cards)} 只:"]
+    for c in final_cards:
+        code = c.get("code", "")
+        name = c.get("name", "") or code
+        q = quotes.get(code, {})
+        price = q.get("price")
+        change = q.get("change_pct")
+        limit_up = q.get("limit_up_price") or q.get("limit_up")
+        if price and limit_up and float(price) >= float(limit_up):
+            tag = "封板"
+        elif price:
+            tag = "未封板"
+        else:
+            tag = "行情待接入"
+        price_str = f"{float(price):.2f}" if price else "—"
+        lines.append(f"  - {name}({code}) {price_str} {_fmt_pct(change)} {tag}")
+    lines.append("")
+    lines.append(_S101_DISCLAIMER)
+    return "\n".join(lines)
+
+
+def _compute_t1_returns(
+    final_cards: list[dict], f_date: str, t_date: str,
+) -> list[dict]:
+    """算 final_candidates 在 T 日的 close2close 收益（F close → T close）。
+
+    从 baostock_kline_cache 读 F 日 close + T 日 close。缺数据跳过（不臆造收益）。
+    """
+    try:
+        from strategies.premarket_selection import KLINE_CACHE
+        import json
+
+        cache = json.loads(KLINE_CACHE.read_bytes())
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[S101] t1 读 kline cache 失败: %s", e)
+        return []
+
+    out: list[dict] = []
+    for c in final_cards:
+        code = c.get("code", "")
+        name = c.get("name", "") or code
+        bars = cache.get(code, [])
+        f_close = _bar_close(bars, f_date)
+        t_close = _bar_close(bars, t_date)
+        if f_close and t_close and f_close > 0:
+            ret = (t_close - f_close) / f_close * 100
+            out.append({
+                "code": code, "name": name,
+                "f_close": round(f_close, 2), "t_close": round(t_close, 2),
+                "return_pct": round(ret, 2),
+            })
+    return out
+
+
+def _bar_close(bars: list[dict], target_date: str) -> float | None:
+    """从 baostock bars 找 target_date 的 close。"""
+    for b in bars:
+        if b.get("date") == target_date:
+            close = b.get("close")
+            try:
+                return float(close) if close else None
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _build_t1_review_content(
+    f_date: str, t_date: str, returns: list[dict],
+) -> str:
+    """T+1 复盘通知：均值/胜率/逐只 + §44 诚实口径。"""
+    n = len(returns)
+    if n == 0:
+        lines = [
+            f"📋 T+1 复盘 {f_date}→{t_date}",
+            "",
+            "无 T+1 收益数据（baostock kline 待更新或无候选）",
+            "",
+            _S101_DISCLAIMER,
+        ]
+        return "\n".join(lines)
+
+    rets = [r["return_pct"] for r in returns]
+    mean_ret = sum(rets) / n
+    wins = sum(1 for r in rets if r > 0)
+    win_rate = wins / n * 100
+    # §44 口径：n<30 标样本不足；不宣称 alpha（lift<2x=噪声）
+    sample_note = "样本不足(n<30)，不下结论" if n < 30 else f"n={n}"
+
+    lines = [
+        f"📋 T+1 复盘 {f_date}→{t_date}",
+        "",
+        f"标的 {n} 只 · 均值收益 {_fmt_pct(mean_ret)} · 红盘 {wins}/{n}（{win_rate:.0f}%）",
+        f"§44 口径：{sample_note}，未 validated，不宣称 alpha",
+        "",
+        "逐只收益:",
+    ]
+    for r in returns:
+        lines.append(f"  - {r['name']}({r['code']}) {_fmt_pct(r['return_pct'])} ({r['f_close']}→{r['t_close']})")
+    lines.append("")
+    lines.append(_S101_DISCLAIMER)
+    return "\n".join(lines)
+
+
 def generate_daily_summary(date: str) -> str:
     """S093 R12 AI 盘后总结 stub — 返空串 + 落存储位。
 
@@ -1884,8 +2164,25 @@ def _ensure_seed_tasks() -> None:
     在本约定下=周二至周六，与"跳周末"意图不符，已按 0=周一 约定修正为 0-4。
     节假日精确判断推 S011b（trading_calendar.json 本轮不建，非交易日由 screener
     返空涨停池自然处理）。
+
+    S101 迁移：candidate_funnel_precompute cron 曾被手改为 16:05（`5 16`），早于
+    gene_scores 写入完成（limitup_precompute 15:30 起，全量基因得分+STI 跑 >30min
+    未写完），致漏斗 R1 宽源输入 0 → final_candidates=0 → 通知"0 只"。改回 17:15
+    （晚 derived_precompute 16:30 +15min，龙虎榜 16:30 后 + gene_scores 写完）。
     """
     existing = {t.name for t in _manager.list_tasks()}
+
+    # S101 迁移：把偏离的 candidate_funnel_precompute cron 拉回 17:15（一次，幂等）
+    for t in _manager.list_tasks():
+        if t.name == "candidate_funnel_precompute" and t.cron_expr != "15 17 * * 0-4":
+            old_cron = t.cron_expr
+            t.cron_expr = "15 17 * * 0-4"
+            _manager.update_task(t)
+            logger.info(
+                "[scheduler] candidate_funnel_precompute cron 迁移 %s → 15 17 * * 0-4"
+                "（S101：等 gene_scores 写入完成 + 龙虎榜 16:30 后）",
+                old_cron,
+            )
     if "limitup_precompute" not in existing:
         _manager.create_task(ScheduledTask(
             name="limitup_precompute",
@@ -2054,6 +2351,41 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 daily_ai_summary 已创建（cron 30 15 * * 0-4）")
+
+    # S101：飞书多点通知——9:25 竞价 / 9:35 开盘 / T+1 16:35 复盘
+    # 前瞻标的从 F 日 funnel_cache 读（17:15 已存），不重跑漏斗。
+    if "premarket_auction_notify" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="premarket_auction_notify",
+            description="S101 9:25 竞价确认通知（前瞻标的 F 日 final_candidates 开盘竞价表现）",
+            task_type="premarket_auction_notify",
+            cron_expr="25 9 * * 0-4",  # 工作日 9:25（集合竞价完成后）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 premarket_auction_notify 已创建（cron 25 9 * * 0-4）")
+
+    if "premarket_open_notify" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="premarket_open_notify",
+            description="S101 9:35 开盘表现通知（前瞻标的开盘 5min 现价/涨跌幅/封板）",
+            task_type="premarket_open_notify",
+            cron_expr="35 9 * * 0-4",  # 工作日 9:35（开盘后 5min）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 premarket_open_notify 已创建（cron 35 9 * * 0-4）")
+
+    if "premarket_t1_review" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="premarket_t1_review",
+            description="S101 T+1 复盘通知（前瞻标的 F→T 收益评价，§44 诚实口径）",
+            task_type="premarket_t1_review",
+            cron_expr="35 16 * * 0-4",  # 16:35（晚 first_board_t1_review 5min 避抢 DB）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 premarket_t1_review 已创建（cron 35 16 * * 0-4）")
 
 
 async def stop_scheduler() -> None:

@@ -70,6 +70,10 @@ class TestScheduledTasksImports(unittest.TestCase):
             "monthly_vacuum",           # S089 D2：月度 VACUUM + wal_checkpoint
             "kline_refresh",            # S090 B：baostock_kline_cache 日更
             "daily_ai_summary",         # S093 R12：AI 盘后总结 stub
+            # S101 飞书多点通知
+            "premarket_auction_notify",
+            "premarket_open_notify",
+            "premarket_t1_review",
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")
