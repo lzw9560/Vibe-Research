@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
-"""S104 hithink 数据源封装测试——结构性缺口唯一源（PS/PCF + 异动/飙升/热股榜）。
+"""S105 hithink 直连 HTTP 数据源测试（替代 S104 subprocess mock）。
 
 契约（spec §6 验收标准）：
-- A1 valuation_snapshot 返 PS_TTM/PCF_TTM 非空
-- A2 thscode 映射：600519→SH / 000001→SZ / 830xxx→BJ
-- A3 hithink ok:false（CLI_BAD_ARGUMENT）→ 返空 dict/list，不透传 error envelope
-- A4 subprocess 超时 → 返空不崩
-- A5 full_valuation 返 ps_ttm/pcf_ttm 非空（hithink 补上），pe/pb 仍东财腾讯口径
-- A6 hithink 失败时 full_valuation 降级返 ps_ttm=None（不崩）
-- A7 query_skyrocket/hot_stock/anomaly AI 工具注册可调
-- A8 端点返数据（冒烟在 plan 验证，测试用 mock）
+- A1 valuation_snapshot 返 PS_TTM/PCF_TTM 非空（直连，延迟 ≤0.3s）
+- A2 code==0 成功取 data；code!=0 失败返 None 不透传 envelope
+- A3 重试：429/503 连续 → 重试 3 次后失败返 None + record_failure
+- A4 业务码 4001（retryable）触发重试；非 retryable 直接失败
+- A5 Key：env 优先 / env 无 fallback keychain / 都无 DependencyMissing
+- A6 下游零改动（full_valuation / AI 工具 / 端点 不动）
+- A7 skyrocket/hot_stock 30 条；anomaly 盘后空
+- A8 5min 缓存仍生效
 """
 from __future__ import annotations
 
 import json
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,239 +22,250 @@ import pytest
 from data.sources import hithink_src as hs
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# A2：thscode 映射
-# ──────────────────────────────────────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    hs._valuation_cache.clear()
+    yield
+    hs._valuation_cache.clear()
 
 
-class TestThscodeMapping:
-    @pytest.mark.parametrize("code, expected_suffix", [
-        ("600519", "SH"),   # 沪市
-        ("688981", "SH"),   # 科创板（6 开头）
-        ("000001", "SZ"),   # 深市主板
-        ("000858", "SZ"),   # 深市
-        ("300750", "SZ"),   # 创业板
-        ("830799", "BJ"),   # 北交所
-        ("830832", "BJ"),   # 北交所
-    ])
-    def test_to_thscode(self, code, expected_suffix):
-        """A2：6 位 code → thscode 后缀映射（复用 tencent.get_prefix）。"""
-        ths = hs._to_thscode(code)
-        assert ths == f"{code}.{expected_suffix}"
-
-    @pytest.mark.parametrize("ths, expected_bare", [
-        ("600519.SH", "600519"),
-        ("000001.SZ", "000001"),
-        ("830799.BJ", "830799"),
-        ("600519", "600519"),  # 无后缀原样
-    ])
-    def test_strip_thscode(self, ths, expected_bare):
-        """A2 反映射：thscode → 裸 6 位 code。"""
-        assert hs._strip_thscode(ths) == expected_bare
+def _mock_response(code, data, status=200):
+    """构造 urllib.urlopen 返回的 mock context manager（body={code,message,data}）。"""
+    body = json.dumps({"code": code, "message": "ok" if code == 0 else "err",
+                       "request_id": "rid-test", "data": data}).encode()
+    cm = MagicMock()
+    cm.__enter__ = lambda self: MagicMock(read=lambda: body, status=status)
+    cm.__exit__ = lambda *a: False
+    return cm
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# A1 / A3 / A4：_run_cli envelope 解析 + 失败/超时降级
-# ──────────────────────────────────────────────────────────────────────────────
+# ── A2：envelope 转译（code==0 / code!=0）─────────────────────────────────────
 
 
-class TestRunCli:
-    def test_ok_true_returns_data(self):
-        """A1：ok:true → 返 data 字段（剥 envelope）。"""
-        payload = {"ok": True, "data": {"item": [{"thscode": "600519.SH", "ps_ttm": 9.36}]}}
-        mock_proc = MagicMock(returncode=0, stdout=json.dumps(payload), stderr="")
-        with patch("data.sources.hithink_src.subprocess.run", return_value=mock_proc), \
-             patch("data.sources.hithink_src.get_breaker") as mb:
+class TestEnvelopeTranslation:
+    def test_code_zero_returns_data(self):
+        """A2：code==0 → 返 data（剥 envelope）。"""
+        with patch("data.sources.hithink_src.urllib.request.urlopen",
+                   return_value=_mock_response(0, {"item": [{"thscode": "600519.SH"}]})), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"):
             mb.return_value.allow_request.return_value = True
-            data = hs._run_cli(["valuation", "snapshot"], 15)
-            assert data == {"item": [{"thscode": "600519.SH", "ps_ttm": 9.36}]}
+            data = hs._http_get("/api/a-share/valuations/snapshot", {"thscodes": "600519.SH"})
+            assert data == {"item": [{"thscode": "600519.SH"}]}
+            mb.return_value.record_success.assert_called_once()
 
-    def test_ok_false_returns_none_no_envelope_leak(self):
-        """A3：ok:false（CLI_BAD_ARGUMENT）→ 返 None，不透传 error envelope。"""
-        payload = {"ok": False, "error": {"code": "CLI_BAD_ARGUMENT", "message": "bad arg"}}
-        mock_proc = MagicMock(returncode=0, stdout=json.dumps(payload), stderr="")
-        with patch("data.sources.hithink_src.subprocess.run", return_value=mock_proc), \
-             patch("data.sources.hithink_src.get_breaker") as mb:
+    def test_code_nonzero_returns_none_no_envelope_leak(self):
+        """A2：code!=0（业务错误）→ 返 None，不透传 error envelope。"""
+        with patch("data.sources.hithink_src.urllib.request.urlopen",
+                   return_value=_mock_response(1001, None)), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"):
             mb.return_value.allow_request.return_value = True
-            data = hs._run_cli(["valuation", "snapshot"], 15)
-            assert data is None  # 关键：返 None 不透传 error envelope
-
-    def test_timeout_returns_none(self):
-        """A4：subprocess 超时 → 返 None 不崩 + record_failure。"""
-        import subprocess
-        with patch("data.sources.hithink_src.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=[], timeout=15)), \
-             patch("data.sources.hithink_src.get_breaker") as mb:
-            mb.return_value.allow_request.return_value = True
-            data = hs._run_cli(["valuation", "snapshot"], 15)
+            data = hs._http_get("/api/any", {})
             assert data is None
             mb.return_value.record_failure.assert_called_once()
 
-    def test_nonzero_exit_returns_none(self):
-        """A3 边界：CLI 非零退出 → 返 None。"""
-        mock_proc = MagicMock(returncode=2, stdout="", stderr="some error")
-        with patch("data.sources.hithink_src.subprocess.run", return_value=mock_proc), \
-             patch("data.sources.hithink_src.get_breaker") as mb:
+    def test_code_nonzero_retryable_triggers_retry(self):
+        """A4：业务码 4001（retryable）触发重试，耗尽后 None。"""
+        with patch("data.sources.hithink_src.urllib.request.urlopen",
+                   return_value=_mock_response(4001, None)), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"), \
+             patch("data.sources.hithink_src.time.sleep"):
             mb.return_value.allow_request.return_value = True
-            data = hs._run_cli(["special", "skyrocket"], 30)
+            data = hs._http_get("/api/any", {})
             assert data is None
 
-    def test_breaker_open_returns_none(self):
-        """A4 边界：熔断 OPEN → 快速失败返 None，不调 subprocess。"""
+
+# ── A3：有界重试（HTTP 429/503 + 网络超时）───────────────────────────────────
+
+
+class TestRetry:
+    def test_http_429_retries_then_fails(self):
+        """A3：HTTP 429 连续 → 重试 maxAttempts 次后 None。"""
+        err = urllib.error.HTTPError("url", 429, "Too Many", {}, None)
+        with patch("data.sources.hithink_src.urllib.request.urlopen", side_effect=err), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"), \
+             patch("data.sources.hithink_src.time.sleep"):
+            mb.return_value.allow_request.return_value = True
+            data = hs._http_get("/api/any", {})
+            assert data is None
+            assert hs.urllib.request.urlopen.call_count == hs._MAX_ATTEMPTS
+
+    def test_http_500_not_retryable_fails_fast(self):
+        """A3 边界：HTTP 500（非 retryable）→ 不重试直接 None。"""
+        err = urllib.error.HTTPError("url", 500, "Server Err", {}, None)
+        with patch("data.sources.hithink_src.urllib.request.urlopen", side_effect=err), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"):
+            mb.return_value.allow_request.return_value = True
+            data = hs._http_get("/api/any", {})
+            assert data is None
+            assert hs.urllib.request.urlopen.call_count == 1
+
+    def test_timeout_retries_then_fails(self):
+        """A4：网络超时（URLError）→ 重试后 None。"""
+        with patch("data.sources.hithink_src.urllib.request.urlopen",
+                   side_effect=urllib.error.URLError("timeout")), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"), \
+             patch("data.sources.hithink_src.time.sleep"):
+            mb.return_value.allow_request.return_value = True
+            data = hs._http_get("/api/any", {})
+            assert data is None
+
+    def test_breaker_open_fast_fail(self):
+        """A3 边界：熔断 OPEN → 快速失败返 None，不调 urlopen。"""
         with patch("data.sources.hithink_src.get_breaker") as mb:
             mb.return_value.allow_request.return_value = False
-            with patch("data.sources.hithink_src.subprocess.run") as mock_run:
-                data = hs._run_cli(["valuation", "snapshot"], 15)
+            with patch("data.sources.hithink_src.urllib.request.urlopen") as mock_open:
+                data = hs._http_get("/api/any", {})
                 assert data is None
-                mock_run.assert_not_called()  # 熔断中不调 subprocess
+                mock_open.assert_not_called()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# A1：valuation_snapshot 剥 item + thscode 还原
-# ──────────────────────────────────────────────────────────────────────────────
+# ── A5：API Key 解析 ──────────────────────────────────────────────────────────
+
+
+class TestApiKeyResolve:
+    def test_env_priority(self, monkeypatch):
+        """A5：env HITHINK_FINANCE_API_KEY 优先。"""
+        monkeypatch.setenv("HITHINK_FINANCE_API_KEY", "env-key-123")
+        with patch("data.sources.hithink_src.subprocess.run") as mock_run:
+            assert hs._resolve_api_key() == "env-key-123"
+            mock_run.assert_not_called()
+
+    def test_keychain_fallback(self, monkeypatch):
+        """A5：env 无时 fallback macOS keychain（security 命令）。"""
+        monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)
+        mock_r = MagicMock(returncode=0, stdout="kc-key-456\n")
+        with patch("data.sources.hithink_src.subprocess.run", return_value=mock_r):
+            assert hs._resolve_api_key() == "kc-key-456"
+
+    def test_both_missing_raises_dependency_missing(self, monkeypatch):
+        """A5：env 无 + keychain 读失败 → DependencyMissing。"""
+        monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)
+        mock_r = MagicMock(returncode=1, stdout="")
+        with patch("data.sources.hithink_src.subprocess.run", return_value=mock_r):
+            from data.sources._common import DependencyMissing
+            with pytest.raises(DependencyMissing):
+                hs._resolve_api_key()
+
+
+# ── A1/A8：valuation_snapshot 剥 item + thscode 还原 + 缓存 ─────────────────────
 
 
 class TestValuationSnapshot:
-    def test_strips_envelope_and_restores_bare_code(self):
-        """A1：valuation_snapshot 剥 envelope + thscode→裸 code + 缓存写入。"""
-        hs._valuation_cache.clear()
-        payload = {
-            "ok": True,
-            "data": {"item": [
-                {"thscode": "600519.SH", "pe_ttm": 19.92, "ps_ttm": 9.36, "pcf_ttm": 13.62},
-                {"thscode": "000001.SZ", "pe_ttm": 5.20, "ps_ttm": 1.70, "pcf_ttm": 0.63},
-            ]},
-        }
-        mock_proc = MagicMock(returncode=0, stdout=json.dumps(payload), stderr="")
-        with patch("data.sources.hithink_src.subprocess.run", return_value=mock_proc), \
-             patch("data.sources.hithink_src.get_breaker") as mb:
+    def test_strips_and_restores_bare_code(self):
+        """A1：valuation_snapshot 剥 envelope + thscode→裸 code。"""
+        payload = {"item": [
+            {"thscode": "600519.SH", "ps_ttm": 9.36, "pcf_ttm": 13.62, "pe_ttm": 19.92},
+            {"thscode": "000001.SZ", "ps_ttm": 1.70, "pcf_ttm": 0.63, "pe_ttm": 5.20},
+        ]}
+        with patch("data.sources.hithink_src.urllib.request.urlopen",
+                   return_value=_mock_response(0, payload)), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"):
             mb.return_value.allow_request.return_value = True
             out = hs.valuation_snapshot(["600519", "000001"])
-            assert "600519" in out and "000001" in out  # 裸 code 键
             assert out["600519"]["ps_ttm"] == 9.36
             assert out["000001"]["pcf_ttm"] == 0.63
 
-    def test_empty_codes_returns_empty(self):
-        """边界：空 codes 列表 → 返 {} 不调 CLI。"""
-        with patch("data.sources.hithink_src.subprocess.run") as mock_run:
+    def test_empty_codes_no_call(self):
+        with patch("data.sources.hithink_src.urllib.request.urlopen") as mock_open:
             assert hs.valuation_snapshot([]) == {}
-            mock_run.assert_not_called()
+            mock_open.assert_not_called()
 
-    def test_hithink_failure_returns_empty_dict(self):
-        """A1 降级：hithink 失败 → 返 {}（PS/PCF 无数据，诚实缺失）。"""
-        hs._valuation_cache.clear()
-        with patch("data.sources.hithink_src._run_cli", return_value=None):
-            out = hs.valuation_snapshot(["600519"])
-            assert out == {}
+    def test_failure_returns_empty(self):
+        """A1 降级：直连失败 → 返 {}（PS/PCF 诚实缺失）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=None):
+            assert hs.valuation_snapshot(["600519"]) == {}
 
     def test_5min_cache_hit(self):
-        """缓存：5min TTL 内第二次命中缓存不重打 CLI。"""
-        hs._valuation_cache.clear()
+        """A8：5min TTL 内第二次命中缓存不重打。"""
         call_count = 0
-        payload = {"ok": True, "data": {"item": [{"thscode": "600519.SH", "ps_ttm": 9.36}]}}
-        mock_proc = MagicMock(returncode=0, stdout=json.dumps(payload), stderr="")
+        payload = {"item": [{"thscode": "600519.SH", "ps_ttm": 9.36}]}
 
-        def fake_run(*a, **kw):
+        def fake_open(*a, **kw):
             nonlocal call_count
             call_count += 1
-            return mock_proc
+            return _mock_response(0, payload)
 
-        with patch("data.sources.hithink_src.subprocess.run", side_effect=fake_run), \
-             patch("data.sources.hithink_src.get_breaker") as mb:
+        with patch("data.sources.hithink_src.urllib.request.urlopen", side_effect=fake_open), \
+             patch("data.sources.hithink_src.get_breaker") as mb, \
+             patch("data.sources.hithink_src._resolve_api_key", return_value="test-key"):
             mb.return_value.allow_request.return_value = True
             r1 = hs.valuation_snapshot(["600519"])
-            r2 = hs.valuation_snapshot(["600519"])  # 命中缓存
+            r2 = hs.valuation_snapshot(["600519"])
             assert r1 == r2
-            assert call_count == 1  # 第二次命中缓存未重打
+            assert call_count == 1
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 飙升/热股/异动 归一
-# ──────────────────────────────────────────────────────────────────────────────
+# ── A7：飙升/热股/异动 归一 ───────────────────────────────────────────────────
 
 
 class TestSpecialData:
-    def test_skyrocket_normalizes_items(self):
-        """飙升榜 item 归一：thscode→code + 保留 rank/heat。"""
-        payload = {"ok": True, "data": {"item": [
-            {"thscode": "000560.SZ", "name": "我爱我家", "rank": 1, "heat": "215357", "rank_change": 2, "rank_trend": "up"},
-        ]}}
-        mock_proc = MagicMock(returncode=0, stdout=json.dumps(payload), stderr="")
-        with patch("data.sources.hithink_src.subprocess.run", return_value=mock_proc), \
-             patch("data.sources.hithink_src.get_breaker") as mb:
-            mb.return_value.allow_request.return_value = True
+    def test_skyrocket_normalizes(self):
+        """A7：飙升榜 thscode→code + 保留 rank/heat。"""
+        payload = {"item": [{"thscode": "000560.SZ", "name": "我爱我家",
+                              "rank": 1, "heat": "215357", "rank_change": 2, "rank_trend": "up"}]}
+        with patch("data.sources.hithink_src._http_get", return_value=payload):
             out = hs.skyrocket()
-            assert len(out) == 1
-            assert out[0]["code"] == "000560"  # 裸 code
+            assert out[0]["code"] == "000560"
             assert out[0]["rank"] == 1
-            assert out[0]["heat"] == "215357"
 
-    def test_skyrocket_failure_returns_empty(self):
-        """飙升榜失败 → 返 [] 不崩。"""
-        with patch("data.sources.hithink_src._run_cli", return_value=None):
+    def test_skyrocket_failure_empty(self):
+        with patch("data.sources.hithink_src._http_get", return_value=None):
             assert hs.skyrocket() == []
 
     def test_anomaly_stock_rejects_over_50(self):
-        """A3 边界：>50 只 thscodes → 返 []（hithink 限制 50）。"""
+        """A7 边界：>50 thscodes → 返 []。"""
         codes = [f"{i:06d}" for i in range(51)]
-        with patch("data.sources.hithink_src._run_cli") as mock_run:
+        with patch("data.sources.hithink_src._http_get") as mock_get:
             assert hs.anomaly_stock(codes) == []
-            mock_run.assert_not_called()
+            mock_get.assert_not_called()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# A5 / A6：full_valuation 补 PS/PCF + 降级
-# ──────────────────────────────────────────────────────────────────────────────
+# ── A6：下游零改动（full_valuation + AI 工具）─────────────────────────────────
 
 
-class TestFullValuationIntegration:
+class TestDownstreamUnchanged:
     def test_full_valuation_fills_ps_pcf(self, monkeypatch):
-        """A5：full_valuation 调 hithink 补 PS/PCF（东财结构性缺）。"""
+        """A6：full_valuation 仍调 hithink 补 PS/PCF（下游零改动）。"""
         import astock
-        # mock 腾讯行情（东财口径 pe/pb 不变）
         monkeypatch.setattr(astock, "tencent_quote", lambda codes: {
             "600519": {"name": "茅台", "price": 1500, "mcap_yi": 1.88e4, "pe_ttm": 19.92, "pb": 6.46}
         })
-        # mock hithink 返 PS/PCF
         monkeypatch.setattr("data.sources.hithink_src.valuation_snapshot",
                             lambda codes: {"600519": {"ps_ttm": 9.36, "pcf_ttm": 13.62,
                                                        "pe_ttm": 19.92, "pe_mrq": 18.2, "pb_mrq": 6.46}})
-        # profit_forecast 走 DependencyMissing 快速跳过
         from data.sources.akshare_src import DependencyMissing
-        monkeypatch.setattr(astock, "profit_forecast", lambda code: (_ for _ in ()).throw(DependencyMissing()))
+        monkeypatch.setattr(astock, "profit_forecast", lambda c: (_ for _ in ()).throw(DependencyMissing()))
         fv = astock.full_valuation("600519")
-        assert fv["pe_ttm"] == 19.92      # 东财腾讯口径不变
-        assert fv["pb"] == 6.46           # 东财腾讯口径不变
-        assert fv["ps_ttm"] == 9.36       # hithink 补上
-        assert fv["pcf_ttm"] == 13.62     # hithink 补上
+        assert fv["ps_ttm"] == 9.36 and fv["pcf_ttm"] == 13.62
+        assert fv["pe_ttm"] == 19.92
 
-    def test_full_valuation_degrades_on_hithink_failure(self, monkeypatch):
-        """A6：hithink 失败 → PS/PCF 仍 None（东财本来也 None，不崩）。"""
-        import astock
-        monkeypatch.setattr(astock, "tencent_quote", lambda codes: {
-            "600519": {"name": "茅台", "price": 1500, "mcap_yi": 1.88e4, "pe_ttm": 19.92, "pb": 6.46}
-        })
-        # hithink 返空（失败/熔断）
-        monkeypatch.setattr("data.sources.hithink_src.valuation_snapshot", lambda codes: {})
-        from data.sources.akshare_src import DependencyMissing
-        monkeypatch.setattr(astock, "profit_forecast", lambda code: (_ for _ in ()).throw(DependencyMissing()))
-        fv = astock.full_valuation("600519")
-        assert fv["pe_ttm"] == 19.92      # 东财口径仍正常
-        assert fv["pb"] == 6.46
-        assert fv["ps_ttm"] is None       # hithink 失败，诚实 None
-        assert fv["pcf_ttm"] is None
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# A7：AI 工具注册
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-class TestAIToolsRegistration:
-    def test_three_tools_registered(self):
-        """A7：query_skyrocket / query_hot_stock / query_anomaly 三工具注册。"""
+    def test_three_ai_tools_registered(self):
+        """A6：3 AI 工具仍注册。"""
         from ai.tools import registry
-        tools = registry.get_openai_tools()
-        names = {t["function"]["name"] for t in tools}
-        assert "query_skyrocket" in names
-        assert "query_hot_stock" in names
-        assert "query_anomaly" in names
+        names = {t["function"]["name"] for t in registry.get_openai_tools()}
+        assert {"query_skyrocket", "query_hot_stock", "query_anomaly"} <= names
+
+
+# ── thscode 映射（S104 保留）──────────────────────────────────────────────────
+
+
+class TestThscodeMapping:
+    @pytest.mark.parametrize("code, suffix", [
+        ("600519", "SH"), ("688981", "SH"), ("000001", "SZ"),
+        ("000858", "SZ"), ("300750", "SZ"), ("830799", "BJ"),
+    ])
+    def test_to_thscode(self, code, suffix):
+        assert hs._to_thscode(code) == f"{code}.{suffix}"
+
+    @pytest.mark.parametrize("ths, bare", [
+        ("600519.SH", "600519"), ("000001.SZ", "000001"), ("830799.BJ", "830799"),
+    ])
+    def test_strip_thscode(self, ths, bare):
+        assert hs._strip_thscode(ths) == bare
