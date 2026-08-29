@@ -187,9 +187,8 @@ async def run_scheduled_task_now(task_id: int) -> Dict[str, Any]:
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    import threading
     executor = st.TaskExecutor()
-    run = executor.execute(task)
+    run = await executor.execute_async(task)
     return {
         "data": {
             "run_id": run.id,
