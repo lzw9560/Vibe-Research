@@ -1,6 +1,6 @@
 # Spec: S095 — gene_scores 写路径修复与日期自证守卫
 
-> 状态：✅ 已实施+已验收（commit a6618df/ac22bac/9907e8a；6 tests 全绿；全量 2226 passed；08-13~08-21 七日 7/7 code 集合全等；ora-8 终审闭合）
+> 状态：✅已实现（2026-08-23）（commit a6618df/ac22bac/9907e8a；6 tests 全绿；全量 2226 passed；08-13~08-21 七日 7/7 code 集合全等；ora-8 终审闭合）
 > 作者：opencode 会话  日期：2026-08-23
 > 级别：**medium**（写路径修复 + 守卫，不改业务算法，不碰前端）
 > 流程门：spec.md + plan（并入本文件）；issue 层单轮审查；直接 develop 提交

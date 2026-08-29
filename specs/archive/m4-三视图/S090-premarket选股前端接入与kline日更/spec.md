@@ -1,6 +1,6 @@
 # Spec: S090 — premarket_selection 前端接入 + kline 日更
 
-> 状态：草案
+> 状态：✅已实现（2026-08-22）
 > 作者：lzw9560　日期：2026-08-21
 > 关联：S071（premarket_selection 模型/端点/风控已就绪）、grill-reframe-final-verdict（下一步接 endpoint+live kline 日更+风控+前端）
 

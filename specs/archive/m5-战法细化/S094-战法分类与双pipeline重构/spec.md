@@ -1,6 +1,6 @@
 # Spec: S094 — 战法分类与双 pipeline 统一底座重构
 
-> 状态：**主体已实现**（S0-S5 功能核心 done；G4 backend pytest 2269 passed 0回归 + G5 frontend vitest 428 + tsc + vite build 双绿门）—— 2026-08-23 会话。Follow-up：T25 剩 4 polish bug（代码2次/P2判据/验证对齐/仓位摘要截断）/ T28 playwright e2e（需后端重启 + 可选写 s094 AC e2e spec）/ T19 前端 ContextTab 传 triplet.today。**判状态看 git log 不看本行。**
+> 状态：**✅已实现（2026-08-29）**（S0-S5 功能核心 done；G4 backend pytest 2269 passed 0回归 + G5 frontend vitest 428 + tsc + vite build 双绿门）—— 2026-08-23 会话。Follow-up：T25 剩 4 polish bug（代码2次/P2判据/验证对齐/仓位摘要截断）/ T28 playwright e2e（需后端重启 + 可选写 s094 AC e2e spec）/ T19 前端 ContextTab 传 triplet.today。**判状态看 git log 不看本行。**
 > 作者：Claude 会话  日期：2026-08-23
 > 级别：**large**（跨层 + 双 pipeline 统一底座 + score_candidates 分流 + confidence 统一 + kline 扩容 + 5 根因修复 + UI 重设计）
 > 流程门：spec.md + plan + task；feature 分支 `feature/S094-战法分类与双pipeline重构`；完整 grill；playwright 验收

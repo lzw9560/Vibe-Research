@@ -1,6 +1,6 @@
 # Spec: S087 — 工作流 tab 按 pipeline 步骤重设计
 
-> 状态：草案
+> 状态：设计被 S093 吸收实现（2026-08-22）
 > 作者：lzw9560　日期：2026-08-20
 > 关联：S084（选股池战法解耦，两级 tab）/ S086（涨停战法 dispatch_match 统一）/ S063（SentimentContext pipeline 头部）/ S004（candidate_funnel R1/R2/R3）
 >

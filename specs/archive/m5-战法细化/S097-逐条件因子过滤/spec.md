@@ -1,6 +1,6 @@
 # Spec: S097 — 逐条件因子过滤
 
-> 状态：已实现 + 验收通过（2026-08-26；详见 §10 实现记录）
+> 状态：✅已实现（2026-08-25）（详见 §10 实现记录）
 > 作者：Claude 会话  日期：2026-08-26
 > 级别：medium（跨层 backend match() + frontend 渲染；不碰外部数据源 / 不新增 AI 工具 / 不涉财务验算）
 > 流程门：spec.md（S094:304 预留"待开独立 spec"）+ issue 层单轮 review；直接 develop（免 feature 分支 / 免完整 grill）

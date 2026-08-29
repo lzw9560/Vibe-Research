@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S099。
+`SNNN` 三位递增。下一个新 spec 用 S103。
 
 > 历史里程碑索引见 [`MILESTONES.md`](MILESTONES.md)。已完成的 M0-M3 归档在 `archive/`。
 
@@ -101,6 +101,38 @@ specs/
 | [S065](S065-weather-history持久化/spec.md) | weather_history 持久化 | ✅已实现 2026-08-13 | spec | 盘后落 weather_state 快照 + 五因子明细（W1 证据层前置，零 em_get） |
 | [S066](S066-策略特定漏斗架构重构/spec.md) | 策略特定漏斗架构重构 | 🟡Phase 0-3 主体完成 2026-08-14 | spec · [plan](S066-策略特定漏斗架构重构/plan.md) · [tasks](S066-策略特定漏斗架构重构/tasks.md) · [HANDOFF-PROMPT](S066-策略特定漏斗架构重构/HANDOFF-PROMPT.md) | 3 套权重漏斗 + 天气硬开关 + 板块周期 + 日历因子 + 前端三页统一（后端 9 模块 201 测试 + 5 API + 前端组件/hooks/因子子页 331 测试） |
 | [S067](S067-advisory-perf/spec.md) | advisory 端点性能优化 | ✅已实现 2026-08-14 | spec | advisory P0-P3 全落地（缓存+预热+并发+批量+超时降级），>40s→0.34s |
+| [S068](archive/m3-strategy/S068-工作流触发与结算正确性/spec.md) | 工作流触发与结算正确性 | ✅已实现 2026-08-15 | spec | 盘前/盘中/盘后触发点 + 结算时序对齐（S026/S034/S038/S048 衔接） |
+| [S069](archive/m3-strategy/S069-每日forward_test管道/spec.md) | 每日 forward_test 管道 + T+1 收益回填 | ✅已实现 | spec | forward_test 流程框架打通；待 prod baostock 验证 live 日积 |
+| [S070](archive/m3-strategy/S070-intraday采集管道/spec.md) | intraday 数据采集管道 | ✅已实现 | spec | 盘中 ephemeral → 盘后离线 §44 60日复验窗口 + 战法因子派生（并入原 S080） |
+| [S071](archive/m3-strategy/S071-盘前选股谨慎部署/spec.md) | 盘前选股谨慎部署（breakout 弱信号 + 风控） | ✅已实现 2026-08-16 | spec | 事后补写 spec（代码先于规范，grill 指出 §0 违规已补齐）；定位待确认未投真金 |
+| [S072](archive/m3-strategy/S072-涨停叉pipeline诚实可观测/spec.md) | 涨停叉 pipeline 诚实可观测层 | ✅已实现 | spec | weights drift 修 + 前端诚实层 + forward 基线标注（spec 先行，medium） |
+| [S074](archive/m3-strategy/S074-market_phase统一判定/spec.md) | market_phase 统一判定与盘后桩对接 | ✅已实现 | spec | 盘前盘后时段统一（当日收盘→次日开盘）+ post-market 桩对接 + 前端状态机对齐（→ S092 三视图） |
+| [S075](archive/m3-strategy/S075-首板流/spec.md) | 首板流（首板涨停股 T+1 操作工作流） | ✅已实现 | spec | 首个战法工作流：从"找涨停中谁最好"转向"剔除首板中谁会亏"（medium） |
+| [S076](archive/m3-strategy/S076-首板流盘中多源行情实测/spec.md) | 首板流盘中多源行情实测 | ✅已实现 | spec | 多源行情盘中闭环实测（small，纯探查脚本零生产改动） |
+| [S077](archive/m3-strategy/S077-首板流剔除层lift验证/spec.md) | 首板流剔除层 §44 lift 验证（B1） | ✅已实现 | spec | 独立研究脚本 + 30天 smoke 通；剔除层 lift 1.01-1.06 待 120 天全量复验 |
+| [S078](archive/m3-strategy/S078-涨停历史snapshot数据地基/spec.md) | 涨停历史 snapshot 数据地基 | ✅已实现 2026-08-18 | spec | snapshot 表 + 15日 backfill + daily task cron `0 16` 累积供 B1 复验 |
+| [S079](archive/m3-strategy/S079-打板P2战法与仓位闸/spec.md) | 打板 P2 仓位闸 + 龙虎榜黑名单（瘦身版） | ✅已实现 | spec | 仓位闸 + 龙虎榜黑名单（不依赖 S070/S081） |
+| [S081](archive/m3-strategy/S081-打板P2战法匹配/spec.md) | 打板 P2 战法匹配扩展 | ✅已实现 | spec | S070 R7 就绪后扩展战法匹配（草案，待实现） |
+| [S082](archive/m3-strategy/S082-echarts按需引入/spec.md) | echarts 按需引入优化 | ✅已实现 2026-08-19 | spec | useECharts chunk 558.93KB/gzip 190.45KB + graph/tree 下沉 Topology chunk；渲染回归待确认 |
+| [S083](archive/m3-strategy/S083-工作流重构选股池分层/spec.md) | 工作流重构：选股池分层（漏斗接入 pre_market_workflow） | ✅已实现 | spec | 漏斗接入 pre_market_workflow（→ S092 三视图） |
+| [S084](archive/m3-strategy/S084-选股池战法解耦/spec.md) | 选股池战法解耦（选股池 Tab + 战法 Tab 两级导航 + 因子补全） | ✅已实现 2026-08-19 | spec · [验收报告](archive/m3-strategy/S084-选股池战法解耦/验收报告.md) | 两级 tab 导航 + 因子补全（→ S092 三视图） |
+| [S085](archive/m3-strategy/S085-因子全量补全与游资画像/spec.md) | 因子全量补全 + 游资画像 + 接预警 + 防封 | ✅已实现 | spec · [核实报告](archive/m3-strategy/S085-因子全量补全与游资画像/核实报告.md) | 32 因子 5+ bug 修 + 22 backlog 透传 + 预警 5 因子 + 游资画像 + 防封 |
+| [S086](archive/m3-strategy/S086-涨停战法pipeline统一架构/spec.md) | 涨停战法 pipeline 统一架构 | ✅已实现 2026-08-20 | spec | dispatch_match 统一（S066/S072/S081/S084 衔接，→ S092 三视图） |
+| [S087](archive/m4-三视图/S087-工作流tab按pipeline重设计/spec.md) | 工作流 tab 按 pipeline 步骤重设计 | ✅已实现 2026-08-22 | spec | 设计被 S093 吸收实现 |
+| [S088](archive/m4-三视图/S088-盘前暴风雨预测/spec.md) | 盘前暴风雨预测模型 | ✅已实现 2026-08-22 | spec | 设计被 S093 吸收实现 |
+| [S089](archive/m4-三视图/S089-SQLite并发性能加固与分表分库/spec.md) | SQLite 并发性能加固与 seal_intraday 分表分库 | ✅已实现 | spec | WAL+busy_timeout 落地；分表分库 deferred |
+| [S090](archive/m4-三视图/S090-premarket选股前端接入与kline日更/spec.md) | premarket_selection 前端接入 + kline 日更 | ✅已实现 2026-08-22 | spec | 接 endpoint + live kline 日更 + 风控 + 前端 |
+| [S091](archive/m4-三视图/S091-gstock限流容错优化/spec.md) | gstock.global_indices 限流容错优化 | ✅已实现 2026-08-22 | spec | 加 KOSPI/SOX + push2 间歇限流记忆 + 异常诊断 |
+| [S092](archive/m4-三视图/S092-三视图交易日锚与时段推进/spec.md) | 三视图交易日锚与时段推进 | ✅已实现 2026-08-22 | spec | 设计被 S093 吸收实现（跨前后端 medium） |
+| [S093](archive/m4-三视图/S093-三视图内容重组与飞书通知/spec.md) | 三视图内容重组与飞书通知 | ✅已实现 2026-08-22 | spec | 6 阶段全闭合；后端 2215 + 前端 428 passed；AC1-AC10 全过（large，Oracle 4 轮审查） |
+| [S094](archive/m5-战法细化/S094-战法分类与双pipeline重构/spec.md) | 战法分类与双 pipeline 统一底座重构 | ✅已实现 2026-08-29 | spec | 涨停/非涨停双 pipeline + score_candidates 分流 + confidence 统一 + kline 扩容 + 5 根因修复（large，2269 passed） |
+| [S095](archive/m5-战法细化/S095-gene_scores写路径修复与日期守卫/spec.md) | gene_scores 写路径修复与日期自证守卫 | ✅已实现 2026-08-23 | spec | 6 tests 全绿 + 全量 2226 passed + 七日 7/7 code 集合全等（medium） |
+| [S096](archive/m5-战法细化/S096-P2现象判据暴露/spec.md) | P2 现象判据暴露（P2RiskPanel 补"为何此 tier"） | ✅已实现 2026-08-24 | spec | grill Q1 完整链 + Q2 红期 override + 数据降级标注（small-medium） |
+| [S097](archive/m5-战法细化/S097-逐条件因子过滤/spec.md) | 逐条件因子过滤 | ✅已实现 2026-08-25 | spec | 12 战法三态 + 批次聚合 + 前端漏斗；对抗验证 2 bug 修；2275 passed（medium） |
+| [S098](archive/m6-首板流合规/S098-首板流选股合规修复/spec.md) | 首板流选股 §44 合规修复（select 不 auto-rank + 确认时间序） | ✅已实现 2026-08-26 | spec | 29 测试绿 + 全量 2279 passed + 1 pre-existing 非 S098（medium-small） |
+| [S100](archive/m7-战法卡片对齐/S100-战法卡片对齐/spec.md) | 战法卡片对齐 match 条件（S097 收尾 + fa4514e 阈值同步） | ✅已实现 2026-08-27 | spec | 12 卡片 + docstring + S097§5.2 + registry entry_condition + 一致性测试；fa4514e 残局顺手修；2281 passed |
+| [S101](archive/m7-战法卡片对齐/S101-飞书多点通知/spec.md) | 飞书多点通知（T-1 选股 / 9:25 竞价 / 9:35 开盘 / T+1 复盘） | ✅已实现 2026-08-27 | spec | T-1 cron 17:15 + final=0 guard + 3 新 executor + 内容函数 + seed；2295 passed（medium） |
+| [S102](S102-战法卡片历史战绩/spec.md) | 战法卡片运行时拼接历史战绩段 | 🟡草案 2026-08-29 | spec | S100 延伸；strategy_backtest 12h 缓存拼接进卡片；§44 口径 |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 

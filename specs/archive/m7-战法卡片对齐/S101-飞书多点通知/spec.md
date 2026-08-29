@@ -1,6 +1,6 @@
 # Spec: S101 — 飞书多点通知（T-1 选股 / 9:25 竞价 / 9:35 开盘 / T+1 复盘）
 
-> 状态：已实现 + 验收通过（2026-08-27；详见 §10）
+> 状态：✅已实现（2026-08-27）
 > 作者：Claude 会话  日期：2026-08-27
 > 级别：medium（跨 scheduled_tasks + notification + bidding_monitor + tencent_quote + funnel_cache；不碰外部数据源新增 / 不碰 AI 提示词 / 不碰前端 / 不涉财务验算）
 > 流程门：spec.md + issue 层单轮 review；直接 develop（免 feature 分支 / 免完整 grill）

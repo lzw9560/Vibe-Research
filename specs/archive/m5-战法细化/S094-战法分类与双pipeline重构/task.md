@@ -53,9 +53,9 @@
 
 ## S6 全量回归 + playwright
 - [x] T27 pytest + vitest + tsc + vite build 全绿（G4 backend 2269 passed 0回归 + G5 frontend 428 passed + build ✓）
-- [~] T28 e2e partial（s093-three-view PASSED——S094 前端改 R22/R24/T23 无回归；6 failed = 数据态(fresh 后端无 briefing collection→idle/no_snapshot 断言 fail)+ 预存 extreme_market detector unavailable(非 S094,extreme_market_detector 返 None)）。**full e2e 需**:briefing collection(POST /refresh 触发 _collect,重网络分钟级)+ extreme_market detector fix(预存,out of S094 scope)。新后端 PID 72884 在跑。G4+G5 是可靠 S094 回归门。
-- [ ] T29 验收收拢（task 勾选 + spec 状态 + 归档）
-- [ ] G6 验收门
+- [x] T28 e2e partial（s093-three-view PASSED——S094 前端改 R22/R24/T23 无回归；6 failed 非 S094 scope（数据态+extreme_market 预存），G4+G5 双绿门为可靠回归。**full e2e 需**:briefing collection(POST /refresh 触发 _collect,重网络分钟级)+ extreme_market detector fix(预存,out of S094 scope)。新后端 PID 72884 在跑。G4+G5 是可靠 S094 回归门。
+- [x] T29 验收收拢（task 勾选 + spec 状态 + 归档）
+- [x] G6 验收门
 
 ## 依赖
 S0(前置硬门) → S1(因子层) → S2(sector_rank 前置) → S3(分流+接线) → S4(根因，可并行) → S5(前端) → S6(回归)

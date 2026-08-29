@@ -1,6 +1,6 @@
 # Spec: S089 — SQLite 并发性能加固与 seal_intraday 分表分库
 
-> 状态：草案
+> 状态：部分实现：WAL+busy_timeout 脚本已落地，分表分库 deferred（2026-08-22）
 > 作者：lzw  日期：2026-08-20
 > 关联：`../S037-gene-db-迁移/spec.md`（路径常量体系复用）、`../S070-intraday采集管道/spec.md`（R7 派生查询需走路由层）、`backend/risk/seal_intraday_collector.py`、`backend/config/__init__.py`
 

@@ -1,6 +1,6 @@
 # Spec: S091 — gstock.global_indices 限流容错优化
 
-> 状态：草案
+> 状态：✅已实现（2026-08-22）
 > 作者：lzw9560　日期：2026-08-21
 > 关联：S088（global_indices 加 KOSPI/SOX）、eastmoney-push2-ut-token 记忆（push2 间歇限流）、daily-review 异常诊断
 

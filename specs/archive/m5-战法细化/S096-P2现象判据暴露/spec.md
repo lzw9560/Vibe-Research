@@ -1,6 +1,6 @@
 # Spec: S096 — P2 现象判据暴露（P2RiskPanel 补"为何此 tier"）
 
-> 状态：**已实现（grill Q1 完整链 + Q2 红期 override 显覆盖 + 数据降级标注, 2026-08-23 落地）**
+> 状态：**✅已实现（2026-08-24）**（grill Q1 完整链 + Q2 红期 override 显覆盖 + 数据降级标注）
 > 作者：Claude 会话  日期：2026-08-23
 > 级别：small-medium（backend 暴露既有计算中间态 + 前端展示，非新算法）
 > 起因：S094 R25 "P2 仓位闸显示（P2RiskPanel，补现象判据）"——briefing 只透传 market_phase/cap/tier（结果），无判据（因子值 + 触发规则）→ 用户看不到"为何绿档/红档"。

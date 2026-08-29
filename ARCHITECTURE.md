@@ -38,7 +38,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 | 文件 | 职责 | 关键函数/类 |
 |---|---|---|
-| `app.py` | FastAPI 入口；注册 26 个 router；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
+| `app.py` | FastAPI 入口；注册 27 个 router；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
 | `astock.py` | A股全栈数据层（五源分级） | `tencent_quote`、`em_get`（统一限流入口）、`eastmoney_reports`、`profit_forecast`、`kline`、`finance`、`full_valuation`、`valuation_percentile`、`em_zt_topic_pool`（涨停四池）、`dragon_tiger_board`、`margin_trading`、`block_trade`、`stock_fund_flow_120d`、`concept_blocks`… |
 | `gstock.py` | 美股/港股/韩股（东财合规子集） | `global_indices`、`resolve_symbol`、`us_hk_stock`、`_push2_stock_get`（push2→push2delay 降级） |
 | `newsradar.py` | 资讯雷达（108 RSS / 12 赛道） | `fetch_radar`、`get_radar(force)`；`ThreadPoolExecutor(40)`；原子写缓存 |
@@ -54,7 +54,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 | `risk/position_manager.py` | 动态仓位管理 | `PositionManager` |
 | `trading_workflow.py` | 打板工作流编排（按时段判阶段） | `TradingWorkflow`、`get_current_stage`、`run_pre_market/intraday/post_market` |
 | `workflow_state_machine.py` | 打板状态机 | `WorkflowStatus`（7态）、`WorkflowStateMachine`、`_ALLOWED_TRANSITIONS` |
-| `scheduled_tasks.py` | SQLite 持久化 cron 调度 | `CronScheduler`（每分钟tick）、`TaskExecutor`（6种内置任务）、`start_scheduler` |
+| `scheduled_tasks.py` | SQLite 持久化 cron 调度 | `CronScheduler`（每分钟tick）、`TaskExecutor`（10种内置任务）、`start_scheduler` |
 | `scheduler.py` | 后台调度（盘后预计算+持仓刷新） | `start_limitup_scheduler`、`start_portfolio_scheduler(1800)` |
 | `circuit_breaker.py` | 数据源熔断器 | `get_breaker("eastmoney")` → `allow_request/record_success/record_failure` |
 | `notification/` | 多通道通知（15+ sender） | `notification_service`、senders/(feishu/dingtalk/email/discord/slack/telegram/...) |
@@ -129,7 +129,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 ## 前端（React 19 + Vite 6 + TS）
 
-- **路由**（`router.tsx`）：26+ 页面，`/`→`/daily-review`。含 daily-review / intel / sectors / portfolio / stock-data / stock/:code / watchlist / my-reports / limitup(×3) / recommendation / strategy-signals / backtest / risk-dashboard / sentiment-weather / workflow / scheduled-tasks / settings 等。
+- **路由**（`router.tsx`）：30+ 页面，`/`→`/daily-review`。含 daily-review / intel / sectors / portfolio / stock-data / stock/:code / watchlist / my-reports / limitup(×3) / recommendation / strategy-signals / backtest / risk-dashboard / sentiment-weather / workflow / scheduled-tasks / settings 等。
 - **状态管理**：实际是 React state + localStorage（zustand 列在依赖但全仓未用——冗余）。
 - **AI 配置/鉴权**：`lib/llm.ts` 存 `localStorage["vr-llm"]`；`lib/api.ts` 存 `localStorage["vr-access-key"]`，每次请求带 `Authorization: Bearer`。
 - **与后端**：Vite 代理 `/api`→`:8900`；`lib/api.ts` 统一 `request<T>`；AI 对话 `chatStream` 流式 POST `/api/chat`，NDJSON 逐行解析 `{delta|tool|done|error}`，支持 AbortSignal 中止。

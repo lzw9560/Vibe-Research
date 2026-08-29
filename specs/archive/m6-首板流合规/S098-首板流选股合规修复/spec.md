@@ -1,6 +1,6 @@
 # Spec: S098 — 首板流选股 §44 合规修复（select 不 auto-rank + 确认时间序）
 
-> 状态：已实现 + 验收通过（2026-08-26）
+> 状态：✅已实现（2026-08-26）
 > 作者：Claude 会话  日期：2026-08-26
 > 级别：medium-small（后端 select_for_entry 排序键改 + notify 标签；不碰外部数据 / 不新增 AI 工具 / 不涉财务验算）
 > 流程门：spec.md + issue 层单轮 review；直接 develop

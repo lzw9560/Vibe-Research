@@ -1,6 +1,6 @@
 # Spec: S088 — 盘前暴风雨预测模型
 
-> 状态：Q1/Q4/Q5/Q2/Q3 已实施（commit b29afa6 承重修复 + 本轮 Q2/Q3 探测落地），待 push。Q6 done。R10 blocking（scheduled_tasks 并发重构中）。见 §10/§11。
+> 状态：设计被 S093 吸收实现（2026-08-22）
 > 作者：lzw9560　日期：2026-08-20
 > 关联：S063（SentimentContext 事后 STI 检测）/ S087（语境 tab 接入）/ S086（战法 pipeline）
 >

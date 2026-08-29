@@ -109,3 +109,9 @@
 **日期：** 2026-08-11
 
 **状态：** 已采纳（工作流文档 v1.2 已落地，§12）
+
+---
+
+## DEC-005: notes/debate 路由无独立 spec（2026-08-29）
+
+**决策**：notes.py 首次 commit 借 S075 编号（`aa51847`），实际 S075 spec 不涵盖 notes 功能；debate.py 为 merge 遗留代码（`3305c1b`），ROADMAP 标未完成。两者均为历史功能，不追溯补 spec，标"wontfix 或待 v0.2.0 补 spec"。
