@@ -146,6 +146,16 @@ _WEBHOOK_SEND_TIMEOUT_SECONDS = 30
 _NO_CLIENT = object()
 
 
+def markdown_to_image(content: str, max_chars: int = 4000) -> bytes | None:
+    """将 Markdown 转为图片（H10 stub）。
+
+    未实现——返回 None 触发上层 fallback 走纯文本发送。
+    notification_dispatcher 已有完善的 fallback 日志（提示安装 wkhtmltopdf 等）。
+    实现时：markdown → HTML → wkhtmltoimage/markdown-to-file → PNG bytes。
+    """
+    return None
+
+
 class FeishuSender:
 
     def __init__(self, config: Config):
