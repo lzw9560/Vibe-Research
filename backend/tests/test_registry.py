@@ -166,10 +166,12 @@ def test_registry_only_objective_and_research_tools():
     """§1.2：注册表只挂客观取数 + 研究性判断工具，无越权工具。
 
     S058 新增 query_strategy_card（战法卡查询，客观文本返回）。
+    S104 新增 query_skyrocket/query_hot_stock/query_anomaly（hithink 特色榜单，客观数据）。
     """
     names = set(registry.tool_names())
     assert names == {
         "query_quote", "query_valuation", "query_reports", "query_news",
         "query_global_stock", "prediction_short_sector", "prediction_intraday_framework",
         "worldmonitor_query", "query_strategy_card",
+        "query_skyrocket", "query_hot_stock", "query_anomaly",
     }

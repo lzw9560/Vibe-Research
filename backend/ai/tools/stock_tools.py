@@ -111,3 +111,38 @@ def prediction_intraday_framework() -> dict:
     from routers.prediction import intraday_framework_payload
 
     return intraday_framework_payload("short_sector")
+
+
+# ── S104：hithink 特色数据工具（异动/飙升/热股榜，项目从无独立源） ──────
+
+@register_tool(
+    "query_skyrocket",
+    "查 A 股飙升榜（同花顺口径，hithink 独家）：rank/heat/rank_change/rank_trend。"
+    "东财无此数据源。period=day(日榜,默认) / hour(小时榜)。",
+    params={"period": {"description": "周期：day(日榜) / hour(小时榜)", "default": "day"}},
+)
+def query_skyrocket(period: str = "day") -> list[dict]:
+    from data.sources.hithink_src import skyrocket
+    return skyrocket(str(period))
+
+
+@register_tool(
+    "query_hot_stock",
+    "查 A 股热股榜（同花顺口径，hithink 独家）：rank/heat/rank_change/rank_trend。"
+    "东财无此数据源。period=day / hour。",
+    params={"period": {"description": "周期：day(日榜) / hour(小时榜)", "default": "day"}},
+)
+def query_hot_stock(period: str = "day") -> list[dict]:
+    from data.sources.hithink_src import hot_stock
+    return hot_stock(str(period))
+
+
+@register_tool(
+    "query_anomaly",
+    "查 A 股异动分析（同花顺口径，hithink 独家）：个股异动标签/原因。"
+    "东财无独立异动源。tag_codes 可选过滤异动类型。盘后可能空（异动本就少）。",
+    params={"tag_codes": {"description": "可选，异动类型标签逗号分隔过滤"}},
+)
+def query_anomaly(tag_codes: str | None = None) -> list[dict]:
+    from data.sources.hithink_src import anomaly_list
+    return anomaly_list(tag_codes)

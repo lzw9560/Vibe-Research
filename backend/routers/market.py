@@ -58,6 +58,42 @@ def market_turnover_top() -> Dict[str, Any]:
         raise HTTPException(502, f"成交额榜异常：{e}") from e
 
 
+# ── S104：hithink 特色榜单端点（异动/飙升/热股榜，东财无独立源） ────────
+
+@router.get("/api/market/skyrocket")
+def market_skyrocket(period: str = Query("day", description="day(日榜) / hour(小时榜)")) -> Dict[str, Any]:
+    """A 股飙升榜（同花顺口径，hithink 独家数据源）。客观榜单数据，非推荐。"""
+    from data.sources.hithink_src import skyrocket
+    if period not in ("day", "hour"):
+        raise HTTPException(400, "period must be day | hour")
+    try:
+        return {"data": skyrocket(period), "source": "hithink", "period": period}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"飙升榜异常：{e}") from e
+
+
+@router.get("/api/market/hot-stock")
+def market_hot_stock(period: str = Query("day", description="day / hour")) -> Dict[str, Any]:
+    """A 股热股榜（同花顺口径，hithink 独家数据源）。客观榜单数据，非推荐。"""
+    from data.sources.hithink_src import hot_stock
+    if period not in ("day", "hour"):
+        raise HTTPException(400, "period must be day | hour")
+    try:
+        return {"data": hot_stock(period), "source": "hithink", "period": period}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"热股榜异常：{e}") from e
+
+
+@router.get("/api/market/anomaly")
+def market_anomaly(tag_codes: str | None = Query(None, description="可选异动类型标签过滤")) -> Dict[str, Any]:
+    """A 股异动分析（同花顺口径，hithink 独家数据源）。盘后可能空。客观异动数据，非推荐。"""
+    from data.sources.hithink_src import anomaly_list
+    try:
+        return {"data": anomaly_list(tag_codes), "source": "hithink"}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"异动榜异常：{e}") from e
+
+
 @router.get("/api/global/indices")
 def global_indices() -> Dict[str, Any]:
     """全球指数快照（道指 / 标普500 / 纳斯达克 / 恒生 / 恒生科技）—— A 股看隔夜外围脸色。缓存 5 分钟。"""

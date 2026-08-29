@@ -113,7 +113,12 @@ def pe_digestion(current_pe: float, cagr: float, target_pe: float = 30) -> float
 
 
 def full_valuation(code: str) -> dict:
-    """单票完整估值：腾讯行情 + 一致预期 EPS + 前向PE/PEG/消化年数。"""
+    """单票完整估值：腾讯行情 + 一致预期 EPS + 前向PE/PEG/消化年数。
+
+    S104：PS_TTM / PCF_TTM 由 hithink_src.valuation_snapshot 补（东财结构性缺）。
+    hithink 失败/熔断 → PS/PCF 仍 None（东财本来也 None，诚实缺失不崩）；
+    PE/PB 仍走东财腾讯行情口径（不变）。
+    """
     quotes = tencent_quote([code])
     q = quotes.get(code)
     if not q:
@@ -123,9 +128,20 @@ def full_valuation(code: str) -> dict:
     out = {
         "name": q["name"], "code": code, "price": price,
         "mcap_yi": q["mcap_yi"], "pe_ttm": q["pe_ttm"], "pb": q["pb"],
+        "ps_ttm": None, "pcf_ttm": None,  # S104：hithink 补（东财结构性缺）
         "eps_26e": None, "eps_27e": None, "pe_26e": None,
         "cagr_pct": None, "peg": None, "digest_years": None, "analyst_count": 0,
     }
+
+    # S104：hithink 补 PS_TTM / PCF_TTM（5min TTL 缓存，hithink_src 内部）
+    try:
+        from data.sources.hithink_src import valuation_snapshot as _hs_val
+        hs = _hs_val([code])
+        if code in hs:
+            out["ps_ttm"] = hs[code].get("ps_ttm")
+            out["pcf_ttm"] = hs[code].get("pcf_ttm")
+    except Exception:  # noqa: BLE001 — hithink 失败不阻塞估值，PS/PCF 降级 None
+        pass
 
     try:
         rows = profit_forecast(code)
