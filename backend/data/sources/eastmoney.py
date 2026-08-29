@@ -141,9 +141,36 @@ def announcements(code: str, limit: int = 15) -> list[dict]:
 # ---------------------------------------------------------------------------
 _ZTB_UT = "7eea3edcaed734bea9cbfc24409ed989"
 
-# 涨停池 HTTP 缓存：(endpoint, date, sort) → (timestamp, data)，TTL 24 小时
+# S103：涨停池缓存 TTL 分级（盘中短保新鲜 / 盘后中定盘 / 历史长省请求）。
+# 原单一 24h TTL 对盘中场景致命：seal_intraday 60s 轮询命中 24h 缓存返 09:25 陈旧首帧。
 _ztb_cache: dict[tuple[str, str, str], tuple[float, list[dict]]] = {}
-_ZTB_CACHE_TTL = 86400  # 24 小时
+_ZTB_CACHE_TTL_INTRADAY = 60      # 盘中 60s（保新鲜，对齐 S055 seal_intraday 采集节奏）
+_ZTB_CACHE_TTL_POSTMARKET = 3600  # 今日盘后 1h（定盘后稳定）
+_ZTB_CACHE_TTL_HISTORY = 86400    # 历史日 / 非交易日 24h（无变化，省请求）
+# 向后兼容别名（S103 前单一 24h TTL；旧消费者 astock._ZTB_CACHE_TTL 仍可取）
+_ZTB_CACHE_TTL = _ZTB_CACHE_TTL_HISTORY
+
+
+def _ztb_cache_ttl(date: str) -> int:
+    """根据 date + 当前时刻选 TTL（S103 盘中陈旧快照根因治理）。
+
+    判定顺序（grill 第 4 轮锁定）：
+    1. 当前非交易日（is_trading_day(date.today())）→ 24h（不管查什么 date，都稳定）
+    2. date != 今日交易日紧凑日期 → 历史日 24h
+    3. date == 今日 + 当前盘中 → 60s
+    4. date == 今日 + 当前盘后 → 1h
+
+    用 is_trading_day(date.today()) 而非 last_trading_date_str() 判非交易日——
+    否则周六查周五数据被错判"今日盘后"用 1h（grill 第 4 轮）。
+    """
+    from vr_paths import is_intraday_time, is_trading_day, last_trading_date_str
+    if not is_trading_day():                                  # 当前非交易日 → 一律 24h
+        return _ZTB_CACHE_TTL_HISTORY
+    if date != last_trading_date_str().replace("-", ""):     # 历史日
+        return _ZTB_CACHE_TTL_HISTORY
+    if is_intraday_time():                                    # 今日盘中
+        return _ZTB_CACHE_TTL_INTRADAY
+    return _ZTB_CACHE_TTL_POSTMARKET                          # 今日盘后
 
 
 def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[dict]:
@@ -151,11 +178,13 @@ def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[di
     endpoint: getTopicZTPool(涨停) / getTopicZBPool(炸板) / getTopicDTPool(跌停) / getYesterdayZTPool(昨涨停)
     date: YYYYMMDD 交易日。非交易日 / 参数错 → []。
     池内每项字段含 lbc(连板数) / zbc(炸板次数) / hybk(行业) 等。
-    缓存：同一 (endpoint, date, sort) 结果缓存 24 小时，避免重复 HTTP 请求。"""
+    缓存（S103）：同一 (endpoint, date, sort) 结果按 _ztb_cache_ttl 分级缓存（盘中 60s /
+    盘后 1h / 历史 24h）。空结果不缓存——失败/熔断返空不毒缓存，下次请求直接重试。"""
     cache_key = (endpoint, date, sort)
     now = time.time()
+    ttl = _ztb_cache_ttl(date)
     cached = _ztb_cache.get(cache_key)
-    if cached and now - cached[0] < _ZTB_CACHE_TTL:
+    if cached and now - cached[0] < ttl:
         return cached[1]
 
     url = f"https://push2ex.eastmoney.com/{endpoint}"
@@ -165,11 +194,17 @@ def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[di
     try:
         r = em_get(url, params=params, headers=headers, timeout=10)
         result = (r.json().get("data") or {}).get("pool") or []
-        _ztb_cache[cache_key] = (now, result)
+        # S103 R1：空结果不缓存——失败/真空都不写缓存，下次请求直接重试。
+        # （grill 第 2 轮：实测 push2ex 成功 response 恒 pool 非空，故空只走失败路径，
+        #  `if result` 与"成功缓存/失败不缓存"语义吻合。盘中 09:25 真空盲区验收阶段补测。）
+        if result:
+            _ztb_cache[cache_key] = (now, result)
         return result
     except Exception:
         # 异常时不缓存——让上层 _emotion 的 5min TTL 重试机制生效
         # （原实现缓存空结果 24h，导致瞬态故障后 24h 内恒空）
+        # S103：已与"空结果不缓存"合一，熔断 OPEN 时 em_get raise → 此处返空不缓存，
+        # breaker 恢复后下次请求重试成功即恢复。
         return []
 
 

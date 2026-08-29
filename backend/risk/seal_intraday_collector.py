@@ -40,6 +40,10 @@ _TRADING_PERIODS = [
     (dtime(9, 25), dtime(11, 30)),
     (dtime(13, 0), dtime(15, 5)),
 ]
+# S103：盘中时段判断已下沉到 vr_paths.is_intraday_time（供 data/sources 复用避免循环 import）。
+# _TRADING_PERIODS 保留供本模块其他引用（如 collect_once 时段校验）；
+# is_intraday_trading_time 改为复用 vr_paths 实现，行为不变，7+ 调用方签名兼容。
+from vr_paths import is_intraday_time as _vr_is_intraday_time
 
 
 def run_migrations() -> None:
@@ -76,16 +80,15 @@ def _get_conn() -> sqlite3.Connection:
 def is_intraday_trading_time(now: datetime | None = None) -> bool:
     """判断当前是否在盘中交易时段（含是否交易日）。
 
-    组合判断：is_trading_day(日期) 且 当前时间在 _TRADING_PERIODS 内。
+    S103：改为复用 vr_paths.is_intraday_time（盘中时段判断已下沉到 vr_paths，
+    供 data/sources/eastmoney 的 em_zt_topic_pool 缓存 TTL 判定复用，消除
+    data/sources → risk 反向依赖）。行为与原实现一致：is_trading_day(日期) 且
+    当前时间在 _TRADING_PERIODS 内。7+ 调用方签名/行为不变。
+
+    注：vr_paths.INTRADAY_PERIODS 与本模块 _TRADING_PERIODS 时段一致
+    （09:25-11:30 / 13:01-15:05）。
     """
-    now = now or datetime.now()
-    if not is_trading_day(now.date()):
-        return False
-    t = now.time()
-    for start, end in _TRADING_PERIODS:
-        if start <= t <= end:
-            return True
-    return False
+    return _vr_is_intraday_time(now)
 
 
 def archive_old_partitions(retention_days: int = 30) -> dict[str, Any]:

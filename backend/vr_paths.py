@@ -88,6 +88,28 @@ def is_trading_day(d: date | None = None) -> bool:
     return d.isoformat() not in _A_SHARE_HOLIDAYS
 
 
+#: A 股盘中交易时段（S103 下沉自 seal_intraday_collector，供 data/sources 复用避免循环 import）
+#: 09:25-11:30（含集合竞价尾 + 上午盘）/ 13:01-15:05（下午盘含收盘竞价）
+INTRADAY_PERIODS: list[tuple[_time, _time]] = [
+    (_time(9, 25), _time(11, 30)),
+    (_time(13, 1), _time(15, 5)),
+]
+
+
+def is_intraday_time(now: _dt | None = None) -> bool:
+    """是否在盘中交易时段（交易日 + 09:25-11:30 / 13:01-15:05）。
+
+    S103：盘中时段判断基础设施级函数。组合 is_trading_day(当前日期) +
+    当前时刻在 INTRADAY_PERIODS 内。供 em_zt_topic_pool 缓存 TTL 判定 +
+    seal_intraday_collector 复用（消除 data/sources → risk 反向依赖）。
+    """
+    now = now or _dt.now()
+    if not is_trading_day(now.date()):
+        return False
+    t = now.time()
+    return any(s <= t <= e for s, e in INTRADAY_PERIODS)
+
+
 def last_trading_date(d: date | None = None) -> date:
     """返回 d 当日或之前的最近 A 股交易日。
 
