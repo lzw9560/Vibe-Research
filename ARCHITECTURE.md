@@ -141,7 +141,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 ### 关键环境变量
 - **安全**：`VR_API_KEY`（设了则 `/api/*` 除 `/api/health` 需鉴权；本地留空=开放，公网必设）、`VR_ALLOW_ORIGINS`（CORS 白名单）。
-- **AI 兜底**：`VR_USE_FREE_FALLBACK` / `VR_FREE_PROVIDER` / `VR_GEMINI_API_KEY` / `VR_GROQ_API_KEY` 等。
+- **AI 兜底**：`VR_USE_FREE_FALLBACK` / `VR_FREE_PROVIDER` / `VR_GEMINI_API_KEY` 等（**未实现**，仅预留占位）。
 - **数据源**：`VR_DATA_PROXY=1`（强制东财走代理，默认 auto 直连优先）；`IWENCAI_API_KEY`（仅语义搜索）。
 - **基因/推荐阈值**：`VR_GENE_QUALIFY_THRESHOLD` / `VR_RECOMMEND_*_THRESHOLD`。
 - **通知渠道**：飞书/钉钉/邮件/telegram/discord/slack/wechat 等大量字段（见 `config.py`）。

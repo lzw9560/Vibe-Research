@@ -209,7 +209,7 @@ export const api = {
   sectorDivergence: (date?: string) =>
     get<any>(`/sector/divergence${date ? `?date=${date}` : ""}`),
   sectorRotation: (date?: string) =>
-    get<any>(`/sector/rotation${date ? `?date=${date}` : ""}`),
+    get<any>(`/strategy/funnel/sector-rotation${date ? `?date=${date}` : ""}`),
   sectorDivergenceHistory: (days?: number) =>
     get<any[]>(`/sector/divergence/history${days ? `?days=${days}` : ""}`),
   // 定时任务

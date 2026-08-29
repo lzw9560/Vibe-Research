@@ -50,16 +50,15 @@ ANALYSIS_FRAMEWORK = """【投研分析框架】当用户要你分析个股、�
 # 用 f-string 先把框架焊进去，只留 {{context}} 给运行时 .format() 填——4 处调用点无需改。
 SYSTEM_PROMPT = f"""你是 Vibe-Research 里的投研助理。你可以调用工具获取客观数据来支撑回答，A 股工具一律传 6 位代码：
 
-- 行情估值：query_quote（批量行情）/ query_valuation（前向 PE、PEG）/ query_valuation_percentile（估值历史分位）/ query_kline（K 线与区间涨跌）
-- 基本面：query_financials（营收净利 ROE 毛利率）/ query_company_info / query_reports（研报）/ query_news
-- 资金筹码：query_fund_flow（主力净流入）/ query_margin（两融）/ query_holders（股东户数）/ query_block_trade / query_dragon_tiger / query_dividend
-- 事件风险：query_announcements（公告）/ query_lockup（解禁）/ query_investor_qa（互动易）
-- 行业板块：query_concepts（板块归属与热门概念）/ query_industry_comparison（行业强弱）/ query_industry_reports
-- 市场层：query_market（scope=indices/global/emotion/turnover/overview）/ query_news_radar（赛道资讯）
-- 海外：query_global_stock（美股 AAPL / 港股 00700 / 韩股 005930.KS）/ query_hk_cashflow（港股现金流量表，仅港股）
+- 行情估值：query_quote（批量行情：现价/涨跌/PE/PB/市值/换手/涨跌停）/ query_valuation（完整估值+前向PE/PEG/机构一致预期）
+- 研报新闻：query_reports（研报标题/机构/评级）/ query_news（个股近期新闻）
+- 海外：query_global_stock（美股 AAPL / 港股 00700 / 韩股 005930.KS，韩股仅行情无财务）
+- 预测：prediction_short_sector（短线板块级联概率 S1/S2/S3）/ prediction_intraday_framework（盘中研判框架，教育参考）
+- 宏观：worldmonitor_query（宏观/地缘/资讯/供应链等 11 类决策因子）
+- 战法：query_strategy_card（战法卡片：适用天气/核心逻辑/入场条件/退出参数/历史战绩/风险点）
 
 用工具的方式：**先想清楚要回答什么，再挑最相关的 2-5 个工具**，不要一次把所有工具都调一遍。
-估值贵贱看 query_valuation_percentile，资金动向看 query_fund_flow，风险排查看 query_announcements + query_lockup。
+估值看 query_valuation，行情看 query_quote，研报看 query_reports，战法逻辑看 query_strategy_card，宏观地缘看 worldmonitor_query。
 
 规则（按 §1 弱合规，私人投研助理定位）：
 - 可给方向性研判、买卖时机研判、收益预期（三情景测算）、模式识别、战法匹配、风险标注、明确操作建议——你是半自动化助手，给建议，用户是最终决策者。
@@ -232,7 +231,7 @@ def run_chat_cli(cfg: dict, user_messages: list, context: str = "") -> dict:
     """
     provider = str(cfg.get("provider", ""))
     kind = provider[4:] if provider.startswith("cli-") else provider
-    system = SYSTEM_PROMPT.format(context=context or "（无）")
+    system = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）")
     user = "\n\n".join(m.get("content", "") for m in user_messages if m.get("content")) or "（无问题）"
     content = cli_runtime.run_cli(kind, system, user)
     return {"content": content, "trace": [], "rounds": 1}
@@ -374,7 +373,7 @@ def run_chat_cli_stream(cfg: dict, user_messages: list, context: str = ""):
     """订阅接入流式：CLI stdout 边出边推 delta。"""
     provider = str(cfg.get("provider", ""))
     kind = provider[4:] if provider.startswith("cli-") else provider
-    system = SYSTEM_PROMPT.format(context=context or "（无）")
+    system = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）")
     user = "\n\n".join(m.get("content", "") for m in user_messages if m.get("content")) or "（无问题）"
     for chunk in cli_runtime.run_cli_stream(kind, system, user):
         yield {"type": "delta", "text": chunk}

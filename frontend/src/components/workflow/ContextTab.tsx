@@ -5,6 +5,7 @@
 
 import { usePreMarketBriefing, localTodayStr } from "@/lib/query";
 import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { request } from "@/lib/api/client";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Badge } from "@/components/ui/Badge";
@@ -28,13 +29,10 @@ export function ContextTab({ date }: Props) {
   const ctx = briefing?.sentiment_context;
   const me = briefing?.market_emotion;
 
-  // R19：板块轮动（接 /api/strategy/funnel/sector-rotation，有数据端点；/api/sector/rotation 空弃用）
+  // R19：板块轮动（api.sectorRotation → /api/strategy/funnel/sector-rotation）
   const { data: sectorRot } = useQuery({
     queryKey: ["sector-rotation", date ?? "latest"],
-    queryFn: () =>
-      request<{ date: string; strength_rank: Array<{ industry: string; zt_count_today: number; strength: number; rank: number }> }>(
-        `/api/strategy/funnel/sector-rotation?date=${date ?? localTodayStr()}`,
-      ),
+    queryFn: () => api.sectorRotation(date ?? localTodayStr()),
     retry: false,
   });
   const sectors = sectorRot?.strength_rank ?? [];
