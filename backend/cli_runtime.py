@@ -266,6 +266,7 @@ def run_cli_stream(kind: str, system_prompt: str, user_prompt: str):
             err = "".join(err_tail).strip()[-500:] or "（子进程未输出错误信息）"
             raise RuntimeError(f"{kind} 退出码 {rc}：{err}")
     finally:
+        # L1 修复：GeneratorExit（前端断连）也走 finally 清理子进程
         if proc and proc.poll() is None:
             proc.kill()
         shutil.rmtree(tmpdir, ignore_errors=True)

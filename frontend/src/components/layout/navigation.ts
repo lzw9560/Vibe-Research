@@ -44,7 +44,6 @@ export const NAV_GROUPS: NavGroup[] = [
     name: "个股研究",
     icon: Search,
     tabs: [
-      { to: "/stock/:code", label: "个股深度" },
       { to: "/stock-data", label: "股票数据" },
       { to: "/notes", label: "笔记" },
       { to: "/recommendation", label: "推荐" },

@@ -803,6 +803,8 @@ class TaskExecutor:
         results: Dict[str, Any] = {"snapshot_date": snapshot_date, "lookback_days": lookback, "start": start, "as_of_date": as_of}
 
         # lite 引擎
+        # L5 标注：asyncio.run() 在 execute() 同步路径经 asyncio.to_thread 包装在线程池中，
+        # 无现有事件循环，安全。execute_async 异步路径不经过此同步方法。
         try:
             lite_result = asyncio.run(run_backtest_async(start, end))
             _save_snapshot(snapshot_date, "lite", lite_result)

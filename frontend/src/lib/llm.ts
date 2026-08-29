@@ -117,8 +117,9 @@ export async function chatStream(messages: ChatMsg[], context: string, handlers:
 }
 
 // 非流式便捷包装（不需要逐字 UI 的调用方用它）。
-export function chat(messages: ChatMsg[], context: string): Promise<ChatResult> {
-  return chatStream(messages, context);
+// L5 修复：加可选 signal 参数，调用方可控制中止
+export function chat(messages: ChatMsg[], context: string, signal?: AbortSignal): Promise<ChatResult> {
+  return chatStream(messages, context, {}, signal);
 }
 
 // 后端已配的 LLM 预设（key 存后端 .env，前端只拿清单不含 key）。
