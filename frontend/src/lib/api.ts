@@ -92,8 +92,6 @@ export const api = {
     get<ScreenerResult>(`/limitup/screener${date ? `?date=${date}` : ""}`),
   limitupAnalysis: (code: string, date?: string) =>
     get<LimitUpAnalysis>(`/limitup/analysis/${code}${date ? `?date=${date}` : ""}`),
-  triggerLimitupScreener: () =>
-    request<{ status: string; date: string }>("/limitup/screener/trigger", "POST"),
   getLimitUpScreenerParams,
   saveLimitUpScreenerParams,
   getAuctionParams,
@@ -128,8 +126,6 @@ export const api = {
     get<StrategyRecommendation>("/sentiment/weather/strategy"),
   sentimentWeatherFuse: () =>
     get<{ data: FuseState }>("/sentiment/weather/fuse"),
-  sentimentWeatherExitSignals: (date: string) =>
-    get<{ data: ExitSignalsResult }>(`/sentiment/weather/exit-signals?date=${date}`),
   sentimentWeatherTimeline: (days = 30) =>
     get<{ data: { timeline: WeatherTimelineItem[]; stats: WeatherStats } }>(`/sentiment/weather/timeline?days=${days}`),
   sentimentWeatherEvents: (days = 30) =>
@@ -144,8 +140,6 @@ export const api = {
     request<{ data: FusePardonRecord }>("/sentiment/weather/pardon/toggle", "POST", data),
   sentimentWeatherPardonRevoke: (pardonId: string) =>
     request<{ data: { success: boolean } }>(`/sentiment/weather/pardon/revoke?pardon_id=${pardonId}`, "POST"),
-  sentimentWeatherPardonOutcome: (data: PardonOutcome) =>
-    request<{ data: { success: boolean } }>("/sentiment/weather/pardon/outcome", "POST", data),
   stockDeep: (code: string) => get<StockDeep>(`/stock/${code}/deep`),
   // 性能监控（PRD V2.0.2 三层拆分）
   metricsDataFetch: () => get<any>("/metrics/data_fetch"),
@@ -155,8 +149,6 @@ export const api = {
   // 推荐引擎
   recommendationToday: (limit?: number) =>
     get<StockRecommendation[]>(`/recommendation/today${limit ? `?limit=${limit}` : ""}`),
-  recommendationStock: (code: string, date?: string) =>
-    get<StockRecommendation>(`/recommendation/${code}${date ? `?date=${date}` : ""}`),
   // 胜率追踪
   winRateStats: (windowSize?: number) =>
     get<WinRateStats>(`/winrate/stats${windowSize ? `?window_size=${windowSize}` : ""}`),
@@ -194,8 +186,6 @@ export const api = {
   // 风险仪表盘
   riskDashboard: (date?: string) =>
     get<any>(`/risk/dashboard${date ? `?date=${date}` : ""}`),
-  riskStock: (code: string) =>
-    get<any>(`/risk/stock/${code}`),
   riskOnedayList: (date?: string, minRiskScore?: number) => {
     const params = new URLSearchParams();
     if (date) params.set("date", date);
@@ -210,8 +200,6 @@ export const api = {
     get<any>(`/sector/divergence${date ? `?date=${date}` : ""}`),
   sectorRotation: (date?: string) =>
     get<any>(`/strategy/funnel/sector-rotation${date ? `?date=${date}` : ""}`),
-  sectorDivergenceHistory: (days?: number) =>
-    get<any[]>(`/sector/divergence/history${days ? `?days=${days}` : ""}`),
   // 定时任务
   scheduledTasks: () => get<any[]>("/scheduled-tasks"),
   scheduledTask: (id: number) => get<any>(`/scheduled-tasks/${id}`),
@@ -247,10 +235,6 @@ export const api = {
   // S060 验证对账卡
   verificationCard: (date?: string) =>
     get<VerificationCardResult>(`/workflow/verification-card${date ? `?date=${date}` : ""}`),
-  verificationCardGenerate: (date?: string) =>
-    request(`/workflow/verification-card/generate${date ? `?date=${date}` : ""}`, "POST", {}),
-  verificationCardVerify: () =>
-    request(`/workflow/verification-card/verify`, "POST", {}),
   // S063：盘中情绪辅助决策四层
   intradaySentimentLatest: () =>
     get<import("./api/types").IntradaySnapshot>("/intraday/sentiment/latest"),
