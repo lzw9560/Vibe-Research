@@ -95,6 +95,7 @@ export async function chatStream(messages: ChatMsg[], context: string, handlers:
   let errMsg: string | null = null;
 
   for (;;) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const { done, value } = await reader.read();
     if (done) break;
     buf += decoder.decode(value, { stream: true });

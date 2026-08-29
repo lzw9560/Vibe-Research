@@ -28,7 +28,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
  2. API 接入  chat.py        — OpenAI 兼容 function-calling (≤6轮循环) — AI 自己调数据工具
  3. MCP 接入  mcp_server.py  — stdio JSON-RPC，复用 chat._exec_tool — 给 Claude Code 等 agent
 
-调度: scheduled_tasks.py (cron-like, 每分钟tick, SQLite持久化) + scheduler.py (盘后预计算/持仓刷新)
+调度: scheduled_tasks.py (cron-like, 每分钟tick, SQLite持久化) + portfolio.py (持仓刷新 start_scheduler)
 打板工作流: trading_workflow.py (按时段编排) + workflow_state_machine.py (七态状态机) + pre/realtime/post_market_workflow.py
 ```
 
@@ -55,7 +55,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 | `trading_workflow.py` | 打板工作流编排（按时段判阶段） | `TradingWorkflow`、`get_current_stage`、`run_pre_market/intraday/post_market` |
 | `workflow_state_machine.py` | 打板状态机 | `WorkflowStatus`（7态）、`WorkflowStateMachine`、`_ALLOWED_TRANSITIONS` |
 | `scheduled_tasks.py` | SQLite 持久化 cron 调度 | `CronScheduler`（每分钟tick）、`TaskExecutor`（10种内置任务）、`start_scheduler` |
-| `scheduler.py` | 后台调度（盘后预计算+持仓刷新） | `start_limitup_scheduler`、`start_portfolio_scheduler(1800)` |
+| `portfolio.py` | 持仓管理 + 后台调度（持仓刷新） | `refresh_all`、`CACHE_DIR`、`start_scheduler(interval)` |
 | `circuit_breaker.py` | 数据源熔断器 | `get_breaker("eastmoney")` → `allow_request/record_success/record_failure` |
 | `notification/` | 多通道通知（15+ sender） | `notification_service`、senders/(feishu/dingtalk/email/discord/slack/telegram/...) |
 
@@ -117,7 +117,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 - CronScheduler：每 60s tick，5 段 cron 匹配，daemon 线程。
 - SQLite 持久化（`backend/data/market_data.db`）：`scheduled_tasks` + `scheduled_task_runs`。
 - TaskExecutor 内置 10 种任务：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs` / `derived_precompute`（S084 盘后 derived 异步预采集）/ `monthly_vacuum`（S089 月度 VACUUM+wal_checkpoint）/ `kline_refresh`（S090 baostock kline 日更）/ `daily_ai_summary`（S093 AI 盘后总结 stub，cron 15:30，S094 完整实现）。S093：`candidate_funnel_precompute` success 后调 `NotificationService.send()` 发飞书富内容卡片（前瞻选股结果）。
-- `app.py` 启动时 `start_scheduler()`；另 `scheduler.py` 起 `start_portfolio_scheduler(1800)` 与 `start_limitup_scheduler()`。
+- `app.py` 启动时 `_st.start_scheduler()`；另 `portfolio.py` 起 `start_scheduler(1800)`（持仓刷新，原 scheduler.py 已删，S031 R12）。
 
 ### 打板工作流状态机（`workflow_state_machine.py`）
 七态：`pending → candidate → watching → monitoring → holding → settled`，旁路 `filtered`；`settled → candidate`（下一轮）、`filtered → candidate`（可重入）。`transition(target, reason)` 记 `_history`。

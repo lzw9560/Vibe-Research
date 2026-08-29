@@ -64,6 +64,7 @@ def _get_connection() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     # R3：连接级 busy_timeout——写冲突时等待 30s 而非立即抛 database is locked
     conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 

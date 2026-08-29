@@ -106,7 +106,7 @@ def _exec_tool(name: str, args: dict):
 _PUBLIC_MODE = bool(os.environ.get("VR_API_KEY", "").strip())  # 设了鉴权≈公网部署姿态
 _METADATA_NETS = [ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fe80::/10")]
 _PRIVATE_NETS = [ipaddress.ip_network(n) for n in
-                 ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "::1/128", "fc00::/7")]
+                 ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "0.0.0.0/8", "::1/128", "fc00::/7")]
 
 
 def _get_env_llm_config() -> dict:

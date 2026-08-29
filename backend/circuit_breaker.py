@@ -42,7 +42,10 @@ class CircuitBreaker:
         if self.state == CircuitState.CLOSED:
             return True
         if self.state == CircuitState.HALF_OPEN:
-            return self.half_open_calls < self.config.half_open_max_calls
+            allowed = self.half_open_calls < self.config.half_open_max_calls
+            if allowed:
+                self.half_open_calls += 1
+            return allowed
         # OPEN：检查是否超时
         if time.time() - self.last_failure_time >= self.config.recovery_timeout:
             self.state = CircuitState.HALF_OPEN

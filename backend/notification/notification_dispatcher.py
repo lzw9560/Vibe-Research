@@ -510,7 +510,7 @@ class NotificationDispatcherMixin:
         if channel.value not in self._markdown_to_image_channels or image_bytes is None:
             return False
         if channel == NotificationChannel.WECHAT:
-            from notification.senders.feishu_sender import WECHAT_IMAGE_MAX_BYTES
+            from notification.senders.wechat_sender import WECHAT_IMAGE_MAX_BYTES
             if len(image_bytes) > WECHAT_IMAGE_MAX_BYTES:
                 logger.warning(
                     "企业微信图片超限 (%d bytes)，回退为 Markdown 文本发送",
