@@ -80,12 +80,11 @@ def chat(req: ChatReq) -> StreamingResponse:
             env_cfg = chat_layer._get_env_llm_config()
             if not env_cfg.get("apiKey") or not env_cfg.get("baseURL"):
                 raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」里填写，或配置后端环境变量 VR_LLM_BASE_URL / VR_LLM_API_KEY")
-
-    # 后端环境变量兜底：前端未传的字段用环境变量补全
-    env_cfg = chat_layer._get_env_llm_config()
-    for k in ("baseURL", "apiKey", "model"):
-        if not cfg.get(k) and env_cfg.get(k):
-            cfg[k] = env_cfg[k]
+        # L3 修复：环境变量兜底仅在非 CLI 路径执行（CLI 路径不需要 baseURL/apiKey）
+        env_cfg = chat_layer._get_env_llm_config()
+        for k in ("baseURL", "apiKey", "model"):
+            if not cfg.get(k) and env_cfg.get(k):
+                cfg[k] = env_cfg[k]
 
     def gen():
         try:

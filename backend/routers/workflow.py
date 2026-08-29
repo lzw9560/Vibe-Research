@@ -279,8 +279,8 @@ async def _collect(run_id: str, target_date: str) -> None:
             execution_checklist=p2_fields.get("execution_checklist", []),
             param_disclaimer=p2_fields.get("param_disclaimer"),
         )
-        # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _build_funnel_layers 重建）
-        funnel_mod.clear_funnel_cache(target_date)
+        # L4 修复：clear_funnel_cache 移到 _save_snapshot 之后
+        # （原在 snapshot 前清空，进程崩溃则缓存空+快照未写→下次全量重跑）
         try:
             # S049 C4/S093 R4：final_candidates 诊断卡已提前算好（复用 funnel_result）
             _save_snapshot({
@@ -310,6 +310,8 @@ async def _collect(run_id: str, target_date: str) -> None:
             })
         except Exception as exc:  # noqa: BLE001 — 落盘失败不影响内存态
             logger.warning("快照写盘失败 %s: %s", target_date, exc)
+        # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _cache.funnel_layers 复用）
+        funnel_mod.clear_funnel_cache(target_date)
     except Exception as exc:  # noqa: BLE001
         _cache.update(run_id=run_id, status="error", error=str(exc), as_of=_now_iso())
 

@@ -99,7 +99,9 @@ def _handle(msg: dict) -> None:
         name = params.get("name", "")
         args = params.get("arguments") or {}
         data = chat._exec_tool(name, args)
-        is_error = isinstance(data, dict) and "error" in data
+        # L2 修复：不再用 "error" in data 判定（业务正常返回可能含 error 键如"未找到该代码"）
+        # 改为：只有 registry.execute 返回的 {"error": "未知工具..."} 才是真错误
+        is_error = isinstance(data, dict) and data.get("error", "").startswith(("未知工具", "执行失败"))
         _result(rid, {
             "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
             "isError": is_error,

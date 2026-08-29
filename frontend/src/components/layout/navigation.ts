@@ -1,7 +1,5 @@
 import {
   LayoutDashboard, Search, TrendingUp, PieChart, Settings,
-  Cog, Cpu, Database, Cable, Rocket, FlaskConical,
-  
 } from "lucide-react";
 
 export interface NavGroup {
@@ -14,16 +12,6 @@ export interface NavTab {
   to: string;
   label: string;
 }
-
-// 板块中心子链接
-export const SECTOR_LINKS = [
-  { to: "/sectors/humanoid", icon: Cog, label: "人形机器人" },
-  { to: "/sectors/ai-computing", icon: Cpu, label: "AI 算力" },
-  { to: "/sectors/hbm", icon: Database, label: "HBM" },
-  { to: "/sectors/cpo", icon: Cable, label: "光互联" },
-  { to: "/sectors/business-space", icon: Rocket, label: "商业航天" },
-  { to: "/sectors/ai-pharma", icon: FlaskConical, label: "生物医药" },
-];
 
 // 主题选项
 export const THEMES = [
