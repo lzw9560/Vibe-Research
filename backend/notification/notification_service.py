@@ -158,9 +158,15 @@ class NotificationService(
             logger.info(f"已配置 {len(channel_names)} 个通知渠道：{', '.join(channel_names)}")
 
 
+_notification_service_instance: "NotificationService | None" = None
+
+
 def get_notification_service() -> NotificationService:
-    """获取通知服务实例"""
-    return NotificationService()
+    """获取通知服务实例（M15：单例，避免高频场景重复初始化 14 个 Sender）"""
+    global _notification_service_instance
+    if _notification_service_instance is None:
+        _notification_service_instance = NotificationService()
+    return _notification_service_instance
 
 
 def send_daily_report(results: List[Any]) -> bool:
