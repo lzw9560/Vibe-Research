@@ -267,6 +267,7 @@ async def _collect(run_id: str, target_date: str) -> None:
             scored_candidates=scored_candidates,
             market_scan_scored=market_scan_scored,  # S094 T17/R28：非涨停 pipeline 透传
             final_candidates=final_cards,  # S093 R4：透传到 live-done 响应
+            funnel_layers=funnel_layers,  # H7 修复：存 funnel_layers，done 路径直接复用
             # S079 P2 顶层字段（供 get_pre_market_workflow 响应直接透传）
             market_phase=p2_fields.get("market_phase"),
             market_phase_cap=p2_fields.get("market_phase_cap"),
@@ -575,13 +576,18 @@ async def get_pre_market_workflow(date: Optional[str] = Query(None, description=
             resp["market_scan_scored"] = _cache.get("market_scan_scored", [])
             # S093 R4：透传 final_candidates 供前端前瞻 Tab 漏斗候选 + 交叉验证
             resp["final_candidates"] = _cache.get("final_candidates", [])
-            # S049 D4：live done 透出 funnel_layers（与快照路径对齐；_build_funnel_layers 命中 run_funnel 缓存不重复请求）
-            # S063 T4：ctx 下传——live done 时重建 ctx（T-1 硬标准，幂等）
-            ctx = await asyncio.to_thread(build_context, d)
-            funnel_layers = await asyncio.to_thread(_build_funnel_layers, d, ctx)
-            resp["funnel_layers"] = funnel_layers
-            # ctx 可能与采集时存的不完全一致（T-1 STI 被重算）→ 以最新 ctx 为准
-            resp["sentiment_context"] = ctx.to_dict()
+            # S049 D4：live done 透出 funnel_layers
+            # H7 修复：直接复用 _collect 已算好并存入 _cache 的 funnel_layers，
+            # 不再调 _build_funnel_layers 全量重跑 run_funnel（省一次 10-30s 外部采集）
+            cached_layers = _cache.get("funnel_layers")
+            if cached_layers is not None:
+                resp["funnel_layers"] = cached_layers
+            else:
+                # 降级：_cache 无 funnel_layers 时仍走重建（兼容旧 _cache）
+                ctx = await asyncio.to_thread(build_context, d)
+                funnel_layers = await asyncio.to_thread(_build_funnel_layers, d, ctx)
+                resp["funnel_layers"] = funnel_layers
+                resp["sentiment_context"] = ctx.to_dict()
             # S079 D1：透传 P2 仓位闸 + 龙虎榜风控字段到响应顶层
             resp["market_phase"] = _cache.get("market_phase")
             resp["market_phase_cap"] = _cache.get("market_phase_cap")
