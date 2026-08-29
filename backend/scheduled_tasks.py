@@ -726,16 +726,9 @@ class TaskExecutor:
         return results
 
     def _execute_market_data_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """同步市场数据。"""
+        """同步市场数据（M12：空壳桩，未实现具体同步逻辑）。"""
         results: Dict[str, Any] = {}
-        try:
-            import market as _market
-            # 这里可以添加具体的市场数据同步逻辑
-            results["market"] = "ok"
-        except Exception as e:
-            logger.warning("[market_data_sync] 市场数据同步失败: %s", e)
-            results["market"] = f"error: {e}"
-
+        results["market"] = "stub: market_data_sync 未实现具体同步逻辑"
         return results
 
     def _execute_cleanup_old_runs(self, payload: Dict[str, Any]) -> Dict[str, Any]:
