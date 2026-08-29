@@ -18,6 +18,8 @@
   （B6「sample_size ≤ available_days」系 qualify-gate 假设，已按实际策略命中修正）。
 - K 线按 code 缓存（同股跨日复用）；结果 12h 缓存（_CACHE），重复请求不重算。
 - 胜率/收益属客观历史统计特征，用户可见输出挂「历史统计特征，市场有风险」。
+- S086 起战法数为 12（9 既有 + low_absorption + reverse_package + storm_reversal 等，
+  详见 STRATEGY_REGISTRY）；早期文档「8 战法」表述已逐处对齐。
 """
 
 from __future__ import annotations
@@ -110,10 +112,10 @@ def _backtest_single(
 
 
 def run_strategy_backtest(lookback_days: int = 60, as_of: str | None = None) -> list[StrategyBacktestResult]:
-    """对 8 战法各跑历史 lookback_days（按 DB 实际可用天数截断）。
+    """对 12 战法各跑历史 lookback_days（按 DB 实际可用天数截断）。
 
     S052 D1/D6：as_of 给定时只取 date <= as_of 的 gene_scores（point-in-time）。
-    返回 8 个 StrategyBacktestResult（按 STRATEGY_REGISTRY 顺序，sample_size=0 的也列出）。
+    返回 12 个 StrategyBacktestResult（按 STRATEGY_REGISTRY 顺序，sample_size=0 的也列出）。
     """
     cache_key = (lookback_days, as_of)  # S052 D1：as_of 进缓存键（不同 as_of 不串数据）
     now = time.time()

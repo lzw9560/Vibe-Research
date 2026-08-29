@@ -63,7 +63,7 @@ async def strategy_registry() -> Dict[str, Any]:
 
 @router.get("/api/strategy/backtest")
 async def strategy_backtest(lookback_days: int = Query(60, ge=1, le=365)) -> Dict[str, Any]:
-    """S031 R20/R22：按战法历史回测——8 战法各返 {win_rate, avg_return, sample_size, available_days}。
+    """S031 R20/R22：按战法历史回测——12 战法各返 {win_rate, avg_return, sample_size, available_days}（S086 起 8→12）。
 
     只读 DB gene_scores + astock.kline（mootdx 本地），不触发 em_get；结果 12h 缓存。
     客观历史统计特征，市场有风险。

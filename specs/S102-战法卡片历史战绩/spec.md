@@ -13,7 +13,7 @@
 ## 2. 背景
 
 - 战法卡片静态文本在 `backend/strategies/cards/<code>.md`，`query_strategy_card`（`backend/ai/tools/strategy_tools.py`）读文件返回。
-- 历史战绩已在 `backend/strategies/strategy_backtest.py` 的 `run_strategy_backtest(lookback_days=60)` 实现，结果带 12h 缓存（`_CACHE` / `_CACHE_TS` / `_CACHE_TTL=43200`），返回 8 战法各一个 `StrategyBacktestResult`（`strategy_code`/`win_rate`(0-1)/`avg_return`(百分比)/`sample_size`）。
+- 历史战绩已在 `backend/strategies/strategy_backtest.py` 的 `run_strategy_backtest(lookback_days=60)` 实现，结果带 12h 缓存（`_CACHE` / `_CACHE_TS` / `_CACHE_TTL=43200`），返回 12 战法各一个 `StrategyBacktestResult`（`strategy_code`/`win_rate`(0-1)/`avg_return`(百分比)/`sample_size`）。
 - §44 口径（CLAUDE.md §1.2 + memory `section44-pre-conclusion-gate`）：出胜率/收益前须报 n + 样本不足判定；`win<50% 且 n>=30` 是战绩差的诚实标注，不是出 winrate/r/verdict 结论（本 spec 不出 r/lift/verdict，只标注口径，未 validated）。
 - 卡片查询是 AI 解析战法的高频热路径（chat 每轮可能调）。
 
@@ -42,7 +42,7 @@
 
 **§44 口径标注（非出结论）**：本 spec 不出 r/lift/verdict，只标注 n + 三态判定 + 「未 validated」——符合 §44「报 n + 样本不足不下结论」要求，不触发 §44 的 lift<2x=噪声 gate（那是出 r/verdict 才需过的，本 spec 不出）。
 
-**插入点**：`_insert_before_section(card, "风险点", section)`——找 `## 风险点` 段插其前；8 张卡片均有 `## 风险点` 段（已核实），找不到则追加末尾（兜底）。确保尾部风险提醒「历史统计特征，市场有风险，研究参考。」始终在末尾。
+**插入点**：`_insert_before_section(card, "风险点", section)`——找 `## 风险点` 段插其前；12 张卡片均有 `## 风险点` 段（已核实），找不到则追加末尾（兜底）。确保尾部风险提醒「历史统计特征，市场有风险，研究参考。」始终在末尾。
 
 **备选不选**：
 - 预生成落盘到卡片文件——否，战绩 12h 变，落盘需定时回写，双事实源。
@@ -55,7 +55,7 @@
 - [ ] A2 真实缓存命中时 `query_strategy_card("first_plate")` 返回 card 含「## 历史战绩」+ 胜率/n + §44 口径
 - [ ] A3 战绩段在「## 风险点」段前；尾部「研究参考。」仍在末尾
 - [ ] A4 缓存未命中时不阻塞（秒回「计算中」）+ 后台异步填缓存
-- [ ] A5 8 张卡片任一查不崩（dragon_head 尾部结构略不同也兜底）
+- [ ] A5 12 张卡片任一查不崩（dragon_head 尾部结构略不同也兜底）
 
 ## 7. 合规与工程底线自查
 

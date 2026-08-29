@@ -121,7 +121,7 @@ def build_context(decision_date: str) -> SentimentContext:
     # 复用 sentiment_weather 的天气计算（单一事实源，避免映射分叉）
     weather_state, composite_score, factors = _compute_weather_from_row(t1_row, sti_score)
 
-    # 战法适配度：遍历 8 战法，标注允许/禁用
+    # 战法适配度：遍历 12 战法（S086 起 8→12），标注允许/禁用
     allowed, forbidden = _compute_allowed_styles(weather_state)
 
     # 熔断状态（复用 sentiment_weather 同步逻辑）
@@ -209,7 +209,7 @@ def _compute_weather_from_row(
 
 
 def _compute_allowed_styles(weather_state: str | None) -> tuple[list[str], list[str]]:
-    """遍历 8 战法，标注允许/禁用。
+    """遍历 12 战法（S086 起 8→12），标注允许/禁用。
 
     grill Q7：天气硬开关降级为软标注——所有战法都 allowed（不强禁），暴风雨唯一例外。
     天气推荐集合通过 WEATHER_RECOMMENDATION 查（前端用 weather_recommended 标注）。

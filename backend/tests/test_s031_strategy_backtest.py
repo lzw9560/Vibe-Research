@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """S031 T22：按战法回测引擎单测。
 
-mock DB gene_scores + K 线 → 验证 8 战法聚合 win_rate/avg_return/sample_size +
+mock DB gene_scores + K 线 → 验证 12 战法聚合 win_rate/avg_return/sample_size +
 K 线缺失跳过 + 端点 shape。不联网（mootdx/astock 全 mock）。
 """
 

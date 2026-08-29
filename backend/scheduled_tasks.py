@@ -340,7 +340,7 @@ def _save_snapshot(snapshot_date: str, engine: str, result: Any) -> None:
 
     result 对 lite 是 BacktestResult dataclass，对 strategy 是 list[StrategyBacktestResult]。
     按 engine 字段区分提取字段——lite 取 hit_rate/avg_return/max_drawdown/sharpe_ratio/
-    total_signals/percentile_json；strategy 取 strategy_breakdown_json（8 战法聚合）。
+    total_signals/percentile_json；strategy 取 strategy_breakdown_json（12 战法聚合，S086 起 8→12）。
     """
     conn = _get_connection()
     try:
