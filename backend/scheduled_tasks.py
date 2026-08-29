@@ -1137,9 +1137,10 @@ class TaskExecutor:
         """
         from config import GENE_SCORES_DB_PATH
         from vr_paths import resolve_data_dir
+        from db_health import get_healthy_conn
 
         threshold = int(payload.get("threshold", 60))
-        conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+        conn = get_healthy_conn(GENE_SCORES_DB_PATH)
         try:
             days = conn.execute(
                 "SELECT COUNT(DISTINCT date) FROM gene_scores WHERE data_source='eastmoney_live'"
@@ -1202,6 +1203,7 @@ class TaskExecutor:
         import sqlite3
         from config import GENE_SCORES_DB_PATH
         from datetime import datetime, timedelta
+        from db_health import get_healthy_conn
         from vr_paths import last_trading_date_str, resolve_data_dir
         from strategies.forward_test import record_actual_returns, record_universe_returns
         from strategies.kline_returns import compute_returns_for_codes
@@ -1217,7 +1219,7 @@ class TaskExecutor:
         cutoff = (datetime.now() - timedelta(days=7)).isoformat()
         stuck = {d: t for d, t in stuck.items() if t >= cutoff}  # 清 7 日前的 stuck（重试）
 
-        conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+        conn = get_healthy_conn(GENE_SCORES_DB_PATH)
         try:
             rows = conn.execute(
                 "SELECT DISTINCT signal_date FROM forward_test_records "
@@ -1232,7 +1234,7 @@ class TaskExecutor:
 
         summary = []
         for signal_date in dates:
-            conn = sqlite3.connect(GENE_SCORES_DB_PATH, timeout=10)
+            conn = get_healthy_conn(GENE_SCORES_DB_PATH)
             try:
                 pick_codes = [r[0] for r in conn.execute(
                     "SELECT DISTINCT code FROM forward_test_records "
