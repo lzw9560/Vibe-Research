@@ -95,8 +95,14 @@ async def list_funnel_cache_dates():
 @router.get("/candidates")
 @cache_response(ttl=60)
 async def list_candidates(date: str | None = None):
-    """GET → 最终候选 DiagnosisCard 列表（AC1）。"""
-    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or _today(), _store["config"])
+    """GET → 最终候选 DiagnosisCard 列表（AC1）。
+    H8 修复：优先读 SQLite 持久化缓存（POST /candidates/funnel 落库），
+    缓存缺失时 fallback 实跑 run_funnel。"""
+    d = date or _today()
+    cached = load_funnel_result(d, "all")
+    if cached is not None:
+        return cached.final_candidates
+    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", d, _store["config"])
     return result.final_candidates
 
 
@@ -110,8 +116,13 @@ async def get_diagnosis(code: str, date: str | None = None):
 @router.get("/funnel/layers")
 @cache_response(ttl=60)
 async def get_layers(run_id: str | None = None, date: str | None = None):
-    """GET → 各层 FunnelLayer（AC1 每层可检视）。"""
-    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or _today(), _store["config"])
+    """GET → 各层 FunnelLayer（AC1 每层可检视）。
+    H8 修复：优先读 SQLite 持久化缓存，缓存缺失时 fallback 实跑。"""
+    d = date or _today()
+    cached = load_funnel_result(d, "all")
+    if cached is not None:
+        return cached.layers
+    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", d, _store["config"])
     return result.layers
 
 
