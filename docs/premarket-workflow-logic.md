@@ -116,7 +116,7 @@
  - 盘前采集后自动落库 candidate/filtered（漏斗 passed→candidate，filtered_out→filtered）。
  - 手动流转仅抽屉状态卡一处 UI（`WorkflowStateCard`，渲染 `allowed_targets` 按钮；holding/settled 带表单）。
  - settled 流转即结算（S034：价齐写 winrate.db；S038 可拉市价预填卖出价）。
- - **无「回退/取消」转移**：watching 不能回 candidate，只能向前或转 filtered（标签「已过滤」）（§8 P7）。
+ - **回退已实现**（S049 D7）：watching → candidate 允许（取消观察→回候选池）。filtered/settled → candidate 可重入。仅向前推进或转 filtered 的旧限制已解除。
 
  ---
 

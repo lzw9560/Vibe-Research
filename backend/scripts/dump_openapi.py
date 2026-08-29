@@ -24,15 +24,9 @@ OUT = os.path.join(REPO, "frontend", "openapi.json")
 
 
 def main() -> int:
-    # 在 import app 之前禁用调度器（app.py:71-72 模块级启动）
-    try:
-        import scheduler as _sched  # noqa: F401
-        _sched.start_portfolio_scheduler = lambda *a, **k: None  # noqa: E731
-        _sched.start_limitup_scheduler = lambda *a, **k: None  # noqa: E731
-    except Exception:
-        pass  # scheduler 模块缺失则跳过（app import 会自身处理）
-
-    from app import app  # noqa: F401  — 调度器已禁用，import 无后台副作用
+    # scheduler.py 已删除（S031 R12），app.py 启动时由 portfolio.py start_scheduler 管理
+    # 直接 import app（调度器在 lifespan 中启动，dump 时不会触发）
+    from app import app  # noqa: F401
 
     schema = app.openapi()
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

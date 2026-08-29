@@ -568,10 +568,10 @@ class TaskExecutor:
             if hasattr(service, "send"):
                 try:
                     service.send(content)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:  # L1 修复：不再静默吞异常
+                    logger.warning("定时任务通知发送失败: %s", e)
+        except Exception as e:  # L1 修复：不再静默吞异常
+            logger.warning("定时任务通知构建失败: %s", e)
 
     def _execute_daily_data_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """每日数据刷新：刷新持仓。

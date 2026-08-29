@@ -237,7 +237,13 @@ def resolve_symbol(query: str) -> dict | None:
 
 def _key_metrics(secucode: str) -> dict | None:
     """东财 GMAININDICATOR 最新一期关键财务指标（美股/港股中文字段）。"""
-    market = "HK" if secucode.endswith(".HK") else "US"
+    # L4 修复：韩股 .KS 后缀不应归为 US 市场
+    if secucode.endswith(".HK"):
+        market = "HK"
+    elif secucode.endswith(".KS") or secucode.endswith(".KQ"):
+        return None  # 韩股无 F10 财务，_key_metrics 不适用
+    else:
+        market = "US"
     rows = astock.eastmoney_datacenter(
         f"RPT_{market}F10_FN_GMAININDICATOR",
         filter_str=f'(SECUCODE="{secucode}")',
