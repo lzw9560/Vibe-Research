@@ -436,6 +436,8 @@ def stock_fund_flow_120d(code: str, date: str | None = None) -> list[dict]:
     资金流为日级盘后数据，延迟无实质影响）。首个返非空 klines 的 host 即用；都失败返空。
     S085 A6 残留：date 传则过滤 flows ≤ date（修 topology replay 误取今日；fund_flow.py
     走 A6 内部过滤不复用此参数，topology/risk_models 实时取最新不传 date）。
+    资金流 fallback：push2his/push2delay 都失败时降级新浪 MoneyFlow（ssl_qsfx_lscjfb，
+    四档细分齐全，单位元一致）。本机 push2his 被拒连时由新浪兜底（审查 M4/P4）。
     """
     market_code = 1 if code.startswith("6") else 0
     params = {
@@ -455,9 +457,62 @@ def stock_fund_flow_120d(code: str, date: str | None = None) -> list[dict]:
         rows = _parse_fflow_klines(d)
         if date and rows:  # S085 A6 残留：过滤 ≤ date（replay 取该日或之前最近）
             rows = [r for r in rows if (r.get("date") or "")[:10] <= date]
-        if rows:  # 200 但 klines 空（断连恢复期）也视同失败，继续降级
+        # push2delay 可能只返 1 条当天数据（延时镜像不完整）——数据量不足时也降级
+        if rows and len(rows) >= 5:  # 至少 5 条才视为有效历史数据
             return rows
-    return []
+    # 东财双 host 均失败/数据不足 → 新浪 MoneyFlow 降级
+    rows = _sina_fund_flow_fallback(code, 120)
+    if date and rows:
+        rows = [r for r in rows if (r.get("date") or "")[:10] <= date]
+    return rows
+
+
+def _sina_fund_flow_fallback(code: str, num: int = 120) -> list[dict]:
+    """新浪 MoneyFlow 降级取数（东财 push2his/push2delay 均失败时）。
+
+    接口：MoneyFlow.ssl_qsfx_lscjfb（四档细分齐全：超大/大/中/小单净流入）
+    单位：元（与东财一致）
+    无需认证；IP 限流建议间隔 ≥0.2s（本函数是 fallback 低频路径，不做额外限流）
+    """
+    import json as _json
+
+    prefix = "sh" if code.startswith(("6", "9")) else "sz"
+    daima = f"{prefix}{code}"
+    url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_qsfx_lscjfb"
+    sina_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://finance.sina.com.cn/",
+    }
+    try:
+        import requests
+        r = requests.get(url, params={"page": "1", "num": str(num), "sort": "opendate", "asc": "0", "daima": daima},
+                         headers=sina_headers, timeout=10)
+        r.encoding = "gbk"
+        text = r.text.strip()
+        # 新浪返回类 JSON（可能带 PHP 前缀），截取 [ 到 ] 之间内容
+        start, end = text.index("["), text.rindex("]")
+        data = _json.loads(text[start:end + 1])
+    except Exception:
+        return []
+
+    rows = []
+    for item in data:
+        def _f(v):
+            try:
+                return float(v) if v not in ("-", "", None) else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+        rows.append({
+            "date": item.get("opendate", ""),
+            "main_net": _f(item.get("netamount")),
+            "small_net": _f(item.get("r3_net")),
+            "mid_net": _f(item.get("r2_net")),
+            "large_net": _f(item.get("r1_net")),
+            "super_net": _f(item.get("r0_net")),
+        })
+    # 新浪按日期降序（最新在前），翻转为升序与东财口径一致
+    rows.reverse()
+    return rows
 
 
 def _parse_fflow_klines(d: dict) -> list[dict]:
