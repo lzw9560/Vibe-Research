@@ -15,11 +15,14 @@
 
 from __future__ import annotations
 
+import threading
+
 import astock
 
 _UA_H = {"User-Agent": astock.UA}
 _GS_HOSTS = ("push2.eastmoney.com", "push2delay.eastmoney.com")
 _gs_host = [0]  # 当前可用主机下标；首次 push2 掉连后 latch 到 push2delay
+_gs_host_lock = threading.Lock()  # L2 修复：保护 _gs_host 读写
 
 # 全球指数（东财 push2 secid）—— A 股看隔夜外围脸色的核心几个，均已实测。
 _INDICES = (
@@ -47,7 +50,9 @@ def _push2_stock_get(secid: str, fields: str) -> dict | None:
     限流致 daily-review 卡 9.75s；缩 5 后限流指数 5s 失败降级 push2delay，整体 <5s）。
     """
     params = {"secid": secid, "fields": fields}
-    for i in range(_gs_host[0], len(_GS_HOSTS)):
+    with _gs_host_lock:
+        start_i = _gs_host[0]
+    for i in range(start_i, len(_GS_HOSTS)):
         try:
             r = astock.em_get(f"https://{_GS_HOSTS[i]}/api/qt/stock/get",
                               params=params, headers=_UA_H, timeout=5)
@@ -55,7 +60,8 @@ def _push2_stock_get(secid: str, fields: str) -> dict | None:
         except Exception:
             continue
         if d:
-            _gs_host[0] = i
+            with _gs_host_lock:
+                _gs_host[0] = i
             return d
     return None
 

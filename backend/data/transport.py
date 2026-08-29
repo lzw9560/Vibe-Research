@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import random
+import threading
 import time
 
 from circuit_breaker import get_breaker
@@ -23,7 +24,9 @@ from circuit_breaker import get_breaker
 # 东财请求最小间隔（秒），内置防封节流
 _EM_MIN_INTERVAL = 0.3
 _em_last_call = [0.0]           # 上次请求时间戳（可变单元素列表，模块级共享）
+_em_last_call_lock = threading.Lock()  # L1 修复：保护 _em_last_call 读写
 _EM_SESSIONS: dict = {}         # {direct(bool): requests.Session}
+_em_mode_lock = threading.Lock()  # L1 修复：保护 _em_mode 读写
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 # 数据层连接模式：国内财经站本应「直连」——科学上网系统代理会把东财这类国内站路由挂掉。
@@ -70,11 +73,14 @@ def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = N
     if not breaker.allow_request():
         raise RuntimeError(f"[CircuitBreaker:eastmoney] 东财数据源熔断中，快速失败（{url}）")
 
-    wait = _EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
+    # L1 修复：限流时间戳加锁，防并发探测浪费
+    with _em_last_call_lock:
+        wait = _EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
     if wait > 0:
         time.sleep(wait + random.uniform(0.1, 0.5))
     try:
-        mode = _em_mode[0]
+        with _em_mode_lock:
+            mode = _em_mode[0]
         if mode != "auto":
             r = _em_session(mode == "direct").get(url, params=params, headers=headers, timeout=timeout)
             breaker.record_success()
@@ -82,16 +88,20 @@ def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = N
         # auto：先直连，成功固定 direct；直连失败再走系统代理、成功固定 proxy。
         try:
             r = _em_session(True).get(url, params=params, headers=headers, timeout=min(timeout, 8))
-            _em_mode[0] = "direct"
+            with _em_mode_lock:
+                _em_mode[0] = "direct"
             breaker.record_success()
             return r
         except Exception:
             r = _em_session(False).get(url, params=params, headers=headers, timeout=timeout)
-            _em_mode[0] = "proxy"
+            with _em_mode_lock:
+                _em_mode[0] = "proxy"
             breaker.record_success()
             return r
     except Exception:
         breaker.record_failure()
         raise
     finally:
-        _em_last_call[0] = time.time()
+        # L3 修复：成功/失败都更新时间戳（保持限流间隔，防失败后立即重试触发限流）
+        with _em_last_call_lock:
+            _em_last_call[0] = time.time()
