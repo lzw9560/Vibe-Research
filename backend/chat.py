@@ -102,10 +102,15 @@ def _exec_tool(name: str, args: dict):
 
 
 # —— 防 SSRF：用户可自带 OpenAI 兼容端点，但后端替其发请求前要挡住指向云元数据/内网的地址 ——
-_PUBLIC_MODE = bool(os.environ.get("VR_API_KEY", "").strip())  # 设了鉴权≈公网部署姿态
+# M10 修复：_PUBLIC_MODE 改为函数动态求值，避免模块导入时 .env 未加载导致 SSRF 降级
 _METADATA_NETS = [ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fe80::/10")]
 _PRIVATE_NETS = [ipaddress.ip_network(n) for n in
                  ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "0.0.0.0/8", "::1/128", "fc00::/7")]
+
+
+def _is_public_mode() -> bool:
+    """设了 VR_API_KEY ≈ 公网部署姿态。动态读取，不受模块导入顺序影响。"""
+    return bool(os.environ.get("VR_API_KEY", "").strip())
 
 
 def _get_env_llm_config() -> dict:
@@ -128,7 +133,7 @@ def _ip_blocked(host: str) -> bool:
         return False  # 非字面 IP（域名）——交给 _check_base_url 决定是否解析核对
     if any(ip in n for n in _METADATA_NETS):  # 云元数据 / 链路本地：SSRF 头号目标，始终禁
         return True
-    if _PUBLIC_MODE and any(ip in n for n in _PRIVATE_NETS):  # 公网姿态再禁内网 / 本机
+    if _is_public_mode() and any(ip in n for n in _PRIVATE_NETS):  # 公网姿态再禁内网 / 本机
         return True
     return False
 
@@ -136,7 +141,8 @@ def _ip_blocked(host: str) -> bool:
 def _check_base_url(url: str) -> None:
     """挡住把用户自带 baseURL 指向云元数据 / 内网的 SSRF。
     本地单用户（未设 VR_API_KEY）放行 127.0.0.1 等本机地址（方便接本机 Ollama / 网关），只挡 169.254 元数据；
-    公网部署（设了 VR_API_KEY）额外禁内网，并解析域名核对，防 DNS 指向内网。"""
+    公网部署（设了 VR_API_KEY）额外禁内网。
+    M6 修复：非公网模式也解析域名核对 169.254 元数据网段（防 DNS rebinding 如 169.254.169.254.nip.io）。"""
     p = urlparse(url or "")
     if p.scheme not in ("http", "https"):
         raise RuntimeError("Base URL 必须以 http:// 或 https:// 开头")
@@ -145,13 +151,21 @@ def _check_base_url(url: str) -> None:
         raise RuntimeError("Base URL 缺少主机名")
     if _ip_blocked(host):
         raise RuntimeError("Base URL 指向了不允许的地址（云元数据 / 内网）")
-    if _PUBLIC_MODE:  # 公网姿态：域名也解析核对，防 DNS rebinding 指向内网
+    # 域名解析核对（M6：非公网模式也核对 169.254 元数据网段；公网模式核对全部内网）
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        # host 是域名 → DNS 解析核对
         try:
             infos = socket.getaddrinfo(host, None)
         except socket.gaierror as e:
             raise RuntimeError("Base URL 域名无法解析") from e
         for info in infos:
-            if _ip_blocked(info[4][0]):
+            resolved_ip = info[4][0]
+            if _ip_blocked(resolved_ip):
+                raise RuntimeError("Base URL 解析到了不允许的地址")
+            # 公网模式额外禁内网
+            if _is_public_mode() and _ip_blocked(resolved_ip):
                 raise RuntimeError("Base URL 解析到了不允许的内网地址")
 
 
@@ -168,8 +182,8 @@ def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
     r = requests.post(
         f"{base}/chat/completions",
         headers={"Authorization": f"Bearer {cfg['apiKey']}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=90,
+        json=payload, timeout=90,
+        allow_redirects=False,  # M8 修复：禁重定向，防 SSRF 绕过
     )
     if r.status_code != 200:
         raise RuntimeError(f"模型接口 HTTP {r.status_code}: {r.text[:300]}")
@@ -258,6 +272,7 @@ def _call_llm_stream(cfg: dict, messages: list, use_tools: bool):
         f"{_resolve_base(cfg)}/chat/completions",
         headers={"Authorization": f"Bearer {cfg['apiKey']}", "Content-Type": "application/json"},
         json=payload, timeout=120, stream=True,
+        allow_redirects=False,  # M8 修复：禁重定向，防 SSRF 绕过
     )
     if r.status_code != 200:
         raise RuntimeError(f"模型接口 HTTP {r.status_code}: {r.text[:300]}")

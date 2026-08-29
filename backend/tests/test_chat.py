@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """chat.py 纯函数单测。"""
 
-import importlib
 import os
 import unittest
 from unittest.mock import patch
@@ -9,20 +8,9 @@ from unittest.mock import patch
 import chat
 
 
-_original_public_mode = chat._PUBLIC_MODE
-
-
-def _reload_chat(env_overrides: dict):
-    """重新加载 chat 模块以应用环境变量。"""
-    with patch.dict(os.environ, env_overrides, clear=True):
-        importlib.reload(chat)
-    return chat
-
-
 def _restore_chat():
-    """恢复 chat 模块到原始状态。"""
-    global _original_public_mode
-    chat._PUBLIC_MODE = _original_public_mode
+    """恢复 chat 模块到默认状态（_is_public_mode 读环境变量）。"""
+    pass  # _is_public_mode 动态读取，无需手动恢复
 
 
 class TestIpBlocked(unittest.TestCase):
@@ -35,37 +23,37 @@ class TestIpBlocked(unittest.TestCase):
         _restore_chat()
 
     def test_metadata_ip_blocked(self):
-        mod = _reload_chat({})
-        self.assertTrue(mod._ip_blocked("169.254.1.1"))
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(chat._ip_blocked("169.254.1.1"))
 
     def test_localhost_blocked_in_public_mode(self):
-        mod = _reload_chat({"VR_API_KEY": "test-key"})
-        self.assertTrue(mod._ip_blocked("127.0.0.1"))
+        with patch.dict(os.environ, {"VR_API_KEY": "test-key"}, clear=True):
+            self.assertTrue(chat._ip_blocked("127.0.0.1"))
 
     def test_localhost_allowed_in_local_mode(self):
-        mod = _reload_chat({})
-        self.assertFalse(mod._ip_blocked("127.0.0.1"))
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(chat._ip_blocked("127.0.0.1"))
 
     def test_private_ip_blocked_in_public_mode(self):
-        mod = _reload_chat({"VR_API_KEY": "test-key"})
-        self.assertTrue(mod._ip_blocked("10.0.0.1"))
-        self.assertTrue(mod._ip_blocked("172.16.0.1"))
-        self.assertTrue(mod._ip_blocked("192.168.1.1"))
+        with patch.dict(os.environ, {"VR_API_KEY": "test-key"}, clear=True):
+            self.assertTrue(chat._ip_blocked("10.0.0.1"))
+            self.assertTrue(chat._ip_blocked("172.16.0.1"))
+            self.assertTrue(chat._ip_blocked("192.168.1.1"))
 
     def test_private_ip_allowed_in_local_mode(self):
-        mod = _reload_chat({})
-        self.assertFalse(mod._ip_blocked("10.0.0.1"))
-        self.assertFalse(mod._ip_blocked("172.16.0.1"))
-        self.assertFalse(mod._ip_blocked("192.168.1.1"))
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(chat._ip_blocked("10.0.0.1"))
+            self.assertFalse(chat._ip_blocked("172.16.0.1"))
+            self.assertFalse(chat._ip_blocked("192.168.1.1"))
 
     def test_public_ip_allowed(self):
-        mod = _reload_chat({"VR_API_KEY": "test-key"})
-        self.assertFalse(mod._ip_blocked("8.8.8.8"))
-        self.assertFalse(mod._ip_blocked("1.1.1.1"))
+        with patch.dict(os.environ, {"VR_API_KEY": "test-key"}, clear=True):
+            self.assertFalse(chat._ip_blocked("8.8.8.8"))
+            self.assertFalse(chat._ip_blocked("1.1.1.1"))
 
     def test_invalid_host_not_blocked(self):
-        mod = _reload_chat({})
-        self.assertFalse(mod._ip_blocked("example.com"))
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(chat._ip_blocked("example.com"))
 
 
 class TestCheckBaseUrl(unittest.TestCase):
@@ -78,32 +66,32 @@ class TestCheckBaseUrl(unittest.TestCase):
         _restore_chat()
 
     def test_http_url_allowed(self):
-        mod = _reload_chat({})
-        mod._check_base_url("http://example.com")
+        with patch.dict(os.environ, {}, clear=True):
+            chat._check_base_url("http://example.com")
 
     def test_https_url_allowed(self):
-        mod = _reload_chat({})
-        mod._check_base_url("https://example.com")
+        with patch.dict(os.environ, {}, clear=True):
+            chat._check_base_url("https://example.com")
 
     def test_invalid_scheme_raises(self):
-        mod = _reload_chat({})
-        with self.assertRaises(RuntimeError):
-            mod._check_base_url("ftp://example.com")
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError):
+                chat._check_base_url("ftp://example.com")
 
     def test_empty_url_raises(self):
-        mod = _reload_chat({})
-        with self.assertRaises(RuntimeError):
-            mod._check_base_url("")
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError):
+                chat._check_base_url("")
 
     def test_metadata_ip_raises(self):
-        mod = _reload_chat({})
-        with self.assertRaises(RuntimeError):
-            mod._check_base_url("http://169.254.1.1")
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError):
+                chat._check_base_url("http://169.254.1.1")
 
     def test_private_ip_raises_in_public_mode(self):
-        mod = _reload_chat({"VR_API_KEY": "test-key"})
-        with self.assertRaises(RuntimeError):
-            mod._check_base_url("http://192.168.1.1")
+        with patch.dict(os.environ, {"VR_API_KEY": "test-key"}, clear=True):
+            with self.assertRaises(RuntimeError):
+                chat._check_base_url("http://192.168.1.1")
 
 
 class TestGetEnvLLMConfig(unittest.TestCase):

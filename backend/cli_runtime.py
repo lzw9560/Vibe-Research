@@ -44,11 +44,33 @@ _CLI_DEFS: dict[str, dict] = {
         ],
         "env": {},
     },
-    "qwen": {"bins": ["qwen"], "delivery": "stdin", "build_args": lambda _: ["--yolo"], "env": {}},
-    "deepseek": {"bins": ["deepseek", "codewhale"], "delivery": "arg",
-                 "build_args": lambda _: ["exec", "--auto"], "env": {}},
-    "codex": {"bins": ["codex"], "delivery": "stdin",
-              "build_args": lambda _: ["exec", "--skip-git-repo-check", "-"], "env": {}},
+    "qwen": {
+        "bins": ["qwen"],
+        "delivery": "stdin",
+        "build_args": lambda _: ["--yolo"],
+        "env": {},
+        # M9 风险标注：qwen CLI 的 --yolo 放开自动模式，
+        # qwen CLI 目前不支持 --disallowedTools 等价参数。
+        # 风险：AI 可执行文件读写/shell 命令（越权）。
+        # 缓解：仅本地自托管使用，CLI 已登录的用户信任边界内。
+    },
+    "deepseek": {
+        "bins": ["deepseek", "codewhale"],
+        "delivery": "arg",
+        "build_args": lambda _: ["exec", "--auto"],
+        "env": {},
+        # M9 风险标注：deepseek CLI 的 --auto 放开自动模式，
+        # 不支持工具禁用参数。风险同 qwen。
+    },
+    "codex": {
+        "bins": ["codex"],
+        "delivery": "stdin",
+        "build_args": lambda _: ["exec", "--skip-git-repo-check", "-"],
+        "env": {},
+        # M9 风险标注：codex CLI 无等价 --disallowedTools 参数。
+        # --skip-git-repo-check 放开 git 仓库限制（允许非 git 目录执行）。
+        # 风险同上，缓解同上。
+    },
 }
 
 _EXTRA_PATH_DIRS = [
