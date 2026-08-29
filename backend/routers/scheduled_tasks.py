@@ -103,22 +103,9 @@ async def list_task_types() -> Dict[str, List[str]]:
     """List available task types.
 
     必须注册在 ``/{task_id}`` 之前，否则 /types 会被 int 路径捕获（422）。
+    M13 修复：动态从 TaskExecutor._executors 取完整列表，不再硬编码。
     """
-    return {
-        "data": [
-            "daily_data_refresh",
-            "daily_review_notify",
-            "limitup_precompute",
-            "portfolio_refresh",
-            "market_data_sync",
-            "cleanup_old_runs",
-            "daily_backtest_run",
-            "sti_post_market",
-            "seal_intraday_collect",
-            "candidate_funnel_precompute",
-            "first_board_filter",
-        ]
-    }
+    return {"data": list(st.TaskExecutor()._executors.keys())}
 
 
 @router.get("/api/scheduled-tasks/{task_id}")
