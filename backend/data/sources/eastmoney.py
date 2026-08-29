@@ -39,12 +39,19 @@ _PDF_TPL = "https://pdf.dfcfw.com/pdf/H3_{info_code}_1.pdf"
 _PUSH2_UT = "fa5fd1943c7b386f172d6893dbbd1"
 
 
-def _report_session():
-    import requests  # 軽依赖，随后端一起装
+_report_session_cache = None
 
-    s = requests.Session()
-    s.headers.update({"User-Agent": UA, "Referer": "https://data.eastmoney.com/"})
-    return s
+
+def _report_session():
+    """研报 Session（M20 修复：模块级惰性构建+复用，与 _em_session 模式一致）。"""
+    global _report_session_cache
+    import requests  # 輕依赖，随后端一起装
+
+    if _report_session_cache is None:
+        s = requests.Session()
+        s.headers.update({"User-Agent": UA, "Referer": "https://data.eastmoney.com/"})
+        _report_session_cache = s
+    return _report_session_cache
 
 
 def eastmoney_reports(code: str, max_pages: int = 3) -> list[dict]:
