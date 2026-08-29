@@ -4,7 +4,7 @@
 // - CandidateDetail（路由页）：thin 包装——useParams 取 code + 返回按钮 + Panel。
 // 合规：仅客观数据 + 命中规则 + 客观状态记录，不输出方向结论词。
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { candidatesApi, type DiagnosisCard, type IndicatorSet } from "@/lib/candidates";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -33,6 +33,8 @@ function buildCandidateContext(card: DiagnosisCard | null, code: string): string
 export default function CandidateDetail() {
   const { code = "" } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const date = searchParams.get("date") || undefined;
   return (
     <div className="space-y-4 p-4">
       <button
@@ -41,7 +43,7 @@ export default function CandidateDetail() {
       >
         <ArrowLeft className="h-4 w-4" /> 返回
       </button>
-      <CandidateDetailPanel code={code} />
+      <CandidateDetailPanel code={code} date={date} />
     </div>
   );
 }

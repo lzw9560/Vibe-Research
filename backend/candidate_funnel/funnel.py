@@ -8,6 +8,7 @@ R2/R3 的 _filter_r2/_filter_r3 函数保留供战法层与单测调用（diagno
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -56,6 +57,7 @@ def _fetch_sentiment_phase(date: str, ctx: "SentimentContext | None" = None) -> 
 # 各跑一遍会重复外部请求；缓存命中即复用。rerun 不受影响（done 即清）。
 # S004 R5：TTL 接线 config.CANDIDATE_FUNNEL_CACHE_TTL（默认 3600s，盘后预计算长 TTL）。
 _FUNNEL_CACHE: dict[str, tuple[float, "FunnelResult"]] = {}
+_FUNNEL_CACHE_LOCK = threading.Lock()
 
 
 def _funnel_cache_ttl() -> int:
@@ -234,11 +236,13 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentConte
     import time
     key = _funnel_cache_key(date, cfg)
     now = time.time()
-    hit = _FUNNEL_CACHE.get(key)
-    if hit and now - hit[0] < _funnel_cache_ttl():
-        return hit[1]
+    with _FUNNEL_CACHE_LOCK:
+        hit = _FUNNEL_CACHE.get(key)
+        if hit and now - hit[0] < _funnel_cache_ttl():
+            return hit[1]
     result = _run_funnel_impl(stage, date, cfg, ctx)
-    _FUNNEL_CACHE[key] = (now, result)
+    with _FUNNEL_CACHE_LOCK:
+        _FUNNEL_CACHE[key] = (now, result)
     return result
 
 
@@ -246,18 +250,21 @@ def run_funnel_force(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     """rerun 显式清缓存路径（不受 TTL 缓存影响）。"""
     import time
     key = _funnel_cache_key(date, cfg)
-    _FUNNEL_CACHE.pop(key, None)
+    with _FUNNEL_CACHE_LOCK:
+        _FUNNEL_CACHE.pop(key, None)
     result = _run_funnel_impl(stage, date, cfg, ctx)
-    _FUNNEL_CACHE[key] = (time.time(), result)
+    with _FUNNEL_CACHE_LOCK:
+        _FUNNEL_CACHE[key] = (time.time(), result)
     return result
 
 
 def clear_funnel_cache(date: str | None = None) -> None:
-    if date is None:
-        _FUNNEL_CACHE.clear()
-        return
-    for k in [k for k in _FUNNEL_CACHE if k.startswith(f"{date}|")]:
-        _FUNNEL_CACHE.pop(k, None)
+    with _FUNNEL_CACHE_LOCK:
+        if date is None:
+            _FUNNEL_CACHE.clear()
+            return
+        for k in [k for k in _FUNNEL_CACHE if k.startswith(f"{date}|")]:
+            _FUNNEL_CACHE.pop(k, None)
 
 
 def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
@@ -492,6 +499,17 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
                 "max_boards": emo.get("max_boards"),
                 "lianban_stocks": emo.get("lianban_stocks") or [],
             }
+            # M4 修复：注入 hot_sectors TOP10（标准⑦题材热度依赖此字段）
+            # sector_rotation 内部有 em_get 限流+熔断，失败不阻塞漏斗
+            try:
+                from strategies.sector_cycle import sector_rotation
+                rot = sector_rotation(date)
+                rank = rot.get("strength_rank") or []
+                market_context["hot_sectors"] = [
+                    {"name": s.get("industry")} for s in rank[:10] if s.get("industry")
+                ]
+            except Exception:
+                pass  # hot_sectors 缺失时标准⑦降级 missing（已有逻辑）
     except Exception:
         market_context = None
 

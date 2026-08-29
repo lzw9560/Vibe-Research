@@ -161,7 +161,8 @@ def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[di
         _ztb_cache[cache_key] = (now, result)
         return result
     except Exception:
-        _ztb_cache[cache_key] = (now, [])
+        # 异常时不缓存——让上层 _emotion 的 5min TTL 重试机制生效
+        # （原实现缓存空结果 24h，导致瞬态故障后 24h 内恒空）
         return []
 
 
