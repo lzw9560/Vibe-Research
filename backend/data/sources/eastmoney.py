@@ -139,6 +139,8 @@ def announcements(code: str, limit: int = 15) -> list[dict]:
 # ⚠️ 合规：原始池含个股 code/name —— 仅供 market.py 聚合成【不含个股名】的短线情绪指标。
 #    切勿把原始池直接接成 API/UI（会甩个股名单、破产品「零标的」红线）。
 # ---------------------------------------------------------------------------
+# 日 K 通用公开 token（非涨停池专属）：push2his kline/get 用此 ut（akshare stock_cyq_em
+# 验证），S114 chip_distribution 自建取数复用。非密钥，硬编码常量。fflow 用 _PUSH2_UT。
 _ZTB_UT = "7eea3edcaed734bea9cbfc24409ed989"
 
 # S103：涨停池缓存 TTL 分级（盘中短保新鲜 / 盘后中定盘 / 历史长省请求）。

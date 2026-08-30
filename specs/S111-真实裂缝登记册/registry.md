@@ -8,7 +8,7 @@
 
 | 类别 | 条数 | 状态 |
 |---|---|---|
-| 诚实（S113 修 chip-breaker+premarket；chip-cyq 待 S114；fund-flow-dual-break 仅登记） | 4 | 2已修+2登记 |
+| 诚实（S113 修 chip-breaker+premarket；chip-cyq S114 修；fund-flow-dual-break 仅登记） | 4 | 3已修+1登记 |
 | Tier-1 撒谎（S111 已实现，全 confirmed_honest） | 6 | 已修 |
 | Tier-2 撒谎（S112 已实现，全 confirmed_honest，含已知限制） | 8 | 已修 |
 
@@ -170,12 +170,31 @@ S113 修 2 条诚实缺陷项 availability（非性质撒谎）+ 1 文档化。3
 |---|---|---|
 | chip-breaker-permanent-no-recovery | ✅ 已修 | R1：删除手搓 _chip_fail_streak，复用通用 circuit_breaker.get_breaker("akshare_chip", config=failure_threshold=3/recovery_timeout=60/success_threshold=2)，OPEN→60s→half-open→2次成功复位/失败回 OPEN。返 {} 诚实不变。对齐 transport.py/worldmonitor/eastmoney/hithink_src sibling。 |
 | premarket-selection-unguarded-cache-read | ✅ 已修 | R2：premarket_selection.py:96 加 _load_kline_cache() helper（exists()+try→{}）+ market_note data-missing，对齐 first_board_filter:357-384。缺 cache 返 [] 非 500，守 S069 优雅降级契约。 |
-| chip-data-bypasses-generic-em-breaker | ⏳ 待 S114 | 非平凡（自建 cyq 取数走 em_get 重写端点解析），独立研究切片 S114。 |
+| chip-data-bypasses-generic-em-breaker | ✅ 已修（S114） | 自建 _fetch_cyq_klines 走 em_get（push2his kline/get + ut=_ZTB_UT + timeout=8 + breaker('eastmoney')），删 ak.stock_cyq_em 黑盒 + 删 daemon 8s + 删 chip breaker（em_get 覆盖）。CYQ_JS 搬东财原 JS 保真（py_mini_racer）。返{} 4态诚实。见 S114 状态节。 |
 | source-key-leak（deferred LOW） | 📝 文档化 | R3：fund flow API 响应带 source provenance（_with_source 加性），前端可后续消费 degraded 徽章。不结构性收窄（provenance 对 R4/S112 cross-source 检测有用）。 |
 
 **review 观察（2 LOW，非 bug，无需改码）**：
 - scheduled_tasks:1860 守卫实为 c1a499e8（S101, 2026-08-28）既有，早于 S113——spec R2"同型裸读同崩"前提 stale，agent 查证后未加冗余守卫（不做"看起来正确但没用"的事）。S113 只加了钉死测试。availability 达成与哪个 commit 加守卫无关。
 - CircuitBreaker 状态变更有无 threading.Lock——既有缺陷，与 transport.py 同款，影响低（当前无并发筹码取数路径），后续若并发成真再加锁。
+
+## S114 实现后状态（2026-08-30，最后一条诚实缺陷项）
+
+S114 把 chip_distribution 取数层从 ak.stock_cyq_em 黑盒改自建走 em_get，关最后一条防封缺口（§1.2 em_get 工程底线）。research（wf_be9f461b）+ impl（w074x03hi）+ 3 路 review。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 取数层 em_get | ✅ 已修 | R1 _fetch_cyq_klines 走 em_get（push2his kline/get + ut=_ZTB_UT + timeout=8 + breaker('eastmoney') 限流/熔断/代理探测/UA），删 ak.stock_cyq_em 裸 requests 黑盒 |
+| daemon 8s 硬截断 | ✅ 已删 | R2 em_get timeout=8 真实 socket 超时，无限挂起根因消除 |
+| chip breaker | ✅ 已删（R8） | em_get breaker('eastmoney') 已覆盖，_CHIP_BREAKER_NAME 冗余删（对齐 hot_money_seats 复用范式） |
+| CYQ_JS 保真 | ✅ 已搬 | R5 从 akshare stock_cyq_em.py:27-218 搬东财 CYQCalculator JS 到 cyq_js.py（6315 字符逐字一致），py_mini_racer 跑（策略 A，V8 依赖 akshare 已带不新增） |
+| 返 {} 4态诚实 | ✅ | R3 em_get 熔断 OPEN/请求异常/无筹码/解析失败 → 均 {}（falsy，diagnosis.py:230 missing 标记）；R4 不返 {chip_profit_ratio:None} truthy 绕过 |
+| 5键 shape 不变 | ✅ | R6 chip_profit_ratio/avg_cost/concentration/90_cost/70_cost |
+
+**review**：6/7 availability confirmed（em_get 真用/ut 真带/熔断不冒泡/返 falsy {}/CYQ_JS 逐字保真/5键不变），1 still_broken 是测试残留（S113 chip_breaker 测试引用已删 _CHIP_BREAKER_NAME）→ 已删 dead 测试修复。1 LOW（_fetch_cyq_klines skip 坏行 vs akshare raise，改进非 bug，不修）。
+
+**⚠ live AC1 未验**：本机被东财 push2his kline/get 拒连（RemoteDisconnected，反爬/IP 针对性拒绝，akshare 原版同款拒连——非实现缺陷）。em_get 防封工作（无挂起/熔断/代理探测/timeout），失败诚实返 {}。live test（test_chip_distribution_live_returns_nonempty_with_numeric_ratio）标 @pytest.mark.live，offline 跳过，待东财恢复或换网络手验。
+
+**ut 厘清**：kline/get 用 _ZTB_UT（7eea...，实为日K通用公开 token 非密钥，被误命名涨停池）；非 fflow 的 _PUSH2_UT（fa5fd...）。两者同 host 不同 path 吃不同 ut。eastmoney.py:142 加注释说明。
 
 ## 本轮未覆盖维度（completeness gaps，后续切片补扫）
 - AI 出口诚实（chat.TOOLS/_exec_tool→registry.execute）：数据工具失败时返给 LLM 的是诚实 'unavailable' 还是 bare None/[]（LLM 可能据此臆造）——数据进入 AI 研判的最后一跳

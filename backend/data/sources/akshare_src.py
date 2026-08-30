@@ -12,18 +12,12 @@ from __future__ import annotations
 
 import logging
 
-from circuit_breaker import CircuitBreakerConfig, get_breaker
 from ._common import DependencyMissing
 
-# S094/S113 熔断：chip_distribution 走通用 circuit_breaker（对齐 transport eastmoney breaker）。
-# 连续失败 3 次→OPEN 快速返 {} 不发请求；60s 后 half-open 放试探请求，成功复位 CLOSED，
-# 失败回 OPEN（自愈）。原 S094 手搓 _chip_fail_streak 计数器复位仅走成功路径、熔断后不可达
-# →进程生命周期内永久 OPEN 直到后端重启；S113 对齐通用 breaker 修复此可用性悬崖。
-_CHIP_BREAKER_NAME = "akshare_chip"
-_CHIP_BREAKER_CONFIG = CircuitBreakerConfig(
-    failure_threshold=3,    # 对齐原 _chip_fail_streak >= 3 阈值
-    recovery_timeout=60.0,  # OPEN 后 60s 进 half-open（对齐 transport eastmoney breaker 默认）
-)
+# S114：chip_distribution 自建取数走 em_get（push2his kline/get + ut=_ZTB_UT 日K token），
+# 不再直调 ak.stock_cyq_em 黑盒。em_get 自带 breaker('eastmoney') + 限流 + 代理探测 + UA
+# （对齐 hot_money_seats 复用 breaker('eastmoney') 范式，不臆造新 chip breaker——
+# _CHIP_BREAKER_NAME/_CHIP_BREAKER_CONFIG 冗余已删，R8 精简）。计算层保真复用东财原 JS（cyq_js.CYQ_JS）。
 
 
 def _akshare():
@@ -134,81 +128,120 @@ def valuation_percentile(code: str, period: str = "近五年") -> dict:
     return {"period": "近5年", "metrics": metrics}
 
 
-def chip_distribution(code: str) -> dict:
-    """筹码分布（东财 stock_cyq_em，最新交易日）—— 获利比例 / 平均成本 / 集中度 / 90%&70%成本。
+def _fetch_cyq_klines(code: str) -> list[dict] | None:
+    """em_get 拉东财日 K + 换手率（push2his kline/get），解析 klines 喂 CYQCalculator。
 
-    S085 D3：接通 IndicatorSet.chip_profit_ratio（此前恒 None）。
-    返回字段映射：
-      - chip_profit_ratio: 获利比例（0-100）
-      - avg_cost: 平均成本
-      - concentration: 集中度
-      - 90_cost / 70_cost: 90%成本-70%成本区间上下沿
-    akshare 缺失抛 DependencyMissing；取数异常返回空 dict {}（不臆造，遵循项目红线 AC6）。
+    S114 自建取数层：params 含 ut=_ZTB_UT（日 K 通用公开 token，非涨停池专属）、
+    secid=f"{1 if 沪 else 0}.{code}"、fields2 含 f61=hsl 换手率、klt=101/fqt=0/lmt=210。
+    em_get 自带 breaker('eastmoney') + 0.3s 限流 + 直连/代理探测 + UA + timeout=8
+    （真实 socket 超时，根因消除 S094 的 daemon 8s 线程硬截断）。
 
-    S094 修复：akshare stock_cyq_em 服务端断连时 requests 无 socket 超时会无限挂起，
-    52 只逐只调时一只挂住整个 _collect 卡死。加 8s 硬超时（ThreadPoolExecutor 包裹），
-    超时返 {}（同异常路径，diagnosis 标 missing 不阻断 pipeline）。
-    S113 自愈：熔断走通用 circuit_breaker（对齐 transport eastmoney breaker）——
-    连续失败 3 次→OPEN 快速返 {} 不发请求；60s 后 half-open 放试探请求，成功累计
-    复位 CLOSED，失败回 OPEN。原 S094 手搓计数器复位仅走成功路径、熔断后不可达→
-    永久 OPEN 直到后端重启，此切片修复为可自愈。返 {} 仍诚实（不臆造数值）。
+    返回 list[dict]（含 open/close/high/low/hsl，数值类型对齐 akshare pd.to_numeric）
+    或 None（熔断 OPEN raise / 请求异常 / 无筹码 body 空 / 解析失败 / 不足 90 条）。
+    None 4 态均诚实降级（R3），chip_distribution 据此返 {} 走 diagnosis missing 标记。
     """
-    breaker = get_breaker(_CHIP_BREAKER_NAME, _CHIP_BREAKER_CONFIG)
-    # 熔断器：OPEN 时快速失败返 {}（60s 后自动转 half-open 放试探请求，自愈）
-    if not breaker.allow_request():
-        logging.getLogger("astock").debug(
-            "chip_distribution(%s) 熔断中（state=%s），快速失败返 {}",
-            code, breaker.state.value)
-        return {}
+    from datetime import datetime  # noqa: PLC0415
+    from data.transport import eastmoney_get as em_get  # noqa: PLC0415 — 防封底线
+    from .eastmoney import _ZTB_UT  # noqa: PLC0415 — 日 K 通用公开 token
 
-    ak = _akshare()
+    params = {
+        "secid": f"{1 if code.startswith('6') else 0}.{code}",
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "klt": "101",
+        "fqt": "0",
+        "end": datetime.now().date().strftime("%Y%m%d"),
+        "lmt": "210",
+        "ut": _ZTB_UT,
+    }
+    headers = {"Referer": "https://quote.eastmoney.com/"}
+    try:
+        r = em_get("https://push2his.eastmoney.com/api/qt/stock/kline/get",
+                   params=params, headers=headers, timeout=8)
+        data = r.json()
+    except Exception as e:
+        # em_get 熔断 OPEN raise RuntimeError / 请求异常 / JSON 解析失败 → None
+        logging.getLogger("astock").warning(
+            "chip_distribution(%s) 取数失败（em_get）: %s", code, e)
+        return None
 
-    # S094 修复：akshare 内部 requests 无 timeout，服务端断连时无限挂起。
-    # 用 daemon 线程 + join(timeout=8) 硬截断——超时后不等待线程退出（daemon 线程
-    # 在主进程退出时自动被杀），避免 ThreadPoolExecutor 的 shutdown(wait=True)
-    # 阻塞等 TCP 超时（~15s/只 × 52 = 780s）。
-    import threading  # noqa: PLC0415
-    result_holder: dict | None = {"df": None}
-    exc_holder: list = []
+    klines = (data.get("data") or {}).get("klines")
+    if not klines:
+        return None  # 该股无筹码（body 空 / 新股）
 
-    def _call():
+    def _to_float(s: str) -> float | None:
         try:
-            result_holder["df"] = ak.stock_cyq_em(symbol=code)
-        except Exception as e:
-            exc_holder.append(e)
+            return float(s)
+        except (TypeError, ValueError):
+            return None
 
-    t = threading.Thread(target=_call, daemon=True)
-    t.start()
-    t.join(timeout=8)
+    out: list[dict] = []
+    for line in klines:
+        parts = line.split(",")
+        if len(parts) < 11:
+            continue
+        # f51-f61: date,open,close,high,low,volume,amount,振幅,涨跌幅,涨跌额,hsl
+        rec = {
+            "open": _to_float(parts[1]), "close": _to_float(parts[2]),
+            "high": _to_float(parts[3]), "low": _to_float(parts[4]),
+            "hsl": _to_float(parts[10]),
+        }
+        # CYQCalculator 依赖 open/close/high/low/hsl 均为数值（akshare pd.to_numeric 对齐），
+        # 字符串传入会致 JS `+` 拼接而非数值相加 → avg=NaN。数值缺失行跳过。
+        if any(rec[k] is None for k in ("open", "close", "high", "low", "hsl")):
+            continue
+        out.append(rec)
+    if len(out) < 90:  # R9：push2delay 延时镜像不足 90 条不视为成功
+        return None
+    return out
 
-    if t.is_alive():
-        # 线程还在跑（超时）——daemon 线程不等待，主进程退出时自动杀
-        breaker.record_failure()
+
+def chip_distribution(code: str) -> dict:
+    """筹码分布（东财 CYQCalculator，最新交易日）—— 获利比例 / 平均成本 / 集中度 / 90%&70%成本区间。
+
+    S114：自建取数走 em_get（push2his kline/get + ut=_ZTB_UT 日K token），删 ak.stock_cyq_em
+    黑盒 + 删 daemon 8s 线程（em_get timeout=8 真实 socket 超时，无限挂起根因消除）+ 删
+    chip breaker（em_get breaker('eastmoney') 已覆盖，对齐 hot_money_seats 复用范式，R8 精简）。
+    计算层保真复用东财原 JS（cyq_js.CYQ_JS + py_mini_racer，策略 A，R5 逐字搬已验保真）。
+
+    返 {} 诚实 fallback 4 态（R3）：em_get 熔断 OPEN raise / 请求异常 / 无筹码 / 解析失败
+    → 均 {}（falsy，走 diagnosis.py:230 missing 标记，不臆造值）。**不可**返
+    {chip_profit_ratio: None, ...}（truthy 绕过 missing 标记，改变行为，R4）。
+
+    返回 5 键（R6 shape 不变）：
+      - chip_profit_ratio: 获利比例（0-1，benefitPart）
+      - avg_cost: 平均成本
+      - concentration: 90% 集中度
+      - 90_cost / 70_cost: 90% / 70% 成本区间（"low-high"）
+    """
+    klines = _fetch_cyq_klines(code)
+    if not klines:
+        return {}  # R3 诚实 fallback（falsy，走 diagnosis missing 标记）
+    try:
+        import py_mini_racer  # noqa: PLC0415 — V8 计算依赖（akshare 已带，不新增）
+        from .cyq_js import CYQ_JS  # noqa: PLC0415 — 东财原 JS（逐字搬，R5 保真）
+        js = py_mini_racer.MiniRacer()
+        js.eval(CYQ_JS)
+        # 算最后一条 = 最新交易日筹码分布（index 0-based，klinedata 全量）
+        mcode = js.call("CYQCalculator", len(klines) - 1, klines)
+    except Exception as e:
         logging.getLogger("astock").warning(
-            "chip_distribution(%s) 8s 超时（state=%s）", code, breaker.state.value)
+            "chip_distribution(%s) CYQCalculator 计算失败: %s", code, e)
         return {}
-    if exc_holder:
-        breaker.record_failure()
-        logging.getLogger("astock").warning(
-            "chip_distribution(%s) akshare 取数失败（state=%s）: %s",
-            code, breaker.state.value, exc_holder[0])
-        return {}
-    # 调用完成（含空 df = 该股无筹码，非服务故障）——记录成功；
-    # half-open 试探成功累计达阈值（默认 2 次）即复位 CLOSED，熔断自愈。
-    breaker.record_success()
-    df = result_holder["df"]
-    if df is None or df.empty:
-        return {}
-    row = df.iloc[-1].to_dict()
 
-    def g(k):
-        v = row.get(k)
+    def g(v):
+        # R7：清洗 JS 假值占位（False/"false"/""/None/"-"/"--"→None）。注 0==False，
+        # benefitPart=0（全套牢）时 g(0)→None，与原 akshare g() 既有行为一致。
         return None if v in (False, "false", "", None, "-", "--") else v
 
+    p90 = mcode["percentChips"]["90"]
+    p70 = mcode["percentChips"]["70"]
+    lo90, hi90 = g(p90["priceRange"][0]), g(p90["priceRange"][1])
+    lo70, hi70 = g(p70["priceRange"][0]), g(p70["priceRange"][1])
     return {
-        "chip_profit_ratio": g("获利比例"),
-        "avg_cost": g("平均成本"),
-        "concentration": g("集中度"),
-        "90_cost": g("90成本-70成本"),
-        "70_cost": g("70成本-90成本"),
+        "chip_profit_ratio": g(mcode["benefitPart"]),
+        "avg_cost": g(mcode["avgCost"]),
+        "concentration": g(p90["concentration"]),
+        "90_cost": None if (lo90 is None or hi90 is None) else f"{lo90}-{hi90}",
+        "70_cost": None if (lo70 is None or hi70 is None) else f"{lo70}-{hi70}",
     }
