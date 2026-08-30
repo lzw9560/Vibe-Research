@@ -91,7 +91,8 @@ from data.sources.baidu import fetch_raw as baidu_kline  # noqa: F401,E402
 from data.sources.kline_resolver import fetch_kline as kline_multi  # noqa: F401,E402
 
 # ── 新浪财报三表源（urllib，基本面因子组数据地基）──────────────────────────
-from data.sources.sina_financial import fetch_raw as sina_financial_report  # noqa: F401,E402
+# S108：fetch_raw/fetch_merged_periods 由 value_funnel/quality + routers/value_funnel 直接调，
+# 不再经 astock 死别名 re-export（原 sina_financial_report 零调用，删）。
 
 
 # ---------------------------------------------------------------------------

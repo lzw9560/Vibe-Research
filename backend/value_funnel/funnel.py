@@ -106,6 +106,17 @@ def run_value_funnel(direction: str, stage: str = "all",
                 a = result.l3_analyses[code]
                 summary = f"{a.financials_summary} | {a.valuation_position}"
             result.l4_finals.append(l4_deep_skeleton.build_deep_skeleton(code, name, summary))
+        # S108：L4 finals 财报异常5信号（≤3 只，新浪三表 → detect_anomalies）
+        # 限 L4 finals 不进 L2 全量（请求风暴防线：新浪 urllib 单表 12-25s ×3 表 ×60 候选会卡死）
+        try:
+            from data.sources.sina_financial import fetch_merged_periods
+            from value_funnel.anomaly import detect_anomalies
+            for code in finals:
+                periods = fetch_merged_periods(code)
+                if len(periods) >= 2:  # 不足2期 detect_anomalies 自标 inapplicable，这里省请求
+                    result.l4_anomalies[code] = detect_anomalies(periods)
+        except Exception:  # noqa: BLE001 — anomaly 故障不阻断 L4 主流程
+            pass
         layer.output_codes = finals
         layer.output_count = len(finals)
         result.layers.append(layer)

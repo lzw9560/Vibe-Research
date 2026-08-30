@@ -76,3 +76,33 @@ def fetch_raw(code: str, report_type: str = "lrb", num: int = 8) -> list[dict]:
     d = _fetch_json(code, report_type, num)
     report_list = d.get("result", {}).get("data", {}).get("report_list", {}) or {}
     return _parse(report_list, num)
+
+
+def fetch_merged_periods(code: str, num: int = 8):
+    """S108：同 code 调三表 fetch_raw → 按 period 对齐 merge raw → mapper 产完整 FinancialPeriod。
+
+    FinancialPeriod frozen，一次只填一表字段——故合并须在喂 mapper 前合并 raw dict
+    （mappers.merge_three_statements 按「报告期」对齐）。返按 period 倒序的完整
+    FinancialPeriod 列表（每期含 lrb+fzb+llb 字段 + share_capital）。
+
+    任一表 fetch 失败 → 该表当空 rows，merge 仍用其余两表（不阻断，缺失字段 None）。
+    全失败 → 返 []（调用方 anomaly 标 inapplicable / quality 回退 ths）。
+    """
+    from data.mappers import merge_three_statements, sina_financials_from_rows
+
+    try:
+        lrb = fetch_raw(code, "lrb", num)
+    except Exception:  # noqa: BLE001 — 单表失败不阻断，降级空 rows
+        lrb = []
+    try:
+        fzb = fetch_raw(code, "fzb", num)
+    except Exception:  # noqa: BLE001
+        fzb = []
+    try:
+        llb = fetch_raw(code, "llb", num)
+    except Exception:  # noqa: BLE001
+        llb = []
+    if not (lrb or fzb or llb):
+        return []
+    merged = merge_three_statements(lrb, fzb, llb)
+    return sina_financials_from_rows(merged, report_type="merged")

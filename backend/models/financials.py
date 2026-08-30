@@ -66,6 +66,7 @@ class FinancialPeriod(BaseModel):
     inventory: float | None = None
     fixed_assets: float | None = None
     goodwill: float | None = None
+    share_capital: float | None = None  # S108：实收资本(或股本)——解锁 quality 指标7 股本膨胀
     # ── 现金流量表 (llb) ──
     operating_cash_flow: float | None = None
     investing_cash_flow: float | None = None

@@ -461,6 +461,7 @@ _SINA_ALIASES: dict[str, list[str]] = {
     "inventory": ["存货"],
     "fixed_assets": ["固定资产", "固定资产净额"],
     "goodwill": ["商誉"],
+    "share_capital": ["实收资本(或股本)", "实收资本", "股本"],  # S108：解锁 quality 指标7 股本膨胀
     "operating_cash_flow": ["经营活动产生的现金流量净额", "经营活动现金流量净额"],
     "investing_cash_flow": ["投资活动产生的现金流量净额", "投资活动现金流量净额"],
     "financing_cash_flow": ["筹资活动产生的现金流量净额", "筹资活动现金流量净额"],
@@ -493,6 +494,29 @@ def sina_financials_from_rows(rows: list[dict], report_type: str) -> list[Financ
             # 全别名缺/空 → kwargs 不设该键 → FinancialPeriod 默认 None
         periods.append(FinancialPeriod(**kwargs))
     return periods
+
+
+def merge_three_statements(
+    lrb_rows: list[dict], fzb_rows: list[dict], llb_rows: list[dict]
+) -> list[dict]:
+    """S108：按「报告期」对齐三表 raw rows，合并成每期一个 dict（含三表科目）。
+
+    FinancialPeriod frozen 且 ``sina_financials_from_rows`` 传哪种表的 rows 只填该表字段
+    ——故合并须在喂 mapper 前合并 raw dict。本函数把同 报告期 的 lrb/fzb/llb 科目
+    ``dict.update`` 合并（含 ``_同比`` 后缀字段），按报告期倒序返回。
+
+    period 对齐：不强制三表期数一致（lrb 季报 vs fzb 年报期可能不同），按 报告期
+    严格匹配；某表独有的期也保留（另两表字段缺失→mapper 填 None，不臆造）。
+    """
+    by_period: dict[str, dict] = {}
+    for rows in (lrb_rows, fzb_rows, llb_rows):
+        for r in rows or []:
+            p = r.get("报告期")
+            if not p:
+                continue
+            by_period.setdefault(p, {}).update(r)
+    # 报告期倒序（YYYY-MM-DD 字典序=时间序，倒序=最新在前，与 fetch_raw 一致）
+    return [by_period[p] for p in sorted(by_period, reverse=True)]
 
 
 # ── KLine (百度股市通源) ──────────────────────────────────────────────────

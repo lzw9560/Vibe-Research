@@ -107,6 +107,7 @@ class ValueFunnelResult(BaseModel):
     l2_assessments: dict[str, QualityAssessment] = {}
     l3_analyses: dict[str, CompanyAnalysis] = {}
     l4_finals: list[DeepAnalysisSkeleton] = []
+    l4_anomalies: dict[str, AnomalyAssessment] = {}  # S108：L4 finals 财报异常5信号（新浪三表）
     as_of: datetime = Field(default_factory=datetime.now)
 
 

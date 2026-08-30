@@ -105,6 +105,25 @@ def get_analysis(code: str):
         raise HTTPException(500, f"分析骨架构建失败: {e}")
 
 
+# ---------- S108：财报异常 5 信号（新浪三表 → FinancialPeriod → detect_anomalies）----------
+
+@router.get("/api/value-funnel/{code}/anomaly")
+def get_anomaly(code: str):
+    """单只财报异常 5 信号（塞渠道/积压/利润质量/capex突增/非经常占比）。
+
+    S108：新浪三表 fetch_merged_periods → detect_anomalies。不足 2 期标 inapplicable（不臆造）。
+    数据源新浪 urllib（非 em_get），单只按需触发不进 L2 全量（请求风暴防线）。
+    """
+    try:
+        from data.sources.sina_financial import fetch_merged_periods
+        from value_funnel.anomaly import detect_anomalies
+        periods = fetch_merged_periods(code)
+        assessment = detect_anomalies(periods)
+        return {"data": assessment.model_dump(mode="json"), "period_count": len(periods)}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"异常信号计算失败: {e}") from e
+
+
 # ---------- L4 四大师 → AI 产出文字 ----------
 
 @router.post("/api/value-funnel/{code}/deep-ai")

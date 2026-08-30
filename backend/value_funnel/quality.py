@@ -125,43 +125,77 @@ def _metric_1_roe(rows: list[dict], years: int) -> models.QualityMetric:
     return m
 
 
-def _metric_2_fcf(rows: list[dict], years: int) -> models.QualityMetric:
-    """5年累计自由现金流为负排除。ths无capex，用经营现金流代理并标注。"""
+def _metric_2_fcf(rows: list[dict], years: int, code: str = "") -> models.QualityMetric:
+    """5年累计自由现金流为负排除。S108：ths无capex → 新浪三表取真 OCF−capex 算 FCF。"""
     m = models.QualityMetric(index=2, name="5年累计自由现金流", threshold=0.0)
     if years < 5:
         m.inapplicable, m.inapplicable_reason = True, "上市不足5年，数据不足"
         m.evidence = "上市年限<5，无法计算5年累计FCF"
         return m
+    # S108：优先新浪三表绝对额 OCF−capex 算真 FCF
+    if code:
+        try:
+            from data.sources.sina_financial import fetch_merged_periods
+            periods = fetch_merged_periods(code, num=5)
+            ocf_list = [p.operating_cash_flow for p in periods if p.operating_cash_flow is not None]
+            capex_list = [p.capex for p in periods if p.capex is not None]
+            if len(ocf_list) >= 1 and len(capex_list) >= 1:
+                n = min(len(ocf_list), len(capex_list), 5)
+                fcf = sum(ocf_list[:n]) - sum(capex_list[:n])
+                m.value = round(fcf, 2)
+                m.passed = fcf >= 0
+                m.evidence = f"5年累计FCF={fcf:.0f}(新浪: OCF累计{sum(ocf_list[:n]):.0f}−capex累计{sum(capex_list[:n]):.0f})，阈值≥0"
+                return m
+        except Exception:  # noqa: BLE001 — 新浪失败降级 ths 代理口径
+            pass
+    # 降级：ths 每股 OCF 累计代理（不扣 capex）
     ocf_ps = [_to_float(r.get("每股经营现金流")) for r in rows[-5:]]
     ocf_ps = [x for x in ocf_ps if x is not None]
     if not ocf_ps:
         m.missing, m.evidence = True, "经营现金流数据未取得"
         return m
-    total = sum(ocf_ps)  # 每股口径累计（代理，未扣capex）
+    total = sum(ocf_ps)
     m.value = round(total, 4)
     m.passed = total >= 0
-    m.evidence = f"5年累计每股经营现金流={total:.4f}(代理，capex未取)，阈值≥0"
+    m.evidence = f"5年累计每股经营现金流={total:.4f}(代理，新浪capex未取)，阈值≥0"
     return m
 
 
-def _metric_3_interest(rows: list[dict], years: int, industry: str) -> models.QualityMetric:
-    """利息覆盖倍数(EBIT/利息)<2 排除。银行/保险不适用。"""
+def _metric_3_interest(rows: list[dict], years: int, industry: str, code: str = "") -> models.QualityMetric:
+    """利息覆盖倍数(EBIT/利息)<2 排除。银行/保险不适用。S108：ths缺→新浪取 financial_expense/total_profit。"""
     m = models.QualityMetric(index=3, name="利息覆盖倍数", threshold=2.0)
     if _is_bank_insurance(industry):
         m.inapplicable, m.inapplicable_reason = True, f"行业({industry})不适用利息覆盖"
         m.evidence = "银行/保险/证券不适用第3条"
         return m
-    # ths 摘要常无 EBIT/利息费用；尽力取利润总额与财务费用
+    # S108：优先新浪三表 total_profit/financial_expense（绝对额稳定）
+    if code:
+        try:
+            from data.sources.sina_financial import fetch_merged_periods
+            periods = fetch_merged_periods(code, num=2)
+            if len(periods) >= 1:
+                p = periods[0]
+                profit = p.total_profit or p.operating_profit
+                fin_cost = p.financial_expense
+                if profit is not None and fin_cost is not None and fin_cost != 0:
+                    ratio = profit / abs(fin_cost)
+                    m.value = round(ratio, 2)
+                    m.passed = ratio >= 2.0
+                    m.evidence = f"利润总额/|财务费用|={ratio:.2f}(新浪绝对额)，阈值2"
+                    return m
+        except Exception:  # noqa: BLE001 — 新浪失败降级 ths
+            pass
+    # 降级：ths 摘要利润总额/财务费用
     latest = rows[-1] if rows else {}
     profit = _to_float(latest.get("利润总额") or latest.get("营业利润"))
     fin_cost = _to_float(latest.get("财务费用"))
     if profit is None or fin_cost is None or fin_cost == 0:
-        m.missing, m.evidence = True, "EBIT/利息费用数据未取得(ths摘要无此字段)"
+        m.missing, m.evidence = True, "EBIT/利息费用数据未取得(ths摘要+新浪均无此字段)"
         return m
     ratio = profit / abs(fin_cost)
     m.value = round(ratio, 2)
     m.passed = ratio >= 2.0
-    m.evidence = f"利润总额/|财务费用|={ratio:.2f}，阈值2(代理口径)"
+    m.evidence = f"利润总额/|财务费用|={ratio:.2f}(ths代理口径)，阈值2"
     return m
 
 
@@ -227,15 +261,32 @@ def _metric_6_net_margin(rows: list[dict], years: int) -> models.QualityMetric:
 
 
 def _metric_7_share_dilution(code: str, years: int) -> models.QualityMetric:
-    """5年总股本膨胀>20%(非并购)排除。历史股本 ths 摘要不直接提供。"""
+    """5年总股本膨胀>20%(非并购)排除。S108：新浪三表 share_capital 历史序列算膨胀率。"""
     m = models.QualityMetric(index=7, name="5年总股本膨胀", threshold=20.0)
     if years < 5:
         m.inapplicable, m.inapplicable_reason = True, "上市不足5年，数据不足"
         m.evidence = "上市年限<5"
         return m
-    # ths 摘要无历史股本序列；标记未取得，需人工/其他源核实
+    # S108：新浪三表 share_capital（实收资本(或股本)）历史序列
+    try:
+        from data.sources.sina_financial import fetch_merged_periods
+        periods = fetch_merged_periods(code, num=10)
+        shares = [p.share_capital for p in periods if p.share_capital is not None]
+        if len(shares) >= 2:
+            # periods 倒序（最新在前），取最新 vs 5 年前（或最早可得）
+            latest = shares[0]
+            oldest = shares[-1] if len(shares) >= 5 else shares[-1]
+            if oldest and oldest != 0:
+                dilution = (latest - oldest) / oldest * 100
+                m.value = round(dilution, 2)
+                m.passed = dilution <= 20.0
+                m.evidence = f"股本膨胀={dilution:.2f}%(新浪share_capital: 最新{latest:.0f} vs 最早{oldest:.0f})，阈值≤20%"
+                return m
+    except Exception:  # noqa: BLE001 — 新浪失败降级 missing
+        pass
+    # 降级：ths 摘要无历史股本序列
     m.missing = True
-    m.evidence = "历史股本序列未取得(ths摘要无)，需人工核实5年股本变化"
+    m.evidence = "历史股本序列未取得(新浪+ths均无)，需人工核实5年股本变化"
     return m
 
 
@@ -287,8 +338,8 @@ def compute_quality(code: str, rank: Optional[int] = None) -> models.QualityAsse
 
     metrics = [
         _metric_1_roe(rows, years),
-        _metric_2_fcf(rows, years),
-        _metric_3_interest(rows, years, industry),
+        _metric_2_fcf(rows, years, code),
+        _metric_3_interest(rows, years, industry, code),
         _metric_4_gross_margin(rows, years),
         _metric_5_cash_quality(rows, years),
         _metric_6_net_margin(rows, years),

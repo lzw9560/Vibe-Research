@@ -1,10 +1,24 @@
 """S005 quality 单测：去劣7条 + 豁免 + 双口径 + 年限降级 + 银行不适用。
-全部 monkeypatch 取数函数，免联网。"""
+全部 monkeypatch 取数函数，免联网。
 
+S108：quality 第2/3/7 条新增新浪三表回退。本测试文件测 quality 既有逻辑（ths 口径），
+故 mock 新浪 fetch_merged_periods 返空（模拟新浪不可用 → 降级 ths 代理/missing）。
+S108 新浪回退行为在 tests/test_s108_sina_financials.py 测。
+"""
 import pytest
 
 import value_funnel.quality as q
 from value_funnel import models
+
+
+@pytest.fixture(autouse=True)
+def _mock_sina_empty(monkeypatch):
+    """S108：mock 新浪 fetch_merged_periods 返空，让 quality 走 ths 代理/missing 降级路径。
+
+    既有 quality 测试测 ths 口径逻辑，不依赖新浪；新浪回退在 test_s108 测。
+    """
+    monkeypatch.setattr("data.sources.sina_financial.fetch_merged_periods",
+                        lambda code, num=8: [])
 
 
 # ---------- 测试用历史数据（10年，优质公司） ----------
