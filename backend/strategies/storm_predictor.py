@@ -23,7 +23,7 @@ class StormFactor:
     name: str
     score: float  # 0-100
     detail: str
-    data_status: str = "ok"  # ok | missing
+    data_status: str = "ok"  # ok | degraded | fallback_current | missing
 
 
 @dataclass(frozen=True)
@@ -81,14 +81,17 @@ def _collect_global_factor(date: str) -> StormFactor:
     # 优先读前一交易日夜间快照（修历史 bug——预测交易日读前日夜间而非当日当前）
     snap = get_t1_global_snapshot(date)
     indices = (snap or {}).get("global_indices") if snap else None
-    data_status = "ok"
+    # S116：读 snapshot provenance——degraded 快照（fetch 失败/空）标 degraded，
+    # 对齐下方 fallback_current 诚实范式（非 ok 假装好快照）
+    data_status = "degraded" if (snap and snap.get("is_degraded")) else "ok"
     if not indices:
-        # fallback 当前（无前日快照，标 fallback_current）
+        # fallback 当前（无前日好快照/降级，取当前 + 标；degraded 源保留 degraded 标）
         try:
             import market  # noqa: PLC0415
 
             indices = market.get_global_indices() or []
-            data_status = "fallback_current"
+            if data_status == "ok":
+                data_status = "fallback_current"
         except Exception as exc:  # noqa: BLE001
             return StormFactor("外围隔夜", 50.0, f"采集失败: {exc}", "missing")
 
@@ -132,7 +135,13 @@ def _collect_global_factor(date: str) -> StormFactor:
     w_sum = sum(w for _, _, w in present)
     combined = sum(c * (w / w_sum) for _, c, w in present) if w_sum > 0 else 0.0
     score = max(0.0, min(100.0, 50 - combined * 15))
-    src = "T-1 夜间快照" if data_status == "ok" else "当前(fallback)"
+    # S116：src 据 data_status 分档——ok=T-1 夜间；degraded=T-1 降级已 fallback 当前；余=无 T-1 fallback
+    if data_status == "ok":
+        src = "T-1 夜间快照"
+    elif data_status == "degraded":
+        src = "T-1 degraded(fallback当前)"
+    else:
+        src = "当前(fallback)"
     parts = [f"{n}{c:+.2f}%" for n, c, _ in present]
     detail = f"[{src}] {' / '.join(parts)}"
     if missing_names:

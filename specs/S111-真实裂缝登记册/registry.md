@@ -208,7 +208,7 @@ S115 scan（wf_fe0ad61d，7路+综合+对抗核实）扫 registry「本轮未覆
 | sina-fallback-no-min-bars-maxabs-drift | eastmoney.py:475 | 新浪降级路径加对称 len>=5 门（对齐东财 :466），<5→[] 落回 missing |
 | storm-predictor-internal-null-sti-as-zero-calm | storm_predictor.py:162 | STI NULL 列/source_ok=0/no-row → missing+50.0（中性基线，非 0.0+ok 假平静） |
 
-**6 actually_honest**（verify 推翻合成 over-claim，登记非修）：hithink-trio-bare-empty / query-quote-bare-empty-tencent / mcp-iserror-false-on-bare-empty / storm-predictor-global-discards-is-delayed / storm-daemon-snapshot-no-provenance（诚实但 defect，last-write-wins 待 availability 切片）/ portfolio-realtime-pnl-no-calendar-gate。皆诚实返空非 fabricate（防住 6 假阳性缝补）。
+**6 actually_honest**（verify 推翻合成 over-claim，登记非修）：hithink-trio-bare-empty / query-quote-bare-empty-tencent / mcp-iserror-false-on-bare-empty / storm-predictor-global-discards-is-delayed / storm-daemon-snapshot-no-provenance（✅ S116 已修 availability，见 S116 状态节）/ portfolio-realtime-pnl-no-calendar-gate。皆诚实返空非 fabricate（防住 6 假阳性缝补）。
 
 **1 uncertain**：gstock-us-hk-no-calendar-gate（周末返周五收盘 is_delayed=False 无 trade_date，live API 消费者难区分；非 fabricate，语义缺口，可选修 gstock 请求 f86 date）。
 
@@ -216,7 +216,21 @@ S115 scan（wf_fe0ad61d，7路+综合+对抗核实）扫 registry「本轮未覆
 
 **review 补修 2**：R2 broke S111 #4 test（2 行 fixture 被 R2 min-bars 门 gated）→ #4 fixture 扩 5 行（过门测 source provenance，#16 测 <5→missing）；R3 新 helper `_load_sti_internal_signals` bare except 无 log → 加 logger.warning（对齐 S111 R7/S112 anti-pattern 修复）。
 
-**撒谎总账**：14（S111/S112）+ 3（S115）= **17 confirmed_lying 全修**。诚实登记 4（S111）+ 15（S115）= 19。registry 覆盖从 S111 的 18 扩到 36（18+18）。「本轮未覆盖维度」8 项已扫（S115），剩余 open：baostock EOD 时点 / 多 worker 硬化 / baostock stuck-mark 动否 / storm-daemon last-write-wins availability / premarket off-by-one 提 medium 级否——见 spec §9。
+**撒谎总账**：14（S111/S112）+ 3（S115）= **17 confirmed_lying 全修**。诚实登记 4（S111）+ 15（S115）= 19。registry 覆盖从 S111 的 18 扩到 36（18+18）。「本轮未覆盖维度」8 项已扫（S115），剩余 open：baostock EOD 时点 / 多 worker 硬化 / baostock stuck-mark 动否 / storm-daemon last-write-wins availability（✅ S116 已修）/ premarket off-by-one 提 medium 级否——见 spec §9。
+
+## S116 实现后状态（2026-08-30，storm-daemon availability）
+
+S116 修 S115 scan #7 storm-daemon-snapshot-no-provenance-last-write-wins（verify 判 actually_honest 但明确称"worth fixing independent of lying"的可用性缺陷）。impl（wf_4e5e0018）+ 3 路 review。4/4 confirmed_available，10 availability 测试全绿，全量 2440 passed 0 回归。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| fetch_snapshot provenance | ✅ 已修 | R1 global_fetch_ok=bool(global_indices 非空)；失败/空→fetch_ok=False/is_degraded=True 落盘（storm_daemon.py:41,46,53,54） |
+| get_t1_global_snapshot 过滤 | ✅ 已修 | R2 从盲 snaps[-1] 改过滤 `[s for s if global_indices and fetch_ok]` 取最近好；全坏→reversed 取最近坏 + `{**s,is_degraded:True}` 不可变拷贝（:109-118） |
+| storm_predictor 读 provenance | ✅ 已修 | R3 _collect_global_factor 读 snap.is_degraded→data_status='degraded'（非 ok 假装）；fallback 仅当 ok 才改 fallback_current（:86-96） |
+
+**review 补修 3**：MEDIUM 全坏分支零覆盖（R4.2 mock 掉 get_t1 绕过）→ 加直接喂 [bad1,bad2] 测真实 get_t1 钉死 reversed+is_degraded；LOW fetch_snapshot exception 仅 debug → 升 warning（连续多日失败运维可见）；LOW StormFactor.data_status 注释 `# ok|missing` 陈旧 → 更新 `# ok|degraded|fallback_current|missing`。
+
+storm cluster 终账：#8 NULL-sti（S115 R3 修）、#6 is_delayed（verify 推翻 honest 不修）、#7 last-write-wins（S116 修）——全收口。
 
 ## 本轮未覆盖维度（completeness gaps，后续切片补扫）
 - AI 出口诚实（chat.TOOLS/_exec_tool→registry.execute）：数据工具失败时返给 LLM 的是诚实 'unavailable' 还是 bare None/[]（LLM 可能据此臆造）——数据进入 AI 研判的最后一跳

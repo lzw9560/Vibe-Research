@@ -29,18 +29,31 @@ _KEEP = 20  # 每日保留最近 20 个快照
 
 
 def fetch_snapshot() -> dict:
-    """存外围+新闻快照（date+time → JSON，每日一文件，保留最近 20 个快照）。"""
+    """存外围+新闻快照（date+time → JSON，每日一文件，保留最近 20 个快照）。
+
+    S116 provenance：global_indices 失败/空→fetch_ok=False/is_degraded=True 落盘，
+    供 get_t1_global_snapshot 过滤 last-write-wins 遮蔽坏快照（非撒谎修复，是可用性）。
+    """
     now = _dt.now()
     snap: dict = {"ts": now.isoformat(), "date": now.strftime("%Y-%m-%d")}
 
-    # 外围指数
+    # 外围指数（provenance 主体：fetch_ok/is_degraded 据此判定，非新闻——新闻有独立 fallback）
+    global_fetch_ok = False
     try:
         import market  # noqa: PLC0415
 
         snap["global_indices"] = market.get_global_indices() or []
+        global_fetch_ok = bool(snap["global_indices"])
+        if not global_fetch_ok:
+            _logger.debug("[storm-daemon] 外围快照空")
     except Exception as exc:  # noqa: BLE001
         snap["global_indices"] = []
-        _logger.debug("[storm-daemon] 外围快照失败: %s", exc)
+        # 真 exception（非空结果正常抖动）升 warning——daemon 连续多日 fetch 失败
+        # 运维侧可见（provenance 落盘已是数据管道诚实信号，此为运维可见性补）
+        _logger.warning("[storm-daemon] 外围快照失败: %s", exc)
+    # S116 provenance 落盘（成功→fetch_ok=True/is_degraded=False；空/失败→False/True）
+    snap["fetch_ok"] = global_fetch_ok
+    snap["is_degraded"] = not global_fetch_ok
 
     # 新闻（fetch_radar 同步阻塞 10-30s，但在 daemon 线程不阻塞主流程）
     try:
@@ -77,7 +90,9 @@ def fetch_snapshot() -> dict:
 def get_t1_global_snapshot(date: str) -> dict | None:
     """读前一交易日（T-1）夜间外围快照（predict_storm 用，替代 get_global_indices 当前）。
 
-    返回前一交易日最后一个快照（夜间美股收盘后）。无快照返 None（调用方 fallback 当前）。
+    S116 last-write-wins 修：不再盲返 snaps[-1]——过滤 empty/degraded 快照
+    （global_indices==[] 或 fetch_ok==False），取最近非空夜间好快照；全坏→返最近坏 +
+    标 is_degraded（供 storm_predictor 据 provenance 诚实标 degraded/fallback）。无快照返 None。
     S088 grill Q1 修：原 last_trading_date(d) 在交易日返回 d 本身，读当日快照而非前日夜间；
     改用 prev_trading_date（先退一日再回退）。
     """
@@ -92,7 +107,18 @@ def get_t1_global_snapshot(date: str) -> dict | None:
         snaps = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(snaps, list) or not snaps:
             return None
-        return snaps[-1]  # T-1 最后一个快照（夜间）
+        # S116：过滤遮蔽坏快照，取最近非空夜间好快照（fetch_ok 缺省 True 兼容旧无 provenance 快照）
+        good = [
+            s for s in snaps
+            if isinstance(s, dict) and s.get("global_indices") and s.get("fetch_ok", True)
+        ]
+        if good:
+            return good[-1]
+        # 全坏→返最近坏 + 标 degraded（不可变拷贝，不污染落盘；供 storm_predictor 诚实标）
+        for s in reversed(snaps):
+            if isinstance(s, dict):
+                return {**s, "is_degraded": True}
+        return None
     except Exception:  # noqa: BLE001
         return None
 

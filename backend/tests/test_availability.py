@@ -21,6 +21,8 @@ R10 chip-cyq 自建走 em_get（S114）：offline fallback 4 态 + live AC1，�
 """
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -251,3 +253,131 @@ def test_chip_distribution_live_returns_nonempty_with_numeric_ratio():
     # R6：5 键 shape 不变（值可 None 经 g() 清洗，键必在）
     for key in ("avg_cost", "concentration", "90_cost", "70_cost"):
         assert key in result, f"R6 5-key shape 缺键 {key}"
+
+
+# ===========================================================================
+# S116 R4：storm-daemon snapshot availability —— bad 不遮蔽 good + 全坏诚实
+# 对齐 S111/S113/S114 AAA + monkeypatch 风格。impl 并行做中，测试针对 spec 期望
+# 行为，完成时可能 RED（正常）——不为过而弱化断言。
+#
+# 范式：storm_daemon.get_t1_global_snapshot 原 last-write-wins（盲返 snaps[-1]），
+# 若 T-1 最后一次跑（23:55 抖动返空 / 进程死前 14:00 美股盘前）是降级/陈旧快照，
+# 静默遮蔽同日更早（21:00）的好夜间快照。S116 R1 fetch_snapshot 加 provenance
+# （fetch_ok/is_degraded）落盘；R2 get_t1_global_snapshot 过滤 empty/degraded 取最近
+# 好快照（非盲 snaps[-1]）；R3 storm_predictor 读 provenance 标 degraded（非 ok 假装）。
+# mock 对象：storm_daemon._SNAP_DIR（快照目录）+ vr_paths.prev_trading_date（钉死前日，
+# 免依赖 holidays.json）+ storm_daemon.get_t1_global_snapshot（直接注 snap）+ market.
+# get_global_indices（fallback 当前外围），均经 test_s088_storm_predictor 验证可用。
+# ===========================================================================
+
+
+def test_get_t1_snapshot_bad_does_not_mask_good(tmp_path, monkeypatch):
+    """R4.1/A1：bad snapshot（empty + fetch_ok=False）不遮蔽 good——get_t1_global_snapshot
+    取到最近好快照（非盲 snaps[-1] 的坏快照）。
+
+    S116 R2：原 get_t1_global_snapshot 盲返 snaps[-1]，T-1 最后一次跑（23:55 抖动
+    返空）的坏快照遮蔽同日更早（21:00）的好夜间快照。R2 改过滤 empty/degraded
+    （fetch_ok=False），取最近好快照。本用例 snaps=[good(21:00), bad(23:55 empty)]
+    （bad 在末尾=snaps[-1]），断言返 good 的 indices 非 [] + ts=21:00，非 bad 的空。
+    盲 snaps[-1] 的旧逻辑必 RED（返 bad 空 []）——这正是要钉死的遮蔽 bug。
+    """
+    from strategies import storm_daemon as sd
+
+    # Arrange：T-1 日两快照——good(21:00) 在前，bad(23:55 empty+fetch_ok=False) 在后
+    good_snap = {
+        "ts": "2026-08-28T21:00:00", "date": "2026-08-28",
+        "global_indices": [{"name": "道琼斯", "change_pct": -1.5},
+                            {"name": "标普500", "change_pct": -1.2}],
+        "fetch_ok": True,  # S116 R1 provenance：成功
+    }
+    bad_snap = {
+        "ts": "2026-08-28T23:55:00", "date": "2026-08-28",
+        "global_indices": [],          # empty——fetch 抖动返空/降级
+        "fetch_ok": False,             # S116 R1 provenance：失败/空→False
+        "is_degraded": True,
+    }
+    monkeypatch.setattr(sd, "_SNAP_DIR", tmp_path)
+    # prev_trading_date 钉死（纯测过滤逻辑，免依赖 holidays.json 日历）
+    monkeypatch.setattr("vr_paths.prev_trading_date",
+                        lambda d: datetime(2026, 8, 28))
+    (tmp_path / "2026-08-28.json").write_text(
+        json.dumps([good_snap, bad_snap], ensure_ascii=False), encoding="utf-8")
+
+    # Act
+    result = sd.get_t1_global_snapshot("2026-08-30")
+
+    # Assert：返 good 快照（ts=21:00 + indices 非空），非盲 snaps[-1] 的 bad 空
+    assert result is not None
+    assert result["ts"] == good_snap["ts"]                            # 21:00 good 非 23:55 bad
+    assert result["global_indices"] == good_snap["global_indices"]   # good 的非空 indices
+    assert result["global_indices"]                                   # 非 []（非 bad 的空）
+
+
+def test_collect_global_factor_all_degraded_snap_not_ok(monkeypatch):
+    """R4.2/A2：全坏快照（empty + fetch_ok=False）→ _collect_global_factor 标
+    degraded/fallback_current/missing（诚实，非 'ok' 假装）。
+
+    S116 R3：storm_predictor 读 snapshot provenance，degraded 快照→data_status='degraded'
+    （非 ok）。本用例 mock get_t1_global_snapshot 返 degraded 快照（fetch_ok=False /
+    is_degraded=True / global_indices=[]），mock market.get_global_indices 返当前非空
+    数据（fallback 可得），断言即便 fallback 取到当前数据，data_status 仍非 'ok'——
+    不假装 degraded 的 T-1 夜间快照是干净的 ok 读。诚实降级范式对齐 S115 fallback_current
+    （degraded/fallback_current 均诚实，spec A2 接受二者，本测只钉死"非 ok 假装"）。
+    """
+    from strategies import storm_daemon, storm_predictor
+    import market
+
+    # Arrange：T-1 快照全坏（empty + fetch_ok=False + is_degraded）
+    degraded_snap = {
+        "ts": "2026-08-28T23:55:00", "date": "2026-08-28",
+        "global_indices": [],
+        "fetch_ok": False,
+        "is_degraded": True,
+    }
+    monkeypatch.setattr(storm_daemon, "get_t1_global_snapshot",
+                        lambda d: degraded_snap)
+    # fallback 当前外围非空（测"fallback 取到但不得假装 ok"路径，非全空→missing 的退化态）
+    monkeypatch.setattr(market, "get_global_indices",
+                        lambda: [{"name": "道琼斯", "change_pct": -0.8},
+                                 {"name": "标普500", "change_pct": -0.5}])
+
+    # Act
+    factor = storm_predictor._collect_global_factor("2026-08-30")
+
+    # Assert：data_status 诚实（degraded/fallback_current/missing），非 'ok' 假装
+    assert factor.data_status != "ok"
+    assert factor.data_status in ("degraded", "fallback_current", "missing")
+
+
+def test_get_t1_snapshot_all_bad_returns_most_recent_with_degraded(tmp_path, monkeypatch):
+    """MEDIUM review fix：全部坏快照（empty+fetch_ok=False）→ get_t1_global_snapshot
+    返最近坏（reversed）+ 强制 is_degraded=True（钉死全坏分支 provenance 产出，非 ok 假装）。
+
+    R4.2 mock 掉 get_t1_global_snapshot 绕过全坏分支（storm_daemon.py:116-118），本测直接
+    喂 [bad1,bad2] 到真实 get_t1（bad 无 is_degraded 字段，仅 fetch_ok=False），断言返 bad2
+    （reversed 最近）+ is_degraded=True（分支 {**s,is_degraded:True} 强制标）。若分支漏标
+    或 reversed 取错，predictor 拿无 is_degraded 快照→标 ok→A2 端到端诚实降级失效。
+    """
+    from strategies import storm_daemon as sd
+
+    # Arrange：T-1 日两坏快照——bad1(22:00) 在前，bad2(23:30 empty) 在后=snaps[-1]，
+    # 均无 is_degraded 字段（仅 fetch_ok=False），测全坏分支强制标 is_degraded
+    bad1 = {"ts": "2026-08-28T22:00:00", "date": "2026-08-28",
+            "global_indices": [], "fetch_ok": False}
+    bad2 = {"ts": "2026-08-28T23:30:00", "date": "2026-08-28",
+            "global_indices": [], "fetch_ok": False}
+    monkeypatch.setattr(sd, "_SNAP_DIR", tmp_path)
+    monkeypatch.setattr("vr_paths.prev_trading_date", lambda d: datetime(2026, 8, 28))
+    (tmp_path / "2026-08-28.json").write_text(
+        json.dumps([bad1, bad2], ensure_ascii=False), encoding="utf-8")
+
+    # Act
+    result = sd.get_t1_global_snapshot("2026-08-30")
+
+    # Assert：返最近坏（bad2, reversed 取最近）+ 强制 is_degraded=True（全坏分支产出 provenance）
+    assert result is not None
+    assert result["ts"] == bad2["ts"]        # reversed 取最近坏（非盲 snaps[-1]=bad2，但经 reversed 逻辑确认）
+    assert result["is_degraded"] is True    # 全坏分支强制标 degraded（非 ok 假装好快照）
+    # 不可变拷贝：原 snaps 文件未被 {**s,is_degraded} 污染（bad2 原无 is_degraded，落盘仍无）
+    reloaded = json.loads((tmp_path / "2026-08-28.json").read_text(encoding="utf-8"))
+    assert "is_degraded" not in reloaded[1]  # 原始 bad2 未被污染（分支返新 dict 非原地改）
