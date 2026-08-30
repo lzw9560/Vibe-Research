@@ -12,11 +12,18 @@ from __future__ import annotations
 
 import logging
 
+from circuit_breaker import CircuitBreakerConfig, get_breaker
 from ._common import DependencyMissing
 
-# S094 熔断：chip_distribution 连续失败计数器——3 次失败后直接返 {} 不再请求
-# （akshare 服务端全面断连时逐只 TCP 超时 10-20s，52 只最坏 500s；熔断后降到 ~30s）
-_chip_fail_streak: int = 0
+# S094/S113 熔断：chip_distribution 走通用 circuit_breaker（对齐 transport eastmoney breaker）。
+# 连续失败 3 次→OPEN 快速返 {} 不发请求；60s 后 half-open 放试探请求，成功复位 CLOSED，
+# 失败回 OPEN（自愈）。原 S094 手搓 _chip_fail_streak 计数器复位仅走成功路径、熔断后不可达
+# →进程生命周期内永久 OPEN 直到后端重启；S113 对齐通用 breaker 修复此可用性悬崖。
+_CHIP_BREAKER_NAME = "akshare_chip"
+_CHIP_BREAKER_CONFIG = CircuitBreakerConfig(
+    failure_threshold=3,    # 对齐原 _chip_fail_streak >= 3 阈值
+    recovery_timeout=60.0,  # OPEN 后 60s 进 half-open（对齐 transport eastmoney breaker 默认）
+)
 
 
 def _akshare():
@@ -141,12 +148,17 @@ def chip_distribution(code: str) -> dict:
     S094 修复：akshare stock_cyq_em 服务端断连时 requests 无 socket 超时会无限挂起，
     52 只逐只调时一只挂住整个 _collect 卡死。加 8s 硬超时（ThreadPoolExecutor 包裹），
     超时返 {}（同异常路径，diagnosis 标 missing 不阻断 pipeline）。
-    S094 补丁：连续 3 次失败熔断——akshare 服务端全面断连时逐只 TCP 超时 10-20s，
-    52 只最坏 500s；3 次失败后直接返 {} 不再请求，降到 ~30s。
+    S113 自愈：熔断走通用 circuit_breaker（对齐 transport eastmoney breaker）——
+    连续失败 3 次→OPEN 快速返 {} 不发请求；60s 后 half-open 放试探请求，成功累计
+    复位 CLOSED，失败回 OPEN。原 S094 手搓计数器复位仅走成功路径、熔断后不可达→
+    永久 OPEN 直到后端重启，此切片修复为可自愈。返 {} 仍诚实（不臆造数值）。
     """
-    global _chip_fail_streak
-    # 熔断器：连续失败 3 次后直接返 {}（服务端全面断连时逐只试无意义）
-    if _chip_fail_streak >= 3:
+    breaker = get_breaker(_CHIP_BREAKER_NAME, _CHIP_BREAKER_CONFIG)
+    # 熔断器：OPEN 时快速失败返 {}（60s 后自动转 half-open 放试探请求，自愈）
+    if not breaker.allow_request():
+        logging.getLogger("astock").debug(
+            "chip_distribution(%s) 熔断中（state=%s），快速失败返 {}",
+            code, breaker.state.value)
         return {}
 
     ak = _akshare()
@@ -171,17 +183,19 @@ def chip_distribution(code: str) -> dict:
 
     if t.is_alive():
         # 线程还在跑（超时）——daemon 线程不等待，主进程退出时自动杀
-        _chip_fail_streak += 1
+        breaker.record_failure()
         logging.getLogger("astock").warning(
-            "chip_distribution(%s) 8s 超时（连续失败 %d/3）", code, _chip_fail_streak)
+            "chip_distribution(%s) 8s 超时（state=%s）", code, breaker.state.value)
         return {}
     if exc_holder:
-        _chip_fail_streak += 1
+        breaker.record_failure()
         logging.getLogger("astock").warning(
-            "chip_distribution(%s) akshare 取数失败（连续 %d/3）: %s", code, _chip_fail_streak, exc_holder[0])
+            "chip_distribution(%s) akshare 取数失败（state=%s）: %s",
+            code, breaker.state.value, exc_holder[0])
         return {}
-    # 成功——重置失败计数
-    _chip_fail_streak = 0
+    # 调用完成（含空 df = 该股无筹码，非服务故障）——记录成功；
+    # half-open 试探成功累计达阈值（默认 2 次）即复位 CLOSED，熔断自愈。
+    breaker.record_success()
     df = result_holder["df"]
     if df is None or df.empty:
         return {}

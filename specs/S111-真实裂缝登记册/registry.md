@@ -8,7 +8,7 @@
 
 | 类别 | 条数 | 状态 |
 |---|---|---|
-| 诚实（仅登记，含 3 条 Tier-2 健壮性/防封修复项） | 4 | 登记完成 |
+| 诚实（S113 修 chip-breaker+premarket；chip-cyq 待 S114；fund-flow-dual-break 仅登记） | 4 | 2已修+2登记 |
 | Tier-1 撒谎（S111 已实现，全 confirmed_honest） | 6 | 已修 |
 | Tier-2 撒谎（S112 已实现，全 confirmed_honest，含已知限制） | 8 | 已修 |
 
@@ -161,6 +161,21 @@
 - **gstock is_delayed 无消费者**：backend 真标 is_delayed 透传到 /api/global/indices JSON 边界，但 grep 全仓零 reader（前端未消费）。"延时当实时"危害 backend 已诚实但未端到端闭环→前端任务。
 - **DRY _resolve_pool_provenance / _resolve_sector_provenance**：两 helper 近乎逐字重复，日后易分叉→抽共享 helper（纯质量，非阻塞）。
 - **extreme degraded 仍缓存 5min**：fix 1 只跳过 missing 缓存，degraded 仍缓存（陈旧计数有参考价值，可接受；若天气熔断要 best-effort 陈旧判定可改）。
+
+## S113 实现后状态（2026-08-30，availability 切片）
+
+S113 修 2 条诚实缺陷项 availability（非性质撒谎）+ 1 文档化。3 路 review 全 confirmed_available，5 测试全绿，全量 2432 passed 0 回归。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| chip-breaker-permanent-no-recovery | ✅ 已修 | R1：删除手搓 _chip_fail_streak，复用通用 circuit_breaker.get_breaker("akshare_chip", config=failure_threshold=3/recovery_timeout=60/success_threshold=2)，OPEN→60s→half-open→2次成功复位/失败回 OPEN。返 {} 诚实不变。对齐 transport.py/worldmonitor/eastmoney/hithink_src sibling。 |
+| premarket-selection-unguarded-cache-read | ✅ 已修 | R2：premarket_selection.py:96 加 _load_kline_cache() helper（exists()+try→{}）+ market_note data-missing，对齐 first_board_filter:357-384。缺 cache 返 [] 非 500，守 S069 优雅降级契约。 |
+| chip-data-bypasses-generic-em-breaker | ⏳ 待 S114 | 非平凡（自建 cyq 取数走 em_get 重写端点解析），独立研究切片 S114。 |
+| source-key-leak（deferred LOW） | 📝 文档化 | R3：fund flow API 响应带 source provenance（_with_source 加性），前端可后续消费 degraded 徽章。不结构性收窄（provenance 对 R4/S112 cross-source 检测有用）。 |
+
+**review 观察（2 LOW，非 bug，无需改码）**：
+- scheduled_tasks:1860 守卫实为 c1a499e8（S101, 2026-08-28）既有，早于 S113——spec R2"同型裸读同崩"前提 stale，agent 查证后未加冗余守卫（不做"看起来正确但没用"的事）。S113 只加了钉死测试。availability 达成与哪个 commit 加守卫无关。
+- CircuitBreaker 状态变更有无 threading.Lock——既有缺陷，与 transport.py 同款，影响低（当前无并发筹码取数路径），后续若并发成真再加锁。
 
 ## 本轮未覆盖维度（completeness gaps，后续切片补扫）
 - AI 出口诚实（chat.TOOLS/_exec_tool→registry.execute）：数据工具失败时返给 LLM 的是诚实 'unavailable' 还是 bare None/[]（LLM 可能据此臆造）——数据进入 AI 研判的最后一跳

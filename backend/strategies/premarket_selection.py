@@ -12,6 +12,7 @@ universe：cache 1121 股（§44 测试的 broad set，历史涨停股）。
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,28 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 KLINE_CACHE = ROOT.parent / ".vibe-research" / "baostock_kline_cache.json"
+
+_logger = logging.getLogger(__name__)
+
+
+def _load_kline_cache() -> dict[str, list[dict]]:
+    """读 baostock_kline_cache.json，缺失/损坏返空 dict（降级不崩，对齐 first_board_filter 范式）。
+
+    baostock 未装或首次运行时缓存文件不存在，裸读会抛 FileNotFoundError 冒泡至 endpoint
+    返 500（违 S069"dev 无 baostock 降级不崩"契约）。此处 exists()+try 守卫，返 {} 使调用方
+    降级为空候选列表而非崩。返 {} 诚实（不臆造 kline），与 first_board_filter.py
+    ``_get_kline_cache`` / first_board_premium_baseline.py exists()+try 同范式（S113 R2）。
+    """
+    if not KLINE_CACHE.exists():
+        _logger.warning(
+            "baostock kline cache 缺失（未装/首次运行）path=%s，盘前选股降级返空候选", KLINE_CACHE
+        )
+        return {}
+    try:
+        return json.loads(KLINE_CACHE.read_bytes())
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("baostock kline cache 读取失败，降级返空候选: %s", e)
+        return {}
 
 
 def _load_code_name_map() -> dict[str, str]:
@@ -93,7 +116,10 @@ def select_premarket_candidates(
     target_date: T（选 T 的候选，用 T-1 kline 算 breakout）。
     返回 top-N candidates（breakout 分数降序）。
     """
-    cache = json.loads(KLINE_CACHE.read_bytes())
+    cache = _load_kline_cache()
+    if not cache:
+        # baostock 未装/首次运行/缓存损坏 → 降级返空候选（非 500 崩，对齐 S069 降级不崩契约）
+        return []
     # spec §8 盲点 #6：baostock kline bar 无 name 字段，从 gene_scores 表补名
     code_names = _load_code_name_map()
     candidates: list[PreMarketCandidate] = []
@@ -191,6 +217,11 @@ def select_premarket_with_risk(
     mult, reason = calendar_factor(target_date)
     pos_pct = round(_PREMARKET_RISK_BASE.position_pct * mult, 2)
 
+    market_note = "盘前选股：market_kill_switch 需盘中指数，盘前不判（开盘后实时核）"
+    if not KLINE_CACHE.exists():
+        # data-missing 备注：候选空系 baostock cache 缺失降级（未装/首次运行），非"无突破信号"
+        market_note += "｜baostock kline cache 缺失，候选为空系降级（未装/首次运行），非无信号"
+
     candidates = [
         PreMarketCandidateRisk(
             code=c.code, name=c.name, breakout_score=c.breakout_score,
@@ -215,7 +246,7 @@ def select_premarket_with_risk(
         calendar_multiplier=mult,
         calendar_reason=reason,
         candidates=candidates,
-        market_note="盘前选股：market_kill_switch 需盘中指数，盘前不判（开盘后实时核）",
+        market_note=market_note,
     )
 
 
