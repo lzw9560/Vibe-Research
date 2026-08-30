@@ -146,17 +146,18 @@
 
 **Tier-2 8 条撒谎全修**（S112 workflow 4 并行 impl + 3 路 review，18 测试全绿，全量 2424 passed 0 S112 回归）。对抗 honesty 8/8 confirmed_honest on literal claims。
 
-**review 驱动补修 3 项**：
+**review 驱动补修 3 项 + post-S112 over-reporting fix（2026-08-30）**：
 
 | # | finding | severity | 补修 |
 |---|---|---|---|
 | 1 | extreme detector 漏补 sector 同款"不缓存 missing"守卫——源恢复后延迟再探测最长 5min | MEDIUM | get_extreme_market_signal 加 `if data_status!='missing': _set_cached` 守卫（对齐 sector_divergence:308），missing 不缓存源恢复即重探 |
 | 2 | SOX dict 缺 is_delayed 字段（8 push2 指数有，SOX 无，前端按 is_delayed 消费得 None） | LOW | _fetch_sox_datacenter 返 dict 显式加 is_delayed=False（日频非延时镜像） |
 | 3 | newsradar skeleton() 裸读 SOURCES_FILE 无 try/except + load_cache except 未含 UnicodeDecodeError/OSError | LOW | skeleton 包 try/except 退最简骨架；load_cache except 扩 (FileNotFoundError,JSONDecodeError,UnicodeDecodeError,OSError) |
+| 4 | risk-trio over-report 'missing'（头部发现）：_is_empty 分不开源断 vs 未上榜→99% 非上榜股永久 missing | HIGH（reliability） | post-S112 fetch_ok fix：meta 加 fetch_ok 标志，risk-trio empty 分支按 fetch_ok 区分 ok(未上榜/无席位) vs missing(源断)；+3 测试钉死。原 crack 不可区分诉求已解决 |
 
 **⚠ 已知限制（未修，待后续）**：
 
-- **risk-trio over-report 'missing'（头部发现）**：crack 1/2/3 的 `get_with_fallback_meta` 的 `_is_empty` 分不开"源断返空" vs "股票真没上龙虎榜返空"→ ~99% 非上榜股票 dragon_tiger/seat/concentration **永久标 missing**，OneDayRisk.data_status 对多数股票恒 missing。源断确实不再 silent-0（literal claim 达成），但原 crack"源断 vs 未上榜不可区分"诉求**未真解决**（两者都→missing），marker 作为 health signal 不可靠。**修需**：给 get_with_fallback_meta 加 fetch_ok 标志（fetch_fn 返无 exception=True）让 risk-trio 区分 live-empty(未上榜=ok) vs live-failed(missing)，或 risk-trio 改直调源不走 empty→cache fallback。非平凡，待后续切片决策。
+- ~~risk-trio over-report 'missing'~~ **✅ 已修（post-S112 fetch_ok fix, 2026-08-30）**：见上表 row 4。get_with_fallback_meta 加 fetch_ok 标志，risk-trio empty 分支按 fetch_ok 区分 ok(未上榜/无席位) vs missing(源断)，3 测试钉死。原 crack"源断 vs 未上榜不可区分"诉求已解决。residual：源限流返空(非抛异常)→ok（罕见，非 lie，data 确空）。
 - **gstock is_delayed 无消费者**：backend 真标 is_delayed 透传到 /api/global/indices JSON 边界，但 grep 全仓零 reader（前端未消费）。"延时当实时"危害 backend 已诚实但未端到端闭环→前端任务。
 - **DRY _resolve_pool_provenance / _resolve_sector_provenance**：两 helper 近乎逐字重复，日后易分叉→抽共享 helper（纯质量，非阻塞）。
 - **extreme degraded 仍缓存 5min**：fix 1 只跳过 missing 缓存，degraded 仍缓存（陈旧计数有参考价值，可接受；若天气熔断要 best-effort 陈旧判定可改）。

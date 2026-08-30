@@ -298,10 +298,11 @@ async def _get_dragon_tiger_risk(code: str) -> tuple[float, str]:
 
     records = dt.records
     if not records:
-        # 非陈旧且无记录：fetch 失败/空 + 缓存空 → fallback_value。源断与"近期未上榜"
-        # 同形不可区分——保守标 missing（不臆造"确认未上榜"），关 R1 silent-zero 毒窗口。
-        # 风险评分仍 0.0（不臆造风险），仅 data_status 区分"无数据"与"确认无风险"。
-        return 0.0, "missing"
+        # 非陈旧且无记录：fallback_value。S112 over-reporting fix——按 meta.fetch_ok 区分：
+        # fetch_ok=True（源正常返空=近期未上龙虎榜）→ ok（合法，非断源）；
+        # fetch_ok=False（fetch 抛异常=源断）→ missing。关 R1 silent-zero + 原 crack
+        # "源断 vs 未上榜不可区分"诉求（现在可分：ok vs missing）。风险评分仍 0.0。
+        return 0.0, "ok" if meta.get("fetch_ok") else "missing"
 
     # live 成功、有记录 → 正常计算
     # 基于近期上榜频率和净买入额波动计算风险
@@ -367,9 +368,10 @@ async def _get_seat_info(code: str) -> dict:
         return _empty("degraded")
 
     if not signal:
-        # 非 stale 且 signal 为空：fetch 失败/空 + 缓存空 → fallback=None，
-        # 源断与"当日无特征席位"同形不可区分——保守标 missing，关 R2 silent-empty 毒窗口。
-        return _empty("missing")
+        # 非 stale 且 signal 为空：fallback=None。S112 over-reporting fix——按 meta.fetch_ok
+        # 区分：fetch_ok=True（源正常返空=当日无特征席位）→ ok（合法）；fetch_ok=False（源断）→ missing。
+        # 关 R2 silent-empty + "源断 vs 无特征席位不可区分"诉求。
+        return _empty("ok" if meta.get("fetch_ok") else "missing")
 
     details = signal.get("details", {})
     buy_seats = details.get("buy_seats", [])
@@ -520,9 +522,10 @@ async def _calculate_concentration_risk_meta(code: str) -> tuple[float, str]:
 
     records = dt.records
     if not records:
-        # 非陈旧且无记录：fetch 失败/空 + 缓存空 → fallback_value。源断与"无上榜"
-        # 同形不可区分——保守标 missing，关 R3 silent-zero 毒窗口。
-        return 0.0, "missing"
+        # 非陈旧且无记录：fallback_value。S112 over-reporting fix——按 meta.fetch_ok 区分：
+        # fetch_ok=True（源正常返空=近期无上榜）→ ok（合法）；fetch_ok=False（源断）→ missing。
+        # 关 R3 silent-zero + "源断 vs 无上榜不可区分"诉求。
+        return 0.0, "ok" if meta.get("fetch_ok") else "missing"
 
     # 计算最近一次上榜的席位集中度（CR5）
     net_buys = [r.net_buy or 0 for r in records[:5]]

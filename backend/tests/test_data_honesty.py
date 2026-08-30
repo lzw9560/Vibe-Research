@@ -414,6 +414,71 @@ def test_concentration_risk_fetch_fault_marks_missing(isolated_cache, monkeypatc
     assert status == "missing"
 
 
+def test_dragon_tiger_risk_not_listed_live_empty_marks_ok(isolated_cache, monkeypatch):
+    """S112 over-reporting fix：股票近期未上龙虎榜（源正常返空 records）→ (0.0, 'ok')，非 missing。
+
+    关 risk-trio over-report 毒窗口：旧 S112 impl 把"源正常返空(未上榜)"与"源断"都标
+    missing（_is_empty 分不开），致 ~99% 非上榜股永久 missing、data_status 失效。
+    fetch_ok fix：fetch_ok=True（源正常返空）→ ok（合法未上榜，非断源）；fetch_ok=False（源断）→ missing。
+    与 test_dragon_tiger_risk_fetch_fault_marks_missing 互补：源断=missing / 未上榜=ok 现可区分。
+    """
+    import astock
+
+    code = "600519"
+    # 源正常：股票近期未上龙虎榜，dragon_tiger_board 返空 records（fetch_ok=True）
+    monkeypatch.setattr(astock, "dragon_tiger_board", lambda *a, **k: {"records": []})
+
+    # Act
+    score, status = asyncio.run(risk_models._get_dragon_tiger_risk(code))
+
+    # Assert：未上榜标 ok（非 missing）——over-report 毒窗口关闭
+    assert score == 0.0
+    assert status == "ok"
+
+
+def test_seat_info_no_seats_live_empty_marks_ok(isolated_cache, monkeypatch):
+    """S112 over-reporting fix：当日无特征席位（源正常返 None）→ data_status='ok'，非 missing。
+
+    seat_engine 对未上榜股返 None（非异常）。fetch_ok=True → ok（合法无席位）。
+    与 test_seat_info_fetch_fault_marks_missing 互补：源断=missing / 无席位=ok。
+    """
+    import seat_engine
+
+    code = "600519"
+    # 源正常：当日无特征席位，compute_consensus_signal 返 None（fetch_ok=True）
+    class _EmptyEngine:
+        def compute_consensus_signal(self, *a, **k):
+            return None
+
+    monkeypatch.setattr(seat_engine, "get_engine", lambda: _EmptyEngine())
+
+    # Act
+    seat = asyncio.run(risk_models._get_seat_info(code))
+
+    # Assert：无席位标 ok（非 missing）——over-report 毒窗口关闭
+    assert seat["data_status"] == "ok"
+    assert seat["one_day_seats"] == []
+
+
+def test_concentration_risk_not_listed_live_empty_marks_ok(isolated_cache, monkeypatch):
+    """S112 over-reporting fix：近期无上榜（源正常返空 records）→ (0.0, 'ok')，非 missing。
+
+    与 test_concentration_risk_fetch_fault_marks_missing 互补：源断=missing / 无上榜=ok。
+    """
+    import astock
+
+    code = "600519"
+    # 源正常：近期无上榜，dragon_tiger_board 返空 records（fetch_ok=True）
+    monkeypatch.setattr(astock, "dragon_tiger_board", lambda *a, **k: {"records": []})
+
+    # Act
+    score, status = asyncio.run(risk_models._calculate_concentration_risk_meta(code))
+
+    # Assert：无上榜标 ok（非 missing）——over-report 毒窗口关闭
+    assert score == 0.0
+    assert status == "ok"
+
+
 def test_sector_divergence_source_break_marks_missing_not_now(isolated_cache, monkeypatch):
     """裂缝#10（R4）：calculate_sector_divergence industry_comparison 源断 → data_status='missing'
     + last_updated 不戳 now（源断不伪装刚更新）。

@@ -180,21 +180,24 @@ def get_with_fallback_meta(
 
     Returns:
         (data, meta)：
-        - meta = {"from_cache": bool, "is_stale": bool, "cache_ts": float | None}
-        - live fetch 成功 → (data, {from_cache:False, is_stale:False, cache_ts:None})
-        - fetch 失败/空但缓存命中 → (cached, {from_cache:True, is_stale:True,
-          cache_ts:缓存写入时间})：命中缓存即标 stale（非 live）
-        - fetch 失败且缓存未命中 → (fallback_value, {from_cache:False,
-          is_stale:False, cache_ts:None})：调用方按 data 是否空自行判 missing
+        - meta = {"from_cache": bool, "is_stale": bool, "cache_ts": float | None, "fetch_ok": bool}
+        - fetch_ok=True：fetch_fn 返回无 exception（源正常，data 空也可能是合法空如未上榜）
+        - fetch_ok=False：fetch_fn 抛异常（源断/限流/编程 bug）
+        - live fetch 成功非空 → (data, {from_cache:False, is_stale:False, cache_ts:None, fetch_ok:True})
+        - fetch 返空(含合法空)或失败、缓存命中 → (cached, {from_cache:True, is_stale:True, cache_ts, fetch_ok})
+        - fetch 返空或失败、缓存未命中 → (fallback_value, {from_cache:False, is_stale:False,
+          cache_ts:None, fetch_ok})：调用方按 fetch_ok+data 区分"源正常返空(合法)"vs"源断(missing)"
     """
-    meta: dict[str, Any] = {"from_cache": False, "is_stale": False, "cache_ts": None}
+    meta: dict[str, Any] = {"from_cache": False, "is_stale": False, "cache_ts": None, "fetch_ok": False}
     # 1. 尝试实时获取
     try:
         data = fetch_fn()
+        meta["fetch_ok"] = True  # fetch 返回无 exception（S112 over-reporting fix）
         if not _is_empty(data):
             save_cache(key, data, ttl)
             return data, meta
-        # 空数据（限流返空）——不写覆盖，降级到缓存
+        # 空数据（可能限流返空，也可能合法空如未上龙虎榜）——不写覆盖，降级到缓存。
+        # 调用方按 meta.fetch_ok 区分：True=源正常返空(合法)，False=fetch 抛异常(源断)
     except Exception as e:
         # 实时获取失败（源宕/限流/编程 bug），降级到缓存——记日志便于排查
         # （非 bare 吞无日志：S111 spec R7 批的同款 anti-pattern 不在此重演）
