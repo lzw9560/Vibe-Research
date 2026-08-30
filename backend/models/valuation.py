@@ -25,6 +25,7 @@ class Valuation(BaseModel):
     pe_ttm: float | None = None
     pb: float | None = None
     ps_ttm: float | None = None
+    pcf_ttm: float | None = None  # S106：hithink 补（东财结构性缺）
     dividend_yield: float | None = None  # 百分数
     peg: float | None = None
     forward_pe: float | None = None
@@ -33,3 +34,4 @@ class Valuation(BaseModel):
     digest_years: float | None = None
     analyst_count: int | None = None
     updated_at: str | None = None  # ISO+08:00
+    discrepancy: list[dict] | None = None  # S106：cross_validate 仲裁结果透传（[{field,verdict,deviation_pct}]）

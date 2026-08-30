@@ -250,6 +250,10 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         market_cap=mcap_yi * 1e8 if mcap_yi is not None else None,
         pe_ttm=_numf(raw.get("pe_ttm")),
         pb=_numf(raw.get("pb")),
+        ps_ttm=_numf(raw.get("ps_ttm")),  # S106：hithink 补（东财结构性缺）
+        pcf_ttm=_numf(raw.get("pcf_ttm")),  # S106：hithink 补
+        dividend_yield=_numf(raw.get("dividend_yield")),
+        discrepancy=raw.get("discrepancy"),  # S106：数据层 cross_validate 仲裁结果透传
         forward_pe=_numf(raw.get("pe_26e")),
         consensus_eps=_numf(raw.get("eps_26e")),
         cagr_pct=_numf(raw.get("cagr_pct")),

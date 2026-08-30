@@ -129,18 +129,46 @@ def full_valuation(code: str) -> dict:
         "name": q["name"], "code": code, "price": price,
         "mcap_yi": q["mcap_yi"], "pe_ttm": q["pe_ttm"], "pb": q["pb"],
         "ps_ttm": None, "pcf_ttm": None,  # S104：hithink 补（东财结构性缺）
+        "pe_ttm_hithink": None, "pb_hithink": None,  # S106：备源（供 cross_validate 仲裁）
         "eps_26e": None, "eps_27e": None, "pe_26e": None,
         "cagr_pct": None, "peg": None, "digest_years": None, "analyst_count": 0,
     }
 
     # S104：hithink 补 PS_TTM / PCF_TTM（5min TTL 缓存，hithink_src 内部）
+    # S106：同时暴露 hithink 备源 PE/PB（valuation_snapshot 已返，零额外请求），供 cross_validate 仲裁
     try:
         from data.sources.hithink_src import valuation_snapshot as _hs_val
         hs = _hs_val([code])
         if code in hs:
             out["ps_ttm"] = hs[code].get("ps_ttm")
             out["pcf_ttm"] = hs[code].get("pcf_ttm")
-    except Exception:  # noqa: BLE001 — hithink 失败不阻塞估值，PS/PCF 降级 None
+            out["pe_ttm_hithink"] = hs[code].get("pe_ttm")   # S106 备源（与东财腾讯口径一致）
+            out["pb_hithink"] = hs[code].get("pb_mrq")       # S106 备源
+    except Exception:  # noqa: BLE001 — hithink 失败不阻塞估值，PS/PCF/备源 降级 None
+        pass
+
+    # S106：PE/PB 交叉验证（东财 vs hithink）——数据层一处仲裁，两出口（query_valuation 走 mapper
+    # → Valuation / /api/valuation raw dict）透传，无重复仲裁代码。
+    # §44 边界：PE/PB 展示非"出结论"（§44 管 winrate/r/verdict）；MAJOR_DIFFERENCE 取主源（东财）
+    # 不丢数据 + discrepancy 标记告知"这值两源差>5%，别基于它下重判断"，不阻断。
+    try:
+        from data.validators import Verdict, cross_validate
+        discrepancies: list[dict] = []
+        for field, em_val, hs_val in [
+            ("pe_ttm", out.get("pe_ttm"), out.get("pe_ttm_hithink")),
+            ("pb", out.get("pb"), out.get("pb_hithink")),
+        ]:
+            if em_val is not None and hs_val is not None:  # 两源都有才仲裁
+                vr = cross_validate(field, {"东财": em_val, "hithink": hs_val})
+                if vr.verdict in (Verdict.DIFFERENCE, Verdict.MAJOR_DIFFERENCE):
+                    discrepancies.append({
+                        "field": field,
+                        "verdict": vr.verdict.value,
+                        "deviation_pct": vr.max_deviation_pct,
+                    })  # CONSISTENT/SINGLE_SOURCE 不标（不打扰）
+        if discrepancies:
+            out["discrepancy"] = discrepancies
+    except Exception:  # noqa: BLE001 — cross_validate 故障不阻塞估值
         pass
 
     try:

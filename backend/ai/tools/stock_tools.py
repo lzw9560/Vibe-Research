@@ -32,11 +32,14 @@ def query_quote(codes: list[str]) -> dict:
 
 @register_tool(
     "query_valuation",
-    "查单只个股的完整估值：行情 + 机构一致预期 EPS + 前向PE/PEG/PE消化年数。",
+    "查单只个股的完整估值：行情 + 机构一致预期 EPS + 前向PE/PEG/PE消化年数。"
+    "S106：PE/PB 两源（东财 vs hithink）差异>5% 标 discrepancy（full_valuation 数据层仲裁，本工具透传）。",
     params={"code": {"description": "6 位股票代码"}},
 )
 def query_valuation(code: str) -> dict:
     raw = astock.full_valuation(str(code))
+    # S106：discrepancy 在 full_valuation 数据层仲裁生成（astock.py），mapper 透传进 Valuation，
+    # 本工具无需重复仲裁。raw.get("discrepancy") 经 mapper 已入 model_dump。
     out = mappers.valuation_from_full_valuation(str(code), raw).model_dump(mode="json")
     if raw.get("forecast_note"):
         out["note"] = raw["forecast_note"]
