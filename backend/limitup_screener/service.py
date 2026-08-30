@@ -280,18 +280,10 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
     zt_pool, yzt_pool, zb_pool = await _fetch_zt_pool(target_date)
     display_date = target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:]
     if not zt_pool:
-        result = ScreenerResult(
-            date=display_date,
-            gene_scores=[],
-            qualified=[],
-            high_gene=[],
-            updated=datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
-            disclaimer=DISCLAIMER,
-            data_freshness="fresh",
-            data_age_seconds=0.0,
-        )
-        _CACHE[cache_key] = (now, result)
-        return result
+        # S109：空涨停池返 expired（非 fresh）+ 不缓存空——瞬态失败返空不毒缓存 12h。
+        # 旧实现标 fresh + 缓存空 12h，掩盖故障为"新鲜空"。复用 _empty_screener_result
+        # （已返 expired）。verify 抓到：整块替换非删行，防留 fresh 误标。
+        return _empty_screener_result(target_date, reason="涨停池为空（瞬态失败或非交易日）")
 
     # S095 R4：交叉校验钩子——zt_history final 快照与请求池行数不一致 → 拒绝写入
     if not _cross_check_zt_history(target_date, len(zt_pool)):

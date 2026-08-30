@@ -101,7 +101,10 @@ def fetch_raw(codes: list[str]) -> dict[str, dict]:
         return cached[0]
     prefixed = [f"{get_prefix(c)}{c}" for c in codes]
     result = _parse_gtimg(_fetch_gtimg(prefixed))
-    _TENCENT_CACHE[key] = (result, now)
+    # S109：空不缓存——gtimg 返空 {}（CDN/瞬态故障/全 codes 跳过）不写缓存，
+    # 下次立即重试（tencent urllib 免费不限流，重试成本≈0）。对齐 S103 + market._cached。
+    if result:
+        _TENCENT_CACHE[key] = (result, now)
     return result
 
 

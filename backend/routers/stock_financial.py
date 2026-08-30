@@ -14,13 +14,20 @@ router = APIRouter(tags=["stock"])
 _DC_CACHE: Dict[Tuple[str, str], Tuple[float, Any]] = {}  # key=(endpoint, code) -> (ts, data)
 
 
-def _cached(endpoint: str, code: str, ttl: int, fetch: Callable) -> Any:
+def _cached(endpoint: str, code: str, ttl: int, fetch: Callable, valid: Callable = bool) -> Any:
+    """S109：加 valid 守卫——valid(data) 判否不缓存（空不缓存），下次重试。
+
+    复用 S103 market._cached(valid=bool) 范式：空结果/失败返空不写缓存，breaker
+    恢复后下次请求重试。list 型路由用默认 bool；dict 型（dragon_tiger/lockup/
+    blocks）传内容感知 lambda（失败返非空 dict，bool 漏网）。
+    """
     key: Tuple[str, str] = (endpoint, code)
     hit = _DC_CACHE.get(key)
     if hit and _time.time() - hit[0] < ttl:
         return hit[1]
     data = fetch()
-    _DC_CACHE[key] = (_time.time(), data)
+    if valid(data):  # ← S103 空不缓存核心
+        _DC_CACHE[key] = (_time.time(), data)
     return data
 
 
@@ -88,7 +95,8 @@ def dragon_tiger(code: str = Query(...)) -> Dict[str, Any]:
     from routers.common import _validate
     code = _validate(code)
     try:
-        return {"data": _cached("dt", code, 1800, lambda: astock.dragon_tiger_board(code))}
+        return {"data": _cached("dt", code, 1800, lambda: astock.dragon_tiger_board(code),
+                                valid=lambda v: bool(v.get("records")) if isinstance(v, dict) else bool(v))}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"龙虎榜异常：{e}") from e
 
@@ -99,7 +107,8 @@ def lockup(code: str = Query(...)) -> Dict[str, Any]:
     from routers.common import _validate
     code = _validate(code)
     try:
-        return {"data": _cached("lockup", code, 1800, lambda: astock.lockup_expiry(code))}
+        return {"data": _cached("lockup", code, 1800, lambda: astock.lockup_expiry(code),
+                                valid=lambda v: bool(v.get("history") or v.get("upcoming")) if isinstance(v, dict) else bool(v))}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"解禁日历异常：{e}") from e
 
@@ -110,7 +119,8 @@ def blocks(code: str = Query(...)) -> Dict[str, Any]:
     from routers.common import _validate
     code = _validate(code)
     try:
-        return {"data": _cached("blocks", code, 1800, lambda: astock.concept_blocks(code))}
+        return {"data": _cached("blocks", code, 1800, lambda: astock.concept_blocks(code),
+                                valid=lambda v: bool(v.get("boards")) if isinstance(v, dict) else bool(v))}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"板块归属异常：{e}") from e
 
@@ -146,7 +156,10 @@ def industry(top: int = Query(20, ge=5, le=50)) -> Dict[str, Any]:
         return {"data": hit[1]}
     try:
         data = astock.industry_comparison(top_n=top)
-        _DC_CACHE[key] = (_time.time(), data)
+        # S109：dict 陷阱内容感知——industry_comparison 失败返非空 {"top":[],...}，
+        # bool 漏网，用 if data.get("top") 守卫不缓存空排名。
+        if isinstance(data, dict) and data.get("top"):
+            _DC_CACHE[key] = (_time.time(), data)
         return {"data": data}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"行业排名异常：{e}") from e

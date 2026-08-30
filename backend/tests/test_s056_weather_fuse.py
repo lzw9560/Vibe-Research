@@ -273,7 +273,8 @@ class TestExitSignalsEndpoint:
         class _FakeAstock:
             @staticmethod
             def tencent_quote(codes):
-                return {"000001": {"pct": -1.5, "open": 10.0, "price": 10.0}}
+                # S109：对齐 tencent raw 真实键 change_pct（旧误键 pct 已修）
+                return {"000001": {"change_pct": -1.5, "open": 10.0, "price": 10.0}}
             @staticmethod
             def kline(code, *a, **k):
                 # 5 日均价 11.0 → price 10 < 11 触发破均线

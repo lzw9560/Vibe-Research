@@ -1160,7 +1160,9 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
             name = h.get("name", code)
             q = quotes.get(code, {})
             # 竞价涨幅（change_pct）+ 开盘价
-            change_pct = q.get("pct") if isinstance(q, dict) else None
+            # S109：修误键——tencent raw 键是 change_pct（tencent.py:68），非 pct。
+            # 旧 q.get("pct") 恒 None 致 no_gap/竞价未高开 强制离场分支恒死（与缓存正交）。
+            change_pct = q.get("change_pct") if isinstance(q, dict) else None
             open_price = q.get("open") if isinstance(q, dict) else None
             price = q.get("price") if isinstance(q, dict) else None
 

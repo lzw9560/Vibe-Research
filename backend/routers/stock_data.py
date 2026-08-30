@@ -23,17 +23,7 @@ class QuoteMapResponse(BaseModel):
 _PCT_CACHE: Dict[str, Tuple[float, Any]] = {}
 _ANN_CACHE: Dict[str, Tuple[float, Any]] = {}
 _FIN_CACHE: Dict[str, Tuple[float, Any]] = {}
-_DC_CACHE: Dict[Tuple[str, str], Tuple[float, Any]] = {}  # key=(endpoint, code) -> (ts, data)
-
-
-def _cached(endpoint: str, code: str, ttl: int, fetch: Callable) -> Any:
-    key: Tuple[str, str] = (endpoint, code)
-    hit = _DC_CACHE.get(key)
-    if hit and _time.time() - hit[0] < ttl:
-        return hit[1]
-    data = fetch()
-    _DC_CACHE[key] = (_time.time(), data)
-    return data
+# S109：删除零调用死代码 _DC_CACHE + _cached（DRY，统一走 stock_financial._cached / market._cached）。
 
 
 # ---- Routes ----
@@ -76,7 +66,10 @@ def valuation_percentile(code: str = Query(...)) -> Dict[str, Any]:
         return {"data": hit[1]}
     try:
         data = astock.valuation_percentile(code)
-        _PCT_CACHE[code] = (_time.time(), data)
+        # S109：dict 陷阱内容感知——valuation_percentile 失败返非空 {"metrics":{}}，
+        # bool 漏网（truthy dict），用 if data.get("metrics") 不缓存空分位。
+        if isinstance(data, dict) and data.get("metrics"):
+            _PCT_CACHE[code] = (_time.time(), data)
         return {"data": data}
     except astock.DependencyMissing as e:
         raise HTTPException(501, str(e)) from e
@@ -94,7 +87,9 @@ def announcements(code: str = Query(...)) -> Dict[str, Any]:
         return {"data": hit[1]}
     try:
         data = astock.announcements(code)
-        _ANN_CACHE[code] = (_time.time(), data)
+        # S109：空不缓存——东财返 []（HTTP 成功但无数据）不缓存，下次重试。
+        if data:
+            _ANN_CACHE[code] = (_time.time(), data)
         return {"data": data}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"公告源异常：{e}") from e
@@ -110,7 +105,9 @@ def financials(code: str = Query(...)) -> Dict[str, Any]:
         return {"data": hit[1]}
     try:
         data = astock.financials(code)
-        _FIN_CACHE[code] = (_time.time(), data)
+        # S109：空不缓存——akshare 返 {} 不缓存，下次重试。
+        if data:
+            _FIN_CACHE[code] = (_time.time(), data)
         return {"data": data}
     except astock.DependencyMissing as e:
         raise HTTPException(501, str(e)) from e
