@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -139,6 +140,47 @@ def _collect_global_factor(date: str) -> StormFactor:
     return StormFactor("外围隔夜", round(score, 1), detail, data_status)
 
 
+def _load_sti_internal_signals(t1: str) -> tuple[float, float] | None:
+    """读 T-1 sti_timeline 的连板高度 + 炸板率。
+
+    S115 R3 诚实化：降级日（source_ok=0 / 列 NULL / 无行 / 查询异常）→ None，
+    调用方据此标 missing + 50.0 中性基线（非 0.0+ok 假平静）。原 'if ... is not None'
+    漏 NULL→保持 0.0+data_status='ok'，降级日冒充真平静→内部因子(权重0.35)
+    假性偏低→风暴概率低估→suggested_position 偏高。
+
+    source_ok=0 是写侧诚实降级标记（compute 返 dimensions=None→DB 列全 NULL）；
+    source_ok NULL（旧迁移行）不阻断，由列 NULL 检查兜底，免误判好行。
+    """
+    try:
+        import sqlite3
+        from config import STI_TIMELINE_DB_PATH  # noqa: PLC0415
+
+        _sti = sqlite3.connect(STI_TIMELINE_DB_PATH)
+        _sti.row_factory = sqlite3.Row
+        try:
+            row = _sti.execute(
+                "SELECT dimension_max_boards, raw_break_rate, source_ok "
+                "FROM sti_timeline WHERE date=?",
+                (t1,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["source_ok"] == 0:
+                return None
+            max_boards = row["dimension_max_boards"]
+            break_rate = row["raw_break_rate"]
+            if max_boards is None or break_rate is None:
+                return None
+            return float(max_boards), float(break_rate)
+        finally:
+            _sti.close()
+    except Exception as e:  # noqa: BLE001 — sti 缺失/异常 → 诚实降级 missing（不臆造 0.0）
+        logging.getLogger("storm_predictor").warning(
+            "_load_sti_internal_signals(t1=%s) STI 取数失败，降级 missing: %s", t1, e
+        )
+        return None
+
+
 def _collect_internal_factor(date: str) -> StormFactor:
     """前日内部先行因子（连板梯队高度/炸板率/溢价）。权重 0.40。
 
@@ -159,26 +201,14 @@ def _collect_internal_factor(date: str) -> StormFactor:
         # sti_timeline T-1 的连板高度 + 炸板率
         # S088 R10 分析修：sti_timeline 在 STI_TIMELINE_DB_PATH（非 gene_scores DB），
         # 原调 limitup_screener.data.get_db()（gene_scores DB）→ no such table → 恒降级 0。
-        max_boards = 0.0
-        break_rate = 0.0
-        try:
-            import sqlite3
-            from config import STI_TIMELINE_DB_PATH  # noqa: PLC0415
-            _sti = sqlite3.connect(STI_TIMELINE_DB_PATH)
-            _sti.row_factory = sqlite3.Row
-            try:
-                row = _sti.execute(
-                    "SELECT dimension_max_boards, raw_break_rate FROM sti_timeline WHERE date=?",
-                    (t1,),
-                ).fetchone()
-                if row and row["dimension_max_boards"] is not None:
-                    max_boards = float(row["dimension_max_boards"])
-                if row and row["raw_break_rate"] is not None:
-                    break_rate = float(row["raw_break_rate"])
-            finally:
-                _sti.close()
-        except Exception:  # noqa: BLE001 — sti 缺失降级 0
-            pass
+        # S115 R3：降级日（source_ok=0 / 列 NULL / 无行）→ None → missing + 50.0（非 0.0+ok 假平静）。
+        sti_signals = _load_sti_internal_signals(t1)
+        if sti_signals is None:
+            return StormFactor(
+                "前日内部先行", 50.0,
+                f"T-1({t1}) STI 降级/缺行（连板高度/炸板率未知）", "missing",
+            )
+        max_boards, break_rate = sti_signals
 
         # 情绪转弱信号 → 暴风雨概率
         # 连板高度（>5 见顶信号）+ 炸板率（>20% 转弱）+ 溢价（<0 转负）

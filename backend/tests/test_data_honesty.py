@@ -159,12 +159,18 @@ def test_stock_fund_flow_120d_sina_degradation_carries_source(monkeypatch):
     旧逻辑东财断静默切新浪，返回与东财同字段/形状/单位的 rows 无来源标记，下游当东财
     正典数据归一化算 signal/big_fund，跨源口径混算失真。修复：新浪降级行加 source 标记。
     """
-    # Arrange：新浪降级返 2 行（对齐 S110 test_s008 fixture 风格，mock 不联网）
+    # Arrange：新浪降级返 5 行（>=5 过 S115 R2 min-bars 门，对齐 test_s008 5-kline 范式，mock 不联网）
     sina_rows = [
         {"date": "2026-07-29", "main_net": 100.0, "small_net": -50.0,
          "mid_net": 20.0, "large_net": 30.0, "super_net": 80.0},
         {"date": "2026-07-28", "main_net": 200.0, "small_net": -60.0,
          "mid_net": 30.0, "large_net": 40.0, "super_net": 90.0},
+        {"date": "2026-07-27", "main_net": 150.0, "small_net": -40.0,
+         "mid_net": 25.0, "large_net": 35.0, "super_net": 70.0},
+        {"date": "2026-07-26", "main_net": 180.0, "small_net": -55.0,
+         "mid_net": 28.0, "large_net": 38.0, "super_net": 75.0},
+        {"date": "2026-07-25", "main_net": 120.0, "small_net": -45.0,
+         "mid_net": 22.0, "large_net": 32.0, "super_net": 82.0},
     ]
     monkeypatch.setattr(eastmoney, "_sina_fund_flow_fallback",
                         lambda code, num=120: sina_rows)
@@ -178,8 +184,9 @@ def test_stock_fund_flow_120d_sina_degradation_carries_source(monkeypatch):
     # Act
     rows = eastmoney.stock_fund_flow_120d("600519")
 
-    # Assert：降级行带来源标记，下游可见"这是新浪降级数据非东财"
-    assert len(rows) == 2
+    # Assert：降级行带来源标记，下游可见"这是新浪降级数据非东财"（>=5 过 R2 门；
+    # <5→[]→missing 由 #16 test_realtime_capital_flow_sina_few_rows 覆盖）
+    assert len(rows) == 5
     assert all(r.get("source") == "sina_fallback" for r in rows)
 
 
@@ -630,3 +637,142 @@ def test_newsradar_stale_cache_returns_skeleton_not_stale(monkeypatch, tmp_path)
     # skeleton 的 industries 来自配置（items 空），非旧缓存的 stale item
     assert result["generated_at"] is None
     assert all(i.get("items") == [] for i in result["industries"])
+
+
+# ===========================================================================
+# S115 三撒谎修复（R4）：3 confirmed_lying 各一断言（AAA + monkeypatch，
+# 对齐 S111/S112 范式）。impl 并行修复中，测试针对 spec 期望行为——完成时
+# 可能 RED（正常），不为过而弱化断言。裂缝映射（spec S115 §2 表）：
+# 15. first-board-settlement-t0-bar-lte-fallback      → run_t1_premium_review
+# 16. sina-fallback-no-min-bars-maxabs-drift          → _get_realtime_capital_flow
+# 17. storm-predictor-internal-null-sti-as-zero-calm  → _collect_internal_factor
+# ===========================================================================
+
+
+def test_first_board_settlement_missing_signal_date_bar_returns_none_not_neighbor(
+        tmp_path, monkeypatch):
+    """裂缝#15（S115 R1）：baostock 缓存有前一日 bar 但无 signal_date 当日 bar
+    → t1_return_pct=None（非邻近 bar 冒充的 wrong value）+ t0_date=None provenance。
+
+    旧逻辑 `<=` 取"当日或之前最近 bar"，signal_date 当日 bar 缺（停牌/新股缺口/
+    baostock 缓存未含该日）时静默回退前一日 bar，用前一日 open 当 signal_date
+    当日 open 算 t1_return_pct → wildly wrong ret 喂 lift/胜率/verdict（§44 承重链）。
+    修复：`<=`→`==` 精确匹配（对齐 S111 R6 _bar_close:1885 范式），缺当日 bar→
+    t0_bar=None→t1_open=None→ret=None 跳过；t0_date=None 诚实记"缺 signal_date bar"。
+    """
+    # Arrange：VR_DATA_DIR→tmp，写 baostock 缓存：前一日 bar（真实 open）+
+    # T1 bar（close），但故意缺 signal_date(2026-08-15) 当日 bar
+    import json as _json
+    from strategies import first_board_filter as _fbf
+    from strategies.first_board_settlement import run_t1_premium_review
+
+    monkeypatch.setenv("VR_DATA_DIR", str(tmp_path))
+    signal_date = "2026-08-15"
+    cache = {"600519": [
+        {"date": "2026-08-14", "open": 1800.0, "close": 1850.0},  # 前一日（邻近）
+        {"date": "2026-08-16", "open": 1880.0, "close": 1900.0},   # T1（次日）
+    ]}
+    (tmp_path / "baostock_kline_cache.json").write_text(
+        _json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+
+    # load_scores 返候选快照（mock，避开磁盘/联网）
+    monkeypatch.setattr(_fbf, "load_scores", lambda d: {
+        "scored_candidates": [
+            {"code": "600519", "name": "贵州茅台", "rank": 1, "total": 80.0},
+        ],
+    })
+
+    # Act
+    result = run_t1_premium_review(signal_date)
+
+    # Assert：t1_return_pct=None（非旧 `<=` 用 08-14 open=1800 算出的 ~5.5556 wrong value）；
+    # t0_date=None provenance 诚实记"缺 signal_date 当日 bar"（不冒充邻近 bar 日期）
+    cand = result["candidates"][0]
+    assert cand["t1_return_pct"] is None
+    assert cand["t0_date"] is None
+    # 反证：旧 `<=` bug 会算 (1900-1800)/1800*100≈5.5556，确认不是该 wrong value
+    wrong_value = round((1900.0 - 1800.0) / 1800.0 * 100, 4)
+    assert cand["t1_return_pct"] != wrong_value
+
+
+def test_realtime_capital_flow_sina_few_rows_marks_missing_not_full_signal(
+        isolated_cache, monkeypatch):
+    """裂缝#16（S115 R2）：新浪降级返<5 条 → _get_realtime_capital_flow
+    data_status='missing'（非满格 signal）。
+
+    旧逻辑新浪降级路径无 len>=5 门（东财路径有 :466），新浪返 1-4 条当 120d
+    历史喂 risk_models，在退化序列算 max_abs→signal 满格 ±1.0→adjustment
+    扭曲 risk_level（口径漂移~25×）。修复：新浪降级路径加对称 len>=5 门（<5 返 []），
+    落回 risk_models not history→missing 诚实返空（S111 R3 范式）。
+    """
+    code = "600519"
+    # 新浪降级返 2 条（<5 门阈值），主力净流入巨大——若无门会算出非零满格 signal
+    sina_rows = [
+        {"date": "2026-08-14", "main_net": 999999.0, "super_net": 8.0e5,
+         "large_net": 3.0e5, "small_net": -5.0e4, "mid_net": 2.0e4},
+        {"date": "2026-08-13", "main_net": 888888.0, "super_net": 7.0e5,
+         "large_net": 2.0e5, "small_net": -4.0e4, "mid_net": 1.5e4},
+    ]
+    monkeypatch.setattr(eastmoney, "_sina_fund_flow_fallback",
+                        lambda code_, num=120: sina_rows)
+
+    # 东财双 host 全断 → 降级新浪（em_get 由 astock/eastmoney 共用模块全局）
+    def fake_em_get(url, *a, **k):
+        raise ConnectionError("eastmoney down")
+
+    monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
+
+    # Act：_get_realtime_capital_flow → astock.stock_fund_flow_120d（= eastmoney 同函数）
+    cf = risk_models._get_realtime_capital_flow(code)
+
+    # Assert：<5 条新浪降级行被 R2 门挡返 [] → history 空 → missing
+    # （非旧满格 signal ±1.0 / degraded 当有效行情）
+    assert cf["data_status"] == "missing"
+    assert cf["capital_flow_signal"] == 0.0
+    assert cf["fund_flow_history"] == []
+
+
+def test_storm_internal_factor_null_sti_marks_missing_not_calm(
+        tmp_path, monkeypatch):
+    """裂缝#17（S115 R3）：sti_timeline 行存在但 raw_break_rate=NULL →
+    data_status='missing' + score 50.0（非 0.0+ok 假平静）。
+
+    旧逻辑 `if ... is not None` 漏 NULL→break_rate 保持 0.0+data_status='ok'，
+    降级日（写侧 source_ok=0/列 NULL 诚实标记）冒充真平静→内部因子(权重0.35)
+    假性偏低→风暴概率低估→suggested_position 偏高。修复：NULL 列/source_ok=0/
+    无行→None→missing+50.0 中性基线（函数已用 50.0 for acknowledged-missing）。
+    """
+    import sqlite3
+    import config
+    from strategies import storm_predictor
+    from limitup_screener import data as ls_data
+
+    # Arrange：t1 固定（避开 _prev_trading_day 联网/日历），gene_scores 非空
+    # （避开"无 gene→早返 missing"假阳性——本测专测 NULL sti 路径）
+    t1 = "2026-08-14"
+    monkeypatch.setattr(storm_predictor, "_prev_trading_day", lambda date: t1)
+    monkeypatch.setattr(ls_data, "load_gene_scores", lambda d: [
+        SimpleNamespace(factors={"封板率": 80.0, "炸板后溢价": 0.5}),
+    ])
+
+    # sti_timeline DB：行存在，dimension_max_boards=6（非 NULL），raw_break_rate=NULL
+    # （降级日写侧诚实标 NULL），source_ok=1（隔离 NULL 列路径，非 source_ok=0 路径）
+    db_path = tmp_path / "sti_timeline.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE sti_timeline (date TEXT, dimension_max_boards REAL, "
+        "raw_break_rate REAL, source_ok INTEGER)")
+    conn.execute(
+        "INSERT INTO sti_timeline (date, dimension_max_boards, raw_break_rate, source_ok) "
+        "VALUES (?, ?, ?, ?)", (t1, 6.0, None, 1))
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(config, "STI_TIMELINE_DB_PATH", str(db_path))
+
+    # Act
+    factor = storm_predictor._collect_internal_factor("2026-08-15")
+
+    # Assert：NULL raw_break_rate→missing+50.0（中性基线），非旧 0.0+ok 假平静
+    # （旧 bug：max_boards=6/break_rate=0(NULL)→score=(90+0+49)/3≈46.3+ok）
+    assert factor.data_status == "missing"
+    assert factor.score == 50.0

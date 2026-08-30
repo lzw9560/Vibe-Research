@@ -196,6 +196,28 @@ S114 把 chip_distribution 取数层从 ak.stock_cyq_em 黑盒改自建走 em_ge
 
 **ut 厘清**：kline/get 用 _ZTB_UT（7eea...，实为日K通用公开 token 非密钥，被误命名涨停池）；非 fflow 的 _PUSH2_UT（fa5fd...）。两者同 host 不同 path 吃不同 ut。eastmoney.py:142 加注释说明。
 
+## S115 实现后状态（2026-08-30，completeness-gaps 扫描 + 三修）
+
+S115 scan（wf_fe0ad61d，7路+综合+对抗核实）扫 registry「本轮未覆盖维度」，发现 18 条新裂缝。impl（wf_f3ebbecb-116，4并行+3路review）修 3 confirmed_lying，15 非撒谎登记。3 fix 全 confirmed_honest，24 测试全绿，全量 2437 passed 0 S115 回归。
+
+**3 confirmed_lying（全 confirmed_honest，已修）**：
+
+| crack | where | 修法 |
+|---|---|---|
+| first-board-settlement-t0-bar-lte-fallback | first_board_settlement.py:524 | `<=`→`==` 精确匹配 signal_date，缺当日 bar→None 跳过（非邻近 bar 冒充），t0_date provenance。§44 承重链 |
+| sina-fallback-no-min-bars-maxabs-drift | eastmoney.py:475 | 新浪降级路径加对称 len>=5 门（对齐东财 :466），<5→[] 落回 missing |
+| storm-predictor-internal-null-sti-as-zero-calm | storm_predictor.py:162 | STI NULL 列/source_ok=0/no-row → missing+50.0（中性基线，非 0.0+ok 假平静） |
+
+**6 actually_honest**（verify 推翻合成 over-claim，登记非修）：hithink-trio-bare-empty / query-quote-bare-empty-tencent / mcp-iserror-false-on-bare-empty / storm-predictor-global-discards-is-delayed / storm-daemon-snapshot-no-provenance（诚实但 defect，last-write-wins 待 availability 切片）/ portfolio-realtime-pnl-no-calendar-gate。皆诚实返空非 fabricate（防住 6 假阳性缝补）。
+
+**1 uncertain**：gstock-us-hk-no-calendar-gate（周末返周五收盘 is_delayed=False 无 trade_date，live API 消费者难区分；非 fabricate，语义缺口，可选修 gstock 请求 f86 date）。
+
+**8 honest_already**（latent，登记）：fallback-mem-shadows-disk / funnel-mem-shadows-db（多 worker 缓存分叉，当前单 worker 诚实，扩 gunicorn 前必修）/ premarket-funnel-cache-fdate-offbyone / first-board-filter-kline-race / forward-test-daily-gene-scores-race / forward-test-t1-settle-baostock-race / first-board-t1-review-kline-sametick（cron 时序竞态诚实空，共同根因 baostock 当日 EOD 时点未定）/ baostock-t1-stuck-mark-7d-slows-section44-lift（§44 样本偏，诚实仅登记）。
+
+**review 补修 2**：R2 broke S111 #4 test（2 行 fixture 被 R2 min-bars 门 gated）→ #4 fixture 扩 5 行（过门测 source provenance，#16 测 <5→missing）；R3 新 helper `_load_sti_internal_signals` bare except 无 log → 加 logger.warning（对齐 S111 R7/S112 anti-pattern 修复）。
+
+**撒谎总账**：14（S111/S112）+ 3（S115）= **17 confirmed_lying 全修**。诚实登记 4（S111）+ 15（S115）= 19。registry 覆盖从 S111 的 18 扩到 36（18+18）。「本轮未覆盖维度」8 项已扫（S115），剩余 open：baostock EOD 时点 / 多 worker 硬化 / baostock stuck-mark 动否 / storm-daemon last-write-wins availability / premarket off-by-one 提 medium 级否——见 spec §9。
+
 ## 本轮未覆盖维度（completeness gaps，后续切片补扫）
 - AI 出口诚实（chat.TOOLS/_exec_tool→registry.execute）：数据工具失败时返给 LLM 的是诚实 'unavailable' 还是 bare None/[]（LLM 可能据此臆造）——数据进入 AI 研判的最后一跳
 - 写侧/落盘诚实：storm_daemon 每 30min 存 global_indices 快照，若 push2delay 已 latch 延时数据会被快照固化 → storm_predictor 读 T-1 快照做风暴预测；forward_test 写 verdict 时效性

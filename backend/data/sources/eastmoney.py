@@ -475,7 +475,13 @@ def stock_fund_flow_120d(code: str, date: str | None = None) -> list[dict]:
     rows = _sina_fund_flow_fallback(code, 120)
     if date and rows:
         rows = [r for r in rows if (r.get("date") or "")[:10] <= date]
-    return _with_source(rows, "sina_fallback")
+    # S115 R2：新浪降级路径加对称 len>=5 门（对齐东财 :466）——新浪返 <5 条
+    # （新股/稀疏覆盖）非有效 120d 历史，返 [] 落回 risk_models not history→
+    # _empty_capital_flow(missing) 诚实返空（S111 R3 范式）；避免 1-4 条当 120d
+    # 历史算 max_abs 致 signal 满格 ±1.0 → adjustment 扭曲 risk_level（口径漂移~25×）
+    if rows and len(rows) >= 5:
+        return _with_source(rows, "sina_fallback")
+    return []
 
 
 def _sina_fund_flow_fallback(code: str, num: int = 120) -> list[dict]:

@@ -477,7 +477,7 @@ def run_t1_premium_review(signal_date: str) -> dict:
         dict：
         - signal_date: str（YYYYMMDD）
         - candidates: list[dict]，每项 {code, name, rank, total_score,
-                       t1_date, t1_close, t1_open, t1_return_pct}
+                       t0_date, t1_date, t1_close, t1_open, t1_return_pct}
         - stats: dict {n, mean_return_pct, pos_ratio, pos_count,
                    best_return, worst_return}
         - verdict: str（lift 四态）
@@ -521,13 +521,22 @@ def run_t1_premium_review(signal_date: str) -> dict:
             if b_iso > iso_date:
                 t1_bar = b
                 break
-            if b_iso <= iso_date:
-                t0_bar = b  # 最后一个 <= signal_date 的 bar（T-1 日）
+            # S115 R1：精确匹配 signal_date 当日 bar（对齐 S111 R6
+            # _bar_close:scheduled_tasks.py:1885 '==' 范式 + first_board_filter:324
+            # R6 同款）。旧 '<=' 取"当日或之前最近 bar"，当日 bar 缺（停牌/新股
+            # 缺口/baostock 缓存未含该日）时静默回退数日/周前 bar 冒充当日 open
+            # → wildly wrong return_pct 喂 lift/胜率/verdict（§44 承重链撒谎）。
+            # 改 '==' 精确匹配，缺当日 bar→t0_bar=None→t1_return_pct=None 跳过，
+            # 不取邻近 bar 冒充（不臆造，§1.2 工程底线）。
+            if b_iso == iso_date:
+                t0_bar = b
 
         ret: float | None = None
         t1_close = None
         t1_open = None
         t1_date = None
+        # t0_date provenance：下游可见 T-1 bar 实际日期（非黑盒）；缺当日 bar→None
+        t0_date = t0_bar.get("date") if t0_bar is not None else None
         if t1_bar is not None:
             t1_close = t1_bar.get("close")
             t1_date = t1_bar.get("date")
@@ -535,6 +544,7 @@ def run_t1_premium_review(signal_date: str) -> dict:
             # T-1 open 用 t0_bar.open（signal_date 当日 open）
             if t0_bar is not None:
                 t1_open = t0_bar.get("open")
+            # 缺当日 t0_bar（停牌/缺口）→ t1_open=None → ret=None 跳过，不冒充
             if t1_open and t1_open > 0 and t1_close is not None:
                 ret = round((t1_close - t1_open) / t1_open * 100, 4)
 
@@ -543,6 +553,7 @@ def run_t1_premium_review(signal_date: str) -> dict:
             "name": c.get("name", ""),
             "rank": c.get("rank", 0),
             "total_score": c.get("total", 0.0),
+            "t0_date": t0_date,
             "t1_date": t1_date,
             "t1_close": t1_close,
             "t1_open": t1_open,
