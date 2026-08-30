@@ -246,7 +246,7 @@ def skyrocket(period: str = "day") -> list[dict]:
     """
     data = _http_get(_EP_SKYROCKET, {"period": period}, _TIMEOUT_SPECIAL)
     if data is None:
-        return []
+        raise RuntimeError("hithink 飙升榜暂不可达（熔断/离线/API Key 缺失）")
     return _normalize_rank_items(_items(data))
 
 
@@ -254,18 +254,19 @@ def hot_stock(period: str = "day") -> list[dict]:
     """热股榜。返同飙升榜结构。period: day / hour。"""
     data = _http_get(_EP_HOT_STOCK, {"period": period}, _TIMEOUT_SPECIAL)
     if data is None:
-        return []
+        raise RuntimeError("hithink 热股榜暂不可达（熔断/离线/API Key 缺失）")
     return _normalize_rank_items(_items(data))
 
 
 def anomaly_list(tag_codes: str | None = None) -> list[dict]:
-    """今日异动分析。返 [{code, name, ...}]。实测盘后可能空（item=0），诚实返空。"""
+    """今日异动分析。返 [{code, name, ...}]。盘后可能空（item=0）诚实返 []；
+    源断（_http_get None：熔断/离线/Key 缺）raise RuntimeError（S120，不伪装空榜喂 LLM）。"""
     query: dict[str, Any] = {}
     if tag_codes:
         query["tag_codes"] = tag_codes
     data = _http_get(_EP_ANOMALY_LIST, query, _TIMEOUT_SPECIAL)
     if data is None:
-        return []
+        raise RuntimeError("hithink 异动榜暂不可达（熔断/离线/API Key 缺失）")
     return _normalize_anomaly_items(_items(data))
 
 

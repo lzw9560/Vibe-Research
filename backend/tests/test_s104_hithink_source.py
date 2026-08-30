@@ -215,9 +215,32 @@ class TestSpecialData:
             assert out[0]["code"] == "000560"
             assert out[0]["rank"] == 1
 
-    def test_skyrocket_failure_empty(self):
+    def test_skyrocket_failure_raises(self):
+        """S120：源断（_http_get None）→ raise RuntimeError（非返 [] 喂 LLM 当"无榜"）。
+        源断经 registry.execute 兜成 {"error"} 喂 LLM（诚实），router→502。
+        """
         with patch("data.sources.hithink_src._http_get", return_value=None):
+            with pytest.raises(RuntimeError, match="飙升榜暂不可达"):
+                hs.skyrocket()
+
+    def test_skyrocket_legit_empty_returns_empty(self):
+        """S120：合法空榜（code==0, item=[]）→ 返 [] 不抛（盘后空诚实保留，与源断 raise 区分）。"""
+        with patch("data.sources.hithink_src._http_get", return_value={"item": []}):
             assert hs.skyrocket() == []
+
+    def test_hot_stock_failure_raises(self):
+        """S120：热股榜源断 → raise（同 skyrocket 范式）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=None):
+            with pytest.raises(RuntimeError, match="热股榜暂不可达"):
+                hs.hot_stock()
+
+    def test_anomaly_list_failure_raises_and_legit_empty(self):
+        """S120：异动榜源断 → raise；盘后合法空（item=[]）仍 [] 不抛。"""
+        with patch("data.sources.hithink_src._http_get", return_value=None):
+            with pytest.raises(RuntimeError, match="异动榜暂不可达"):
+                hs.anomaly_list()
+        with patch("data.sources.hithink_src._http_get", return_value={"item": []}):
+            assert hs.anomaly_list() == []
 
     def test_anomaly_stock_rejects_over_50(self):
         """A7 边界：>50 thscodes → 返 []。"""
