@@ -31,6 +31,7 @@ class ExtremeMarketSignal:
     is_extreme: bool = False  # 是否极端行情
     interpretation: str = ""
     last_updated: str = ""
+    data_status: str = "ok"   # ok | missing | degraded（数据诚实标记，对齐 sentiment_context:45；Tier-1 仅加字段，逻辑待 Tier-2）
 
 
 # ===========================================================================

@@ -296,7 +296,9 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
         - turnover_pct: float | None（换手率，百分数，如 8.5 表示 8.5%）
         - vol_ratio: float | None（量比）
         - amount: float | None（成交额，元）
-        数据缺失/请求失败 → 空 dict {}（剔除层跳过该条件，不因数据缺失误剔除）。
+        数据缺失/请求失败/当日 bar 不在 cache → 空 dict {}（剔除层跳过该条件，
+        不因数据缺失误剔除）。S111 R6：精确匹配 date 当日 bar（== 对齐 _bar_close），
+        缺当日 bar 返 {} 不回退前一日值（旧 <= 静默返昨日值打分，已修）。
 
     ⚠️ 无未来函数：全部用 date 当日及之前的历史 K 线，不用 tencent_quote 实时接口。
     旧实现调 tencent_quote([code]) 返回 T 日收盘筹码，用 T 日数据评判 T-1 首板 = 未来函数。
@@ -309,11 +311,17 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
         bars = _get_kline_cache().get(code, [])
         if not bars:
             return {}
-        # 找 date 当日或之前最近的 bar（bars 已按日期升序，从末尾往前找）
+        # 精确匹配 date 当日 bar（对齐 _bar_close: scheduled_tasks.py:1885 == 范式）。
+        # bars 已按日期升序，从末尾往前找。
+        # S111 R6：旧 <= 取"当日或之前最近 bar"，当日 bar 未入 cache（baostock
+        # 16:30 kline_refresh，first_board 16:15 跑早 15min）时静默回退前一日值
+        # 冒充当日 → score_dim_turnover(权重0.15)+score_dim4_chip 用过期值打分。
+        # 改 == 精确匹配，缺当日 bar 返 {}（剔除/评分层降级跳过，对齐
+        # score_dim_turnover 返 -1.0 不加权 / _bar_close 缺则跳过诚实范式，不臆造昨日值）。
         target_bar: dict | None = None
         target_idx = -1
         for i in range(len(bars) - 1, -1, -1):
-            if bars[i].get("date", "") <= d:
+            if bars[i].get("date", "") == d:
                 target_bar = bars[i]
                 target_idx = i
                 break

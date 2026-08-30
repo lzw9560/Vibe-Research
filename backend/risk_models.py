@@ -36,6 +36,7 @@ class OneDayRisk(BaseModel):
     recommendation: str = ""              # 建议 (关注风险/谨慎参与/可正常参与)
     factors: list[str] = []               # 风险因素列表
     last_updated: str = ""                # 最后更新时间（用于前端展示时效性）
+    data_status: str = "ok"               # ok | missing | degraded（数据诚实标记，对齐 sentiment_context:45）
     # 动态阈值
     dynamic_thresholds: dict = {}         # 基于市场环境的动态阈值
     # 原有字段（保留兼容）
@@ -96,8 +97,19 @@ def calculate_capital_flow_trend(fund_flow_history: list[dict]) -> str:
 # 动态风险评分更新
 # ===========================================================================
 
-async def calculate_base_risk(code: str) -> float:
-    """计算个股基础风险评分（静态部分）。"""
+async def calculate_base_risk(code: str) -> tuple[float, str]:
+    """计算个股基础风险评分（静态部分）。
+
+    返回 (base_score, data_status)：
+    - 命中 gene score → (反推风险, 'ok')
+    - 未入 screener（合法中性先验）→ (50.0, 'ok')，非故障
+    - 取数故障（import/解析异常）→ (50.0, 'missing')，区分故障 vs 合法中性先验
+
+    S111 R7：原 bare except:pass 吞一切无日志。改为 broad catch——任何取数故障
+    （含 sqlite3.OperationalError/TypeError/OSError 等 load_gene_scores 的
+    conn.execute 可抛的 DB/IO 错）→ 'missing' 并记日志；非异常的未入 screener
+    路径已在上面返 'ok'，故障 vs 合法中性先验靠异常路径区分，不靠枚举异常类型。
+    """
     try:
         import limitup_screener as ls
         result = await ls.get_screener_result()
@@ -105,10 +117,14 @@ async def calculate_base_risk(code: str) -> float:
             if g.code == code:
                 # 基于基因得分反推风险：得分越高，风险越低
                 base_score = max(0.0, 100.0 - g.total_score)
-                return round(base_score, 2)
-    except Exception:
-        pass
-    return 50.0
+                return round(base_score, 2), "ok"
+        # 未入 screener：合法中性先验（非取数故障）
+        return 50.0, "ok"
+    except Exception as e:
+        logging.getLogger("risk_models").warning(
+            "calculate_base_risk(%s) 取数失败，降级中性先验 50.0: %s", code, e
+        )
+        return 50.0, "missing"
 
 
 def calculate_flow_adjustment(capital_flow: dict) -> float:
@@ -141,7 +157,7 @@ async def get_current_sti_phase() -> str | None:
 async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
     """实时更新一日游风险评分（V2.0.2 动态化）。"""
     # 1. 获取基础风险评分
-    base_score = await calculate_base_risk(code)
+    base_score, base_status = await calculate_base_risk(code)
 
     # 2. 获取最新资金流数据（模拟：实际应接入实时资金流接口）
     capital_flow = await asyncio.to_thread(_get_realtime_capital_flow, code)
@@ -193,7 +209,16 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
         multi_seat_signal=multi_seat_signal,
     )
 
-    # 10. 构建动态风险对象
+    # 10. 数据诚实性：聚合 data_status；实时资金流非 ok 不戳 last_updated=now
+    cf_status = capital_flow.get("data_status", "ok")
+    data_status = _merge_data_status(base_status, cf_status)
+    if cf_status == "ok":
+        last_updated = datetime.now().isoformat()
+    else:
+        # degraded → 用缓存时间；missing → 留空（不伪装刚更新）
+        last_updated = capital_flow.get("data_time", "")
+
+    # 11. 构建动态风险对象
     return OneDayRisk(
         code=code,
         date=datetime.now().strftime("%Y-%m-%d"),
@@ -215,7 +240,8 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
         seat_confidence=seat_confidence,
         recommendation=recommendation,
         factors=factors,
-        last_updated=datetime.now().isoformat(),
+        last_updated=last_updated,
+        data_status=data_status,
         dynamic_thresholds=thresholds,
         risk_factors=factors,
         max_drawdown=max_drawdown,
@@ -470,33 +496,82 @@ def _build_risk_factors(
 # 实时资金流数据获取（接入 a-stock-data 东财资金流）
 # ===========================================================================
 
+# 数据诚实性辅助（S111：data_status 聚合 + 空资金流不伪装中性）
+_STATUS_SEVERITY = {"ok": 0, "degraded": 1, "missing": 2}
+
+
+def _merge_data_status(*statuses: str) -> str:
+    """取最差 data_status（missing > degraded > ok）。未知值按 ok 处理。"""
+    if not statuses:
+        return "ok"
+    return max(statuses, key=lambda s: _STATUS_SEVERITY.get(s, 0))
+
+
+def _empty_capital_flow(status: str = "missing") -> dict:
+    """空资金流（断源/缺失）——不伪装中性信号，data_status 标 missing/degraded。
+
+    对齐 sentiment_context._empty_context 范式：缺失不编值，用 data_status 区分
+    "无数据"与"净流入≈0 合法中性"——后者 data_status='ok' 且 signal 由实时数据算出。
+    """
+    return {
+        "capital_flow_signal": 0.0,
+        "big_fund_detected": False,
+        "big_fund_type": "",
+        "fund_flow_history": [],
+        "data_status": status,
+        "data_time": "",
+    }
+
+
 def _get_realtime_capital_flow(code: str) -> dict:
     """获取实时资金流数据（接入东财 push2his 资金流接口）。
 
     数据源：astock.stock_fund_flow_120d(code)
     返回近 120 交易日资金流，包含主力/大单/超大单净流入。
-    降级：东财故障时返回本地缓存或空数据。
+
+    诚实化（S111 R4）：消费 get_with_fallback_meta 元数据，断源/陈旧不再
+    伪装成实时中性信号。
+    - live fetch 成功（东财正典）→ data_status='ok'，正常算 signal，data_time=now
+    - live fetch 成功但为新浪降级数据 → data_status='degraded'（跨源口径差异，
+      关闭 #4 跨源混算伪装 ok 的毒窗口），signal 仍算（best-effort）但下游勿当东财正典
+    - fetch 失败、命中陈旧缓存 → data_status='degraded'，signal=0.0（不基于
+      陈旧算非零 signal），data_time=缓存时间（不戳 now 伪标刚更新）
+    - fetch 失败、缓存也空 → data_status='missing'，不伪装中性 dict
     """
     try:
-        from fallback import get_with_fallback
+        from fallback import get_with_fallback_meta
         cache_key = f"capital_flow:{code}"
-        history = get_with_fallback(
+        history, meta = get_with_fallback_meta(
             cache_key,
             lambda: astock.stock_fund_flow_120d(code),
             ttl=600,  # 10 分钟缓存
             fallback_value=[],
         )
     except Exception:
-        history = []
+        return _empty_capital_flow("missing")
 
     if not history:
+        return _empty_capital_flow("missing")
+
+    # S111 #4：检测跨源降级（新浪 vs 东财正典）——source 字段由
+    # eastmoney._with_source 嵌入。含新浪降级行则标 degraded：口径与东财 f52
+    # 聚合有差异，下游勿当东财正典（关闭"跨源 max_abs 混算伪装 ok"毒窗口）。
+    cross_source = any(h.get("source") == "sina_fallback" for h in history)
+
+    if meta.get("is_stale"):
+        # 命中陈旧缓存：不基于陈旧数据算非零 signal，标 degraded
+        cache_ts = meta.get("cache_ts")
+        data_time = datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else ""
         return {
             "capital_flow_signal": 0.0,
             "big_fund_detected": False,
             "big_fund_type": "",
             "fund_flow_history": [],
+            "data_status": "degraded",
+            "data_time": data_time,
         }
 
+    # live fetch 成功，正常计算
     # 取最近一日数据
     latest = history[-1]
     main_net = float(latest.get("main_net", 0) or 0)
@@ -532,4 +607,6 @@ def _get_realtime_capital_flow(code: str) -> dict:
         "big_fund_detected": big_fund_detected,
         "big_fund_type": big_fund_type,
         "fund_flow_history": fund_flow_history,
+        "data_status": "degraded" if cross_source else "ok",
+        "data_time": datetime.now().isoformat(),
     }

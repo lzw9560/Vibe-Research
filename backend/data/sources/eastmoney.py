@@ -438,6 +438,9 @@ def stock_fund_flow_120d(code: str, date: str | None = None) -> list[dict]:
     走 A6 内部过滤不复用此参数，topology/risk_models 实时取最新不传 date）。
     资金流 fallback：push2his/push2delay 都失败时降级新浪 MoneyFlow（ssl_qsfx_lscjfb，
     四档细分齐全，单位元一致）。本机 push2his 被拒连时由新浪兜底（审查 M4/P4）。
+    S111 R3：每行带 ``source`` provenance（对齐 market._emotion data_source 字段范式）——
+    东财行 'eastmoney'，新浪降级行 'sina_fallback'。下游可见跨源降级，破坏默认取主源
+    契约时能识别（新浪主力/超大单口径与东财 f52 聚合算法有细微差异，max_abs 不混算）。
     """
     market_code = 1 if code.startswith("6") else 0
     params = {
@@ -459,12 +462,18 @@ def stock_fund_flow_120d(code: str, date: str | None = None) -> list[dict]:
             rows = [r for r in rows if (r.get("date") or "")[:10] <= date]
         # push2delay 可能只返 1 条当天数据（延时镜像不完整）——数据量不足时也降级
         if rows and len(rows) >= 5:  # 至少 5 条才视为有效历史数据
-            return rows
+            return _with_source(rows, "eastmoney")
     # 东财双 host 均失败/数据不足 → 新浪 MoneyFlow 降级
+    # S111 R3：新浪降级路径加 source provenance——返回值带来源标识，让下游可见
+    # '这是新浪降级数据非东财'（新浪主力/超大单口径与东财 f52 聚合算法有细微差异，
+    # max_abs 跨源混算失真）。对齐 market._emotion data_source='ths_fallback' 字段范式
+    # （kline_resolver (bars,source_name) 元组范式会改签名破坏 6 调用方——risk_models /
+    # routers / fund_flow / mappers / topology / validation——弱合规下不可行；字段范式
+    # 加性兼容、下游默认取主源契约时可见、不臆造）。
     rows = _sina_fund_flow_fallback(code, 120)
     if date and rows:
         rows = [r for r in rows if (r.get("date") or "")[:10] <= date]
-    return rows
+    return _with_source(rows, "sina_fallback")
 
 
 def _sina_fund_flow_fallback(code: str, num: int = 120) -> list[dict]:
@@ -531,6 +540,17 @@ def _parse_fflow_klines(d: dict) -> list[dict]:
                 "mid_net": _f(p[3]), "large_net": _f(p[4]), "super_net": _f(p[5]),
             })
     return rows
+
+
+def _with_source(rows: list[dict], source: str) -> list[dict]:
+    """给每行加 source provenance（immutable：新建 dict 不改原行）。
+
+    S111 R3：stock_fund_flow_120d 返回值带来源标识，让下游可见'这是新浪降级数据
+    非东财'。对齐 market._emotion data_source='ths_fallback' 字段范式——东财行
+    source='eastmoney'，新浪降级行 source='sina_fallback'。下游（risk_models /
+    cross_validate）默认取主源契约时可据此识别降级数据不混算。
+    """
+    return [{**r, "source": source} for r in rows]
 
 
 # ---------------------------------------------------------------------------

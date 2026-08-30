@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -138,3 +139,76 @@ def get_with_fallback(
 
     # 3. 返回兜底值
     return fallback_value
+
+
+def _peek_cache_ts(key: str) -> float | None:
+    """读取缓存条目的时间戳（不返回数据，仅供 provenance/降级标注）。
+
+    优先内存缓存，其次文件；与 load_cache 同源但只取 ts，不改动 load_cache 签名。
+    """
+    hit = _MEM_CACHE.get(key)
+    if hit:
+        return hit[0]
+    try:
+        path = _cache_path(key)
+        if not path.exists():
+            return None
+        raw = json.loads(path.read_text())
+        ts = raw.get("ts")
+        return ts if isinstance(ts, (int, float)) else None
+    except Exception:
+        return None
+
+
+def get_with_fallback_meta(
+    key: str,
+    fetch_fn,
+    ttl: int = _MEM_TTL,
+    fallback_value: Any = None,
+) -> tuple[Any, dict[str, Any]]:
+    """带降级的数据获取（诚实版）：与 get_with_fallback 同语义，但返回 (data, meta)。
+
+    让调用方区分 live 数据与缓存降级——断源/陈旧不再伪装成实时中性信号
+    （S111 R2，对齐 sentiment_context data_status 范式）。既有
+    get_with_fallback 零改动，渐进迁移。
+
+    Args:
+        key: 缓存键
+        fetch_fn: 实时数据获取函数（可能抛出异常）
+        ttl: 缓存有效期（秒）
+        fallback_value: 缓存也失效时的兜底值
+
+    Returns:
+        (data, meta)：
+        - meta = {"from_cache": bool, "is_stale": bool, "cache_ts": float | None}
+        - live fetch 成功 → (data, {from_cache:False, is_stale:False, cache_ts:None})
+        - fetch 失败/空但缓存命中 → (cached, {from_cache:True, is_stale:True,
+          cache_ts:缓存写入时间})：命中缓存即标 stale（非 live）
+        - fetch 失败且缓存未命中 → (fallback_value, {from_cache:False,
+          is_stale:False, cache_ts:None})：调用方按 data 是否空自行判 missing
+    """
+    meta: dict[str, Any] = {"from_cache": False, "is_stale": False, "cache_ts": None}
+    # 1. 尝试实时获取
+    try:
+        data = fetch_fn()
+        if not _is_empty(data):
+            save_cache(key, data, ttl)
+            return data, meta
+        # 空数据（限流返空）——不写覆盖，降级到缓存
+    except Exception as e:
+        # 实时获取失败（源宕/限流/编程 bug），降级到缓存——记日志便于排查
+        # （非 bare 吞无日志：S111 spec R7 批的同款 anti-pattern 不在此重演）
+        logging.getLogger("fallback").debug(
+            "get_with_fallback_meta fetch_fn 失败 key=%s，降级到缓存: %s", key, e
+        )
+
+    # 2. 降级到缓存
+    cached = load_cache(key, ttl)
+    if cached is not None:
+        meta["from_cache"] = True
+        meta["is_stale"] = True
+        meta["cache_ts"] = _peek_cache_ts(key)
+        return cached, meta
+
+    # 3. 返回兜底值
+    return fallback_value, meta
