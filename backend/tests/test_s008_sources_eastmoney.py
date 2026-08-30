@@ -6,6 +6,17 @@
 """
 from data.sources import eastmoney
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _mock_sina_fund_flow_fallback(monkeypatch):
+    """S109/bc197ca：stock_fund_flow_120d 东财双 host 失败/数据不足(<5条)时降级新浪。
+    本测东财链路语义，mock 新浪 fallback 返 []（不联网 + 保"东财失败→空"旧断言）。
+    东财成功路径（payload ≥5 条）不触发 fallback。"""
+    monkeypatch.setattr(eastmoney, "_sina_fund_flow_fallback",
+                        lambda code, num=120: [])
+
 
 class _FakeResp:
     def __init__(self, payload):
@@ -36,10 +47,12 @@ def test_market_turnover_rank_shape(monkeypatch):
 
 def test_stock_fund_flow_120d_shape(monkeypatch):
     # push2his klines: "date,main,small,mid,large,super,..."
-    payload = {"data": {"klines": ["2026-07-29,1000,-500,200,300,800"]}}
+    # S109/bc197ca：≥5 条才算有效历史（<5 降级新浪），故给 5 条测 shape
+    klines = ["2026-07-2%d,1000,-500,200,300,800" % d for d in (9, 8, 7, 6, 5)]
+    payload = {"data": {"klines": klines}}
     monkeypatch.setattr(eastmoney, "em_get", lambda *a, **k: _FakeResp(payload))
     rows = eastmoney.stock_fund_flow_120d("600519")
-    assert len(rows) == 1
+    assert len(rows) == 5
     r = rows[0]
     assert r["date"] == "2026-07-29"
     assert r["main_net"] == 1000.0
@@ -50,9 +63,10 @@ def test_stock_fund_flow_120d_shape(monkeypatch):
 
 
 def test_fund_flow_120d_first_host_ok_no_fallback(monkeypatch):
-    """S049a R5：push2his 成功 → 用首 host，不降级（em_get 只调 1 次）。"""
+    """S049a R5：push2his 成功(≥5条) → 用首 host，不降级（em_get 只调 1 次）。"""
     hosts = []
-    payload = {"data": {"klines": ["2026-08-08,100,-50,20,30,80"]}}
+    klines = ["2026-08-0%d,100,-50,20,30,80" % d for d in range(1, 6)]
+    payload = {"data": {"klines": klines}}
 
     def fake_em_get(url, *a, **k):
         hosts.append(url)
@@ -60,15 +74,16 @@ def test_fund_flow_120d_first_host_ok_no_fallback(monkeypatch):
 
     monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
     rows = eastmoney.stock_fund_flow_120d("600519")
-    assert len(rows) == 1
+    assert len(rows) == 5
     assert len(hosts) == 1
     assert "push2his." in hosts[0]
 
 
 def test_fund_flow_120d_fallback_to_push2delay(monkeypatch):
-    """S049a R5：push2his 断连 + push2delay 成功 → 用 push2delay（em_get 调 2 次）。"""
+    """S049a R5：push2his 断连 + push2delay 成功(≥5条) → 用 push2delay（em_get 调 2 次）。"""
     hosts = []
-    payload = {"data": {"klines": ["2026-08-08,664611600,-1,2,3,4"]}}
+    klines = ["2026-08-0%d,664611600,-1,2,3,4" % d for d in range(1, 6)]
+    payload = {"data": {"klines": klines}}
 
     def fake_em_get(url, *a, **k):
         hosts.append(url)
@@ -78,15 +93,16 @@ def test_fund_flow_120d_fallback_to_push2delay(monkeypatch):
 
     monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
     rows = eastmoney.stock_fund_flow_120d("600519")
-    assert len(rows) == 1
+    assert len(rows) == 5
     assert rows[0]["main_net"] == 664611600.0
     assert len(hosts) == 2
     assert "push2delay." in hosts[1]
 
 
 def test_fund_flow_120d_empty_klines_falls_back(monkeypatch):
-    """S049a：push2his 返 200 但 klines 空（断连恢复期）→ 视同失败继续下一 host。"""
+    """S049a/bc197ca：push2his 返空 klines → push2delay 返<5条不足 → 降级新浪。"""
     hosts = []
+    # push2delay 返 1 条（<5）→ 视为不足，降级新浪（fixture mock 返 []）
     ok = {"data": {"klines": ["2026-08-08,5,5,5,5,5"]}}
 
     def fake_em_get(url, *a, **k):
@@ -97,7 +113,8 @@ def test_fund_flow_120d_empty_klines_falls_back(monkeypatch):
 
     monkeypatch.setattr(eastmoney, "em_get", fake_em_get)
     rows = eastmoney.stock_fund_flow_120d("600519")
-    assert len(rows) == 1
+    # push2delay 1 条<5 → 降级新浪（mock []）→ 返 []
+    assert rows == []
     assert len(hosts) == 2
 
 

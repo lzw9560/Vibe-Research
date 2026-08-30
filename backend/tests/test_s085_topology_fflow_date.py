@@ -29,7 +29,12 @@ def _kline_json(rows):
 
 def test_stock_fund_flow_120d_filters_by_date(monkeypatch):
     """stock_fund_flow_120d(code, date=H) 过滤 flows ≤ H（修 replay 误取今日）。"""
+    # bc197ca：≥5 条才算有效（<5 降级新浪），mock 新浪返 [] 让东财路径生效
+    monkeypatch.setattr(eastmoney, "_sina_fund_flow_fallback", lambda code, num=120: [])
     rows = [
+        {"date": "2026-08-10", "main_net": 0},  # 补足 5 条
+        {"date": "2026-08-11", "main_net": 0},
+        {"date": "2026-08-12", "main_net": 0},
         {"date": "2026-08-14", "main_net": 1e8},
         {"date": "2026-08-15", "main_net": 2e8},
         {"date": "2026-08-16", "main_net": 3e8},  # > as_of
@@ -38,17 +43,19 @@ def test_stock_fund_flow_120d_filters_by_date(monkeypatch):
     monkeypatch.setattr(eastmoney, "em_get",
                        lambda url, params=None, headers=None, timeout=15: _FakeResp(_kline_json(rows)))
     out = eastmoney.stock_fund_flow_120d("600519", date="2026-08-15")
-    assert len(out) == 2  # 08-14, 08-15 ≤ 08-15
+    assert len(out) == 5  # 08-10~08-15 ≤ 08-15（共 5 条）
     assert all(r["date"] <= "2026-08-15" for r in out)
 
 
 def test_stock_fund_flow_120d_no_date_returns_all(monkeypatch):
     """不传 date（fund_flow.py/risk_models/routers 用）→ 不过滤，既有行为。"""
-    rows = [{"date": "2026-08-14", "main_net": 1e8}, {"date": "2026-08-17", "main_net": 4e8}]
+    monkeypatch.setattr(eastmoney, "_sina_fund_flow_fallback", lambda code, num=120: [])
+    # bc197ca：≥5 条才算有效，给 5 条
+    rows = [{"date": "2026-08-%02d" % d, "main_net": d * 1e8} for d in range(10, 15)]
     monkeypatch.setattr(eastmoney, "em_get",
                        lambda url, params=None, headers=None, timeout=15: _FakeResp(_kline_json(rows)))
     out = eastmoney.stock_fund_flow_120d("600519")
-    assert len(out) == 2  # 不过滤
+    assert len(out) == 5  # 不过滤
 
 
 def test_topology_fund_flow_passes_date_to_stock_fund_flow(monkeypatch):
