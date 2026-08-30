@@ -251,3 +251,62 @@ S117 修 S115 scan #13 premarket-funnel-cache-fdate-offbyone（honest_already：
 - 跨源 date 匹配口径一致性：全仓 date 匹配（== vs <= vs in-range）未做声明式断言统一
 - baostock T+1 stuck-mark 7 日：拖慢 §44 lift 样本积累（forward_test T+1 回填慢、verdict 久留探索性 n<30），borderline 入册待定
 - 新浪降级无最小条数校验：返 1-4 条当 120d 历史致 max_abs 归一化口径漂移
+
+## S118 实现后状态（2026-08-31，completeness-gaps 第二轮扫描 + 龙虎榜源端）
+
+S118 scan（wf_552c8943-5d3，8 维并行 finder + per-finding 对抗核实 + 完整性 critic，26 agent 0 error，~1.2M token）扫旧「本轮未覆盖维度」7 项 + 用户追加龙虎榜源端（第 8 维，S107 占位草案从未实现）。17 裂缝：9 confirmed_lying / 8 actually_honest / 0 uncertain。已抽验 3 处代码实锤：fix_now（source-em-swallow，eastmoney.py:366 吞异常→[] + fallback.py:191-195 fetch_ok=不抛异常 + risk_models.py:305 ok 分支，链环闭合，"击败 S112"判词成立）/ hithink-rank（hithink_src.py:248 `if data is None: return []` 坍缩失败与合法空）/ critic 最 material 漏扫（risk 三子维度 risk_models.py:411-474 except 返 0.0 + _merge_data_status:215 不含三者）。verify gate 成立。**本节 critic 的 6 漏扫维度 = 新「本轮未覆盖维度」，取代旧 §本轮未覆盖维度（旧 8 项已全扫）。**
+
+**9 confirmed_lying（待后续切片修，按 fix_urgency/sev 排序）**：
+
+| crack | where | sev | fix_urgency | 修法 |
+|---|---|---|---|---|
+| source-em-swallow-defeats-fetch-ok | eastmoney.py:366 | HIGH | ✅ 已修（S119） | eastmoney_datacenter 改：em_get/.json() 抛异常时 raise typed SourceUnavailable（非 bare return []），仅 HTTP 成功但 result.data 空才返 []（真无数据）。单点覆盖 dragon_tiger_board 三处 + seat_engine._pull_records + hot_money_seats 间接。**⚠ 击败 S112**：fetch_ok 区分"源断 vs 未上榜"前提是源端源断会抛异常，但源端把源断也变 []→fetch_ok 恒 True→源断伪装"未上榜 ok"→risk 归零。S112 在源端被绕过，须回看。**S119 已修**（opt-in raise_on_failure，见 S119 状态节）。 |
+| ai-hithink-rank-empty-on-failure | hithink_src.py:248 | HIGH | worth_fixing | skyrocket/hot_stock/anomaly_list 把 `if data is None: return []` 改 raise RuntimeError；registry.execute 兜成 {"error"} 喂 LLM；router 同步 502；改 test_skyrocket_failure_empty 断言（从 ==[] 改 raises/返 error）。同仓 query_global_stock/worldmonitor_query 失败返 {"error":"暂不可达"} 是诚实范式。⚠ 关联 hithink APIKey 泄漏待轮换，轮换后旧 key 401 活体触发此路径。 |
+| ai-tencent-num-zero-coercion | tencent.py:58 | HIGH | worth_fixing | num() 对空/非数值返 None 而非 0.0（根因），或范围修：quote_from_tencent 对 0 永不合法字段（price/pe_ttm/pe_static/pb/last_close/open/high/low/market_cap/float_market_cap）用 `_numf(...) or None` 把 0.0 归 None。亏损股 PE 未定义→gtimg 返空/"-"→num()→0.0 喂 LLM 当真 PE=0 极度低估。触 §1.2 不臆造底线。 |
+| market-emotion-realttime-weekend-silent-fallback-no-calendar-gate | market.py:220 | HIGH | worth_fixing | market._emotion(date=None) 实时入口加交易日历门控：周末/非交易日不取 em_zt_topic_pool 当日池当实时，返 stale 或标 is_delayed/trade_date。em_zt_topic_pool 静默回退是唯一未守卫缺口。 |
+| realtime-capital-flow-no-date-provenance-carryforward-as-fresh | risk_models.py:670 | MEDIUM | worth_fixing | _get_realtime_capital_flow 取 history[-1] 加 date 校验：盘前 carry-forward 资金流（无当日 bar）标 data_status=degraded/missing 不戳 last_updated=now。 |
+| hot-money-seats-partial-fetch-silent | hot_money_seats.py:109 | MEDIUM | worth_fixing | fetch_billboard_for_date 单侧断流 except:continue 静默返半截→席位画像在残缺数据上算 next_day_sell_rate。返 {rows,buy_ok,sell_ok}，残缺日不纳入聚合 + warning 日志（非 bare continue）。 |
+| seal-intraday-cron-misses-1500-close-auction-final | scheduled_tasks.py:2214 | MEDIUM | worth_fixing | seal_intraday_collect cron `* 9-14` 止于 14:59，漏采 15:00 收盘集合竞价终态涨停/炸板；注释假称覆盖 15:00-15:05。改 cron 到 15:05 或加 15:00 专项采集。verify 推翻 finder honest_empty 判 confirmed_lying（注释撒谎）。 |
+| backtest-daily-snapshot-degraded-hit-rate-no-provenance | backtest_lite.py:78 | MEDIUM | worth_fixing | backtest_daily_snapshots 落盘 degraded hit_rate 加 provenance：取数失败被 _calc_next_day_return 静默压成 0.0 当真实命中率落盘固化。加 fetch_ok/is_degraded 标。 |
+| storm-daemon-news-items-no-provenance | storm_daemon.py:40 | LOW | worth_fixing | storm_daemon 快照 news_items 加 provenance：部分源失败的新闻被当完整隔夜快照喂 storm_predictor。 |
+
+**8 actually_honest（登记非修，verify 推翻 lying 主张或判诚实空/latent）**：
+- ai-eastmoney-reports-soft-empty（eastmoney.py:72，MEDIUM）— reportapi 信封无 success/message 字段（实测），返 [] 诚实；verify 称未触发真 429（违防封底线）不活测，留登记。
+- ai-query-quote-bare-empty-dict（stock_tools.py:30，LOW）— query_quote tencent 瞬态失败返裸 {}，与兄弟工具范式不一，但非 fabricate。
+- premarket-t1-review-kline-refresh-completion-race（scheduled_tasks.py:1860，MEDIUM honest_empty）— 16:35 读 baostock cache 时 16:30 kline_refresh 未原子写完，S101 T+1 通知系统性空（与 S117 f_date off-by-one 不同根因，另立登记）。
+- scheduler-daemons-no-single-worker-guard（app.py:88 + scheduled_tasks.py:2072/2079/2122/510，HIGH availability）— lifespan 调度器/守护/采样器无单 worker 守卫 + fire 无跨 worker dedup，多 worker 下 N× 跑（N× em_get 防封底线 + 缓存分叉）。当前单 worker 诚实，扩 gunicorn 前必修（对齐 multi-worker-cache latent）。
+- funnel-config-inprocess-no-propagation（candidates.py:51/140/105，MEDIUM robustness）— ThresholdConfig `_store` 纯进程内无持久化/跨 worker 传播，多 worker 阈值改动分叉→rerun 候选集静默不一致。
+- storm-t1-snapshot-no-night-gating-blocks-current-fallback（storm_daemon.py:90-121 + storm_predictor.py:82-96/140，MEDIUM robustness）— get_t1_global_snapshot 取 good[-1] 无夜间时段门控，非空 T-1 快照阻塞 current fallback（dev 盘前停机用盘中/盘前美盘值当隔夜）。
+- forward-test-t1-settle-stuck-mark-conflates-transient-with-permanent（scheduled_tasks.py:1252-1265 + kline_returns.py:91-118 + scheduled_tasks.py:2294 vs :2254，MEDIUM robustness）— stuck-mark 把暂态 fetch-empty 当永久 no-bar 施 7 日抑制，15:50 cron 命中 baostock EOD 未就绪（baostock-stuck 维度 borderline，登记）。
+- s107-hithink-dragon-tiger-unimplemented（S107 spec.md:3，LOW completeness_gap）— S107 占位草案从未实现，hithink 个股+概念维度与东财席位维度不重叠，东财断无备援是维度约束下诚实缺口，非缺陷（用户追加龙虎榜维度的产出）。
+
+**撒谎总账**：14（S111/S112，全修）+ 3（S115，全修）+ 1（S119，已修）= 18 全修 → +8（S118 待修）= **26 confirmed_lying，其中 8 待修**。诚实登记 19 + 8 = 27。registry 覆盖从 36 扩到 53（36+17）。
+
+## S119 实现后状态（2026-08-31，source-em-raise 诚实化——恢复 S112 fetch_ok 前提）
+
+S119 修 S118 scan #15 `source-em-swallow-defeats-fetch-ok`（fix_now confirmed_lying）。spec + impl + 4 测试，全量 2445 passed 0 回归（24 deselected newsradar/s032/spec_consistency 既有 flaky/归档债）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| eastmoney_datacenter raise_on_failure | ✅ 已修 | 加 `raise_on_failure: bool=False` 参数；异常路径 `if raise_on_failure: raise`（re-raise 原异常保 em_get 错误信息），HTTP 成功但 result.data 空仍返 []（合法空不抛）。默认 False 向后兼容，保护 margin_trading/block_trade/lockup_expiry/gstock/fund_flow predict 等 10+ 直调消费者零影响 |
+| dragon_tiger_board opt-in | ✅ 已修 | 加 `raise_on_failure=False` 透传 3 内调（DETAILSNEW/BUY/SELL）；risk-trio 两 lambda（risk_models.py:284 `_get_dragon_tiger_risk` + :508 `_calculate_concentration_risk`）传 True |
+| seat_engine _pull_records opt-in | ✅ 已修 | `_pull_records` 加 `raise_on_failure=False` 透传；`compute_consensus_signal` 3 调传 True（seat-info 腿）；build_seat_profiles/precompute_daily 用默认 False 不变 |
+| S112 fetch_ok 前提恢复 | ✅ | 源端 raise → get_with_fallback_meta fetch_ok=False → risk-trio "missing"（非 ok）。S112 区分源断 vs 未上榜在源端不再被绕过 |
+
+**设计**：opt-in 参数（raise_on_failure 默认 False）而非全局改契约——10+ eastmoney_datacenter 消费者诚实性未扫（critic missed_dim #6），改全局契约 blast radius 大且破既有 `[]` mock 测试。YAGNI：只修 confirmed_lying 的 risk-trio 路径（dragon_tiger 两腿 + seat-info 一腿），其余消费者留下一轮 scan 判。备选 `eastmoney_datacenter_strict` 新函数（同效但 DRY 分叉）与返 `(rows,ok)` 元组（破签名）均否决。
+
+**测试**：4 新测（test_data_honesty.py）mock `eastmoney.em_get` 层走真链——①源断 + raise_on_failure=True → dragon_tiger 抛 → fetch_ok=False → missing；②seat 腿同；③HTTP 成功但 data 空（真未上榜）→ fetch_ok=True → ok（合法路径保留）；④默认 False → 吞 [] 向后兼容。S112 risk-trio 旧测（mock 整个 dragon_tiger_board）全绿无回归。修 test_s008_t13e_misc 2 处严格 mock 签名（`lambda code, look_back=10`→加 `**k`，risk-trio 现传 raise_on_failure=True，严格签名会 TypeError）。
+
+**撒谎总账更新**：26 confirmed_lying = 18 全修（S111/S112/S115 17 + S119 1）+ 8 待修。registry 覆盖 53 不变（S119 修不新增裂缝）。
+
+**下一步候选**：剩 8 confirmed_lying 待修（ai-hithink-rank-empty / ai-tencent-num-zero / market-weekend-calendar-gate 三 HIGH + 5 M/LOW）；或跑 S120 scan round 2 扫 critic 6 漏扫（risk 三子维度承重链为头条 + `or 0` 归零反模式 ~30+ 处）。
+
+**completeness critic 抓 6 漏扫维度（= 新「本轮未覆盖维度」，下一轮 S119 scan 头条）**：
+1. ⭐ **risk score 三子维度 provenance 缺口（最 material）**：_calculate_volatility/_calculate_max_drawdown/_calculate_liquidity_risk（risk_models.py:411-474）失败返裸 0.0 + warning 但无 data_status，_merge_data_status（:215）不含三者 → composite risk 可在 3/8 维度静默归零时仍标 ok+LOW。**在仓位决策承重链上**。抽验实锤。
+2. `or 0`/`or 0.0` None→zero 强制归零反模式系统性遍布 ~30+ 处（portfolio.py:147 price or 0.0 / bidding_monitor / seat_engine / first_board_filter），S118 只抓 tencent num() 冰山一角。
+3. 聚合层顶层 provenance 缺失：StormPrediction（storm_predictor.py:30-38）probability/suggested_position 由含 degraded 因子的加权和算出当权威呈现，无顶层 data_status。
+4. 前端渲染层未扫：TrendChart.tsx:103 `typeof r.hit_rate==='number'` 把 0.0 渲染为 "0% 胜率" 非 "数据缺失"（backend→API→React 路径未系统审）。
+5. 3 个 AI 工具未审计：query_valuation（full_valuation hithink 备源失败→PS/PCF=None 透传）/query_news（akshare 异常是否被吞成 []）/prediction_short_sector（load_cached 静默）源不可达路径。
+6. em_get 消费者吞异常→返空结构全量未扫（eastmoney.py:721-722 concept_blocks `except Exception: return {'total':0,...}` 同型等）。
+
+**下一轮（S119 scan）建议 7 条**：①系统扫 `or 0` 归零反模式全仓 / ②审 risk_models 三子维度 provenance / ③审聚合层顶层 provenance（StormPrediction/composite risk_score/funnel total_score）/ ④审前端渲染层（TrendChart/HonestyBanner/ContextTab/StatsMetrics/WinRateCard）/ ⑤扫剩余 3 AI 工具源不可达路径 / ⑥em_get 消费者吞异常→返空结构全量 / ⑦scheduled_tasks.py 56 个 except 子句 bare except:pass。

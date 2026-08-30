@@ -486,6 +486,91 @@ def test_concentration_risk_not_listed_live_empty_marks_ok(isolated_cache, monke
     assert status == "ok"
 
 
+# ===========================================================================
+# S119 fix_now：source-em-swallow-defeats-fetch-ok——源端 raise 传播恢复 S112 前提
+# S112 测试 mock 掉整个 astock.dragon_tiger_board，绕过 eastmoney_datacenter 吞异常链，
+# 故漏抓 S118 回归。以下测试 mock em_get 层走真链，钉死源断→missing / 合法空→ok。
+# ===========================================================================
+
+
+def test_dragon_tiger_source_break_em_get_raise_marks_missing(isolated_cache, monkeypatch):
+    """S119 fix_now：em_get 源断 + 真 dragon_tiger_board(raise_on_failure=True) 链 → risk-trio missing。
+
+    源端 eastmoney_datacenter 旧 `except: return []` 吞异常 → dragon_tiger_board 不抛 →
+    fetch_ok 恒 True → 源断伪装"未上榜 ok"（S118 回归，击败 S112）。修：raise_on_failure=True
+    时 em_get 抛即 re-raise → dragon_tiger_board 透传 → get_with_fallback_meta fetch_ok=False → missing。
+    """
+    code = "600519"
+
+    def boom(*a, **k):
+        raise ConnectionError("em_get 源断")
+
+    monkeypatch.setattr(eastmoney, "em_get", boom)
+
+    score, status = asyncio.run(risk_models._get_dragon_tiger_risk(code))
+
+    assert score == 0.0
+    assert status == "missing"  # 非 ok——S118 回归已修
+
+
+def test_seat_info_source_break_em_get_raise_marks_missing(isolated_cache, monkeypatch):
+    """S119 seat-info 腿：em_get 源断 + _pull_records(raise_on_failure=True) → missing。
+
+    seat 腿经 compute_consensus_signal→_pull_records(raise_on_failure=True)→eastmoney_datacenter
+    re-raise → get_with_fallback_meta fetch_ok=False → _get_seat_info missing（非 ok）。
+    """
+    code = "600519"
+
+    def boom(*a, **k):
+        raise ConnectionError("em_get 源断")
+
+    monkeypatch.setattr(eastmoney, "em_get", boom)
+
+    seat = asyncio.run(risk_models._get_seat_info(code))
+
+    assert seat["data_status"] == "missing"  # 非 ok——seat 腿同源端修复
+
+
+def test_dragon_tiger_genuine_empty_em_get_marks_ok(isolated_cache, monkeypatch):
+    """S119 诚实化不误伤合法空：em_get HTTP 成功但 result.data 空（真未上榜）→ ok。
+
+    raise_on_failure 仅改异常路径；HTTP 成功但无 data（真无榜）仍返 []（不抛）→
+    dragon_tiger_board 返空骨架 → fetch_ok=True → ok（合法路径保留，与源断 missing 区分）。
+    """
+    code = "600519"
+
+    # em_get 返 HTTP 成功但 result 无 data（真未上榜，非源断）
+    monkeypatch.setattr(
+        eastmoney, "em_get",
+        lambda *a, **k: SimpleNamespace(json=lambda: {"result": None}),
+    )
+
+    score, status = asyncio.run(risk_models._get_dragon_tiger_risk(code))
+
+    assert score == 0.0
+    assert status == "ok"  # 真未上榜（非源断）→ ok
+
+
+def test_eastmoney_datacenter_default_swallows_exception_backward_compat(monkeypatch):
+    """S119 向后兼容：raise_on_failure=False（默认）→ em_get 异常仍吞成 []（非 raise）。
+
+    margin_trading/block_trade/lockup_expiry/gstock/fund_flow predict 等非 risk-trio 消费者
+    用默认 False，零影响（其诚实性未扫、未 confirmed_lying，YAGNI 不改契约）。
+    """
+    def boom(*a, **k):
+        raise ConnectionError("em_get 源断")
+
+    monkeypatch.setattr(eastmoney, "em_get", boom)
+
+    # 默认 False → 吞异常返 []（非 raise），其他消费者行为不变
+    assert eastmoney.eastmoney_datacenter("RPT_DAILYBILLBOARD_DETAILSNEW") == []
+
+    # dragon_tiger_board 默认 False → 返空骨架（非 raise），fund_flow/routers/first_board_filter 不变
+    result = eastmoney.dragon_tiger_board("600519")
+    assert result["records"] == []
+    assert result["seats"] == {"buy": [], "sell": []}
+
+
 def test_sector_divergence_source_break_marks_missing_not_now(isolated_cache, monkeypatch):
     """裂缝#10（R4）：calculate_sector_divergence industry_comparison 源断 → data_status='missing'
     + last_updated 不戳 now（源断不伪装刚更新）。

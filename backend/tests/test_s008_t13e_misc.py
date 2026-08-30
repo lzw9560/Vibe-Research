@@ -77,7 +77,7 @@ def test_announcement_and_concept_blocks():
 # ── risk_models 龙虎榜经模型 ─────────────────────────────────────────────
 
 def test_risk_concentration_via_model(monkeypatch):
-    monkeypatch.setattr(astock, "dragon_tiger_board", lambda code, look_back=10: {
+    monkeypatch.setattr(astock, "dragon_tiger_board", lambda code, look_back=10, **k: {
         "records": [{"net_buy": 1e8}, {"net_buy": 5e7}, {"net_buy": 3e7},
                     {"net_buy": 2e7}, {"net_buy": 1e7}]})
     r = __import__("asyncio").run(risk_models._calculate_concentration_risk("600519"))
@@ -85,7 +85,7 @@ def test_risk_concentration_via_model(monkeypatch):
 
 
 def test_risk_dragon_tiger_empty(monkeypatch):
-    monkeypatch.setattr(astock, "dragon_tiger_board", lambda code, look_back=10: {"records": []})
+    monkeypatch.setattr(astock, "dragon_tiger_board", lambda code, look_back=10, **k: {"records": []})
     assert __import__("asyncio").run(risk_models._calculate_concentration_risk("600519")) == 0.0
 
 

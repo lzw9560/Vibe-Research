@@ -58,8 +58,14 @@ class SeatEngine:
 
     def _pull_records(self, report_name: str, columns: str,
                       filter_str: str, page_size: int = 5000,
-                      sort_columns: str = "", sort_types: str = "-1") -> list[dict]:
-        """Wrapper around astock.eastmoney_datacenter with pagination."""
+                      sort_columns: str = "", sort_types: str = "-1",
+                      raise_on_failure: bool = False) -> list[dict]:
+        """Wrapper around astock.eastmoney_datacenter with pagination.
+
+        raise_on_failure=True 时透传给 eastmoney_datacenter——源断 raise（非吞 []），
+        供 compute_consensus_signal（seat-info 腿，经 get_with_fallback_meta）诚实化（S119）。
+        默认 False = 既有吞行为（build_seat_profiles/precompute_daily 不变）。
+        """
         all_data: list[dict] = []
         page = 1
         while True:
@@ -70,6 +76,7 @@ class SeatEngine:
                 page_size=page_size,
                 sort_columns=sort_columns,
                 sort_types=sort_types,
+                raise_on_failure=raise_on_failure,
             )
             if not data:
                 break
@@ -235,6 +242,7 @@ class SeatEngine:
             report_name="RPT_DAILYBILLBOARD_DETAILSNEW",
             columns="ALL",
             filter_str=filter_str,
+            raise_on_failure=True,
         )
         if not records:
             return None
@@ -243,11 +251,13 @@ class SeatEngine:
             report_name="RPT_BILLBOARD_DAILYDETAILSBUY",
             columns="ALL",
             filter_str=filter_str,
+            raise_on_failure=True,
         )
         sell_details = self._pull_records(
             report_name="RPT_BILLBOARD_DAILYDETAILSSELL",
             columns="ALL",
             filter_str=filter_str,
+            raise_on_failure=True,
         )
 
         if not buy_details and not sell_details:

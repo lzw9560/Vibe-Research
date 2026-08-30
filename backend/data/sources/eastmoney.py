@@ -356,8 +356,15 @@ _DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 
 
 def eastmoney_datacenter(report_name: str, columns: str = "ALL", filter_str: str = "",
-                         page_size: int = 50, sort_columns: str = "", sort_types: str = "-1") -> list[dict]:
-    """东财数据中心统一查询 —— 龙虎榜/解禁/融资融券/大宗交易/股东户数/分红 共用（已内置限流）。"""
+                         page_size: int = 50, sort_columns: str = "", sort_types: str = "-1",
+                         raise_on_failure: bool = False) -> list[dict]:
+    """东财数据中心统一查询 —— 龙虎榜/解禁/融资融券/大宗交易/股东户数/分红 共用（已内置限流）。
+
+    raise_on_failure=True 时，em_get/.json() 抛异常（源断/限流/JSON 错）即 re-raise（非吞成 []），
+    让下游 get_with_fallback_meta 据此设 fetch_ok=False（S119 恢复 S112 fetch_ok 前提——
+    源端吞异常曾令 fetch_ok 恒 True、源断伪装"未上榜 ok"）。HTTP 成功但 result.data 空
+    （真无数据）仍返 []（合法空，不抛）。默认 False = 既有吞异常行为（向后兼容，保护其他消费者）。
+    """
     params = {
         "reportName": report_name, "columns": columns, "filter": filter_str,
         "pageNumber": "1", "pageSize": str(page_size),
@@ -366,6 +373,8 @@ def eastmoney_datacenter(report_name: str, columns: str = "ALL", filter_str: str
     try:
         d = em_get(_DATACENTER_URL, params=params, timeout=15).json()
     except Exception:
+        if raise_on_failure:
+            raise
         return []
     if d.get("result") and d["result"].get("data"):
         return d["result"]["data"]
@@ -633,15 +642,23 @@ def bids(code: str) -> dict:
             "prev_close": None, "buy": [], "sell": []}
 
 
-def dragon_tiger_board(code: str, trade_date: str | None = None, look_back: int = 30) -> dict:
-    """龙虎榜：该股近期上榜记录 + 最近一次买卖席位 TOP5 + 机构专用席位净买。"""
+def dragon_tiger_board(code: str, trade_date: str | None = None, look_back: int = 30,
+                       raise_on_failure: bool = False) -> dict:
+    """龙虎榜：该股近期上榜记录 + 最近一次买卖席位 TOP5 + 机构专用席位净买。
+
+    raise_on_failure=True 时，底层 eastmoney_datacenter 源断即 raise（非吞 []），让下游
+    get_with_fallback_meta 设 fetch_ok=False（S119 诚实化 risk-trio——源断不再伪装"未上榜 ok"）。
+    默认 False = 既有吞行为（向后兼容；risk-trio 调用方传 True，其他调用方 fund_flow/routers/
+    first_board_filter 用默认 False 不变，其诚实性未扫、留下一轮 scan 判，YAGNI）。
+    """
     trade_date = trade_date or datetime.now().strftime("%Y-%m-%d")
     start = (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=look_back)).strftime("%Y-%m-%d")
     records = []
     data = eastmoney_datacenter(
         "RPT_DAILYBILLBOARD_DETAILSNEW",
         filter_str=f'(TRADE_DATE>=\'{start}\')(TRADE_DATE<=\'{trade_date}\')(SECURITY_CODE="{code}")',
-        page_size=50, sort_columns="TRADE_DATE", sort_types="-1")
+        page_size=50, sort_columns="TRADE_DATE", sort_types="-1",
+        raise_on_failure=raise_on_failure)
     for r in data:
         records.append({
             "date": str(r.get("TRADE_DATE", ""))[:10],
@@ -657,11 +674,13 @@ def dragon_tiger_board(code: str, trade_date: str | None = None, look_back: int 
         buy_data = eastmoney_datacenter(
             "RPT_BILLBOARD_DAILYDETAILSBUY",
             filter_str=f'(TRADE_DATE=\'{latest}\')(SECURITY_CODE="{code}")',
-            page_size=10, sort_columns="BUY", sort_types="-1")
+            page_size=10, sort_columns="BUY", sort_types="-1",
+            raise_on_failure=raise_on_failure)
         sell_data = eastmoney_datacenter(
             "RPT_BILLBOARD_DAILYDETAILSSELL",
             filter_str=f'(TRADE_DATE=\'{latest}\')(SECURITY_CODE="{code}")',
-            page_size=10, sort_columns="SELL", sort_types="-1")
+            page_size=10, sort_columns="SELL", sort_types="-1",
+            raise_on_failure=raise_on_failure)
         for r in buy_data[:5]:
             seats["buy"].append({"name": r.get("OPERATEDEPT_NAME", ""),
                                  "buy_amt": round((r.get("BUY") or 0) / 10000, 1),

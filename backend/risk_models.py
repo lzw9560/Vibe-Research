@@ -281,7 +281,7 @@ async def _get_dragon_tiger_risk(code: str) -> tuple[float, str]:
         payload, meta = await asyncio.to_thread(
             get_with_fallback_meta,
             cache_key,
-            lambda: astock.dragon_tiger_board(code, look_back=30),
+            lambda: astock.dragon_tiger_board(code, look_back=30, raise_on_failure=True),
             ttl=600,  # 10 分钟缓存
             fallback_value={"records": []},
         )
@@ -505,7 +505,7 @@ async def _calculate_concentration_risk_meta(code: str) -> tuple[float, str]:
         payload, meta = await asyncio.to_thread(
             get_with_fallback_meta,
             cache_key,
-            lambda: astock.dragon_tiger_board(code, look_back=10),
+            lambda: astock.dragon_tiger_board(code, look_back=10, raise_on_failure=True),
             ttl=600,  # 10 分钟缓存
             fallback_value={"records": []},
         )
