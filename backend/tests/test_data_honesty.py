@@ -318,3 +318,250 @@ def test_calculate_base_risk_db_operational_error_marks_missing(monkeypatch):
     # Assert：DB 故障标 missing（非崩 502，非 ok）——broad except catch 住 OperationalError
     assert score == 50.0
     assert status == "missing"
+
+
+# ===========================================================================
+# S112 Tier-2 撒谎裂缝（8 条，每裂缝一断言：源断→missing/degraded/is_delayed）
+# 对齐 S111 AAA + monkeypatch + isolated_cache 范式。R1-R5 已实现（GREEN），
+# R6-R8 impl 并行中（RED 正常）——测试针对 spec 期望行为，不为过而弱化断言。
+# 裂缝映射（registry.md Tier-2 节）：
+# 7. risk-dragon-tiger-silent-zero           → _get_dragon_tiger_risk
+# 8. risk-seat-info-silent-empty             → _get_seat_info
+# 9. risk-concentration-silent-zero          → _calculate_concentration_risk_meta
+# 10. sector-divergence-silent-empty          → calculate_sector_divergence
+# 11. extreme-market-broken-zt-pool-as-normal → detect_extreme_market
+# 12. score-dim4-chip-silent-50-neutral-fallback → score_dim4_chip
+# 13. gstock-push2delay-permanent-latch-no-delay-flag → global_indices
+# 14. newsradar-cache-no-ttl-stale-as-fresh   → get_radar/load_cache
+# ===========================================================================
+
+
+def test_dragon_tiger_risk_fetch_fault_marks_missing(isolated_cache, monkeypatch):
+    """裂缝#7（R1）：_get_dragon_tiger_risk 取数故障（源断）→ (0.0, 'missing')，非 silent 0.0。
+
+    旧逻辑 bare except: return 0.0 无日志无标记，与"近期未上榜=0风险"同形——源断被
+    呈现成 0 风险喂打板（risk_level 可能 HIGH→MEDIUM）。修复：源断标 data_status=missing
+    + logger，对齐 _get_realtime_capital_flow (S111 R4) 范式 + :374/:398/:418 warning sibling。
+    风险评分仍 0.0（不臆造风险），仅 data_status 区分"无数据"与"确认无风险"。
+    """
+    import astock
+
+    code = "600519"
+    # 源断：dragon_tiger_board 取数抛异常（东财 push2 断连）
+    def boom(*a, **k):
+        raise ConnectionError("dragon_tiger_board 源断")
+
+    monkeypatch.setattr(astock, "dragon_tiger_board", boom)
+
+    # Act
+    score, status = asyncio.run(risk_models._get_dragon_tiger_risk(code))
+
+    # Assert：源断标 missing（非 ok，非旧 silent 0.0 无标记）
+    assert score == 0.0
+    assert status == "missing"
+
+
+def test_seat_info_fetch_fault_marks_missing(isolated_cache, monkeypatch):
+    """裂缝#8（R2）：_get_seat_info 取数故障（源断）→ data_status='missing'，非空 dict 当真。
+
+    旧逻辑 compute_consensus_signal 任一异常或 fallback=None → 返空 dict
+    {one_day_seats:[],multi_seat_signal:False,seat_confidence:0.0}，与"当日无特征席位"
+    合法结果同形无 data_status——席位共识信号源断时漏报。修复：空 dict 加 data_status=missing
+    + logger（原 bare except 无日志），对齐 R1/R4 范式。
+    """
+    import seat_engine
+
+    code = "600519"
+    # 源断：席位引擎 compute_consensus_signal 抛异常
+    class _BrokenEngine:
+        def compute_consensus_signal(self, *a, **k):
+            raise ConnectionError("seat source 源断")
+
+    monkeypatch.setattr(seat_engine, "get_engine", lambda: _BrokenEngine())
+
+    # Act
+    seat = asyncio.run(risk_models._get_seat_info(code))
+
+    # Assert：源断标 missing（非 ok，非旧空 dict 无标记伪装"无特征席位"）
+    assert seat["data_status"] == "missing"
+    assert seat["one_day_seats"] == []
+    assert seat["multi_seat_signal"] is False
+    assert seat["seat_confidence"] == 0.0
+
+
+def test_concentration_risk_fetch_fault_marks_missing(isolated_cache, monkeypatch):
+    """裂缝#9（R3）：_calculate_concentration_risk 取数故障（源断）→ (0.0, 'missing')。
+
+    旧逻辑直调 astock.dragon_tiger_board（未走 get_with_fallback 缓存层，更脆，单次断连
+    即返空）→ records 空 return 0.0 或 bare except return 0.0，无日志无标记，集中度维度
+    被低估。修复：套 get_with_fallback_meta 缓存层（对齐同模块 dragon_tiger）+ 0.0→missing
+    + logger。
+    """
+    import astock
+
+    code = "600519"
+    # 源断：dragon_tiger_board 取数抛异常
+    def boom(*a, **k):
+        raise ConnectionError("concentration 源断")
+
+    monkeypatch.setattr(astock, "dragon_tiger_board", boom)
+
+    # Act
+    score, status = asyncio.run(risk_models._calculate_concentration_risk_meta(code))
+
+    # Assert：源断标 missing（非 ok，非旧 silent 0.0 无标记）
+    assert score == 0.0
+    assert status == "missing"
+
+
+def test_sector_divergence_source_break_marks_missing_not_now(isolated_cache, monkeypatch):
+    """裂缝#10（R4）：calculate_sector_divergence industry_comparison 源断 → data_status='missing'
+    + last_updated 不戳 now（源断不伪装刚更新）。
+
+    旧逻辑源断 → fallback_value 空板块 → return[]，或 bare except return[]（无 logger 无标记）；
+    last_updated=now 把陈旧标 fresh。修复：[]→data_status=missing + logger（:172/:227/:313 三处）；
+    last_updated 源断留空不戳 now，对齐 S111 R4 范式。
+    """
+    import astock
+    import sector_divergence as sd
+
+    # 源断：industry_comparison 取数抛异常（东财行业板块源断）
+    def boom(*a, **k):
+        raise ConnectionError("industry_comparison 源断")
+
+    monkeypatch.setattr(astock, "industry_comparison", boom)
+
+    # Act：传显式日期避开 _resolve_date 联网
+    result = asyncio.run(sd.calculate_sector_divergence("2026-08-28"))
+
+    # Assert：源断标 missing（非 ok），last_updated 留空（不戳 now 伪装刚更新）
+    assert len(result) == 1
+    assert result[0].data_status == "missing"
+    assert result[0].last_updated == ""
+    assert result[0].last_updated != datetime.now().isoformat()
+
+
+def test_extreme_market_pool_source_break_marks_missing_not_normal(isolated_cache, monkeypatch):
+    """裂缝#11（R5）：涨停/跌停/炸板池源断且缓存失效 → data_status='missing'，signal_type 非 '正常'
+    （与"真平静"区分）。
+
+    旧逻辑空池（源断）→ zt_count=0 → signal_type='正常'、is_extreme=False，无 data_status，
+    把断源呈现成"平静市"喂情绪面板/打板信号，盘中断源期触发天气熔断/仓位闸误判。修复：
+    空池(源断)→missing/degraded 不判"正常"，与"真平静"区分（ExtremeMarketSignal 已有
+    data_status 字段 S111 R5）。
+    """
+    import astock
+    import extreme_market_detector as emd
+
+    # 绕过交易日历守卫（避免非交易日直接返 None，掩盖源断路径）
+    monkeypatch.setattr(emd, "is_trading_day", lambda d: True)
+
+    # 源断：涨停/跌停/炸板池取数抛异常（东财 em_zt_topic_pool 断连）
+    def boom(*a, **k):
+        raise ConnectionError("zt_topic_pool 源断")
+
+    monkeypatch.setattr(astock, "em_zt_topic_pool", boom)
+
+    # Act：传显式日期避开 _resolve_date 联网
+    signal = asyncio.run(emd.detect_extreme_market("2026-08-28"))
+
+    # Assert：源断标 missing（非 ok），signal_type 非"正常"（与真平静区分），不判极端
+    assert signal is not None
+    assert signal.data_status == "missing"
+    assert signal.signal_type != "正常"
+    assert signal.is_extreme is False
+
+
+def test_score_dim4_chip_missing_data_returns_negative_one_not_50():
+    """裂缝#12（R6）：score_dim4_chip 筹码数据缺失 → 返 -1（不参与加权），非 50.0（伪装"中等"）。
+
+    旧逻辑子项换手/量比/成交额缺数据各默认 50.0，整函数异常 try/except 返 50.0，把"数据断裂"
+    伪装成"筹码结构中等"。raw_values 诚实 None 但 scores['chip']=50 已撒谎。当前 chip 不在
+    MARKET_PHASE_WEIGHTS（权重 0）→ 50 既不进 total（latent 不污染），但一旦给 chip 非零权重，
+    缺失→50 掩盖真实筹码松动/过冷。修复：50.0→-1 对齐 score_dim_turnover:1274 sibling
+    （缺失不参与加权，权重重分配）。
+    """
+    # Arrange：candidate 筹码结构为空（extract_chip_structure 缺当日 bar 返 {}，S111 R5）
+    candidate = {"code": "600519", "_chip_structure": {}}
+
+    # Act
+    score, raw = fbf.score_dim4_chip(candidate, "2026-08-15")
+
+    # Assert：缺数据返 -1（不参与加权），非 50.0（伪装中等）；raw 字段均 None（诚实）
+    assert score == -1.0
+    assert raw["turnover"] is None
+    assert raw["vol_ratio"] is None
+    assert raw["amount"] is None
+
+
+def test_gstock_push2delay_latch_marks_is_delayed(monkeypatch):
+    """裂缝#13（R7）：push2 实时源断 → latch 到 push2delay（延时镜像），返回带 is_delayed=True 标记。
+
+    旧逻辑 push2 失败一次后 _gs_host[0] 永久 latch 到 push2delay（延时~15min 镜像），整进程后续
+    所有 global_indices/us_hk_stock 调用永久走延时且不回探 push2，返回 d 无 is_delayed/latency
+    标记。routers/market 直接当前态返前端——单次 push2 瞬断后整进程给前端喂延时美港股/指数当
+    "实时"。修复：保留 latch（保 fast-fail，§10 Q4 选此非 per-call 重试）但加 is_delayed 标记
+    透传 global_indices（对齐 market._emotion data_source），前端可见"这是延时数据非实时"。
+    """
+    import astock
+    import gstock
+
+    # 重置 latch 到 push2（index 0），清锁前态
+    monkeypatch.setattr(gstock, "_gs_host", [0])
+
+    def fake_em_get(url, *a, **k):
+        # push2（实时，index 0）源断
+        if "push2.eastmoney.com" in url and "push2delay" not in url:
+            raise ConnectionError("push2 实时源断")
+        # push2delay（延时镜像，index 1）可用，返数据
+        if "push2delay.eastmoney.com" in url:
+            return SimpleNamespace(json=lambda: {
+                "data": {"f43": 35000, "f57": "100.DJIA", "f58": "道琼斯",
+                         "f59": 2, "f60": 34500, "f170": 144}
+            })
+        raise ConnectionError("unknown host")
+
+    monkeypatch.setattr(astock, "em_get", fake_em_get)
+    # SOX 走 datacenter，mock 为空避免联网
+    monkeypatch.setattr(astock, "eastmoney_datacenter", lambda *a, **k: [])
+
+    # Act
+    indices = gstock.global_indices()
+
+    # Assert：latch 到 push2delay 后所有指数项带 is_delayed=True（前端可见延时，非伪装实时）
+    assert len(indices) > 0
+    assert all(idx.get("is_delayed") is True for idx in indices)
+
+
+def test_newsradar_stale_cache_returns_skeleton_not_stale(monkeypatch, tmp_path):
+    """裂缝#14（R8）：newsradar 缓存过期（generated_at 远早于 TTL）→ 返 skeleton（诚实空），
+    非旧缓存当新。
+
+    旧逻辑 load_cache 仅 FileNotFoundError/JSONDecodeError→None，无 TTL/时间戳校验——调度
+    fetch 断/未跑时返上次成功写的旧缓存当新 radar，recent_days 时效窗口在调度断期间静默
+    失真（比 fallback.py 更糟，无 TTL 上界）。修复：load_cache 加 TTL 比较 + 过期返 skeleton
+    （诚实空，对齐 fallback.py TTL 范式）。
+    """
+    import json as _json
+    import newsradar
+
+    # Arrange：写一份明显过期的缓存（generated_at 远早于任何合理 TTL）
+    stale_cache = {
+        "generated_at": "2026-06-01 10:00",  # 近 3 个月前，远超任何 TTL
+        "recent_days": 7,
+        "industries": [{"key": "chip", "name": "半导体", "accent": "blue", "total": 1,
+                        "items": [{"title": "stale news", "url": "x", "time": "",
+                                   "ts": 0, "summary": "", "source": "stale"}]}],
+        "stats": {"industries": 1, "total_sources": 1},
+    }
+    cache_file = tmp_path / "radar.json"
+    cache_file.write_text(_json.dumps(stale_cache, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(newsradar, "CACHE_FILE", str(cache_file))
+
+    # Act：force=False → 走 load_cache 路径
+    result = newsradar.get_radar(force=False)
+
+    # Assert：过期缓存→skeleton（generated_at=None），非旧缓存当新（旧 generated_at 非 None）；
+    # skeleton 的 industries 来自配置（items 空），非旧缓存的 stale item
+    assert result["generated_at"] is None
+    assert all(i.get("items") == [] for i in result["industries"])

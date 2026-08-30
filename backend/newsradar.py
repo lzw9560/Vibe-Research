@@ -190,17 +190,54 @@ def fetch_radar() -> dict:
     return data
 
 
+# S112 R8：缓存 TTL——过期返 None 让 get_radar 退回 skeleton（诚实空，对齐 fallback.py TTL 范式）。
+# storm_daemon 每 30min fetch_radar 刷新；TTL 1h（=2 个 fetch 周期）容忍单次 fetch 抖动，
+# daemon 挂掉 >1h 即过期退 skeleton，不拿旧缓存当新 radar（原仅判文件存在/JSON 合法）。
+_RADAR_CACHE_TTL_SECONDS = 3600  # 1 小时（对齐 fallback._MEM_TTL）
+
+
+def _cache_is_fresh(data) -> bool:
+    """缓存是否在 TTL 内：generated_at 缺失/格式坏/过期 → False。"""
+    if not isinstance(data, dict):
+        return False
+    generated_at = data.get("generated_at")
+    if not isinstance(generated_at, str) or not generated_at:
+        return False
+    try:
+        ts = datetime.strptime(generated_at, "%Y-%m-%d %H:%M").replace(tzinfo=BEIJING)
+    except (ValueError, TypeError):
+        return False
+    age = (datetime.now(BEIJING) - ts).total_seconds()
+    return age <= _RADAR_CACHE_TTL_SECONDS
+
+
 def load_cache():
+    """读缓存并校验 TTL：过期/损坏返 None（让 get_radar 退回 skeleton 诚实空）。
+
+    S112 R8：原仅 FileNotFoundError/JSONDecodeError→None 无 TTL/时间戳校验，
+    调度 fetch 断/未跑时返上次成功写的旧缓存当新 radar。现加 TTL 比较——
+    过期返 None（对齐 fallback.py TTL 范式），generated_at 缺失/格式坏也判过期。
+    """
     try:
         with open(CACHE_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError, OSError):
+        # S112 review fix：扩 except 防 UnicodeDecodeError/PermissionError 外泄
+        # （S112 后 stale 即触发 skeleton，该路径触发面扩大，加固预存脆弱点）
         return None
+    if not _cache_is_fresh(data):
+        return None
+    return data
 
 
 def skeleton() -> dict:
     """无缓存时返回赛道骨架（空 items），前端提示点刷新。"""
-    cfg = json.load(open(SOURCES_FILE, encoding="utf-8"))
+    try:
+        cfg = json.load(open(SOURCES_FILE, encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError, OSError):
+        # S112 review fix：SOURCES_FILE 损坏/权限异常退最简骨架而非崩
+        # （S112 后 stale 触发 skeleton 路径，加固预存脆弱点）
+        return {"generated_at": None, "recent_days": 7, "industries": [], "stats": {"industries": 0, "total_sources": 0}}
     byhint: dict[str, int] = {}
     for s in cfg["sources"]:
         byhint[s["hint"]] = byhint.get(s["hint"], 0) + 1

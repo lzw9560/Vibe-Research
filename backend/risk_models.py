@@ -182,19 +182,20 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
     capital_flow_trend = calculate_capital_flow_trend(fund_flow_history)
 
     # 6. 龙虎榜风险评分（T+1 更新）
-    dragon_tiger_risk = await _get_dragon_tiger_risk(code)
+    dragon_tiger_risk, dt_status = await _get_dragon_tiger_risk(code)
 
     # 7. 席位信息（一日游特征席位 + 多席位信号）
     seat_info = await _get_seat_info(code)
     one_day_seats = seat_info.get("one_day_seats", [])
     multi_seat_signal = seat_info.get("multi_seat_signal", False)
     seat_confidence = seat_info.get("seat_confidence", 0.0)
+    seat_status = seat_info.get("data_status", "ok")
 
     # 8. 波动率与回撤（基于近期行情）
     volatility = await _calculate_volatility(code)
     max_drawdown = await _calculate_max_drawdown(code)
     liquidity_risk = await _calculate_liquidity_risk(code)
-    concentration_risk = await _calculate_concentration_risk(code)
+    concentration_risk, conc_status = await _calculate_concentration_risk_meta(code)
 
     # 9. 综合风险因素与建议
     factors, recommendation = _build_risk_factors(
@@ -209,9 +210,14 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
         multi_seat_signal=multi_seat_signal,
     )
 
-    # 10. 数据诚实性：聚合 data_status；实时资金流非 ok 不戳 last_updated=now
+    # 10. 数据诚实性：聚合 data_status（base + 资金流 + risk-trio）；实时资金流非 ok 不戳 now
     cf_status = capital_flow.get("data_status", "ok")
-    data_status = _merge_data_status(base_status, cf_status)
+    data_status = _merge_data_status(
+        base_status, cf_status, dt_status, seat_status, conc_status
+    )
+    # last_updated 仍以资金流（实时向量）为准：cf 非 ok 则不戳 now（对齐 S111 R4）；
+    # risk-trio 缺失只抬 data_status，不回退 last_updated——risk_score 由 base+cf 决定，
+    # trio 缺失只影响 factors/字段值，不影响核心评分时效。
     if cf_status == "ok":
         last_updated = datetime.now().isoformat()
     else:
@@ -255,100 +261,145 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
 # 龙虎榜与席位风险计算
 # ===========================================================================
 
-async def _get_dragon_tiger_risk(code: str) -> float:
-    """计算龙虎榜风险评分（0-100，越高风险越大）。"""
+async def _get_dragon_tiger_risk(code: str) -> tuple[float, str]:
+    """计算龙虎榜风险评分（0-100，越高风险越大）。
+
+    返回 (risk_score, data_status)：
+    - live 成功、有记录 → (computed, 'ok')
+    - fetch 失败/空、命中陈旧缓存 → (0.0, 'degraded')：不基于陈旧算非零风险
+    - fetch 失败/空、缓存也空 → (0.0, 'missing')：不伪装"近期未上榜=0风险"
+    - 取数/解析异常（mapper/import/infra） → (0.0, 'missing') + logger.warning
+
+    S112 R1：原 bare except: return 0.0 无日志无标记，与"近期未上榜=0风险"同形——
+    源断被呈现成 0 风险喂打板（risk_level 可能 HIGH→MEDIUM）。改消费
+    get_with_fallback_meta + 返 data_status，对齐 _get_realtime_capital_flow
+    (S111 R4) 范式 + :374/:398/:418 warning sibling。
+    """
     try:
-        import astock
-        from fallback import get_with_fallback
+        from fallback import get_with_fallback_meta
         cache_key = f"dragon_tiger:{code}"
-        dt = dragon_tiger_from_dict(
-            await asyncio.to_thread(
-                get_with_fallback,
-                cache_key,
-                lambda: astock.dragon_tiger_board(code, look_back=30),
-                ttl=600,  # 10 分钟缓存
-                fallback_value={"records": []},
-            )
+        payload, meta = await asyncio.to_thread(
+            get_with_fallback_meta,
+            cache_key,
+            lambda: astock.dragon_tiger_board(code, look_back=30),
+            ttl=600,  # 10 分钟缓存
+            fallback_value={"records": []},
         )
-        records = dt.records
-        if not records:
-            return 0.0
+        dt = dragon_tiger_from_dict(payload)
+    except Exception as e:
+        logging.getLogger("risk_models").warning(
+            "_get_dragon_tiger_risk(%s) 取数失败，降级 missing: %s", code, e
+        )
+        return 0.0, "missing"
 
-        # 基于近期上榜频率和净买入额波动计算风险
-        recent_days = len(records)
-        net_amounts = [r.net_buy or 0 for r in records[:5]]
-        avg_net = sum(net_amounts) / len(net_amounts) if net_amounts else 0
+    # 命中陈旧缓存（源断/限流返空时降级）：不基于陈旧算非零风险，标 degraded（对齐 R4）
+    if meta.get("is_stale"):
+        return 0.0, "degraded"
 
-        # 上榜频率风险（5次以上加分）
-        frequency_risk = min(recent_days * 5, 30)
+    records = dt.records
+    if not records:
+        # 非陈旧且无记录：fetch 失败/空 + 缓存空 → fallback_value。源断与"近期未上榜"
+        # 同形不可区分——保守标 missing（不臆造"确认未上榜"），关 R1 silent-zero 毒窗口。
+        # 风险评分仍 0.0（不臆造风险），仅 data_status 区分"无数据"与"确认无风险"。
+        return 0.0, "missing"
 
-        # 净买入波动风险
-        if len(net_amounts) >= 2:
-            variance = sum((x - avg_net) ** 2 for x in net_amounts) / len(net_amounts)
-            volatility_risk = min(variance / 1000, 30)  # 归一化
-        else:
-            volatility_risk = 0
+    # live 成功、有记录 → 正常计算
+    # 基于近期上榜频率和净买入额波动计算风险
+    recent_days = len(records)
+    net_amounts = [r.net_buy or 0 for r in records[:5]]
+    avg_net = sum(net_amounts) / len(net_amounts) if net_amounts else 0
 
-        return round(frequency_risk + volatility_risk, 2)
-    except Exception:
-        return 0.0
+    # 上榜频率风险（5次以上加分）
+    frequency_risk = min(recent_days * 5, 30)
+
+    # 净买入波动风险
+    if len(net_amounts) >= 2:
+        variance = sum((x - avg_net) ** 2 for x in net_amounts) / len(net_amounts)
+        volatility_risk = min(variance / 1000, 30)  # 归一化
+    else:
+        volatility_risk = 0
+
+    return round(frequency_risk + volatility_risk, 2), "ok"
 
 
 async def _get_seat_info(code: str) -> dict:
-    """获取席位信息（一日游特征席位 + 多席位信号）。"""
+    """获取席位信息（一日游特征席位 + 多席位信号）。
+
+    返回 dict 含 data_status：
+    - live 成功、有 signal → (seats..., 'ok')
+    - fetch 失败/空、命中陈旧缓存 → (空..., 'degraded')：不基于陈旧算席位
+    - fetch 失败/空、缓存也空 → (空..., 'missing')：不伪装"当日无特征席位"
+    - 取数/解析异常 → (空..., 'missing') + logger.warning
+
+    S112 R2：原 fallback=None → 返空 dict 无 data_status，与"当日无特征席位"
+    合法结果同形——席位共识信号源断时漏报。改消费 get_with_fallback_meta +
+    返 data_status，对齐 R1/R4 范式 + bare except 补 logger（原无日志）。
+    """
+
+    def _empty(status: str) -> dict:
+        return {
+            "one_day_seats": [],
+            "multi_seat_signal": False,
+            "seat_confidence": 0.0,
+            "data_status": status,
+        }
+
     try:
         import seat_engine as se
-        from fallback import get_with_fallback
+        from fallback import get_with_fallback_meta
         cache_key = f"seat_info:{code}"
         date_str = datetime.now(se.BEIJING_TZ).strftime("%Y-%m-%d")
-        signal = await asyncio.to_thread(
-            get_with_fallback,
+        signal, meta = await asyncio.to_thread(
+            get_with_fallback_meta,
             cache_key,
             lambda: se.get_engine().compute_consensus_signal(date_str, code),
             ttl=600,  # 10 分钟缓存
             fallback_value=None,
         )
-        if not signal:
-            return {
-                "one_day_seats": [],
-                "multi_seat_signal": False,
-                "seat_confidence": 0.0,
-            }
+    except Exception as e:
+        logging.getLogger("risk_models").warning(
+            "_get_seat_info(%s) 取数失败，降级 missing: %s", code, e
+        )
+        return _empty("missing")
 
-        details = signal.get("details", {})
-        buy_seats = details.get("buy_seats", [])
-        sell_seats = details.get("sell_seats", [])
+    # 命中陈旧缓存（源断时降级）：不基于陈旧算席位，标 degraded（对齐 R1/R4）
+    if meta.get("is_stale"):
+        return _empty("degraded")
 
-        # 一日游特征席位：当日买入且近期未持续出现的席位
-        one_day_seats = []
-        for seat in buy_seats:
-            name = seat.get("name", "")
-            if name and seat.get("net", 0) > 0:
-                one_day_seats.append(name)
+    if not signal:
+        # 非 stale 且 signal 为空：fetch 失败/空 + 缓存空 → fallback=None，
+        # 源断与"当日无特征席位"同形不可区分——保守标 missing，关 R2 silent-empty 毒窗口。
+        return _empty("missing")
 
-        # 多席位信号：买入侧出现 2+ 种不同类型的资金
-        buy_types = {s.get("seat_type") for s in buy_seats if s.get("seat_type")}
-        multi_seat_signal = len({t for t in buy_types if t != "未知席位"}) >= 2
+    details = signal.get("details", {})
+    buy_seats = details.get("buy_seats", [])
+    sell_seats = details.get("sell_seats", [])
 
-        # 席位置信度：基于机构占比和净买入额
-        total_buy = details.get("total_buy_amount", 0)
-        inst_buy = details.get("institution_buy_amt", 0)
-        if total_buy > 0:
-            confidence = min(inst_buy / total_buy, 1.0) * 100
-        else:
-            confidence = 0.0
+    # 一日游特征席位：当日买入且近期未持续出现的席位
+    one_day_seats = []
+    for seat in buy_seats:
+        name = seat.get("name", "")
+        if name and seat.get("net", 0) > 0:
+            one_day_seats.append(name)
 
-        return {
-            "one_day_seats": one_day_seats[:5],  # 最多5个
-            "multi_seat_signal": multi_seat_signal,
-            "seat_confidence": round(confidence, 2),
-        }
-    except Exception:
-        return {
-            "one_day_seats": [],
-            "multi_seat_signal": False,
-            "seat_confidence": 0.0,
-        }
+    # 多席位信号：买入侧出现 2+ 种不同类型的资金
+    buy_types = {s.get("seat_type") for s in buy_seats if s.get("seat_type")}
+    multi_seat_signal = len({t for t in buy_types if t != "未知席位"}) >= 2
+
+    # 席位置信度：基于机构占比和净买入额
+    total_buy = details.get("total_buy_amount", 0)
+    inst_buy = details.get("institution_buy_amt", 0)
+    if total_buy > 0:
+        confidence = min(inst_buy / total_buy, 1.0) * 100
+    else:
+        confidence = 0.0
+
+    return {
+        "one_day_seats": one_day_seats[:5],  # 最多5个
+        "multi_seat_signal": multi_seat_signal,
+        "seat_confidence": round(confidence, 2),
+        "data_status": "ok",
+    }
 
 
 # ===========================================================================
@@ -422,28 +473,68 @@ async def _calculate_liquidity_risk(code: str) -> float:
 
 
 async def _calculate_concentration_risk(code: str) -> float:
-    """计算集中度风险（基于龙虎榜席位集中度）。"""
+    """计算集中度风险（基于龙虎榜席位集中度）。
+
+    返 float（向后兼容直调测试 test_s008_t13e_misc）。data_status 由
+    _calculate_concentration_risk_meta 返回，update_one_day_risk_realtime 读 _meta。
+    """
+    score, _status = await _calculate_concentration_risk_meta(code)
+    return score
+
+
+async def _calculate_concentration_risk_meta(code: str) -> tuple[float, str]:
+    """集中度风险 + data_status（S112 R3）。
+
+    返回 (concentration, data_status)：
+    - live 成功、有记录、total>0 → (computed, 'ok')
+    - live 成功、有记录、total<=0 → (0.0, 'ok')（合法无正向净买，非断源）
+    - fetch 失败/空、命中陈旧缓存 → (0.0, 'degraded')：不基于陈旧算集中度
+    - fetch 失败/空、缓存也空 → (0.0, 'missing')：不伪装"无集中度风险"
+    - 取数/解析异常 → (0.0, 'missing') + logger.warning
+
+    原直调 astock.dragon_tiger_board（未走 get_with_fallback 缓存层，更脆，单次断连
+    即返空）→ records 空 return 0.0 或 bare except return 0.0，无日志无标记。改套
+    get_with_fallback_meta 缓存层（对齐同模块 _get_dragon_tiger_risk）+ 0.0→missing
+    + logger，对齐 _get_realtime_capital_flow (S111 R4) 范式 + :374/:398/:418 sibling。
+    """
     try:
-        import astock
-        dt = dragon_tiger_from_dict(
-            await asyncio.to_thread(astock.dragon_tiger_board, code, look_back=10)
+        from fallback import get_with_fallback_meta
+        cache_key = f"concentration_dt:{code}"
+        payload, meta = await asyncio.to_thread(
+            get_with_fallback_meta,
+            cache_key,
+            lambda: astock.dragon_tiger_board(code, look_back=10),
+            ttl=600,  # 10 分钟缓存
+            fallback_value={"records": []},
         )
-        records = dt.records
-        if not records:
-            return 0.0
+        dt = dragon_tiger_from_dict(payload)
+    except Exception as e:
+        logging.getLogger("risk_models").warning(
+            "_calculate_concentration_risk(%s) 取数失败，降级 missing: %s", code, e
+        )
+        return 0.0, "missing"
 
-        # 计算最近一次上榜的席位集中度（CR5）
-        net_buys = [r.net_buy or 0 for r in records[:5]]
-        total = sum(net_buys)
-        if total <= 0:
-            return 0.0
+    # 命中陈旧缓存（源断时降级）：不基于陈旧算集中度，标 degraded（对齐 R1/R4）
+    if meta.get("is_stale"):
+        return 0.0, "degraded"
 
-        # 计算前5席位的集中度
-        top5 = sum(sorted(net_buys, reverse=True)[:5])
-        concentration = top5 / total if total > 0 else 0
-        return round(concentration * 100, 2)
-    except Exception:
-        return 0.0
+    records = dt.records
+    if not records:
+        # 非陈旧且无记录：fetch 失败/空 + 缓存空 → fallback_value。源断与"无上榜"
+        # 同形不可区分——保守标 missing，关 R3 silent-zero 毒窗口。
+        return 0.0, "missing"
+
+    # 计算最近一次上榜的席位集中度（CR5）
+    net_buys = [r.net_buy or 0 for r in records[:5]]
+    total = sum(net_buys)
+    if total <= 0:
+        # 有记录但无正向净买：合法"无集中度风险"，标 ok（非断源）
+        return 0.0, "ok"
+
+    # 计算前5席位的集中度
+    top5 = sum(sorted(net_buys, reverse=True)[:5])
+    concentration = top5 / total if total > 0 else 0
+    return round(concentration * 100, 2), "ok"
 
 
 # ===========================================================================

@@ -48,6 +48,12 @@ def _push2_stock_get(secid: str, fields: str) -> dict | None:
 
     S091：timeout 10→5——push2 间歇限流时 fast-fail（global_indices 8 指数串行，
     限流致 daily-review 卡 9.75s；缩 5 后限流指数 5s 失败降级 push2delay，整体 <5s）。
+
+    S112 R7：保留 latch + fast-fail，但把 is_delayed 标记注入返回 dict（_is_delayed）——
+    push2delay 是延时~15min 镜像（非 push2 实时），latch 后整进程复用该主机。下游
+    _quote_from/global_indices 透传为 is_delayed，让前端/消费者可见"这是延时数据"
+    （对齐 market._emotion data_source='ths_fallback' 范式），不撒谎把延时当实时。
+    §10 Q4 选此非 per-call 重试（保 fast-fail）。
     """
     params = {"secid": secid, "fields": fields}
     with _gs_host_lock:
@@ -62,7 +68,9 @@ def _push2_stock_get(secid: str, fields: str) -> dict | None:
         if d:
             with _gs_host_lock:
                 _gs_host[0] = i
-            return d
+            # is_delayed：push2delay（host 名含 "delay"）是延时镜像，push2 是实时。
+            # 用 {**d, ...} 新建 dict（不 mutate 原响应），标记绑定到具体这份数据。
+            return {**d, "_is_delayed": "delay" in _GS_HOSTS[i]}
     return None
 
 
@@ -87,6 +95,9 @@ def _quote_from(d: dict) -> dict:
         "amount": d.get("f48") if isinstance(d.get("f48"), (int, float)) else None,
         "mcap": d.get("f116") if isinstance(d.get("f116"), (int, float)) and d.get("f116") else None,
         "change_pct": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
+        # S112 R7：延时标记透传（push2delay 镜像→True，push2 实时→False）。
+        # _push2_stock_get 注入 _is_delayed；无该键（如取数失败 d={}）→ False。
+        "is_delayed": bool(d.get("_is_delayed", False)),
     }
 
 
@@ -112,6 +123,9 @@ def _fetch_sox_datacenter() -> dict | None:
             "key": "sox", "name": "费城半导体", "region": "外围半导体",
             "price": r.get("INDICATOR_VALUE"),
             "change_pct": round(float(cr), 2) if isinstance(cr, (int, float)) else None,
+            # S112 review fix：SOX 走 datacenter 日频报告（非 push2delay 延时镜像），
+            # 显式标 is_delayed=False 保证所有指数项字段一致，前端无需特判。
+            "is_delayed": False,
         }
     except Exception:  # noqa: BLE001
         return None
@@ -134,6 +148,9 @@ def global_indices() -> list[dict]:
             "key": idx["key"], "name": idx["name"], "region": idx["region"],
             "price": _price(d, "f43"),
             "change_pct": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
+            # S112 R7：延时标记透传（push2delay 镜像→True），让前端可见"这是延时数据"
+            # （market._cached 5min passthrough，直接进 /api/global/indices 响应）。
+            "is_delayed": bool(d.get("_is_delayed", False)),
         })
     sox = _fetch_sox_datacenter()
     if sox:

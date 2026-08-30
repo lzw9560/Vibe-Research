@@ -10,7 +10,7 @@
 |---|---|---|
 | 诚实（仅登记，含 3 条 Tier-2 健壮性/防封修复项） | 4 | 登记完成 |
 | Tier-1 撒谎（S111 已实现，全 confirmed_honest） | 6 | 已修 |
-| Tier-2 撒谎（待后续切片，全 confirmed_lying） | 8 | 登记 |
+| Tier-2 撒谎（S112 已实现，全 confirmed_honest，含已知限制） | 8 | 已修 |
 
 > 14 条撒谎全部经对抗核实 confirmed_lying（默认尝试反驳、代码实锤才确认）。
 > `premarket-selection-unguarded-cache-read` 原判"撒谎"被 verify 推翻为 **actually_honest**（诚实崩 500，健壮性缺陷非数据撒谎）——正是对抗核实防的假阳性，差点把崩错当撒谎去缝补。
@@ -141,6 +141,25 @@
 - where: `backend/newsradar.py:215-218`
 - 毒窗口: `newsradar.get_radar(force=False)` 恒返 `load_cache()`，load_cache 仅 FileNotFoundError/JSONDecodeError→None 无 TTL/时间戳校验。调度 fetch 断/未跑时返上次成功写的旧缓存当新 radar，generated_at 虽是旧时间（部分诚实）但系统不标 stale 不回退 skeleton，recent_days 时效窗口在调度断期间静默失真。比 fallback.py 更糟（无 TTL 上界）。
 - 修法: load_cache 加 TTL 比较 + 过期返 skeleton（诚实空，对齐 fallback.py TTL 范式）
+
+## S112 实现后状态 + 修复记录 + 已知限制（2026-08-30）
+
+**Tier-2 8 条撒谎全修**（S112 workflow 4 并行 impl + 3 路 review，18 测试全绿，全量 2424 passed 0 S112 回归）。对抗 honesty 8/8 confirmed_honest on literal claims。
+
+**review 驱动补修 3 项**：
+
+| # | finding | severity | 补修 |
+|---|---|---|---|
+| 1 | extreme detector 漏补 sector 同款"不缓存 missing"守卫——源恢复后延迟再探测最长 5min | MEDIUM | get_extreme_market_signal 加 `if data_status!='missing': _set_cached` 守卫（对齐 sector_divergence:308），missing 不缓存源恢复即重探 |
+| 2 | SOX dict 缺 is_delayed 字段（8 push2 指数有，SOX 无，前端按 is_delayed 消费得 None） | LOW | _fetch_sox_datacenter 返 dict 显式加 is_delayed=False（日频非延时镜像） |
+| 3 | newsradar skeleton() 裸读 SOURCES_FILE 无 try/except + load_cache except 未含 UnicodeDecodeError/OSError | LOW | skeleton 包 try/except 退最简骨架；load_cache except 扩 (FileNotFoundError,JSONDecodeError,UnicodeDecodeError,OSError) |
+
+**⚠ 已知限制（未修，待后续）**：
+
+- **risk-trio over-report 'missing'（头部发现）**：crack 1/2/3 的 `get_with_fallback_meta` 的 `_is_empty` 分不开"源断返空" vs "股票真没上龙虎榜返空"→ ~99% 非上榜股票 dragon_tiger/seat/concentration **永久标 missing**，OneDayRisk.data_status 对多数股票恒 missing。源断确实不再 silent-0（literal claim 达成），但原 crack"源断 vs 未上榜不可区分"诉求**未真解决**（两者都→missing），marker 作为 health signal 不可靠。**修需**：给 get_with_fallback_meta 加 fetch_ok 标志（fetch_fn 返无 exception=True）让 risk-trio 区分 live-empty(未上榜=ok) vs live-failed(missing)，或 risk-trio 改直调源不走 empty→cache fallback。非平凡，待后续切片决策。
+- **gstock is_delayed 无消费者**：backend 真标 is_delayed 透传到 /api/global/indices JSON 边界，但 grep 全仓零 reader（前端未消费）。"延时当实时"危害 backend 已诚实但未端到端闭环→前端任务。
+- **DRY _resolve_pool_provenance / _resolve_sector_provenance**：两 helper 近乎逐字重复，日后易分叉→抽共享 helper（纯质量，非阻塞）。
+- **extreme degraded 仍缓存 5min**：fix 1 只跳过 missing 缓存，degraded 仍缓存（陈旧计数有参考价值，可接受；若天气熔断要 best-effort 陈旧判定可改）。
 
 ## 本轮未覆盖维度（completeness gaps，后续切片补扫）
 - AI 出口诚实（chat.TOOLS/_exec_tool→registry.execute）：数据工具失败时返给 LLM 的是诚实 'unavailable' 还是 bare None/[]（LLM 可能据此臆造）——数据进入 AI 研判的最后一跳

@@ -837,7 +837,8 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
     - 成交额（30%）：1-10 亿健康满分，>15 亿过大 0 分
 
     数据来源：tencent_quote（实时/盘后收盘行情）。
-    数据缺失 → 该子项 50 分中性，不因缺失误判。
+    数据缺失 → 该子项 -1 不参与加权（对齐 score_dim_turnover sibling）；
+    全部子项缺失 → 维度返 -1 不参与加权（不伪装"筹码结构中等"，防 chip 权重启用即引爆）。
 
     Returns:
         (score, raw)：raw 含 turnover（换手率%）/vol_ratio（量比）/amount（成交额元）。
@@ -850,10 +851,10 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
             chip = extract_chip_structure(candidate.get("code", ""), date)
             candidate["_chip_structure"] = chip
 
-        # 子项1：换手率
+        # 子项1：换手率（缺失→-1 不参与加权）
         tp = chip.get("turnover_pct")
         raw["turnover"] = tp
-        tp_score = 50.0
+        tp_score = -1.0
         if tp is not None:
             if 5.0 <= tp <= 15.0:
                 tp_score = 100.0
@@ -864,10 +865,10 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
             else:  # < 2.0
                 tp_score = 30.0
 
-        # 子项2：量比
+        # 子项2：量比（缺失→-1 不参与加权）
         vr = chip.get("vol_ratio")
         raw["vol_ratio"] = vr
-        vr_score = 50.0
+        vr_score = -1.0
         if vr is not None:
             if 0.8 <= vr <= 1.5:
                 vr_score = 100.0
@@ -878,12 +879,12 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
             else:  # < 0.5
                 vr_score = 30.0
 
-        # 子项3：成交额（优先 tencent amount，降级涨停池 amount）
+        # 子项3：成交额（优先 tencent amount，降级涨停池 amount；缺失→-1 不参与加权）
         amt = chip.get("amount")
         if amt is None:
             amt = candidate.get("amount")
         raw["amount"] = amt
-        amt_score = 50.0
+        amt_score = -1.0
         if amt is not None:
             amt_yi = amt / 1e8  # 元 → 亿
             if 1.0 <= amt_yi <= 10.0:
@@ -895,11 +896,19 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
             else:  # < 0.3 亿
                 amt_score = 30.0
 
-        total = tp_score * 0.40 + vr_score * 0.30 + amt_score * 0.30
+        # 加权：缺失子项（-1）不参与，权重重分配到有效子项
+        # （对齐 score_candidate 维度级 -1 重分配）；全部缺失 → 维度返 -1 不参与加权
+        # （对齐 score_dim_turnover 缺失返 -1）。
+        sub_items = ((tp_score, 0.40), (vr_score, 0.30), (amt_score, 0.30))
+        active = [(s, w) for s, w in sub_items if s >= 0]
+        if not active:
+            return -1.0, raw
+        weighted_sum = sum(s * w for s, w in active)
+        total = weighted_sum / sum(w for _, w in active)
         return round(max(0.0, min(100.0, total)), 1), raw
     except Exception as e:
-        _logger.debug("score_dim4_chip 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0, raw
+        _logger.debug("score_dim4_chip 数据缺失 -1 code=%s err=%s", candidate.get("code"), e)
+        return -1.0, raw
 
 
 # ── 维度5：竞价确认（权重 10%）──────────────────────────────────────────

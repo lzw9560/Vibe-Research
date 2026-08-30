@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import astock
@@ -74,6 +75,22 @@ def _interpret_extreme(signal_type: str, zt_count: int, dt_count: int, zt_ratio:
         return "市场情绪正常，无明显极端行情"
 
 
+def _resolve_pool_provenance(meta: dict[str, Any], pools_all_empty: bool) -> tuple[str, str]:
+    """从 fallback meta 解析涨停池数据诚实状态 + last_updated（S112 R5，对齐 S111 R4）。
+
+    - live fetch 成功（非空池）→ ('ok', now)：可判定极端行情
+    - 命中陈旧缓存（meta.is_stale）→ ('degraded', 缓存时间戳)：不戳 now，不基于陈旧判定
+    - 源断且缓存失效（空池兜底）→ ('missing', '')：不判"正常"，与真平静区分
+    """
+    if meta.get("is_stale"):
+        cache_ts = meta.get("cache_ts")
+        last_updated = datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else ""
+        return "degraded", last_updated
+    if pools_all_empty:
+        return "missing", ""
+    return "ok", datetime.now().isoformat()
+
+
 # ===========================================================================
 # 主检测函数
 # ===========================================================================
@@ -85,7 +102,6 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
     降级：东财故障时返回本地缓存或默认值。
     """
     try:
-        from datetime import datetime, timedelta
         import limitup_screener as ls
 
         # 解析日期
@@ -106,10 +122,10 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
         except ValueError:
             return None
 
-        # 获取涨停池、跌停池、炸板池（带降级）
-        from fallback import get_with_fallback
+        # 获取涨停池、跌停池、炸板池（带降级 + 诚实元数据，S112 R5）
+        from fallback import get_with_fallback_meta
         cache_key = f"zt_pool:{target_date}"
-        pool_data = get_with_fallback(
+        pool_data, meta = get_with_fallback_meta(
             cache_key,
             lambda: {
                 "zt": astock.em_zt_topic_pool("getTopicZTPool", target_date, "fbt:asc"),
@@ -133,13 +149,61 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
         zt_ratio = zt_count / total_attempts if total_attempts > 0 else 0.0
         dt_ratio = dt_count / (zt_count + dt_count + zb_count) if (zt_count + dt_count + zb_count) > 0 else 0.0
 
+        # 数据诚实性：从 fallback meta 解析 status + last_updated（源断不戳 now，对齐 S111 R4）
+        pools_all_empty = zt_count == 0 and dt_count == 0 and zb_count == 0
+        data_status, last_updated = _resolve_pool_provenance(meta, pools_all_empty)
+
+        # 源断（missing）→ 不判"正常"与真平静区分；陈旧（degraded）→ 不基于陈旧判极端
+        if data_status == "missing":
+            _logger.warning(
+                "detect_extreme_market 涨停/跌停/炸板池源断且缓存失效 date=%s，标 missing 不判正常",
+                display_date,
+            )
+            return ExtremeMarketSignal(
+                date=display_date,
+                signal_type="数据缺失",
+                zt_count=0,
+                dt_count=0,
+                zb_count=0,
+                total_attempts=0,
+                zt_ratio=0.0,
+                dt_ratio=0.0,
+                threshold_zt=100.0,
+                threshold_dt=50.0,
+                is_extreme=False,
+                interpretation="数据源断开，涨停/跌停/炸板池取数失败，无法判定极端行情（非'正常'平静市）",
+                last_updated=last_updated,
+                data_status=data_status,
+            )
+        if data_status == "degraded":
+            _logger.warning(
+                "detect_extreme_market 涨停/跌停/炸板池命中陈旧缓存 date=%s，标 degraded 不基于陈旧判定",
+                display_date,
+            )
+            return ExtremeMarketSignal(
+                date=display_date,
+                signal_type="数据延迟",
+                zt_count=zt_count,
+                dt_count=dt_count,
+                zb_count=zb_count,
+                total_attempts=total_attempts,
+                zt_ratio=round(zt_ratio, 4),
+                dt_ratio=round(dt_ratio, 4),
+                threshold_zt=100.0,
+                threshold_dt=50.0,
+                is_extreme=False,
+                interpretation="涨停/跌停/炸板池取数失败，展示最近缓存数据（陈旧，非实时，不判定极端行情）",
+                last_updated=last_updated,
+                data_status=data_status,
+            )
+
+        # ok：live 数据，正常判定极端行情
         # 获取历史数据计算动态阈值（简化：用内存中的历史记录）
         # TODO: 接入历史涨停/跌停数据
         zt_history = [zt_count]  # 临时：实际应查询历史
         dt_history = [dt_count]
         threshold_zt, threshold_dt = _compute_dynamic_thresholds(zt_history, dt_history)
 
-        # 判定极端行情
         signal_type = "正常"
         is_extreme = False
         if zt_count >= threshold_zt and zt_ratio >= 0.7:
@@ -162,7 +226,8 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
             threshold_dt=threshold_dt,
             is_extreme=is_extreme,
             interpretation=_interpret_extreme(signal_type, zt_count, dt_count, zt_ratio, dt_ratio),
-            last_updated=datetime.now().isoformat(),
+            last_updated=last_updated,
+            data_status=data_status,
         )
 
     except Exception as e:  # S094 audit/#6 over-correction fix: log + re-raise（不再吞→health except 接 ok=false；非交易日/无数据 None L101→ok=true 正确区分 no-signal vs broken）
@@ -198,5 +263,9 @@ async def get_extreme_market_signal(date: str | None = None) -> ExtremeMarketSig
         return cached
 
     result = await detect_extreme_market(date)
-    _set_cached(cache_key, result)
+    # S112 review fix：不缓存 missing 信号（对齐 sector_divergence 范式）——源断返
+    # '数据缺失'时不入缓存，源恢复后下次调用立即重探（否则最长 _EXTREME_TTL 延迟
+    # 再探测，盘中断源期假'平静'延迟暴露）。degraded 可缓存（陈旧计数仍有参考）。
+    if result is not None and getattr(result, "data_status", "ok") != "missing":
+        _set_cached(cache_key, result)
     return result
