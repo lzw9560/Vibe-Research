@@ -212,7 +212,7 @@ S115 scan（wf_fe0ad61d，7路+综合+对抗核实）扫 registry「本轮未覆
 
 **1 uncertain**：gstock-us-hk-no-calendar-gate（周末返周五收盘 is_delayed=False 无 trade_date，live API 消费者难区分；非 fabricate，语义缺口，可选修 gstock 请求 f86 date）。
 
-**8 honest_already**（latent，登记）：fallback-mem-shadows-disk / funnel-mem-shadows-db（多 worker 缓存分叉，当前单 worker 诚实，扩 gunicorn 前必修）/ premarket-funnel-cache-fdate-offbyone / first-board-filter-kline-race / forward-test-daily-gene-scores-race / forward-test-t1-settle-baostock-race / first-board-t1-review-kline-sametick（cron 时序竞态诚实空，共同根因 baostock 当日 EOD 时点未定）/ baostock-t1-stuck-mark-7d-slows-section44-lift（§44 样本偏，诚实仅登记）。
+**8 honest_already**（latent，登记）：fallback-mem-shadows-disk / funnel-mem-shadows-db（多 worker 缓存分叉，当前单 worker 诚实，扩 gunicorn 前必修）/ premarket-funnel-cache-fdate-offbyone（✅ S117 已修，见 S117 状态节） / first-board-filter-kline-race / forward-test-daily-gene-scores-race / forward-test-t1-settle-baostock-race / first-board-t1-review-kline-sametick（cron 时序竞态诚实空，共同根因 baostock 当日 EOD 时点未定）/ baostock-t1-stuck-mark-7d-slows-section44-lift（§44 样本偏，诚实仅登记）。
 
 **review 补修 2**：R2 broke S111 #4 test（2 行 fixture 被 R2 min-bars 门 gated）→ #4 fixture 扩 5 行（过门测 source provenance，#16 测 <5→missing）；R3 新 helper `_load_sti_internal_signals` bare except 无 log → 加 logger.warning（对齐 S111 R7/S112 anti-pattern 修复）。
 
@@ -231,6 +231,16 @@ S116 修 S115 scan #7 storm-daemon-snapshot-no-provenance-last-write-wins（veri
 **review 补修 3**：MEDIUM 全坏分支零覆盖（R4.2 mock 掉 get_t1 绕过）→ 加直接喂 [bad1,bad2] 测真实 get_t1 钉死 reversed+is_degraded；LOW fetch_snapshot exception 仅 debug → 升 warning（连续多日失败运维可见）；LOW StormFactor.data_status 注释 `# ok|missing` 陈旧 → 更新 `# ok|degraded|fallback_current|missing`。
 
 storm cluster 终账：#8 NULL-sti（S115 R3 修）、#6 is_delayed（verify 推翻 honest 不修）、#7 last-write-wins（S116 修）——全收口。
+
+## S117 实现后状态（2026-08-30，premarket off-by-one 功能性修复）
+
+S117 修 S115 scan #13 premarket-funnel-cache-fdate-offbyone（honest_already：诚实但致 S101 整式空转）。非性质撒谎，是功能性日期 bug。2442 passed 0 回归。
+
+**off-by-one**：S101 三时点通知（9:25 竞价 / 9:35 开盘 / 16:35 T+1）全用 `f_date = payload.get("date") or last_trading_date_str()`，但 `last_trading_date_str()` 在交易日返 today=T 日，而 final_candidates 存在 F 日（prev trading day）→ `_load_final_cards(T日)` 找不到 → no_candidates → S101 三时点通知**整式空转**（永远跳过从不发）。注释意图是 F 日，代码取 T 日，off-by-one。
+
+**修**：vr_paths 加 `prev_trading_date_str` helper（对称 last_trading_date_str，返严格前一交易日）；3 S101 任务 f_date 改 `prev_trading_date_str()`（F 日）。对齐 storm_predictor `_prev_trading_day` 范式（S088 grill Q1 修过同款"前一交易日取到当日"bug）。
+
+**测试**：①vr_paths 单元（prev≠last，d=交易日时 last 返 d、prev 返前一）②behavioral t1_review 空 payload → f_date=F 日 → _load_final_cards(F 日) → candidates 找到 → notified（非 no_candidates 空转）。
 
 ## 本轮未覆盖维度（completeness gaps，后续切片补扫）
 - AI 出口诚实（chat.TOOLS/_exec_tool→registry.execute）：数据工具失败时返给 LLM 的是诚实 'unavailable' 还是 bare None/[]（LLM 可能据此臆造）——数据进入 AI 研判的最后一跳

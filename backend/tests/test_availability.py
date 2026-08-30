@@ -381,3 +381,67 @@ def test_get_t1_snapshot_all_bad_returns_most_recent_with_degraded(tmp_path, mon
     # 不可变拷贝：原 snaps 文件未被 {**s,is_degraded} 污染（bad2 原无 is_degraded，落盘仍无）
     reloaded = json.loads((tmp_path / "2026-08-28.json").read_text(encoding="utf-8"))
     assert "is_degraded" not in reloaded[1]  # 原始 bad2 未被污染（分支返新 dict 非原地改）
+
+
+# ===========================================================================
+# S117：premarket S101 f_date off-by-one —— prev_trading_date_str 非 last
+# ===========================================================================
+
+
+def test_prev_trading_date_str_returns_prev_not_same_day():
+    """S117：prev_trading_date_str(d) 返 d 之前交易日（非 d 本身）——off-by-one 修复核心。
+
+    S101 原用 last_trading_date_str()（d 为交易日→返 d 本身=T 日），final_candidates 存在
+    F 日→_load_final_cards(T 日)找不到→no_candidates→S101 整式空转。prev_trading_date_str()
+    返 F 日（严格前一交易日）。钉死 prev≠last（d=交易日时 last 返 d，prev 返前一）。
+    """
+    import vr_paths
+    from datetime import date
+
+    # Arrange：d=2026-08-28（周五，交易日）
+    d = date(2026, 8, 28)
+
+    # Act
+    last = vr_paths.last_trading_date_str(d)   # 旧逻辑（bug 源）：交易日返 d 本身
+    prev = vr_paths.prev_trading_date_str(d)   # S117 修：前一交易日
+
+    # Assert：prev=前一交易日（2026-08-27 周四），非 d 本身；last=d 本身（off-by-one 源）
+    assert prev == "2026-08-27"
+    assert last == "2026-08-28"  # last 返 d 本身——这正是 S101 原 bug 源
+    assert prev != last  # prev≠last，钉死 S101 须用 prev 非 last
+
+
+def test_premarket_t1_review_uses_prev_trading_day_for_f_date(monkeypatch):
+    """S117 behavioral：t1_review 空 payload → f_date=prev trading day（F 日）非 today（T 日），
+    _load_final_cards 以 F 日调用 → candidates 找到 → notified（非 no_candidates 整式空转）。
+
+    钉死 S101 三时点通知 off-by-one 修复：若有人回退 f_date=last_trading_date_str()（T 日），
+    _load_final_cards(T 日)找不到 candidates→no_candidates 跳过→notified=False，本测 RED。
+    """
+    import scheduled_tasks as st
+    import vr_paths
+
+    # Arrange：mock prev_trading_date_str 返固定 F 日（测 S101 调它 + 用其值，vr_paths 逻辑由上测覆盖）
+    F_DATE = "2026-08-27"
+    monkeypatch.setattr(vr_paths, "prev_trading_date_str", lambda d=None: F_DATE)
+
+    # mock _load_final_cards：记录 f_date + 返非空 candidates（让任务过 no_candidates 分支）
+    captured = {"f_date": None}
+    def _fake_load(fd):
+        captured["f_date"] = fd
+        return [{"code": "600519", "name": "贵州茅台"}]  # 非空 → 不跳过
+    monkeypatch.setattr(st, "_load_final_cards", _fake_load)
+    # mock _compute_t1_returns + _build_t1_review_content + _send_notify（避免真实计算/网络）
+    monkeypatch.setattr(st, "_compute_t1_returns",
+                        lambda cards, f, t: [{"code": "600519", "t1_return_pct": 5.0}])
+    monkeypatch.setattr(st, "_build_t1_review_content", lambda f, t, r: "t1 review content")
+    monkeypatch.setattr(st, "_send_notify", lambda content: True)
+
+    # Act：空 payload（seed 默认 payload={}），任务内部 f_date = prev_trading_date_str() = F_DATE
+    executor = st.TaskExecutor()
+    result = executor._execute_premarket_t1_review({})
+
+    # Assert：f_date=F 日（prev trading day），_load_final_cards 以 F 日调用非 T 日
+    assert captured["f_date"] == F_DATE  # F 日，非 today（T 日）
+    assert result["status"] == "ok"
+    assert result.get("notified") is True  # candidates 找到 → 发了通知（非 no_candidates 空转）

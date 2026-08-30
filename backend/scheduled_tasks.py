@@ -1032,11 +1032,11 @@ class TaskExecutor:
         → 不崩不推（增强，catch 不抛）。
         """
         try:
-            from vr_paths import last_trading_date_str
+            from vr_paths import prev_trading_date_str
             from candidate_funnel.funnel_cache import load_funnel_result
             from notification.notification_service import NotificationService
 
-            f_date = payload.get("date") or last_trading_date_str()
+            f_date = payload.get("date") or prev_trading_date_str()
             final_cards = _load_final_cards(f_date)
             if not final_cards:
                 logger.info("[premarket_auction_notify] %s 无 final_candidates，跳过", f_date)
@@ -1055,9 +1055,9 @@ class TaskExecutor:
     def _execute_premarket_open_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S101：9:35 开盘 5min 后推送前瞻标的开盘表现（现价/涨跌幅/封板）。"""
         try:
-            from vr_paths import last_trading_date_str
+            from vr_paths import prev_trading_date_str
 
-            f_date = payload.get("date") or last_trading_date_str()
+            f_date = payload.get("date") or prev_trading_date_str()
             final_cards = _load_final_cards(f_date)
             if not final_cards:
                 logger.info("[premarket_open_notify] %s 无 final_candidates，跳过", f_date)
@@ -1081,10 +1081,10 @@ class TaskExecutor:
         §44 口径：n<30 标样本不足 / 不宣称 alpha / lift<2x 标无 validated edge。
         """
         try:
-            from vr_paths import last_trading_date_str, next_trading_date
+            from vr_paths import prev_trading_date_str, next_trading_date
             from datetime import date as _date
 
-            f_date = payload.get("date") or last_trading_date_str()
+            f_date = payload.get("date") or prev_trading_date_str()
             final_cards = _load_final_cards(f_date)
             if not final_cards:
                 logger.info("[premarket_t1_review] %s 无 final_candidates，跳过", f_date)

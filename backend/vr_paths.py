@@ -138,6 +138,11 @@ def last_trading_date_str(d: date | None = None) -> str:
     return last_trading_date(d).isoformat()
 
 
+def prev_trading_date_str(d: date | None = None) -> str:
+    """返回 prev_trading_date 的 YYYY-MM-DD 字符串（严格前一交易日，S117）。"""
+    return prev_trading_date(d).isoformat()
+
+
 def next_trading_date(d: date | None = None) -> date:
     """返回 d 之后（不含 d）的最近交易日——严格后一交易日。
 
