@@ -24,3 +24,18 @@ export function formatRate(v: number): string {
 export function formatPercent(v: number): string {
   return `${v.toFixed(2)}%`;
 }
+
+/**
+ * S126：分数 → 百分比，但 sample=0 时返"数据缺失"（防 0% 假胜率/命中率）。
+ * win_rate=0 + total_trades=0 = 无数据非真 0%；sample>0 真 0% 保留。
+ */
+export function formatRateOrMissing(v: number, sampleCount: number): string {
+  return sampleCount > 0 ? formatRate(v) : "数据缺失";
+}
+
+/**
+ * S126：hit_rate（分数 0-1）→ 百分比，signalCount=0 时返"数据缺失"。
+ */
+export function formatHitRateOrMissing(hitRate: number, signalCount: number): string {
+  return signalCount > 0 ? `${(hitRate * 100).toFixed(1)}%` : "数据缺失";
+}

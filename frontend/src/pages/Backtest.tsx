@@ -394,7 +394,7 @@ export default function Backtest() {
           {result && (
             <div className="grid gap-3 md:grid-cols-3">
               <MetricCard label="总信号数" value={result.total_signals} />
-              <MetricCard label="命中率" value={`${(result.hit_rate * 100).toFixed(1)}%`} />
+              <MetricCard label="命中率" value={result.total_signals > 0 ? `${(result.hit_rate * 100).toFixed(1)}%` : "数据缺失"} />
               <MetricCard label="平均收益" value={`${(result.avg_return * 100).toFixed(2)}%`} />
               <MetricCard label="最大回撤" value={`${(result.max_drawdown * 100).toFixed(2)}%`} />
               <MetricCard label="夏普比率" value={result.sharpe_ratio.toFixed(2)} />

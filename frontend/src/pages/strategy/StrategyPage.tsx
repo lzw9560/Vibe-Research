@@ -85,7 +85,7 @@ export default function StrategyPage() {
                     <tr key={r.code} className="border-b border-border/20 hover:bg-muted/10">
                       <td className="px-2 py-1">{r.name}</td>
                       <td className="px-2 py-1 text-right font-mono">
-                        {bt ? `${(bt.win_rate * 100).toFixed(1)}%` : "—"}
+                        {bt ? (bt.sample_size > 0 ? `${(bt.win_rate * 100).toFixed(1)}%` : "数据缺失") : "—"}
                       </td>
                       <td className="px-2 py-1 text-right font-mono">
                         {bt ? bt.avg_return : "—"}

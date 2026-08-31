@@ -84,6 +84,7 @@ async def risk_dashboard(date: str = Query(None, description="日期，格式 YY
                 "risk_score": risk_data.risk_score,
                 "risk_level": risk_data.risk_level,
                 "factors": risk_data.factors[:3],  # 只取前 3 个风险因素
+                "data_status": risk_data.data_status,  # S126：透 data_status（degraded 风险不伪装权威）
             })
 
         # 风险因素统计
@@ -148,6 +149,7 @@ async def risk_oneday_list(
                     "risk_level": risk_data.risk_level,
                     "factors": risk_data.factors[:3],
                     "last_updated": risk_data.last_updated,
+                    "data_status": risk_data.data_status,  # S126：透 data_status
                 })
 
         # 按风险评分降序，取前 50

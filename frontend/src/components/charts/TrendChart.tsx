@@ -72,7 +72,7 @@ function extractStrategySeries(rows: BacktestSnapshotRow[]): {
         names[it.strategy_code] = it.strategy_name;
       }
       perDay[r.snapshot_date][it.strategy_code] =
-        typeof it.win_rate === "number" ? it.win_rate * 100 : null;
+        typeof it.win_rate === "number" && it.sample_size > 0 ? it.win_rate * 100 : null;
     }
   }
 
@@ -100,7 +100,7 @@ export function HitRateChart({ rows, height = 320 }: HitRateChartProps) {
     a.snapshot_date.localeCompare(b.snapshot_date),
   );
   const data = sorted.map((r) =>
-    typeof r.hit_rate === "number" ? r.hit_rate * 100 : null,
+    typeof r.hit_rate === "number" && r.total_signals != null && r.total_signals > 0 ? r.hit_rate * 100 : null,
   );
 
   useECharts(

@@ -323,7 +323,8 @@ def test_risk_dashboard_caps_and_caches(monkeypatch):
     async def _fake_risk(code):
         calls["n"] += 1
         return SimpleNamespace(risk_score=50.0, risk_level="MEDIUM",
-                               factors=["a", "b"], last_updated="t")
+                               factors=["a", "b"], last_updated="t",
+                               data_status="ok")  # S126：risk_dashboard 透 data_status
 
     monkeypatch.setattr(ls, "get_screener_result", _scr)
     monkeypatch.setattr(risk, "update_one_day_risk_realtime", _fake_risk)

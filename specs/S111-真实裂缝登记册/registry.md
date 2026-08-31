@@ -455,3 +455,21 @@ S125 修 S124 scan 3 HIGH confirmed_lying（全承重链/regress S121）。spec 
 **撒谎总账更新**：40 confirmed_lying = 29 全修（S111-S123 26 + S125 3）+ 11 待修（~8 MEDIUM + ~3 LOW，非承重链，S124 扫出）。registry 覆盖 ~64 不变（S125 修不新增裂缝）。
 
 **下一步候选**：剩 11 confirmed_lying 待修（全 M/LOW 非承重链：risk-trio factors provenance / risk-dashboard strip data_status / 前端 4 处 winrate=0 渲染 / em_get 吞异常 2 处 / backtest-metriccard / lockup-expiry / topology-ladder）；或跑 or-zero 契约级 sweep（407 处）+ ai-tools 全 13 个 + 漏扫 dim（scheduled_tasks bare except/cron DAG/funnel total_score）——validation 族继续，用户拍。
+
+## S126 实现后状态（2026-08-31，前端渲染诚实 + risk-dashboard 透 data_status——MEDIUM 批）
+
+S126 修 S124 scan 前端渲染 4 处 winrate/hit_rate=0 当 sample=0 渲染"0%胜率"非"数据缺失"+ risk-dashboard strip data_status（display 层 lie，非承重链）。直接 impl（机械显示 guard，trivial mechanical 例外，未开 workflow）+ tsc + 全量 pytest 验证。2482 passed 0 回归（test_s003 risk_dashboard fake 加 data_status attr）。
+
+**修复（6 处 display lie）**：
+- `lib/format.ts` 加 `formatRateOrMissing(rate, sampleCount)` + `formatHitRateOrMissing(hitRate, signalCount)`：sample=0→"数据缺失"，>0→格式化（真 0% 保留，对齐 S121 "0 永不合法"语义）
+- `StatsMetrics.tsx:27` 胜率→`formatRateOrMissing(win_rate, total_trades)`
+- `StrategyPage.tsx:88` 战法胜率→查 `bt.sample_size>0`，0→"数据缺失"
+- `Backtest.tsx:397` 命中率→查 `result.total_signals>0`，0→"数据缺失"
+- `TrendChart.tsx:74-75`（perDay win_rate）+ `:102-104`（hit_rate）chart data→sample/signal=0 返 null（ECharts 断线显 gap 非"0%"线）
+- `routers/risk.py:81-87`（risk_scores）+ `:144-151`（high_risk）响应 dict 加 `data_status: risk_data.data_status`（透 degraded 标，对齐 sentiment_weather.py:1249 S125 R3 emit 模式）
+
+**设计**：sample=0→"数据缺失"非"0%"是 S121 同语义（0 永不合法当无样本）；真 0%（sample>0 全 miss）保留。chart 用 null（断线）非字串（ECharts tooltip 已 null→"—"，:116-118）。risk.py 透 data_status 对齐 S125 R3。test_s003 `_fake_risk` SimpleNamespace 加 `data_status="ok"` attr（fake 须反映真 OneDayRisk shape）。
+
+**撒谎总账更新**：40 confirmed_lying = 29 全修（S111-S123 26 + S125 3）+ S126 修 5 display（StatsMetrics/StrategyPage/Backtest/TrendChart×2 含 backtest-metriccard LOW）+ risk-dashboard = **35 全修 + 5 待修**（risk-trio factors MEDIUM / em_get 吞异常 2 处 MEDIUM+LOW / lockup-expiry LOW / topology-ladder LOW）。registry 覆盖 ~64 不变。
+
+**下一步候选**：剩 5 confirmed_lying 待修（全 M/LOW 非承重链）；或 or-zero 407 处契约级 sweep / ai-tools 全 13 / 漏扫 dim——validation 族继续，用户拍。
