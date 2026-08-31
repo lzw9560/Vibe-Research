@@ -192,13 +192,13 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
     seat_confidence = seat_info.get("seat_confidence", 0.0)
     seat_status = seat_info.get("data_status", "ok")
 
-    # 8. 波动率与回撤（基于近期行情）
-    volatility = await _calculate_volatility(code)
-    max_drawdown = await _calculate_max_drawdown(code)
-    liquidity_risk = await _calculate_liquidity_risk(code)
+    # 8. 波动率、回撤与流动性（基于近期行情）+ data_status（S129 R2：trio 接 status）
+    volatility, vol_status = await _calculate_volatility_meta(code)
+    max_drawdown, dd_status = await _calculate_max_drawdown_meta(code)
+    liquidity_risk, liq_status = await _calculate_liquidity_risk_meta(code)
     concentration_risk, conc_status = await _calculate_concentration_risk_meta(code)
 
-    # 9. 综合风险因素与建议
+    # 9. 综合风险因素与建议（S129 R3：trio status 传入，失败维度显“数据缺失”非“较少”）
     factors, recommendation = _build_risk_factors(
         dynamic_score=dynamic_score,
         risk_level=risk_level,
@@ -209,12 +209,16 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
         concentration_risk=concentration_risk,
         capital_flow_trend=capital_flow_trend,
         multi_seat_signal=multi_seat_signal,
+        vol_status=vol_status,
+        dd_status=dd_status,
+        liq_status=liq_status,
     )
 
-    # 10. 数据诚实性：聚合 data_status（base + 资金流 + risk-trio）；实时资金流非 ok 不戳 now
+    # 10. 数据诚实性：聚合 data_status（base + 资金流 + risk-trio 8 态，S129 R2 含 trio）
     cf_status = capital_flow.get("data_status", "ok")
     data_status = _merge_data_status(
-        base_status, cf_status, dt_status, seat_status, conc_status
+        base_status, cf_status, dt_status, seat_status, conc_status,
+        vol_status, dd_status, liq_status
     )
     # last_updated 仍以资金流（实时向量）为准：cf 非 ok 则不戳 now（对齐 S111 R4）；
     # risk-trio 缺失只抬 data_status，不回退 last_updated——risk_score 由 base+cf 决定，
@@ -410,35 +414,76 @@ async def _get_seat_info(code: str) -> dict:
 # ===========================================================================
 
 async def _calculate_volatility(code: str, window: int = 20) -> float:
-    """计算近 window 日收益率标准差（波动率）。"""
+    """计算近 window 日收益率标准差（波动率）。
+
+    返 float（向后兼容直调测试 test_s008_t13b_kline/test_s008_bugs/
+    test_regression_bugs，签名不变）。data_status 由
+    _calculate_volatility_meta 返回，update_one_day_risk_realtime 读 _meta。
+    """
+    score, _status = await _calculate_volatility_meta(code, window)
+    return score
+
+
+async def _calculate_volatility_meta(
+    code: str, window: int = 20
+) -> tuple[float, str]:
+    """波动率 + data_status（S129 R1.1，对齐 _calculate_concentration_risk_meta 范式）。
+
+    返回 (volatility, data_status)：
+    - 成功（含合法零：方差=0）→ (round(variance**0.5*100, 2), 'ok')
+    - bar 不足（len(closes)<2）→ (0.0, 'degraded')（partial data，非 fetch 失败）
+    - 取数/解析异常 → (0.0, 'missing') + logger.warning
+
+    原直调 astock.kline（mootdx 本地直连，非 get_with_fallback 缓存层），
+    无 fetch_ok 标志；len<2 可能是新股历史不足或 kline 返 0 bar，
+    degraded（未算出，非 ok）比 ok（撒谎）诚实，比 missing（overstate fetch 失败）克制。
+    """
     try:
         raw = await asyncio.to_thread(lambda: astock.kline(code, offset=window + 10))
         bars = kline_from_mootdx(code, raw).bars
         closes = [b.close for b in bars[-window:] if b.close is not None]
         if len(closes) < 2:
-            return 0.0
+            return 0.0, "degraded"
         returns = [
             (closes[i] - closes[i - 1]) / closes[i - 1]
             for i in range(1, len(closes))
         ]
         mean = sum(returns) / len(returns)
         variance = sum((r - mean) ** 2 for r in returns) / len(returns)
-        return round(variance ** 0.5 * 100, 2)  # 百分比
+        return round(variance ** 0.5 * 100, 2), "ok"  # 百分比
     except (KeyError, ValueError, TypeError, AttributeError) as e:
         logging.getLogger("risk_models").warning(
             "_calculate_volatility(%s) 取数失败: %s", code, e
         )
-        return 0.0
+        return 0.0, "missing"
 
 
 async def _calculate_max_drawdown(code: str, window: int = 60) -> float:
-    """计算近 window 日最大回撤（百分比）。"""
+    """计算近 window 日最大回撤（百分比）。
+
+    返 float（向后兼容直调测试，签名不变）。data_status 由
+    _calculate_max_drawdown_meta 返回，update_one_day_risk_realtime 读 _meta。
+    """
+    score, _status = await _calculate_max_drawdown_meta(code, window)
+    return score
+
+
+async def _calculate_max_drawdown_meta(
+    code: str, window: int = 60
+) -> tuple[float, str]:
+    """最大回撤 + data_status（S129 R1.2，对齐 _calculate_concentration_risk_meta 范式）。
+
+    返回 (max_drawdown, data_status)：
+    - 成功（含合法零：无回撤 max_dd=0.0）→ (round(max_dd*100, 2), 'ok')
+    - bar 不足（len(closes)<2）→ (0.0, 'degraded')
+    - 取数/解析异常 → (0.0, 'missing') + logger.warning
+    """
     try:
         raw = await asyncio.to_thread(lambda: astock.kline(code, offset=window + 10))
         bars = kline_from_mootdx(code, raw).bars
         closes = [b.close for b in bars[-window:] if b.close is not None]
         if len(closes) < 2:
-            return 0.0
+            return 0.0, "degraded"
         peak = closes[0]
         max_dd = 0.0
         for c in closes[1:]:
@@ -447,32 +492,49 @@ async def _calculate_max_drawdown(code: str, window: int = 60) -> float:
             dd = (peak - c) / peak
             if dd > max_dd:
                 max_dd = dd
-        return round(max_dd * 100, 2)
+        return round(max_dd * 100, 2), "ok"
     except (KeyError, ValueError, TypeError, AttributeError) as e:
         logging.getLogger("risk_models").warning(
             "_calculate_max_drawdown(%s) 取数失败: %s", code, e
         )
-        return 0.0
+        return 0.0, "missing"
 
 
 async def _calculate_liquidity_risk(code: str) -> float:
-    """计算流动性风险（基于近20日平均成交额，越低风险越高）。"""
+    """计算流动性风险（基于近20日平均成交额，越低风险越高）。
+
+    返 float（向后兼容直调测试，签名不变）。data_status 由
+    _calculate_liquidity_risk_meta 返回，update_one_day_risk_realtime 读 _meta。
+    """
+    score, _status = await _calculate_liquidity_risk_meta(code)
+    return score
+
+
+async def _calculate_liquidity_risk_meta(code: str) -> tuple[float, str]:
+    """流动性风险 + data_status（S129 R1.3，对齐 _calculate_concentration_risk_meta 范式）。
+
+    返回 (liquidity_risk, data_status)：
+    - 成功、avg_amount>=50000000（高流动性合法零）→ (0.0, 'ok')
+    - 成功、avg_amount<50000000 → (round(100-avg_amount/50000000*100, 2), 'ok')
+    - bar 不足（not amounts）→ (0.0, 'degraded')
+    - 取数/解析异常 → (0.0, 'missing') + logger.warning
+    """
     try:
         raw = await asyncio.to_thread(lambda: astock.kline(code, offset=20))
         bars = kline_from_mootdx(code, raw).bars
         amounts = [b.turnover or 0 for b in bars]
         if not amounts:
-            return 0.0
+            return 0.0, "degraded"
         avg_amount = sum(amounts) / len(amounts)
         # 成交额低于 5000 万视为高流动性风险
         if avg_amount < 50000000:
-            return round(100 - avg_amount / 50000000 * 100, 2)
-        return 0.0
+            return round(100 - avg_amount / 50000000 * 100, 2), "ok"
+        return 0.0, "ok"
     except (KeyError, ValueError, TypeError, AttributeError) as e:
         logging.getLogger("risk_models").warning(
             "_calculate_liquidity_risk(%s) 取数失败: %s", code, e
         )
-        return 0.0
+        return 0.0, "missing"
 
 
 async def _calculate_concentration_risk(code: str) -> float:
@@ -555,16 +617,31 @@ def _build_risk_factors(
     concentration_risk: float,
     capital_flow_trend: str,
     multi_seat_signal: bool,
+    vol_status: str = "ok",
+    dd_status: str = "ok",
+    liq_status: str = "ok",
 ) -> tuple[list[str], str]:
-    """根据各维度指标生成风险因素列表和建议。"""
+    """根据各维度指标生成风险因素列表和建议。
+
+    S129 R3：trio（volatility/max_drawdown/liquidity_risk）加 status 感知——
+    失败维度（degraded/missing）显“数据缺失”factor，而非在 float=0.0 时静默
+    不报、最终走“当前风险因素较少”兜底（把“没算出来”伪装成“低风险”）。
+    默认 vol/dd/liq_status='ok' 保持向后兼容（既有直调不传 status 不破）。
+    """
     factors: list[str] = []
     if dragon_tiger_risk > 30:
         factors.append(f"龙虎榜风险较高({dragon_tiger_risk})")
-    if volatility > 5:
+    if vol_status in ("degraded", "missing"):
+        factors.append("波动率数据缺失")
+    elif volatility > 5:
         factors.append(f"波动率偏高({volatility}%)")
-    if max_drawdown > 10:
+    if dd_status in ("degraded", "missing"):
+        factors.append("回撤数据缺失")
+    elif max_drawdown > 10:
         factors.append(f"近期回撤较大({max_drawdown}%)")
-    if liquidity_risk > 0:
+    if liq_status in ("degraded", "missing"):
+        factors.append("流动性数据缺失")
+    elif liquidity_risk > 0:
         factors.append(f"流动性风险({liquidity_risk})")
     if concentration_risk > 60:
         factors.append(f"席位集中度较高({concentration_risk}%)")

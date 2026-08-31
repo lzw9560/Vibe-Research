@@ -513,3 +513,22 @@ S128 修 S127 or-zero sweep 3 HIGH + 2 头条 MEDIUM 承重链 + 落地 NEVER_ZE
 **撒谎总账终账**：45 confirmed_lying = 40 全修（S111-S123 26 + S125 3 + S126 5 display + S128 5 承重链 +1）+ 5 待修（全 M/LOW 非承重链：risk-trio factors / em_get 吞异常 2 / lockup-expiry / topology-ladder / sentiment_weather:1174 / market.py or-0）。**承重链 or-zero 全闭合（S121 契约 + CI lint 防复发）。**
 
 **下一步候选**：承重链 or-zero 已闭合（NEVER_ZERO 契约 + CI lint 守门）。剩 5 非承重链 M/LOW 可点修或停；或 ai-tools 全 13 / 漏扫 dim（scheduled_tasks bare except/cron DAG/funnel total_score）。**or-zero 契约级治理完成，可停。**
+
+## S129 实现后状态（2026-09-01, risk trio provenance 诚实化——critic #1 漏扫闭合）
+
+S129 修 S124 scan MEDIUM `kline-risk-trio-silent-zero-no-data-status`（critic 6 漏扫 #1 头条：risk 三子维度 volatility/max_drawdown/liquidity_risk 失败返裸 0.0 + warning 但无 data_status，`_merge_data_status` 不含三者 → composite risk 可在 3/8 维度静默归零时仍标 ok+LOW + factors 呈现"风险因素较少"，而真相是三维度没算出。非仓位承重链——trio 不进 risk_score/risk_level，仅 data_status+factors 喂 LLM/打板风险研判）。spec + impl + ~11 测试，全量 pytest 0 回归。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| trio _meta sibling | ✅ 已修 | R1：`_calculate_volatility_meta`/`_calculate_max_drawdown_meta`/`_calculate_liquidity_risk_meta`（risk_models.py:412-475）返 `tuple[float, str]`，except→(0.0,"missing")、bar 不足(len<2/not amounts)→(0.0,"degraded")、成功含合法零→(value,"ok")。原函数改调 _meta 返 float（签名不变，向后兼容） |
+| `_merge_data_status` 含 trio | ✅ 已修 | R2：:216-218 合 base/cf/dt/seat/conc + trio 三态（vol/dd/liq）；trio 全 missing→data_status="missing"，一 degraded 余 ok→"degraded"，全 ok→"ok" |
+| `_build_risk_factors` status 感知 | ✅ 已修 | R3：签名加 `vol_status/dd_status/liq_status`（默认 ok 向后兼容）；trio 失败维度显"波动率/回撤/流动性数据缺失"（非 `volatility>5` 原分支）；ok+超阈→原文本不破；`not factors` 兜底保留（全 ok 无风险因素时"较少"仍合法） |
+| 向后兼容 | ✅ | OneDayRisk `max_drawdown/volatility/liquidity_risk` 仍 float（API 加性兼容，前端不破，对齐 S123 R4 hit_rate 不加 schema 字段范式）；既有 test_s008_t13b/test_s008_bugs/test_regression 调原函数拿 float 全绿 |
+
+**设计**：统一 _meta sibling 范式（对齐 `_calculate_concentration_risk_meta:488` / S123 R2/R4）——三函数加 _meta 返 (float, status)，原函数包一层返 float（向后兼容签名不变，既有测试拿 float 全绿）。status 约定：except（fetch/parse 异常）→"missing"、`len(closes)<2`/`not amounts`（bar 不足）→"degraded"、成功（含合法零：高流动性 0.0/无回撤 0.0）→"ok"。**边界诚实**：`len(closes)<2` 可能是新股历史不足（合法）或 kline 返 0 bar（fetch 失败但未抛异常）——无 fetch_ok 标志无法区分，"degraded"（未算出非 ok）比"ok"（撒谎）诚实、比"missing"（overstate fetch 失败）克制；trio 走 astock.kline（mootdx 本地直连非 get_with_fallback_meta 缓存层无 fetch_ok），若 0 bar 需精确区分后续接 get_with_fallback_meta（YAGNI，当前 degraded 已闭合"未算出 vs ok"撒谎）。**conc/dt factors-text residual**（不在本 spec，scope 守 trio）：conc_status/dt_status 已进 `_merge_data_status`（data_status 反映），仅 factors 文本未感知，留下一轮扫。
+
+**测试**：`test_s129_risk_trio_provenance.py` ~11 测——R1.4 五测（三 _meta 成功→(value,"ok")；except→(0.0,"missing")；bar 不足 len<2/not amounts→(0.0,"degraded")；liquidity 合法零 avg_amount>=50M→(0.0,"ok")；原函数返 float 向后兼容）；R2.3 三测（trio 全 missing→data_status="missing"；一 degraded 余 ok→"degraded"；全 ok→"ok"，mock astock.kline 三态）；R3.5 三测（trio 全 missing→factors 含三"数据缺失"非"较少"；degraded→对应"数据缺失"；ok+volatility>5→"波动率偏高"原行为不破）。全量 `pytest -m "not live" --deselect` 既有 flaky（newsradar/s032/spec_consistency/test_s040/test_market_degrades_without_akshare/S061 date-fragile）0 回归。
+
+**撒谎总账更新 / critic 6 漏扫进度**：45 confirmed_lying = 41 全修（S111-S123 26 + S125 3 + S126 6 display/risk-dashboard + S128 5 承重链 + S129 1 risk-trio）+ 4 待修（em_get 吞异常 2 / lockup-expiry / topology-ladder / sentiment_weather:1174 / market.py or-0，全 M/LOW 非承重链）。**critic 6 漏扫**——#1 risk-trio（closed by S129）/ #2 or-zero（closed by S128）/ #4 frontend（closed by S126）；#3 顶层聚合 / #5 AI工具 / #6 em_get消费者 still open。
+
+**下一步候选**：critic 6 漏扫剩 3 open（#3 顶层聚合 / #5 AI工具 / #6 em_get消费者）；或点修剩 4 非承重链 M/LOW。**risk-trio provenance 闭合，可停。**
