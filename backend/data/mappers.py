@@ -59,32 +59,32 @@ def quote_from_tencent(code: str, raw: dict) -> Quote:
     except (ValueError, AttributeError):
         norm_code, market = code, Market.A
 
-    mcap = _numf(raw.get("mcap_yi"))
-    float_mcap = _numf(raw.get("float_mcap_yi"))
-    amount_wan = _numf(raw.get("amount_wan"))
+    mcap = _numf(raw.get("mcap_yi")) or None  # 0 永不合法→None（S121，防 LLM 见 market_cap=0）
+    float_mcap = _numf(raw.get("float_mcap_yi")) or None
+    amount_wan = _numf(raw.get("amount_wan"))  # turnover 0 合法（停牌无量）不动
     return Quote(
         code=norm_code,
         market=market,
         name=raw.get("name"),
-        price=_numf(raw.get("price")),
-        change_pct=_numf(raw.get("change_pct")),
-        change_amount=_numf(raw.get("change_amt")),
-        volume=_numf(raw.get("vol")),  # 手（tencent 若无 vol 则 None）
+        price=_numf(raw.get("price")) or None,  # 0 永不合法
+        change_pct=_numf(raw.get("change_pct")),  # 0 合法（平盘）
+        change_amount=_numf(raw.get("change_amt")),  # 0 合法
+        volume=_numf(raw.get("vol")),  # 0 合法（停牌）；tencent 若无 vol 则 None
         turnover=amount_wan * 1e4 if amount_wan is not None else None,
         market_cap=mcap * 1e8 if mcap is not None else None,
         float_market_cap=float_mcap * 1e8 if float_mcap is not None else None,
-        pe_ttm=_numf(raw.get("pe_ttm")),
-        pb=_numf(raw.get("pb")),
-        turnover_rate=_numf(raw.get("turnover_pct")),
-        amplitude=_numf(raw.get("amplitude_pct")),
-        limit_up_price=_numf(raw.get("limit_up")),
-        limit_down_price=_numf(raw.get("limit_down")),
-        last_close=_numf(raw.get("last_close")),
-        open=_numf(raw.get("open")),
-        high=_numf(raw.get("high")),
-        low=_numf(raw.get("low")),
-        vol_ratio=_numf(raw.get("vol_ratio")),
-        pe_static=_numf(raw.get("pe_static")),
+        pe_ttm=_numf(raw.get("pe_ttm")) or None,  # 0 永不合法（PE 不会是 0）
+        pb=_numf(raw.get("pb")) or None,  # 0 永不合法
+        turnover_rate=_numf(raw.get("turnover_pct")),  # 0 合法
+        amplitude=_numf(raw.get("amplitude_pct")),  # 0 合法（平盘 high==low）
+        limit_up_price=_numf(raw.get("limit_up")) or None,  # 0 永不合法
+        limit_down_price=_numf(raw.get("limit_down")) or None,  # 0 永不合法
+        last_close=_numf(raw.get("last_close")) or None,  # 0 永不合法
+        open=_numf(raw.get("open")) or None,  # 0 永不合法
+        high=_numf(raw.get("high")) or None,  # 0 永不合法
+        low=_numf(raw.get("low")) or None,  # 0 永不合法
+        vol_ratio=_numf(raw.get("vol_ratio")),  # 0 合法
+        pe_static=_numf(raw.get("pe_static")) or None,  # 0 永不合法
     )
 
 

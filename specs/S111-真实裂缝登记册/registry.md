@@ -262,7 +262,7 @@ S118 scan（wf_552c8943-5d3，8 维并行 finder + per-finding 对抗核实 + �
 |---|---|---|---|---|
 | source-em-swallow-defeats-fetch-ok | eastmoney.py:366 | HIGH | ✅ 已修（S119） | eastmoney_datacenter 改：em_get/.json() 抛异常时 raise typed SourceUnavailable（非 bare return []），仅 HTTP 成功但 result.data 空才返 []（真无数据）。单点覆盖 dragon_tiger_board 三处 + seat_engine._pull_records + hot_money_seats 间接。**⚠ 击败 S112**：fetch_ok 区分"源断 vs 未上榜"前提是源端源断会抛异常，但源端把源断也变 []→fetch_ok 恒 True→源断伪装"未上榜 ok"→risk 归零。S112 在源端被绕过，须回看。**S119 已修**（opt-in raise_on_failure，见 S119 状态节）。 |
 | ai-hithink-rank-empty-on-failure | hithink_src.py:248 | HIGH | ✅ 已修（S120） | skyrocket/hot_stock/anomaly_list 把 `if data is None: return []` 改 raise RuntimeError；registry.execute 兜成 {"error"} 喂 LLM；router 同步 502；改 test_skyrocket_failure_empty 断言（从 ==[] 改 raises/返 error）。同仓 query_global_stock/worldmonitor_query 失败返 {"error":"暂不可达"} 是诚实范式。⚠ 关联 hithink APIKey 泄漏待轮换，轮换后旧 key 401 活体触发此路径。**S120 已修**（见 S120 状态节）。 |
-| ai-tencent-num-zero-coercion | tencent.py:58 | HIGH | worth_fixing | num() 对空/非数值返 None 而非 0.0（根因），或范围修：quote_from_tencent 对 0 永不合法字段（price/pe_ttm/pe_static/pb/last_close/open/high/low/market_cap/float_market_cap）用 `_numf(...) or None` 把 0.0 归 None。亏损股 PE 未定义→gtimg 返空/"-"→num()→0.0 喂 LLM 当真 PE=0 极度低估。触 §1.2 不臆造底线。 |
+| ai-tencent-num-zero-coercion | tencent.py:58 | HIGH | ✅ 已修（S121） | num() 对空/非数值返 None 而非 0.0（根因），或范围修：quote_from_tencent 对 0 永不合法字段（price/pe_ttm/pe_static/pb/last_close/open/high/low/market_cap/float_market_cap）用 `_numf(...) or None` 把 0.0 归 None。亏损股 PE 未定义→gtimg 返空/"-"→num()→0.0 喂 LLM 当真 PE=0 极度低估。触 §1.2 不臆造底线。**S121 已修**（范围修 quote_from_tencent，见 S121 状态节）。 |
 | market-emotion-realttime-weekend-silent-fallback-no-calendar-gate | market.py:220 | HIGH | worth_fixing | market._emotion(date=None) 实时入口加交易日历门控：周末/非交易日不取 em_zt_topic_pool 当日池当实时，返 stale 或标 is_delayed/trade_date。em_zt_topic_pool 静默回退是唯一未守卫缺口。 |
 | realtime-capital-flow-no-date-provenance-carryforward-as-fresh | risk_models.py:670 | MEDIUM | worth_fixing | _get_realtime_capital_flow 取 history[-1] 加 date 校验：盘前 carry-forward 资金流（无当日 bar）标 data_status=degraded/missing 不戳 last_updated=now。 |
 | hot-money-seats-partial-fetch-silent | hot_money_seats.py:109 | MEDIUM | worth_fixing | fetch_billboard_for_date 单侧断流 except:continue 静默返半截→席位画像在残缺数据上算 next_day_sell_rate。返 {rows,buy_ok,sell_ok}，残缺日不纳入聚合 + warning 日志（非 bare continue）。 |
@@ -280,7 +280,7 @@ S118 scan（wf_552c8943-5d3，8 维并行 finder + per-finding 对抗核实 + �
 - forward-test-t1-settle-stuck-mark-conflates-transient-with-permanent（scheduled_tasks.py:1252-1265 + kline_returns.py:91-118 + scheduled_tasks.py:2294 vs :2254，MEDIUM robustness）— stuck-mark 把暂态 fetch-empty 当永久 no-bar 施 7 日抑制，15:50 cron 命中 baostock EOD 未就绪（baostock-stuck 维度 borderline，登记）。
 - s107-hithink-dragon-tiger-unimplemented（S107 spec.md:3，LOW completeness_gap）— S107 占位草案从未实现，hithink 个股+概念维度与东财席位维度不重叠，东财断无备援是维度约束下诚实缺口，非缺陷（用户追加龙虎榜维度的产出）。
 
-**撒谎总账**：14（S111/S112，全修）+ 3（S115，全修）+ 1（S119，已修）+ 1（S120，已修）= 19 全修 → +7（S118 待修）= **26 confirmed_lying，其中 7 待修**。诚实登记 19 + 8 = 27。registry 覆盖从 36 扩到 53（36+17）。
+**撒谎总账**：14（S111/S112，全修）+ 3（S115，全修）+ 1（S119，已修）+ 1（S120，已修）+ 1（S121，已修）= 20 全修 → +6（S118 待修）= **26 confirmed_lying，其中 6 待修**。诚实登记 19 + 8 = 27。registry 覆盖从 36 扩到 53（36+17）。
 
 ## S119 实现后状态（2026-08-31，source-em-raise 诚实化——恢复 S112 fetch_ok 前提）
 
@@ -328,3 +328,23 @@ S120 修 S118 scan #1 `ai-hithink-rank-empty-on-failure`（HIGH confirmed_lying�
 **撒谎总账更新**：26 confirmed_lying = 19 全修（S111/S112/S115 17 + S119 1 + S120 1）+ 7 待修。registry 覆盖 53 不变（S120 修不新增裂缝）。
 
 **下一步候选**：剩 7 confirmed_lying 待修——2 HIGH（`ai-tencent-num-zero-coercion` tencent.py:58 num() 空→0.0 当真 PE/PB 触 §1.2 不臆造 / `market-emotion-realttime-weekend` market.py:220 周末返周五池当实时）+ 5 M/LOW；或跑 S121 scan round 2 扫 critic 6 漏扫（risk 三子维度承重链头条）。
+
+## S121 实现后状态（2026-08-31，tencent quote 0 归一化诚实化——AI 出口不喂 PE=0/PB=0）
+
+S121 修 S118 scan #2 `ai-tencent-num-zero-coercion`（HIGH confirmed_lying，触 §1.2 不臆造工程底线）。spec + impl + 3 测试，全量 2451 passed 0 回归（test_s040 偶发 flaky 见下）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| quote_from_tencent 0→None | ✅ 已修 | `mappers.quote_from_tencent` 对 0 永不合法字段（price/pe_ttm/pe_static/pb/last_close/open/high/low/limit_up_price/limit_down_price/mcap/float_mcap 12 字段）`_numf(raw.get(X))` → `_numf(raw.get(X)) or None`（0.0 falsy→None，真值不变）。0→None 经 `Quote.model_dump`→`query_quote`→chat.py 喂 LLM 见 null 可辨缺失（非 0.0 当真 PE=0） |
+| 0 合法字段保留 | ✅ | change_pct/change_amount/volume/turnover/turnover_rate/amplitude/vol_ratio 不动（0=平盘/停牌/无量，合法） |
+| num() 不动 | ✅ | num(i)（tencent.py:56）仍 0.0 on 空——raw dict 28 消费者零影响（YAGNI，未 confirmed_lying 留 scan）。范围修只动 Quote 投影层 |
+
+**设计**：范围修（quote_from_tencent 层）而非根因修（num() 返 None）——num()→None 会破 raw dict 28 消费者算术（`None*x` TypeError），blast radius 大。范围修只动 Quote 投影层，raw dict 不变。`_numf(0.0) or None`=None、`_numf(19.92) or None`=19.92、`_numf(None) or None`=None 三态正确。Quote 字段全 `float|None` 兼容。备选根因修否决（28 消费者 blast radius）。
+
+**测试**：test_s008_mappers 加 3 测——①亏损股/停牌 0.0→None（price/pe_ttm/pb/market_cap 等 12 字段）；②0 合法字段保留（change_pct=0 等）；③真值不变（`19.92 or None`=19.92）。既有 `test_quote_from_tencent_dash_values_become_none`（"-"→None）仍绿。
+
+**撒谎总账更新**：26 confirmed_lying = 20 全修（S111/S112/S115 17 + S119 1 + S120 1 + S121 1）+ 6 待修。registry 覆盖 53 不变。
+
+**⚠ test_s040 flaky 观察**：S121 全量首跑 `test_s040_backfill::test_run_backtest_async_passes_kline_cache` 偶发崩（seen_offsets `[54,105,105,...]` 末值 105≠54；105=90+15 但本测日期只该 39+15=54，105 来源不明，疑前序测 asyncio 任务泄漏被 fake_kline 抓到残留调用）。单跑 PASS、重跑 PASS（b163kzlxf 2451/0 带本测）——非 S121 纯函数改导致（quote_from_tencent 不被 backtest_lite 用）。pre-existing flaky，未 deselect（通过率 2/3），若 CI 复发再加 `--deselect tests/test_s040_backfill.py::test_run_backtest_async_passes_kline_cache`。
+
+**下一步候选**：剩 6 confirmed_lying 待修——1 HIGH（`market-emotion-realttime-weekend` market.py:220 周末返周五池当实时）+ 5 M/LOW；或跑 S122 scan round 2 扫 critic 6 漏扫（risk 三子维度承重链头条）。

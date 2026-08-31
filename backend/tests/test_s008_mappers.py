@@ -54,6 +54,75 @@ def test_quote_from_tencent_dash_values_become_none():
     assert q.market_cap is None
 
 
+def test_quote_from_tencent_zero_coerced_fields_become_none():
+    """S121：num() 把空字段归一成 0.0（亏损股 PE/停牌 price），quote_from_tencent
+    对 0 永不合法字段归 None（防 LLM 见 PE=0/PB=0/price=0 当真，触 §1.2 不臆造）。"""
+    raw = {
+        "name": "亏损股",
+        "price": 0.0,         # num() 空归一 → 0 永不合法 → None
+        "last_close": 15.3,   # 真值保留
+        "pe_ttm": 0.0,        # 亏损 PE 未定义 → 0 永不合法 → None
+        "pb": 0.0,            # → None
+        "pe_static": 0.0,     # → None
+        "mcap_yi": 0.0,       # market_cap=0 永不合法 → None
+        "float_mcap_yi": 0.0,  # → None
+        "limit_up": 0.0,      # → None
+        "limit_down": 0.0,    # → None
+        "open": 0.0, "high": 0.0, "low": 0.0,  # → None
+    }
+    q = mappers.quote_from_tencent("600519", raw)
+    # 0 永不合法字段 → None（非 0.0 喂 LLM）
+    assert q.price is None            # price=0 与 last_close=15.3 矛盾 → price=None
+    assert q.pe_ttm is None
+    assert q.pb is None
+    assert q.pe_static is None
+    assert q.market_cap is None
+    assert q.float_market_cap is None
+    assert q.limit_up_price is None
+    assert q.limit_down_price is None
+    assert q.open is None and q.high is None and q.low is None
+    # 真值保留
+    assert q.last_close == 15.3
+
+
+def test_quote_from_tencent_zero_legit_fields_stay_zero():
+    """S121：0 合法字段（平盘 change_pct=0 / 停牌 volume=0 / 平盘 amplitude=0）保留 0.0。"""
+    raw = {
+        "name": "平盘股",
+        "price": 15.3,
+        "change_pct": 0.0,      # 0 合法（平盘）→ 保留
+        "change_amt": 0.0,      # 0 合法 → 保留
+        "amplitude_pct": 0.0,   # 0 合法（high==low）→ 保留
+        "vol_ratio": 0.0,       # 0 合法 → 保留
+        "turnover_pct": 0.0,   # 0 合法 → 保留
+    }
+    q = mappers.quote_from_tencent("600519", raw)
+    assert q.change_pct == 0.0
+    assert q.change_amount == 0.0
+    assert q.amplitude == 0.0
+    assert q.vol_ratio == 0.0
+    assert q.turnover_rate == 0.0
+
+
+def test_quote_from_tencent_real_values_unchanged():
+    """S121：真正值不受 `or None` 影响（19.92 or None == 19.92）。"""
+    raw = {
+        "name": "茅台", "price": 1700.0, "last_close": 1661.16,
+        "pe_ttm": 19.92, "pb": 6.46, "pe_static": 20.5,
+        "mcap_yi": 18800.0, "float_mcap_yi": 18700.0,
+        "limit_up": 1870.0, "limit_down": 1530.0,
+        "open": 1665.0, "high": 1710.0, "low": 1655.0,
+    }
+    q = mappers.quote_from_tencent("600519", raw)
+    assert q.price == 1700.0
+    assert q.pe_ttm == 19.92
+    assert q.pb == 6.46
+    assert q.pe_static == 20.5
+    assert q.market_cap == 18800.0 * 1e8
+    assert q.limit_up_price == 1870.0
+    assert q.high == 1710.0
+
+
 def test_quote_from_turnover_rank():
     raw = {
         "code": "600519", "name": "贵州茅台", "price": 1700.0,
