@@ -16,6 +16,28 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 import pytest
+from datetime import datetime as _real_datetime
+
+
+# S061 测试硬编码 stated_at="2026-08-01" + days=30 窗口；不冻 now 则 09-01 起
+# 08-01 落 30 日窗外 → list_predictions 返空 → assert 崩。冻 now=2026-08-10 让
+# 窗口数学日期无关（cutoff=07-11，08-01 在内；08-05 verify 日 ≤ due_date）。
+_FROZEN_NOW = _real_datetime(2026, 8, 10, 12, 0, 0)
+
+
+class _FrozenDatetime(_real_datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return _FROZEN_NOW
+
+
+@pytest.fixture(autouse=True)
+def _freeze_now(monkeypatch):
+    """冻 prediction_ledger/prediction_verify 的 datetime.now → 测试日期无关。"""
+    import prediction_ledger as pl
+    import prediction_verify as pv
+    monkeypatch.setattr(pl, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(pv, "datetime", _FrozenDatetime)
 
 
 @pytest.fixture()
