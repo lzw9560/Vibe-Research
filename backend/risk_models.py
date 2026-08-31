@@ -139,8 +139,17 @@ def calculate_flow_adjustment(capital_flow: dict) -> float:
     return round(adjustment, 2)
 
 
-async def get_current_sti_phase() -> str | None:
-    """获取当前 STI 阶段（用于动态阈值）。"""
+async def get_current_sti_phase() -> tuple[str | None, str]:
+    """获取当前 STI 阶段（用于动态阈值）。
+
+    返回 (phase, data_status)（S131 R2，对齐 S111 R7 calculate_base_risk 范式）：
+    - 查询成功、有 row → (phase, "ok")
+    - 查询成功、无 row（合法空=未初始化） → (None, "ok")
+    - 取数/解析异常 → (None, "missing") + logger.warning
+
+    原 bare except:pass 无日志，源断静默返 None → thresholds 默认 DIVERGENCE，
+    _merge_data_status 不含 STI status → composite risk 可在 STI 源断时仍 ok。
+    """
     try:
         import limitup_sti as ls_sti
         engine = ls_sti.get_sti_engine()
@@ -149,10 +158,13 @@ async def get_current_sti_phase() -> str | None:
             "SELECT phase FROM sti_timeline WHERE phase IS NOT NULL ORDER BY date DESC LIMIT 1"
         ).fetchone()
         if row:
-            return row["phase"]
-    except Exception:
-        pass
-    return None
+            return row["phase"], "ok"
+        return None, "ok"
+    except Exception as e:
+        logging.getLogger("risk_models").warning(
+            "get_current_sti_phase() 取数失败，降级 missing: %s", e
+        )
+        return None, "missing"
 
 
 async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
@@ -167,7 +179,7 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
     dynamic_score = max(0.0, min(100.0, dynamic_score))
 
     # 3. 动态阈值调整（基于 STI 阶段）
-    sti_phase = await get_current_sti_phase()
+    sti_phase, sti_status = await get_current_sti_phase()
     thresholds = get_dynamic_thresholds(sti_phase)
 
     # 4. 判定风险等级
@@ -198,7 +210,8 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
     liquidity_risk, liq_status = await _calculate_liquidity_risk_meta(code)
     concentration_risk, conc_status = await _calculate_concentration_risk_meta(code)
 
-    # 9. 综合风险因素与建议（S129 R3：trio status 传入，失败维度显“数据缺失”非“较少”）
+    # 9. 综合风险因素与建议（S129 R3：trio status + S130 R1：conc/dt/seat/cf status 传入）
+    cf_status = capital_flow.get("data_status", "ok")
     factors, recommendation = _build_risk_factors(
         dynamic_score=dynamic_score,
         risk_level=risk_level,
@@ -212,13 +225,16 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
         vol_status=vol_status,
         dd_status=dd_status,
         liq_status=liq_status,
+        conc_status=conc_status,
+        dt_status=dt_status,
+        seat_status=seat_status,
+        cf_status=cf_status,
     )
 
-    # 10. 数据诚实性：聚合 data_status（base + 资金流 + risk-trio 8 态，S129 R2 含 trio）
-    cf_status = capital_flow.get("data_status", "ok")
+    # 10. 数据诚实性：聚合 data_status（base+cf+dt+seat+conc+trio+sti 9 态，S129 R2 + S131 R2 含 sti）
     data_status = _merge_data_status(
         base_status, cf_status, dt_status, seat_status, conc_status,
-        vol_status, dd_status, liq_status
+        vol_status, dd_status, liq_status, sti_status
     )
     # last_updated 仍以资金流（实时向量）为准：cf 非 ok 则不戳 now（对齐 S111 R4）；
     # risk-trio 缺失只抬 data_status，不回退 last_updated——risk_score 由 base+cf 决定，
@@ -620,16 +636,24 @@ def _build_risk_factors(
     vol_status: str = "ok",
     dd_status: str = "ok",
     liq_status: str = "ok",
+    conc_status: str = "ok",
+    dt_status: str = "ok",
+    seat_status: str = "ok",
+    cf_status: str = "ok",
 ) -> tuple[list[str], str]:
     """根据各维度指标生成风险因素列表和建议。
 
     S129 R3：trio（volatility/max_drawdown/liquidity_risk）加 status 感知——
-    失败维度（degraded/missing）显“数据缺失”factor，而非在 float=0.0 时静默
-    不报、最终走“当前风险因素较少”兜底（把“没算出来”伪装成“低风险”）。
-    默认 vol/dd/liq_status='ok' 保持向后兼容（既有直调不传 status 不破）。
+    失败维度（degraded/missing）显"数据缺失"factor，而非在 float=0.0 时静默
+    不报、最终走"当前风险因素较少"兜底（把"没算出来"伪装成"低风险"）。
+    S130 R1：conc/dt/seat/cf 同款补——四维 status 感知，失败显对应"数据缺失"
+    非静默不报。默认 vol/dd/liq/conc/dt/seat/cf_status='ok' 保持向后兼容
+    （既有直调不传 status 不破）。
     """
     factors: list[str] = []
-    if dragon_tiger_risk > 30:
+    if dt_status in ("degraded", "missing"):
+        factors.append("龙虎榜数据缺失")
+    elif dragon_tiger_risk > 30:
         factors.append(f"龙虎榜风险较高({dragon_tiger_risk})")
     if vol_status in ("degraded", "missing"):
         factors.append("波动率数据缺失")
@@ -643,11 +667,17 @@ def _build_risk_factors(
         factors.append("流动性数据缺失")
     elif liquidity_risk > 0:
         factors.append(f"流动性风险({liquidity_risk})")
-    if concentration_risk > 60:
+    if conc_status in ("degraded", "missing"):
+        factors.append("席位集中度数据缺失")
+    elif concentration_risk > 60:
         factors.append(f"席位集中度较高({concentration_risk}%)")
-    if capital_flow_trend == "流出":
+    if cf_status in ("degraded", "missing"):
+        factors.append("资金流数据缺失")
+    elif capital_flow_trend == "流出":
         factors.append("资金流呈流出趋势")
-    if multi_seat_signal:
+    if seat_status in ("degraded", "missing"):
+        factors.append("席位数据缺失")
+    elif multi_seat_signal:
         factors.append("多席位共识信号")
 
     if not factors:

@@ -47,6 +47,9 @@ class EventContext:
     events: list[EventFactor]
     has_upcoming_ex_dividend: bool
     ex_dividend_note: str = ""
+    # S131 R10：解禁源状态。'ok'=取数成功（含"无解禁"）；'missing'=源断（不可与"无解禁"混淆）。
+    # 当前仅解禁源（fetch_share_unlock_with_status）产出 status；其余源静默 swallow 待后续覆盖。
+    lockup_data_status: str = "ok"
 
 
 # ===========================================================================
@@ -145,16 +148,40 @@ def fetch_shareholder_change(code: str) -> list[EventFactor]:
 # ===========================================================================
 
 def fetch_share_unlock(code: str) -> list[EventFactor]:
-    """限售解禁（spec §8）。
+    """限售解禁（spec §8）——向后兼容入口，返回事件列表（无 data_status）。
 
     akshare 无 stock_share_unlock_em → 用 astock lockup_expiry 替代。
-    返回未来 90 天的解禁事件。
+    返回未来 90 天的解禁事件。``build_event_context`` 已改用
+    ``fetch_share_unlock_with_status``（S131 R10），此入口留向后兼容 / 既有 mock。
+    需区分"源断"vs"无解禁"的调用方用 ``fetch_share_unlock_with_status``。
+
+    S131 R10：内部走 ``lockup_expiry(code, raise_on_failure=True)``——源断时 lockup_expiry
+    re-raise（非吞成 {"history":[],"upcoming":[]}），此处 catch 返 []（不崩）。
+    data_status 区分见 ``fetch_share_unlock_with_status``。
     """
+    events, _status = _fetch_share_unlock_impl(code)
+    return events
+
+
+def fetch_share_unlock_with_status(code: str) -> tuple[list[EventFactor], str]:
+    """返回 ``(events, data_status)``——区分源断(missing) vs 无解禁(ok)。
+
+    S131 R10：``lockup_expiry(raise_on_failure=True)`` 源断时 raise → 此处 catch →
+    ``([], "missing")``（源断返空 + 标 missing，非当合法空"无解禁"）。
+    成功但无 upcoming → ``([], "ok")``（真无解禁）。有 upcoming → ``(events, "ok")``。
+    对齐 S119 raise_on_failure opt-in 范式：取数路径仍走 em_get 限流/熔断/代理，
+    仅源断时 raise 而非 swallow，让下游可识别"源断"非"无数据"。
+    """
+    return _fetch_share_unlock_impl(code)
+
+
+def _fetch_share_unlock_impl(code: str) -> tuple[list[EventFactor], str]:
+    """解禁取数实现：lockup_expiry(raise_on_failure=True) + try/except 兜底返 ([], missing)。"""
     try:
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from astock import lockup_expiry
-        data = lockup_expiry(code, forward_days=90)
+        data = lockup_expiry(code, forward_days=90, raise_on_failure=True)
         events: list[EventFactor] = []
         for item in data.get("upcoming", []):
             unlock_date = item.get("date", "")
@@ -178,9 +205,11 @@ def fetch_share_unlock(code: str) -> list[EventFactor]:
                 detail=f"解禁 {shares} 股（占比 {ratio}%）",
                 impact_score=impact,
             ))
-        return events
+        return events, "ok"
     except Exception:
-        return []
+        # S131 R10：lockup_expiry(raise_on_failure=True) 源断 → catch 返 ([], "missing")
+        # （区分"源断"vs"无解禁"，非当合法空 []）。
+        return [], "missing"
 
 
 # ===========================================================================
@@ -241,6 +270,9 @@ def build_event_context(code: str, trade_date: str | None = None) -> EventContex
 
     合并：业绩预告 + 增减持 + 解禁 + 除权除息。
     各数据源独立拉取，任一失败不阻断其他（降级不崩）。
+
+    S131 R10：解禁走 ``fetch_share_unlock_with_status`` 取 ``(events, status)``，
+    源断 status='missing' 透传到 ``EventContext.lockup_data_status``（区分"源断"vs"无解禁"）。
     """
     trade_date = trade_date or datetime.now().strftime("%Y-%m-%d")
     events: list[EventFactor] = []
@@ -249,8 +281,9 @@ def build_event_context(code: str, trade_date: str | None = None) -> EventContex
     events.extend(fetch_earnings_forecast(code))
     # 增减持
     events.extend(fetch_shareholder_change(code))
-    # 解禁
-    events.extend(fetch_share_unlock(code))
+    # 解禁（S131 R10：status-aware，源断标 missing 非当合法空）
+    unlock_events, lockup_status = fetch_share_unlock_with_status(code)
+    events.extend(unlock_events)
 
     # 除权除息
     has_ex_div, ex_note = check_ex_dividend(code, trade_date)
@@ -260,6 +293,7 @@ def build_event_context(code: str, trade_date: str | None = None) -> EventContex
         events=events,
         has_upcoming_ex_dividend=has_ex_div,
         ex_dividend_note=ex_note,
+        lockup_data_status=lockup_status,
     )
 
 

@@ -158,12 +158,12 @@ def test_emotion_dirty_amount(monkeypatch):
         "getTopicDTPool": [],
         "getYesterdayZTPool": [{}],
     }
-    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="": pools.get(ep, []))
+    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="", raise_on_failure=False: pools.get(ep, []))
     out = market._emotion()
     stocks = out["lianban_stocks"]
     assert [s["code"] for s in stocks] == ["600001", "600002"]  # 排序没崩、按连板数降序
     assert stocks[0]["amount"] is None    # '-' 归一为 None
-    assert stocks[1]["price"] == 0.0      # p='-' 归一后按 0 展示
+    assert stocks[1]["price"] is None     # p='-' 归一为 None（S130 R2: 0→None，'-'=缺失非 0）
     assert stocks[1]["amount"] == 5e8
 
 
@@ -203,7 +203,7 @@ def test_emotion_weekend_resolves_to_friday_not_saturday(monkeypatch):
     # em 对任意日返池（模拟静默回退——周六查也返周五池）；守卫已跳过周六直落到周五
     pool = [{"c": "600001", "n": "甲", "lbc": 3, "p": 10000, "zdp": 10.0,
              "amount": 5e8, "ltsz": 1e9, "hybk": "X"}]
-    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="": pool)
+    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="", raise_on_failure=False: pool)
     monkeypatch.setattr(market, "_sentiment", lambda *a, **k: {})
 
     out = market._emotion(None)
@@ -225,7 +225,7 @@ def test_emotion_trading_day_afterclose_resolves_today(monkeypatch):
     monkeypatch.setattr(vr_paths, "is_trading_day", lambda d=None: d is not None and d.weekday() < 5)
     pool = [{"c": "600001", "n": "甲", "lbc": 3, "p": 10000, "zdp": 10.0,
              "amount": 5e8, "ltsz": 1e9, "hybk": "X"}]
-    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="": pool)
+    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="", raise_on_failure=False: pool)
     monkeypatch.setattr(market, "_sentiment", lambda *a, **k: {})
 
     out = market._emotion(None)

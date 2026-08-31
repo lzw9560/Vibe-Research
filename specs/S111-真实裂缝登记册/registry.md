@@ -532,3 +532,42 @@ S129 修 S124 scan MEDIUM `kline-risk-trio-silent-zero-no-data-status`（critic 
 **撒谎总账更新 / critic 6 漏扫进度**：45 confirmed_lying = 41 全修（S111-S123 26 + S125 3 + S126 6 display/risk-dashboard + S128 5 承重链 + S129 1 risk-trio）+ 4 待修（em_get 吞异常 2 / lockup-expiry / topology-ladder / sentiment_weather:1174 / market.py or-0，全 M/LOW 非承重链）。**critic 6 漏扫**——#1 risk-trio（closed by S129）/ #2 or-zero（closed by S128）/ #4 frontend（closed by S126）；#3 顶层聚合 / #5 AI工具 / #6 em_get消费者 still open。
 
 **下一步候选**：critic 6 漏扫剩 3 open（#3 顶层聚合 / #5 AI工具 / #6 em_get消费者）；或点修剩 4 非承重链 M/LOW。**risk-trio provenance 闭合，可停。**
+
+## S130 实现后状态（2026-09-01，非承重 confirmed_lying 批量修——conc/dt/seat/cf factors + market/sentiment_weather or-0）
+
+S130 修 3 条非承重 confirmed_lying（scan #3 finding #1 扩展 + S127 or-zero 残留）。spec + impl + ~16 测，全量 0 回归。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| conc/dt/seat/cf factors-text status | ✅ 已修 | R1（scan #3 #1 扩展：不止 conc/dt，**seat+cf 同款盲态**）：`_build_risk_factors` 加 conc/dt/seat/cf 4 status（默认 ok 向后兼容），4 factor 条件 status 感知（"龙虎榜/席位集中度/席位/资金流数据缺失"），调用处传 4 status。对齐 S129 R3 trio 范式 |
+| market.py lianban_stocks or-0 | ✅ 已修 | R2：price/pct/amount `or 0`→`or None`（S121 范式，0→None 让 AI 见 null）；arithmetic 字段保 inner `or 0`+trailing `or None`（None/1000 不崩）；sort key `or 0` 保（非呈现） |
+| sentiment_weather MA or-0 | ✅ 已修 | R3：`b.get("close") or 0`→filter None close，ma_price=None if 空（below_ma 不误触） |
+
+**设计**：scan #3 #1 实锤 `_build_risk_factors` 对 conc/dt/seat/cf 四维全盲（不止 S129 critic 说的 conc/dt）——trio 修了 4 维同款盲态留此 spec。R2 对齐 S121 `or None`。R3 过滤非 coerce。
+
+## S131 实现后状态（2026-09-01，scan #3/#5/#6 confirmed_lying + lockup-expiry——11 条 + caller wiring follow-up）
+
+S131 修 scan `wf_cad164bc-f17`（3 维 finder+对抗 verify+critic，16 agent）确认 10 confirmed_lying + lockup-expiry（registry:418 非 scan）。spec + impl workflow `wf_83d1d131-cfa`（6 impl 按文件+4 verify+critic，11 agent）+ follow-up caller-wiring `wf_543b9757-078`（6 wire+3 verify+critic，10 agent）+ topology:86 手补。全量 ~2604 passed 0 回归。
+
+**critic 6 漏扫全闭合**：#1 risk-trio（S129）/ #2 or-zero（S128）/ #4 frontend（S126）/ #3 顶层聚合+storm+sti（S131）/ #5 AI工具 query_valuation（S131）/ #6 em_get消费者（S131）。
+
+| # | R | where | 状态 | 说明 |
+|---|---|---|---|---|
+| 1 | storm_internal_factor gene datasource | storm_predictor.py:255 | ✅ | _collect_internal_factor 查 g.data_source/missing_factors；kline_rebuild→StormFactor data_status="degraded"（不 fabricated 50）；_worst_factor_status 传顶层 |
+| 2 | sti_phase silent failure | risk_models.py:153 | ✅ | get_current_sti_phase 返 (phase,status)，except→(None,"missing")+warning；_merge_data_status 含 sti（9 statuses） |
+| 3 | query_valuation hithink PS/PCF | astock.py+mappers.py+valuation.py | ✅ | hithink 断→ps_pcf_status='hithink_unavailable'，mapper 透 data_status，Valuation model 加字段 |
+| 4 | concept_blocks swallow→empty | eastmoney.py:740 | ✅+wiring | raise_on_failure opt-in；承重 callers（stock_financial:122→502 / catalyst:53→missing / stock_data:231→None / first_board_filter:404 / topology:86 SectorEdgeProvider）传 True |
+| 5 | em_zt_topic_pool swallow→[] | eastmoney.py:205 | ✅+wiring | raise_on_failure opt-in；承重 callers（market 5 处 / topology:138,335 / limitup_screener:223 / first_board_filter×3 / first_board_market_env×2 / daily_review / extreme_market_detector:128 lambda 内传 True）传 True |
+| 6 | market_turnover_rank | eastmoney.py:345 | ✅ | raise_on_failure opt-in；get_turnover_top 传 True+标 data_status='missing' |
+| 7 | sector_fund_flow | eastmoney.py:321 | ✅ | raise_on_failure opt-in；overview 传 True+标 sectors_status='missing' |
+| 8 | industry_comparison | eastmoney.py:773 | ✅+cache fix | failure dict 含 data_status='missing'；**R8 cache fix**：fallback._is_empty_leaf 认 data_status='missing' 为空（不缓存覆盖好缓存，对齐 [fallback-empty-write-corrupts-snapshots]）；/api/industry 透 missing |
+| 9 | eastmoney_datacenter default-swallow | eastmoney.py:375 | ✅ mechanism | raise_on_failure 默认 False；info-panel 承重 callers 传 True（LOW） |
+| 10 | lockup-expiry no-raise | eastmoney.py:705+event_factors.py:156 | ✅+dead-code fix | lockup_expiry raise_on_failure opt-in；fetch_share_unlock 传 True；build_event_context 调 _with_status 变体；EventContext 加 data_status 字段（修 dead-code：原 _with_status 没人调） |
+
+**follow-up caller wiring**（`wf_543b9757-078`）：impl workflow `wf_83d1d131-cfa` 6 agent 照 spec 字面做函数级机制+测试全绿，但**跳过 spec R4.2/R5.2 等明确要求的"承重 callers 传 True"这半**（[spec-scope-mis-trace-pattern] 又中：impl 照 spec 字面做绿测试假信心，critic 横扫抓到 5 mechanism-only 撒谎照旧）。follow-up 补 wiring（6 agent 按文件）+ 修 R8 cache（OPTION B：_is_empty_leaf 认 missing 为空）+ R10 dead-code（build_event_context 调 _with_status+EventContext 加 data_status）+ topology:86 手补（最后一个漏网 caller，传 True+log；topology response 加 data_status 字段是更大 schema 改动，**登记 follow-up**——per-candidate 源断现 log 非 silent）。advWiring 确认 R4/R5/R6/R7/R10 全闭合。
+
+**撒谎总账更新**：45→~53 confirmed_lying 全修（原 4 待修全闭合 + S130 新增 conc/dt/seat/cf + S131 scan 新增 7 确认 sti/storm/query_valuation/market_turnover/sector_fund_flow/industry_comparison/eastmoney_datacenter）+ 0 待修。**critic 6 漏扫 #1-#6 全闭合。** registry 覆盖 ~64+S131=~76。
+
+**critic 16 missed areas**（scan completeness critic flag，**未深扫非已确认**——登记 S132 follow-up，需下轮 scan+对抗 verify）：d3 risk_score/risk_level fallback 呈现 / score_components 无 status / OneDayRisk.last_updated / StormPrediction 最终聚合 / d5 query_quote/query_reports/query_global_stock/skyrocket/profit_forecast/cache-stale / d6 gstock/hot_money_seats/fund_flow/bids/akshare_src。
+
+**下一步候选**：S132 scan critic 16 missed（finder+对抗 verify 确认哪些真 lie）/ topology response data_status schema / 或停（承重链 + critic 6 漏扫 + 原 4 待修全闭合，gate 绿）。

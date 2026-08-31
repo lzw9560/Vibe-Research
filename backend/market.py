@@ -124,9 +124,19 @@ def _sectors() -> list[dict]:
 def get_overview() -> dict:
     """市场情绪 + 板块资金（含缓存）。资金轮动由前端从 sectors 头尾取。"""
     def build():
+        # S131 R7：承重 caller 传 raise_on_failure=True——源断 catch → sectors_status='missing'
+        # （非吞 [] 当合法空"无板块资金流"）。源断不缓存（_cached valid 判否，下次重试）。
+        try:
+            from data.sources.eastmoney import sector_fund_flow
+            sectors = sector_fund_flow(raise_on_failure=True)
+            sectors_status = "ok"
+        except Exception:
+            sectors = []
+            sectors_status = "missing"
         return {
             "sentiment": _sentiment(),
-            "sectors": _sectors(),
+            "sectors": sectors,
+            "sectors_status": sectors_status,
             "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
         }
     return _cached("overview", build, valid=lambda v: bool(v.get("sentiment") or v.get("sectors")))
@@ -204,6 +214,9 @@ def _emotion(date: str | None = None) -> dict:
     cross_source = None
     data_source = "eastmoney"
     ths = None  # 懒拉取：降级与交叉验证共用，只请求一次
+    # S131 R5：em 源断标志——承重 caller 传 raise_on_failure=True，catch 时置 True，
+    # 早返 {data_status:"missing"}（源断不伪装"无数据"=合法空 {}）。
+    em_source_down = False
 
     if date is not None:
         # 直接使用指定日期
@@ -229,7 +242,13 @@ def _emotion(date: str | None = None) -> dict:
             if back == 0 and datetime.now(BEIJING).hour < 15:
                 continue  # 盘前当日池未生成，em 回退 T-1 误标今日（P0-3 同款）
             d_str = d.strftime("%Y%m%d")
-            zt_temp = astock.em_zt_topic_pool("getTopicZTPool", d_str, "fbt:asc")
+            # S131 R5：承重 caller 传 raise_on_failure=True——源断 raise（非吞 [] 误标"无数据"）
+            try:
+                zt_temp = astock.em_zt_topic_pool("getTopicZTPool", d_str, "fbt:asc",
+                                                  raise_on_failure=True)
+            except Exception:
+                em_source_down = True
+                break  # em 源断——无须再探更多日，直接走 ths 降级定位
             if zt_temp:
                 resolved = d_str
                 break
@@ -249,14 +268,21 @@ def _emotion(date: str | None = None) -> dict:
                     ths = ths_try  # 复用：后续不再重复请求
                     break
             if not resolved:
-                return {}
+                # S131 R5：em 源断 + ths 降级也空 → missing（非合法空 {}）
+                return {"data_status": "missing"} if em_source_down else {}
 
     # T18：真实涨停数（akshare legu 源）——_sentiment 只能查最新日，历史日返 {}→None。
     # CRITICAL：传 dash-formatted resolved 日期（emotion 实际数据日），别裸调 _sentiment()
     # （=always-latest），否则今天 zt_real 标到非最新 emotion 日，重犯 P0-1/P0-2 日期错配。
     zt_real = _sentiment(f"{resolved[:4]}-{resolved[4:6]}-{resolved[6:]}").get("zt_real")
 
-    zt = astock.em_zt_topic_pool("getTopicZTPool", resolved, "fbt:asc")
+    # S131 R5：承重 caller 传 raise_on_failure=True——源断 raise（非吞 [] 当"无涨停"）
+    try:
+        zt = astock.em_zt_topic_pool("getTopicZTPool", resolved, "fbt:asc",
+                                     raise_on_failure=True)
+    except Exception:
+        zt = []
+        em_source_down = True
     if not zt and date is None:
         # 主源空 → 同花顺降级（若 ths 已在定位阶段取到则复用，否则现取）
         if ths is None:
@@ -265,7 +291,8 @@ def _emotion(date: str | None = None) -> dict:
             except Exception:
                 ths = []
         if not ths:
-            return {}
+            # S131 R5：em 源断 + ths 也空 → missing（非合法空 {}）
+            return {"data_status": "missing"} if em_source_down else {}
         # 东财涨停池为空 → 同花顺降级重建 zt_count / max_boards（最小降级）
         zt_count = len(ths)
         boards = [_parse_high_days(s.get("high_days")) for s in ths]
@@ -288,15 +315,34 @@ def _emotion(date: str | None = None) -> dict:
             "yzt_count": None,
             "cross_source": None,  # 降级源无交叉验证对象
             "data_source": data_source,
+            "data_status": "degraded",  # S131 R5：降级源=degraded（非 ok 权威）
         }
 
     # 如果指定日期但无数据，返回空
     if not zt:
-        return {}
+        # S131 R5：em 源断 → missing（非合法空 {}）
+        return {"data_status": "missing"} if em_source_down else {}
 
-    zb = astock.em_zt_topic_pool("getTopicZBPool", resolved, "fbt:asc")    # 炸板池
-    dt = astock.em_zt_topic_pool("getTopicDTPool", resolved, "fund:asc")   # 跌停池
-    yzt = astock.em_zt_topic_pool("getYesterdayZTPool", resolved, "zs:desc")  # 昨涨停池
+    # S131 R5：metrics 承重 callers 传 raise_on_failure=True——单个池源断 → degraded（非吞 [] 当 0 算）
+    pools_status = "ok"
+    try:
+        zb = astock.em_zt_topic_pool("getTopicZBPool", resolved, "fbt:asc",
+                                     raise_on_failure=True)    # 炸板池
+    except Exception:
+        zb = []
+        pools_status = "degraded"
+    try:
+        dt = astock.em_zt_topic_pool("getTopicDTPool", resolved, "fund:asc",
+                                     raise_on_failure=True)   # 跌停池
+    except Exception:
+        dt = []
+        pools_status = "degraded"
+    try:
+        yzt = astock.em_zt_topic_pool("getYesterdayZTPool", resolved, "zs:desc",
+                                      raise_on_failure=True)  # 昨涨停池
+    except Exception:
+        yzt = []
+        pools_status = "degraded"
 
     boards = [_num(p.get("lbc")) or 1 for p in zt]      # 每只连板数（缺省按 1 板）
     lianban = [b for b in boards if b >= 2]             # 2 板及以上（连板）
@@ -310,9 +356,9 @@ def _emotion(date: str | None = None) -> dict:
         ({
             "code": str(p.get("c", "")), "name": p.get("n", ""),
             "boards": _num(p.get("lbc")) or 1,
-            "price": round((astock._numf(p.get("p")) or 0) / 1000, 2),
-            "pct": round(astock._numf(p.get("zdp")) or 0, 2),
-            "amount": astock._numf(p.get("amount")),      # 成交额,元（'-' 占位归一为 None，防排序对 str 取负崩溃）
+            "price": round((astock._numf(p.get("p")) or 0) / 1000, 2) or None,  # S130: 0→None（对齐 S121，0 永不合法防 LLM 见 0 当真价）
+            "pct": round(astock._numf(p.get("zdp")) or 0, 2) or None,            # S130: 同上（涨停股 pct=0 异常→None）
+            "amount": astock._numf(p.get("amount")) or None,      # 成交额,元（'-' 占位归一 None；S130: 0→None 防排序对 str 取负崩溃）
             "float_cap": astock._numf(p.get("ltsz")),     # 流通市值,元
             "industry": p.get("hybk", ""),  # 概念/行业
         } for p in zt if (_num(p.get("lbc")) or 1) >= 2),
@@ -357,6 +403,7 @@ def _emotion(date: str | None = None) -> dict:
         "yzt_count": yzt_count,
         "cross_source": cross_source,
         "data_source": data_source,
+        "data_status": pools_status,  # S131 R5：metrics 源断 → degraded（非 ok 权威）
     }
 
 
@@ -368,8 +415,17 @@ def get_short_term_emotion() -> dict:
 def get_turnover_top() -> dict:
     """全市场成交额榜 Top20（客观公开榜单，含缓存 5 分钟）。"""
     def build():
+        # S131 R6：承重 caller 传 raise_on_failure=True——双 host 断 catch → data_status='missing'
+        # （非吞 [] 当合法空"无成交额榜"）。源断不缓存（_cached valid 判否，下次重试）。
+        try:
+            stocks = astock.market_turnover_rank(20, raise_on_failure=True)
+            data_status = "ok"
+        except Exception:
+            stocks = []
+            data_status = "missing"
         return {
-            "stocks": astock.market_turnover_rank(20),
+            "stocks": stocks,
+            "data_status": data_status,
             "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
         }
     return _cached("turnover_top", build, valid=lambda v: bool(v.get("stocks")))

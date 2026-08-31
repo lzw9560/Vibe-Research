@@ -177,7 +177,9 @@ def fetch_zt_pool(date: str) -> list[dict]:
     """
     compact = date.replace("-", "") if "-" in date else date
     try:
-        return em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc") or []
+        # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装空池），
+        # try/except 兜底返 []（上层 run_first_board_filter 走空候选降级）。
+        return em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc", raise_on_failure=True) or []
     except Exception as e:
         _logger.warning("fetch_zt_pool 取涨停池失败 date=%s err=%s", date, e)
         return []
@@ -397,7 +399,9 @@ def extract_sector(code: str) -> dict:
         数据缺失/请求失败 → 空 dict {}。
     """
     try:
-        raw = concept_blocks(code)
+        # S131 R4：raise_on_failure=True 让源断 raise（非吞空 dict 伪装"无板块"），
+        # try/except 兜底返 {}（上层 extract_sector 返空 dict，评分层降级跳过）。
+        raw = concept_blocks(code, raise_on_failure=True)
     except Exception as e:
         _logger.warning("extract_sector concept_blocks 失败 code=%s err=%s", code, e)
         return {}
@@ -657,8 +661,10 @@ def score_dim1_sector(candidate: dict, date: str) -> tuple[float, dict]:
         raw["industry"] = industry
 
         # 从涨停池统计同行业涨停数（em_zt_topic_pool 有 24h TTL 缓存，不重复请求）
+        # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装零联动），
+        # 外层 try/except 兜底返 50.0 降级。
         compact = date.replace("-", "") if "-" in date else date
-        pool = em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc") or []
+        pool = em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc", raise_on_failure=True) or []
         same_industry_count = sum(1 for p in pool if (p.get("hybk") or "") == industry)
         raw["sector_zt_count"] = same_industry_count
 
@@ -1199,7 +1205,9 @@ def score_dim_sector_link(candidate: dict, date: str) -> tuple[float, dict]:
             return -1.0, raw  # 无行业归属，数据缺失
         raw["industry"] = industry
         compact = date.replace("-", "") if "-" in date else date
-        pool = em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc") or []
+        # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装零联动），
+        # 外层 try/except 兜底返 -1.0（数据缺失不参与加权）。
+        pool = em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc", raise_on_failure=True) or []
         same_industry_count = sum(1 for p in pool if (p.get("hybk") or "") == industry)
         raw["sector_zt_count"] = same_industry_count
         if same_industry_count >= 3:

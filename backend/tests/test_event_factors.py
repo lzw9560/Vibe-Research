@@ -17,6 +17,7 @@ from strategies.event_factors import (
     fetch_earnings_forecast,
     fetch_shareholder_change,
     fetch_share_unlock,
+    fetch_share_unlock_with_status,
     check_ex_dividend,
     build_event_context,
     classify_announcement_llm,
@@ -97,7 +98,7 @@ class TestEventContext:
         mock_event = [EventFactor("业绩预告", "2026-08-01", "利好", "预增", 1.0)]
         monkeypatch.setattr("strategies.event_factors.fetch_earnings_forecast", lambda c: mock_event)
         monkeypatch.setattr("strategies.event_factors.fetch_shareholder_change", lambda c: [])
-        monkeypatch.setattr("strategies.event_factors.fetch_share_unlock", lambda c: [])
+        monkeypatch.setattr("strategies.event_factors.fetch_share_unlock_with_status", lambda c: ([], "ok"))
         monkeypatch.setattr("strategies.event_factors.check_ex_dividend", lambda c, d, **kw: (False, "无"))
 
         ctx = build_event_context("000001", "2026-08-14")
@@ -105,17 +106,19 @@ class TestEventContext:
         assert len(ctx.events) == 1
         assert ctx.events[0].event_type == "业绩预告"
         assert ctx.has_upcoming_ex_dividend is False
+        assert ctx.lockup_data_status == "ok"
 
     def test_build_context_empty(self, monkeypatch):
         """所有数据源失败 → 空上下文（不崩）。"""
         monkeypatch.setattr("strategies.event_factors.fetch_earnings_forecast", lambda c: [])
         monkeypatch.setattr("strategies.event_factors.fetch_shareholder_change", lambda c: [])
-        monkeypatch.setattr("strategies.event_factors.fetch_share_unlock", lambda c: [])
+        monkeypatch.setattr("strategies.event_factors.fetch_share_unlock_with_status", lambda c: ([], "ok"))
         monkeypatch.setattr("strategies.event_factors.check_ex_dividend", lambda c, d, **kw: (False, "无"))
 
         ctx = build_event_context("000001")
         assert ctx.code == "000001"
         assert ctx.events == []
+        assert ctx.lockup_data_status == "ok"
 
     def test_events_aggregated(self, monkeypatch):
         """多数据源事件合并。"""
@@ -125,7 +128,7 @@ class TestEventContext:
 
         monkeypatch.setattr("strategies.event_factors.fetch_earnings_forecast", lambda c: e1)
         monkeypatch.setattr("strategies.event_factors.fetch_shareholder_change", lambda c: e2)
-        monkeypatch.setattr("strategies.event_factors.fetch_share_unlock", lambda c: e3)
+        monkeypatch.setattr("strategies.event_factors.fetch_share_unlock_with_status", lambda c: (e3, "ok"))
         monkeypatch.setattr("strategies.event_factors.check_ex_dividend", lambda c, d, **kw: (False, "无"))
 
         ctx = build_event_context("000001")
@@ -134,3 +137,4 @@ class TestEventContext:
         assert "业绩预告" in types
         assert "增减持" in types
         assert "解禁" in types
+        assert ctx.lockup_data_status == "ok"

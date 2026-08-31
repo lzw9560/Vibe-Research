@@ -128,9 +128,11 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
         pool_data, meta = get_with_fallback_meta(
             cache_key,
             lambda: {
-                "zt": astock.em_zt_topic_pool("getTopicZTPool", target_date, "fbt:asc"),
-                "dt": astock.em_zt_topic_pool("getTopicDTPool", target_date, "fund:asc"),
-                "zb": astock.em_zt_topic_pool("getTopicZBPool", target_date, "fbt:asc"),
+                # S131 R5：raise_on_failure=True 让源断 raise（非吞 []），
+                # → get_with_fallback_meta 捕获 → fetch_ok=False → _resolve_pool_provenance 标 missing/degraded。
+                "zt": astock.em_zt_topic_pool("getTopicZTPool", target_date, "fbt:asc", raise_on_failure=True),
+                "dt": astock.em_zt_topic_pool("getTopicDTPool", target_date, "fund:asc", raise_on_failure=True),
+                "zb": astock.em_zt_topic_pool("getTopicZBPool", target_date, "fbt:asc", raise_on_failure=True),
             },
             ttl=600,  # 10 分钟缓存
             fallback_value={"zt": [], "dt": [], "zb": []},

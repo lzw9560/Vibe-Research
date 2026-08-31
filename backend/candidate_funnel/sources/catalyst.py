@@ -50,7 +50,7 @@ def fetch_catalyst(codes: list[str], as_of: str) -> dict[str, dict]:
         except Exception:
             entry["missing"]["announcements"] = "公告未取得"
         try:
-            cb = astock.concept_blocks(c) or {}
+            cb = astock.concept_blocks(c, raise_on_failure=True) or {}
             entry["concepts"] = [
                 b.name for b in concept_blocks_from_dict(cb) if b.name
             ]

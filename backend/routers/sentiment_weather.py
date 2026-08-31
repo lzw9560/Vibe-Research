@@ -1171,7 +1171,8 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
             try:
                 bars = astock.kline(code, EXIT_SIGNAL_MA_DAYS + 1, 10) or []
                 if len(bars) >= EXIT_SIGNAL_MA_DAYS:
-                    closes = [float(b.get("close") or 0) for b in bars[-EXIT_SIGNAL_MA_DAYS:]]
+                    # S130 R3：缺失 close 过滤而非 coerce 0（0 会拉低均价→below_ma 误判）
+                    closes = [float(b["close"]) for b in bars[-EXIT_SIGNAL_MA_DAYS:] if b.get("close") is not None]
                     ma_price = sum(closes) / len(closes) if closes else None
             except Exception:
                 ma_price = None

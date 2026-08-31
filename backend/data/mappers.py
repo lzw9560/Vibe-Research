@@ -264,6 +264,7 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         pcf_ttm=_numf(raw.get("pcf_ttm")) or None,  # S106：hithink 补；0 永不合法
         dividend_yield=_numf(raw.get("dividend_yield")),
         discrepancy=raw.get("discrepancy"),  # S106：数据层 cross_validate 仲裁结果透传
+        data_status=raw.get("ps_pcf_status"),  # S131 R3：PS/PCF 源断标（astock full_valuation except 块设 'hithink_unavailable'）
         forward_pe=_numf(raw.get("pe_26e")) or None,  # S125 契约补全：forward PE 类，0 永不合法
         consensus_eps=_numf(raw.get("eps_26e")),
         cagr_pct=_numf(raw.get("cagr_pct")),

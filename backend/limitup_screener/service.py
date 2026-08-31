@@ -220,7 +220,9 @@ def _fetch_zt_next_pool(target_date: str) -> list:
     for _ in range(7):  # 最多扫 7 日找下一交易日
         d_str = next_d.strftime("%Y%m%d")
         try:
-            pool = astock.em_zt_topic_pool("getTopicZTPool", d_str, "fbt:asc")
+            pool = astock.em_zt_topic_pool(
+                "getTopicZTPool", d_str, "fbt:asc", raise_on_failure=True,
+            )
             if pool:
                 return [zt_pool_item_from_dict(it) for it in pool]
         except Exception:

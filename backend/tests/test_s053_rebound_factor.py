@@ -83,7 +83,7 @@ class TestR2FetchZtNextPool:
     def test_skips_empty_days_finds_next_trading_day(self):
         """跳过空日（周末/节假日）找到下一交易日。"""
         call_count = [0]
-        def mock_pool(*args):
+        def mock_pool(*args, **kwargs):
             call_count[0] += 1
             return [] if call_count[0] < 3 else [{"c": "001"}]
         with patch("limitup_screener.service.astock") as mock_astock:

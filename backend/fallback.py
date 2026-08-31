@@ -35,6 +35,13 @@ def _is_empty_leaf(value: Any) -> bool:
     if isinstance(value, (str, bytes)):
         return len(value) == 0  # 显式先行，避免落入通用 __len__ 递归（str 迭代=字符串无限递归）
     if isinstance(value, dict):
+        # S131 R8：data_status='missing' 是源断失败标记（非合法空 dict）——
+        # 整个 dict 代表"源断无数据"，认其为空，避免 get_with_fallback_meta 缓存
+        # 失败 dict 覆盖好缓存（[fallback-empty-write-corrupts-snapshots] 同款防护）。
+        # industry_comparison 默认失败返 {"top":[],...,"data_status":"missing"}，
+        # "missing" 字符串使旧 _is_empty 漏网（dict 非空）→ 覆盖好缓存。
+        if value.get("data_status") == "missing":
+            return True
         return all(_is_empty_leaf(v) for v in value.values())  # all([])=True：空 dict 为空
     if hasattr(value, "__len__"):
         if len(value) == 0:

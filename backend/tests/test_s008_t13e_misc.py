@@ -134,7 +134,7 @@ def test_sector_rotation_via_model(monkeypatch):
 def test_catalyst_via_model(monkeypatch):
     monkeypatch.setattr(astock, "announcements", lambda c, limit=10: [
         {"title": "回购", "date": "2026-07-30", "type": "利好"}])
-    monkeypatch.setattr(astock, "concept_blocks", lambda c: {"boards": [{"name": "新能源"}]})
+    monkeypatch.setattr(astock, "concept_blocks", lambda c, **k: {"boards": [{"name": "新能源"}]})
     out = catalyst.fetch_catalyst(["600519"], "2026-07-30")
     e = out["600519"]
     # S044 R3：type 经 classify_announcement 按标题机械分类（"回购"→"回购"），非原始 eastmoney 列

@@ -228,7 +228,7 @@ async def stock_deep(code: str) -> Dict[str, Any]:
         dragon_tiger_task = _safe_call("dragon_tiger", lambda: astock.dragon_tiger_board(code))
         limitup_task = _safe_call("limitup", lambda: _limitup_analysis_sync(code))
         financials_task = _safe_call("financials", lambda: astock.financials(code))
-        blocks_task = _safe_call("blocks", lambda: astock.concept_blocks(code))
+        blocks_task = _safe_call("blocks", lambda: astock.concept_blocks(code, raise_on_failure=True))
         hot_concepts_task = _safe_call("hot_concepts", lambda: astock.hot_concepts(code))
         announcements_task = _safe_call("announcements", lambda: astock.announcements(code))
         reports_task = _safe_call("reports", lambda: astock.eastmoney_reports(code, max_pages=2))

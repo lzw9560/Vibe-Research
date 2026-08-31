@@ -163,3 +163,72 @@ def test_load_cache_损坏空骨架自愈(isolated_cache):
     path.write_text(json.dumps({"ts": 99999999999, "data": _DT_SKELETON}))
     assert fallback.load_cache("k") is None
     assert not path.exists()
+
+
+# ============ S131 R8：data_status='missing' 失败标记 dict 视为空 ============
+# industry_comparison 默认失败返 {"top":[],...,"data_status":"missing"}，
+# "missing" 字符串使旧 _is_empty 漏网（dict 非空）→ get_with_fallback_meta
+# 缓存失败 dict 覆盖好缓存（[fallback-empty-write-corrupts-snapshots] 同款 bug）。
+
+
+def test_is_empty_data_status_missing_dict为空():
+    """data_status='missing' 的 dict 视为空（源断失败标记，不缓存覆盖好缓存）。"""
+    assert fallback._is_empty({"top": [], "bottom": [], "total": 0, "data_status": "missing"}) is True
+    assert fallback._is_empty({"data_status": "missing"}) is True
+    assert fallback._is_empty({"top": [], "data_status": "missing", "extra": {}}) is True
+
+
+def test_is_empty_data_status_ok_有实数据不为空():
+    """data_status='ok'/'degraded' 伴实数据不算空（只有 'missing' 触发空判定）。"""
+    assert fallback._is_empty({"top": [{"name": "白酒"}], "data_status": "ok"}) is False
+    assert fallback._is_empty({"top": [{"name": "白酒"}], "data_status": "degraded"}) is False
+
+
+def test_save_cache_data_status_missing不覆盖好缓存(isolated_cache):
+    """失败标记 dict 不写缓存——好缓存保留。"""
+    good = {"top": [{"name": "白酒", "change_pct": 2.5}], "bottom": [], "total": 1}
+    fallback.save_cache("k", good)
+    failure = {"top": [], "bottom": [], "total": 0, "data_status": "missing"}
+    fallback.save_cache("k", failure)  # 限流失败 dict——不应覆盖
+    assert fallback.load_cache("k") == good
+
+
+def test_get_with_fallback_meta_失败dict不覆盖好缓存(isolated_cache):
+    """get_with_fallback_meta：fetch 返 data_status='missing' dict → 不缓存，
+    降级到好缓存（stale），不覆盖。模拟 industry_comparison 默认失败路径。
+    """
+    good = {"top": [{"name": "白酒", "change_pct": 2.5}], "bottom": [], "total": 1}
+    fallback.save_cache("industry_comparison:20260901", good)
+    failure = {"top": [], "bottom": [], "total": 0, "data_status": "missing"}
+
+    data, meta = fallback.get_with_fallback_meta(
+        "industry_comparison:20260901",
+        lambda: failure,  # 源断返失败 dict（非 raise，fetch_ok=True）
+        ttl=600,
+        fallback_value={"top": [], "bottom": []},
+    )
+
+    # 好缓存未被覆盖
+    assert fallback.load_cache("industry_comparison:20260901") == good
+    # 降级到好缓存（stale）——非返失败 dict 当 live
+    assert data == good
+    assert meta["from_cache"] is True
+    assert meta["is_stale"] is True
+    assert meta["fetch_ok"] is True  # fetch_fn 未 raise（内部 swallow）
+
+
+def test_get_with_fallback_meta_失败dict无缓存返fallback标missing(isolated_cache):
+    """无好缓存时 fetch 返 data_status='missing' dict → 不缓存，返 fallback_value。"""
+    failure = {"top": [], "bottom": [], "total": 0, "data_status": "missing"}
+    data, meta = fallback.get_with_fallback_meta(
+        "industry_comparison:20260901",
+        lambda: failure,
+        ttl=600,
+        fallback_value={"top": [], "bottom": []},
+    )
+    # 无缓存 → 返 fallback_value（无 data_status，下游据 meta+空判 missing）
+    assert data == {"top": [], "bottom": []}
+    assert meta["from_cache"] is False
+    assert meta["fetch_ok"] is True
+    # 失败 dict 未写缓存
+    assert fallback.load_cache("industry_comparison:20260901") is None

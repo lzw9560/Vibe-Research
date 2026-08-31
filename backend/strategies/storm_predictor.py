@@ -220,6 +220,12 @@ def _collect_internal_factor(date: str) -> StormFactor:
 
     情绪高潮→崩盘先行信号：连板高度见顶 + 炸板率上升 + 溢价转负。
     数据：T-1 gene_scores + sti_timeline（max_boards/break_rate）。
+
+    S131 R1：检测 gene data_source/missing_factors——kline_rebuild 基因的
+    炸板后溢价/封板率 NULL→0（data.py load 时 ``or 0``），原代码 ``or 0`` 致
+    rebound_score=50 中性 fabricated + StormFactor data_status 默认 ok 当权威。
+    现检测 degraded gene → 标 degraded（probability/suggested_position 不当权威）。
+    读炸板后溢价/封板率 without ``or 0``（None→degraded，不 fabricated 0→50）。
     """
     try:
         from limitup_screener.data import load_gene_scores  # noqa: PLC0415
@@ -229,8 +235,29 @@ def _collect_internal_factor(date: str) -> StormFactor:
         if not genes:
             return StormFactor("前日内部先行", 50.0, f"T-1({t1}) gene_scores 未取得", "missing")
 
-        avg_seal = sum(g.factors.get("封板率", 0) or 0 for g in genes) / len(genes)
-        avg_rebound = sum(g.factors.get("炸板后溢价", 0) or 0 for g in genes) / len(genes)
+        # S131 R1.1：检查 gene data_source/missing_factors——kline_rebuild 基因的
+        # 炸板后溢价/封板率 NULL→0（data.py load 时 or 0），原代码或 0 致
+        # rebound_score=50 中性 fabricated + data_status 默认 ok 当权威。
+        gene_degraded = any(
+            g.data_source == "kline_rebuild"
+            or "炸板后溢价" in (g.missing_factors or [])
+            or "封板率" in (g.missing_factors or [])
+            for g in genes
+        )
+
+        # S131 R1.2：读炸板后溢价/封板率 without `or 0`（None→degraded，不 fabricated 0→50）
+        seal_values = [g.factors.get("封板率") for g in genes]
+        rebound_values = [g.factors.get("炸板后溢价") for g in genes]
+
+        # gene degraded 或任一因子 None → StormFactor 标 degraded（不当权威）
+        has_none = any(v is None for v in seal_values + rebound_values)
+        data_status = "degraded" if (gene_degraded or has_none) else "ok"
+
+        # 仅用非 None 值计算均值（None 不 fabricated 为 0→50 假中性）
+        seal_present = [v for v in seal_values if v is not None]
+        rebound_present = [v for v in rebound_values if v is not None]
+        avg_seal = sum(seal_present) / len(seal_present) if seal_present else 0.0
+        avg_rebound = sum(rebound_present) / len(rebound_present) if rebound_present else 0.0
 
         # sti_timeline T-1 的连板高度 + 炸板率
         # S088 R10 分析修：sti_timeline 在 STI_TIMELINE_DB_PATH（非 gene_scores DB），
@@ -252,7 +279,7 @@ def _collect_internal_factor(date: str) -> StormFactor:
         score = (height_score + break_score + rebound_score) / 3
 
         detail = f"连板 {max_boards:.0f}板 / 炸板率 {break_rate:.0%} / 炸板后溢价 {avg_rebound:.1f} / 封板率 {avg_seal:.0f}%"
-        return StormFactor("前日内部先行", round(score, 1), detail)
+        return StormFactor("前日内部先行", round(score, 1), detail, data_status)
     except Exception as exc:  # noqa: BLE001
         return StormFactor("前日内部先行", 50.0, f"采集失败: {exc}", "missing")
 

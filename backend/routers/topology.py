@@ -83,7 +83,7 @@ class SectorEdgeProvider:
     def build_edges(self, candidates: list[dict], *, date: str | None = None) -> list[dict]:
         return _collect_shared_sets(
             candidates,
-            fetch_fn=lambda code, _d: astock.concept_blocks(code),
+            fetch_fn=lambda code, _d: astock.concept_blocks(code, raise_on_failure=True),  # S131 R4.2: 源断 raise→_collect_shared_sets try/except 兜底+log（非静默空 dict 当合法空）
             extract_fn=lambda blocks: set((blocks or {}).get("concept_tags", []) or []),
             edge_type="sector",
             date=date,
@@ -135,7 +135,9 @@ class LadderEdgeProvider:
             logger.warning("ladder provider: 非交易日 %s 跳过 em_zt_topic_pool", parsed.isoformat())
             return []
         try:
-            pool = astock.em_zt_topic_pool("getTopicZTPool", pool_date, "fbt:asc")
+            pool = astock.em_zt_topic_pool(
+                "getTopicZTPool", pool_date, "fbt:asc", raise_on_failure=True,
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning("ladder provider: em_zt_topic_pool 失败: %s", exc)
             return []
@@ -332,7 +334,9 @@ def build_board_ladder_tree(date: str | None = None) -> dict:
         logger.warning("board-ladder: 非交易日 %s 跳过 em_zt_topic_pool", parsed.isoformat())
         return {"name": "当日涨停", "children": []}
     try:
-        pool = astock.em_zt_topic_pool("getTopicZTPool", pool_date, "fbt:asc")
+        pool = astock.em_zt_topic_pool(
+            "getTopicZTPool", pool_date, "fbt:asc", raise_on_failure=True,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("board-ladder: em_zt_topic_pool 失败: %s", exc)
         pool = []

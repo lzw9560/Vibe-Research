@@ -35,3 +35,4 @@ class Valuation(BaseModel):
     analyst_count: int | None = None
     updated_at: str | None = None  # ISO+08:00
     discrepancy: list[dict] | None = None  # S106：cross_validate 仲裁结果透传（[{field,verdict,deviation_pct}]）
+    data_status: str | None = None  # S131 R3：PS/PCF 源断标 'hithink_unavailable'（非"无估值"），mapper 透传

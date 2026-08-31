@@ -146,7 +146,7 @@ def full_valuation(code: str) -> dict:
             out["pe_ttm_hithink"] = hs[code].get("pe_ttm")   # S106 备源（与东财腾讯口径一致）
             out["pb_hithink"] = hs[code].get("pb_mrq")       # S106 备源
     except Exception:  # noqa: BLE001 — hithink 失败不阻塞估值，PS/PCF/备源 降级 None
-        pass
+        out["ps_pcf_status"] = "hithink_unavailable"  # S131 R3：标源断非"无估值"，mapper 透传 data_status 给 LLM
 
     # S106：PE/PB 交叉验证（东财 vs hithink）——数据层一处仲裁，两出口（query_valuation 走 mapper
     # → Valuation / /api/valuation raw dict）透传，无重复仲裁代码。

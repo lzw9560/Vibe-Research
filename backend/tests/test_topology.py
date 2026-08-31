@@ -73,7 +73,7 @@ def test_sector_provider_same_concept(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code, date=None:{
+        lambda code, date=None, **kw:{
             "600519": {"concept_tags": ["白酒", "消费", "机构重仓"]},
             "000858": {"concept_tags": ["白酒", "消费"]},
             "300750": {"concept_tags": ["新能源"]},
@@ -104,7 +104,7 @@ def test_sector_provider_empty_when_no_tags(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code, date=None:{"concept_tags": []},
+        lambda code, date=None, **kw:{"concept_tags": []},
     )
     assert SectorEdgeProvider().build_edges(_CANDIDATES) == []
 
@@ -114,7 +114,7 @@ def test_sector_single_shared_concept_no_edge(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code, date=None:{
+        lambda code, date=None, **kw:{
             "600519": {"concept_tags": ["白酒", "消费"]},
             "000858": {"concept_tags": ["白酒", "新能源"]},  # 与 600519 仅共享 白酒
             "300750": {"concept_tags": ["新能源", "储能"]},  # 与 000858 仅共享 新能源
@@ -137,7 +137,7 @@ def test_fund_flow_provider_coinflow(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "stock_fund_flow_120d",
-        lambda code, date=None:{
+        lambda code, date=None, **kw:{
             "600519": _flow(shared_dates + [("2026-08-04", -1e8)]),
             "000858": _flow(shared_dates),  # 三天共享正流入 → weight=3
             "300750": _flow(shared_dates[:2]),  # 仅 2 天共享（<3）→ 不达阈值无边
@@ -204,7 +204,7 @@ def test_ladder_provider_same_height(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
-        lambda endpoint, date, sort="fbt:asc": [
+        lambda endpoint, date, sort="fbt:asc", **kw: [
             _pool_item("600519", "贵州茅台", 3, "白酒"),
             _pool_item("000858", "五粮液", 3, "白酒"),
             _pool_item("300750", "宁德时代", 1, "新能源"),
@@ -235,7 +235,7 @@ def test_ladder_provider_no_selfloop_on_dup_code(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
-        lambda endpoint, date, sort="fbt:asc": [
+        lambda endpoint, date, sort="fbt:asc", **kw: [
             _pool_item("600519", "贵州茅台", 3, "白酒"),
             _pool_item("000858", "五粮液", 3, "白酒"),
         ],
@@ -316,7 +316,7 @@ def test_seat_provider_resilient(monkeypatch):
 def test_relation_aggregation_nodes_and_edges(monkeypatch):
     """聚合多 provider → GraphData{nodes,edges}；节点=候选去重。"""
     # review fix 防封：mock concept_blocks 防离线测试发真实东财请求（§1.2 防封底线）
-    monkeypatch.setattr(topology.astock, "concept_blocks", lambda code, date=None:{"concept_tags": []})
+    monkeypatch.setattr(topology.astock, "concept_blocks", lambda code, date=None, **kw:{"concept_tags": []})
     providers = [_FakeProvider(), SectorEdgeProvider()]  # fake + sector
     graph = build_relation_graph(_CANDIDATES, providers=providers)
     assert set(graph.keys()) == {"nodes", "edges"}
@@ -400,7 +400,7 @@ def test_board_ladder_tree_structure(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
-        lambda endpoint, date, sort="fbt:asc": [
+        lambda endpoint, date, sort="fbt:asc", **kw: [
             _pool_item("600519", "贵州茅台", 3, "白酒"),
             _pool_item("000858", "五粮液", 3, "白酒"),
             _pool_item("300750", "宁德时代", 1, "新能源"),
@@ -434,6 +434,71 @@ def test_board_ladder_resilient(monkeypatch):
     """数据源异常 → 根 + 空 children（不崩）。"""
     monkeypatch.setattr(topology.astock, "em_zt_topic_pool", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
     tree = build_board_ladder_tree()
+    assert tree["children"] == []
+
+
+# ─────────────────────── S131 R5 caller-side ───────────────────────
+
+
+def _boom_em_get(*a, **k):
+    """模拟 em_get 源断（断连/限流/JSON 错统一 raise）。"""
+    raise ConnectionError("em_get 源断")
+
+
+def test_ladder_provider_passes_raise_on_failure_true(monkeypatch):
+    """S131 R5.2 caller-side：LadderEdgeProvider 传 raise_on_failure=True
+    （源断 raise 而非 swallow []，让 try/except 兜底成 clean empty edge）。
+    """
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
+    captured: dict = {}
+
+    def _spy(endpoint, date, sort="fbt:asc", **kw):
+        captured.update(kw)
+        return []
+
+    monkeypatch.setattr(topology.astock, "em_zt_topic_pool", _spy)
+    LadderEdgeProvider().build_edges(_CANDIDATES)
+    assert captured.get("raise_on_failure") is True
+
+
+def test_board_ladder_passes_raise_on_failure_true(monkeypatch):
+    """S131 R5.2 caller-side：build_board_ladder_tree 传 raise_on_failure=True。"""
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
+    captured: dict = {}
+
+    def _spy(endpoint, date, sort="fbt:asc", **kw):
+        captured.update(kw)
+        return []
+
+    monkeypatch.setattr(topology.astock, "em_zt_topic_pool", _spy)
+    build_board_ladder_tree()
+    assert captured.get("raise_on_failure") is True
+
+
+def test_ladder_provider_source_fail_propagates_to_empty(monkeypatch):
+    """S131 R5.2 caller-side：em_get 源断 → em_zt_topic_pool(raise_on_failure=True)
+    raises → LadderEdgeProvider try/except 兜底 → []（clean empty edge，非 500）。
+    """
+    import data.sources.eastmoney as eastmoney
+
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
+    monkeypatch.setattr(eastmoney, "em_get", _boom_em_get)
+    eastmoney._ztb_cache.clear()
+    edges = LadderEdgeProvider().build_edges(_CANDIDATES)
+    assert edges == []
+
+
+def test_board_ladder_source_fail_propagates_to_empty(monkeypatch):
+    """S131 R5.2 caller-side：em_get 源断 → em_zt_topic_pool(raise_on_failure=True)
+    raises → build_board_ladder_tree try/except 兜底 → 空树（非 500）。
+    """
+    import data.sources.eastmoney as eastmoney
+
+    monkeypatch.setattr(topology, "is_trading_day", lambda d=None: True)
+    monkeypatch.setattr(eastmoney, "em_get", _boom_em_get)
+    eastmoney._ztb_cache.clear()
+    tree = build_board_ladder_tree()
+    assert tree["name"] == "当日涨停"
     assert tree["children"] == []
 
 
@@ -493,7 +558,7 @@ def test_endpoint_board_ladder_wired(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
-        lambda endpoint, d, sort="fbt:asc": [_pool_item("600519", "贵州茅台", 3, "白酒")],
+        lambda endpoint, d, sort="fbt:asc", **kw: [_pool_item("600519", "贵州茅台", 3, "白酒")],
     )
     app_module._RESPONSE_CACHE.clear()
     client = TestClient(app_module.app)
@@ -521,7 +586,7 @@ def test_endpoint_relation_wired(monkeypatch):
         ],
     )
     # 各 provider 数据源返空（不重复测 provider 逻辑，聚焦端点聚合接线）
-    monkeypatch.setattr(topology.astock, "concept_blocks", lambda c: {"concept_tags": []})
+    monkeypatch.setattr(topology.astock, "concept_blocks", lambda c, **kw: {"concept_tags": []})
     monkeypatch.setattr(topology.astock, "stock_fund_flow_120d", lambda c: [])
     monkeypatch.setattr(topology.astock, "em_zt_topic_pool", lambda *a, **k: [])
     monkeypatch.setattr(topology.astock, "dragon_tiger_board", lambda *a, **k: {"seats": {"buy": [], "sell": []}})
@@ -557,7 +622,7 @@ def test_endpoint_relation_all_four_edge_types(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "concept_blocks",
-        lambda code, date=None:{"concept_tags": ["白酒", "消费"]},
+        lambda code, date=None, **kw:{"concept_tags": ["白酒", "消费"]},
     )
     # fund_flow：共享 3 日正流入（窗口内；S048 R9 阈值 ≥3）
     monkeypatch.setattr(
@@ -569,7 +634,7 @@ def test_endpoint_relation_all_four_edge_types(monkeypatch):
     monkeypatch.setattr(
         topology.astock,
         "em_zt_topic_pool",
-        lambda endpoint, date, sort="fbt:asc": [
+        lambda endpoint, date, sort="fbt:asc", **kw: [
             _pool_item("600519", "贵州茅台", 3, "白酒"),
             _pool_item("000858", "五粮液", 3, "白酒"),
         ],

@@ -175,13 +175,21 @@ def _ztb_cache_ttl(date: str) -> int:
     return _ZTB_CACHE_TTL_POSTMARKET                          # 今日盘后
 
 
-def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[dict]:
+def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc",
+                     raise_on_failure: bool = False) -> list[dict]:
     """东财涨停板行情中心原始池（push2ex）。
     endpoint: getTopicZTPool(涨停) / getTopicZBPool(炸板) / getTopicDTPool(跌停) / getYesterdayZTPool(昨涨停)
     date: YYYYMMDD 交易日。非交易日 / 参数错 → []。
     池内每项字段含 lbc(连板数) / zbc(炸板次数) / hybk(行业) 等。
     缓存（S103）：同一 (endpoint, date, sort) 结果按 _ztb_cache_ttl 分级缓存（盘中 60s /
-    盘后 1h / 历史 24h）。空结果不缓存——失败/熔断返空不毒缓存，下次请求直接重试。"""
+    盘后 1h / 历史 24h）。空结果不缓存——失败/熔断返空不毒缓存，下次请求直接重试。
+
+    S131 R5：``raise_on_failure=True`` 时源断（em_get 断连/限流/JSON 错）即 re-raise
+    （非吞成 []），让承重 caller 的 ``get_with_fallback_meta``（extreme_market_detector:128
+    已范式）设 fetch_ok=False → data_status='missing'（源断不伪装"平静市"）。
+    默认 False 向后兼容（既有吞 [] 行为，mock 测试不破）。空不缓存逻辑不变。
+    防封安全：取数路径仍走 em_get 限流/熔断/代理，仅源断时 raise 而非 swallow []。
+    """
     cache_key = (endpoint, date, sort)
     now = time.time()
     ttl = _ztb_cache_ttl(date)
@@ -203,10 +211,11 @@ def em_zt_topic_pool(endpoint: str, date: str, sort: str = "fbt:asc") -> list[di
             _ztb_cache[cache_key] = (now, result)
         return result
     except Exception:
-        # 异常时不缓存——让上层 _emotion 的 5min TTL 重试机制生效
-        # （原实现缓存空结果 24h，导致瞬态故障后 24h 内恒空）
-        # S103：已与"空结果不缓存"合一，熔断 OPEN 时 em_get raise → 此处返空不缓存，
-        # breaker 恢复后下次请求重试成功即恢复。
+        # S131 R5：raise_on_failure=True 时 re-raise（源断不伪装合法空 []），
+        # 默认 False 仍返 []（向后兼容）。异常时不缓存——让上层 _emotion 的
+        # 5min TTL 重试机制生效（原实现缓存空结果 24h 致瞬态故障后恒空）。
+        if raise_on_failure:
+            raise
         return []
 
 
@@ -286,13 +295,19 @@ def ths_limit_up_pool(date: str) -> list[dict]:
     } for it in info]
 
 
-def sector_fund_flow() -> list[dict]:
+def sector_fund_flow(raise_on_failure: bool = False) -> list[dict]:
     """行业板块资金流（东财 push2 clist，fs=m:90+t:2 行业板块，~100 个行业）。
 
     S085 A5：替代 market._sectors 的 akshare stock_fund_flow_industry（打同花顺 raw requests 无熔断）。
     走 em_get + 双 host 降级（push2→push2delay，同 market_turnover_rank 范式）。
     返每板块：name/f14(名) / pct/f3(涨跌幅) / net(亿, f62元/1e8) / inflow=None / outflow=None /
     firms(f104+f105 涨跌家数)。
+
+    S131 R7：``raise_on_failure=True`` 时双 host 均 raise（断连/限流）即 re-raise
+    （非吞成 []），让 market._sectors/overview build 标 sectors_status='missing'
+    （源断不伪装"无板块资金流"）。双 host 均返空但无异常（真无板块，罕见）仍返 []
+    （合法空不 raise，对齐 S119 HTTP-成功-空=合法 范式）。默认 False 向后兼容。
+    防封安全：取数路径仍走 em_get 限流/熔断/代理，仅源断时 raise 而非 swallow []。
 
     probe（2026-08-19 live）：akshare 打同花顺非东财（§1.2 东财 scope 不强制——A5 是防封工程改进，
     非选股 bug）；东财 push2 直连断、push2delay 可达（双 host 降级必要）；东财行业板块无 inflow/outflow
@@ -302,6 +317,7 @@ def sector_fund_flow() -> list[dict]:
               "fid": "f62",  # 按主力净额降序
               "fs": "m:90+t:2",
               "fields": "f12,f14,f3,f62,f104,f105", "ut": _PUSH2_UT}
+    last_exc: Exception | None = None
     for host in ("push2.eastmoney.com", "push2delay.eastmoney.com"):
         try:
             r = em_get(f"https://{host}/api/qt/clist/get", params=params,
@@ -318,23 +334,35 @@ def sector_fund_flow() -> list[dict]:
                     "outflow": None,
                     "firms": (_numf(d.get("f104")) or 0) + (_numf(d.get("f105")) or 0),
                 } for d in items]
-        except Exception:
+        except Exception as exc:
+            last_exc = exc
             continue  # 断连/限流 → 下一 host
+    # S131 R7：双 host 均失败（断连/限流，last_exc 非 None）→ raise_on_failure=True 时
+    # re-raise（让 _sectors/overview 标 sectors_status='missing'，非合法空 []）。
+    # 双 host 均返空但无异常（真无板块，罕见）仍返 []（合法空不 raise）。
+    if raise_on_failure and last_exc is not None:
+        raise last_exc
     return []
 
 
-def market_turnover_rank(n: int = 20) -> list[dict]:
+def market_turnover_rank(n: int = 20, raise_on_failure: bool = False) -> list[dict]:
     """全市场成交额榜（沪深京 A 股按成交额降序 TopN）。
 
     东财行情中心 clist。**push2(实时) 不可达时降级 push2delay(延迟行情，日榜场景足够)**。
     返回每只: code / name / price / pct / amount(成交额,元) / mcap(总市值,元) /
     float_cap(流通市值,元) / industry。
     ⚠️ 这是客观公开榜单数据（东财/同花顺同款），产品侧只做客观展示——非推荐、非预测、不评分。
+
+    S131 R6：``raise_on_failure=True`` 时双 host 均 raise（断连/限流，diff 终空）即 re-raise
+    （非吞成 []），让 get_turnover_top/build 标 data_status='missing'（源断不伪装"无成交额榜"）。
+    双 host 均返空但无异常（真无数据，罕见）仍返 []（合法空不 raise，对齐 S119 范式）。
+    默认 False 向后兼容。防封安全：取数路径仍走 em_get 限流/熔断/代理。
     """
     params = {"pn": 1, "pz": n, "po": 1, "np": 1, "fltt": 2, "invt": 2, "fid": "f6",
               "fs": "m:0 t:6,m:0 t:80,m:1 t:2,m:1 t:23,m:0 t:81 s:2048",
               "fields": "f12,f14,f2,f3,f6,f20,f21,f100"}
     diff: list[dict] = []
+    last_exc: Exception | None = None
     for host in ("push2.eastmoney.com", "push2delay.eastmoney.com"):
         try:
             r = em_get(f"https://{host}/api/qt/clist/get", params=params,
@@ -342,8 +370,14 @@ def market_turnover_rank(n: int = 20) -> list[dict]:
             diff = (r.json().get("data") or {}).get("diff") or []
             if diff:
                 break
-        except Exception:
+        except Exception as exc:
+            last_exc = exc
             continue
+    # S131 R6：双 host 均失败（断连/限流，diff 终空 + last_exc 非 None）→ raise_on_failure=True
+    # 时 re-raise（让 get_turnover_top 标 data_status='missing'，非合法空 []）。
+    # 双 host 均返空但无异常（真无数据）仍返 []（合法空不 raise）。
+    if raise_on_failure and not diff and last_exc is not None:
+        raise last_exc
     return [{
         "code": str(d.get("f12", "")), "name": d.get("f14", ""),
         "price": _numf(d.get("f2")), "pct": _numf(d.get("f3")),
@@ -702,11 +736,18 @@ def dragon_tiger_board(code: str, trade_date: str | None = None, look_back: int 
     return {"records": records, "seats": seats, "institution": institution}
 
 
-def lockup_expiry(code: str, trade_date: str | None = None, forward_days: int = 90) -> dict:
+def lockup_expiry(code: str, trade_date: str | None = None, forward_days: int = 90,
+                  raise_on_failure: bool = False) -> dict:
     """限售解禁日历：历史解禁记录 + 未来 N 天待解禁事件。
 
     字段随东财 2026 改列名同步（a-stock-data §3.6）：旧 LIMITED_STOCK_TYPE/FREE_SHARES_NUM
     已废、致 type/shares 恒空 → 改 FREE_SHARES_TYPE/FREE_SHARES，并补 able_shares（实际可流通股数）。
+
+    S131 R10：``raise_on_failure=True`` 时底层 eastmoney_datacenter 源断即 re-raise
+    （非吞成 {"history":[],"upcoming":[]}），让 fetch_share_unlock（event_factors.py）
+    据此区分"源断"(→data_status='missing') vs"无解禁"(→data_status='ok')。
+    默认 False 向后兼容（既有吞行为，routers/stock_financial:110 → 502 兜底）。
+    防封安全：取数路径仍走 em_get 限流/熔断/代理，仅源断时 raise 而非 swallow。
     """
     trade_date = trade_date or datetime.now().strftime("%Y-%m-%d")
     history = [{
@@ -715,7 +756,8 @@ def lockup_expiry(code: str, trade_date: str | None = None, forward_days: int = 
         "ratio": r.get("FREE_RATIO", 0),
     } for r in eastmoney_datacenter(
         "RPT_LIFT_STAGE", filter_str=f'(SECURITY_CODE="{code}")',
-        page_size=15, sort_columns="FREE_DATE", sort_types="-1")]
+        page_size=15, sort_columns="FREE_DATE", sort_types="-1",
+        raise_on_failure=raise_on_failure)]
 
     end = (datetime.strptime(trade_date, "%Y-%m-%d") + timedelta(days=forward_days)).strftime("%Y-%m-%d")
     upcoming = [{
@@ -725,12 +767,20 @@ def lockup_expiry(code: str, trade_date: str | None = None, forward_days: int = 
     } for r in eastmoney_datacenter(
         "RPT_LIFT_STAGE",
         filter_str=f'(SECURITY_CODE="{code}")(FREE_DATE>=\'{trade_date}\')(FREE_DATE<=\'{end}\')',
-        page_size=20, sort_columns="FREE_DATE", sort_types="1")]
+        page_size=20, sort_columns="FREE_DATE", sort_types="1",
+        raise_on_failure=raise_on_failure)]
     return {"history": history, "upcoming": upcoming}
 
 
-def concept_blocks(code: str) -> dict:
-    """个股所属板块/概念归属（东财 slist，行业/概念/地域混合，板块名自解释）。"""
+def concept_blocks(code: str, raise_on_failure: bool = False) -> dict:
+    """个股所属板块/概念归属（东财 slist，行业/概念/地域混合，板块名自解释）。
+
+    S131 R4：``raise_on_failure=True`` 时源断（em_get 断连/限流/JSON 错）即 re-raise
+    （非吞成空 dict），让承重 caller 标 degraded/missing（catalyst:53 try/except→"板块未取得"；
+    routers/stock_financial:122 try/except→502；topology:86 try/except→空边）。
+    默认 False 向后兼容（返空 dict，既有 mock 测试不破）。
+    防封安全：取数路径仍走 em_get 限流/熔断/代理，仅源断时 raise 而非 swallow。
+    """
     market_code = 1 if code.startswith("6") else 0
     params = {"fltt": "2", "invt": "2", "secid": f"{market_code}.{code}",
               "spt": "3", "pi": "0", "pz": "200", "po": "1", "fields": "f12,f14,f3,f128", "ut": _PUSH2_UT}
@@ -738,6 +788,10 @@ def concept_blocks(code: str) -> dict:
     try:
         d = em_get("https://push2.eastmoney.com/api/qt/slist/get", params=params, headers=headers, timeout=15).json()
     except Exception:
+        # S131 R4：raise_on_failure=True 时 re-raise（源断不伪装合法空 dict），
+        # 默认 False 返空 dict（向后兼容）。
+        if raise_on_failure:
+            raise
         return {"total": 0, "boards": [], "concept_tags": []}
     diff = (d.get("data") or {}).get("diff") or {}
     items = diff.values() if isinstance(diff, dict) else diff
@@ -762,8 +816,16 @@ def hot_concepts(code: str) -> list[dict]:
     return [{"concept": x.get("conceptName"), "bk": x.get("conceptId"), "hit": x.get("hitCount")} for x in data]
 
 
-def industry_comparison(top_n: int = 20) -> dict:
-    """全行业涨跌幅排名（东财行业板块，~100 个行业）：板块级涨跌 / 涨跌家数 / 领涨。"""
+def industry_comparison(top_n: int = 20, raise_on_failure: bool = False) -> dict:
+    """全行业涨跌幅排名（东财行业板块，~100 个行业）：板块级涨跌 / 涨跌家数 / 领涨。
+
+    S131 R8：``raise_on_failure=True`` 时源断即 re-raise（让 sector_divergence:152
+    get_with_fallback_meta / /api/industry 标 data_status='missing'）。默认 False 时
+    失败 dict 加 ``data_status='missing'``——/api/industry（stock_financial:158 透传
+    整个 dict）可见"源断"非"空排名"，对齐 sector_divergence.py:150-159 范式。
+    HTTP 成功但 items 空（真无数据，罕见）返无 data_status 的空 dict（合法空，对齐 S119）。
+    默认 False 向后兼容。防封安全：取数路径仍走 em_get 限流/熔断/代理。
+    """
     params = {"pn": "1", "pz": "100", "po": "1", "np": "1", "fltt": "2", "invt": "2",
               "fid": "f3",  # fid=f3 + po=1：按涨跌幅降序，否则 top/bottom 切片非涨幅序（a-stock-data §3.7）
               "fs": "m:90+t:2", "fields": "f2,f3,f4,f12,f13,f14,f104,f105,f128,f136,f140,f141,f207", "ut": _PUSH2_UT}
@@ -771,7 +833,11 @@ def industry_comparison(top_n: int = 20) -> dict:
         d = em_get("https://push2.eastmoney.com/api/qt/clist/get",
                    params=params, headers={"User-Agent": UA}, timeout=15).json()
     except Exception:
-        return {"top": [], "bottom": [], "total": 0}
+        # S131 R8：raise_on_failure=True 时 re-raise；默认 False 返空 dict +
+        # data_status='missing'（/api/industry 透传可见源断，非伪装空排名）。
+        if raise_on_failure:
+            raise
+        return {"top": [], "bottom": [], "total": 0, "data_status": "missing"}
     items = d.get("data", {}).get("diff", [])
     if isinstance(items, dict):
         items = list(items.values())

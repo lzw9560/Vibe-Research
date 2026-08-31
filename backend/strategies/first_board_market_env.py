@@ -184,7 +184,9 @@ def fetch_zt_count_compare(date: str) -> dict:
     # T-1 全天涨停数（必取）
     zt_count_t1 = 0
     try:
-        t1_pool = em_zt_topic_pool("getTopicZTPool", t1_date, "fbt:asc") or []
+        # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装零涨停），
+        # try/except 兜底 zt_count_t1 保持 0（judge 跳过 zt 因素）。
+        t1_pool = em_zt_topic_pool("getTopicZTPool", t1_date, "fbt:asc", raise_on_failure=True) or []
         zt_count_t1 = len(t1_pool)
     except Exception as e:
         logger.warning("fetch_zt_count_compare T-1 取数失败 t1=%s err=%s", t1_date, e)
@@ -192,7 +194,9 @@ def fetch_zt_count_compare(date: str) -> dict:
     # T日竞价涨停数（盘前可能为空）
     zt_count_t: Optional[int] = None
     try:
-        t_pool = em_zt_topic_pool("getTopicZTPool", compact_date, "fbt:asc") or []
+        # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装零涨停），
+        # try/except 兜底 zt_count_t 保持 None（judge 跳过 zt 因素）。
+        t_pool = em_zt_topic_pool("getTopicZTPool", compact_date, "fbt:asc", raise_on_failure=True) or []
         if t_pool:
             zt_count_t = len(t_pool)
     except Exception as e:

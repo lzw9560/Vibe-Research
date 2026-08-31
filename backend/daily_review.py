@@ -143,10 +143,28 @@ class DailyReviewer:
         sti_data = self._get_sti_data(trade_date)
         
         # 2. 获取涨停池 + 跌停池 + 炸板池
-        zt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc")]
-        dt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicDTPool", date_fmt)]
-        zb_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc")]
-        yzt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc")]
+        # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装平静市），
+        # 逐池 try/except 兜底——单池断不丢其他池数据。
+        zt_pool: list = []
+        dt_pool: list = []
+        zb_pool: list = []
+        yzt_pool: list = []
+        try:
+            zt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc", raise_on_failure=True)]
+        except Exception as e:
+            logging.getLogger("vibe-research").warning("daily_review 涨停池取数失败 date=%s err=%s", date_fmt, e)
+        try:
+            dt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicDTPool", date_fmt, raise_on_failure=True)]
+        except Exception as e:
+            logging.getLogger("vibe-research").warning("daily_review 跌停池取数失败 date=%s err=%s", date_fmt, e)
+        try:
+            zb_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc", raise_on_failure=True)]
+        except Exception as e:
+            logging.getLogger("vibe-research").warning("daily_review 炸板池取数失败 date=%s err=%s", date_fmt, e)
+        try:
+            yzt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc", raise_on_failure=True)]
+        except Exception as e:
+            logging.getLogger("vibe-research").warning("daily_review 昨涨停池取数失败 date=%s err=%s", date_fmt, e)
         
         # 3. 获取市场广度（涨跌家数）
         try:

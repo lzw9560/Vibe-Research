@@ -119,7 +119,7 @@ def blocks(code: str = Query(...)) -> Dict[str, Any]:
     from routers.common import _validate
     code = _validate(code)
     try:
-        return {"data": _cached("blocks", code, 1800, lambda: astock.concept_blocks(code),
+        return {"data": _cached("blocks", code, 1800, lambda: astock.concept_blocks(code, raise_on_failure=True),
                                 valid=lambda v: bool(v.get("boards")) if isinstance(v, dict) else bool(v))}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"板块归属异常：{e}") from e
