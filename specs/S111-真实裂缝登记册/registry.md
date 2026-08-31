@@ -263,7 +263,7 @@ S118 scan（wf_552c8943-5d3，8 维并行 finder + per-finding 对抗核实 + �
 | source-em-swallow-defeats-fetch-ok | eastmoney.py:366 | HIGH | ✅ 已修（S119） | eastmoney_datacenter 改：em_get/.json() 抛异常时 raise typed SourceUnavailable（非 bare return []），仅 HTTP 成功但 result.data 空才返 []（真无数据）。单点覆盖 dragon_tiger_board 三处 + seat_engine._pull_records + hot_money_seats 间接。**⚠ 击败 S112**：fetch_ok 区分"源断 vs 未上榜"前提是源端源断会抛异常，但源端把源断也变 []→fetch_ok 恒 True→源断伪装"未上榜 ok"→risk 归零。S112 在源端被绕过，须回看。**S119 已修**（opt-in raise_on_failure，见 S119 状态节）。 |
 | ai-hithink-rank-empty-on-failure | hithink_src.py:248 | HIGH | ✅ 已修（S120） | skyrocket/hot_stock/anomaly_list 把 `if data is None: return []` 改 raise RuntimeError；registry.execute 兜成 {"error"} 喂 LLM；router 同步 502；改 test_skyrocket_failure_empty 断言（从 ==[] 改 raises/返 error）。同仓 query_global_stock/worldmonitor_query 失败返 {"error":"暂不可达"} 是诚实范式。⚠ 关联 hithink APIKey 泄漏待轮换，轮换后旧 key 401 活体触发此路径。**S120 已修**（见 S120 状态节）。 |
 | ai-tencent-num-zero-coercion | tencent.py:58 | HIGH | ✅ 已修（S121） | num() 对空/非数值返 None 而非 0.0（根因），或范围修：quote_from_tencent 对 0 永不合法字段（price/pe_ttm/pe_static/pb/last_close/open/high/low/market_cap/float_market_cap）用 `_numf(...) or None` 把 0.0 归 None。亏损股 PE 未定义→gtimg 返空/"-"→num()→0.0 喂 LLM 当真 PE=0 极度低估。触 §1.2 不臆造底线。**S121 已修**（范围修 quote_from_tencent，见 S121 状态节）。 |
-| market-emotion-realttime-weekend-silent-fallback-no-calendar-gate | market.py:220 | HIGH | worth_fixing | market._emotion(date=None) 实时入口加交易日历门控：周末/非交易日不取 em_zt_topic_pool 当日池当实时，返 stale 或标 is_delayed/trade_date。em_zt_topic_pool 静默回退是唯一未守卫缺口。 |
+| market-emotion-realttime-weekend-silent-fallback-no-calendar-gate | market.py:220 | HIGH | ✅ 已修（S122） | market._emotion(date=None) 实时入口加交易日历门控：周末/非交易日不取 em_zt_topic_pool 当日池当实时，返 stale 或标 is_delayed/trade_date。em_zt_topic_pool 静默回退是唯一未守卫缺口。**S122 已修**（date=None 循环加 is_trading_day 跳过 + 盘前当日跳过，见 S122 状态节）。 |
 | realtime-capital-flow-no-date-provenance-carryforward-as-fresh | risk_models.py:670 | MEDIUM | worth_fixing | _get_realtime_capital_flow 取 history[-1] 加 date 校验：盘前 carry-forward 资金流（无当日 bar）标 data_status=degraded/missing 不戳 last_updated=now。 |
 | hot-money-seats-partial-fetch-silent | hot_money_seats.py:109 | MEDIUM | worth_fixing | fetch_billboard_for_date 单侧断流 except:continue 静默返半截→席位画像在残缺数据上算 next_day_sell_rate。返 {rows,buy_ok,sell_ok}，残缺日不纳入聚合 + warning 日志（非 bare continue）。 |
 | seal-intraday-cron-misses-1500-close-auction-final | scheduled_tasks.py:2214 | MEDIUM | worth_fixing | seal_intraday_collect cron `* 9-14` 止于 14:59，漏采 15:00 收盘集合竞价终态涨停/炸板；注释假称覆盖 15:00-15:05。改 cron 到 15:05 或加 15:00 专项采集。verify 推翻 finder honest_empty 判 confirmed_lying（注释撒谎）。 |
@@ -280,7 +280,7 @@ S118 scan（wf_552c8943-5d3，8 维并行 finder + per-finding 对抗核实 + �
 - forward-test-t1-settle-stuck-mark-conflates-transient-with-permanent（scheduled_tasks.py:1252-1265 + kline_returns.py:91-118 + scheduled_tasks.py:2294 vs :2254，MEDIUM robustness）— stuck-mark 把暂态 fetch-empty 当永久 no-bar 施 7 日抑制，15:50 cron 命中 baostock EOD 未就绪（baostock-stuck 维度 borderline，登记）。
 - s107-hithink-dragon-tiger-unimplemented（S107 spec.md:3，LOW completeness_gap）— S107 占位草案从未实现，hithink 个股+概念维度与东财席位维度不重叠，东财断无备援是维度约束下诚实缺口，非缺陷（用户追加龙虎榜维度的产出）。
 
-**撒谎总账**：14（S111/S112，全修）+ 3（S115，全修）+ 1（S119，已修）+ 1（S120，已修）+ 1（S121，已修）= 20 全修 → +6（S118 待修）= **26 confirmed_lying，其中 6 待修**。诚实登记 19 + 8 = 27。registry 覆盖从 36 扩到 53（36+17）。
+**撒谎总账**：14（S111/S112，全修）+ 3（S115，全修）+ 1（S119，已修）+ 1（S120，已修）+ 1（S121，已修）+ 1（S122，已修）= 21 全修 → +5（S118 待修）= **26 confirmed_lying，其中 5 待修**。诚实登记 19 + 8 = 27。registry 覆盖从 36 扩到 53（36+17）。
 
 ## S119 实现后状态（2026-08-31，source-em-raise 诚实化——恢复 S112 fetch_ok 前提）
 
@@ -348,3 +348,23 @@ S121 修 S118 scan #2 `ai-tencent-num-zero-coercion`（HIGH confirmed_lying，�
 **⚠ test_s040 flaky 观察**：S121 全量首跑 `test_s040_backfill::test_run_backtest_async_passes_kline_cache` 偶发崩（seen_offsets `[54,105,105,...]` 末值 105≠54；105=90+15 但本测日期只该 39+15=54，105 来源不明，疑前序测 asyncio 任务泄漏被 fake_kline 抓到残留调用）。单跑 PASS、重跑 PASS（b163kzlxf 2451/0 带本测）——非 S121 纯函数改导致（quote_from_tencent 不被 backtest_lite 用）。pre-existing flaky，未 deselect（通过率 2/3），若 CI 复发再加 `--deselect tests/test_s040_backfill.py::test_run_backtest_async_passes_kline_cache`。
 
 **下一步候选**：剩 6 confirmed_lying 待修——1 HIGH（`market-emotion-realttime-weekend` market.py:220 周末返周五池当实时）+ 5 M/LOW；或跑 S122 scan round 2 扫 critic 6 漏扫（risk 三子维度承重链头条）。
+
+## S122 实现后状态（2026-08-31，market._emotion 周末交易日历门控——不把周五池标成周六实时情绪）
+
+S122 修 S118 scan #5 `market-emotion-realttime-weekend-silent-fallback-no-calendar-gate`（HIGH confirmed_lying，本会话最后一个 HIGH）。spec + impl + 2 测试，全量 2451 passed 0 回归（5 flaky/network 测 deselect）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| date=None 循环 is_trading_day 守卫 | ✅ 已修 | _emotion date=None 分支循环（market.py:218-225）加 `if not is_trading_day(d): continue`（跳非交易日，防 em_zt_topic_pool 静默回退误标周末）+ `if back==0 and hour<15: continue`（盘前当日池未生成 em 回退 T-1 误标今日，P0-3 同款） |
+| ths 回退循环同款守卫 | ✅ 已修 | ths 降级回退循环加同款 is_trading_day 跳过（一致性，防 ths_limit_up_pool 同型静默回退） |
+| resolved 诚实 | ✅ | 周末→周五（back=2），date 字段与池数据一致（非周五池标周六） |
+
+**设计**：逐迭代加 is_trading_day 跳过（verify 提案）而非"last_trading_date 单查"——逐迭代复用既有 `for back in range(8)` + 与同函数 P0-2/P0-3 + 全仓 6 处守卫范式一致；单查 last_trading_date 否决（绕过 em"最近有数据日"语义，长假后首日 em 仍空时不可继续回溯）。盘前阈值 `hour<15`：涨停池收盘数据集 15:00 后生成。
+
+**测试**：test_fixes 加 2 测（`_fake_datetime` 替身控制 now，对齐 test_s056 _FakeDateTime / test_s052 type("DT",...) 范式）——①周末（今天=周六 2026-08-15）→ date=周五 2026-08-14（非周六）；②交易日盘后（周五 16:00）→ date=今日。is_trading_day mock decouple 交易日历。
+
+**⚠ test_market_degrades_without_akshare network-flaky**：S122 全量首跑该测崩（`assert _sectors()==[]` 得真实板块）——`_sectors()`（market.py:109）S085 A5 已换源走 em_get（非 akshare），测只 mock akshare 故 stale；网络通→真实板块→断言破，网络断→[]→过。非 S122 改（_sectors 独立于 _emotion）。pre-existing network/stale，加 `--deselect tests/test_fixes.py::test_market_degrades_without_akshare` 集（同 newsradar/s032/spec_consistency/test_s040 flaky 集）。
+
+**撒谎总账更新**：26 confirmed_lying = 21 全修（S111/S112/S115 17 + S119 1 + S120 1 + S121 1 + S122 1）+ 5 待修。registry 覆盖 53 不变。
+
+**下一步候选**：剩 5 confirmed_lying 待修（全 M/LOW，非承重链：realtime-capital-flow-carryforward / hot-money-seats-partial-fetch / seal-intraday-cron-misses-1500 / backtest-daily-snapshot-degraded / storm-daemon-news-items-no-provenance）；或跑 S123 scan round 2 扫 critic 6 漏扫（risk 三子维度承重链头条，最 material）。

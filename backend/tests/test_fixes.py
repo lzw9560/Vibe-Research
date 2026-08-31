@@ -167,6 +167,71 @@ def test_emotion_dirty_amount(monkeypatch):
     assert stocks[1]["amount"] == 5e8
 
 
+# ── S122：market._emotion(date=None) 周末交易日历门控 ────────────────────
+
+def _fake_datetime(now_val):
+    """datetime 替身（对齐 test_s056 _FakeDateTime / test_s052 type("DT",...) 范式）。
+    now() 返固定值控制周末/盘前/盘后；strptime 等委托真 datetime。"""
+    from datetime import datetime as real_dt
+
+    class _DT:
+        @staticmethod
+        def now(tz=None):
+            return now_val
+
+        def __getattr__(self, name):
+            return getattr(real_dt, name)
+
+    return _DT()
+
+
+def test_emotion_weekend_resolves_to_friday_not_saturday(monkeypatch):
+    """S122 A1：周末（今天=周六）_emotion(None) → date=周五（非周六）。
+
+    em_zt_topic_pool 非交易日查询静默回退返最近交易日池（实测 08-21/22/23 三天字节级
+    相同的周五 54 条）；无 is_trading_day 守卫则 back=0 命中周五池 → resolved=周六 →
+    周五池标成周六实时情绪撒谎。守卫跳过周末落到周五，date 与池数据一致。
+    """
+    from datetime import datetime as real_dt
+    import vr_paths
+
+    # 今天=2026-08-15（周六，weekday=5）10:00
+    sat = real_dt(2026, 8, 15, 10, 0, tzinfo=market.BEIJING)
+    monkeypatch.setattr(market, "datetime", _fake_datetime(sat))
+    # is_trading_day：Mon-Fri True（decouple 交易日历）
+    monkeypatch.setattr(vr_paths, "is_trading_day", lambda d=None: d is not None and d.weekday() < 5)
+    # em 对任意日返池（模拟静默回退——周六查也返周五池）；守卫已跳过周六直落到周五
+    pool = [{"c": "600001", "n": "甲", "lbc": 3, "p": 10000, "zdp": 10.0,
+             "amount": 5e8, "ltsz": 1e9, "hybk": "X"}]
+    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="": pool)
+    monkeypatch.setattr(market, "_sentiment", lambda *a, **k: {})
+
+    out = market._emotion(None)
+    assert out["date"] == "2026-08-14"  # 周五，非周六 2026-08-15
+
+
+def test_emotion_trading_day_afterclose_resolves_today(monkeypatch):
+    """S122 A3：交易日盘后（hour>=15）_emotion(None) → date=今日（非 T-1）。
+
+    盘前(hour<15)当日池未生成 em 回退 T-1 误标今日（P0-3 同款）；盘后 hour>=15
+    当日池已生成 → resolved=今日，date 与池数据一致（happy path）。
+    """
+    from datetime import datetime as real_dt
+    import vr_paths
+
+    # 今天=2026-08-14（周五，weekday=4）16:00（盘后）
+    fri = real_dt(2026, 8, 14, 16, 0, tzinfo=market.BEIJING)
+    monkeypatch.setattr(market, "datetime", _fake_datetime(fri))
+    monkeypatch.setattr(vr_paths, "is_trading_day", lambda d=None: d is not None and d.weekday() < 5)
+    pool = [{"c": "600001", "n": "甲", "lbc": 3, "p": 10000, "zdp": 10.0,
+             "amount": 5e8, "ltsz": 1e9, "hybk": "X"}]
+    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda ep, d, sort="": pool)
+    monkeypatch.setattr(market, "_sentiment", lambda *a, **k: {})
+
+    out = market._emotion(None)
+    assert out["date"] == "2026-08-14"  # 今日（周五盘后）
+
+
 # ── 缓存：数据源故障的空结果不缓存 5 分钟 ───────────────────────────
 
 def test_cached_skips_empty():

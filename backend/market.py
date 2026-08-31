@@ -214,25 +214,38 @@ def _emotion(date: str | None = None) -> dict:
         except ValueError:
             return {}
     else:
-        # 定位最近交易日：从今天往前回溯，第一日有涨停池即取（非交易日/盘前返空则继续回溯）。
+        # 定位最近交易日：从今天往前回溯，第一日有涨停池即取。
+        # ⚠ is_trading_day 守卫（S122）：em_zt_topic_pool 非交易日查询静默回退返最近交易日池
+        # （实测 08-21/22/23 三天字节级相同的周五 54 条），无守卫则周末 back=0 命中周五池
+        # → resolved=周末 → 周五池标成周末日期当"周末实时情绪"撒谎。对齐同函数 P0-2/P0-3
+        # + 全仓 daily_review/extreme_market/auction_screener/topology/limitup_screener/backfill_history 守卫。
+        from vr_paths import is_trading_day
         today = datetime.now(BEIJING).date()
         resolved, zt_temp = "", []
         for back in range(8):
-            d = (today - timedelta(days=back)).strftime("%Y%m%d")
-            zt_temp = astock.em_zt_topic_pool("getTopicZTPool", d, "fbt:asc")
+            d = today - timedelta(days=back)
+            if not is_trading_day(d):
+                continue  # 跳过非交易日——em 静默回退会误标周末（P0-2 同款）
+            if back == 0 and datetime.now(BEIJING).hour < 15:
+                continue  # 盘前当日池未生成，em 回退 T-1 误标今日（P0-3 同款）
+            d_str = d.strftime("%Y%m%d")
+            zt_temp = astock.em_zt_topic_pool("getTopicZTPool", d_str, "fbt:asc")
             if zt_temp:
-                resolved = d
+                resolved = d_str
                 break
         if not resolved:
             # 东财连续 8 日空（长假/数据源故障）→ 尝试同花顺降级定位最近交易日
             for back in range(8):
-                d = (today - timedelta(days=back)).strftime("%Y%m%d")
+                d = today - timedelta(days=back)
+                if not is_trading_day(d):
+                    continue  # 同型守卫：防 ths_limit_up_pool 静默回退误标周末（S122 一致性）
+                d_str = d.strftime("%Y%m%d")
                 try:
-                    ths_try = astock.ths_limit_up_pool(d) if hasattr(astock, "ths_limit_up_pool") else []
+                    ths_try = astock.ths_limit_up_pool(d_str) if hasattr(astock, "ths_limit_up_pool") else []
                 except Exception:
                     ths_try = []
                 if ths_try:
-                    resolved = d
+                    resolved = d_str
                     ths = ths_try  # 复用：后续不再重复请求
                     break
             if not resolved:
