@@ -241,20 +241,20 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         norm_code, market = normalize_stock_code(code)
     except (ValueError, AttributeError):
         norm_code, market = code, Market.A
-    mcap_yi = _numf(raw.get("mcap_yi"))
+    mcap_yi = _numf(raw.get("mcap_yi")) or None  # S125 契约补全：0 永不合法（市值=0 喂 LLM 当真低估），对齐 quote_from_tencent:62
     return Valuation(
         code=norm_code,
         market=market,
         name=raw.get("name"),
-        price=_numf(raw.get("price")),
+        price=_numf(raw.get("price")) or None,  # S125 契约补全：THE S121 "0 永不合法"字段，对齐 quote_from_tencent:69
         market_cap=mcap_yi * 1e8 if mcap_yi is not None else None,
-        pe_ttm=_numf(raw.get("pe_ttm")),
-        pb=_numf(raw.get("pb")),
-        ps_ttm=_numf(raw.get("ps_ttm")),  # S106：hithink 补（东财结构性缺）
-        pcf_ttm=_numf(raw.get("pcf_ttm")),  # S106：hithink 补
+        pe_ttm=_numf(raw.get("pe_ttm")) or None,  # 0 永不合法（S121 契约补全：PE=0 喂 LLM 当真低估）
+        pb=_numf(raw.get("pb")) or None,  # 0 永不合法（S121 契约补全）
+        ps_ttm=_numf(raw.get("ps_ttm")) or None,  # S106：hithink 补（东财结构性缺）；0 永不合法
+        pcf_ttm=_numf(raw.get("pcf_ttm")) or None,  # S106：hithink 补；0 永不合法
         dividend_yield=_numf(raw.get("dividend_yield")),
         discrepancy=raw.get("discrepancy"),  # S106：数据层 cross_validate 仲裁结果透传
-        forward_pe=_numf(raw.get("pe_26e")),
+        forward_pe=_numf(raw.get("pe_26e")) or None,  # S125 契约补全：forward PE 类，0 永不合法
         consensus_eps=_numf(raw.get("eps_26e")),
         cagr_pct=_numf(raw.get("cagr_pct")),
         peg=_numf(raw.get("peg")),

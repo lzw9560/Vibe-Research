@@ -36,6 +36,31 @@ class StormPrediction:
     suggested_position: float  # 0-1 推荐仓位比例
     factors: list[StormFactor] = field(default_factory=list)
     disclaimer: str = "概率预测非确定，市场有风险，黑天鹅不可测"
+    data_status: str = "ok"  # ok | degraded | fallback_current | missing（最差因子态）
+
+
+# 因子 data_status 严重度（对齐 risk_models._merge_data_status，扩展 fallback_current 与 degraded 同级）
+_FACTOR_STATUS_SEVERITY = {"ok": 0, "degraded": 1, "fallback_current": 1, "missing": 2}
+# 同级 tiebreak：degraded 优先于 fallback_current（顶层 status 取更通用标签）
+_FACTOR_STATUS_TIEBREAK = {"fallback_current": 0, "degraded": 1}
+
+
+def _worst_factor_status(factors: list[StormFactor]) -> str:
+    """取因子 data_status 最差者（missing > degraded/fallback_current > ok）。
+
+    对齐 risk_models._merge_data_status 范式（避免 import risk_models 循环依赖，inline 复制）。
+    degraded 与 fallback_current 同级（severity=1）——并存时取 degraded（更通用语义）；
+    仅 fallback_current 时保留该态（更具体诚实）。未知值按 ok 处理。
+    """
+    if not factors:
+        return "ok"
+    return max(
+        (f.data_status for f in factors),
+        key=lambda s: (
+            _FACTOR_STATUS_SEVERITY.get(s, 0),
+            _FACTOR_STATUS_TIEBREAK.get(s, 0),
+        ),
+    )
 
 
 # 概率分 → 风险等级 + 仓位映射（spec §5.2）
@@ -368,10 +393,13 @@ def predict_storm(date: str | None = None) -> StormPrediction:
 
     risk_level, suggested_position = _probability_to_level(probability)
 
+    data_status = _worst_factor_status([global_f, internal_f, news_f, calendar_f])
+
     return StormPrediction(
         date=d,
         probability=probability,
         risk_level=risk_level,
         suggested_position=suggested_position,
         factors=[global_f, internal_f, news_f, calendar_f],
+        data_status=data_status,
     )

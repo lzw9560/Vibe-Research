@@ -124,8 +124,9 @@ export interface RadarData {
 }
 
 export interface Holding {
-  code: string; name: string; price: number; shares: number; cost: number;
-  market_value: number; pnl: number; pnl_pct: number;
+  code: string; name: string; price: number | null; shares: number; cost: number;
+  market_value: number | null; pnl: number | null; pnl_pct: number | null;
+  data_status?: string;  // S125 R1：degraded（行情取数失败）→ 字段 null，前端标"数据缺失"
 }
 export interface ClosedPosition {
   code: string; name: string; date: string; price: number; shares: number; cost: number;
@@ -133,7 +134,7 @@ export interface ClosedPosition {
 }
 export interface PortfolioData {
   holdings: Holding[];
-  totals: { market_value: number; cost: number; pnl: number; pnl_pct: number };
+  totals: { market_value: number; cost: number; pnl: number; pnl_pct: number; data_status?: string };
   closed: ClosedPosition[];
   realized_pnl: number;
   updated: string; last_refresh: string | null;
@@ -1504,7 +1505,7 @@ export interface AdvisoryItem {
   suggested_pct?: number;
   stop_loss_pct?: number;
   take_profit_pct?: number;
-  pnl_pct?: number;
+  pnl_pct?: number | null;  // S125 R1：degraded holding → null
   cost?: number;
   price?: number;
   status?: string;

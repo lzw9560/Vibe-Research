@@ -960,3 +960,127 @@ def test_realtime_capital_flow_cross_source_and_carryforward_both_degraded(isola
     assert cf["data_time"] == "2026-08-13"
     assert "T" not in cf["data_time"]
 
+
+# ===========================================================================
+# S125 R1：portfolio-price-or-zero-defeats-s121 —— 反吞 None 诚实化 +
+# position_advisor 跳 degraded（承重链闭合）
+# 承重链：portfolio.py:147 `price=model.price or 0.0` 反吞 S121(mappers.py:69)
+# None→0.0 → mv=0/pnl=-100% → position_advisor_v2:618 pnl_pct=-100.0 truthy 直通
+# → :633 layer3 → :351 `_HARD_STOP_PCT(-5.0)` → false close advisory + 前端伪全亏。
+# 修复：price is None → row degraded+字段 None；totals 任一 degraded 即 degraded；
+# position_advisor 读 data_status=degraded 跳止损层返 hold（不喂伪 -100% 给 layer）。
+# 对齐 S111 R4 _empty_capital_flow 范式（缺失不编值，data_status 区分）。
+# ===========================================================================
+
+
+def test_portfolio_price_none_marks_degraded_not_fake_loss(monkeypatch):
+    """R1.1（S125）：tencent price=None（源断/停牌，S121 已归一）→ row data_status=degraded
+    + price/market_value/pnl/pnl_pct=None，非旧 `or 0.0` 造伪 mv=0/pnl=-100%。
+
+    旧 portfolio.py:147 `price = model.price or 0.0` 反吞 S121(mappers.py:69) 的 None→0.0
+    → mv=0/pnl=-cv/pnl_pct=-100% → position_advisor_v2:618 `pnl_pct=-100.0 or 0.0` truthy
+    直通 :633 layer3 → :351 `_HARD_STOP_PCT(-5.0)` → false close advisory + 前端伪全亏。
+    修复：price is None → row 标 degraded + 字段 None（不 or 0.0 造伪 -100%）。
+    """
+    import portfolio as pf
+
+    # Arrange：1 笔持仓；tencent 整批断（返空 raw）→ quote price=None（S121）
+    monkeypatch.setattr(pf, "_load", lambda: {
+        "holdings": [{"code": "600519", "shares": 100, "cost": 1800.0}],
+        "last_refresh": None,
+    })
+    monkeypatch.setattr(pf.astock, "tencent_quote", lambda codes: {})
+    monkeypatch.setattr(pf, "quote_from_tencent",
+                        lambda code, raw: SimpleNamespace(name="贵州茅台", price=None))
+
+    # Act
+    result = asyncio.run(pf.get_portfolio())
+
+    # Assert：row 标 degraded + 字段 None（非旧 0.0 / -100.0）
+    row = result["holdings"][0]
+    assert row["data_status"] == "degraded"
+    assert row["price"] is None
+    assert row["market_value"] is None
+    assert row["pnl"] is None
+    assert row["pnl_pct"] is None
+    # 反证：旧 `or 0.0` 会得 price=0.0 / mv=0.0 / pnl=-180000.0 / pnl_pct=-100.0
+    assert row["price"] != 0.0
+    assert row["pnl_pct"] != -100.0
+    # totals：任一 holding degraded → 标 degraded
+    assert result["totals"]["data_status"] == "degraded"
+
+
+def test_portfolio_price_present_marks_ok_normal_pnl(monkeypatch):
+    """R1.1 互补（S125）：price 有值 → data_status=ok + 正常 mv/pnl/pnl_pct（非 degraded）。
+
+    证明诚实化二值契约：price 有值维持原计算 + ok，不误伤正常取数（与 price=None→
+    degraded 区分），对齐 S111 AAA 范式（missing/ok 互补断言）。"""
+    import portfolio as pf
+
+    monkeypatch.setattr(pf, "_load", lambda: {
+        "holdings": [{"code": "600519", "shares": 100, "cost": 1800.0}],
+        "last_refresh": None,
+    })
+    monkeypatch.setattr(pf.astock, "tencent_quote", lambda codes: {})
+    monkeypatch.setattr(pf, "quote_from_tencent",
+                        lambda code, raw: SimpleNamespace(name="贵州茅台", price=1900.0))
+
+    # Act
+    result = asyncio.run(pf.get_portfolio())
+
+    # Assert：price 有值 → ok + 正常盈亏（mv=1900*100=190000；pnl=(1900-1800)*100=10000）
+    row = result["holdings"][0]
+    assert row["data_status"] == "ok"
+    assert row["price"] == 1900.0
+    assert row["market_value"] == 190000.0
+    assert row["pnl"] == 10000.0
+    assert row["pnl_pct"] == 5.56  # 10000/180000*100 ≈ 5.5556 → round 5.56
+    assert result["totals"]["data_status"] == "ok"
+    assert result["totals"]["market_value"] == 190000.0
+
+
+def test_advise_holdings_degraded_skips_stop_loss_no_false_close(monkeypatch):
+    """R1.3（S125）：holding data_status=degraded → 跳过止损层，返 action=hold（非 close），
+    不喂伪 pnl_pct=-100.0 给 layer3 :351 _HARD_STOP_PCT 触发 false close。
+
+    旧承重链：portfolio.py:147 `price=model.price or 0.0` 反吞 S121 None→0.0 →
+    pnl_pct=-100.0 → advise_holdings:618 `pnl_pct=h.get('pnl_pct') or 0.0`（-100.0 truthy
+    直通）→ :633 layer3 → :351 `pnl_pct<=_HARD_STOP_PCT(-5.0)` → close（伪止损）。
+    修复：读 data_status=degraded → 跳 layer1/2/3，返 hold+reason（不基于伪 -100% 触发 close）。
+    """
+    from strategies import position_advisor_v2 as adv
+    adv.clear_caches()  # 隔离 winrate/kline 模块级 TTL 缓存
+
+    import portfolio as pf
+    # 1 笔 degraded holding（portfolio 诚实化后的 shape：price/pnl_pct=None + degraded）
+    async def _pf():
+        return {"holdings": [{
+            "code": "600519", "name": "贵州茅台", "price": None, "shares": 100,
+            "cost": 1800.0, "market_value": None, "pnl": None, "pnl_pct": None,
+            "data_status": "degraded",
+        }]}
+    monkeypatch.setattr(pf, "get_portfolio", _pf)
+    # mock gene/backtest/strat/atr（degraded 路径不读 layer，但 batch setup 仍跑）
+    monkeypatch.setattr(adv, "load_gene_scores", lambda d: [])
+    monkeypatch.setattr(adv, "run_strategy_backtest", lambda n=90: [])
+    monkeypatch.setattr(adv, "STRATEGY_REGISTRY", [])
+    from limitup_screener import data as ldata
+    class _FakeCursor:
+        def fetchone(self): return None
+        def fetchall(self): return []
+    class _FakeConn:
+        def execute(self, *a, **kw): return _FakeCursor()
+        def close(self): pass
+    monkeypatch.setattr(ldata, "get_db", lambda: _FakeConn())
+    monkeypatch.setattr(adv, "_atr_trailing_stop", lambda code, cost, sfp=None: (None, None, False))
+
+    # Act
+    items = asyncio.run(adv.advise_holdings())
+
+    # Assert：跳止损层，action=hold（非 close），不喂伪 -100% 给 layer3
+    assert len(items) == 1
+    assert items[0].action == "hold"
+    assert items[0].action != "close"
+    assert items[0].extra["data_status"] == "degraded"
+    assert items[0].extra["pnl_pct"] is None
+

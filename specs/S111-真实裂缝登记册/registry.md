@@ -401,3 +401,57 @@ S123 一次清掉 S118 scan 残留 5 条 M/LOW confirmed_lying，账本 **26/26 
 **撒谎总账终账**：26 confirmed_lying = 26 全修（S111/S112/S115 17 + S119 1 + S120 1 + S121 1 + S122 1 + S123 5）。registry 覆盖 53 不变（S123 修不新增裂缝，仅闭合 5 条待修）。**S118 scan 9 confirmed_lying 全清，账本闭合。**
 
 **下一步候选**：账本已闭合（26/26）。可跑 S124 scan round 2 扫 critic 6 漏扫维度（头条 risk_models 三子维度 provenance 缺口——_calculate_volatility/_max_drawdown/_liquidity_risk 失败返 0.0 + _merge_data_status 不含三者，composite risk 可在 3/8 维度静默归零时仍标 ok+LOW，在 factors/recommendation 层非仓位承重链但 material；或-0 归零反模式 ~30 处 / 聚合层顶层 provenance / 前端渲染层 / 3 AI 工具源不可达 / em_get 吞异常→返空结构全量 / scheduled_tasks 56 bare except:pass）。
+
+## S124 scan 实现后状态（2026-08-31，completeness-gaps 第三轮扫描）
+
+S124 scan（wf_3fe62403-da7，6 维并行 finder + per-finding 对抗核实 + 完整性 critic，34 agent 0 error，~1.49M token）扫旧「本轮未覆盖维度」critic 6 漏扫（S123 critic 抓出）+ 用户追加 or-zero 全仓 sweep。扫出 **3 HIGH + ~8 MEDIUM + ~3 LOW confirmed_lying**（新裂缝，账本 26/26 之外），6 个 finder-confirmed_lying 被 verify 推翻为 actually_honest（死代码/不可达，防假阳性生效）。
+
+**3 HIGH confirmed_lying（全承重链/regress，S125 已修）**：
+| crack | where | sev | 修法 |
+|---|---|---|---|
+| portfolio-price-or-zero-defeats-s121 | portfolio.py:147 | HIGH | `price = model.price or 0.0` 反吞 S121 None→0.0 → 伪 mv=0/pnl=-100% → position_advisor_v2:618→:351 _HARD_STOP_PCT false close advisory + 前端伪全亏。**S125 已修**（price=None→row data_status=degraded + 字段 None；totals 聚合非 degraded + 标 degraded；position_advisor 跳 degraded 不触发 close；前端 null guard + degraded badge） |
+| ai-valuation-tencent-zero-coercion-s121-incomplete | mappers.py:251 | HIGH | valuation pe_ttm/pb 无 `or None`（S121 只修 quote_from_tencent sibling）。**S125 已修**（pe_ttm/pb/ps_ttm/pcf_ttm + price/mcap_yi/forward_pe 全 `or None`，S121 契约补全） |
+| storm-prediction-no-top-level-data-status | storm_predictor.py:29-38 | HIGH | StormPrediction 无顶层 data_status，probability 从含 degraded 因子加权和算出当权威。**S125 已修**（dataclass 加 data_status + predict_storm 算最差因子 status + sentiment_weather.py:1249 response emit） |
+
+**~8 MEDIUM confirmed_lying（待后续切片修）**：kline-risk-trio-silent-zero-no-data-status（risk_models.py:411-475 三子维度失败返 0.0 + _merge_data_status:216 不含三者，factors/recommendation 层非仓位承重链——**critic "最 material" 略 overstate，实 MEDIUM**，我独立读码 _build_risk_factors:549-587 实锤三子维度只喂 factors 不喂 risk_score）/ risk-dashboard-list-strip-data-status（routers/risk.py:81-87,144-151 不透 data_status）/ storm-prediction-no-top-level-data-status（dim1/dim3 重复，已 S125 修）/ statsmetrics-winrate-0-when-zero-trades / trendchart-strategywinrate-0 / trendchart-hitrate-0 / strategypage-winrate-0（前端 4 处 0.0 渲染"0%胜率"非"数据缺失"，S124 frontend-render 维）/ em-zt-topic-pool-limitup-metrics-total-zero-cached / concept-blocks-topology-sector-edges-dead-guard（em_get 吞异常返空结构）。
+
+**~3 LOW confirmed_lying**：backtest-metriccard-row-0 / em-zt-topic-pool-topology-ladder-dead-guard / lockup-expiry-event-factors-no-raise-on-failure。
+
+**6 actually_honest（verify 推翻 finder lying 主张，登记防假阳性缝补）**：first-board-filter-vol-ratio-escape-defeated（escape 有效）/ intraday-features-seal-trajectory-null-to-zero-dead-code（死代码）/ intraday-sentiment-partial-none-emo-to-zero / contexttab-storm-headline（refutation 自承"bug holds"但判 actually_honest——**矛盾，re-examine 前别信标**）/ forwardtestpanel-winrate-0 / bombalertbanner-ignores-data-status / sector-fund-flow-market-overview / market-turnover-rank / bids-empty-structure-no-consumers / industry-comparison-sector-divergence-rescued。
+
+**critic 抓的 cross-cutting**：
+- ⭐ **S121 是点修非契约**——`quote_from_tencent` 加了 `or None`，sibling mappers（valuation/gstock_us_hk）没加；消费者 `or 0.0` 还能反吞。`or 0` 全仓 **407 处**只采样 4 处，live 承重链未审的还很多（bidding_monitor:114-118 等）→ **or-zero 契约级治理留 follow-up spec（非本 S125 点修）**。
+- data_status convention half-built，ad-hoc（_merge_data_status risk_models + StormFactor 有，聚合层不总 roll up）。
+- 6 finder-confirmed_lying 被推翻为 actually_honest（死代码/不可达占主导）——finder 默认 actually_honest 除非代码实锤的设计生效。
+- dim1 risk-trio 与 dim3 onedayrisk-trio 重复（同一缺陷）。
+- contexttab-storm-headline verdict 矛盾（标 actually_honest 但 refutation 自承 bug holds）。
+
+**critic 抓的 missed（under-scanned，待后续）**：
+- HIGH ai-tools-3：只审 3/~13 个 @register_tool AI 工具（query_global_stock→quote_from_gstock_us_hk mappers.py:128 未审）。
+- HIGH or-zero-pattern：407 处只采样 4（bidding_monitor:114-118 等未审）。
+- MEDIUM scheduled_tasks 56 bare except:pass（dim #7 未扫）/ cron DAG consumer-before-producer 残存 / 跨源 date<= nearest-bar-fallback 残存 / funnel total_score（agg-provenance dim 未覆盖）。
+
+**撒谎总账更新**：26（账本闭合）+ S124 新扫 14 confirmed_lying（3 HIGH S125 已修 + ~8 MEDIUM + ~3 LOW 待修）= **40 confirmed_lying，其中 29 全修 + 11 待修**（~8 MEDIUM + ~3 LOW，非承重链）。registry 覆盖 53 + S124 新 14 = 67（去重后 ~64，dim1/dim3 重复扣 1）。
+
+## S125 实现后状态（2026-08-31，S124 scan 3 HIGH 点修——承重链 regress 闭合）
+
+S125 修 S124 scan 3 HIGH confirmed_lying（全承重链/regress S121）。spec + workflow（wf_45c684b0-120，3 impl + 7 verify + 1 critic，11 agent 0 error）+ Round 2 手修 critic 抓出的 3 residual scope 误指。全量 2482 passed 0 回归（24 deselected 既有 flaky；+12 新测试 vs S123 2470）。
+
+**3 HIGH（全 confirmed_honest，已修）**：
+
+| # | crack | 修法 |
+|---|---|---|
+| 1 | portfolio-price-or-zero-defeats-s121 | portfolio.py:157 price=None→row data_status=degraded + price/mv/pnl/pnl_pct=None（不 or 0.0 造伪 -100%）；totals:179-180 聚合非 degraded + :189 标 degraded；position_advisor_v2:622 读 data_status degraded→跳 layer1/2/3 返 hold（不喂伪 pnl_pct 给 _HARD_STOP_PCT）；**前端配套**（Round 2 补）：Portfolio.tsx fmt/fmtPnlPct null guard + aiContext null guard + totals degraded badge；Advisory.tsx pnl_pct null guard→"数据缺失"；types.ts Holding/AdvisoryItem fields `number|null` + totals data_status |
+| 2 | ai-valuation-tencent-zero-coercion-s121-incomplete | mappers.py:251-254 pe_ttm/pb/ps_ttm/pcf_ttm `or None`（impl）+ **Round 2 补 spec under-scope**：price(249)/mcap_yi(244)/forward_pe(257) `or None`（spec R2.1 原误"0 可合法"自相矛盾 S121 契约，critic 抓出） |
+| 3 | storm-prediction-no-top-level-data-status | storm_predictor.py:39 StormPrediction 加 data_status 字段 + predict_storm 算 _worst_factor_status（最差 4 因子）+ **Round 2 补 API boundary**：sentiment_weather.py:1249 response emit r.data_status（spec §4 漏列 router，critic 抓出"字段算完不到前端"） |
+
+**completeness critic 抓出的关键问题（Round 2 手修，非靠绿测试自欺）**：
+- ⭐ **R1 前端 crash HIGH**（cross-cutting #4 前端渲染层未扫）：spec §4 只列 backend，R1 发 null 但前端无 null guard → Portfolio.tsx:202 fmtPx(null)→TypeError 整页崩 + Advisory.tsx:59 null.toFixed 崩 + 渲染 'null%' 喂 LLM。types.ts Holding 声明 `number` 非 `number|null`，tsc 不报。**Round 2 补前端 null guard + degraded badge + types `number|null`**（承重链 last-mile 闭合）。
+- ⭐ **R2 spec under-scope HIGH**：spec R2.1 说"price(249)/forward_pe(257) 不动（0 可合法）"——**错**。price 是 S121 THE "0 永不合法"字段（mappers.py:69 已 or None），forward_pe 是 PE 类。critic 抓"market_cap 也漏"。**Round 2 补 price/mcap_yi/forward_pe `or None`** + 重写 R2 test（原 test 用 output 字段名 forward_pe 当 input key 但 mapper 读 pe_26e，test bug 非 impl bug）。
+- ⭐ **R3 API boundary HIGH**：spec §4 没列 sentiment_weather.py，dataclass 加了 data_status 但 router:1249 response 不 emit，字段算完不到前端。**Round 2 补 router emit r.data_status**。
+
+**critic 终账**：R1/R2/R3 全 closed（承重链 regress 闭合，无 HIGH residual）；missed：portfolio all-degraded degenerate edge（totals 全 0+degraded 标，前端需 data_status 门控显示——已部分修 degraded badge）；R1 测试 over-mock quote_from_tencent 绕 S121 premise（LOW，测试隔离选择）。
+
+**撒谎总账更新**：40 confirmed_lying = 29 全修（S111-S123 26 + S125 3）+ 11 待修（~8 MEDIUM + ~3 LOW，非承重链，S124 扫出）。registry 覆盖 ~64 不变（S125 修不新增裂缝）。
+
+**下一步候选**：剩 11 confirmed_lying 待修（全 M/LOW 非承重链：risk-trio factors provenance / risk-dashboard strip data_status / 前端 4 处 winrate=0 渲染 / em_get 吞异常 2 处 / backtest-metriccard / lockup-expiry / topology-ladder）；或跑 or-zero 契约级 sweep（407 处）+ ai-tools 全 13 个 + 漏扫 dim（scheduled_tasks bare except/cron DAG/funnel total_score）——validation 族继续，用户拍。

@@ -615,10 +615,23 @@ async def advise_holdings() -> list[AdvisoryItem]:
     items: list[AdvisoryItem] = []
     for h in holdings:
         code = h.get("code")
+        name = h.get("name") or code
+        # R1.3（S125）：行情取数失败（data_status=degraded，portfolio.py 已把
+        # price/pnl_pct 诚实化为 None）→ 跳过止损层判定，不喂伪 -100% 给
+        # layer1/2/3 触发 false close。对齐 S111 R4 _empty_capital_flow 范式。
+        if h.get("data_status") == "degraded":
+            items.append(AdvisoryItem(
+                code=code, name=name, scene="holding", action="hold",
+                win_rate=None, win_rate_source="none", matched_strategy=None,
+                reasons=["行情取数失败，数据缺失不判止损"],
+                risk_notes=[_DISCLAIMER, "行情取数失败，持仓盈亏无法核算"],
+                extra={"data_status": "degraded", "pnl_pct": None,
+                       "cost": h.get("cost"), "price": None, "layer": None},
+            ))
+            continue
         pnl_pct = h.get("pnl_pct") or 0.0
         cost = h.get("cost") or 0.0
         price = h.get("price") or 0.0
-        name = h.get("name") or code
 
         sc, sn, wr, ss, src, layer = strat_map.get(code, (None, "", None, 0, "none", 3))
         params = _strat_params(sc)

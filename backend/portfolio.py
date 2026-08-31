@@ -132,19 +132,40 @@ async def remove_closed(index: int) -> dict:
 
 
 async def get_portfolio() -> dict:
-    """读持仓 + 实时行情，算每笔与汇总的市值/浮动盈亏。"""
+    """读持仓 + 实时行情，算每笔与汇总的市值/浮动盈亏。
+
+    行情取数失败（price=None，S121 已在 mappers.py:69 把 tencent 0/缺 归一 None）
+    → row 标 data_status="degraded"，price/market_value/pnl/pnl_pct=None（不
+    `or 0.0` 造伪 mv=0/pnl=-100% 喂 position_advisor 触发 false close + 前端伪全亏）。
+    totals 任一 holding degraded 即标 degraded，market_value 仅聚合非 degraded（不把
+    缺失股的 0 加进总额造伪缩水）。对齐 S111 R4 _empty_capital_flow 范式（缺失不编值）。
+    """
     async with _LOCK:
         d = await asyncio.to_thread(_load)
     hs = d.get("holdings", [])
-    rows, tmv, tcost = [], 0.0, 0.0
+    rows: list[dict] = []
+    tmv, tcost = 0.0, 0.0
+    any_degraded = False
     if hs:
         try:
             raw = astock.tencent_quote([h["code"] for h in hs]) or {}
-        except Exception:
+        except Exception:  # noqa: BLE001 — tencent 整批断：各 row 落 degraded（不崩）
             raw = {}
+            logger.warning("[portfolio] tencent_quote 整批取数失败，holdings 标 degraded")
         for h in hs:
             model = quote_from_tencent(h["code"], raw.get(h["code"], {}))
-            price = model.price or 0.0
+            if model.price is None:
+                # 行情取数失败（tencent 断/停牌 price=0 被 S121 归一 None）→ 诚实化：
+                # 不 or 0.0 造伪 mv=0/pnl=-cv/pnl_pct=-100%，标 degraded + 字段 None
+                any_degraded = True
+                rows.append({
+                    "code": h["code"], "name": model.name or h["code"],
+                    "price": None, "shares": h["shares"], "cost": h["cost"],
+                    "market_value": None, "pnl": None, "pnl_pct": None,
+                    "data_status": "degraded",
+                })
+                continue
+            price = model.price
             mv = price * h["shares"]
             cv = h["cost"] * h["shares"]
             pnl = mv - cv
@@ -153,6 +174,7 @@ async def get_portfolio() -> dict:
                 "price": price, "shares": h["shares"], "cost": h["cost"],
                 "market_value": round(mv, 2), "pnl": round(pnl, 2),
                 "pnl_pct": round(pnl / cv * 100, 2) if cv else 0.0,
+                "data_status": "ok",
             })
             tmv += mv
             tcost += cv
@@ -164,6 +186,7 @@ async def get_portfolio() -> dict:
             "market_value": round(tmv, 2), "cost": round(tcost, 2),
             "pnl": round(total_pnl, 2),
             "pnl_pct": round(total_pnl / tcost * 100, 2) if tcost else 0.0,
+            "data_status": "degraded" if any_degraded else "ok",
         },
         "closed": closed,
         "realized_pnl": round(sum(c.get("pnl", 0) for c in closed), 2),

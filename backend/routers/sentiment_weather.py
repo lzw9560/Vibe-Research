@@ -1252,6 +1252,7 @@ async def get_storm_predict(date: Optional[str] = Query(None, description="T 日
             "risk_level": r.risk_level,
             "suggested_position": r.suggested_position,
             "factors": [{"name": f.name, "score": f.score, "detail": f.detail, "data_status": f.data_status} for f in r.factors],
+            "data_status": r.data_status,  # S125 R3：顶层 provenance（最差因子 status），前端据此标 degraded
             "disclaimer": r.disclaimer,
         }
     except Exception as e:  # noqa: BLE001

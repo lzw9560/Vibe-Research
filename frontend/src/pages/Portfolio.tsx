@@ -14,10 +14,12 @@ import { usePortfolio } from "@/lib/query";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 30 * 60 * 1000; // 每半小时自动刷新
-const pnlColor = (v: number) => (v > 0 ? "text-danger" : v < 0 ? "text-success" : "text-muted-foreground");
-const fmt = (v: number) => v.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+const pnlColor = (v: number | null | undefined) => (v == null ? "text-muted-foreground" : v > 0 ? "text-danger" : v < 0 ? "text-success" : "text-muted-foreground");
+const fmt = (v: number | null | undefined) => (v == null ? "数据缺失" : v.toLocaleString("zh-CN", { maximumFractionDigits: 2 }));
 // 单价类（现价/成本/清仓价）最多 4 位小数：ETF/基金常见 3-4 位，截断成 2 位会与市值/盈亏对不上账
-const fmtPx = (v: number) => v.toLocaleString("zh-CN", { maximumFractionDigits: 4 });
+const fmtPx = (v: number | null | undefined) => (v == null ? "数据缺失" : v.toLocaleString("zh-CN", { maximumFractionDigits: 4 }));
+// S125 R1：pnl_pct 显示——null（行情取数失败 degraded）→"数据缺失"，否则带 +/-
+const fmtPnlPct = (v: number | null | undefined) => (v == null ? "数据缺失" : (v > 0 ? "+" : "") + v + "%");
 
 export function Portfolio() {
   // T9：原 useState/useEffect + setInterval(30min) 轮询 → usePortfolio + refetchInterval。
@@ -105,8 +107,8 @@ export function Portfolio() {
   const closed = data?.closed || [];
 
   const aiContext = totals
-    ? `我的持仓（本地数据）：\n` + holdings.map((h) => `${h.name}(${h.code}) ${h.shares}股 成本${h.cost} 现价${h.price} 浮盈${h.pnl}(${h.pnl_pct}%)`).join("\n") +
-      `\n汇总：市值${totals.market_value} 总浮盈${totals.pnl}(${totals.pnl_pct}%)`
+    ? `我的持仓（本地数据）：\n` + holdings.map((h) => `${h.name}(${h.code}) ${h.shares}股 成本${h.cost} 现价${h.price ?? "数据缺失"} 浮盈${h.pnl ?? "数据缺失"}(${h.pnl_pct ?? "数据缺失"}%)`).join("\n") +
+      `\n汇总：市值${totals.market_value} 总浮盈${totals.pnl}(${totals.pnl_pct}%)${totals.data_status === "degraded" ? "（部分行情取数失败，总额仅含可用持仓）" : ""}`
     : "我的持仓：暂无记录。";
 
   return (
@@ -145,6 +147,12 @@ export function Portfolio() {
           ].map((m) => (
             <MetricCard key={m.k} label={m.k} value={m.v} valueClassName={cn("font-mono text-lg font-bold", m.c)} />
           ))}
+        </div>
+      )}
+      {totals?.data_status === "degraded" && holdings.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-muted-foreground">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <span>部分持仓行情取数失败，总额仅含可用持仓（degraded 行已标"数据缺失"）。</span>
         </div>
       )}
 
@@ -203,8 +211,8 @@ export function Portfolio() {
                     <td className="px-2 py-2.5 font-mono text-muted-foreground">{fmt(h.shares)}</td>
                     <td className="px-2 py-2.5 font-mono text-muted-foreground">{fmtPx(h.cost)}</td>
                     <td className="px-2 py-2.5 font-mono">{fmt(h.market_value)}</td>
-                    <td className={cn("px-2 py-2.5 font-mono", pnlColor(h.pnl))}>{h.pnl > 0 ? "+" : ""}{fmt(h.pnl)}</td>
-                    <td className={cn("px-2 py-2.5 font-mono", pnlColor(h.pnl))}>{h.pnl_pct > 0 ? "+" : ""}{h.pnl_pct}%</td>
+                    <td className={cn("px-2 py-2.5 font-mono", pnlColor(h.pnl))}>{h.pnl == null ? "数据缺失" : (h.pnl > 0 ? "+" : "") + fmt(h.pnl)}</td>
+                    <td className={cn("px-2 py-2.5 font-mono", pnlColor(h.pnl))}>{fmtPnlPct(h.pnl_pct)}</td>
                     <td className="px-2 py-2.5">
                       <button onClick={() => remove(h.code)} className="text-muted-foreground/50 hover:text-destructive" title="删除">
                         <Trash2 className="h-3.5 w-3.5" />

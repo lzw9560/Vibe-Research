@@ -6,6 +6,7 @@ from models import Market
 from models.fund_flow import FundFlow
 from models.market_snapshot import Emotion, MarketSnapshot, Sector
 from models.quote import Quote
+from models.valuation import Valuation
 
 from data import mappers
 
@@ -121,6 +122,76 @@ def test_quote_from_tencent_real_values_unchanged():
     assert q.market_cap == 18800.0 * 1e8
     assert q.limit_up_price == 1870.0
     assert q.high == 1710.0
+
+
+# ── valuation_from_full_valuation ────────────────────────────────────────
+
+def test_valuation_from_full_valuation_zero_coerced_fields_become_none():
+    """S125 R2：PE/PB/PS/PCF/price/market_cap/forward_pe=0 永不合法（S121 契约补全），
+    0→None 防 LLM 见 PE=0/price=0/市值=0 当真低估。对齐 quote_from_tencent:62-87。"""
+    # Arrange — input 用 mapper 读取的键名（pe_26e/eps_26e，非 output 字段名 forward_pe/consensus_eps）
+    raw = {
+        "name": "亏损股",
+        "price": 0.0,       # 0 永不合法 → None（S125 契约补全）
+        "mcap_yi": 0.0,     # 0 永不合法 → None（市值=0 喂 LLM 当真低估）
+        "pe_ttm": 0.0,      # 亏损 PE 未定义 → None
+        "pb": 0.0,          # → None
+        "ps_ttm": 0.0,      # → None
+        "pcf_ttm": 0.0,     # → None
+        "pe_26e": 0.0,      # forward PE 0 永不合法 → None（S125 契约补全）
+        # 0 合法字段保留 0.0（EPS=0 真平仓/无分红/无增长/PEG 无 E 非真 0）
+        "eps_26e": 0.0,     # consensus_eps：EPS=0 合法（盈亏平衡），不 coerce
+        "dividend_yield": 0.0,
+        "cagr_pct": 0.0,
+        "peg": 0.0,
+    }
+    # Act
+    v = mappers.valuation_from_full_valuation("600519", raw)
+    # Assert — 0 永不合法字段 → None（非 0.0 喂 LLM）
+    assert isinstance(v, Valuation)
+    assert v.price is None
+    assert v.market_cap is None
+    assert v.pe_ttm is None
+    assert v.pb is None
+    assert v.ps_ttm is None
+    assert v.pcf_ttm is None
+    assert v.forward_pe is None
+    # Assert — 0 合法字段保留 0.0（EPS/分红/增长/PEG）
+    assert v.dividend_yield == 0.0
+    assert v.consensus_eps == 0.0
+    assert v.cagr_pct == 0.0
+    assert v.peg == 0.0
+
+
+def test_valuation_from_full_valuation_real_values_unchanged():
+    """S125 R2：真正值不受 `or None` 影响（19.92 or None == 19.92）。"""
+    # Arrange
+    raw = {
+        "name": "茅台", "price": 1700.0, "mcap_yi": 18800.0,
+        "pe_ttm": 19.92, "pb": 6.46, "ps_ttm": 12.5, "pcf_ttm": 8.3,
+    }
+    # Act
+    v = mappers.valuation_from_full_valuation("600519", raw)
+    # Assert — 真值原样透传
+    assert v.pe_ttm == 19.92
+    assert v.pb == 6.46
+    assert v.ps_ttm == 12.5
+    assert v.pcf_ttm == 8.3
+    assert v.price == 1700.0
+    assert v.market_cap == 18800.0 * 1e8
+
+
+def test_valuation_from_full_valuation_missing_fields_become_none():
+    """S125 R2：缺失字段（key 不在 raw）→ _numf(None) → None。"""
+    # Act
+    v = mappers.valuation_from_full_valuation("600519", {"name": "新股"})
+    # Assert — 缺失归 None（非 0）
+    assert v.pe_ttm is None
+    assert v.pb is None
+    assert v.ps_ttm is None
+    assert v.pcf_ttm is None
+    assert v.price is None
+    assert v.market_cap is None
 
 
 def test_quote_from_turnover_rank():

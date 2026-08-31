@@ -55,8 +55,11 @@ function AdvisoryCard({ item }: { item: AdvisoryItem }) {
         {item.scene === "recommendation" && item.suggested_pct !== undefined && (
           <span>研究仓位：<span className="font-medium text-foreground">{(item.suggested_pct * 100).toFixed(0)}%</span></span>
         )}
-        {item.scene === "holding" && item.pnl_pct !== undefined && (
+        {item.scene === "holding" && item.pnl_pct != null && (
           <span>浮动盈亏：<span className="font-medium text-foreground">{item.pnl_pct >= 0 ? "+" : ""}{item.pnl_pct.toFixed(2)}%</span></span>
+        )}
+        {item.scene === "holding" && item.pnl_pct == null && (
+          <span>浮动盈亏：<span className="font-medium text-muted-foreground">数据缺失</span></span>
         )}
         {item.scene === "recommendation" && item.gene_score !== undefined && (
           <span>基因：<span className="font-medium text-foreground">{item.gene_score.toFixed(0)}</span></span>
