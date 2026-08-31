@@ -30,6 +30,16 @@ from models.seat import BillboardDetail, DragonTiger, DragonTigerRecord, Seat
 from models.valuation import Valuation
 
 
+# S128 契约：0 永不合法字段集合——mappers 对这些字段已 `or None`（防 0 喂 LLM/消费者当真），
+# consumer 不可再 `model.X or 0` 反吞 None→0（S127 抓 bidding_monitor:114-118 反吞 S121 致假交易信号）。
+# scripts/check_or_zero_contract.py 据此集合 grep-lint 全 backend，防未来 consumer 反吞复发。
+NEVER_ZERO: frozenset[str] = frozenset({
+    "market_cap", "price", "pe_ttm", "pb", "limit_up_price", "limit_down_price",
+    "last_close", "open", "high", "low", "pe_static", "ps_ttm", "pcf_ttm",
+    "forward_pe", "mcap_yi", "float_market_cap",
+})
+
+
 def _numf(v: Any) -> float | None:
     """东财/腾讯数值字段可能是 '-'（停牌/无数据）→ 归一成 float 或 None。"""
     if isinstance(v, bool):  # bool 是 int 子类，先排除

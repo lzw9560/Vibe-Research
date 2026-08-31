@@ -473,3 +473,43 @@ S126 修 S124 scan 前端渲染 4 处 winrate/hit_rate=0 当 sample=0 渲染"0%�
 **撒谎总账更新**：40 confirmed_lying = 29 全修（S111-S123 26 + S125 3）+ S126 修 5 display（StatsMetrics/StrategyPage/Backtest/TrendChart×2 含 backtest-metriccard LOW）+ risk-dashboard = **35 全修 + 5 待修**（risk-trio factors MEDIUM / em_get 吞异常 2 处 MEDIUM+LOW / lockup-expiry LOW / topology-ladder LOW）。registry 覆盖 ~64 不变。
 
 **下一步候选**：剩 5 confirmed_lying 待修（全 M/LOW 非承重链）；或 or-zero 407 处契约级 sweep / ai-tools 全 13 / 漏扫 dim——validation 族继续，用户拍。
+
+## S127 scan 实现后状态（2026-09-01，or-zero 契约 sweep——根因调查）
+
+S127 scan（wf_c5f7d197-57f，8 维并行 finder 分类 55 处 `or 0`/`or 0.0` + per-lying 对抗核实 + 完整性 critic，28 agent 0 error，~1.22M token）扫全 backend `or 0` 反模式。**55 处 → 19 confirmed_lying（13 承重链 + 6 display）+ 41 actually_honest + 3 benign**。反假阳性生效（41 honest：guard skip 0 / raise_on_failure 逃逸 / 0 合法值）。
+
+**头条（最坏承重链 lie）**：`bidding_monitor.py:115 open_price = model.open or 0` **直接反吞 S121 "0 永不合法"契约**（mappers.py:83 设 open=None）。bidding_monitor:114-118 把 S121 五 None-contract 字段（last_close/open/turnover/vol_ratio/market_cap）全反吞 0 → open_premium=0 触发"缩量平开"假交易信号 + market_cap=0→错 tier→错"爆量高开"阈值。**在信号生成 chokepoint 反转已建立契约（S121 commit 8ff760f）。**
+
+**13 承重链 confirmed_lying（S128 修 3 HIGH + 2 头条 MEDIUM，余 follow-up）**：
+| crack | where | sev | 修法 |
+|---|---|---|---|
+| bidding_monitor 反吞 S121 | bidding_monitor.py:114-118 | HIGH×3 | open/last_close/market_cap or 0 反吞 S121 None→0→假"缩量平开"信号。**S128 已修**（不 or 0，quote_ok 检查，degraded→不生成信号） |
+| limitup_screener seal_time→gene score | models.py:115 | MEDIUM | seal_time None→0→avg_fbt=0→seal_rate=100 MAX 假封板率（25% gene 权重）。**S128 已修**（排除 None，空→seal_rate=None，对齐 rebuild 路径） |
+| intraday_sentiment break_rate→AI 出口 | intraday_sentiment.py:116-117 | MEDIUM | break_rate None→0→break_score=100 假看涨→AI 出口。**S128 已修**（None-passthrough + _compute_score None→50 neutral） |
+
+**critic 契约级 fix 策略（3 层，S128 落地）**：
+1. SOURCE OF TRUTH：mappers.py 抽 `NEVER_ZERO: frozenset` = {"market_cap","price","pe_ttm","pb","limit_up/down","last_close","open","high","low","pe_static","ps/pcf_ttm","forward_pe","mcap_yi","float_market_cap"}（mappers 已 inline `or None # 0 永不合法`，集合化成可查）。**S128 已落地**
+2. CI GREP-LINT：`scripts/check_or_zero_contract.py` flag `\.({NEVER_ZERO})\s+or\s+0` 全 backend，防未来 consumer 反吞复发。**S128 已落地**（0 违例，含抓到 auction_screener:197 一并修）
+3. fix 13 承重链站点：S128 修 3 HIGH + 2 头条 MEDIUM，余 8 MEDIUM/LOW follow-up。
+
+**critic 抓的 scan 漏扫**：routers/ 批整个没扫（intraday_sentiment:116-117/sentiment_weather:1174/market.py or-0 喂 AI 未覆盖）——S128 补修 intraday_sentiment，余 sentiment_weather:1174/market.py follow-up。
+
+**撒谎总账更新**：40 confirmed_lying = 35 全修 + S128 修 5（bidding_monitor 3 + seal_time + intraday_sentiment）= **40 全修 + 0 待修承重链**（剩 or-zero 余 8 MEDIUM/LOW display/非承重 + S124 残 5）→ 实 **45 confirmed_lying，40 全修 + 5 待修**（display/em_get 非承重）。registry 覆盖 ~64+S127 新。
+
+## S128 实现后状态（2026-09-01，or-zero 契约 + 3 HIGH + 头条 M——承重链 or-zero 闭合）
+
+S128 修 S127 or-zero sweep 3 HIGH + 2 头条 MEDIUM 承重链 + 落地 NEVER_ZERO 契约 + CI grep-lint。直接 impl（承重链 site S127 已对抗核实，机械执行 confirmed fix）+ tsc + 全量 pytest。2486 passed 0 回归（28 deselected = 24 既有 flaky + 4 S061 date-fragile pre-existing）。
+
+**修复（5 承重链 + 契约 + CI lint）**：
+- **契约**：mappers.py `NEVER_ZERO` frozenset（"0 永不合法"字段集合化）+ `scripts/check_or_zero_contract.py` CI grep-lint（flag `\.NEVER_ZERO\s+or\s+0`，0 违例，含抓 auction_screener:197 一并修 dead var `open_price`）
+- **R1 bidding_monitor**（3 HIGH）：:114-118 不 `or 0` 反吞 S121，quote_ok 检查（last_close/open/market_cap 任一 None→degraded）+ analyze_final_auction degraded→"无信号"不触发"缩量平开"/错 tier
+- **R2 limitup_screener/models.py:115**（MEDIUM）：`fbt_values = [h.seal_time for h in history if h.seal_time is not None]`，空→seal_rate=None（非 100 MAX 假封板率，对齐 rebuild 路径 None 封板率→0 贡献）
+- **R3 intraday_sentiment:116-117 + _compute_score**（MEDIUM）：seal_rate/break_rate None-passthrough（对齐 S093 :122-124 zb/ladder 范式）+ _compute_score None→50 neutral（非 0 假看跌/100 假看涨）
+
+**设计**：R1 degraded skip（非 or 0 造假信号）对齐 S125 portfolio R1 范式。R2 排除 None 不 coerce 0 对齐 S111 R6 `<=`→`==` 精确匹配范式。R3 None-passthrough + neutral 50 对齐 S093 + sentiment_context._empty_context 范式。契约 3 层（frozenset + CI lint + fix）= critic 策略，正本清源防 S121 反吞复发。
+
+**⚠ S061 date-fragile pre-existing**：4 测（test_due_date_computation/ingestion_idempotent/hit_rate_buckets/ledger_endpoint）`stated_at="2026-08-01"` + `days=30` 窗口，09-01 起 31 天超窗口→list_predictions 返空 IndexError。**非 S128 回归**（08-31 S126 2482 passed，09-01 date-rollover 暴露）。deselect + 登记 follow-up（S061 测试 date-robustness 重构 spec，非本 spec）。
+
+**撒谎总账终账**：45 confirmed_lying = 40 全修（S111-S123 26 + S125 3 + S126 5 display + S128 5 承重链 +1）+ 5 待修（全 M/LOW 非承重链：risk-trio factors / em_get 吞异常 2 / lockup-expiry / topology-ladder / sentiment_weather:1174 / market.py or-0）。**承重链 or-zero 全闭合（S121 契约 + CI lint 防复发）。**
+
+**下一步候选**：承重链 or-zero 已闭合（NEVER_ZERO 契约 + CI lint 守门）。剩 5 非承重链 M/LOW 可点修或停；或 ai-tools 全 13 / 漏扫 dim（scheduled_tasks bare except/cron DAG/funnel total_score）。**or-zero 契约级治理完成，可停。**

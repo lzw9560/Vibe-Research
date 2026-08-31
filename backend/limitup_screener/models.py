@@ -112,9 +112,15 @@ def compute_factors(history: list[ZTPoolItem], yzt: list[ZTPoolItem], zb: list[Z
     red_rate = round(wilson_lower_bound(red_count, n) * 100, 2)
 
     # 封板率 (25%)：封板强度
-    fbt_values = [h.seal_time or 0 for h in history]
-    avg_fbt = sum(fbt_values) / len(fbt_values) if fbt_values else 0
-    seal_rate = round(max(0.0, min(100.0, (1 - (avg_fbt - 92500) / (145000 - 92500)) * 100)), 2)
+    # S128 R2：seal_time (fbt) fetched，_numf '-'→None。排除 None 不 coerce 0（原 or 0
+    # 致 avg_fbt=0→seal_rate=100 MAX 假封板率→gene score 25% 权重虚高）。空→seal_rate=None
+    # → calc_total_score `or 0.0`→0 贡献（对齐 rebuild 路径 None 封板率约定，非 100 通胀）。
+    fbt_values = [h.seal_time for h in history if h.seal_time is not None]
+    if fbt_values:
+        avg_fbt = sum(fbt_values) / len(fbt_values)
+        seal_rate = round(max(0.0, min(100.0, (1 - (avg_fbt - 92500) / (145000 - 92500)) * 100)), 2)
+    else:
+        seal_rate = None  # 全 None→封板率未取得（非 100 假封板率）
 
     # 炸板后溢价：昨涨停池中有连板记录的占比
     zb_total = len(zb)

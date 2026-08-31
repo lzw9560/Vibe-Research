@@ -113,8 +113,11 @@ class _IntradaySampler:
         # 4 维度（spec §2.4）
         zt_count = float(emo.get("zt_count") or 0)
         dt_count = float(emo.get("dt_count") or 0)
-        seal_rate = float(emo.get("seal_rate") or 0)  # 0-1
-        break_rate = float(emo.get("break_rate") or 0)  # 0-1
+        # S128 R3：seal_rate/break_rate None-passthrough（market.py:324-325 源断时 None），
+        # 不 `or 0`（原致 break_rate=0<0.15→break_score=100 假看涨→AI 出口）。
+        # 对齐 S093 R11 zb_count/ladder/dt_count None 保范式；_compute_score None→50 neutral。
+        seal_rate = emo.get("seal_rate")  # 0-1 or None
+        break_rate = emo.get("break_rate")  # 0-1 or None
         # 涨跌比：用 lianban_count / max(dt_count,1) 作近似（ad 无直接字段）
         lianban = float(emo.get("lianban_count") or 0)
         ad_ratio = lianban / max(dt_count, 1) if dt_count > 0 else lianban
@@ -266,18 +269,21 @@ def _score_dimension(value: float, thresholds: tuple[float, float, float]) -> fl
 
 
 def _compute_score(
-    zt_count: float, seal_rate: float, break_rate: float, ad_ratio: float
+    zt_count: float, seal_rate: float | None, break_rate: float | None, ad_ratio: float
 ) -> float:
     """4 维度固定阈值加权平均（spec §2.4）。
 
     权重：涨停家数 0.4 / 封板率 0.2 / 炸板率 0.2 / 涨跌比 0.1。
     注：spec 权重和 0.4+0.2+0.2+0.1=0.9（原 spec 未归一），这里按原口径算
     加权平均后除以权重和 0.9 归一（等比缩放不影响相对排序）。
+
+    S128 R3：seal_rate/break_rate None（源断）→ 该维度 neutral 50.0（非 0 假看跌/非 100
+    假看涨），对齐 sentiment_context._empty_context + storm 50.0 中性基线范式。
     """
     zt_score = _score_dimension(zt_count, (80, 50, 30))
-    seal_score = _score_dimension(seal_rate * 100, (70, 50, 0))  # 0-1→0-100
-    # 炸板率反向：<15%=100，15-30%=60，>30%=20
-    break_score = 100.0 if break_rate < 0.15 else (60.0 if break_rate < 0.30 else 20.0)
+    seal_score = _score_dimension(seal_rate * 100, (70, 50, 0)) if seal_rate is not None else 50.0  # 0-1→0-100
+    # 炸板率反向：<15%=100，15-30%=60，>30%=20；None→neutral 50（非 100 假看涨）
+    break_score = 100.0 if break_rate is not None and break_rate < 0.15 else (60.0 if break_rate is not None and break_rate < 0.30 else (20.0 if break_rate is not None else 50.0))
     ad_score = _score_dimension(ad_ratio, (2, 0.7, 0))
 
     weights = {"zt": 0.4, "seal": 0.2, "break": 0.2, "ad": 0.1}

@@ -111,24 +111,28 @@ async def fetch_auction_snapshot_batch(codes: list[str]) -> list[dict]:
         # 经 mapper 拿 Quote 模型：单位已统一（turnover/market_cap 均为元），
         # 消除写死 amount_wan*1e4 / mcap_yi*1e8 换算与字段丢失风险（plan-stage1 警告项）。
         model = quote_from_tencent(code, quotes.get(code, {}))
-        last_close = model.last_close or 0
-        open_price = model.open or 0
-        auction_amount = model.turnover or 0  # 元
-        vol_ratio = model.vol_ratio or 0
-        market_cap = model.market_cap or 0  # 元
+        # S128 R1：不 or 0 反吞 S121 None-contract（mappers:82-85 last_close/open/market_cap
+        # "0 永不合法"→None）。critical 字段 None=quote 失败→标 degraded，analyze 不生成信号。
+        last_close = model.last_close
+        open_price = model.open
+        market_cap = model.market_cap
+        quote_ok = last_close is not None and open_price is not None and market_cap is not None
+        if quote_ok:
+            open_premium = ((open_price - last_close) / last_close) if last_close else 0.0
+        else:
+            open_premium = None
         stock_name = model.name or code
-
-        open_premium = ((open_price - last_close) / last_close) if last_close else 0.0
 
         snapshots.append(
             {
                 "code": code,
                 "name": stock_name,
                 "open_premium": open_premium,
-                "auction_amount": auction_amount,
-                "volume_ratio": vol_ratio,
-                "cancel_rate": 0.0,  # 腾讯行情不含撤单率，暂置 0
+                "auction_amount": model.turnover,  # None per S121 mappers:73（degraded 路径不用）
+                "volume_ratio": model.vol_ratio,  # 0 合法但 None on missing
+                "cancel_rate": 0.0,  # 腾讯行情不含撤单率
                 "market_cap": market_cap,
+                "data_status": "ok" if quote_ok else "degraded",
             }
         )
     return snapshots
@@ -140,11 +144,21 @@ def analyze_final_auction(snapshots: list[dict]) -> list[AuctionSignal]:
     for snap in snapshots:
         code = snap.get("code", "")
         name = snap.get("name", code)
-        open_premium = snap.get("open_premium", 0)
-        amount = snap.get("auction_amount", 0)
-        volume_ratio = snap.get("volume_ratio", 0)
-        cancel_rate = snap.get("cancel_rate", 0)
-        market_cap = snap.get("market_cap", 0)
+        # S128 R1：degraded（quote 失败，critical 字段 None）→ 不生成信号（不喂 0 触发
+        # "缩量平开"/错 tier "爆量高开"），返 "无信号" + reason。
+        if snap.get("data_status") == "degraded":
+            signals.append(AuctionSignal(
+                code=code, name=name, open_premium=0.0, auction_amount=0.0,
+                volume_ratio=0.0, cancel_rate=0.0, market_cap_tier="unknown",
+                signal_type="无信号", confidence=0.0,
+                reasoning=["行情取数失败（degraded），不生成竞价信号"],
+            ))
+            continue
+        open_premium = snap.get("open_premium") or 0
+        amount = snap.get("auction_amount") or 0
+        volume_ratio = snap.get("volume_ratio") or 0
+        cancel_rate = snap.get("cancel_rate") or 0
+        market_cap = snap.get("market_cap") or 0
 
         tier = _market_cap_tier(market_cap)
         threshold = _AUCTION_THRESHOLDS.get(tier, _AUCTION_THRESHOLDS["mid"])

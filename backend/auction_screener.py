@@ -194,7 +194,7 @@ class AuctionScreener:
             fbt = item.seal_time or 0         # 封板时间
             zbc = item.broken_count or 0      # 炸板次数
             zje = item.limit_price or 0       # 涨停价
-            open_price = item.open or 0       # 开盘价
+            open_price = item.open           # 开盘价（0 永不合法 per S121，None=未取得，不 or 0 反吞）
             seal_amount = item.seal_amount or 0.0  # 封单额（元）
             float_shares = item.float_shares or 0.0  # 流通盘（股）
             prev_close = item.prev_close or 0.0     # 昨收价
