@@ -184,7 +184,7 @@ def _shadow_comparison_impl(window_days: int, tracker: WinRateTracker) -> Dict[s
     missed_returns: list[float] = []
     no_suggestion_days = 0
     missing_kline = 0
-    from backtest_lite import _calc_next_day_return
+    from backtest_lite import _calc_next_day_return_meta
 
     kline_cache: dict = {}
     for d in snap_dates:
@@ -202,9 +202,9 @@ def _shadow_comparison_impl(window_days: int, tracker: WinRateTracker) -> Dict[s
         held = {s["code"] for s in states if s.get("status") in ("holding", "settled", "monitoring")}
         missed_codes = [c for c in candidate_codes if c not in held]
         for code in missed_codes:
-            ret = _calc_next_day_return(code, d, kline_cache)
-            if ret == 0.0:
-                # 0.0 可能是真 0 或 K 线缺返兜底——近似口径下保守计入 missing
+            ret, fetch_ok = _calc_next_day_return_meta(code, d, kline_cache)
+            if not fetch_ok:
+                # K 线取数失败——排除出 hit/miss 分母，计 missing_kline（S123 R4）
                 missing_kline += 1
                 continue
             missed_returns.append(ret)
@@ -267,7 +267,7 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
     from snapshot_store import load_snapshot
     from vr_paths import last_trading_date_str
     import workflow_state_repo as wsr
-    from backtest_lite import _calc_next_day_return
+    from backtest_lite import _calc_next_day_return_meta
     from limitup_screener.data import load_gene_scores
 
     today = date
@@ -338,8 +338,8 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
             prev_missed = [c for c in prev_pushed if c not in prev_bought]
             kline_cache: dict = {}
             for code in prev_missed:
-                ret = _calc_next_day_return(code, prev_str, kline_cache)
-                if ret == 0.0:
+                ret, fetch_ok = _calc_next_day_return_meta(code, prev_str, kline_cache)
+                if not fetch_ok:
                     missing_kline += 1
                     continue
                 prev_items.append({"code": code, "next_day_return": round(ret, 4)})

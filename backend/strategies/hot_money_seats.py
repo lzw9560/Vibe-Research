@@ -23,6 +23,7 @@ spec §9 设计：
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import urllib.request
@@ -34,6 +35,8 @@ from typing import Any
 import astock
 from config import SEAT_PROFILES_DB_PATH
 from vr_paths import resolve_data_dir
+
+logger = logging.getLogger(__name__)
 
 _DATA_DIR = resolve_data_dir()
 _PRESET_PATH = Path(__file__).resolve().parent.parent / "data" / "hot_money_seats_preset.json"
@@ -92,20 +95,24 @@ def fetch_billboard_dates(days: int = 60) -> list[str]:
     try:
         resp = astock.em_get(url, headers=_UA, timeout=15)
         data = resp.json() if hasattr(resp, "json") else json.loads(resp.read())
-        rows = data.get("result", {}).get("data", []) or []
+        rows = (data.get("result") or {}).get("data", []) or []
         dates = sorted(set(str(r.get("TRADE_DATE", ""))[:10] for r in rows if r.get("TRADE_DATE")))
         return dates[-days:] if len(dates) > days else dates
     except Exception:
         return []
 
 
-def fetch_billboard_for_date(trade_date: str) -> list[dict]:
-    """取指定日期所有龙虎榜买卖明细（buy + sell 合并）。
+def fetch_billboard_for_date_meta(trade_date: str) -> dict:
+    """取指定日期所有龙虎榜买卖明细 + 逐侧成功标记（S123 R2.1）。
 
-    S079 AC6：走 astock.em_get 限流 + 熔断（原 urllib 直调已废弃，见模块 docstring）。
-    返回 [{SECURITY_CODE, OPERATEDEPT_NAME, BUY, SELL, NET, TRADE_DATE, side}]。
+    返 ``{"rows": list[dict], "buy_ok": bool, "sell_ok": bool}``。
+    单侧断流不抛异常，标记 buy_ok/sell_ok=False，下游据此跳过/降级
+    （对齐 risk_models._calculate_concentration_risk_meta 范式）。
+    rows 含已成功侧的明细（残缺日用可用 rows best-effort，见 compute_seat_risk_factor）。
     """
-    results: list[dict] = []
+    rows: list[dict] = []
+    buy_ok = False
+    sell_ok = False
     for side, report in (("buy", "RPT_BILLBOARD_DAILYDETAILSBUY"),
                          ("sell", "RPT_BILLBOARD_DAILYDETAILSSELL")):
         url = (
@@ -116,13 +123,31 @@ def fetch_billboard_for_date(trade_date: str) -> list[dict]:
         try:
             resp = astock.em_get(url, headers=_UA, timeout=15)
             data = resp.json() if hasattr(resp, "json") else json.loads(resp.read())
-            rows = data.get("result", {}).get("data", []) or []
-            for r in rows:
+            side_rows = (data.get("result") or {}).get("data", []) or []
+            for r in side_rows:
                 r["side"] = side
-                results.append(r)
-        except Exception:
-            continue
-    return results
+                rows.append(r)
+            if side == "buy":
+                buy_ok = True
+            else:
+                sell_ok = True
+        except Exception as e:
+            logger.warning(
+                "fetch_billboard %s 榜 %s 取数失败: %s", side, trade_date, e
+            )
+    return {"rows": rows, "buy_ok": buy_ok, "sell_ok": sell_ok}
+
+
+def fetch_billboard_for_date(trade_date: str) -> list[dict]:
+    """取指定日期所有龙虎榜买卖明细（buy + sell 合并）。
+
+    S123 R2.1：改调 _meta 返 rows only（签名不变，向后兼容）。
+    底层走 astock.em_get 限流 + 熔断（见 fetch_billboard_for_date_meta）。
+    逐侧成功标记见 fetch_billboard_for_date_meta；既有调用方（batch 脚本、
+    既有测试 mock）继续用 list 版。
+    返回 [{SECURITY_CODE, OPERATEDEPT_NAME, BUY, SELL, NET, TRADE_DATE, side}]。
+    """
+    return fetch_billboard_for_date_meta(trade_date)["rows"]
 
 
 def _classify_seat(next_day_sell_rate: float, appearance_count: int) -> tuple[str, str]:
@@ -376,9 +401,17 @@ def compute_seat_risk_factor(
     profile_map = {p.seat_name: p for p in profiles}
     mutations = mutations or {}
 
-    # 当日龙虎榜明细（batch：外部传入；否则内部 fetch）
+    # 当日龙虎榜明细（batch：外部传入；否则内部 fetch _meta）
+    # S123 R2.3：internal fetch 切 _meta，partial→warning+用可用 rows best-effort
+    # （单 code 单日残缺属降级非聚合场景，不整日跳过）
     if billboard is None:
-        billboard = fetch_billboard_for_date(trade_date)
+        meta = fetch_billboard_for_date_meta(trade_date)
+        if not (meta["buy_ok"] and meta["sell_ok"]):
+            logger.warning(
+                "compute_seat_risk_factor %s %s 残缺（buy_ok=%s, sell_ok=%s），用可用 rows best-effort",
+                code, trade_date, meta["buy_ok"], meta["sell_ok"],
+            )
+        billboard = meta["rows"]
     code_billboard = [r for r in billboard if r.get("SECURITY_CODE") == code]
 
     if not code_billboard:
@@ -455,6 +488,8 @@ def update_hot_money_seats(days: int = 60) -> int:
 
     约 18 次 API 调用（60 日 / 3.5 日均一次，每页 500 条）。
     返回画像席位数。
+    S123 R2.2：切 _meta，残缺日（buy_ok≠sell_ok）跳过聚合（不喂 build_seat_profiles
+    算 next_day_sell_rate，避免在残缺数据上算席位分类）。
     """
     dates = fetch_billboard_dates(days)
     if not dates:
@@ -462,8 +497,14 @@ def update_hot_money_seats(days: int = 60) -> int:
 
     all_data: list[dict] = []
     for d in dates:
-        rows = fetch_billboard_for_date(d)
-        all_data.extend(rows)
+        meta = fetch_billboard_for_date_meta(d)
+        if not (meta["buy_ok"] and meta["sell_ok"]):
+            logger.warning(
+                "update_hot_money_seats 跳过残缺日 %s（buy_ok=%s, sell_ok=%s）",
+                d, meta["buy_ok"], meta["sell_ok"],
+            )
+            continue  # 残缺日不纳入聚合（不喂 build_seat_profiles 算 next_day_sell_rate）
+        all_data.extend(meta["rows"])
 
     profiles = build_seat_profiles(all_data)
     merged = merge_with_presets(profiles)

@@ -2,7 +2,7 @@
 """S050 W0：影子对照端点算账测试。
 
 fixture 造三桶数据 → 验证 follow/feeling/missed 算账 + 独立性指标 +
-样本不足标记 + 无快照日排除 + K 线缺失排除。零外呼（mock _calc_next_day_return）。
+样本不足标记 + 无快照日排除 + K 线缺失排除。零外呼（mock _calc_next_day_return_meta）。
 """
 from __future__ import annotations
 
@@ -51,8 +51,8 @@ def test_three_buckets_aggregation(tmp_tracker, monkeypatch):
     monkeypatch.setattr("snapshot_store.load_snapshot", lambda d: snap)
     # mock workflow_state_repo.list_states：600519 holding（已买入），300750 未买
     monkeypatch.setattr("workflow_state_repo.list_states", lambda d: [{"code": "600519", "status": "holding"}])
-    # mock _calc_next_day_return：300750 次日 +5%（missed 影子收益）
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda code, d, cache=None: 0.05 if code == "300750" else 0.0)
+    # mock _calc_next_day_return_meta：300750 次日 +5%（missed 影子收益）
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda code, d, cache=None: (0.05, True) if code == "300750" else (0.0, False))
 
     result = _shadow_comparison_impl(28, tmp_tracker)
     assert result["follow"]["n"] == 2
@@ -73,7 +73,7 @@ def test_no_snapshot_days_excluded(tmp_tracker, monkeypatch):
     monkeypatch.setattr("snapshot_store.list_snapshot_dates", lambda: [_D1])
     monkeypatch.setattr("snapshot_store.load_snapshot", lambda d: None)  # 快照损坏返 None
     monkeypatch.setattr("workflow_state_repo.list_states", lambda d: [])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
 
     result = _shadow_comparison_impl(28, tmp_tracker)
     assert result["no_suggestion_days"] == 1
@@ -81,14 +81,14 @@ def test_no_snapshot_days_excluded(tmp_tracker, monkeypatch):
 
 
 def test_kline_missing_excluded(tmp_tracker, monkeypatch):
-    """K 线缺失（_calc_next_day_return 返 0.0）→ missing_kline 计数，missed 桶排除。"""
+    """K 线缺失（_calc_next_day_return_meta 返 (0.0, False)）→ missing_kline 计数，missed 桶排除。"""
     _add(tmp_tracker, "600519", _D1, "funnel_candidate", True, 10.0)
     snap = {"final_candidates": [{"code": "300750"}]}
     monkeypatch.setattr("snapshot_store.list_snapshot_dates", lambda: [_D1])
     monkeypatch.setattr("snapshot_store.load_snapshot", lambda d: snap)
     monkeypatch.setattr("workflow_state_repo.list_states", lambda d: [])  # 无 holding
     # K 线缺返 0.0
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
 
     result = _shadow_comparison_impl(28, tmp_tracker)
     assert result["missed"]["n"] == 0
@@ -101,7 +101,7 @@ def test_sufficient_true_when_n_ge_5(tmp_tracker, monkeypatch):
         _add(tmp_tracker, f"60000{i}", _D1, "funnel_candidate", True, 10.0)
         _add(tmp_tracker, f"00000{i}", _D1, "feeling", False, -3.0)
     monkeypatch.setattr("snapshot_store.list_snapshot_dates", lambda: [])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
 
     result = _shadow_comparison_impl(28, tmp_tracker)
     # missed n=0 <5 → sufficient 仍 false（三桶都需 ≥5）
@@ -111,7 +111,7 @@ def test_sufficient_true_when_n_ge_5(tmp_tracker, monkeypatch):
     snap = {"final_candidates": [{"code": "300750"}]}
     monkeypatch.setattr("snapshot_store.load_snapshot", lambda d: snap)
     monkeypatch.setattr("workflow_state_repo.list_states", lambda d: [])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.05)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.05, True))
     result2 = _shadow_comparison_impl(28, tmp_tracker)
     assert result2["missed"]["n"] >= 5 or result2["missed"]["n"] == 1  # 1 快照日只 1 missed code
 
@@ -130,7 +130,7 @@ def test_legacy_null_not_in_buckets(tmp_tracker, monkeypatch):
     conn.commit()
     conn.close()
     monkeypatch.setattr("snapshot_store.list_snapshot_dates", lambda: [])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
 
     result = _shadow_comparison_impl(28, tmp_tracker)
     assert result["follow"]["n"] == 0
@@ -140,7 +140,7 @@ def test_legacy_null_not_in_buckets(tmp_tracker, monkeypatch):
 def test_disclaimer_present(tmp_tracker, monkeypatch):
     """合规：返回体挂 disclaimer。"""
     monkeypatch.setattr("snapshot_store.list_snapshot_dates", lambda: [])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
     result = _shadow_comparison_impl(28, tmp_tracker)
     assert "历史统计特征" in result["disclaimer"]
     assert "市场有风险" in result["disclaimer"]

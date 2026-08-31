@@ -56,6 +56,9 @@ def fetch_snapshot() -> dict:
     snap["is_degraded"] = not global_fetch_ok
 
     # 新闻（fetch_radar 同步阻塞 10-30s，但在 daemon 线程不阻塞主流程）
+    # S123：mirror global_indices provenance——news_fetch_ok 据此落盘，供 _collect_news_factor
+    # 区分"T-1 快照 news 采集失败"与"无 T-1 快照"（原 news 无 provenance 致两者不可区分）
+    news_fetch_ok = False
     try:
         import newsradar  # noqa: PLC0415
 
@@ -66,9 +69,18 @@ def fetch_snapshot() -> dict:
              for it in (ind.get("items", []) or [])]
             if isinstance(radar, dict) else []
         )
+        news_fetch_ok = bool(snap["news_items"])
+        if not news_fetch_ok:
+            _logger.debug("[storm-daemon] 新闻快照空")
     except Exception as exc:  # noqa: BLE001
         snap["news_items"] = []
-        _logger.debug("[storm-daemon] 新闻快照失败: %s", exc)
+        # S123：mirror global_indices(53)——真 exception 升 warning（运维可见，
+        # provenance 落盘已是数据管道诚实信号，此为运维可见性补，非 debug 静默吞）
+        _logger.warning("[storm-daemon] 新闻快照失败: %s", exc)
+    # S123 provenance 落盘（mirror global_indices:55-56；成功→news_fetch_ok=True/
+    # news_is_degraded=False；空/失败→False/True）
+    snap["news_fetch_ok"] = news_fetch_ok
+    snap["news_is_degraded"] = not news_fetch_ok
 
     # 存（每日一文件，追加快照，保留最近 _KEEP 个）
     _SNAP_DIR.mkdir(parents=True, exist_ok=True)

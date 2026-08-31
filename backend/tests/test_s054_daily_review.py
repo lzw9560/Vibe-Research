@@ -2,7 +2,7 @@
 """S054 W0：盘后三问 daily-review 端点测试。
 
 fixture 造快照 + workflow_state → 验证三问三分支 + 无快照日 + 上一交易日回溯 +
-K 线缺失排除 + bought 占位「待判定」。零外呼（mock _calc_next_day_return / snapshot_store / wsr）。
+K 线缺失排除 + bought 占位「待判定」。零外呼（mock _calc_next_day_return_meta / snapshot_store / wsr）。
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def test_no_snapshot_returns_honest(tmp_tracker, monkeypatch):
     """无快照日 → no_snapshot=true，pushed/bought/missed 全空。"""
     monkeypatch.setattr("snapshot_store.load_snapshot", lambda d: None)
     monkeypatch.setattr("workflow_state_repo.list_states", lambda d: [])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
 
     result = _daily_review_impl("2026-08-11", tmp_tracker)
     assert result["no_snapshot"] is True
@@ -42,7 +42,7 @@ def test_three_buckets_with_snapshot(tmp_tracker, monkeypatch):
     monkeypatch.setattr("snapshot_store.load_snapshot", lambda d: snap if d == "2026-08-11" else None)
     monkeypatch.setattr("workflow_state_repo.list_states",
                         lambda d: [{"code": "600519", "status": "holding", "name": "贵州茅台", "entry_price": 1800.0}])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
     monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-08")
 
     result = _daily_review_impl("2026-08-11", tmp_tracker)
@@ -71,8 +71,8 @@ def test_prev_day_missed_next_day_return(tmp_tracker, monkeypatch):
     monkeypatch.setattr("workflow_state_repo.list_states", lambda d: [])
     # 000001 +5% / 300750 -3% / 002594 0.0（K 线缺）
     def fake_ret(code, d, cache=None):
-        return {"000001": 0.05, "300750": -0.03, "002594": 0.0}.get(code, 0.0)
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", fake_ret)
+        return {"000001": (0.05, True), "300750": (-0.03, True), "002594": (0.0, False)}.get(code, (0.0, False))
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", fake_ret)
     monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-08")
 
     result = _daily_review_impl("2026-08-11", tmp_tracker)
@@ -90,7 +90,7 @@ def test_prev_day_missed_empty_when_no_prev_snapshot(tmp_tracker, monkeypatch):
     monkeypatch.setattr("snapshot_store.load_snapshot",
                         lambda d: snap if d == "2026-08-11" else None)
     monkeypatch.setattr("workflow_state_repo.list_states", lambda d: [])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
     monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-08")
 
     result = _daily_review_impl("2026-08-11", tmp_tracker)
@@ -104,7 +104,7 @@ def test_bought_placeholder_label(tmp_tracker, monkeypatch):
     monkeypatch.setattr("snapshot_store.load_snapshot", lambda d: snap)
     monkeypatch.setattr("workflow_state_repo.list_states",
                         lambda d: [{"code": "600519", "status": "holding", "name": "贵州茅台", "entry_price": 1800.0, "strategy": "first_plate"}])
-    monkeypatch.setattr("backtest_lite._calc_next_day_return", lambda *a, **k: 0.0)
+    monkeypatch.setattr("backtest_lite._calc_next_day_return_meta", lambda *a, **k: (0.0, False))
     monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-08")
 
     result = _daily_review_impl("2026-08-11", tmp_tracker)

@@ -20,6 +20,9 @@ from strategies.hot_money_seats import (
     merge_with_presets,
     detect_behavior_mutation,
     compute_seat_risk_factor,
+    fetch_billboard_for_date,
+    fetch_billboard_for_date_meta,
+    update_hot_money_seats,
     DAY_TRIP_SELL_RATE_MIN,
     RELAY_SELL_RATE_MAX,
     APPEARANCE_MIN,
@@ -178,7 +181,7 @@ class TestComputeSeatRiskFactor:
 
     def test_no_billboard_data_returns_no_data(self, monkeypatch):
         """无龙虎榜数据 → 无数据标签，modifier=1.0。"""
-        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date", lambda d: [])
+        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date_meta", lambda d: {"rows": [], "buy_ok": True, "sell_ok": True})
         monkeypatch.setattr("strategies.hot_money_seats.load_aggregate_profiles", lambda: [])
         result = compute_seat_risk_factor("000001", "2026-08-14")
         assert result.risk_label == "无数据"
@@ -191,7 +194,7 @@ class TestComputeSeatRiskFactor:
             {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "拉萨席位", "NET": 1000000, "side": "buy"},
             {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "拉萨席位", "NET": 500000, "side": "buy"},
         ]
-        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date", lambda d: billboard)
+        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date_meta", lambda d: {"rows": billboard, "buy_ok": True, "sell_ok": True})
         profiles = [SeatProfile("拉萨席位", "一日游", 0.8, 10, "medium", "data")]
         monkeypatch.setattr("strategies.hot_money_seats.load_aggregate_profiles", lambda: profiles)
         result = compute_seat_risk_factor("000001", "2026-08-14")
@@ -206,7 +209,7 @@ class TestComputeSeatRiskFactor:
             {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "一日游席位", "NET": 300, "side": "buy"},
             {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "接力席位", "NET": 700, "side": "buy"},
         ]
-        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date", lambda d: billboard)
+        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date_meta", lambda d: {"rows": billboard, "buy_ok": True, "sell_ok": True})
         profiles = [
             SeatProfile("一日游席位", "一日游", 0.8, 10, "medium", "data"),
             SeatProfile("接力席位", "接力型", 0.2, 10, "medium", "data"),
@@ -225,7 +228,7 @@ class TestComputeSeatRiskFactor:
             {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "接力席位", "NET": 800, "side": "buy"},
             {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "一日游席位", "NET": 200, "side": "buy"},
         ]
-        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date", lambda d: billboard)
+        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date_meta", lambda d: {"rows": billboard, "buy_ok": True, "sell_ok": True})
         profiles = [
             SeatProfile("接力席位", "接力型", 0.2, 10, "medium", "data"),
             SeatProfile("一日游席位", "一日游", 0.8, 10, "medium", "data"),
@@ -240,10 +243,98 @@ class TestComputeSeatRiskFactor:
         billboard = [
             {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "突变席位", "NET": 1000, "side": "buy"},
         ]
-        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date", lambda d: billboard)
+        monkeypatch.setattr("strategies.hot_money_seats.fetch_billboard_for_date_meta", lambda d: {"rows": billboard, "buy_ok": True, "sell_ok": True})
         profiles = [SeatProfile("突变席位", "一日游", 0.8, 10, "medium", "data")]
         monkeypatch.setattr("strategies.hot_money_seats.load_aggregate_profiles", lambda: profiles)
         mutations = {"突变席位": {"note": "行为变化：60日 rate=0.80 → 5日=0.20", "alert": True}}
         result = compute_seat_risk_factor("000001", "2026-08-14", profiles, mutations)
         assert result.mutation_alert is True
         assert "行为变化" in result.mutation_note
+
+
+# S123 R2.5：_meta partial-fetch 诚实化钉死
+class _FakeResp:
+    """模拟 astock.em_get 返回的 HTTP 响应（有 .json() 方法）。"""
+
+    def __init__(self, data: dict) -> None:
+        self._data = data
+
+    def json(self) -> dict:
+        return self._data
+
+
+class TestFetchBillboardMeta:
+    """S123 R2.5 partial-fetch 诚实化测试。"""
+
+    def test_meta_partial_returns_rows_and_side_flags(self, monkeypatch):
+        """R2.5①buy 成功 sell 抛异常 → {rows:[...buy...], buy_ok:True, sell_ok:False}。"""
+        def fake_em_get(url, headers=None, timeout=15):
+            if "RPT_BILLBOARD_DAILYDETAILSBUY" in url:
+                return _FakeResp({"result": {"data": [
+                    {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "席位A", "NET": 100},
+                ]}})
+            # sell 榜断流
+            raise RuntimeError("sell 榜断流")
+
+        monkeypatch.setattr("astock.em_get", fake_em_get)
+        meta = fetch_billboard_for_date_meta("2026-08-14")
+        assert meta["buy_ok"] is True
+        assert meta["sell_ok"] is False
+        assert len(meta["rows"]) == 1
+        assert meta["rows"][0]["side"] == "buy"
+
+    def test_update_skips_partial_day_from_aggregation(self, monkeypatch):
+        """R2.5②update_hot_money_seats 残缺日跳过聚合（all_data 不含该日）。"""
+        captured: list[list[dict]] = []
+        monkeypatch.setattr(
+            "strategies.hot_money_seats.fetch_billboard_dates",
+            lambda d: ["2026-08-13", "2026-08-14"],
+        )
+
+        def fake_meta(d: str) -> dict:
+            if d == "2026-08-13":
+                # 残缺日：sell 断流
+                return {"rows": [
+                    {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "席位A", "NET": 100,
+                     "TRADE_DATE": "2026-08-13", "side": "buy"},
+                ], "buy_ok": True, "sell_ok": False}
+            # 完整日
+            return {"rows": [
+                {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "席位B", "NET": 200,
+                 "TRADE_DATE": "2026-08-14", "side": "buy"},
+                {"SECURITY_CODE": "000001", "OPERATEDEPT_NAME": "席位B", "NET": -100,
+                 "TRADE_DATE": "2026-08-14", "side": "sell"},
+            ], "buy_ok": True, "sell_ok": True}
+
+        monkeypatch.setattr(
+            "strategies.hot_money_seats.fetch_billboard_for_date_meta", fake_meta
+        )
+        monkeypatch.setattr(
+            "strategies.hot_money_seats.build_seat_profiles",
+            lambda data: (captured.append(data) or []),
+        )
+        monkeypatch.setattr("strategies.hot_money_seats.merge_with_presets", lambda p: p)
+        monkeypatch.setattr("strategies.hot_money_seats.save_aggregate_profiles", lambda p: None)
+
+        update_hot_money_seats(60)
+
+        # 残缺日 08-13 被跳过，all_data 只含 08-14
+        assert len(captured) == 1
+        all_data = captured[0]
+        assert all(r["TRADE_DATE"] == "2026-08-14" for r in all_data)
+        assert not any(r["TRADE_DATE"] == "2026-08-13" for r in all_data)
+
+    def test_fetch_billboard_still_returns_list(self, monkeypatch):
+        """R2.5③fetch_billboard_for_date 仍返 list（向后兼容，_meta wrapper）。"""
+        monkeypatch.setattr(
+            "astock.em_get",
+            lambda url, headers=None, timeout=15: _FakeResp(
+                {"result": {"data": [{"SECURITY_CODE": "000001", "NET": 100}]}}
+            ),
+        )
+        result = fetch_billboard_for_date("2026-08-14")
+        assert isinstance(result, list)
+        # buy + sell 各 1 行
+        assert len(result) == 2
+        sides = {r["side"] for r in result}
+        assert sides == {"buy", "sell"}

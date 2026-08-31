@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from strategies.hot_money_seats import (
     fetch_billboard_dates,
-    fetch_billboard_for_date,
+    fetch_billboard_for_date_meta,
     build_seat_profiles,
     merge_with_presets,
     save_aggregate_profiles,
@@ -28,12 +28,22 @@ def main() -> None:
 
     print(f"获取 {len(dates)} 个龙虎榜交易日（{dates[0]} ~ {dates[-1]}）")
     all_data: list[dict] = []
+    skipped_partial = 0
     for i, d in enumerate(dates):
-        rows = fetch_billboard_for_date(d)
+        # S123 R2：残缺日（单侧断流）不纳入聚合——半截 rows 算 next_day_sell_rate
+        # 致 seat_profiles 画像失真，落盘后 live 承重链读（compute_seat_risk_factor）。
+        meta = fetch_billboard_for_date_meta(d)
+        if not (meta["buy_ok"] and meta["sell_ok"]):
+            skipped_partial += 1
+            print(f"  [{i + 1}/{len(dates)}] {d}: 残缺 buy_ok={meta['buy_ok']} sell_ok={meta['sell_ok']}，跳过聚合")
+            continue
+        rows = meta["rows"]
         all_data.extend(rows)
         print(f"  [{i + 1}/{len(dates)}] {d}: {len(rows)} 明细")
         if (i + 1) % 10 == 0:
             print(f"  累计 {len(all_data)} 条")
+    if skipped_partial:
+        print(f"⚠ {skipped_partial} 个交易日残缺（单侧断流）已跳过聚合")
 
     print(f"合并 {len(all_data)} 条买卖明细")
     if not all_data:

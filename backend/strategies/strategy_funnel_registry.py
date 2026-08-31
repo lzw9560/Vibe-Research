@@ -18,6 +18,7 @@ S086 重构：合并旧 STRATEGY_REGISTRY（dict，11 项）+ STRATEGY_FUNNEL_RE
 from __future__ import annotations
 
 import json
+import logging
 import os
 import dataclasses
 from dataclasses import field
@@ -596,13 +597,25 @@ def score_candidates(
     recommendation = get_weather_recommendation(weather_state)
 
     # S073 §9.4 游资席位画像接线（batch billboard + profiles；画像未建→load_aggregate_profiles 返空→modifier 1.0 降级）
+    # S123 R2.4：切 _meta，partial fetch 标 degraded（live 承重链，不喂残缺数据当完整用）
     seat_profiles = None
     billboard = None
     if trade_date:
         try:
-            from strategies.hot_money_seats import compute_seat_risk_factor, load_aggregate_profiles, fetch_billboard_for_date
+            from strategies.hot_money_seats import (
+                compute_seat_risk_factor,
+                load_aggregate_profiles,
+                fetch_billboard_for_date_meta,
+            )
             seat_profiles = load_aggregate_profiles()
-            billboard = fetch_billboard_for_date(trade_date)
+            _bb_meta = fetch_billboard_for_date_meta(trade_date)
+            if not (_bb_meta["buy_ok"] and _bb_meta["sell_ok"]):
+                logging.getLogger(__name__).warning(
+                    "score_candidates billboard %s 残缺（buy_ok=%s, sell_ok=%s）"
+                    "→ seat risk 用可用 rows 降级",
+                    trade_date, _bb_meta["buy_ok"], _bb_meta["sell_ok"],
+                )
+            billboard = _bb_meta["rows"]
         except Exception:
             seat_profiles = None
             billboard = None

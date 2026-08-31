@@ -368,3 +368,36 @@ S122 修 S118 scan #5 `market-emotion-realttime-weekend-silent-fallback-no-calen
 **撒谎总账更新**：26 confirmed_lying = 21 全修（S111/S112/S115 17 + S119 1 + S120 1 + S121 1 + S122 1）+ 5 待修。registry 覆盖 53 不变。
 
 **下一步候选**：剩 5 confirmed_lying 待修（全 M/LOW，非承重链：realtime-capital-flow-carryforward / hot-money-seats-partial-fetch / seal-intraday-cron-misses-1500 / backtest-daily-snapshot-degraded / storm-daemon-news-items-no-provenance）；或跑 S123 scan round 2 扫 critic 6 漏扫（risk 三子维度承重链头条，最 material）。
+
+## S123 实现后状态（2026-08-31，S118 撒谎账本收尾——剩 5 条全清，账本 26/26）
+
+S123 一次清掉 S118 scan 残留 5 条 M/LOW confirmed_lying，账本 **26/26 全修**（§44 承重链闭合）。workflow（wf_b49b82ae-92b，5 并行 impl + 12 对抗 verify + 1 completeness critic，18 agent 0 error）+ Round 2 手修 critic 抓出的承重链误指。全量 2470 passed 0 回归（24 deselected 既有 flaky：newsradar/s032/spec_consistency/test_s040/test_market_degrades_without_akshare）。
+
+**5 confirmed_lying（全 confirmed_honest，已修）**：
+
+| # | crack | where | 修法 |
+|---|---|---|---|
+| 1 | realtime-capital-flow-no-date-provenance-carryforward-as-fresh | risk_models.py:676-730 | _get_realtime_capital_flow live 路径加 carry-forward 日期校验：末条 date≠last_trading_date_str → degraded + data_time=bar date（不戳 now）。**Round 2 补周末残存闭合**：非交易日（is_trading_day(today)=False）→ 同 degraded+bar date（对齐 S122 lie family，原 spec 漏）|
+| 2 | hot-money-seats-partial-fetch-silent | hot_money_seats.py:105-150 + tools/build_hot_money_seats.py:32-47 | 加 fetch_billboard_for_date_meta（buy_ok/sell_ok 逐侧标记）；**真承重链 build_hot_money_seats.py 切 _meta 残缺日跳过聚合**（critic 抓出：spec 原误指 update_hot_money_seats 是死代码）。`{"result": None}` 合法空 parse bug 修 `(data.get("result") or {})`（对齐 eastmoney.py:379 范式 + test_data_honesty 契约）|
+| 3 | seal-intraday-cron-misses-1500-close-auction-final | scheduled_tasks.py:2207-2218+迁移 | seed cron `* 9-14`→`* 9-15`（覆盖 15:00 收盘集合竞价终态）+ 注释诚实 + 既有 DB 幂等迁移（旧 cron 才改，新不重复）|
+| 4 | backtest-daily-snapshot-degraded-hit-rate-no-provenance | backtest_lite.py:66-107+205-296 + routers/win_rate.py + prediction_verify.py + backfill_winrate_samples.py | 加 _calc_next_day_return_meta（fetch_ok bool）；**真承重链 run_backtest_async 切 _meta**（critic 抓出：spec 原误指 win_rate.py HTTP 端点，真落盘路径是 run_backtest_async→backtest_daily_snapshots）。!fetch_ok 排除出 hit_rate/returns/sharpe 分母（§44 胜率数字为真）。backfill_winrate_samples 切 _meta（原 R4.5 豁免错误，真 0% vs 取数失败混淆已修）|
+| 5 | storm-daemon-news-items-no-provenance | storm_daemon.py:61-83 + storm_predictor.py:250-279 | fetch_snapshot 加 news_fetch_ok/news_is_degraded（mirror global_indices）；_collect_news_factor 据 news_fetch_ok=False 标 degraded（区分"T-1 快照 news 失败"vs"无快照→fallback_current"）|
+
+**completeness critic 抓出的关键问题（Round 2 手修，非靠绿测试自欺）**：
+- ⭐ **R2/R4 承重链误指**（cross-cutting #1/#2）：spec §2 把 R2 跳过聚合落在死代码 `update_hot_money_seats`、R4 落盘路径误指 `win_rate.py` HTTP 端点（不 persist）。impl agent 按 spec 字面实现，critic 抓出真承重链：R2 真落盘路径是 `tools/build_hot_money_seats.py`（output seat_profiles.db 被 live 承重链 compute_seat_risk_factor 读）、R4 真落盘路径是 `run_backtest_async`→`backtest_daily_snapshots`。两处 Round 2 手修切 _meta，闭合真承重链（非死代码/HTTP 端点）。
+- **R2 parse bug**：`fetch_billboard_for_date_meta` 用 `data.get("result", {}).get("data", [])` 对 `{"result": None}` 合法空抛 AttributeError→误标 fetch failure。修 `(data.get("result") or {})`（对齐 eastmoney.py:379 + test_data_honesty 契约）。同款 fetch_billboard_dates:98 一并修。
+- **R1 周末残存**：原 spec 只校验 carry-forward（末条 date≠今日交易日），周末 last_trading_date_str 回退周五→末条=周五→match→ok+now 伪装今日实时（S122 同型 lie）。Round 2 加 `is_nontrading` 守卫闭合。
+- **R4 backfill 豁免错误**：原 spec R4.5 称 backfill_winrate_samples 已诚实不动，critic 抓出其 `ret if ret != 0.0 else None` 把真 0% 与取数失败混淆（与 R4 修法相悖）。Round 2 切 _meta 修。
+- **R4 win_rate.py 测试只钉 HTTP 路径**：原 test_s123_backtest_hitrate 只测 _shadow_comparison_impl，未测 run_backtest_async 落盘诚实。critic 称"绿测试给假信心"。Round 2 真承重链已修，但 run_backtest_async 的 degraded 排除测试待补（run_backtest_async 跑 ls.get_screener_result 较重，留 follow-up）。
+
+**设计**：统一 _meta sibling 范式（_calculate_concentration_risk_meta risk_models.py:487）——加 `*_meta` 返 tuple/dict+fetch_ok，原函数包一层返原签名（向后兼容 5+ 直调方 + test mock）。R3 cron 选 `* 9-15` 而非专项 15:00 task（collect_once 门在 em_get 前，15:06-15:59 no-op 廉价不触 em_get 防封安全）。R4 hit_rate 用排除分母而非加 schema 字段（避免迁移，对齐 test_s050 既有"K 线缺失排除 missed 桶"范式）。
+
+**⚠ 已知限制（未修，登记）**：
+- **R4 run_backtest_async degraded 排除测试未补**：真承重链已切 _meta（!fetch_ok 排除出分母），但 run_backtest_async 跑 ls.get_screener_result + mootdx kline 较重，test_s123_backtest_hitrate 只钉 _shadow_comparison_impl（HTTP 路径）。落盘诚实靠代码审查 + critic 确认，留 follow-up 加重测钉死。
+- **R1 调休补班日 over-conservative**：vr_paths.is_trading_day 暂不纳入补班日（vr_paths.py:86 docstring 自承），真实补班交易日的最新 bar 会被误标 degraded+bar date（保守误差非 lie，~few days/yr，留 vr_paths 补班日支持后修）。
+- **R5 news_fetch_ok=bool(items)**：fetch exception 与 fetch 成功但空 items 不可区分（均 False），quiet-news T-1（节假日合法空）被标 degraded。mirror global_indices 范式，YAGNI 不加 per-source provenance。
+- **R5 news_is_degraded 字段 dead persisted**：写落盘但无消费者（_collect_news_factor 读 news_fetch_ok 正形式）。mirror global_indices is_degraded 设计，当前 dead data 在 all-bad-global spread 正确存活，留后续若需再消费。
+
+**撒谎总账终账**：26 confirmed_lying = 26 全修（S111/S112/S115 17 + S119 1 + S120 1 + S121 1 + S122 1 + S123 5）。registry 覆盖 53 不变（S123 修不新增裂缝，仅闭合 5 条待修）。**S118 scan 9 confirmed_lying 全清，账本闭合。**
+
+**下一步候选**：账本已闭合（26/26）。可跑 S124 scan round 2 扫 critic 6 漏扫维度（头条 risk_models 三子维度 provenance 缺口——_calculate_volatility/_max_drawdown/_liquidity_risk 失败返 0.0 + _merge_data_status 不含三者，composite risk 可在 3/8 维度静默归零时仍标 ok+LOW，在 factors/recommendation 层非仓位承重链但 material；或-0 归零反模式 ~30 处 / 聚合层顶层 provenance / 前端渲染层 / 3 AI 工具源不可达 / em_get 吞异常→返空结构全量 / scheduled_tasks 56 bare except:pass）。

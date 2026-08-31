@@ -52,11 +52,17 @@ def _load_gene_scores_for_date(date: str) -> List[dict]:
 
 
 def _calc_next_day_return(code: str, date_str: str) -> float | None:
-    """次日收益率（复用 backtest_lite 逻辑，K 线缓存）。"""
+    """次日收益率（复用 backtest_lite _meta，区分真 0% 与取数失败）。
+
+    S123 R4：原用 float wrapper 把 fetch-failure 0.0 当 None 跳过→真 0% 收益
+    被误排除→合成 winrate 样本失真（与 R4 win_rate.py 修法同原理，原 R4.5
+    豁免错误）。改用 _meta：fetch_ok=False→None（取数失败跳过）；fetch_ok=True
+    →真值（含 0.0=真 0%，纳入样本）。
+    """
     try:
-        from backtest_lite import _calc_next_day_return as _calc
-        ret = _calc(code, date_str, {})
-        return ret if ret != 0.0 else None
+        from backtest_lite import _calc_next_day_return_meta as _calc_meta
+        ret, fetch_ok = _calc_meta(code, date_str, {})
+        return ret if fetch_ok else None
     except Exception:
         return None
 

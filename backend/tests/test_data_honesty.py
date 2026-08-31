@@ -23,6 +23,7 @@ from types import SimpleNamespace
 import fallback
 import pytest
 import risk_models
+import vr_paths
 from data.sources import eastmoney
 from strategies import first_board_filter as fbf
 
@@ -861,3 +862,101 @@ def test_storm_internal_factor_null_sti_marks_missing_not_calm(
     # （旧 bug：max_boards=6/break_rate=0(NULL)→score=(90+0+49)/3≈46.3+ok）
     assert factor.data_status == "missing"
     assert factor.score == 50.0
+
+
+# ===========================================================================
+# S123 R1：realtime-capital-flow-no-date-provenance-carryforward-as-fresh
+# _get_realtime_capital_flow 取 history[-1] 当今日资金流戳 ok+now，盘前 carry-forward
+# （末条 date≠今日交易日）被标今日实时。修复：比对 vr_paths.last_trading_date_str()，
+# 末条 date≠最近交易日 → degraded+data_time=bar date（不戳 now）。
+# 裂缝映射（registry.md S123 节 #1，承重链 capital_flow→flow_adjustment→
+# dynamic_score→risk_score）。
+# ===========================================================================
+
+
+def test_realtime_capital_flow_carryforward_marks_degraded_bar_date(isolated_cache, monkeypatch):
+    """裂缝#1（S123 R1）：末条 date=T-1（盘前 carry-forward）→ degraded+data_time=bar date（非 now）。
+
+    旧逻辑取 history[-1] 当今日资金流戳 data_status='ok'+data_time=now，盘前/盘中
+    当日 bar 未出时 history[-1] 实为 T-1 carry-forward，被标成今日实时。修复：比对
+    vr_paths.last_trading_date_str()，末条 date≠最近交易日 → degraded+data_time=bar date。
+    """
+    import astock
+
+    code = "600519"
+    # 末条 date=T-1（carry-forward：盘前/盘中当日 bar 未出，history[-1] 实为 T-1）
+    rows = [
+        {"date": "2026-08-{0:02d}".format(d), "main_net": float(d) * 10,
+         "super_net": 1.0, "large_net": 1.0, "source": "eastmoney"}
+        for d in (9, 10, 11, 12, 13)  # 升序，末条=08-13=T-1
+    ]
+    monkeypatch.setattr(astock, "stock_fund_flow_120d", lambda _code: rows)
+    # 最近交易日=今日 08-14，末条=08-13 → mismatch → carry-forward
+    monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda d=None: "2026-08-14")
+
+    # Act
+    cf = risk_models._get_realtime_capital_flow(code)
+
+    # Assert：标 degraded，data_time=bar date（08-13，非 now）——不戳 now 伪装刚算完
+    assert cf["data_status"] == "degraded"
+    assert cf["data_time"] == "2026-08-13"
+    # now 是含 T 的 full ISO datetime，bar date 是纯 YYYY-MM-DD——carry-forward 用 bar date
+    assert "T" not in cf["data_time"]
+
+
+def test_realtime_capital_flow_today_bar_marks_ok_now(isolated_cache, monkeypatch):
+    """裂缝#1 互补（S123 R1）：末条 date=今日交易日 → ok+data_time=now（当日 bar 已出）。
+
+    证明 carry-forward 校验真区分今日 vs T-1，不是恒标 degraded——当日 bar 已出
+    则维持 ok+now（诚实二值契约，不误伤正常盘中/盘后取数）。
+    """
+    import astock
+
+    code = "600519"
+    # 末条 date=今日交易日（当日 bar 已出）
+    rows = [
+        {"date": "2026-08-{0:02d}".format(d), "main_net": float(d) * 10,
+         "super_net": 1.0, "large_net": 1.0, "source": "eastmoney"}
+        for d in (9, 10, 11, 12, 14)  # 升序，末条=08-14=今日
+    ]
+    monkeypatch.setattr(astock, "stock_fund_flow_120d", lambda _code: rows)
+    monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda d=None: "2026-08-14")
+
+    # Act
+    cf = risk_models._get_realtime_capital_flow(code)
+
+    # Assert：末条=今日 → ok+now（非 bar date）——carry-forward 校验放行当日 bar
+    assert cf["data_status"] == "ok"
+    # now 是含 T 的 full ISO datetime（2026-08-14T12:34:56...），非纯 bar date
+    assert "T" in cf["data_time"]
+    assert cf["data_time"] != "2026-08-14"
+
+
+def test_realtime_capital_flow_cross_source_and_carryforward_both_degraded(isolated_cache, monkeypatch):
+    """裂缝#1+4 合取（S123 R1.2）：cross_source + carry-forward 同存 → degraded+data_time=bar date。
+
+    合取（任一为真→degraded）；data_time：carry-forward 用 bar date（不戳 now），
+    仅 cross_source 用 now。新浪降级行（source=sina_fallback）+ 末条 date=T-1 同存，
+    degraded 由两者任一触发，data_time 取 bar date（carry-forward 优先于跨源）。
+    """
+    import astock
+
+    code = "600519"
+    # 新浪降级行 + 末条 date=T-1（cross_source 与 carry-forward 同存）
+    sina_rows = [
+        {"date": "2026-08-{0:02d}".format(d), "main_net": float(d) * 10,
+         "super_net": 1.0, "large_net": 1.0, "source": "sina_fallback"}
+        for d in (9, 10, 11, 12, 13)  # 升序，末条=08-13=T-1
+    ]
+    monkeypatch.setattr(astock, "stock_fund_flow_120d", lambda _code: sina_rows)
+    monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda d=None: "2026-08-14")
+
+    # Act
+    cf = risk_models._get_realtime_capital_flow(code)
+
+    # Assert：cross_source（sina）+ carry-forward（末条≠今日）合取→degraded；
+    # data_time=bar date（carry-forward 优先，不戳 now）
+    assert cf["data_status"] == "degraded"
+    assert cf["data_time"] == "2026-08-13"
+    assert "T" not in cf["data_time"]
+

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -62,20 +63,30 @@ class BacktestResult:
     factor_ic_analysis: dict[str, Any] | None = None
 
 
-def _calc_next_day_return(code: str, date_str: str, kline_cache: dict[str, Any] | None = None) -> float:
-    """计算次日真实收益率（基于 K 线收盘价）。kline_cache 按 code 缓存 bars，跨日复用。"""
+def _calc_next_day_return_meta(
+    code: str, date_str: str, kline_cache: dict[str, Any] | None = None
+) -> tuple[float, bool]:
+    """计算次日真实收益率 + fetch_ok 标记（S123 R4）。
+
+    返回 (return_value, fetch_ok)：
+    - fetch_ok=True：取数成功，return_value 为真实收益率（可能为 0.0=真 0%）。
+    - fetch_ok=False：取数失败（无 bars / 日期未命中 / 异常），return_value=0.0。
+
+    _calc_next_day_return 包装本函数返 float（!fetch_ok→0.0，向后兼容 5+ 直调方）。
+    对齐仓内 _meta sibling 范式（_calculate_concentration_risk_meta risk_models.py:488）。
+    """
     try:
         if kline_cache is not None and code in kline_cache:
             bars = kline_cache[code]
         else:
-            _meta = kline_cache.get("_offset") if kline_cache is not None else None
-            offset = int(_meta) if isinstance(_meta, (int, float)) else 5
+            _offset_val = kline_cache.get("_offset") if kline_cache is not None else None
+            offset = int(_offset_val) if isinstance(_offset_val, (int, float)) else 5
             raw = astock.kline(code, category=4, offset=offset)
             bars = kline_from_mootdx(code, raw).bars
             if kline_cache is not None:
                 kline_cache[code] = bars
         if not bars:
-            return 0.0
+            return 0.0, False
         # 找到当前日期或之后第一个交易日
         target_close = None
         next_close = None
@@ -86,10 +97,24 @@ def _calc_next_day_return(code: str, date_str: str, kline_cache: dict[str, Any] 
                     next_close = bars[i + 1].close
                 break
         if target_close is None or next_close is None:
-            return 0.0
-        return (next_close - target_close) / target_close if target_close else 0.0
-    except Exception:
-        return 0.0
+            return 0.0, False
+        ret = (next_close - target_close) / target_close if target_close else 0.0
+        return ret, True
+    except Exception as exc:
+        logging.getLogger("backtest_lite").warning(
+            "_calc_next_day_return_meta(%s, %s) 取数失败: %s", code, date_str, exc
+        )
+        return 0.0, False
+
+
+def _calc_next_day_return(code: str, date_str: str, kline_cache: dict[str, Any] | None = None) -> float:
+    """计算次日真实收益率（基于 K 线收盘价）。kline_cache 按 code 缓存 bars，跨日复用。
+
+    向后兼容包装：调 _calc_next_day_return_meta，!fetch_ok 返 0.0（S123 R4）。
+    5+ 直调方（run_backtest_async / backfill_winrate_samples / test mock）不破。
+    """
+    ret, fetch_ok = _calc_next_day_return_meta(code, date_str, kline_cache)
+    return ret if fetch_ok else 0.0
 
 
 async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
@@ -108,7 +133,9 @@ async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
             result = await ls.get_screener_result(current)
             for g in result.gene_scores:
                 # 获取次日真实收益（基于 K 线收盘价）
-                next_day_return = _calc_next_day_return(g.code, current, kline_cache)
+                next_day_return, fetch_ok = _calc_next_day_return_meta(g.code, current, kline_cache)
+                if not fetch_ok:
+                    continue  # K 线取数失败，不喂散点/hit_rate（S123 R4）
                 points.append({
                     "gene_score": g.total_score,
                     "next_day_return": next_day_return,
@@ -170,6 +197,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
     total_signals = 0
     hit_count = 0
     returns: list[float] = []
+    degraded_kline = 0  # S123 R4：K 线取数失败样本（不进 hit_rate/returns 分母，§44 胜率数字为真）
 
     # K 线按 code 缓存（同股跨日复用），offset = 日历天数 + 15 余量
     from datetime import datetime as _dt
@@ -183,9 +211,15 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
             for g in result.gene_scores:
                 if g.total_score < 60:
                     continue
+                # S123 R4：_meta 区分真 0% 与取数失败——!fetch_ok 不进 total_signals/
+                # returns/scatter（hit_rate/avg_return/max_drawdown/sharpe 分母仅含成功
+                # 样本，§44 胜率数字为真）。原 float wrapper 把 fetch-failure 0.0 当真
+                # 0% 收益→hit_rate 落盘 backtest_daily_snapshots 失真（毒窗口已闭合）。
+                next_day_return, fetch_ok = _calc_next_day_return_meta(g.code, current, kline_cache)
+                if not fetch_ok:
+                    degraded_kline += 1
+                    continue
                 total_signals += 1
-                # 使用真实 K 线计算次日收益率
-                next_day_return = _calc_next_day_return(g.code, current, kline_cache)
                 returns.append(next_day_return)
                 if next_day_return > 0:
                     hit_count += 1
@@ -253,6 +287,12 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
 
     cache[cache_key] = asdict(backtest_result)
     _save_cache(cache)
+    if degraded_kline:
+        logging.getLogger("backtest_lite").warning(
+            "run_backtest_async %s~%s: %d 个信号 K 线取数失败（fetch_ok=False）"
+            "已排除出 hit_rate/returns 分母（§44 胜率数字为真）",
+            start_date, end_date, degraded_kline,
+        )
     return backtest_result
 
 

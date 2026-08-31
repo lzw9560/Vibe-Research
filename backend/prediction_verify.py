@@ -2,7 +2,7 @@
 """S061 R3：到期自动验证。
 
 对账函数：到期日取实际收益 → hit/miss/voided。
-- horizon=1 用 backtest_lite._calc_next_day_return（次日 close）
+- horizon=1 用 backtest_lite._calc_next_day_return_meta（次日 close，!fetch_ok→voided）
 - horizon>1 用持有期 close 收益
 - K 线缺失 → voided 诚实标注
 """
@@ -24,12 +24,14 @@ def _calc_actual_return(code: str, stated_at: str, horizon: int) -> float | None
     """取实际收益。horizon=1 用次日 close；horizon>1 用 horizon 日后 close。
 
     返回 None 表示 K 线缺失（不臆造）。
-    复用 backtest_lite._calc_next_day_return（mootdx K 线，不联网东财）。
+    horizon=1 复用 backtest_lite._calc_next_day_return_meta（mootdx K 线，不联网东财），
+    !fetch_ok→None（voided，不计 miss，S123 R4）。
     """
     try:
-        from backtest_lite import _calc_next_day_return
+        from backtest_lite import _calc_next_day_return_meta
         if horizon == 1:
-            return _calc_next_day_return(code, stated_at, kline_cache={})
+            ret, fetch_ok = _calc_next_day_return_meta(code, stated_at, kline_cache={})
+            return ret if fetch_ok else None  # K 线缺失→None（voided，不计 miss，S123 R4）
         # horizon > 1：取 stated_at + horizon 日的 close vs stated_at close
         import astock
         from data.mappers import kline_from_mootdx

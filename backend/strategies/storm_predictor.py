@@ -248,10 +248,13 @@ def _collect_news_factor(date: str) -> StormFactor:
     # 优先读前一交易日夜间快照的 news_items（daemon 已扁平化，对齐 global 口径）
     snap = get_t1_global_snapshot(date)
     items = (snap or {}).get("news_items") if snap else None
-    data_status = "ok"
-    src = "T-1 夜间快照"
+    # S123：读 news provenance——T-1 快照存在但 news_fetch_ok=False（fetch 失败/空）标 degraded，
+    # 区分"无快照→fallback_current"（对齐 global_indices is_degraded 范式：degraded 源 fallback
+    # 当前仍保留 degraded 标，不伪装 ok）。news_fetch_ok 缺省（旧快照）→ 非 degraded，走原 ok/missing 路径
+    data_status = "degraded" if (snap and snap.get("news_fetch_ok") is False) else "ok"
     if not items:
-        # fallback 当前 newsradar cache（无前日快照，标 fallback_current）
+        # fallback 当前 newsradar cache（无前日好快照/degraded，取当前 + 标；
+        # degraded 源保留 degraded 标——非 ok 假装好快照）
         try:
             import newsradar  # noqa: PLC0415
 
@@ -262,10 +265,18 @@ def _collect_news_factor(date: str) -> StormFactor:
                  for it in (ind.get("items", []) or [])]
                 if isinstance(radar, dict) else []
             )
-            data_status = "fallback_current"
-            src = "当前(fallback)"
+            if data_status == "ok":
+                data_status = "fallback_current"
         except Exception as exc:  # noqa: BLE001
             return StormFactor("新闻密度", 50.0, f"采集失败: {exc}", "missing")
+
+    # S123：src 据 data_status 分档（mirror global_indices:138-146）
+    if data_status == "ok":
+        src = "T-1 夜间快照"
+    elif data_status == "degraded":
+        src = "T-1 degraded(fallback当前)"
+    else:
+        src = "当前(fallback)"
 
     if not items:
         return StormFactor("新闻密度", 50.0, "新闻未取得", "missing")

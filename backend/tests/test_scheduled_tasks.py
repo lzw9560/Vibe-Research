@@ -163,3 +163,55 @@ class TestDerivedPrecomputeExecutor:
         assert r["status"] == "ok"
         assert r["written"] == 1  # 000001 写入
         assert r["skipped"] == 1  # 000002 异常跳过
+
+
+# ---------------------------------------------------------------------------
+# S123 R3：seal_intraday_collect cron 覆盖 15:00 收盘集合竞价终态 + 既有 DB 幂等迁移
+class TestSealIntradayCronR3:
+    def test_fresh_seed_creates_cron_9_to_15(self, isolated_market_db):
+        """R3.1：fresh DB seed → cron=`* 9-15 * * 0-4`（覆盖 15:00 收盘竞价终态）。"""
+        st._ensure_seed_tasks()
+        tasks = [t for t in st._manager.list_tasks() if t.name == "seal_intraday_collect"]
+        assert len(tasks) == 1
+        assert tasks[0].cron_expr == "* 9-15 * * 0-4"
+        assert tasks[0].enabled is True
+
+    def test_existing_old_cron_migrated_to_9_to_15(self, isolated_market_db):
+        """R3.3：既有 DB 旧 cron `* 9-14` → seed 后迁移为 `* 9-15`。
+
+        模拟升级前已 seed 的库：手动建任务持旧 cron，再跑 seed 触发迁移块。
+        """
+        # 模拟升级前库态：手动建任务持旧 cron（seed 的 `if not in existing` 不再建）
+        st._manager.create_task(st.ScheduledTask(
+            name="seal_intraday_collect",
+            description="S055 盘中封单时序采集",
+            task_type="seal_intraday_collect",
+            cron_expr="* 9-14 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        tasks = [t for t in st._manager.list_tasks() if t.name == "seal_intraday_collect"]
+        assert tasks[0].cron_expr == "* 9-14 * * 0-4"  # 迁移前
+
+        st._ensure_seed_tasks()  # 触发迁移块
+
+        tasks = [t for t in st._manager.list_tasks() if t.name == "seal_intraday_collect"]
+        assert len(tasks) == 1  # 不重复建
+        assert tasks[0].cron_expr == "* 9-15 * * 0-4"  # 迁移后
+
+    def test_existing_new_cron_no_double_migrate(self, isolated_market_db):
+        """R3.3 幂等：既有已是新 cron `* 9-15` → 不重复迁移（cron 不变）。"""
+        st._manager.create_task(st.ScheduledTask(
+            name="seal_intraday_collect",
+            description="S055 盘中封单时序采集",
+            task_type="seal_intraday_collect",
+            cron_expr="* 9-15 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        st._ensure_seed_tasks()
+        st._ensure_seed_tasks()  # 再跑一次确认幂等
+
+        tasks = [t for t in st._manager.list_tasks() if t.name == "seal_intraday_collect"]
+        assert len(tasks) == 1
+        assert tasks[0].cron_expr == "* 9-15 * * 0-4"  # 不变，未重复迁移

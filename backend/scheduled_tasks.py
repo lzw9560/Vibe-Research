@@ -2204,18 +2204,34 @@ def _ensure_seed_tasks() -> None:
         logger.info("[scheduler] seed 默认任务 sti_post_market 已创建（cron 35 15 * * 0-4）")
 
     # S055：盘中封单时序采集——交易时段每分钟 tick。
-    # cron `* 9-14 * * 0-4` 覆盖 09:00-14:59，加上 15:00-15:05 的 5 分钟。
-    # 实际门控由 is_intraday_trading_time（09:25-15:05）在 collect_once 内兜底。
+    # cron `* 9-15 * * 0-4` 触发 09:00-15:59（末次触发延至 15:59，含 15:00 收盘
+    # 集合竞价终态）。实际写入由 is_intraday_trading_time（09:25-11:30 / 13:01-15:05）
+    # 在 collect_once 内门控——15:06-15:59 的 no-op 触发在 em_get 前早返 skipped
+    # （防封安全，已实锤：collect_once 第一行门在 em_zt_topic_pool 之前）。
     if "seal_intraday_collect" not in existing:
         _manager.create_task(ScheduledTask(
             name="seal_intraday_collect",
             description="S055 盘中封单时序采集（交易时段 09:25-15:05 每 60s 轮询 em_zt_topic_pool）",
             task_type="seal_intraday_collect",
-            cron_expr="* 9-14 * * 0-4",
+            cron_expr="* 9-15 * * 0-4",
             payload={},
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 seal_intraday_collect 已创建（cron * 9-14 * * 0-4）")
+        logger.info("[scheduler] seed 默认任务 seal_intraday_collect 已创建（cron * 9-15 * * 0-4）")
+
+    # S123 R3：既有 DB 迁移——seed 仅 `if not in existing` 建任务，旧库仍存 cron
+    # `* 9-14 * * 0-4`（末次触发 14:59，漏采 15:00 收盘集合竞价终态）。幂等更新：
+    # 仅旧 cron 才改（新 cron 已是目标值→no-op），对齐 candidate_funnel_precompute 迁移范式。
+    for t in _manager.list_tasks():
+        if t.name == "seal_intraday_collect" and t.cron_expr == "* 9-14 * * 0-4":
+            old_cron = t.cron_expr
+            t.cron_expr = "* 9-15 * * 0-4"
+            _manager.update_task(t)
+            logger.info(
+                "[scheduler] seal_intraday_collect cron 迁移 %s → * 9-15 * * 0-4"
+                "（S123 R3：覆盖 15:00 收盘集合竞价终态，写入由 is_intraday_trading_time 门控）",
+                old_cron,
+            )
 
     # S004 R5：盘后漏斗预计算——晚 derived_precompute 15min（读 derived 预采集）+ 龙虎榜 16:30 后。
     # candidate_funnel 走 fund_flow 取龙虎榜（dragon_tiger_board，东财 16:30 后才更新），

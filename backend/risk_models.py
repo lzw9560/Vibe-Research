@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 import astock
+import vr_paths
 from data.mappers import dragon_tiger_from_dict, kline_from_mootdx
 
 
@@ -624,8 +625,13 @@ def _get_realtime_capital_flow(code: str) -> dict:
     返回近 120 交易日资金流，包含主力/大单/超大单净流入。
 
     诚实化（S111 R4）：消费 get_with_fallback_meta 元数据，断源/陈旧不再
-    伪装成实时中性信号。
-    - live fetch 成功（东财正典）→ data_status='ok'，正常算 signal，data_time=now
+    伪装成实时中性信号。S123 R1：再加末条 date carry-forward 校验——盘前/盘中
+    当日 bar 未出时 history[-1] 实为 T-1，不可戳 ok+now 伪装今日实时。
+    - live fetch 成功（东财正典、末条 date=今日交易日）→ data_status='ok'，signal
+      正常算，data_time=now
+    - live fetch 成功但末条 date≠最近交易日（盘前/盘中当日 bar 未出，T-1
+      carry-forward）→ data_status='degraded'，signal 仍算（best-effort），
+      data_time=bar date（不戳 now 伪标刚算完）
     - live fetch 成功但为新浪降级数据 → data_status='degraded'（跨源口径差异，
       关闭 #4 跨源混算伪装 ok 的毒窗口），signal 仍算（best-effort）但下游勿当东财正典
     - fetch 失败、命中陈旧缓存 → data_status='degraded'，signal=0.0（不基于
@@ -668,6 +674,30 @@ def _get_realtime_capital_flow(code: str) -> dict:
     # live fetch 成功，正常计算
     # 取最近一日数据
     latest = history[-1]
+
+    # S123 R1：carry-forward 诚实化——末条 date 若 ≠ 最近交易日，说明当日 bar
+    # 未出（盘前/盘中），history[-1] 实为 T-1 carry-forward，不可戳 ok+now
+    # 伪装今日实时。比对 vr_paths.last_trading_date_str()（今日若交易日否则前一
+    # 交易日）。盘前 carry-forward 与跨源降级合取（任一为真→degraded）；data_time
+    # 取 carry-forward 的 bar date（不戳 now），仅 cross_source 用 now。
+    latest_date = (latest.get("date") or "")[:10]
+    current_td = vr_paths.last_trading_date_str()
+    carry_forward = latest_date != current_td
+    # S123 R1 周末残存闭合：非交易日（周末/节假日）market closed，无"realtime"
+    # 资金流——latest bar 即上一交易日收盘值，戳 ok+now 伪装今日实时是 S122 同型
+    # lie family（不把周五池标成周六实时）。is_nontrading→degraded+data_time=bar date。
+    # ⚠ 调休补班日（vr_paths.is_trading_day 暂不纳入补班日）会 over-conservative
+    # 标 degraded（真实时被标陈旧，保守误差非 lie，~few days/yr，留 vr_paths 补班日支持后修）。
+    today = datetime.now().date()
+    is_nontrading = not vr_paths.is_trading_day(today)
+    stale = carry_forward or is_nontrading
+    if stale:
+        logging.getLogger("risk_models").warning(
+            "_get_realtime_capital_flow(%s) stale：末条 date=%s, current_td=%s, "
+            "carry_forward=%s, is_nontrading=%s → degraded+data_time=bar date（不戳 now）",
+            code, latest_date, current_td, carry_forward, is_nontrading,
+        )
+
     main_net = float(latest.get("main_net", 0) or 0)
     super_net = float(latest.get("super_net", 0) or 0)
     large_net = float(latest.get("large_net", 0) or 0)
@@ -701,6 +731,9 @@ def _get_realtime_capital_flow(code: str) -> dict:
         "big_fund_detected": big_fund_detected,
         "big_fund_type": big_fund_type,
         "fund_flow_history": fund_flow_history,
-        "data_status": "degraded" if cross_source else "ok",
-        "data_time": datetime.now().isoformat(),
+        # S123 R1：cross_source / carry_forward / is_nontrading 任一为真→degraded；
+        # data_time：stale（carry_forward 或 is_nontrading）用 bar date（不戳 now
+        # 伪装刚算完），仅 cross_source 且非 stale 用 now（跨源但当日 bar 已出）。
+        "data_status": "degraded" if (cross_source or stale) else "ok",
+        "data_time": latest_date if stale else datetime.now().isoformat(),
     }
