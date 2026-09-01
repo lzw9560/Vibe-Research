@@ -15,10 +15,21 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
 import astock
 import market
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+@pytest.fixture(autouse=True)
+def _clear_market_cache():
+    """S133 后 _emotion date-keyed 缓存壳跨用例污染——每用例前清 _CACHE。"""
+    market._CACHE.clear()
+    yield
+    market._CACHE.clear()
+
 
 DATE = "2026-08-10"  # 显式交易日，走 _emotion date-is-not-None 分支
 

@@ -152,6 +152,17 @@ def _parse_high_days(s) -> int:
 
 
 def _emotion(date: str | None = None) -> dict:
+    """短线情绪（带 TTL 缓存，date-keyed——镜像 _sentiment 范式 S094/S109）。
+
+    缓存 key=f"emotion:{date or 'latest'}"，每 date 独立（不跨日污染）。
+    ~12 直调方零改动透明获益（去重 + 降封 IP + 防扁平-key footgun）。
+    raw 逻辑见 _emotion_uncached。默认 valid=bool（空 {} 不缓存；非空含 data_status:"missing"
+    缓存——同 _sentiment 一致性，源断 5min 内返 missing 重试需等 TTL）。
+    """
+    return _cached(f"emotion:{date or 'latest'}", lambda: _emotion_uncached(date))
+
+
+def _emotion_uncached(date: str | None = None) -> dict:
     """短线情绪（聚合口径，**零个股名**）：连板梯队 / 最高连板 / 炸板率 / 封板率 / 晋级率 / 涨跌停家数。
 
     数据源＝东财涨停板四池（push2ex）。只把池子聚合成计数与比率，
@@ -408,8 +419,8 @@ def _emotion(date: str | None = None) -> dict:
 
 
 def get_short_term_emotion() -> dict:
-    """短线情绪（含缓存，5 分钟）。"""
-    return _cached("emotion", _emotion)
+    """短线情绪（含缓存，5 分钟）。经 _emotion() 的 emotion:latest key。"""
+    return _emotion()
 
 
 def get_turnover_top() -> dict:

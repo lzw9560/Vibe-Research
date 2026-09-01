@@ -15,6 +15,14 @@ import portfolio as pf
 client = TestClient(app_module.app)
 
 
+@pytest.fixture(autouse=True)
+def _clear_market_cache():
+    """S133 后 _emotion date-keyed 缓存壳跨用例污染——每用例前清 _CACHE。"""
+    market._CACHE.clear()
+    yield
+    market._CACHE.clear()
+
+
 # ── VR_API_KEY 鉴权中间件 ───────────────────────────────────────────
 
 def test_api_key_auth(monkeypatch):
