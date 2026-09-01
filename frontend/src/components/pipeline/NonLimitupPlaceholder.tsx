@@ -10,6 +10,7 @@ import { StrategySubPipelineView } from "@/components/pipeline/StrategySubPipeli
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Clock } from "lucide-react";
 import type { ScoredCandidate } from "@/lib/api";
+import { ArrowDown } from "@/components/pipeline/primitives";
 
 interface NonLimitupLaneProps {
   date?: string;
@@ -188,15 +189,7 @@ function CandidateCard({ c }: { c: ScoredCandidate }) {
   );
 }
 
-function ArrowDown({ label }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center py-0.5">
-      <div className="h-2 w-px bg-border/40" />
-      <span className="text-[9px] text-border/50 leading-none">▼</span>
-      {label && <span className="text-[10px] text-muted-foreground">{label}</span>}
-    </div>
-  );
-}
+// ArrowDown 见 primitives.tsx（S140 R4 去重）
 
 const NODE = "rounded-lg border border-dashed border-muted/40 bg-card/20 p-2.5";
 

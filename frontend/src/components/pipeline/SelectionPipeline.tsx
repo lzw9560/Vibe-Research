@@ -10,6 +10,7 @@ import { NonLimitupLane } from "./NonLimitupPlaceholder";
 import type { FunnelLayer, FunnelResult, DiagnosisCard } from "@/lib/candidates";
 import type { ScoredCandidate } from "@/lib/api";
 import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
+import { NODE, ArrowDown, FunnelShrinkBar } from "@/components/pipeline/primitives";
 
 interface RerunHandlers {
   rerunLayer: (layerId: string, date?: string, body?: Record<string, unknown>) => Promise<unknown>;
@@ -41,8 +42,7 @@ interface Props {
 
 type ActiveLane = "limitup" | "non-limitup";
 
-// 统一节点样式（实线/虚线两态，颜色按语义）
-const NODE = "rounded-lg border border-border/40 bg-card/40 p-3";
+// NODE / ArrowDown / FunnelShrinkBar 见 primitives.tsx（S140 R4 去重）
 
 export function SelectionPipeline({
   funnelResult, funnelLayers, finalCandidates,
@@ -160,15 +160,7 @@ function FinalCandidatesNode({ finals }: { finals: DiagnosisCard[] }) {
   );
 }
 
-function ArrowDown({ label }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center py-0.5">
-      <div className="h-2 w-px bg-border/40" />
-      <span className="text-[9px] text-border/50 leading-none">▼</span>
-      {label && <span className="text-[10px] text-muted-foreground">{label}</span>}
-    </div>
-  );
-}
+// ArrowDown 见 primitives.tsx（S140 R4 去重）
 
 /** F1：终选→战法匹配数据流传递节点（胶囊形带数字，消除视觉断流）。
  *  比 ArrowDown 更醒目：粗箭头 + 数字 pill + 下方标签，让用户看到"终选 N 只 → 进入战法匹配"是连续数据流。 */
@@ -253,16 +245,7 @@ function SectorRotationNode({ date }: { date: string }) {
 // S094 §11 附录 A2：ScoredBranch/ScoredDegraded/RiskNode 已删除——
 // ②战法匹配由 StrategySubPipelineView 渲染，风控移至后置共享区 PostSharedRegion
 
-function FunnelShrinkBar({ input, output }: { input: number; output: number }) {
-  const ratio = input > 0 ? Math.max(output / input, 0.12) : 0.12;
-  return (
-    <div className="flex items-center gap-1.5 px-1">
-      <div className="h-1.5 flex-1 rounded bg-muted/30" />
-      <div className="h-1.5 rounded bg-primary/40" style={{ width: `${ratio * 100}%` }} />
-      <span className="text-[10px] text-muted-foreground">{input}→{output}</span>
-    </div>
-  );
-}
+// FunnelShrinkBar 见 primitives.tsx（S140 R4 去重）
 
 function RerunFooter({ layer, handlers, date }: { layer: FunnelLayer; handlers: RerunHandlers; date?: string }) {
   const [busy, setBusy] = useState(false);

@@ -57,6 +57,10 @@ vi.mock("@/components/workflow/ContextTab", () => ({
 vi.mock("@/components/workflow/FactorSection", () => ({
   FactorSection: () => null,
 }));
+// S140 R6：rail 行为由 CandidateStateRail.test 覆盖；此处 stub 避免触发 useWorkflowStates 真链
+vi.mock("@/components/workflow/CandidateStateRail", () => ({
+  CandidateStateRail: () => <div data-testid="candidate-state-rail" />,
+}));
 vi.mock("@/components/ui/SectionHeader", () => ({
   SectionHeader: () => null,
 }));
@@ -175,8 +179,8 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     renderAt();
     // TabBar 里有三个按钮
     const reviewBtn = getTabButton("复盘");
-    const todayBtn = getTabButton("当日");
-    const forwardBtn = getTabButton("前瞻");
+    const todayBtn = getTabButton("盯盘");
+    const forwardBtn = getTabButton("选股");
     expect(reviewBtn).toBeTruthy();
     expect(todayBtn).toBeTruthy();
     expect(forwardBtn).toBeTruthy();
@@ -185,7 +189,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
   it("默认 Tab = stage 自动高亮（post_market → 前瞻）", async () => {
     renderAt();
     await waitFor(() => {
-      const forwardBtn = getTabButton("前瞻");
+      const forwardBtn = getTabButton("选股");
       expect(forwardBtn?.className).toContain("text-primary");
     });
   });
@@ -200,7 +204,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
 
   it("点击当日 Tab → 渲染 PreMarketBriefing", async () => {
     renderAt();
-    fireEvent.click(getTabButton("当日"));
+    fireEvent.click(getTabButton("盯盘"));
     await waitFor(() => {
       expect(screen.getByTestId("pre-market-briefing")).toBeInTheDocument();
     });
@@ -208,8 +212,8 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
 
   it("点击前瞻 Tab → 渲染 PipelineTopology", async () => {
     renderAt();
-    fireEvent.click(getTabButton("当日"));
-    fireEvent.click(getTabButton("前瞻"));
+    fireEvent.click(getTabButton("盯盘"));
+    fireEvent.click(getTabButton("选股"));
     await waitFor(() => {
       expect(screen.getByTestId("pipeline-topology")).toBeInTheDocument();
     });
@@ -220,7 +224,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet({ stage: "pre_market" }) });
     renderAt();
     await waitFor(() => {
-      const forwardBtn = getTabButton("前瞻");
+      const forwardBtn = getTabButton("选股");
       expect(forwardBtn?.className).toContain("text-primary");
     });
   });
@@ -229,7 +233,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet({ stage: "intraday" }) });
     renderAt();
     await waitFor(() => {
-      const todayBtn = getTabButton("当日");
+      const todayBtn = getTabButton("盯盘");
       expect(todayBtn?.className).toContain("text-primary");
     });
   });
@@ -239,7 +243,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     qMocks.useDateTriplet.mockReturnValue({ data: makeTriplet({ stage: "pre_open" }) });
     renderAt();
     await waitFor(() => {
-      const todayBtn = getTabButton("当日");
+      const todayBtn = getTabButton("盯盘");
       expect(todayBtn?.className).toContain("text-primary");
     });
   });
@@ -373,7 +377,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
 
   it("当日 Tab → PreMarketBriefing 收 dateTriplet.today + stage", async () => {
     renderAt();
-    fireEvent.click(getTabButton("当日"));
+    fireEvent.click(getTabButton("盯盘"));
     const pmb = await waitFor(() => screen.getByTestId("pre-market-briefing"));
     expect(pmb.getAttribute("data-date")).toBe("2026-08-22"); // = triplet.today
     expect(pmb.getAttribute("data-stage")).toBe("post_market");
@@ -381,7 +385,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
 
   it("前瞻 Tab → PipelineTopology 收 dateTriplet.forward", async () => {
     renderAt();
-    fireEvent.click(getTabButton("前瞻"));
+    fireEvent.click(getTabButton("选股"));
     const pt = await waitFor(() => screen.getByTestId("pipeline-topology"));
     expect(pt.getAttribute("data-forward")).toBe("2026-08-22"); // = triplet.forward
   });

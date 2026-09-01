@@ -64,12 +64,12 @@ export const router = createBrowserRouter([
       { path: "/sentiment/weather/fuse", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
       { path: "/workflow", element: lazyEl(() => import("@/pages/Workflow")) },
       { path: "/workflow/first-board", element: lazyEl(() => import("@/pages/workflow/FirstBoardPage")) },
-      { path: "/workflow/pre-market", element: lazyEl(() => import("@/pages/workflow/PreMarketBriefing")) },
+      { path: "/workflow/pre-market", element: <Navigate to="/workflow?view=today" replace /> },
       { path: "/behavior-loop", element: lazyEl(() => import("@/pages/BehaviorLoop")) },
       { path: "/workflow/intraday", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },
       { path: "/workflow/coach", element: lazyEl(() => import("@/pages/workflow/IntradayCoach")) },
       { path: "/workflow/alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },
-      { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
+      { path: "/workflow/post-market", element: <Navigate to="/workflow?view=review" replace /> },
       { path: "/workflow/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },
       // S090 战法 tab 404 修复：前向测试 + 阈值配置独立页（EntryCard 链接原指向 404）
       // S093 T20：/strategy 父路由（战法独立页），承接 S3 删的战法战绩折叠区

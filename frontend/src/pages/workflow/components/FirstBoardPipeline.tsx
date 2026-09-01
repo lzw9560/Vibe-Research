@@ -15,39 +15,16 @@ import { HonestyBanner } from "@/components/ui/HonestyBanner";
 import type {
   FirstBoardCandidate, FirstBoardCandidatesResponse, FirstBoardExcludedItem, FirstBoardRawValues,
 } from "@/lib/api";
+import { NODE, ArrowDown, FunnelShrinkBar } from "@/components/pipeline/primitives";
 
 // 维度 key 联合类型（与 FirstBoardScoreBreakdown 字段对齐，但用显式字符串避免索引签名 symbol 问题）
 type DimKey = "sector" | "hot_money" | "seal_strength" | "chip" | "auction" | "northbound" | "institution" | "theme" | "event";
 
-// ---- 节点样式（复用 SelectionPipeline 的 NODE / NODE_DASHED 语义）----
-const NODE = "rounded-lg border border-border/40 bg-card/40 p-3";
+// ---- 节点样式：NODE / ArrowDown / FunnelShrinkBar 见 primitives.tsx（S140 R4 去重）----
 const NODE_DASHED = "rounded-lg border border-dashed p-3";
 const NODE_GREEN = "rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3";
 const NODE_AMBER = "rounded-lg border border-amber-500/40 bg-amber-500/5 p-3";
 const NODE_RED = "rounded-lg border border-destructive/40 bg-destructive/5 p-3";
-
-// ---- 箭头（复用 SelectionPipeline 的 ArrowDown）----
-function ArrowDown({ label }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center py-0.5">
-      <div className="h-2 w-px bg-border/40" />
-      <span className="text-[9px] text-border/50 leading-none">▼</span>
-      {label && <span className="text-[10px] text-muted-foreground">{label}</span>}
-    </div>
-  );
-}
-
-// ---- 收缩条（input→output 可视化）----
-function FunnelShrinkBar({ input, output }: { input: number; output: number }) {
-  const ratio = input > 0 ? Math.max(output / input, 0.12) : 0.12;
-  return (
-    <div className="flex items-center gap-1.5 px-1">
-      <div className="h-1.5 flex-1 rounded bg-muted/30" />
-      <div className="h-1.5 rounded bg-primary/40" style={{ width: `${ratio * 100}%` }} />
-      <span className="text-[10px] text-muted-foreground">{input}→{output}</span>
-    </div>
-  );
-}
 
 // ---- ① 筛选节点：涨停股池 → 首板过滤 → 3层剔除 ----
 function FilterPipelineNode({ data }: { data: FirstBoardCandidatesResponse | null }) {
