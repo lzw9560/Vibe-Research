@@ -1030,6 +1030,9 @@ class TaskExecutor:
         读 F 日（上一交易日）funnel_cache final_candidates → tencent_quote 取竞价/开盘价
         → 算 gap_pct（open vs last_close）→ 推飞书。无缓存/无 quote/NotificationService 不可用
         → 不崩不推（增强，catch 不抛）。
+
+        S136：开盘后实时核 kill_switch（market_note 承诺落地）——triggered 时通知前置
+        「不开新仓」熔断警告。
         """
         try:
             from vr_paths import prev_trading_date_str
@@ -1045,15 +1048,24 @@ class TaskExecutor:
             codes = [c.get("code") for c in final_cards if c.get("code")]
             quotes = _fetch_quotes(codes)
             content = _build_auction_notify_content(f_date, final_cards, quotes)
+            ks = _check_premarket_kill_switch()  # S136：开盘后实时核
+            if ks["triggered"]:
+                content = _prepend_kill_switch_warning(content, ks)
             notified = _send_notify(content)
-            logger.info("[premarket_auction_notify] %s 候选%d notified=%s", f_date, len(final_cards), notified)
-            return {"date": f_date, "status": "ok", "candidates": len(final_cards), "notified": notified}
+            logger.info("[premarket_auction_notify] %s 候选%d notified=%s kill_switch=%s",
+                        f_date, len(final_cards), notified, ks["triggered"])
+            return {"date": f_date, "status": "ok", "candidates": len(final_cards),
+                    "notified": notified, "kill_switch": ks}
         except Exception as e:
             logger.warning("[premarket_auction_notify] 失败: %s", e)
             return {"status": f"error: {e}"}
 
     def _execute_premarket_open_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """S101：9:35 开盘 5min 后推送前瞻标的开盘表现（现价/涨跌幅/封板）。"""
+        """S101：9:35 开盘 5min 后推送前瞻标的开盘表现（现价/涨跌幅/封板）。
+
+        S136：开盘后实时核 kill_switch（market_note 承诺落地）——triggered 时通知前置
+        「不开新仓」熔断警告。
+        """
         try:
             from vr_paths import prev_trading_date_str
 
@@ -1066,9 +1078,14 @@ class TaskExecutor:
             codes = [c.get("code") for c in final_cards if c.get("code")]
             quotes = _fetch_quotes(codes)
             content = _build_open_notify_content(f_date, final_cards, quotes)
+            ks = _check_premarket_kill_switch()  # S136：开盘后实时核
+            if ks["triggered"]:
+                content = _prepend_kill_switch_warning(content, ks)
             notified = _send_notify(content)
-            logger.info("[premarket_open_notify] %s 候选%d notified=%s", f_date, len(final_cards), notified)
-            return {"date": f_date, "status": "ok", "candidates": len(final_cards), "notified": notified}
+            logger.info("[premarket_open_notify] %s 候选%d notified=%s kill_switch=%s",
+                        f_date, len(final_cards), notified, ks["triggered"])
+            return {"date": f_date, "status": "ok", "candidates": len(final_cards),
+                    "notified": notified, "kill_switch": ks}
         except Exception as e:
             logger.warning("[premarket_open_notify] 失败: %s", e)
             return {"status": f"error: {e}"}
@@ -1797,6 +1814,49 @@ def _fmt_pct(v) -> str:
         return f"{float(v):+.2f}%"
     except (TypeError, ValueError):
         return "—"
+
+
+def _check_premarket_kill_switch() -> dict:
+    """S136：盘前通知开盘后实时核市场熔断（market_note 承诺落地）。
+
+    check_market_kill_switch 查上证<-3%/创业板<-4%→triggered 不开新仓。
+    astock.index_quote() 不可达/空 → check_market_kill_switch 返 not_triggered
+    （不臆造熔断）。检查本身抛 → 降级 not_triggered（不阻断通知，诚实标降级）。
+    """
+    try:
+        from strategies.execution_model import check_market_kill_switch
+        import astock  # noqa: PLC0415
+        ks = check_market_kill_switch(astock.index_quote())
+        return {
+            "triggered": ks.triggered,
+            "reason": ks.reason,
+            "sh_change_pct": ks.sh_change_pct,
+            "gem_change_pct": ks.gem_change_pct,
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[S136] kill_switch 检查失败，降级 not_triggered: %s", e)
+        return {"triggered": False, "reason": f"检查失败（降级不触发）: {e}",
+                "sh_change_pct": None, "gem_change_pct": None}
+
+
+def _prepend_kill_switch_warning(content: str, ks: dict) -> str:
+    """S136：熔断触发时通知 content 前置警告块。
+
+    honest 标注非屏蔽——候选仍列（用户需知熔断+候选），前置块明确 gate 状态
+    「不开新仓」。对齐 S126 诚实范式（标注非屏蔽）。
+    """
+    pct = ""
+    if ks.get("sh_change_pct") is not None:
+        pct += f"上证 {ks['sh_change_pct']:.2f}%"
+    if ks.get("gem_change_pct") is not None:
+        pct += f"{' / ' if pct else ''}创业板 {ks['gem_change_pct']:.2f}%"
+    pct_str = f"（{pct}）" if pct else ""
+    return (
+        f"⚠️ 市场熔断：{ks.get('reason', '')}{pct_str}\n"
+        f"不开新仓。premarket 候选风控价仅供参考，熔断中不入场。\n"
+        f"---\n"
+        f"{content}"
+    )
 
 
 def _build_auction_notify_content(
