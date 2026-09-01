@@ -23,11 +23,19 @@ from __future__ import annotations
 import json
 import urllib.request
 
+from circuit_breaker import CircuitBreakerConfig, get_breaker
+
 from ._common import UA
 from .tencent import get_prefix
 
 _SINA_FIN_URL = ("https://quotes.sina.cn/cn/api/openapi.php/"
                  "CompanyFinanceService.getFinanceReport2022")
+
+# S134：新浪三表慢 12-25s、3×/code、无 Sina 备份——threshold=3 让 1 股完整
+# outage（3 表全失败）即 trip，而非默认 5（1.5 股 150s）。first-write-wins 注入。
+_SINA_FIN_BREAKER = get_breaker(
+    "sina_financial", CircuitBreakerConfig(failure_threshold=3)
+)
 
 
 def _fetch_json(code: str, report_type: str = "lrb", num: int = 8) -> dict:
@@ -72,8 +80,23 @@ def _parse(report_list: dict, num: int) -> list[dict]:
 
 
 def fetch_raw(code: str, report_type: str = "lrb", num: int = 8) -> list[dict]:
-    """单股票单表 period rows（中文科目键，倒序）。"""
-    d = _fetch_json(code, report_type, num)
+    """单股票单表 period rows（中文科目键，倒序）。
+
+    S134：顶加 sina_financial 熔断——OPEN fast-fail（raise RuntimeError，被
+    fetch_merged_periods per-table catch 吞成 []）；_fetch_json raise →
+    record_failure + re-raise；正常返 → record_success + 返 _parse 结果。
+    """
+    breaker = get_breaker("sina_financial")
+    if not breaker.allow_request():
+        raise RuntimeError(
+            f"[CircuitBreaker:sina_financial] 新浪三表源熔断中，快速失败（{code}/{report_type}）"
+        )
+    try:
+        d = _fetch_json(code, report_type, num)
+        breaker.record_success()
+    except Exception:
+        breaker.record_failure()
+        raise
     report_list = d.get("result", {}).get("data", {}).get("report_list", {}) or {}
     return _parse(report_list, num)
 

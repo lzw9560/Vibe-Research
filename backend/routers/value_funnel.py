@@ -113,13 +113,28 @@ def get_anomaly(code: str):
 
     S108：新浪三表 fetch_merged_periods → detect_anomalies。不足 2 期标 inapplicable（不臆造）。
     数据源新浪 urllib（非 em_get），单只按需触发不进 L2 全量（请求风暴防线）。
+
+    S134：返体加 ``data_status``——period_count==0 时 peek sina_financial breaker：
+    fresh OPEN → 'sina_breaker_open'（区分"Sina 暂不可用"vs"真无财报"），
+    否则 'missing'；有 periods → 'ok'。诚实缝（不臆造"有数据"）。
     """
+    from circuit_breaker import get_breaker
     try:
         from data.sources.sina_financial import fetch_merged_periods
         from value_funnel.anomaly import detect_anomalies
         periods = fetch_merged_periods(code)
         assessment = detect_anomalies(periods)
-        return {"data": assessment.model_dump(mode="json"), "period_count": len(periods)}
+        if len(periods) >= 2:
+            status = "ok"
+        elif get_breaker("sina_financial").peek_state().value == "open":
+            status = "sina_breaker_open"
+        else:
+            status = "missing"
+        return {
+            "data": assessment.model_dump(mode="json"),
+            "period_count": len(periods),
+            "data_status": status,
+        }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"异常信号计算失败: {e}") from e
 

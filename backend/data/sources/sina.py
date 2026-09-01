@@ -18,11 +18,17 @@ from __future__ import annotations
 import json
 import urllib.request
 
+from circuit_breaker import get_breaker
+
 from ._common import UA
 from .tencent import get_prefix
 
 _SINA_KLINE_URL = ("https://money.finance.sina.com.cn/quotes_service/api/"
                    "json_v2.php/CN_MarketData.getKLineData")
+
+# S134：新浪日K熔断（默认 config——kline_resolver 有 mootdx/akshare 回退，
+# 降 threshold 反易误 trip 抖动；default 足够）。first-write-wins 注入。
+_SINA_KLINE_BREAKER = get_breaker("sina_kline")
 
 
 def _fetch_json(code: str, datalen: int = 1023) -> list[dict]:
@@ -76,5 +82,20 @@ def fetch_raw(code: str, datalen: int = 1023) -> list[dict]:
 
     返 ``list[dict]``，每 bar 含 ``date/open/high/low/close/volume``，
     ``amount/ma5/ma10/ma20=None``。作为 ``baidu.fetch_raw`` 的异构回退。
+
+    S134：顶加 sina_kline 熔断——OPEN fast-fail（raise RuntimeError，被
+    kline_resolver except 吞成回退下一源）；_fetch_json raise →
+    record_failure + re-raise；正常返 → record_success + 返 _parse 结果。
     """
-    return _parse(_fetch_json(code, datalen))
+    breaker = get_breaker("sina_kline")
+    if not breaker.allow_request():
+        raise RuntimeError(
+            f"[CircuitBreaker:sina_kline] 新浪日K线源熔断中，快速失败（{code}）"
+        )
+    try:
+        raw_rows = _fetch_json(code, datalen)
+        breaker.record_success()
+    except Exception:
+        breaker.record_failure()
+        raise
+    return _parse(raw_rows)

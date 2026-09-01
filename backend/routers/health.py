@@ -38,21 +38,41 @@ def _check_database() -> Dict[str, Any]:
 
 
 def _check_circuit_breaker() -> Dict[str, Any]:
-    """检查熔断器状态。"""
-    try:
-        from circuit_breaker import get_breaker
+    """检查熔断器状态。
 
-        breaker = get_breaker("eastmoney")
-        # peek_state 尊重 recovery_timeout：陈旧 OPEN（>60s 无请求）自愈为 HALF_OPEN，
-        # 避免测试触发的瞬时 OPEN 使 health 永久报红（S022）。
-        state = breaker.peek_state().value
+    S114（旧）：仅报 eastmoney。S134：遍历 ``list_breakers()`` 报所有已注册 breaker
+    ——``detail`` 保持 string（worst-state，backward-compat test_circuit_breaker:127/139
+    字串断言）；新增 ``breakers`` dict 报 per-breaker {state, failure_count}。任一
+    fresh OPEN → ok=False。peek_state 尊重 recovery_timeout：陈旧 OPEN（>60s 无请求）
+    自愈为 HALF_OPEN，避免测试触发的瞬时 OPEN 使 health 永久报红（S022）。
+    """
+    try:
+        from circuit_breaker import list_breakers
+
+        breakers = list_breakers()
+        if not breakers:
+            return {"ok": True, "detail": "circuit_breaker_closed", "breakers": {}}
+        details = {
+            name: {
+                "state": br.peek_state().value,
+                "failure_count": br.failure_count,
+            }
+            for name, br in breakers.items()
+        }
+        any_open = any(d["state"] == "open" for d in details.values())
+        # worst-state：open > half_open > closed（severity 排序取最坏）
+        _sev = {"open": 2, "half_open": 1, "closed": 0}
+        worst = max(
+            (d["state"] for d in details.values()),
+            key=lambda s: _sev.get(s, 0),
+        )
         return {
-            "ok": state != "open",
-            "detail": f"circuit_breaker_{state}",
-            "failure_count": breaker.failure_count,
+            "ok": not any_open,
+            "detail": f"circuit_breaker_{worst}",
+            "breakers": details,
         }
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "detail": f"circuit_breaker_error: {exc}"}
+        return {"ok": False, "detail": f"circuit_breaker_error: {exc}", "breakers": {}}
 
 
 def _check_data_freshness() -> Dict[str, Any]:

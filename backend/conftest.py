@@ -42,6 +42,31 @@ def cron_scheduler():
     return CronScheduler()
 
 
+@pytest.fixture
+def sina_breaker():
+    """S134：保存/恢复 sina_financial + sina_kline 全局 breaker 状态，防跨测试污染。
+
+    镜像 test_circuit_breaker.eastmoney_breaker（:97-115）。显式引用（非 autouse）：
+    操全局 get_breaker("sina_*") 单例的测（如 A5 状态机/A7 health traversal）引之；
+    _FakeBreaker 测（monkeypatch get_breaker 返 fake，绕过全局 _breakers）不需此 fixture。
+    """
+    from circuit_breaker import get_breaker
+
+    saved = {}
+    for name in ("sina_financial", "sina_kline"):
+        br = get_breaker(name)
+        saved[name] = (
+            br.state, br.failure_count, br.last_failure_time,
+            br.half_open_calls, br.success_count,
+        )
+    yield
+    for name, br in ((n, get_breaker(n)) for n in ("sina_financial", "sina_kline")):
+        (
+            br.state, br.failure_count, br.last_failure_time,
+            br.half_open_calls, br.success_count,
+        ) = saved[name]
+
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",

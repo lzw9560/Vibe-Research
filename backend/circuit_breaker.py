@@ -121,3 +121,12 @@ def get_breaker(name: str, config: CircuitBreakerConfig | None = None) -> Circui
     if name not in _breakers:
         _breakers[name] = CircuitBreaker(name, config)
     return _breakers[name]
+
+
+def list_breakers() -> dict[str, CircuitBreaker]:
+    """所有已注册熔断器（S134：供 health 等遍历，避免读私有 _breakers）。
+
+    返回 _breakers 的浅拷贝——调用方遍历不受注册表后续变动影响，也不应
+    通过返回值修改注册表本身。
+    """
+    return dict(_breakers)
