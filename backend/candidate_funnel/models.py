@@ -165,6 +165,10 @@ class DiagnosisCard(BaseModel):
     # {buy_one_ratio, buy_seat_types, sell_seat_types, score_modifier, risk_label, data_status}
     # 无龙虎榜/取数失败 → None 降级（不臆造）。不参与 capped/胜率/结算，仅选股池呈现。
     seat_detail: Optional[dict] = None
+    # S139（s066 task 039）：板块周期阶段纯 LABEL（不改策略分/排序/capped，§5.4 Q2 修饰方向被驳）。
+    # {industry, phase, stay_days, phase_note, count_today, count_avg_3d, momentum}。
+    # 无 pool_item/无 hybk/sector_cycle 失败 → None 降级不臆造。仅选股池呈现。
+    sector_phase: Optional[dict] = None
 
 
 # ---------- S057 八项标准 ----------

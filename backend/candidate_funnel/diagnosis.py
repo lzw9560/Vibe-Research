@@ -305,6 +305,25 @@ def build_diagnosis_card(
     )
     # S085 B2：席位聚合 opt-in——bulk 漏斗跳过（perf），单股 diagnose 开
     seat_detail = _build_seat_detail(code, trade_date) if with_seat_detail else None
+    # S139（s066 task 039）：板块周期阶段纯 LABEL 接线——不改策略分/排序/capped
+    # （§5.4 Q2 验证修饰方向被驳：退潮 62.7% > 启动 55.7%，与 §5.4 反→降级纯 LABEL）。
+    # trade_date + pool_item.hybk → analyze_sector_phase。无 hybk/失败 → None 降级不臆造。
+    sector_phase: dict | None = None
+    if trade_date and pool_item:
+        _hybk = pool_item.get("hybk")
+        if _hybk:
+            try:
+                from strategies.sector_cycle import analyze_sector_phase  # noqa: PLC0415
+                _sp = analyze_sector_phase(trade_date, _hybk)
+                if _sp is not None:
+                    sector_phase = {
+                        "industry": _sp.industry, "phase": _sp.phase,
+                        "stay_days": _sp.stay_days, "phase_note": _sp.phase_note,
+                        "count_today": _sp.count_today, "count_avg_3d": _sp.count_avg_3d,
+                        "momentum": _sp.momentum,
+                    }
+            except Exception:
+                sector_phase = None  # sector_cycle 取数失败 → None 降级（不臆造）
     return DiagnosisCard(
         code=code,
         name=name,
@@ -320,6 +339,7 @@ def build_diagnosis_card(
         pool_item=pool_item,
         derived=derived,
         seat_detail=seat_detail,
+        sector_phase=sector_phase,
     )
 
 
