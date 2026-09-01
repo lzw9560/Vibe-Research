@@ -60,6 +60,8 @@ premarket_selection 的 `market_note`（`premarket_selection.py:220`）承诺：
 ```
 **不**跳过通知（用户需知熔断 + 候选，非闷声不发）——前置警告 + 候选标"熔断抑制（不开新仓）"让用户明确 gate 状态。对齐 S126 诚实范式（标注非屏蔽）。
 
+> **收口（2026-09-01 审查）**：R1/A1/§8 中的"每候选标'熔断抑制（不开新仓）'"判定为冗余——顶部块「不开新仓。premarket 候选风控价仅供参考，熔断中不入场」已覆盖全部候选的 gate 状态。impl 采顶部块方案（`_prepend_kill_switch_warning` 由 caller 前置，`_build_*_notify_content` 不变），不逐候选标。验收以顶部块为准（`content.startswith("⚠️ 市场熔断")` + "不开新仓"），不验 per-candidate。此为 spec 与 impl 一致性收口，非功能缺陷——安全目标已由顶部块达成。
+
 ### 5.3 indices 缺失→不触发（不臆造）
 
 `astock.index_quote()` 盘中可能返空（tencent 不可达）→ `check_market_kill_switch([])` 返 `triggered=False, reason="指数数据未取得，不触发熔断"`。此时通知**不加**熔断警告（不臆造），但返体 `kill_switch.triggered=False, reason="指数未取得"`（诚实标 missing）。对齐 §1.2 不臆造底线。

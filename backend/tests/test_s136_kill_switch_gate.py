@@ -100,3 +100,66 @@ def test_open_notify_kill_switch_check_degrades_no_false_alarm(monkeypatch, _fin
     content = captured[0]
     assert "⚠️ 市场熔断" not in content  # 不臆造熔断
     assert captured  # 通知正常发（检查失败不阻断）
+
+
+# ── wrapper 真身直测（spec A4 兑现：patch astock.index_quote，不 mock wrapper）────
+# 原 4 测 mock 了 _check_premarket_kill_switch 本身，wrapper 真身（import 接线 +
+# MarketKillSwitch 属性访问 + except 降级）零覆盖。以下 3 测 patch 数据源让真函数跑。
+
+
+def test_check_wrapper_real_triggered(monkeypatch):
+    """真 wrapper + 真 check_market_kill_switch：暴跌 indices → triggered=True + 正确 pct。
+
+    覆盖 import 接线 + MarketKillSwitch 属性访问（triggered/reason/sh_change_pct/gem_change_pct）。
+    若 dataclass 改字段名或 import 路径断 → 此测报红（不会静默永远降级）。
+    """
+    import astock  # noqa: PLC0415
+    crash = [
+        {"name": "上证指数", "change_pct": -5.0},
+        {"name": "创业板指", "change_pct": -1.20},
+    ]
+    monkeypatch.setattr(astock, "index_quote", lambda: crash)
+
+    ks = st._check_premarket_kill_switch()
+
+    assert ks["triggered"] is True
+    assert "上证" in ks["reason"]
+    assert ks["sh_change_pct"] == -5.0
+    assert ks["gem_change_pct"] == -1.20
+
+
+def test_check_wrapper_indices_empty_no_false_alarm(monkeypatch):
+    """astock.index_quote 返 [] → 真 check_market_kill_switch 返 not_triggered（不臆造）。
+
+    spec A4：indices 空 → 不触发熔断，wrapper 透传 None pct + reason 标 missing。
+    """
+    import astock  # noqa: PLC0415
+    monkeypatch.setattr(astock, "index_quote", lambda: [])
+
+    ks = st._check_premarket_kill_switch()
+
+    assert ks["triggered"] is False
+    assert "未取得" in ks["reason"] or "不触发" in ks["reason"]
+    assert ks["sh_change_pct"] is None
+    assert ks["gem_change_pct"] is None
+
+
+def test_check_wrapper_exception_degrades_no_false_alarm(monkeypatch):
+    """astock.index_quote 抛异常 → wrapper except 降级 not_triggered（不臆造，不阻断）。
+
+    覆盖 wrapper 的 except 分支——9:25 网络挂/import 断时 kill_switch 永不误触发的诚实保证。
+    若此分支坏（如返 triggered=True 或抛出）→ 此测报红。
+    """
+    import astock  # noqa: PLC0415
+
+    def _boom():
+        raise RuntimeError("tencent 不可达")
+
+    monkeypatch.setattr(astock, "index_quote", _boom)
+
+    ks = st._check_premarket_kill_switch()
+
+    assert ks["triggered"] is False
+    assert "降级" in ks["reason"]
+    assert ks["sh_change_pct"] is None
+    assert ks["gem_change_pct"] is None
