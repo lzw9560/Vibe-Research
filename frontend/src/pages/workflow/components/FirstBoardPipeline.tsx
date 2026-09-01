@@ -959,6 +959,7 @@ export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCand
     <div>
       {/* 总分筛选滑块 */}
       <div className="mb-2 flex items-center gap-2">
+        <span className="text-[10px] text-amber-400/80">⚠ §44 未验证</span>
         <span className="text-xs text-muted-foreground">总分≥</span>
         <input
           type="range"

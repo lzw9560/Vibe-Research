@@ -137,4 +137,14 @@ describe("FirstBoardPipeline 主视图 (S075 077)", () => {
     expect(screen.getByText("卖出提醒")).toBeInTheDocument();
     expect(screen.getByText("暴风雨预警")).toBeInTheDocument();
   });
+
+  it("候选池滑块挂 §44 未验证标签 + n 显示（S098 safeguard 钉1）", () => {
+    renderPipeline();
+    // 点"候选池"展开 CandidateScoreTable
+    fireEvent.click(screen.getByText("候选池"));
+    // 滑块行渲染 §44 标签（§44 safeguard——滑块不 auto-select，显 §44+n 让用户知情手选）
+    expect(screen.getByText(/§44 未验证/)).toBeInTheDocument();
+    // n 显示（filtered.length 只符合）
+    expect(screen.getByText(/只符合/)).toBeInTheDocument();
+  });
 });

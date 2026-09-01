@@ -60,10 +60,10 @@ POSITION_PARAMS: dict = {
 # ===========================================================================
 
 def select_for_entry(open_confirmed: list[dict], market_light: str) -> list[dict]:
-    """建仓选股——按评分排序取前 N 只（绿灯 5/黄灯 3/红灯 0），等权分配仓位。
+    """建仓选股——按确认时间序取前 N 只（§44 合规，不按 score auto-rank；绿灯5/黄灯3/红灯0 等权分配仓位）。
 
     Args:
-        open_confirmed: 来自 first_board_confirm 的 open_confirmed（已按 total 降序）。
+        open_confirmed: 来自 first_board_confirm 的 open_confirmed（按确认时间序 timestamp 升序，S098 §44 合规）。
         market_light: 市场判定灯位 "green"/"yellow"/"red"。
 
     Returns:
@@ -360,7 +360,7 @@ def run_first_board_position(
     """Phase 3 主入口。
 
     Args:
-        open_confirmed: 来自 first_board_confirm 的 open_confirmed（已按 total 降序）。
+        open_confirmed: 来自 first_board_confirm 的 open_confirmed（按确认时间序 timestamp 升序，S098 §44 合规）。
         market_judge: 来自 first_board_market_env 的 3 因素判定，含 light。
         entry_prices: {code: price} 预填建仓价（人工点确认后传入）。
                       None → 用 tencent_quote 实时取开盘价。
