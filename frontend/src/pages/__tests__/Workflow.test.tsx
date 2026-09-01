@@ -108,6 +108,17 @@ vi.mock("@/components/workflow/StrategyMatchMatrix", () => ({
   ),
 }));
 
+// S099: mock PipelineTopology（echarts.init 在 jsdom 无 canvas renderer，stub 避免崩溃）。
+// S099 重构后前瞻 Tab 主组件是 PipelineTopology；PremarketSelectionSection 移入其 ③ fold（defaultOpen=false），
+// 故 forward date 透传到 PipelineTopology 的 forward prop（原 premarket-selection data-date assert 改测 pipeline-topology data-forward）。
+vi.mock("@/components/pipeline/PipelineTopology", () => ({
+  PipelineTopology: ({ forward, F }: { forward: string; F: string }) => (
+    <div data-testid="pipeline-topology" data-forward={forward} data-F={F}>
+      PipelineTopology
+    </div>
+  ),
+}));
+
 import Workflow from "@/pages/Workflow";
 
 // ---- dateTriplet 假数据 ----
@@ -195,12 +206,12 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     });
   });
 
-  it("点击前瞻 Tab → 渲染 PremarketSelectionSection", async () => {
+  it("点击前瞻 Tab → 渲染 PipelineTopology", async () => {
     renderAt();
     fireEvent.click(getTabButton("当日"));
     fireEvent.click(getTabButton("前瞻"));
     await waitFor(() => {
-      expect(screen.getByTestId("premarket-selection")).toBeInTheDocument();
+      expect(screen.getByTestId("pipeline-topology")).toBeInTheDocument();
     });
   });
 
@@ -368,10 +379,10 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     expect(pmb.getAttribute("data-stage")).toBe("post_market");
   });
 
-  it("前瞻 Tab → PremarketSelectionSection 收 dateTriplet.forward", async () => {
+  it("前瞻 Tab → PipelineTopology 收 dateTriplet.forward", async () => {
     renderAt();
     fireEvent.click(getTabButton("前瞻"));
-    const ps = await waitFor(() => screen.getByTestId("premarket-selection"));
-    expect(ps.getAttribute("data-date")).toBe("2026-08-22"); // = triplet.forward
+    const pt = await waitFor(() => screen.getByTestId("pipeline-topology"));
+    expect(pt.getAttribute("data-forward")).toBe("2026-08-22"); // = triplet.forward
   });
 });

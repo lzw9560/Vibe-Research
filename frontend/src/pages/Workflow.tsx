@@ -4,7 +4,7 @@
 // 顶部公共区：PageHeader + date picker + 锚条 + TaskStatusCard。
 // useMarketClock 接入双定时器（15:00 复盘推进 + 17:15 F 推进）。
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -20,17 +20,13 @@ import { useDateTriplet, usePreMarketRefresh, usePreMarketDates, usePreMarketBri
 import { useCrossValidationGroups } from "@/lib/query/useCrossValidation";
 import { useMarketClock } from "@/lib/useMarketClock";
 import { TaskStatusCard } from "@/components/workflow/TaskStatusCard";
-import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
-import CandidateFunnelEmbed from "@/components/workflow/CandidateFunnelEmbed";
 import { CrossValidationBadge } from "@/components/workflow/CrossValidationBadge";
 import { P2RiskPanel } from "@/components/workflow/P2RiskPanel";
 import { WeatherDecisionBar } from "@/components/workflow/WeatherDecisionBar";
 import { ContextTab } from "@/components/workflow/ContextTab";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { StrategySubPipelineView } from "@/components/pipeline/StrategySubPipelineView";
-import { NonLimitupLane } from "@/components/pipeline/NonLimitupPlaceholder";
-import { CandidateFactorTable } from "@/components/workflow/CandidateFactorTable";
 import { WinRateCompareSection } from "@/components/workflow/WinRateCompareSection";
+import { PipelineTopology } from "@/components/pipeline/PipelineTopology";
 import type { DateTripletResponse } from "@/lib/api";
 
 // 三视图组件懒加载（已有路由也懒加载，此处统一）
@@ -339,20 +335,15 @@ export default function Workflow() {
 }
 
 // ===========================================================================
-// S094 附录 A：前瞻 Tab 双 pipeline 互斥切换重构。
-// 布局：前置共享区 → [涨停叉 | 非涨停叉] 切换（默认涨停）→ 当前叉内容 → 后置共享区
-// 前置共享区（辅助角色，只显一次）：板块轮动 · 语境(ContextTab) · 情绪天气(WeatherDecisionBar)
+// S099 拓扑主视图重构：前瞻 Tab 以 echarts graph ①~⑧ 替代垂直节点列表。
+// 布局：前置共享区 → PipelineTopology（graph 主视图 + ②⑦展开 + ①③⑤⑥⑦⑧折叠）→ ④交叉验证折叠 → 后置共享区
 // 涨停叉：① 涨停股池+漏斗 → ② 战法匹配（7战法分组视图）→ ③ breakout → ④ 交叉验证
 // 非涨停叉：⑤ 选股宇宙 → ⑥ K线形态 → ⑦ 非涨停战法分组视图 → ⑧ 候选终选
-// 后置共享区：风控非对称 + P2 仓位（advisory 摘要并入）
-// 删除（附录 A4）：FactorSection（因子漏斗）｜ advisory 仓位详情入口（并入后置共享区）｜ T1Tab ｜ "辅助决策" CollapsibleFold
-// 板块轮动只渲染一个实例（前置共享区）——SelectionPipeline 内部不渲染（sharedSectorRotation=true）
+// graph 显示双叉（不再互斥切换）——②⑦ 金框节点 click 展开战法分组 inline。
 // 数据源：usePreMarketBriefing(F) + useCrossValidationGroups(F, forward)
 // 工程底线：不臆造——query 无数据返空数组；组件缺数据返 null / "—"。
 // 历史统计特征标注：参考值，非执行指令；市场有风险。
 // ===========================================================================
-
-type ForwardLane = "limitup" | "non-limitup";
 
 function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string; urlDate?: string }) {
   // 数据源：前瞻简报（F 日收盘数据算出来的选 T+1 标的结果）
@@ -368,10 +359,6 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
   });
   const recs = advisory?.recommendations ?? [];
 
-  // S094 附录 A1：activeLane 切换状态提升到 ForwardTabSection——
-  // 前置/后置共享区在切换两叉时不抖动（前置共享区只渲染一次板块轮动）
-  const [activeLane, setActiveLane] = useState<ForwardLane>("limitup");
-
   const funnelLayers = briefing?.funnel_layers;
 
   return (
@@ -379,24 +366,19 @@ function ForwardTabSection({ F, forward, urlDate }: { F: string; forward: string
       {/* ============ 前置共享区（辅助角色，顶部折叠态——展开才看详情） ============ */}
       <PreSharedRegion F={F} briefing={briefing} />
 
-      {/* ============ [涨停叉 | 非涨停叉] 切换（默认涨停，无"全部"选项） ============ */}
-      <ForwardLaneSwitcher activeLane={activeLane} onChange={setActiveLane} />
+      {/* ============ 拓扑主视图（echarts graph ①~⑧ + 分叉 + ②⑦展开 + ①③⑤⑥⑦⑧折叠） ============ */}
+      <PipelineTopology
+        briefing={briefing}
+        F={F}
+        forward={forward}
+        funnelLayers={funnelLayers}
+        cv={cv}
+      />
 
-      {/* ============ 当前叉内容（互斥，一次只显一叉）——pipeline 主体 ============ */}
-      {activeLane === "limitup" ? (
-        <LimitupLaneContent
-          briefing={briefing}
-          F={F}
-          forward={forward}
-          funnelLayers={funnelLayers}
-          cv={cv}
-        />
-      ) : (
-        <NonLimitupLaneContent
-          briefing={briefing}
-          F={F}
-        />
-      )}
+      {/* ============ ④ 交叉验证（folded——CrossValidationSummary 留在 Workflow 内避免循环依赖） ============ */}
+      <CollapsibleFold title="④ 交叉验证" subtitle="漏斗 ∩ breakout" defaultOpen={false}>
+        <CrossValidationSummary groups={cv} />
+      </CollapsibleFold>
 
       {/* ============ 后置共享区：风控 + P2 仓位（advisory 摘要并入） ============ */}
       <PostSharedRegion briefing={briefing} recs={recs} urlDate={urlDate} />
@@ -424,151 +406,6 @@ function PreSharedRegion({ F, briefing }: { F: string; briefing: import("@/lib/a
         </div>
       )}
     </CollapsibleFold>
-  );
-}
-
-/** [涨停叉 | 非涨停叉] 切换——原生 button + tailwind，默认涨停，无"全部"选项 */
-function ForwardLaneSwitcher({ activeLane, onChange }: { activeLane: ForwardLane; onChange: (lane: ForwardLane) => void }) {
-  const options: { value: ForwardLane; label: string }[] = [
-    { value: "limitup", label: "涨停叉" },
-    { value: "non-limitup", label: "非涨停叉" },
-  ];
-  return (
-    <div className="my-2 inline-flex rounded-lg border border-border/40 bg-card/30 p-0.5">
-      {options.map((opt) => {
-        const active = activeLane === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className={
-              active
-                ? "rounded-md bg-primary/15 px-4 py-1.5 text-sm font-medium text-primary transition-colors"
-                : "rounded-md px-4 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-card/60 hover:text-foreground"
-            }
-            aria-pressed={active}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** F4：mini 漏斗概览条——涨停池 → R1 → 终选 → 战法命中，水平横排胶囊数字标签。
- *  数据源：涨停池 = market_emotion.zt_count ?? finals.length（fallback 终选数，诚实标注非涨停总数）；
- *  R1 = funnel_layers 中 layer_id="R1" 的 output_count；终选 = final_candidates.length；
- *  战法命中 = scored_candidates 按 code 去重后的独立股票数（非股票×战法组合数）。
- *  紧凑一行（高度 ≤28px），text-[10px] 小字。折叠态不显示（只在 LimitupLaneContent 展开时渲染）。 */
-function MiniFunnelOverview({
-  briefing,
-  funnelLayers,
-}: {
-  briefing: import("@/lib/api").PreMarketBriefing | null | undefined;
-  funnelLayers: import("@/lib/api").FunnelLayer[] | undefined;
-}) {
-  const ztCount = briefing?.market_emotion?.zt_count ?? briefing?.final_candidates?.length;
-  const r1Out = funnelLayers?.find((l) => l.layer_id === "R1")?.output_count;
-  const finalsLen = briefing?.final_candidates?.length;
-  // 去重：一只股票被多战法命中只计一次（82 组合 → 46 独立股票）
-  const scoredUniqueCodes = new Set(briefing?.scored_candidates?.map((s) => s.code) ?? []);
-  const scoredLen = scoredUniqueCodes.size;
-  const nodes = [
-    { label: "涨停池", value: ztCount },
-    { label: "R1", value: r1Out },
-    { label: "终选", value: finalsLen },
-    { label: "战法命中", value: scoredLen },
-  ];
-  return (
-    <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border/30 bg-card/20 px-2 py-1" style={{ height: "28px" }}>
-      {nodes.map((n, i) => (
-        <div key={n.label} className="flex items-center gap-1">
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-muted/30 px-1.5 py-0.5">
-            <span className="text-[10px] text-muted-foreground/70">{n.label}</span>
-            <span className="text-[10px] font-bold tabular-nums text-foreground">
-              {n.value ?? "—"}
-            </span>
-          </span>
-          {i < nodes.length - 1 && <span className="text-[10px] text-muted-foreground/40">→</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** 涨停叉内容：① 涨停股池+漏斗 → ② 战法匹配（7战法分组视图）→ ③ breakout → ④ 交叉验证 */
-function LimitupLaneContent({
-  briefing, F, forward, funnelLayers, cv,
-}: {
-  briefing: import("@/lib/api").PreMarketBriefing | null | undefined;
-  F: string;
-  forward: string;
-  funnelLayers: import("@/lib/api").FunnelLayer[] | undefined;
-  cv: import("@/lib/query/useCrossValidation").CrossValidationGroups;
-}) {
-  const navigate = useNavigate();
-  return (
-    <div className="space-y-2">
-      {/* F4：mini 漏斗概览条——涨停池 → R1 → 终选 → 战法命中，水平横排胶囊数字标签 */}
-      <MiniFunnelOverview briefing={briefing} funnelLayers={funnelLayers} />
-
-      {/* ① 涨停股池+漏斗（CandidateFunnelEmbed，date=F）—— R1 涨停池全量直通，R2/R3 已下放战法不显 */}
-      <CandidateFunnelEmbed
-        date={briefing?.data_date ?? F}
-        onPick={(code) => navigate(`/stock/${code}`)}
-        snapshotLayers={briefing?.from_snapshot ? funnelLayers : funnelLayers}
-        scoredCandidates={briefing?.scored_candidates}
-        marketScanScored={briefing?.market_scan_scored}
-        finalCandidates={briefing?.final_candidates}
-        ztPoolSize={briefing?.market_emotion?.zt_count ?? undefined}
-        sharedSectorRotation={true}  // 附录 A2：板块轮动由前置共享区统一渲染
-      />
-
-      {/* ①b 候选因子表（异步回填的基因分/八项标准/量价/资金/涨停池/分时派生/K线派生） */}
-      {briefing?.final_candidates && briefing.final_candidates.length > 0 && (
-        <CollapsibleFold
-          title="候选因子表"
-          subtitle={`终选 ${briefing.final_candidates.length} 只 · 基因分 · 八项标准 · 量价/资金 · 涨停池原始 · 分时派生 · K线派生`}
-          defaultOpen={false}
-        >
-          <CandidateFactorTable candidates={briefing.final_candidates} date={briefing?.data_date ?? F} />
-        </CollapsibleFold>
-      )}
-
-      {/* ② 涨停战法匹配（7 战法分组视图）—— 替代原独立 CollapsibleFold(StrategyMatchMatrix) */}
-      <StrategySubPipelineView
-        scoredCandidates={briefing?.scored_candidates}
-        marketScanScored={briefing?.market_scan_scored}
-        lane="limitup"
-        scoredTotal={briefing?.scored_candidates?.length}
-      />
-
-      {/* ③ breakout 弱信号（PremarketSelectionSection，date=forward） */}
-      <PremarketSelectionSection date={forward} />
-
-      {/* ④ 交叉验证徽章（漏斗∩breakout 双重确认） */}
-      <CrossValidationSummary groups={cv} />
-    </div>
-  );
-}
-
-/** 非涨停叉内容：⑤⑥⑦⑧ 全部在 NonLimitupLane 内部（⑦复用 StrategySubPipelineView） */
-function NonLimitupLaneContent({
-  briefing, F,
-}: {
-  briefing: import("@/lib/api").PreMarketBriefing | null | undefined;
-  F: string;
-}) {
-  return (
-    <div className="space-y-2">
-      {/* ⑤⑥⑦⑧ 选股宇宙 + K线形态 + 战法匹配 + 候选终选（NonLimitupLane 自管四节点结构） */}
-      <NonLimitupLane
-        date={briefing?.data_date ?? F}
-        candidates={briefing?.market_scan_scored}
-      />
-    </div>
   );
 }
 

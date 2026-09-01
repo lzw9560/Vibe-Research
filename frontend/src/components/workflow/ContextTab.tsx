@@ -11,6 +11,13 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Badge } from "@/components/ui/Badge";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 
+type SectorItem = {
+  rank: number;
+  industry: string;
+  strength: number;
+  zt_count_today: number;
+};
+
 interface Props {
   date?: string;
 }
@@ -35,7 +42,7 @@ export function ContextTab({ date }: Props) {
     queryFn: () => api.sectorRotation(date ?? localTodayStr()),
     retry: false,
   });
-  const sectors = sectorRot?.strength_rank ?? [];
+  const sectors: SectorItem[] = (sectorRot?.strength_rank ?? []) as SectorItem[];
 
   // S088 盘前暴风雨预测（独立于事后 STI 检测）
   const { data: storm } = useQuery({

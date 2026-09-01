@@ -13,12 +13,13 @@ test.describe('S094 双 pipeline 重构', () => {
     await expect(page.getByText(/涨停战法匹配/i).first()).toBeVisible({ timeout: 30000 });
   });
 
-  test('AC8 切换非涨停叉⑦战法匹配加载（默认涨停，点切换按钮）', async ({ page }) => {
+  test('AC8 非涨停叉⑦战法匹配加载（双叉同显，点开 ⑤⑥⑦⑧ fold）', async ({ page }) => {
     await page.goto('/workflow?view=forward');
     await expect(page).toHaveURL(/\/workflow/, { timeout: 30000 });
-    // S094 附录 A：前瞻 Tab [涨停叉|非涨停叉] 互斥切换，默认涨停——点"非涨停叉"切换
-    await page.getByRole('button', { name: /非涨停叉/ }).click();
-    // 非涨停叉⑦ NonLimitupPlaceholder → StrategySubPipelineView lane=non-limitup
+    await page.waitForSelector('canvas', { timeout: 30000 });
+    // S099: ForwardLaneSwitcher 移除，graph 双叉同显。⑤⑥⑦⑧ 非涨停叉在 CollapsibleFold——点开
+    await page.getByRole('button', { name: /⑤⑥⑦⑧ 非涨停叉/ }).click();
+    // NonLimitupLane → ⑦ StrategySubPipelineView lane=non-limitup → "非涨停战法匹配"
     await expect(page.getByText(/非涨停战法匹配/i).first()).toBeVisible({ timeout: 30000 });
   });
 

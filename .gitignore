@@ -65,6 +65,8 @@ frontend/tsconfig.tsbuildinfo
 **/playwright-report/
 **/test-results/
 candidates-smoke.png
+# e2e 验收截图（Playwright artifact，不进仓库）
+frontend/e2e/screenshots/
 
 # 项目内私有数据根（API key/持仓/研报，绝不进 git）
 .vibe-research/
