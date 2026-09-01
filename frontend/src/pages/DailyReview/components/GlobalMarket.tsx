@@ -17,7 +17,10 @@ export function GlobalMarket({ globalIdx }: Props) {
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {globalIdx.map((g) => (
           <GlassCard key={g.key} className="p-3">
-            <p className="truncate text-xs text-muted-foreground">{g.name} <span className="text-muted-foreground/40">{g.region}</span></p>
+            <p className="truncate text-xs text-muted-foreground">
+              {g.name} <span className="text-muted-foreground/40">{g.region}</span>
+              {g.is_delayed && <span className="ml-1 text-[10px] text-muted-foreground/60">延时</span>}
+            </p>
             <p className={cn("mt-1 font-mono text-lg font-bold", g.change_pct == null ? "text-foreground" : pctColor(g.change_pct))}>{g.price ?? "—"}</p>
             <p className={cn("text-xs", g.change_pct == null ? "text-muted-foreground" : pctColor(g.change_pct))}>
               {g.change_pct == null ? "—" : `${g.change_pct > 0 ? "+" : ""}${g.change_pct}%`}

@@ -248,6 +248,9 @@ export function StockData() {
               <h2 className="text-xl font-bold">{gstock.name}</h2>
               <span className="font-mono text-sm text-muted-foreground">{gstock.code}</span>
               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">{gstock.market}</span>
+              {gstock.quote.is_delayed && (
+                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground" title="行情走延时镜像（push2delay，约 15 分钟）">延时</span>
+              )}
               <span className="ml-auto text-xs text-muted-foreground">{mktName(gstock.market)}</span>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

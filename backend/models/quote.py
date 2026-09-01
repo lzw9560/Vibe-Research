@@ -50,6 +50,7 @@ class Quote(BaseModel):
     vol_ratio: float | None = None  # 量比（S008 T13a 加，bidding_monitor/activity 用）
     pe_static: float | None = None  # 静态 PE（S008 T13a 补齐 raw 全字段）
     updated_at: str | None = None  # ISO+08:00
+    is_delayed: bool = False  # S135：延时数据标记（gstock push2delay 镜像→True；A股 tencent 实时→False 默认）
 
     @property
     def market_cap_yi(self) -> float | None:

@@ -165,6 +165,7 @@ export interface IndustryData { top: IndustryRow[]; bottom: IndustryRow[]; total
 export interface GlobalIndex {
   key: string; name: string; region: string;
   price: number | null; change_pct: number | null;
+  is_delayed?: boolean;  // S135：push2delay 延时镜像→true（gstock.py:128 透传）
 }
 // S008 T9：GlobalQuote 退役，quote 子字段走 S007 Quote（扁平）。amount→turnover、
 // mcap→market_cap、prev_close→last_close；open/high/low 不在 Quote（如需再补）。
@@ -179,6 +180,7 @@ export interface GlobalQuote {
   code: string; name: string;
   price: number | null; open: number | null; high: number | null; low: number | null;
   prev_close: number | null; amount: number | null; mcap: number | null; change_pct: number | null;
+  is_delayed?: boolean;  // S135：push2delay 延时镜像→true（gstock._quote_from 透传，mapper 落 Quote）
 }
 export interface GlobalStock {
   code: string; name: string; market: string;

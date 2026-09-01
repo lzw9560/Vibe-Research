@@ -221,6 +221,19 @@ def test_quote_from_gstock_us_hk_flattens():
     assert q.market_cap == 3e12
 
 
+def test_quote_from_gstock_us_hk_passes_is_delayed():
+    """S135：push2delay 延时标记从 inner.quote 透传到 Quote.is_delayed（不撒谎把延时当实时）。"""
+    raw_delayed = {"code": "AAPL", "name": "Apple", "market": "US",
+                   "quote": {"price": 190.0, "change_pct": 1.2, "is_delayed": True}}
+    raw_live = {"code": "AAPL", "name": "Apple", "market": "US",
+                "quote": {"price": 190.0, "change_pct": 1.2, "is_delayed": False}}
+    raw_missing = {"code": "AAPL", "name": "Apple", "market": "US",
+                   "quote": {"price": 190.0, "change_pct": 1.2}}
+    assert mappers.quote_from_gstock_us_hk(raw_delayed).is_delayed is True
+    assert mappers.quote_from_gstock_us_hk(raw_live).is_delayed is False
+    assert mappers.quote_from_gstock_us_hk(raw_missing).is_delayed is False  # 缺键默认 False（非延时）
+
+
 def test_quote_from_gstock_hk():
     raw = {"code": "00700", "name": "腾讯", "market": "HK",
            "quote": {"price": 300.0, "change_pct": -0.5}}

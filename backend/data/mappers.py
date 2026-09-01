@@ -140,6 +140,7 @@ def quote_from_gstock_us_hk(raw: dict) -> Quote:
         turnover=_numf(inner.get("amount")),
         market_cap=_numf(inner.get("mcap")),
         last_close=_numf(inner.get("prev_close")),
+        is_delayed=bool(inner.get("is_delayed", False)),  # S135：push2delay 延时标记透传
     )
 
 
