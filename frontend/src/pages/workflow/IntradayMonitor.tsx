@@ -5,7 +5,7 @@ import { WorkflowStage } from "./components/WorkflowStage";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
 import { MarketKillSwitchBanner } from "@/components/workflow/MarketKillSwitchBanner";
 import { CalendarFactorHint } from "@/components/workflow/CalendarFactorHint";
-import { StateMachineDashboard } from "@/components/intraday/StateMachineDashboard";
+import { CandidateStateRail } from "@/components/workflow/CandidateStateRail";
 import { EmotionTrendChart } from "@/components/intraday/EmotionTrendChart";
 import { HoldingsEmotionTable } from "@/components/intraday/HoldingsEmotionTable";
 import { ScenarioCards } from "@/components/intraday/ScenarioCards";
@@ -103,9 +103,9 @@ export default function IntradayMonitor() {
         )}
       </div>
 
-      {/* 状态机看板 */}
+      {/* 标的状态 rail（S143，date=triplet.today，修 IntradayMonitor 全零 bug） */}
       <div className="mb-6">
-        <StateMachineDashboard />
+        <CandidateStateRail date={triplet?.today} />
       </div>
 
       {/* Layer 1：情绪走势图（被动展示） */}

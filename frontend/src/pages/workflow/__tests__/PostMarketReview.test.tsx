@@ -8,6 +8,7 @@ const qMock = vi.hoisted(() => ({
   useShadowComparison: vi.fn(),
   useTransitionWorkflowState: vi.fn(),
   usePreMarketBriefing: vi.fn(),
+  useWorkflowStates: vi.fn(),
   useDateTriplet: vi.fn(),
 }));
 
@@ -16,6 +17,7 @@ vi.mock("@/lib/query", () => ({
   useShadowComparison: qMock.useShadowComparison,
   useTransitionWorkflowState: qMock.useTransitionWorkflowState,
   usePreMarketBriefing: qMock.usePreMarketBriefing,
+  useWorkflowStates: qMock.useWorkflowStates,
   useDateTriplet: qMock.useDateTriplet,
 }));
 
@@ -41,6 +43,8 @@ describe("PostMarketReview S054", () => {
     qMock.useShadowComparison.mockReturnValue({ data: null });
     qMock.useTransitionWorkflowState.mockReturnValue({ mutate: vi.fn(), isPending: false });
     qMock.usePreMarketBriefing.mockReturnValue({ data: null });
+    // S143：CandidateStateRail 调 useWorkflowStates，mock 防崩（rail date 由 PostMarketReview 的 date prop 传）
+    qMock.useWorkflowStates.mockReturnValue({ data: null });
   });
 
   it("无快照 → no_snapshot 空态文案", () => {

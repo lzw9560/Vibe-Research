@@ -75,7 +75,11 @@ describe("IntradayMonitor (S063)", () => {
     expect(screen.getByText("盘中辅助")).toBeInTheDocument();
   });
 
-  it("AC12：状态机看板标题渲染", () => {
+  it("AC12：状态机看板标题渲染（S143 rail 需 triplet.today）", () => {
+    // S143：StateMachineDashboard → CandidateStateRail(date=triplet?.today)；
+    // triplet 空时 rail 返 null，故 AC12 须给 triplet.today 才见「状态机看板」
+    qMocks.useDateTriplet.mockReturnValue({ data: { today: "2026-09-01", stage: "intraday" } });
+    qMocks.useWorkflowStates.mockReturnValue({ data: { counts: { pending: 1 } } });
     renderPage();
     expect(screen.getByText("状态机看板")).toBeInTheDocument();
   });

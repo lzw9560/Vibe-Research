@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
 import { EntryCard } from "@/components/workflow/EntryCard";
+import { CandidateStateRail } from "@/components/workflow/CandidateStateRail";
 import { VerificationCardBlock } from "@/components/workflow/VerificationCardBlock";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { PipelineProgressBar } from "@/components/workflow/PipelineProgressBar";
@@ -97,6 +98,11 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
       {/* S063 T27：Pipeline 进度条（盘后阶段高亮） */}
       <div className="mb-4">
         <PipelineProgressBar current="post" />
+      </div>
+
+      {/* 标的状态 rail（S143，date=triplet.review，跨语境一致性） */}
+      <div className="mb-4">
+        <CandidateStateRail date={date} />
       </div>
 
       {/* S092 R3a：过渡窗渐进填充占位横幅。
