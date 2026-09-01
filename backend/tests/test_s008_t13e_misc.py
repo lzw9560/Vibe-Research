@@ -11,7 +11,7 @@
 """
 import astock
 import risk_models
-from candidate_funnel.sources import catalyst, fund_flow
+from candidate_funnel.sources import activity, catalyst, fund_flow
 from data.mappers import (
     announcement_from_dict,
     billboard_detail_from_dict,
@@ -171,3 +171,27 @@ def test_catalyst_parallel_multi_codes(monkeypatch):
 def test_catalyst_empty_codes():
     """S137 A3：codes=[] → {}（不启 executor）。"""
     assert catalyst.fetch_catalyst([], "2026-07-30") == {}
+
+
+# ── S138：activity 并行化（mirror fund_flow 范式）──────────────────────
+
+def test_activity_parallel_multi_codes(monkeypatch):
+    """S138 A1：多股并行采集 shape 同（max_workers=5，当日路径）。"""
+    monkeypatch.setattr(astock, "tencent_quote", lambda codes: {c: {"name": c} for c in codes})
+    monkeypatch.setattr(astock, "kline", lambda c, cat=4, off=10: [])
+    out = activity.fetch_activity(["600519", "000001", "002415"], "2099-01-01")  # 未来日=当日路径
+    assert len(out) == 3
+    assert set(out.keys()) == {"600519", "000001", "002415"}
+    expected_keys = {"name", "price", "change_pct", "turnover_pct", "vol_ratio",
+                     "amount_yi", "amplitude_pct", "limit_up", "limit_down", "_as_of",
+                     "float_market_cap", "max_high_pct", "shadow_length_pct", "ma_5_status",
+                     "prev_turnover_pct", "last_close", "open", "change_amt",
+                     "pe_ttm", "mcap_yi", "pb", "prev_amount_yi"}
+    for c, e in out.items():
+        assert expected_keys <= set(e.keys())  # shape 同原串行
+        assert "missing" in e  # kline 空 → kline_derived missing
+
+
+def test_activity_empty_codes():
+    """S138 A3：codes=[] → {}。"""
+    assert activity.fetch_activity([], "2026-07-30") == {}
