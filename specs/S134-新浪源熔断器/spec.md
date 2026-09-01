@@ -192,6 +192,8 @@ sina_kline 留默认 5——kline_resolver 有 mootdx/akshare 回退，超时非
 
 **接受**——后果轻微（稍延迟 trip / 稍多 probe，非正确性破坏；eastmoney/ths 同样无锁且生产稳定）。**若并发问题实测出现**，加 `threading.Lock` 包 `allow_request`/`record_*`（follow-up，非本 spec——保持与 eastmoney/ths 一致性）。
 
+> **2026-09-01 审查实测（Lock follow-up 证伪）**：写并发探测脚本实测——10000 次并发 `record_failure` **lost 0**（`failure_count`=10000）；S134 真实场景（3 并发 failure, threshold=3）跑 2000 轮 **trip 率 100%**（race-miss 0）；10 并发 threshold=3 跑 1000 轮 trip 100%。**race 未复现**——CPython GIL 串行化 `record_failure` 纯 Python 操作（无 I/O / 无 C 释放点），并发线程实际串行执行，`failure_count` 不丢更新。故"加 `threading.Lock`"无价值（GIL 已串行化）+ 爆炸半径大（影响所有 breaker）+ 破坏与 eastmoney/ths 一致性。**Lock follow-up 证伪，维持无锁正确**——本节从"诚实接受风险"升级为"实证确认无 race"。
+
 ## 6. 验收标准
 
 - [ ] A1：`sina_financial` breaker OPEN（mock `allow_request→False`）→ `fetch_merged_periods("600519")` 返 `[]`（raise 被 per-table catch 吞），不抛冒泡。
@@ -237,7 +239,7 @@ sina_kline 留默认 5——kline_resolver 有 mootdx/akshare 回退，超时非
 - **R-fail1（test 污染）**：breaker 在 `fetch_raw` 内，monkeypatch `_fetch_json` raise 的测试会 `record_failure` 污染全局 `get_breaker("sina_*")`。**缓解**：R5 `sina_breaker` save/restore fixture（显式引用在操全局单例的测，如 A7）；`_FakeBreaker`（monkeypatch `get_breaker`）是主防污染（绕过全局 `_breakers`，review refuted 证明 test_s008/test_s108 不受影响）。
 - **R-fail2（health 读私有 `_breakers`）→ 已由 R8 解决**：`list_breakers()` 公开 API 替代私有 dict 读取，`circuit_breaker.py` 列入 §4。
 - **R-fail3（empty-200 漏检 soft-block）**：exception-only 抓不住 Sina 200+空 soft-block。**接受**——soft-block 模式未实测，YAGNI 留 follow-up；soft-block 是快速返空（不浪费 30s 超时），breaker fast-fail value 主要在 timeout/net-error。**若 follow-up 落地 empty-200-as-failure，须复查 R3**（§5.4 已注）。
-- **R-fail4（breaker 无锁并发）**：`failure_count` 自增/HALF_OPEN probe 可能 race。**接受**——Sina 无 rate-limit 锁（不比 eastmoney/ths，§5.9 已诚实标注），sync `get_anomaly` 走 threadpool 并发真实，但后果轻微（稍延迟 trip / 稍多 probe，非正确性破坏）。加 `threading.Lock` 留 follow-up（若实测并发问题），保持与 eastmoney/ths 一致性。
+- **R-fail4（breaker 无锁并发）**：`failure_count` 自增/HALF_OPEN probe 可能 race。**接受**——Sina 无 rate-limit 锁（不比 eastmoney/ths，§5.9 已诚实标注），sync `get_anomaly` 走 threadpool 并发真实，但后果轻微（稍延迟 trip / 稍多 probe，非正确性破坏）。加 `threading.Lock` 留 follow-up（若实测并发问题），保持与 eastmoney/ths 一致性。**2026-09-01 审查实测**：见 §5.9 实测结论——10000 并发 lost 0，S134 场景 2000 轮 trip 100%。race 未复现（GIL 串行化纯 Python `record_failure`）。Lock follow-up 证伪，维持无锁。
 - **回滚**：circuit_breaker.py 加 1 函数 + 2 源文件加 breaker 包裹 + 1 endpoint 加字段 + health 遍历 + conftest fixture + 新测——纯加法，无破坏性改（`detail` 留 string，`breaker_state` 不动，旧契约全共存）。回滚 = revert commit，无数据迁移、无 schema 改。
 
 ## 10. 冲突审查表（large spec，AGENTS.md §44 格式）
