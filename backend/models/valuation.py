@@ -36,3 +36,4 @@ class Valuation(BaseModel):
     updated_at: str | None = None  # ISO+08:00
     discrepancy: list[dict] | None = None  # S106：cross_validate 仲裁结果透传（[{field,verdict,deviation_pct}]）
     data_status: str | None = None  # S131 R3：PS/PCF 源断标 'hithink_unavailable'（非"无估值"），mapper 透传
+    forecast_status: str | None = None  # S132 R2：eps/peg 源断标 'empty_or_source_unavailable'（非"无分析师覆盖"），mapper 透传

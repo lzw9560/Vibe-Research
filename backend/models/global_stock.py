@@ -38,4 +38,5 @@ class GlobalStock(BaseModel):
     name: str | None = None
     market: str | None = None  # 原始标签 NASDAQ/NYSE/US/HK/KR（展示用）
     quote: Quote
+    quote_status: str | None = None  # S132 R1：源断标 'unavailable'（gstock us_hk_stock d is None），mapper 透传
     metrics: GlobalMetrics | None = None

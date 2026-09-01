@@ -571,3 +571,23 @@ S131 修 scan `wf_cad164bc-f17`（3 维 finder+对抗 verify+critic，16 agent�
 **critic 16 missed areas**（scan completeness critic flag，**未深扫非已确认**——登记 S132 follow-up，需下轮 scan+对抗 verify）：d3 risk_score/risk_level fallback 呈现 / score_components 无 status / OneDayRisk.last_updated / StormPrediction 最终聚合 / d5 query_quote/query_reports/query_global_stock/skyrocket/profit_forecast/cache-stale / d6 gstock/hot_money_seats/fund_flow/bids/akshare_src。
 
 **下一步候选**：S132 scan critic 16 missed（finder+对抗 verify 确认哪些真 lie）/ topology response data_status schema / 或停（承重链 + critic 6 漏扫 + 原 4 待修全闭合，gate 绿）。
+
+## S132 实现后状态（2026-09-01，AI-tool advisory 源断诚实化——critic STOP）
+
+S132 verify workflow `wf_8681ebb0-b63`（3 维对抗 verify 16 missed areas + critic，4 agent）确认 **2 confirmed_lying** + 13 actually_honest + 1 uncertain。**critic s133_recommendation: STOP**——承重链 S118-S131 全 honest，剩 2 advisory-display 级（喂 LLM/API display，不进 position/risk 决策），trivial 修，不开 scan 周期（"别陷验证循环 / §44 验够就停"）。本 spec 修 2 confirmed（S131 R3 ps_pcf_status 范式扩展），全量 ~2610 passed 0 回归。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| query_global_stock quote_status | ✅ 已修 | R1：`us_hk_stock`（gstock.py:289-302）`d is None`（双 host 全挂）时返 `quote_status='unavailable'`（非"valid null quote"）；GlobalStock model 加 quote_status 字段；mapper 透传 → LLM 见"源断" |
+| profit_forecast forecast_status | ✅ 已修 | R2：`full_valuation`（astock.py:176）`not rows`（akshare empty-DataFrame soft-block，非 DependencyMissing）时设 `forecast_status='empty_or_source_unavailable'`（非"无分析师覆盖"）；Valuation model 加 forecast_status 字段（与 data_status=PS/PCF 分立，两源独立）；mapper 透传 |
+
+**16 missed areas verify 结果**：
+- **2 confirmed_lying（已修，advisory MEDIUM）**：query_global_stock + profit_forecast（#5 AI工具）。
+- **13 actually_honest（不动）**：d3 risk_score/score_components/last_updated/StormPrediction 最终聚合（9-status data_status backstop 闭合 + S131 R1 闭合 StormPrediction）/ d5 query_quote（urllib raises HTTPError→{'error'}）/ query_skyrocket（S120 raise 传播）/ hithink cache-stale（5min TTL 可接受）/ d6 gstock.global_indices/hot_money_seats.fetch_billboard_dates/fund_flow._industry_of/stock_fund_flow_120d/akshare_src.chip_distribution/bids（consumer 已处理或 existing handling）。
+- **1 uncertain + 1 critic new**：query_reports（eastmoney_reports HTTP error masking，结构脆弱未证实）/ query_news parallel（akshare empty-DataFrame 同款，S131 scan 已记 uncertain）——**登记 follow-up，需下轮 scan+对抗 verify 确认，非已 confirmed**。
+
+**设计**：统一 S131 R3 范式（源断处设 status flag → mapper raw.get 透传 → model 加字段 → model_dump 喂 LLM 见"源断"非"无数据"）。forecast_status 与 data_status 分立（PS/PCF 源 vs eps/peg 源，两源独立）。
+
+**撒谎总账更新**：~53→~55 confirmed_lying 全修（S132 +2 advisory AI-tool）。**critic 6 漏扫 #1-#6 全闭合（S129-S131）。承重链 honesty audit 全闭合。** 16 missed: 2 confirmed 修 / 13 honest / 2 uncertain 登记。
+
+**下一步候选**（critic STOP，自然停止点）：query_reports/query_news uncertain 下轮 scan+verify 确认 / topology response data_status schema / 或停（承重链全 honest，gate 绿 ~2610，剩皆 advisory 级 diminishing returns）。**honesty audit 到此停止。**

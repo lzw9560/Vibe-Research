@@ -300,6 +300,7 @@ def us_hk_stock(query: str) -> dict:
         "market": info["market"],
         "quote": quote,
         "metrics": _key_metrics(info["secucode"]) if info["market"] != "KR" else None,  # 韩股东财无 F10 财务
+        "quote_status": "unavailable" if d is None else None,  # S132 R1：源断（双 host 全挂）标 unavailable 非"valid null quote"，mapper 透传 LLM
     }
 
 

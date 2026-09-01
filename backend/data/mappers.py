@@ -265,6 +265,7 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         dividend_yield=_numf(raw.get("dividend_yield")),
         discrepancy=raw.get("discrepancy"),  # S106：数据层 cross_validate 仲裁结果透传
         data_status=raw.get("ps_pcf_status"),  # S131 R3：PS/PCF 源断标（astock full_valuation except 块设 'hithink_unavailable'）
+        forecast_status=raw.get("forecast_status"),  # S132 R2：eps/peg 源断标（astock full_valuation if not rows 设 'empty_or_source_unavailable'）
         forward_pe=_numf(raw.get("pe_26e")) or None,  # S125 契约补全：forward PE 类，0 永不合法
         consensus_eps=_numf(raw.get("eps_26e")),
         cagr_pct=_numf(raw.get("cagr_pct")),
@@ -390,6 +391,7 @@ def global_stock_from_gstock(raw: dict) -> GlobalStock:
         name=raw.get("name"),
         market=raw.get("market"),
         quote=quote_from_gstock_us_hk(raw),
+        quote_status=raw.get("quote_status"),  # S132 R1：源断标透传
         metrics=global_metrics_from_gstock(raw.get("metrics")),
     )
 

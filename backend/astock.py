@@ -178,6 +178,11 @@ def full_valuation(code: str) -> dict:
         out["forecast_note"] = "一致预期需安装 akshare"
         return out
 
+    # S132 R2：empty-DataFrame（akshare soft-block/无覆盖，非 DependencyMissing）标 forecast_status
+    # 非"无分析师覆盖"——mapper 透传 forecast_status 给 LLM 区分"源断"vs"合法无覆盖"
+    if not rows:
+        out["forecast_status"] = "empty_or_source_unavailable"
+
     def _eps(row: dict):
         # 同花顺对覆盖不全的股票会缺「均值」或给 '-' 占位，硬取会让整只票的估值接口 502
         try:
