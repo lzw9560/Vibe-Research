@@ -147,3 +147,27 @@ def test_fund_flow_dragon_tiger_via_model(monkeypatch):
     monkeypatch.setattr(astock, "dragon_tiger_board", lambda c, trade_date=None, look_back=30: {"institution": {"net_amt": 3e8}})
     out = fund_flow.fetch_fund_flow(["600519"], "2026-07-30")
     assert out["600519"]["dragon_tiger_inst_net"] == 3e8
+
+
+# ── S137：catalyst 并行化（mirror fund_flow 范式）──────────────────────
+
+def test_catalyst_parallel_multi_codes(monkeypatch):
+    """S137 A1：多股并行采集 shape 同（max_workers=5，mirror fund_flow）。"""
+    monkeypatch.setattr(astock, "announcements", lambda c, limit=10: [
+        {"title": "预增", "date": "2026-07-30"}])
+    monkeypatch.setattr(astock, "concept_blocks", lambda c, **k: {"boards": [{"name": "新能源"}]})
+    monkeypatch.setattr(catalyst, "fetch_sector_flow", lambda c, as_of: 1.2e8)
+
+    out = catalyst.fetch_catalyst(["600519", "000001", "002415"], "2026-07-30")
+    assert len(out) == 3
+    assert set(out.keys()) == {"600519", "000001", "002415"}
+    for c, e in out.items():
+        assert e["announcements"] == [{"title": "预增", "date": "2026-07-30", "type": "预增"}]
+        assert e["concepts"] == ["新能源"]
+        assert e["sector_flow"] == 1.2e8
+        assert "missing" in e
+
+
+def test_catalyst_empty_codes():
+    """S137 A3：codes=[] → {}（不启 executor）。"""
+    assert catalyst.fetch_catalyst([], "2026-07-30") == {}
