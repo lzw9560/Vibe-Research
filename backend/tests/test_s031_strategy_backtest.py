@@ -21,7 +21,8 @@ def _gene_matching_first_plate():
 
 
 def _bars_with_profit_on_day1():
-    """K 线：2026-08-01 为信号日，次日开盘 10.5 入场，当日 high=11.5 触发 +8% 止盈。"""
+    """K 线：2026-08-01 为信号日（T），T+1 开盘 10.5 入场（买入日不可卖，S144 T+1），
+    T+2 high=12 触发 +8% 止盈（10.5×1.08=11.32）。旧代码在 T+1 high=11.5 触发，T+1 修正后挪到 T+2。"""
     return [
         SimpleNamespace(date="2026-08-01", open=10, high=11, low=9.5, close=10.5),
         SimpleNamespace(date="2026-08-02", open=10.5, high=11.5, low=10.5, close=11),

@@ -390,6 +390,188 @@ class TestGetForwardTestSummary:
 
 
 # ===========================================================================
+# S144 Tier 1：unbuyable 排除（R2/R3）+ open2next_close 双报（R5）
+# ===========================================================================
+
+class TestS144UnbuyableExclusion:
+    """R2/R3：一字板（unbuyable）pick/universe 排除出 settled/wins 分母。"""
+
+    def test_unbuyable_pick_excluded_from_buyable_only(self, fresh_db):
+        """R2：unbuyable=True 的 pick → is_win=NULL + is_unbuyable=1，排除出 s_settled/s_wins（buyable-only）。"""
+        date = "2026-08-13"
+        recs = [
+            DailyRecommendation(date, "000001", "可买A", "first_plate", 70.0),
+            DailyRecommendation(date, "000002", "一字板B", "first_plate", 75.0),  # unbuyable
+        ]
+        record_daily_recommendations(date, recs)
+        record_actual_returns(date, {
+            "000001": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0,
+                       "is_unbuyable": False},
+            "000002": {"return_open2close": 0.0, "return_close2close": 0.0, "next_pctChg": 10.0,
+                       "is_unbuyable": True},  # 一字板涨停
+        })
+
+        daily = get_daily_recommendations(date)
+        by_code = {r["code"]: r for r in daily}
+        # 可买 pick：is_win=1
+        assert by_code["000001"]["is_win"] == 1
+        assert by_code["000001"]["is_unbuyable"] == 0
+        # 一字板 pick：is_win=NULL（排除非 0）+ is_unbuyable=1
+        assert by_code["000002"]["is_win"] is None
+        assert by_code["000002"]["is_unbuyable"] == 1
+
+        # summary：buyable-only s_settled=1（排除 unbuyable），s_wins=1
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=5)
+        assert result.settled_count == 1  # 排除 unbuyable
+        assert result.win_count == 1
+
+    def test_unbuyable_universe_excluded(self, fresh_db):
+        """R3：universe 的 unbuyable 同样排除——分母不抬高。"""
+        date = "2026-08-13"
+        recs = [DailyRecommendation(date, "000001", "可买", "first_plate", 70.0)]
+        record_daily_recommendations(date, recs)
+        record_actual_returns(date, {
+            "000001": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0,
+                       "is_unbuyable": False},
+        })
+        record_universe_returns(date, {
+            "100001": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0,
+                       "is_unbuyable": False},
+            "100002": {"return_open2close": 0.0, "return_close2close": 0.0, "next_pctChg": 10.0,
+                       "is_unbuyable": True},  # universe 一字板
+        })
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=5)
+        # universe buyable-only：settled=1（排除 unbuyable 100002）
+        assert result.random_settled == 1
+
+    def test_consecutive_loss_excludes_unbuyable(self, fresh_db):
+        """R2：consecutive_loss 查询的 is_unbuyable=0 filter 是承重的——
+        unbuyable(is_win=NULL) 被 filter 排除；无 filter 则 NULL 错误中断连亏计数。
+
+        构造 4 records（DESC by date: D4 loss, D3 loss, D2 unbuyable(NULL), D1 loss）：
+        - with filter: recent=[D4,D3,D1] 全 loss → cl=3（D2 排除）
+        - without filter: recent=[D4,D3,D2(NULL),D1] → NULL 错误中断 → cl=2
+        """
+        for day, unbuyable in [(1, False), (2, True), (3, False), (4, False)]:
+            date = f"2026-08-{day:02d}"
+            rec = DailyRecommendation(date, f"0000{day}", "X", "first_plate", 70.0)
+            record_daily_recommendations(date, [rec])
+            o2c = 0.0 if unbuyable else -1.0  # unbuyable o2c=0（一字板），buyable loss o2c=-1
+            record_actual_returns(date, {
+                f"0000{day}": {"return_open2close": o2c, "return_close2close": o2c,
+                               "next_pctChg": 10.0 if unbuyable else -1.0,
+                               "is_unbuyable": unbuyable},
+            })
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=3)
+        # filter 排除 unbuyable(D2) → recent=[D4,D3,D1] 全 loss → cl=3（无 filter 会 cl=2）
+        assert result.consecutive_loss == 3
+
+    def test_buyable_only_lift_not_polluted_by_unbuyable(self, fresh_db):
+        """R2/R3 合：一字板污染消除后 lift 不被分子压低/分母抬高。"""
+        for day in range(25):
+            date = f"2026-08-{day+1:02d}"
+            recs = [DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0)]
+            record_daily_recommendations(date, recs)
+            # pick：可买，80% 胜率
+            r = 2.0 if day % 5 != 0 else -1.0
+            record_actual_returns(date, {
+                f"00{day}01": {"return_open2close": r, "return_close2close": r, "next_pctChg": r,
+                               "is_unbuyable": False},
+            })
+            # universe：1 可买 + 1 一字板（一字板 o2c=0 不算 win，原口径会抬高基准 winrate）
+            uni = {
+                f"1{day}0a": {"return_open2close": 2.0, "return_close2close": 2.0, "next_pctChg": 2.0,
+                              "is_unbuyable": False},
+                f"1{day}0b": {"return_open2close": 0.0, "return_close2close": 0.0, "next_pctChg": 10.0,
+                              "is_unbuyable": True},
+            }
+            record_universe_returns(date, uni)
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        # 一字板排除后：universe settled=25（非 50），buyable-only
+        assert result.random_settled == 25
+        # buyable-only picks settled=25（全可买），is_win=o2c fallback（未传 o2nc）→ 80% 胜率
+        assert result.settled_count == 25
+        # S144 A3：lift 双报——buyable-only 0.8x vs 原口径（含 unbuyable 污染）1.6x
+        # 原口径：universe 含 25 一字板（o2c=0 不算 win）压低基准 winrate→50%→lift 虚高 1.6x
+        # buyable-only：剔一字板→基准 100%→lift 0.8x（诚实更低，污染消除）
+        assert result.lift == 0.8
+        assert result.lift_unfiltered == 1.6
+        # unbuyable 计数（picks 侧）= 0（本 fixture 只 universe 有 unbuyable；picks 全可买）
+        assert result.unbuyable_count == 0
+
+
+class TestS144Open2NextClose:
+    """R5：return_open2next_close（T-open→T+1-close 可实现口径）双报。"""
+
+    def test_is_win_uses_o2c_baseline_escape_hatch(self, fresh_db):
+        """R5 escape hatch：is_win 仍用 o2c（T+0 基线，一致口径），不用 open2next_close 改 verdict。
+
+        避免 mixed caliber（o2nc 对 settled + o2c 对 recent 混在一个 winrate）= §44 不可复现风险。
+        o2nc（T+1 可实现）单独双报（win_rate_open2next_close），不改 is_win。
+        """
+        date = "2026-08-13"
+        rec = DailyRecommendation(date, "000001", "测试", "first_plate", 70.0)
+        record_daily_recommendations(date, [rec])
+        # o2c<0 但 open2next_close>0 → is_win=0（用 o2c，不切 T+1）——escape hatch 保 verdict 一致
+        record_actual_returns(date, {
+            "000001": {
+                "return_open2close": -1.0,       # T+0 intraday 亏
+                "return_open2next_close": 3.0,   # T+1 可实现 赢
+                "return_close2close": 2.0, "next_pctChg": 2.0,
+                "is_unbuyable": False,
+            },
+        })
+        daily = get_daily_recommendations(date)
+        assert daily[0]["is_win"] == 0  # escape hatch：用 o2c（-1<0），不切 o2nc
+        assert daily[0]["return_open2next_close"] == 3.0  # o2nc 仍记录供双报
+
+    def test_is_win_falls_back_to_o2c_without_open2next_close(self, fresh_db):
+        """R5：未提供 return_open2next_close（旧数据/first_board 路径）→ is_win 用 o2c 兼容。"""
+        date = "2026-08-13"
+        rec = DailyRecommendation(date, "000001", "测试", "first_plate", 70.0)
+        record_daily_recommendations(date, [rec])
+        record_actual_returns(date, {
+            "000001": {"return_open2close": 2.5, "return_close2close": 3.0, "next_pctChg": 3.0},
+            # 不传 open2next_close / is_unbuyable（向后兼容）
+        })
+        daily = get_daily_recommendations(date)
+        assert daily[0]["is_win"] == 1  # o2c>0 fallback
+
+    def test_dual_report_o2c_verdict_and_open2next_close_dual(self, fresh_db):
+        """R5 escape hatch：verdict=win_rate 用 o2c（T+0 一致口径）；open2next_close（T+1 可实现）单独双报。
+
+        o2c 全赢（T+0 100%），open2next_close 52%（T+1 更低）——双报可见 T+1 胜率降（用户预期），
+        但 verdict 保 o2c 一致口径（切纯 T+1=Tier 2，避 mixed caliber §44 风险）。
+        """
+        for day in range(25):
+            date = f"2026-08-{day+1:02d}"
+            recs = [DailyRecommendation(date, f"00{day}01", "A", "first_plate", 70.0)]
+            record_daily_recommendations(date, recs)
+            # o2c 全赢（T+0 intraday），open2next_close 只在 day%2==0 赢（T+1 口径更差）
+            o2c = 2.0
+            o2nc = 2.0 if day % 2 == 0 else -1.0
+            record_actual_returns(date, {
+                f"00{day}01": {
+                    "return_open2close": o2c, "return_open2next_close": o2nc,
+                    "return_close2close": o2c, "next_pctChg": o2c, "is_unbuyable": False,
+                },
+            })
+            uni = {f"1{day}0{i}": {"return_open2close": 1.0, "return_close2close": 1.0,
+                                   "next_pctChg": 1.0, "is_unbuyable": False}
+                   for i in range(5)}
+            record_universe_returns(date, uni)
+
+        result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
+        # verdict = o2c 口径（escape hatch，一致）= 100%（25/25 全赢）
+        assert result.win_rate == 100.0
+        # open2next_close 双报（T+1 可实现）= 52%（13/25）——T+1 胜率降，可见但不改 verdict
+        assert result.win_rate_open2next_close == 52.0
+        assert result.o2nc_settled == 25
+
+
+# ===========================================================================
 # S086 R7：run_daily_forward_test 接 pool_item_map（涨停池→score_candidates）
 # ===========================================================================
 

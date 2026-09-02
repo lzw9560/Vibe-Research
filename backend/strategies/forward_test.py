@@ -51,10 +51,12 @@ CREATE TABLE IF NOT EXISTS forward_test_records (
     weather_state TEXT,                     -- 当日天气
     position_multiplier REAL,               -- 日历因子仓位乘数
     recommended_position REAL,              -- 建议仓位 %
-    return_open2close REAL,                -- 次日开盘到收盘收益 %
+    return_open2close REAL,                -- 次日开盘到收盘收益 %（T+0 intraday，诚实基线）
     return_close2close REAL,               -- 收盘到收盘收益 %
     next_pctChg REAL,                       -- 次日涨跌幅 %
-    is_win INTEGER DEFAULT 0,                    -- 是否盈利（return_open2close > 0）
+    return_open2next_close REAL,           -- S144 R5：T-open→T+1-close 收益 %（可实现口径）
+    is_unbuyable INTEGER DEFAULT 0,        -- S144 R2：一字板涨停封死（T+1 不可买），is_win 置 NULL 排除
+    is_win INTEGER DEFAULT 0,                    -- 是否盈利（优先 open2next_close>0，fallback o2c；unbuyable=NULL）
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(signal_date, code, strategy_code)
 );
@@ -70,7 +72,8 @@ CREATE TABLE IF NOT EXISTS universe_returns (
     return_open2close REAL,                -- 次日 open2close %
     return_close2close REAL,               -- 收盘到收盘 %
     next_pctChg REAL,                       -- 次日涨跌幅 %
-    is_win INTEGER DEFAULT 0,              -- return_open2close > 0
+    is_unbuyable INTEGER DEFAULT 0,        -- S144 R3：一字板涨停封死（同 picks 双向剔，消分母偏高）
+    is_win INTEGER DEFAULT 0,              -- return_open2close > 0（unbuyable=NULL 排除）
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(signal_date, code)
 );
@@ -78,11 +81,27 @@ CREATE INDEX IF NOT EXISTS idx_universe_returns_date ON universe_returns(signal_
 """
 
 
+def _ensure_column(conn: sqlite3.Connection, table: str, col: str, col_def: str) -> None:
+    """幂等加列（existing DB 的 ALTER；fresh DB 已由 CREATE 覆盖，no-op）。
+
+    参照 memory ``migration-stubs-fresh-db-fix``：fresh DB 测试靠 CREATE 完整，
+    existing DB（.vibe-research/gene_scores.db）已存在表，CREATE IF NOT EXISTS 不加列，
+    须 PRAGMA table_info 查列存否后 ALTER ADD COLUMN。
+    """
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if col not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
+
+
 def _ensure_table() -> None:
-    """幂等建表（import 时调用一次）。"""
+    """幂等建表（import 时调用一次）+ existing DB 加列迁移。"""
     try:
         conn = sqlite3.connect(_DB, timeout=10)
         conn.executescript(_FORWARD_TEST_SQL)
+        # S144：existing DB 加列（fresh DB 已由 CREATE 覆盖，_ensure_column no-op）
+        _ensure_column(conn, "forward_test_records", "return_open2next_close", "REAL")
+        _ensure_column(conn, "forward_test_records", "is_unbuyable", "INTEGER DEFAULT 0")
+        _ensure_column(conn, "universe_returns", "is_unbuyable", "INTEGER DEFAULT 0")
         conn.commit()
         conn.close()
     except Exception:
@@ -141,6 +160,12 @@ class ForwardTestResult:
     consecutive_loss: int = 0
     note: str = ""
     validation_status: str = "未 validated"  # §44 60日复验窗口三态：validated | 未 validated | 探索性
+    # S144 R2/R3/R5 双报 + 诚实标注
+    unbuyable_count: int = 0       # 一字板排除 picks 数（buyable-only 口径剔了多少）
+    o2nc_settled: int = 0         # return_open2next_close 有值的 buyable picks 数
+    o2nc_wins: int = 0            # open2next_close>0 的 buyable picks 数
+    win_rate_open2next_close: float = 0.0  # T+1 可实现口径胜率 %（双报；escape hatch：不改 verdict）
+    lift_unfiltered: float = 0.0  # S144 A3：原口径 lift（含 unbuyable 污染）——与 buyable-only lift 双报
 
 
 # ===========================================================================
@@ -193,10 +218,17 @@ def record_actual_returns(
     """回填某信号日 picks 的次日实际收益（forward_test_records）。
 
     signal_date: 信号日（推荐日），不是次日
-    returns_data: {code: {return_open2close, return_close2close, next_pctChg}}
+    returns_data: {code: {return_open2close, return_close2close, next_pctChg,
+                          return_open2next_close(可选), is_unbuyable(可选)}}
 
     次日盘后调用：拉 kline → 算次日收益 → 回填 picks。
     缺 next_bar 的标 None（不臆造）。
+
+    S144 R2：is_unbuyable=True（一字板涨停封死，T+1 不可买）→ is_win=NULL（排除出 settled/wins 分母，
+    非 0 计亏）+ is_unbuyable=1。get_forward_test_summary 的 buyable-only 口径双向剔（picks+universe）。
+    S144 R5（escape hatch：不改 is_win，兼容旧数据 + 避 mixed caliber §44 风险）：is_win 仍用 o2c
+    （T+0 诚实基线，一致口径）；return_open2next_close（T+1 可实现口径）单独双报（win_rate_open2next_close）。
+    verdict 切纯 T+1 口径 = Tier 2（需 s_settled 改 o2nc-based + 全窗口 o2nc 可得，否则 mixed caliber 不可复现）。
     返回更新条数。
     """
     _ensure_table()
@@ -209,14 +241,22 @@ def record_actual_returns(
             o2c = returns.get("return_open2close")
             c2c = returns.get("return_close2close")
             pct = returns.get("next_pctChg")
-            is_win = 1 if (o2c is not None and o2c > 0) else 0
+            o2nc = returns.get("return_open2next_close")
+            is_unbuyable = bool(returns.get("is_unbuyable", False))
+            if is_unbuyable:
+                # 一字板涨停封死 → 排除（is_win=NULL，非 0 计亏）；o2c/o2nc 仍如实保留供检查
+                is_win = None
+            else:
+                # R5 escape hatch：is_win 用 o2c（T+0 基线，一致口径）；o2nc 仅双报不改 verdict
+                is_win = 1 if (o2c is not None and o2c > 0) else 0
             try:
                 cur = conn.execute(
                     """UPDATE forward_test_records
                     SET return_open2close = ?, return_close2close = ?,
-                        next_pctChg = ?, is_win = ?
+                        next_pctChg = ?, return_open2next_close = ?,
+                        is_unbuyable = ?, is_win = ?
                     WHERE signal_date = ? AND code = ?""",
-                    (o2c, c2c, pct, is_win, signal_date, code),
+                    (o2c, c2c, pct, o2nc, 1 if is_unbuyable else 0, is_win, signal_date, code),
                 )
                 if cur.rowcount > 0:
                     updated += 1
@@ -238,6 +278,9 @@ def record_universe_returns(
     与 record_actual_returns（picks）独立：picks→forward_test_records，universe→universe_returns。
     幂等（UNIQUE(signal_date,code)，INSERT OR REPLACE）。
     缺 next_bar 的标 None（不臆造）。返回 upsert 条数。
+
+    S144 R3：is_unbuyable=True（一字板涨停封死）→ is_win=NULL + is_unbuyable=1，buyable-only 口径剔
+    （消分母偏高：弱涨停股 o2c 可正，一字板 o2c≈0 不算 win 会抬高基准 winrate）。
     """
     _ensure_table()
     if not returns_data:
@@ -249,14 +292,18 @@ def record_universe_returns(
             o2c = returns.get("return_open2close")
             c2c = returns.get("return_close2close")
             pct = returns.get("next_pctChg")
-            is_win = 1 if (o2c is not None and o2c > 0) else 0
+            is_unbuyable = bool(returns.get("is_unbuyable", False))
+            if is_unbuyable:
+                is_win = None  # 排除（非 0 计亏）
+            else:
+                is_win = 1 if (o2c is not None and o2c > 0) else 0
             try:
                 conn.execute(
                     """INSERT OR REPLACE INTO universe_returns
                     (signal_date, code, return_open2close, return_close2close,
-                     next_pctChg, is_win)
-                    VALUES (?, ?, ?, ?, ?, ?)""",
-                    (signal_date, code, o2c, c2c, pct, is_win),
+                     next_pctChg, is_unbuyable, is_win)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (signal_date, code, o2c, c2c, pct, 1 if is_unbuyable else 0, is_win),
                 )
                 upserted += 1
             except Exception:
@@ -291,24 +338,35 @@ def get_forward_test_summary(
     _ensure_table()
     conn = sqlite3.connect(_DB, timeout=10)
     try:
-        # —— 策略 picks（forward_test_records）——
+        # —— 策略 picks（forward_test_records）—— S144 buyable-only 口径（剔 is_unbuyable=1 一字板）
         total = conn.execute("SELECT COUNT(*) FROM forward_test_records").fetchone()[0]
+        s_unbuyable = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE is_unbuyable = 1"
+        ).fetchone()[0]
         s_settled = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL"
+            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
         s_wins = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE is_win = 1"
+            "SELECT COUNT(*) FROM forward_test_records WHERE is_win = 1 AND is_unbuyable = 0"
+        ).fetchone()[0]
+        # S144 R5：open2next_close 双报（T+1 可实现口径，与 o2c 诚实基线并列；escape hatch：不改 is_win）
+        o2nc_settled = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close IS NOT NULL AND is_unbuyable = 0"
+        ).fetchone()[0]
+        o2nc_wins = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close > 0 AND is_unbuyable = 0"
         ).fetchone()[0]
         days = conn.execute(
             "SELECT COUNT(DISTINCT signal_date) FROM forward_test_records"
         ).fetchone()[0]
         avg_row = conn.execute(
-            "SELECT AVG(return_open2close) FROM forward_test_records WHERE return_open2close IS NOT NULL"
+            "SELECT AVG(return_open2close) FROM forward_test_records "
+            "WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()
         avg_return = float(avg_row[0]) if avg_row and avg_row[0] is not None else 0.0
         recent = conn.execute(
             """SELECT is_win FROM forward_test_records
-            WHERE return_open2close IS NOT NULL
+            WHERE return_open2close IS NOT NULL AND is_unbuyable = 0
             ORDER BY signal_date DESC, id DESC LIMIT 20"""
         ).fetchall()
         consecutive_loss = 0
@@ -318,13 +376,21 @@ def get_forward_test_summary(
             else:
                 break
 
-        # —— 随机基准 universe（universe_returns）——
+        # —— 随机基准 universe（universe_returns）—— S144 buyable-only（消分母偏高）
         u_total = conn.execute("SELECT COUNT(*) FROM universe_returns").fetchone()[0]
         u_settled = conn.execute(
-            "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL"
+            "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
         u_wins = conn.execute(
-            "SELECT COUNT(*) FROM universe_returns WHERE is_win = 1"
+            "SELECT COUNT(*) FROM universe_returns WHERE is_win = 1 AND is_unbuyable = 0"
+        ).fetchone()[0]
+        # S144 A3：原口径（unfiltered，含 unbuyable）lift 双报——量化一字板污染对 lift 的影响
+        # is_win=1 自然排除 unbuyable（NULL），故 s_wins/u_wins 同；差异在 settled 分母（含/剔 unbuyable）
+        s_settled_unfilt = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL"
+        ).fetchone()[0]
+        u_settled_unfilt = conn.execute(
+            "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL"
         ).fetchone()[0]
     finally:
         conn.close()
@@ -332,6 +398,11 @@ def get_forward_test_summary(
     s_winrate = round(s_wins / s_settled * 100, 2) if s_settled > 0 else 0.0
     u_winrate = round(u_wins / u_settled * 100, 2) if u_settled > 0 else 0.0
     lift = round(s_winrate / u_winrate, 3) if u_winrate > 0 else 0.0
+    # A3 原口径 lift（含 unbuyable 污染）——与 buyable-only lift 双报，方向非预设（修完才知）
+    s_winrate_unfilt = round(s_wins / s_settled_unfilt * 100, 2) if s_settled_unfilt > 0 else 0.0
+    u_winrate_unfilt = round(u_wins / u_settled_unfilt * 100, 2) if u_settled_unfilt > 0 else 0.0
+    lift_unfiltered = round(s_winrate_unfilt / u_winrate_unfilt, 3) if u_winrate_unfilt > 0 else 0.0
+    o2nc_winrate = round(o2nc_wins / o2nc_settled * 100, 2) if o2nc_settled > 0 else 0.0
     s_lo, s_hi = _wilson(s_wins, s_settled)
     u_lo, u_hi = _wilson(u_wins, u_settled)
     is_exploratory = s_settled < 30  # §44(2)：n<30 探索性非定论（60日复验窗口：不阻断接入，标探索性跑通）
@@ -370,6 +441,19 @@ def get_forward_test_summary(
         note_parts.append(f"n={s_settled}<30 探索性（非定论）")
     if consecutive_loss >= 8:
         note_parts.append(f"连续亏损 {consecutive_loss} 笔（kill criteria 触发）")
+    # S144 R2/R3：buyable-only 口径诚实标注——剔了多少一字板（picks 侧）
+    if s_unbuyable > 0:
+        note_parts.append(f"buyable-only 口径剔 picks 中 {s_unbuyable} 个一字板（T+1 涨停封死不可买，is_win=NULL 排除）")
+    # S144 A3：原口径 lift（含 unbuyable 污染）vs buyable-only lift 双报——量化污染影响（方向非预设）
+    # 差异非零 = picks 或 universe 含 unbuyable（任一侧污染）
+    if s_settled > 0 and u_settled > 0 and lift_unfiltered != lift:
+        note_parts.append(f"lift 双报：buyable-only {lift}x vs 原口径（含污染）{lift_unfiltered}x")
+    # S144 R5（escape hatch）：T+1 可实现口径双报——不改 is_win（verdict 仍 o2c 一致口径），
+    # open2next_close 单独双报供对比；verdict 切纯 T+1 = Tier 2
+    if o2nc_settled > 0:
+        note_parts.append(
+            f"T+1 口径胜率 {o2nc_winrate}%（open2next_close，{o2nc_settled} settled）双报；verdict 仍用 o2c 基线（escape hatch，切纯 T+1=Tier 2）"
+        )
     if not note_parts:
         note_parts.append("§44 前向测试通过（胜率>=60% + lift>=2x → validated）")
 
@@ -408,6 +492,11 @@ def get_forward_test_summary(
         consecutive_loss=consecutive_loss,
         note="；".join(note_parts),
         validation_status=validation_status,
+        unbuyable_count=s_unbuyable,
+        o2nc_settled=o2nc_settled,
+        o2nc_wins=o2nc_wins,
+        win_rate_open2next_close=o2nc_winrate,
+        lift_unfiltered=lift_unfiltered,
     )
 
 

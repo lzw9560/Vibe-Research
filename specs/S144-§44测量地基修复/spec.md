@@ -1,8 +1,22 @@
 # Spec: S144 — §44 测量地基修复（unbuyable 检测 + T+1 建模）
 
-> 状态：草案
+> 状态：已实现（Tier 1）2026-09-03
 > 作者：Claude（专家会诊落地）  日期：2026-09-02
 > 关联：S066（§44 recompute-paradigm）、S071（premarket_selection）、S069（forward_test 8因子）；本 spec = 6 HARD item 专家会诊的 Tier 1
+
+## 实现备注（2026-09-03）
+
+- **R1**：`kline_returns._is_unbuyable_next_bar` 检测 next_bar（= T+1 买入日）一字板涨停封死。
+  - **偏离 spec §5 字面**：用 `pctChg>=9.8`（涨停方向 only）非 `abs`——做多策略只有涨停封死不可买，一字跌停可买。
+- **R4**：`_backtest_single` Option B——loop `range(idx+2,...)` + `exit_idx=idx+1+max_hold` + guard `idx+2>=len→None`（非 spec 字面只改 range start）。
+  - spec 字面会让 loop 检查越过 exit（不一致）；Option B 保 max_hold_days 持仓长度 + max_hold=1 时 exit T+2（非 T+1 买入日）。
+- **R5 escape hatch**（spec R5 "或并列标注不改 is_win" 选项）：is_win 仍用 o2c（T+0 一致口径），**不切 T+1 verdict**。
+  - **自审发现 + 修正**：初版 o2nc 公式 `(nb.close - sb.open)/sb.open` 错（用涨停日 open，信号前不可买）→ 修正为 `(nnb.close - nb.open)/nb.open`（买 T+1 open、卖 T+2 close，需 T+2 bar，genuinely realizable）。
+  - 不切 is_win 的理由：is_win=o2nc-when-available-else-o2c 会 mixed caliber（settled=T+1 + recent=T+0 混在一个 winrate）= §44 不可复现风险。escape hatch 保 verdict 一致口径（o2c），o2nc 单独双报。
+  - verdict 切纯 T+1 口径 = Tier 2（需 s_settled 改 o2nc-based + 全窗口 T+2 可得 + settle task 处理 T+2 settle-lag）。
+- **R6/A3**：lift 双报（buyable-only vs 原口径含污染）+ o2c/o2nc 胜率双报，落 get_forward_test_summary 返回字段 + note。重算 run（baostock + settle task 回填 o2nc）= operational follow-up。
+- 全量 `pytest -m "not live" --deselect` 2655 passed / 0 failed（deselect newsradar/s032/s040 flaky）。
+- review workflow（6 维 adversarial）因多 agent API failure 未完成；自审覆盖 6 维，自审抓到 R5 o2nc 公式错（已修）。
 
 ## 1. 问题 / 目标
 

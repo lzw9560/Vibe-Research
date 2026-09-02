@@ -15,6 +15,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# S144 R1：unbuyable（一字板涨停封死）检测口径。
+# 一字板 = next_bar 四价相等（open≈close≈high≈low，无日内区间）+ 涨停幅度。
+# 容差 0.01 元（float 噪声；覆盖 ¥5-50 涨停股，高价股更宽松不误判）。
+# 涨停阈值 9.8% 粗判覆盖主板 10%/创业板科创板 20%/北交所 30%。
+# 注：只覆盖涨停方向（做多策略只有涨停封死不可买；一字跌停对做多可买，有人抛、买家成交）。
+UNBUYABLE_PRICE_TOL: float = 0.01
+UNBUYABLE_PCT_THRESHOLD: float = 9.8
+
+
+def _is_unbuyable_next_bar(nb: dict) -> bool:
+    """检测 next_bar（T+1）是否一字板涨停封死（不可买）。
+
+    四价相等（high≈low≈open≈close）+ pctChg≥9.8% → 一字板涨停 → 不可买。
+    正常上涨/有区间/跌停均返 False（可买）。
+    """
+    nb_open = nb.get("open") or 0.0
+    nb_high = nb.get("high") or 0.0
+    nb_low = nb.get("low") or 0.0
+    nb_close = nb.get("close") or 0.0
+    nb_pct = nb.get("pctChg") or 0.0
+    return (
+        abs(nb_high - nb_low) <= UNBUYABLE_PRICE_TOL
+        and abs(nb_open - nb_close) <= UNBUYABLE_PRICE_TOL
+        and nb_pct >= UNBUYABLE_PCT_THRESHOLD  # 涨停方向（非 abs：跌停一字板对做多可买）
+    )
+
 
 def _bs_code(code: str) -> str:
     """A 股 6 位代码 → baostock 9 位代码（sh./sz. 前缀，6 开头 sh 否则 sz）。"""
@@ -55,18 +81,22 @@ def fetch_klines(bs_code: str, start_date: str, end_date: str) -> list[dict]:
     return bars
 
 
-def _match_next_bar(bars: list[dict], signal_date: str) -> tuple[dict | None, dict | None]:
-    """在 bars 找 signal_date 的 bar + 它的 next_bar（缺失返 None,None）。"""
+def _match_next_bar(bars: list[dict], signal_date: str) -> tuple[dict | None, dict | None, dict | None]:
+    """在 bars 找 signal_date 的 bar + 它的 next_bar（T+1）+ next_next_bar（T+2）。
+
+    返 (sb, nb, nnb)，缺失返 None。T+2（nnb）用于 S144 R5 可实现口径（卖 T+2 收盘）。
+    """
     idx = None
     for i, b in enumerate(bars):
         if b["date"] == signal_date:
             idx = i
             break
     if idx is None:
-        return None, None
-    if idx + 1 >= len(bars):
-        return bars[idx], None
-    return bars[idx], bars[idx + 1]
+        return None, None, None
+    sb = bars[idx]
+    nb = bars[idx + 1] if idx + 1 < len(bars) else None
+    nnb = bars[idx + 2] if idx + 2 < len(bars) else None
+    return sb, nb, nnb
 
 
 def compute_returns_for_codes(
@@ -112,19 +142,34 @@ def compute_returns_for_codes(
             if not bsc:
                 continue
             bars = fetch_klines(bsc, start, end)
-            sb, nb = _match_next_bar(bars, signal_date)
+            sb, nb, nnb = _match_next_bar(bars, signal_date)
             if nb is None or nb.get("open") in (None, 0, 0.0):
-                out[code] = {"return_open2close": None, "return_close2close": None, "next_pctChg": None}
+                out[code] = {
+                    "return_open2close": None, "return_close2close": None,
+                    "next_pctChg": None, "return_open2next_close": None,
+                    "is_unbuyable": False,
+                }
                 continue
-            next_open = nb["open"]
-            next_close = nb["close"]
+            next_open = nb["open"]      # T+1 开盘 = 买入价（信号 T 盘后知，买 T+1 开盘）
+            next_close = nb["close"]     # T+1 收盘
             sig_close = sb["close"] if sb else None
             o2c = round((next_close - next_open) / next_open * 100, 4) if next_open else None
             c2c = round((next_close - sig_close) / sig_close * 100, 4) if sig_close else None
+            # S144 R5：return_open2next_close = (T+2 close - T+1 open)/T+1 open*100
+            # 可实现 T+1 口径：买 T+1 开盘（nb.open），A 股 T+1 买入日不可卖，卖 T+2 收盘（nnb.close）。
+            # 需 nnb（T+2 bar）；近期 picks（T+2 未可得）→ None，is_win fallback o2c（T+0 基线）。
+            # 注：o2c（T+1 intraday）非策略收益（策略买 T+1 open 非 T+1 intraday）；
+            #    o2nc 才是策略可实现收益。is_win 优先 o2nc，fallback o2c 兼容旧数据。
+            nnb_close = nnb["close"] if nnb and nnb.get("close") else None
+            o2nc = round((nnb_close - next_open) / next_open * 100, 4) if (nnb_close is not None and next_open) else None
+            # S144 R1：一字板涨停封死（T+1=买入日 不可买）检测
+            is_unbuyable = _is_unbuyable_next_bar(nb)
             out[code] = {
                 "return_open2close": o2c,
                 "return_close2close": c2c,
                 "next_pctChg": nb.get("pctChg"),
+                "return_open2next_close": o2nc,
+                "is_unbuyable": is_unbuyable,
             }
     finally:
         try:

@@ -90,20 +90,24 @@ def _backtest_single(
     if not bars:
         return None
     idx = next((i for i, b in enumerate(bars) if (getattr(b, "date", "") or "")[:10] == date), None)
-    if idx is None or idx + 1 >= len(bars):
+    if idx is None or idx + 2 >= len(bars):
+        # S144 R4：需 T+1（入场，bars[idx+1].open）+ T+2（首可卖日，A 股 T+1 买入日不可卖）。
+        # 缺 T+2 → 无法 T+1 评估（不能在买入日卖）→ skip。
         return None
     entry = getattr(bars[idx + 1], "open", 0)
     if not entry or entry <= 0:
         return None
-    # 持仓期内逐日检查 stop_loss / take_profit 提前平
-    for j in range(idx + 1, min(idx + 1 + max_hold_days, len(bars))):
+    # S144 R4：A 股 T+1——买入日（T+1=idx+1）不可卖，止损/止盈从 T+2（idx+2）起检查。
+    # 原 range(idx+1) 含买入日 = T+0 违规；改 range(idx+2) 跳过买入日。
+    # loop end + exit_idx 同步 +1，保持 max_hold_days 持仓长度（max_hold=1 时 exit T+2 非 T+1）。
+    for j in range(idx + 2, min(idx + 2 + max_hold_days, len(bars))):
         low = getattr(bars[j], "low", 0)
         high = getattr(bars[j], "high", 0)
         if low and low <= entry * (1 + stop_pct / 100):
             return {"won": False, "return_pct": float(stop_pct)}
         if high and high >= entry * (1 + profit_pct / 100):
             return {"won": True, "return_pct": float(profit_pct)}
-    exit_idx = min(idx + max_hold_days, len(bars) - 1)
+    exit_idx = min(idx + 1 + max_hold_days, len(bars) - 1)
     exit_price = getattr(bars[exit_idx], "close", 0)
     if not exit_price:
         return None
