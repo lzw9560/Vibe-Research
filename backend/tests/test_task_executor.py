@@ -448,7 +448,7 @@ class TestForwardTestT1Settle:
         ])
         record_universe_returns("2026-08-13", {"000001": {}, "000002": {}})
 
-        def fake_compute(sd, codes):
+        def fake_compute(sd, codes, strategy_params_map=None):  # S145: 接 strategy_params_map kwarg
             if sd == "2026-08-13":
                 return {"000001": {"return_open2close": 2.5, "return_close2close": 2.0, "next_pctChg": 2.0},
                         "000002": {"return_open2close": None, "return_close2close": None, "next_pctChg": None}}

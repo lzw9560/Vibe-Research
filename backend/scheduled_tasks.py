@@ -1255,9 +1255,11 @@ class TaskExecutor:
         for signal_date in dates:
             conn = get_healthy_conn(GENE_SCORES_DB_PATH)
             try:
-                pick_codes = [r[0] for r in conn.execute(
-                    "SELECT DISTINCT code FROM forward_test_records "
-                    "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+                # S145：picks 取 code + strategy_code（建 strategy_params_map 供 path 模拟用其战法 params）
+                pick_rows = conn.execute(
+                    "SELECT code, strategy_code FROM forward_test_records "
+                    "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()
+                pick_codes = list(dict.fromkeys(r[0] for r in pick_rows))
                 uni_codes = [r[0] for r in conn.execute(
                     "SELECT DISTINCT code FROM universe_returns "
                     "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
@@ -1266,7 +1268,14 @@ class TaskExecutor:
             all_codes = list(dict.fromkeys(pick_codes + uni_codes))
             if not all_codes:
                 continue
-            returns_map = compute_returns_for_codes(signal_date, all_codes)
+            # S145 R2：每 pick code 取首个战法 params（多战法同 code 时按 code UPDATE 全行同 path）
+            from strategies.kline_returns import strategy_params_for  # noqa: PLC0415
+            strategy_params_map: dict[str, dict] = {}
+            for code, sc in pick_rows:
+                if code not in strategy_params_map and sc:
+                    strategy_params_map[code] = strategy_params_for(sc)
+            returns_map = compute_returns_for_codes(signal_date, all_codes,
+                                                    strategy_params_map=strategy_params_map or None)
             if not returns_map:
                 summary.append({"signal_date": signal_date, "status": "baostock_unavailable"})
                 break  # baostock 不可用，后续日也跑不了

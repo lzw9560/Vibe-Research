@@ -26,7 +26,7 @@ from typing import Any
 from vr_paths import resolve_data_dir
 
 # BaoStock 行业分类缓存（5540 条，日级不变，缓存到 .vibe-research）
-_INDUSTRY_CACHE_PATH = resolve_data_dir() / "baostock_industry.json"
+_INDUSTRY_CACHE_PATH = Path(resolve_data_dir()) / "baostock_industry.json"  # Path() 防 str 返回
 _INDUSTRY_CACHE: dict[str, str] | None = None  # code -> industry_name
 _INDUSTRY_CACHE_TS: float = 0.0
 _INDUSTRY_CACHE_TTL = 86400  # 24h（日级更新）

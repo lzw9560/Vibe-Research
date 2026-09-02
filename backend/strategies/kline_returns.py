@@ -23,6 +23,30 @@ logger = logging.getLogger(__name__)
 UNBUYABLE_PRICE_TOL: float = 0.01
 UNBUYABLE_PCT_THRESHOLD: float = 9.8
 
+# S145 R2/R4：path 模拟默认 params（universe 无 strategy_code 时用；first_plate 常用值）。
+# 测"top-gene 选股 + 战法出场 vs 全体涨停 + 固定出场"的 selection+exit edge。
+DEFAULT_PATH_PARAMS: dict = {"stop_pct": -3.0, "take_profit_pct": 8.0, "max_hold_days": 3}
+
+
+def strategy_params_for(strategy_code: str) -> dict:
+    """S145：strategy_code → {stop_pct, take_profit_pct, max_hold_days}（查 STRATEGY_REGISTRY）。
+
+    用于 path 模拟（picks 用其战法 params；universe 用 DEFAULT_PATH_PARAMS）。
+    未知 strategy_code → DEFAULT_PATH_PARAMS fallback。
+    """
+    try:
+        from strategies.strategy_funnel_registry import STRATEGY_REGISTRY  # noqa: PLC0415
+    except ImportError:
+        return DEFAULT_PATH_PARAMS
+    s = next((x for x in STRATEGY_REGISTRY if x.get("code") == strategy_code), None)
+    if s is None:
+        return DEFAULT_PATH_PARAMS
+    return {
+        "stop_pct": float(s.get("stop_loss_pct", -3)),
+        "take_profit_pct": float(s.get("take_profit_pct", 8)),
+        "max_hold_days": int(s.get("max_hold_days", 3)),
+    }
+
 
 def _is_unbuyable_next_bar(nb: dict) -> bool:
     """检测 next_bar（T+1）是否一字板涨停封死（不可买）。
@@ -47,6 +71,52 @@ def _bs_code(code: str) -> str:
     if not code or len(code) != 6:
         return ""
     return f"sh.{code}" if code.startswith("6") else f"sz.{code}"
+
+
+def _bar_get(bar: object, key: str, default: float = 0.0) -> float | str:
+    """统一取 bar 字段（dict 或 SimpleNamespace——strategy_backtest 用 NS，kline_returns 用 dict）。"""
+    if isinstance(bar, dict):
+        v = bar.get(key, default)
+        return v if v is not None else default
+    return getattr(bar, key, default)
+
+
+def simulate_holding(
+    bars: list, signal_date: str, stop_pct: float, take_profit_pct: float, max_hold_days: int,
+) -> dict | None:
+    """S145 R1：SL/TP/max_hold 路径模拟（抽取自 strategy_backtest._backtest_single，T+1 规则）。
+
+    A 股 T+1：买 T+1 open（bars[idx+1]），买入日不可卖，T+2（idx+2）起检查 stop/take，
+    max_hold 收盘或 stop/take 提前平。返 {won, return_pct, exit_reason, exit_date} 或 None（缺 T+2）。
+    stop_pct 负（如 -3）、take_profit_pct 正（如 8）、max_hold_days 正整数。
+    bars: dict 或 SimpleNamespace 列表（含 date/open/high/low/close）。
+    与 strategy_backtest._backtest_single 行为一致（S144 Tier 1 T+1 Option B）。
+    """
+    if not bars:
+        return None
+    idx = next((i for i, b in enumerate(bars)
+                if str(_bar_get(b, "date", ""))[:10] == signal_date), None)
+    if idx is None or idx + 2 >= len(bars):
+        return None  # 需 T+1（入场）+ T+2（首可卖日）
+    entry = _bar_get(bars[idx + 1], "open", 0)
+    if not entry or entry <= 0:
+        return None
+    for j in range(idx + 2, min(idx + 2 + max_hold_days, len(bars))):
+        low = _bar_get(bars[j], "low", 0)
+        high = _bar_get(bars[j], "high", 0)
+        if low and low <= entry * (1 + stop_pct / 100):
+            return {"won": False, "return_pct": float(stop_pct),
+                    "exit_reason": "stop", "exit_date": _bar_get(bars[j], "date", "")}
+        if high and high >= entry * (1 + take_profit_pct / 100):
+            return {"won": True, "return_pct": float(take_profit_pct),
+                    "exit_reason": "take", "exit_date": _bar_get(bars[j], "date", "")}
+    exit_idx = min(idx + 1 + max_hold_days, len(bars) - 1)
+    exit_price = _bar_get(bars[exit_idx], "close", 0)
+    if not exit_price:
+        return None
+    ret = (exit_price - entry) / entry * 100
+    return {"won": ret > 0, "return_pct": round(ret, 2),
+            "exit_reason": "max_hold", "exit_date": _bar_get(bars[exit_idx], "date", "")}
 
 
 def fetch_klines(bs_code: str, start_date: str, end_date: str) -> list[dict]:
@@ -101,11 +171,15 @@ def _match_next_bar(bars: list[dict], signal_date: str) -> tuple[dict | None, di
 
 def compute_returns_for_codes(
     signal_date: str, codes: list[str], lookback_days: int = 5,
+    strategy_params_map: dict[str, dict] | None = None,
 ) -> dict[str, dict[str, float | None]]:
-    """对一批 codes 算 signal_date 的 T+1 收益（return_open2close/close2close/next_pctChg）。
+    """对一批 codes 算 signal_date 的 T+1 收益（return_open2close/close2close/next_pctChg）
+    + S144 unbuyable/o2nc + S145 path-dependent（return_path/is_win_path/exit_reason）。
 
     signal_date: "YYYY-MM-DD"。baostock login 在本函数内（login→fetch→logout）。
     缺 next_bar 的 code 标 None（不臆造）。baostock 不可用 → 返 {} （调用方降级）。
+    S145 R2：strategy_params_map={code: {stop_pct, take_profit_pct, max_hold_days}}——
+    有则用其战法 params 算 path；无（universe）用 DEFAULT_PATH_PARAMS（-3%/+8%/3）。
     """
     from datetime import datetime, timedelta
 
@@ -148,6 +222,7 @@ def compute_returns_for_codes(
                     "return_open2close": None, "return_close2close": None,
                     "next_pctChg": None, "return_open2next_close": None,
                     "is_unbuyable": False,
+                    "return_path": None, "is_win_path": None, "exit_reason": None,
                 }
                 continue
             next_open = nb["open"]      # T+1 开盘 = 买入价（信号 T 盘后知，买 T+1 开盘）
@@ -155,21 +230,34 @@ def compute_returns_for_codes(
             sig_close = sb["close"] if sb else None
             o2c = round((next_close - next_open) / next_open * 100, 4) if next_open else None
             c2c = round((next_close - sig_close) / sig_close * 100, 4) if sig_close else None
-            # S144 R5：return_open2next_close = (T+2 close - T+1 open)/T+1 open*100
-            # 可实现 T+1 口径：买 T+1 开盘（nb.open），A 股 T+1 买入日不可卖，卖 T+2 收盘（nnb.close）。
-            # 需 nnb（T+2 bar）；近期 picks（T+2 未可得）→ None，is_win fallback o2c（T+0 基线）。
-            # 注：o2c（T+1 intraday）非策略收益（策略买 T+1 open 非 T+1 intraday）；
-            #    o2nc 才是策略可实现收益。is_win 优先 o2nc，fallback o2c 兼容旧数据。
+            # S144 R5：return_open2next_close = (T+2 close - T+1 open)/T+1 open*100（可实现 T+1 口径）
             nnb_close = nnb["close"] if nnb and nnb.get("close") else None
             o2nc = round((nnb_close - next_open) / next_open * 100, 4) if (nnb_close is not None and next_open) else None
             # S144 R1：一字板涨停封死（T+1=买入日 不可买）检测
             is_unbuyable = _is_unbuyable_next_bar(nb)
+            # S145 R2：path-dependent 收益（SL/TP/max_hold 模拟）。unbuyable → path=NULL（不可买无意义）。
+            # strategy_params_map 有则用其战法 params，无（universe）用 DEFAULT_PATH_PARAMS。
+            if is_unbuyable:
+                path_ret, path_won, path_reason = None, None, None
+            else:
+                params = (strategy_params_map or {}).get(code) or DEFAULT_PATH_PARAMS
+                sim = simulate_holding(
+                    bars, signal_date,
+                    params["stop_pct"], params["take_profit_pct"], params["max_hold_days"],
+                )
+                if sim is None:
+                    path_ret, path_won, path_reason = None, None, None
+                else:
+                    path_ret, path_won, path_reason = sim["return_pct"], sim["won"], sim["exit_reason"]
             out[code] = {
                 "return_open2close": o2c,
                 "return_close2close": c2c,
                 "next_pctChg": nb.get("pctChg"),
                 "return_open2next_close": o2nc,
                 "is_unbuyable": is_unbuyable,
+                "return_path": path_ret,
+                "is_win_path": path_won,
+                "exit_reason": path_reason,
             }
     finally:
         try:

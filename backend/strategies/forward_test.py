@@ -56,7 +56,10 @@ CREATE TABLE IF NOT EXISTS forward_test_records (
     next_pctChg REAL,                       -- 次日涨跌幅 %
     return_open2next_close REAL,           -- S144 R5：T-open→T+1-close 收益 %（可实现口径）
     is_unbuyable INTEGER DEFAULT 0,        -- S144 R2：一字板涨停封死（T+1 不可买），is_win 置 NULL 排除
-    is_win INTEGER DEFAULT 0,                    -- 是否盈利（优先 open2next_close>0，fallback o2c；unbuyable=NULL）
+    return_path REAL,                     -- S145 R3：path-dependent 收益 %（SL/TP/max_hold 模拟）
+    is_win_path INTEGER,                  -- S145 R5：path-dependent 是否盈利（verdict 基于此）；unbuyable/缺 bars→NULL
+    exit_reason TEXT,                      -- S145 R3：stop/take/max_hold 出场原因
+    is_win INTEGER DEFAULT 0,                    -- 是否盈利（escape hatch：o2c 基线；path 双报见 win_rate_path）
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(signal_date, code, strategy_code)
 );
@@ -73,6 +76,9 @@ CREATE TABLE IF NOT EXISTS universe_returns (
     return_close2close REAL,               -- 收盘到收盘 %
     next_pctChg REAL,                       -- 次日涨跌幅 %
     is_unbuyable INTEGER DEFAULT 0,        -- S144 R3：一字板涨停封死（同 picks 双向剔，消分母偏高）
+    return_path REAL,                     -- S145 R4：path-dependent 收益 %（默认 -3%/+8%/3 模拟）
+    is_win_path INTEGER,                  -- S145 R4：path-dependent 是否盈利（path-lift 基准分母）
+    exit_reason TEXT,                      -- S145 R4：stop/take/max_hold 出场原因
     is_win INTEGER DEFAULT 0,              -- return_open2close > 0（unbuyable=NULL 排除）
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(signal_date, code)
@@ -102,6 +108,11 @@ def _ensure_table() -> None:
         _ensure_column(conn, "forward_test_records", "return_open2next_close", "REAL")
         _ensure_column(conn, "forward_test_records", "is_unbuyable", "INTEGER DEFAULT 0")
         _ensure_column(conn, "universe_returns", "is_unbuyable", "INTEGER DEFAULT 0")
+        # S145：path-dependent 列（return_path/is_win_path/exit_reason）两表同加
+        for col, defn in (("return_path", "REAL"), ("is_win_path", "INTEGER"),
+                          ("exit_reason", "TEXT")):
+            _ensure_column(conn, "forward_test_records", col, defn)
+            _ensure_column(conn, "universe_returns", col, defn)
         conn.commit()
         conn.close()
     except Exception:
@@ -166,6 +177,14 @@ class ForwardTestResult:
     o2nc_wins: int = 0            # open2next_close>0 的 buyable picks 数
     win_rate_open2next_close: float = 0.0  # T+1 可实现口径胜率 %（双报；escape hatch：不改 verdict）
     lift_unfiltered: float = 0.0  # S144 A3：原口径 lift（含 unbuyable 污染）——与 buyable-only lift 双报
+    # S145 R3/R4：path-dependent（SL/TP/max_hold 模拟）口径——§44 真·gate，双报
+    path_settled: int = 0         # return_path 有值的 buyable picks 数
+    path_wins: int = 0            # is_win_path=1 的 buyable picks 数
+    win_rate_path: float = 0.0    # path-dependent 胜率 %（SL/TP/max_hold 模拟口径）
+    random_path_settled: int = 0  # universe path 有值数
+    random_path_wins: int = 0
+    random_win_rate_path: float = 0.0  # universe path 胜率 %（默认 -3%/+8%/3）
+    path_lift: float = 0.0        # path-dependent lift（strategy path / universe path）——§44 真·gate
 
 
 # ===========================================================================
@@ -242,21 +261,26 @@ def record_actual_returns(
             c2c = returns.get("return_close2close")
             pct = returns.get("next_pctChg")
             o2nc = returns.get("return_open2next_close")
+            path_ret = returns.get("return_path")
+            path_won = returns.get("is_win_path")
+            path_reason = returns.get("exit_reason")
             is_unbuyable = bool(returns.get("is_unbuyable", False))
             if is_unbuyable:
-                # 一字板涨停封死 → 排除（is_win=NULL，非 0 计亏）；o2c/o2nc 仍如实保留供检查
+                # 一字板涨停封死 → 排除（is_win=NULL，非 0 计亏）；o2c/o2nc/path 仍如实保留供检查
                 is_win = None
             else:
-                # R5 escape hatch：is_win 用 o2c（T+0 基线，一致口径）；o2nc 仅双报不改 verdict
+                # R5 escape hatch：is_win 用 o2c（T+0 基线，一致口径）；path 单独双报（win_rate_path）
                 is_win = 1 if (o2c is not None and o2c > 0) else 0
             try:
                 cur = conn.execute(
                     """UPDATE forward_test_records
                     SET return_open2close = ?, return_close2close = ?,
                         next_pctChg = ?, return_open2next_close = ?,
+                        return_path = ?, is_win_path = ?, exit_reason = ?,
                         is_unbuyable = ?, is_win = ?
                     WHERE signal_date = ? AND code = ?""",
-                    (o2c, c2c, pct, o2nc, 1 if is_unbuyable else 0, is_win, signal_date, code),
+                    (o2c, c2c, pct, o2nc, path_ret, path_won, path_reason,
+                     1 if is_unbuyable else 0, is_win, signal_date, code),
                 )
                 if cur.rowcount > 0:
                     updated += 1
@@ -292,6 +316,9 @@ def record_universe_returns(
             o2c = returns.get("return_open2close")
             c2c = returns.get("return_close2close")
             pct = returns.get("next_pctChg")
+            path_ret = returns.get("return_path")
+            path_won = returns.get("is_win_path")
+            path_reason = returns.get("exit_reason")
             is_unbuyable = bool(returns.get("is_unbuyable", False))
             if is_unbuyable:
                 is_win = None  # 排除（非 0 计亏）
@@ -301,9 +328,10 @@ def record_universe_returns(
                 conn.execute(
                     """INSERT OR REPLACE INTO universe_returns
                     (signal_date, code, return_open2close, return_close2close,
-                     next_pctChg, is_unbuyable, is_win)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (signal_date, code, o2c, c2c, pct, 1 if is_unbuyable else 0, is_win),
+                     next_pctChg, is_unbuyable, return_path, is_win_path, exit_reason, is_win)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (signal_date, code, o2c, c2c, pct, 1 if is_unbuyable else 0,
+                     path_ret, path_won, path_reason, is_win),
                 )
                 upserted += 1
             except Exception:
@@ -392,6 +420,20 @@ def get_forward_test_summary(
         u_settled_unfilt = conn.execute(
             "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL"
         ).fetchone()[0]
+        # S145 R3/R4：path-dependent（SL/TP/max_hold 模拟）——picks + universe path-winrate/lift 双报
+        # is_win_path=1 自然排除 unbuyable(NULL) + 缺 bars(NULL)；settled 分母 = return_path IS NOT NULL
+        path_settled = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE return_path IS NOT NULL AND is_unbuyable = 0"
+        ).fetchone()[0]
+        path_wins = conn.execute(
+            "SELECT COUNT(*) FROM forward_test_records WHERE is_win_path = 1 AND is_unbuyable = 0"
+        ).fetchone()[0]
+        u_path_settled = conn.execute(
+            "SELECT COUNT(*) FROM universe_returns WHERE return_path IS NOT NULL AND is_unbuyable = 0"
+        ).fetchone()[0]
+        u_path_wins = conn.execute(
+            "SELECT COUNT(*) FROM universe_returns WHERE is_win_path = 1 AND is_unbuyable = 0"
+        ).fetchone()[0]
     finally:
         conn.close()
 
@@ -403,6 +445,10 @@ def get_forward_test_summary(
     u_winrate_unfilt = round(u_wins / u_settled_unfilt * 100, 2) if u_settled_unfilt > 0 else 0.0
     lift_unfiltered = round(s_winrate_unfilt / u_winrate_unfilt, 3) if u_winrate_unfilt > 0 else 0.0
     o2nc_winrate = round(o2nc_wins / o2nc_settled * 100, 2) if o2nc_settled > 0 else 0.0
+    # S145 R3/R4：path-dependent winrate/lift（SL/TP/max_hold 模拟口径，双报；verdict 仍 o2c escape hatch）
+    path_winrate = round(path_wins / path_settled * 100, 2) if path_settled > 0 else 0.0
+    u_path_winrate = round(u_path_wins / u_path_settled * 100, 2) if u_path_settled > 0 else 0.0
+    path_lift = round(path_winrate / u_path_winrate, 3) if u_path_winrate > 0 else 0.0
     s_lo, s_hi = _wilson(s_wins, s_settled)
     u_lo, u_hi = _wilson(u_wins, u_settled)
     is_exploratory = s_settled < 30  # §44(2)：n<30 探索性非定论（60日复验窗口：不阻断接入，标探索性跑通）
@@ -454,6 +500,12 @@ def get_forward_test_summary(
         note_parts.append(
             f"T+1 口径胜率 {o2nc_winrate}%（open2next_close，{o2nc_settled} settled）双报；verdict 仍用 o2c 基线（escape hatch，切纯 T+1=Tier 2）"
         )
+    # S145 R3/R4：path-dependent（SL/TP/max_hold 模拟）——§44 真·gate，双报
+    # path_lift = strategy path-winrate / universe path-winrate（默认 -3%/+8%/3）
+    if path_settled > 0:
+        note_parts.append(
+            f"path-dependent 胜率 {path_winrate}%（{path_settled} settled）vs universe path {u_path_winrate}% → path_lift {path_lift}x（SL/TP/max_hold 模拟，§44 真·gate）"
+        )
     if not note_parts:
         note_parts.append("§44 前向测试通过（胜率>=60% + lift>=2x → validated）")
 
@@ -497,6 +549,13 @@ def get_forward_test_summary(
         o2nc_wins=o2nc_wins,
         win_rate_open2next_close=o2nc_winrate,
         lift_unfiltered=lift_unfiltered,
+        path_settled=path_settled,
+        path_wins=path_wins,
+        win_rate_path=path_winrate,
+        random_path_settled=u_path_settled,
+        random_path_wins=u_path_wins,
+        random_win_rate_path=u_path_winrate,
+        path_lift=path_lift,
     )
 
 

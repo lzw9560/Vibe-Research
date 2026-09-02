@@ -30,6 +30,7 @@ from typing import Any
 
 import astock
 from data.mappers import kline_from_mootdx
+from strategies.kline_returns import simulate_holding
 from limitup_screener.data import get_db, load_gene_scores
 from limitup_strategy import STRATEGY_REGISTRY, match_strategies
 
@@ -86,33 +87,14 @@ def _backtest_single(
     """K 线算入场(次日开盘)/出场(max_hold 收盘或 stop/profit 提前平)。缺数据返 None。
 
     stop_pct 为负（止损，如 -3）、profit_pct 为正（止盈，如 8）。
+
+    S145 R1：DRY——委托 kline_returns.simulate_holding（路径模拟共享 helper）。
+    返 {won, return_pct}（模拟 exit_reason/date 由 simulate_holding 返，本处只用 won/return_pct）。
     """
-    if not bars:
+    res = simulate_holding(bars, date, stop_pct, profit_pct, max_hold_days)
+    if res is None:
         return None
-    idx = next((i for i, b in enumerate(bars) if (getattr(b, "date", "") or "")[:10] == date), None)
-    if idx is None or idx + 2 >= len(bars):
-        # S144 R4：需 T+1（入场，bars[idx+1].open）+ T+2（首可卖日，A 股 T+1 买入日不可卖）。
-        # 缺 T+2 → 无法 T+1 评估（不能在买入日卖）→ skip。
-        return None
-    entry = getattr(bars[idx + 1], "open", 0)
-    if not entry or entry <= 0:
-        return None
-    # S144 R4：A 股 T+1——买入日（T+1=idx+1）不可卖，止损/止盈从 T+2（idx+2）起检查。
-    # 原 range(idx+1) 含买入日 = T+0 违规；改 range(idx+2) 跳过买入日。
-    # loop end + exit_idx 同步 +1，保持 max_hold_days 持仓长度（max_hold=1 时 exit T+2 非 T+1）。
-    for j in range(idx + 2, min(idx + 2 + max_hold_days, len(bars))):
-        low = getattr(bars[j], "low", 0)
-        high = getattr(bars[j], "high", 0)
-        if low and low <= entry * (1 + stop_pct / 100):
-            return {"won": False, "return_pct": float(stop_pct)}
-        if high and high >= entry * (1 + profit_pct / 100):
-            return {"won": True, "return_pct": float(profit_pct)}
-    exit_idx = min(idx + 1 + max_hold_days, len(bars) - 1)
-    exit_price = getattr(bars[exit_idx], "close", 0)
-    if not exit_price:
-        return None
-    ret = (exit_price - entry) / entry * 100
-    return {"won": ret > 0, "return_pct": round(ret, 2)}
+    return {"won": res["won"], "return_pct": res["return_pct"]}
 
 
 def run_strategy_backtest(lookback_days: int = 60, as_of: str | None = None) -> list[StrategyBacktestResult]:
