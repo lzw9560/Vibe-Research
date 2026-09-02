@@ -50,10 +50,10 @@ vi.mock("@/lib/query/premarket", () => ({
   usePremarketSelection: () => ({ isLoading: true }),
 }));
 vi.mock("@/pages/workflow/CandidateDetail", () => ({ CandidateDetailPanel: () => null }));
-// S093 T17：mock WatchlistBoard（避免内部 useCrossValidationGroups/useQuote/useWorkflowStates 链）
+// S093 T17 + S146：mock WatchlistBoard（避免内部 useCrossValidationGroups/useQuote/useWorkflowStates 链）
 vi.mock("@/components/workflow/WatchlistBoard", () => ({
-  WatchlistBoard: ({ F, forward, date }: { F: string; forward: string; date: string }) => (
-    <div data-testid="watchlist-board" data-F={F} data-forward={forward} data-date={date}>WatchlistBoard</div>
+  WatchlistBoard: ({ F, date }: { F: string; date: string }) => (
+    <div data-testid="watchlist-board" data-F={F} data-date={date}>WatchlistBoard</div>
   ),
 }));
 vi.mock("@/components/workflow/StrategyMatchMatrix", () => ({

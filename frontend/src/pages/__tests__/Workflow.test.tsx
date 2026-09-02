@@ -23,8 +23,9 @@ vi.mock("@/lib/query", () => ({
 }));
 
 // S093 T14：ForwardTabSection 调 useCrossValidationGroups，mock 避免真 hook 链
+// S146：CV 重定向涨停叉内（final∩scored）——breakoutOnly→strategyOnly
 vi.mock("@/lib/query/useCrossValidation", () => ({
-  useCrossValidationGroups: () => ({ dual: [], funnelOnly: [], breakoutOnly: [], isLoading: false }),
+  useCrossValidationGroups: () => ({ dual: [], funnelOnly: [], strategyOnly: [], isLoading: false }),
 }));
 
 // mock useQuery（advisory 摘要等）+ request（避免真请求）
@@ -112,13 +113,12 @@ vi.mock("@/components/workflow/StrategyMatchMatrix", () => ({
   ),
 }));
 
-// S099: mock PipelineTopology（echarts.init 在 jsdom 无 canvas renderer，stub 避免崩溃）。
-// S099 重构后前瞻 Tab 主组件是 PipelineTopology；PremarketSelectionSection 移入其 ③ fold（defaultOpen=false），
-// 故 forward date 透传到 PipelineTopology 的 forward prop（原 premarket-selection data-date assert 改测 pipeline-topology data-forward）。
-vi.mock("@/components/pipeline/PipelineTopology", () => ({
-  PipelineTopology: ({ forward, F }: { forward: string; F: string }) => (
-    <div data-testid="pipeline-topology" data-forward={forward} data-F={F}>
-      PipelineTopology
+// S146: mock PipelineFlow（选股 tab 主组件，2 列 + ④叉内CV）。
+// F date 透传到 PipelineFlow 的 F prop，测 data-F（breakout 移 2 级导航，PipelineFlow 不再收 forward）。
+vi.mock("@/components/pipeline/PipelineFlow", () => ({
+  PipelineFlow: ({ F }: { F: string }) => (
+    <div data-testid="pipeline-flow" data-F={F}>
+      PipelineFlow
     </div>
   ),
 }));
@@ -210,13 +210,12 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     });
   });
 
-  it("点击前瞻 Tab → 渲染 PipelineTopology", async () => {
+  it("点击选股 Tab → 渲染 PipelineFlow（S146 统一流）", async () => {
     renderAt();
     fireEvent.click(getTabButton("盯盘"));
     fireEvent.click(getTabButton("选股"));
-    fireEvent.click(screen.getByText("pipeline 拓扑")); // S145b：展开 fold（默认收缩）
     await waitFor(() => {
-      expect(screen.getByTestId("pipeline-topology")).toBeInTheDocument();
+      expect(screen.getByTestId("pipeline-flow")).toBeInTheDocument();
     });
   });
 
@@ -384,11 +383,10 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     expect(pmb.getAttribute("data-stage")).toBe("post_market");
   });
 
-  it("前瞻 Tab → PipelineTopology 收 dateTriplet.forward", async () => {
+  it("选股 Tab → PipelineFlow 收 dateTriplet.F（S146；breakout 移 2 级导航，PipelineFlow 收 F 不收 forward）", async () => {
     renderAt();
     fireEvent.click(getTabButton("选股"));
-    fireEvent.click(screen.getByText("pipeline 拓扑")); // S145b：展开 fold（默认收缩）
-    const pt = await waitFor(() => screen.getByTestId("pipeline-topology"));
-    expect(pt.getAttribute("data-forward")).toBe("2026-08-22"); // = triplet.forward
+    const pf = await waitFor(() => screen.getByTestId("pipeline-flow"));
+    expect(pf.getAttribute("data-F")).toBe("2026-08-21"); // = triplet.F
   });
 });

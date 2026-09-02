@@ -141,7 +141,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
       </div>
 
       <p className="text-[10px] text-muted-foreground/50">
-        §44 day-cluster lift=1.72x &lt;2x 非 validated edge，edge 主来自风控非对称。前向测试期间不投真金。
+        §44 naive lift=1.36x &lt;2x 非 validated edge（4 方向特征里最弱），edge 主来自风控非对称。前向测试期间不投真金。
       </p>
     </GlassCard>
   );

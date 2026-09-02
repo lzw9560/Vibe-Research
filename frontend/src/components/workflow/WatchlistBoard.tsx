@@ -1,5 +1,5 @@
-// S093 T16：前瞻结论标的看板（spec R6 第一层）
-// 三组分组：dual(漏斗∩breakout) / funnelOnly / breakoutOnly
+// S093 T16 + S146：前瞻结论标的看板（spec R6 第一层）
+// breakout 降级研究后 CV 重定向涨停叉内：三组分组 dual(漏斗终选∩战法命中) / funnelOnly / strategyOnly
 // 每只票卡片：实时价格/涨跌幅/封板状态/持仓状态
 // 点击跳 IntradayMonitor 个股详情
 // 工程底线：不臆造——query 无数据返空数组；quote 缺字段标"—"；历史统计特征标注。
@@ -16,18 +16,16 @@ import type { Quote } from "@/lib/api/types";
 import type { CrossValidationGroup } from "@/lib/query/useCrossValidation";
 
 interface WatchlistBoardProps {
-  /** 前瞻数据日（漏斗 final_candidates 数据源） */
+  /** 前瞻数据日（briefing 数据源：final_candidates + scored_candidates 都从 briefing 取） */
   F: string;
-  /** forward 日期（breakout 候选数据源） */
-  forward: string;
   /** 当日数据日（useWorkflowStates 持仓状态查询用） */
   date: string;
 }
 
-export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
-  const cv = useCrossValidationGroups(F, forward);
+export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
+  const cv = useCrossValidationGroups(F);
 
-  const allCodes = [...cv.dual, ...cv.funnelOnly, ...cv.breakoutOnly].map((c) => c.code);
+  const allCodes = [...cv.dual, ...cv.funnelOnly, ...cv.strategyOnly].map((c) => c.code);
   const codesStr = allCodes.join(",");
   const { data: quoteMap } = useQuote(codesStr);
   const { data: workflowStates } = useWorkflowStates(date);
@@ -41,7 +39,7 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
   if (cv.isLoading) {
     return (
       <div className="mb-6">
-        <SectionHeader title="前瞻结论标的看板" subtitle="双重确认 / 仅漏斗 / 仅 breakout" />
+        <SectionHeader title="前瞻结论标的看板" subtitle="双重确认 / 仅漏斗终选 / 仅战法命中" />
         <GlassCard className="p-4">
           <Skeleton variant="rounded" className="h-32" />
         </GlassCard>
@@ -53,7 +51,7 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
   if (total === 0) {
     return (
       <div className="mb-6">
-        <SectionHeader title="前瞻结论标的看板" subtitle="双重确认 / 仅漏斗 / 仅 breakout" />
+        <SectionHeader title="前瞻结论标的看板" subtitle="双重确认 / 仅漏斗终选 / 仅战法命中" />
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">
             前瞻 Tab 尚无选股结论，待 17:15 漏斗预计算完成后产出。
@@ -66,14 +64,14 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
   const groups: { key: CrossValidationGroup; items: typeof cv.dual }[] = [
     { key: "dual", items: cv.dual },
     { key: "funnelOnly", items: cv.funnelOnly },
-    { key: "breakoutOnly", items: cv.breakoutOnly },
+    { key: "strategyOnly", items: cv.strategyOnly },
   ];
 
   return (
     <div className="mb-6">
       <SectionHeader
         title="前瞻结论标的看板"
-        subtitle="双重确认 / 仅漏斗 / 仅 breakout · 点击展开 · 点击标的跳个股盯盘"
+        subtitle="双重确认 / 仅漏斗终选 / 仅战法命中 · 点击展开 · 点击标的跳个股盯盘"
       />
       <div className="space-y-2">
         {groups.map(
@@ -89,7 +87,6 @@ export function WatchlistBoard({ F, forward, date }: WatchlistBoardProps) {
                       strategyName={item.strategyName}
                       strategyScore={item.strategyScore}
                       geneScore={item.geneScore}
-                      breakoutScore={item.breakoutScore}
                       quote={quoteMap?.[item.code]}
                       status={stateMap.get(item.code)}
                     />
@@ -142,7 +139,6 @@ function WatchlistCard({
   strategyName,
   strategyScore,
   geneScore,
-  breakoutScore,
   quote,
   status,
 }: {
@@ -151,7 +147,6 @@ function WatchlistCard({
   strategyName?: string;
   strategyScore?: number;
   geneScore?: number;
-  breakoutScore?: number;
   quote?: Quote;
   status?: string;
 }) {
@@ -186,7 +181,6 @@ function WatchlistCard({
           {strategyName && <span>{strategyName}</span>}
           {strategyScore != null && <span className="font-mono">战法分 {strategyScore.toFixed(1)}</span>}
           {geneScore != null && <span className="font-mono">基因 {geneScore.toFixed(1)}</span>}
-          {breakoutScore != null && <span className="font-mono">breakout {breakoutScore.toFixed(2)}</span>}
         </div>
         {/* 第三行：价格 + 涨跌幅 */}
         <div className="mt-2 flex items-baseline justify-between">

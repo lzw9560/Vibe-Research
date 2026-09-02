@@ -47,9 +47,8 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
   const { data: triplet } = useDateTriplet();
   const _date = date ?? triplet?.today ?? "";
   const _stage = stage ?? triplet?.stage ?? "pre_market";
-  // S093 T17：WatchlistBoard 需要 F + forward（前瞻结论数据日）
+  // S093 T17 + S146：WatchlistBoard 需要 F（前瞻数据日——briefing final+scored；breakout 移研究后不再需 forward）
   const F = triplet?.F ?? "";
-  const forward = triplet?.forward ?? "";
   // S092：盘后时段（stage=post_market）标注"数据为今早盘前采集口径"
   const isPostMarket = _stage === "post_market";
 
@@ -199,8 +198,8 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
       )}
 
       {/* S093 T17：done 状态——盯盘执行台核心内容（WatchlistBoard + 持仓 chips + 市场情绪） */}
-      {status === "done" && F && forward && (
-        <WatchlistBoard F={F} forward={forward} date={_date} />
+      {status === "done" && F && (
+        <WatchlistBoard F={F} date={_date} />
       )}
 
       {/* S093 T17：持仓 chips——useWorkflowStates 取候选/观察/监控/持仓/已结计数 */}

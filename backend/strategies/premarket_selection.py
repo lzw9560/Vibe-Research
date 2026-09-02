@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
-"""S071：谨慎盘前选股——breakout_20d 弱正信号（§44 <2x 但 day-cluster robust>1 + PnL+0.523%）。
+"""S071：谨慎盘前选股——breakout_20d 弱正信号（§44 naive lift=1.36x <2x，最弱方向特征）。
 
-**诚实标注**：breakout_20d 在 §44 day-cluster 下 lift=1.67x（<2x，非 validated edge），
-但 robust>1（90%CI 下界>1）+ premium spread +0.523%（正 PnL）。是最弱正信号，谨慎用作排序参考，
-不宣称"validated edge"。edge 主要来自风控非对称（(b) ethos），breakout 是 weak ranking signal。
+**诚实标注**（2026-09-02 实算复现）：breakout_20d naive pooled lift=1.36x（top 1.78% vs bottom 1.31%，
+Wilson CI不重叠故非纯噪声，但 <2x = §44 噪声级非 validated edge；4 方向特征里最弱：momentum 1.83 /
+vol_surge 1.90 / ma_align 1.65 / breakout 1.36）。谨慎用作排序参考，不宣称 validated edge。
+edge 主来自风控非对称（(b) ethos），breakout 是 weak ranking signal。
 
-数据：baostock_kline_cache（1121 股 × 日K，本地缓存）。live 需日更 baostock kline（非东财，不被 IP 限流）。
-universe：cache 1121 股（§44 测试的 broad set，历史涨停股）。
+**复现性更正**：此前引用 day-cluster lift=1.72x + robust>1 + PnL 0.486/0.523% ——无对应脚本复现
+（kline_ta_validation.py 算 naive lift 不聚类；factor_regression.py 算 r 且测 gene 因子非 breakout）。
+已按 §44 工程底线改为可复现的 naive 1.36x。
+
+数据：baostock_kline_cache（5226 股 × 日K，全市场，本地缓存）。live 需日更 baostock kline（非东财，不被 IP 限流）。
+universe：cache 5226 股（全市场 broad set，T21 R20 扩展自历史涨停股至全 A）。
 信号：breakout_20d = T-1 close >= 0.95 × max(high, 前 20 日) → 1（接近新高）+ 连续分数（越接近越高）。
 """
 from __future__ import annotations
@@ -68,10 +73,11 @@ def _load_code_name_map() -> dict[str, str]:
     except Exception:
         return {}
 
-# 诚实标签（不改不撒谎）——数值随 §44 重验更新（2026-08-16 cache 08-14 重验）
+# 诚实标签（不改不撒谎）——naive lift 随 §44 重验更新（2026-09-02 实算，208043 obs，kline_ta_validation.py）
+# 复现性更正见模块 docstring：此前 day-cluster 1.72x + PnL 0.486% 无脚本复现，已改可复现 naive 1.36x
 HONEST_LABEL = (
-    "弱信号（§44 day-cluster lift=1.72x <2x 非 validated edge，"
-    "但 robust>1 + PnL spread +0.486%正）。谨慎排序参考，非预测保证。"
+    "弱信号（§44 naive lift=1.36x <2x 非 validated edge，4 方向特征里最弱；"
+    "Wilson CI不重叠故非纯噪声）。谨慎排序参考，非预测保证。"
     "edge 主要来自风控非对称，breakout 是 weak ranking。"
 )
 
@@ -166,7 +172,7 @@ class PreMarketRiskParams:
     max_hold_days: int         # 最大持有日（短线，breakout 衰减快）
 
 
-# 弱信号保守默认（breakout §44 day-cluster 1.72x <2x 非 validated → 小仓紧止损）
+# 弱信号保守默认（breakout §44 naive lift=1.36x <2x 非 validated → 小仓紧止损）
 _PREMARKET_RISK_BASE = PreMarketRiskParams(
     position_pct=3.0,
     max_positions=3,

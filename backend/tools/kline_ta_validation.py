@@ -6,7 +6,7 @@
 不需涨停事件，universe=有 kline 历史的股）。§44 60日复验窗口：lift>=2x + CI 不重叠 + n>=30 → validated；
 <2x 标未 validated（复验日满60天后定权重），不阻断接入跑通。本脚本计算逻辑不变，只改注释口径。
 
-数据：baostock_kline_cache.json（1121 股 × 日K，2025-12-25→2026-08-13，缓存本地无限流）
+数据：baostock_kline_cache.json（5226 股 × 日K，全市场，2025-12-25→2026-08-13，缓存本地无限流）
 + gene_scores（T 涨停池，eastmoney_live 32 日）。T-1 覆盖 30 日（07-09→08-13）。
 
 设计：对每个 T（eastmoney_live 日）：
@@ -130,7 +130,8 @@ def main() -> int:
         print(f"{feat:12s}: top {t_zt}/{q}={t_rate*100:.2f}%[{tb_lo*100:.1f},{tb_hi*100:.1f}]  "
               f"bottom {b_zt}/{q}={b_rate*100:.2f}%[{bb_lo*100:.1f},{bb_hi*100:.1f}]  "
               f"lift={lift:.3f}x → {verdict}（{sig}）")
-    print(f"\ncaveat: n_days={len(em_dates)}；universe=cache 1109 股（有 kline 历史，非全市场）；"
+    print(f"\ncaveat: n_days={len(em_dates)}；universe=cache {len(cache)} 股（全市场 broad set，"
+          f"~{n // len(em_dates)} 股/T 有 T-1+20bar 前置历史）；"
           f"若全 <2x → kline TA 对次日涨停无 §44 edge（标未 validated，不阻断接入，60日后复验）。")
     return 0
 
