@@ -15,7 +15,7 @@ export function HonestyBanner() {
         <li>· 第一步=当日涨停股池（em_zt_topic_pool，T 日涨停标的 → 选 T+1 候选）</li>
         <li>· screener total_score：Phase 0b 二轮证伪（within-day r≈0，5 因子 CI 全含 0）</li>
         <li>· 策略分：limitup 权重已回等权 placeholder（rebound pooled-r=0.179 是 IID 假象，within-day r=-0.010，已收回主因子）</li>
-        <li>· S071 盘前选股：breakout 1.72x&lt;2x 弱正，孤立未并入（universe=1121 涨停史股非当日），定位撕裂待决</li>
+        <li>· S071 盘前选股：breakout naive lift=1.36x&lt;2x 弱正（4 方向特征里最弱），已降级 2 级导航研究（universe=5226 全市场）；R:R 1:2 只设盈亏平衡门槛不创造 edge</li>
       </ul>
       {ft && (
         <div className="mt-2 text-xs text-amber-100/90">

@@ -1,5 +1,5 @@
-// S071 盘前选股 — breakout 弱信号 + 风控非对称。
-// §44：day-cluster lift=1.72x <2x 非 validated edge；honest 标签前置，edge 主来自风控。
+// S071 盘前选股 — breakout 弱信号（§44 naive lift=1.36x <2x 最弱方向特征）。
+// R:R 1:2 只设盈亏平衡门槛不创造 edge；honest 标签前置。breakout 已降级 2 级导航研究（本页为独立入口）。
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -18,7 +18,7 @@ export function PremarketSelection() {
     <div className="mx-auto max-w-5xl space-y-4 p-4">
       <PageHeader
         title="盘前选股（breakout 弱信号）"
-        subtitle="breakout_20d 排序 → top-N + 风控具体价。§44 day-cluster lift=1.72x <2x，非 validated edge。"
+        subtitle="breakout_20d 排序 → top-N + 风控具体价。§44 naive lift=1.36x <2x，非 validated edge（4 方向特征里最弱）。"
       />
       <Disclaimer />
 

@@ -1,13 +1,13 @@
 // S146：涨停叉内交叉验证摘要——final_candidates(漏斗终选) ∩ scored_candidates(战法命中)。
 // breakout 降级研究后 ④ 重定向叉内：涨停∩非涨停 by 构造 disjoint（非涨停=板块TOP非涨停股），
 // breakout 曾是唯一可交集的第二输入，现移研究 tab；④ 改涨停叉内双确认（漏斗终选∩战法命中，都涨停股有交集）。
-// 三组：双重确认 / 仅漏斗终选 / 仅战法命中。保 geneScore/strategyScore 不丢（drop breakoutScore）。
+// 三组：双指标重叠 / 仅漏斗终选 / 仅战法命中。保 geneScore/strategyScore 不丢（drop breakoutScore）。
 // 类型从 useCrossValidation 共享（CrossValidationGroups）——选股 ④ + 盯盘 WatchlistBoard 同一份 CV 定义。
 import { GlassCard } from "@/components/ui/GlassCard";
 import type { CrossValidationGroups } from "@/lib/query/useCrossValidation";
 
 const GROUPS = [
-  { key: "dual" as const, label: "双重确认", desc: "漏斗终选 ∩ 战法命中", icon: "✓✓", cls: "text-green-500" },
+  { key: "dual" as const, label: "双指标重叠", desc: "漏斗终选 ∩ 战法命中（§44 未 validated，排序参考非 edge）", icon: "◆", cls: "text-muted-foreground/70" },
   { key: "funnelOnly" as const, label: "仅漏斗终选", desc: "过八项 · 未命中战法", icon: "◆", cls: "text-muted-foreground/50" },
   { key: "strategyOnly" as const, label: "仅战法命中", desc: "命中战法 · 未过八项", icon: "◇", cls: "text-muted-foreground/50" },
 ];
@@ -24,7 +24,7 @@ export function CrossValidationSummary({ groups }: { groups: CrossValidationGrou
     <GlassCard className="mb-3 p-4">
       <div className="flex items-center gap-2 border-b border-border/30 pb-2">
         <span className="text-sm font-semibold">交叉验证</span>
-        <span className="text-xs text-muted-foreground/70">漏斗终选 ∩ 战法命中 · {groups.dual.length} 双重确认</span>
+        <span className="text-xs text-muted-foreground/70">漏斗终选 ∩ 战法命中 · {groups.dual.length} 双指标重叠（§44 未 validated，非 edge）</span>
       </div>
       <div className="mt-3 space-y-3">
         {GROUPS.map((g) => {

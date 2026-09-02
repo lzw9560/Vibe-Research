@@ -331,6 +331,8 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
 
         stop_loss = round(entry_price * (1 + cfg.stop_loss_pct / 100), 2)
         take_profit = round(entry_price * (1 + cfg.take_profit_pct / 100), 2)
+        # §44 诚实更正（2026-09-02 专家会诊）：此非实测历史胜率，是 confidence→winrate 合成映射公式。
+        # 展示层须标"置信度映射(非实测)"，不得称"历史胜率"（§1.2 不臆造底线）。接 win_rate_tracker 实测属 Tier 2。
         historical_win_rate = min(confidence * 0.8 + 0.2, 0.95)
         historical_avg_return = round(
             (cfg.take_profit_pct - cfg.stop_loss_pct) / 2 * historical_win_rate, 2,

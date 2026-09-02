@@ -39,7 +39,7 @@ export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
   if (cv.isLoading) {
     return (
       <div className="mb-6">
-        <SectionHeader title="前瞻结论标的看板" subtitle="双重确认 / 仅漏斗终选 / 仅战法命中" />
+        <SectionHeader title="前瞻结论标的看板" subtitle="双指标重叠 / 仅漏斗终选 / 仅战法命中" />
         <GlassCard className="p-4">
           <Skeleton variant="rounded" className="h-32" />
         </GlassCard>
@@ -51,7 +51,7 @@ export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
   if (total === 0) {
     return (
       <div className="mb-6">
-        <SectionHeader title="前瞻结论标的看板" subtitle="双重确认 / 仅漏斗终选 / 仅战法命中" />
+        <SectionHeader title="前瞻结论标的看板" subtitle="双指标重叠 / 仅漏斗终选 / 仅战法命中" />
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">
             前瞻 Tab 尚无选股结论，待 17:15 漏斗预计算完成后产出。
@@ -71,7 +71,7 @@ export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
     <div className="mb-6">
       <SectionHeader
         title="前瞻结论标的看板"
-        subtitle="双重确认 / 仅漏斗终选 / 仅战法命中 · 点击展开 · 点击标的跳个股盯盘"
+        subtitle="双指标重叠 / 仅漏斗终选 / 仅战法命中 · 点击展开 · 点击标的跳个股盯盘"
       />
       <div className="space-y-2">
         {groups.map(

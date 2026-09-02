@@ -63,7 +63,7 @@ describe("WatchlistBoard (S093 T16)", () => {
     });
     renderBoard();
     // 三组 label（header 始终显）
-    expect(screen.getByText("双重确认")).toBeInTheDocument();
+    expect(screen.getByText("双指标重叠")).toBeInTheDocument();
     expect(screen.getAllByText("仅漏斗终选").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("仅战法命中").length).toBeGreaterThanOrEqual(1);
     // 双重确认默认展开 → 贵州茅台 立即可见

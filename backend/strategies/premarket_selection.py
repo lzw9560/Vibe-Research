@@ -77,8 +77,10 @@ def _load_code_name_map() -> dict[str, str]:
 # 复现性更正见模块 docstring：此前 day-cluster 1.72x + PnL 0.486% 无脚本复现，已改可复现 naive 1.36x
 HONEST_LABEL = (
     "弱信号（§44 naive lift=1.36x <2x 非 validated edge，4 方向特征里最弱；"
-    "Wilson CI不重叠故非纯噪声）。谨慎排序参考，非预测保证。"
-    "edge 主要来自风控非对称，breakout 是 weak ranking。"
+    "Wilson CI不重叠故非纯噪声）。R:R 1:2 只设盈亏平衡门槛（p>33.3%含成本~35.8%）不创造 edge——"
+    "edge 完全由信号预测力决定，而 §44 全 <2x；breakout 在 -4%/+8%/3d 制度下 path-winrate 未测，EV 未知可能为负。"
+    "止损/止盈锚 T-1 close 非实际入场价（实盘 T 日开盘竞价），gap>3% 时 R:R 失真；"
+    "forward_test 未建模止损止盈，R:R=1:2 未经验证。谨慎排序参考，非预测保证。"
 )
 
 
@@ -191,7 +193,7 @@ class PreMarketCandidateRisk:
     breakout_binary: int
     t1_close: float
     t1_date: str
-    entry_ref: float           # 入场参考价（= T-1 close；实盘以开盘竞价为准）
+    entry_ref: float           # 预案估算价（= T-1 close，非实际成交参考；实盘以 T 日开盘竞价重算，gap 时止损止盈失真）
     stop_loss: float           # 止损价（entry_ref × (1+stop_loss_pct/100)）
     take_profit: float         # 止盈价（entry_ref × (1+take_profit_pct/100)）
     position_pct: float        # 仓位 %（已 × 日历因子）

@@ -1,5 +1,5 @@
 // S090 A：premarket_selection（S071 breakout 弱信号）前端展示——候选表 + 风控 + honest。
-// §44 day-cluster lift=1.72x <2x 非 validated；honest_label 标弱信号，edge 主来自风控非对称。
+// §44 naive lift=1.36x <2x 非 validated；honest_label 标弱信号，R:R 1:2 只设盈亏平衡门槛不创造 edge。
 // 前向测试期间不投真金（disclaimer）。
 import { usePremarketSelection } from "@/lib/query/premarket";
 import { GlassCard } from "@/components/ui/GlassCard";

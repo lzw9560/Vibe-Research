@@ -1738,7 +1738,7 @@ def _build_premarket_notification_content(
         f"📊 前瞻选股结果 {f_date}",
         "",
         f"漏斗最终候选: {len(final_cards)} 只",
-        f"双重确认（漏斗∩breakout）: {dual_count} 只",
+        f"交集计数（§44 未 validated，排序参考非 edge）: {dual_count} 只",
         "",
     ]
     top5 = final_cards[:5]
@@ -2460,6 +2460,30 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 premarket_t1_review 已创建（cron 35 16 * * 0-4）")
+
+    # S078：盘后终盘涨停池 snapshot——17:15（过稳定点写 is_final=true，zt_history.db）。
+    # 旧 cron "0 16"（16:00 写 is_final=false，无 17:15 final run → is_final 从不自动 true）。
+    # 迁移到 "15 17"（仿 :2233 candidate_funnel 范式）。幂等：存在跳过 create，旧 cron 才迁移。
+    if "zt_history_snapshot" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="zt_history_snapshot",
+            description="S078 盘后终盘涨停池 snapshot（17:15 过稳定点写 is_final=true，zt_history.db 数据地基）",
+            task_type="zt_history_snapshot",
+            cron_expr="15 17 * * 0-4",  # 17:15（东财池盘后稳定，写 is_final=true）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 zt_history_snapshot 已创建（cron 15 17 * * 0-4）")
+    for t in _manager.list_tasks():
+        if t.name == "zt_history_snapshot" and t.cron_expr == "0 16 * * 0-4":
+            old_cron = t.cron_expr
+            t.cron_expr = "15 17 * * 0-4"
+            _manager.update_task(t)
+            logger.info(
+                "[scheduler] zt_history_snapshot cron 迁移 %s → 15 17 * * 0-4"
+                "（17:15 过稳定点写 is_final=true，旧 16:00 写 is_final=false 无 final run）",
+                old_cron,
+            )
 
 
 async def stop_scheduler() -> None:
