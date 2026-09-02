@@ -214,6 +214,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     renderAt();
     fireEvent.click(getTabButton("盯盘"));
     fireEvent.click(getTabButton("选股"));
+    fireEvent.click(screen.getByText("pipeline 拓扑")); // S145b：展开 fold（默认收缩）
     await waitFor(() => {
       expect(screen.getByTestId("pipeline-topology")).toBeInTheDocument();
     });
@@ -386,6 +387,7 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
   it("前瞻 Tab → PipelineTopology 收 dateTriplet.forward", async () => {
     renderAt();
     fireEvent.click(getTabButton("选股"));
+    fireEvent.click(screen.getByText("pipeline 拓扑")); // S145b：展开 fold（默认收缩）
     const pt = await waitFor(() => screen.getByTestId("pipeline-topology"));
     expect(pt.getAttribute("data-forward")).toBe("2026-08-22"); // = triplet.forward
   });

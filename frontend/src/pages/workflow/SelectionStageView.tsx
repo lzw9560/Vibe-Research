@@ -46,14 +46,16 @@ export function SelectionStageView({ F, forward, urlDate, today }: { F: string; 
       {/* ============ 前置共享区（辅助角色，顶部折叠态——展开才看详情） ============ */}
       <PreSharedRegion F={F} briefing={briefing} />
 
-      {/* ============ 拓扑主视图（echarts graph ①~⑧ + 分叉 + ②⑦展开 + ①③⑤⑥⑦⑧折叠） ============ */}
-      <PipelineTopology
-        briefing={briefing}
-        F={F}
-        forward={forward}
-        funnelLayers={funnelLayers}
-        cv={cv}
-      />
+      {/* ============ 拓扑主视图（echarts graph ①~⑧，默认收缩——展开才看 graph） ============ */}
+      <CollapsibleFold title="pipeline 拓扑" subtitle="①~⑧ echarts graph" defaultOpen={false}>
+        <PipelineTopology
+          briefing={briefing}
+          F={F}
+          forward={forward}
+          funnelLayers={funnelLayers}
+          cv={cv}
+        />
+      </CollapsibleFold>
 
       {/* ============ ④ 交叉验证（folded——CrossValidationSummary 随 SelectionStageView 一并迁出，S140 R5） ============ */}
       <CollapsibleFold title="④ 交叉验证" subtitle="漏斗 ∩ breakout" defaultOpen={false}>
