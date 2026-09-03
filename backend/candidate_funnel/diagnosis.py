@@ -248,6 +248,7 @@ def build_diagnosis_card(
     derived: dict | None = None,    # S084 R3：S070 R7 分时派生
     trade_date: str | None = None,  # S085 B2：T-1 交易日（龙虎榜盘后数据，供席位聚合取数）
     with_seat_detail: bool = False,  # S085 B2：席位聚合 opt-in（bulk 漏斗默认关，单股 diagnose 开）
+    st_play: str | None = None,  # S148：ST carve-out 标（摘帽/重组/扭亏），radar 白名单 re-include 的 ST 股带
 ) -> DiagnosisCard:
     """聚合 → DiagnosisCard（AC4）。risk_flags 为客观标注（AC8/§8 极端估值）。
 
@@ -340,6 +341,7 @@ def build_diagnosis_card(
         derived=derived,
         seat_detail=seat_detail,
         sector_phase=sector_phase,
+        st_play=st_play,
     )
 
 

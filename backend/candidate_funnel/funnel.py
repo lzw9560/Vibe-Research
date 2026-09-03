@@ -493,6 +493,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         cards.append(build_diagnosis_card(
             code, name, ind, eff, market_ctx=board, as_of=as_of,
             gene_obj=gene_obj, pool_item=pool_item, derived=derived,
+            st_play=r1_st_play.get(code),  # S148：ST carve-out 标透传到诊断卡（摘帽/重组/扭亏）
             # S085 B2：bulk 漏斗 with_seat_detail=False（默认）——席位聚合 per-code 调
             # compute_consensus_signal（3 次 datacenter/code），N 候选会拖垮响应；
             # 选股池列表跳过，单股 diagnose() 才开 with_seat_detail=True。
@@ -598,9 +599,11 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     gene_obj = genes.get(code, {}).get("gene_obj")
     pool_item = zt_pool_map.get(code)
     derived = derived_source.fetch_derived(code, yesterday_date) if yesterday_date else None
+    _radar = load_st_play_radar()  # S148：单股 diagnose 也带 ST carve-out 标（若该 code 在 radar 白名单）
     return build_diagnosis_card(
         code, name, ind, eff, market_ctx=board, as_of=as_of,
         gene_obj=gene_obj, pool_item=pool_item, derived=derived,
         trade_date=yesterday_date,  # S085 B2：单股 diagnose 开席位聚合（1 code 开销可接受）
         with_seat_detail=True,
+        st_play=_radar.get(code),  # S148
     )

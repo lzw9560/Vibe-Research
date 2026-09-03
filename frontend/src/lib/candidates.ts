@@ -58,6 +58,7 @@ export interface DiagnosisCard {
   activity: ActivityAssessment;
   stabilization: StabilizationSignals;
   risk_flags: string[];
+  st_play?: string | null;  // S148：ST carve-out 正向标（摘帽/重组/扭亏），radar 白名单 re-include 的 ST 股带
   as_of: string;
   eight_standards?: EightStandardResult | null;  // S057
   capped?: boolean;  // S057：未过≥3 → 封顶 55

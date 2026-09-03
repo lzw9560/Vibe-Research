@@ -126,5 +126,21 @@ class TestBuildDiagnosisCardAndMissing(unittest.TestCase):
         self.assertIsInstance(card.stabilization, StabilizationSignals)
 
 
+class TestDiagnosisCardStPlay(unittest.TestCase):
+    """S148 R7：DiagnosisCard st_play 字段（ST carve-out 正向标）。"""
+
+    def test_st_play_set_when_provided(self):
+        ind = IndicatorSet(code="603555", name="ST贵人", turnover_pct=5.0)
+        card = build_diagnosis_card("603555", "ST贵人", ind, EFF, market_ctx=None,
+                                    as_of=datetime(2026, 9, 3, 9, 0), st_play="摘帽")
+        self.assertEqual(card.st_play, "摘帽")
+
+    def test_st_play_default_none(self):
+        ind = IndicatorSet(code="600519", name="贵州茅台", turnover_pct=25.0)
+        card = build_diagnosis_card("600519", "贵州茅台", ind, EFF, market_ctx=None,
+                                    as_of=datetime(2026, 9, 3, 9, 0))
+        self.assertIsNone(card.st_play)
+
+
 if __name__ == "__main__":
     unittest.main()

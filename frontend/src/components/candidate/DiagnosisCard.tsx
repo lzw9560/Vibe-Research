@@ -86,6 +86,11 @@ export function DiagnosisCardView({ card }: { card: Card }) {
         <div className="text-sm text-warning">风险标注：{card.risk_flags.join("、")}</div>
       )}
 
+      {/* S148 R7：ST carve-out 正向标（摘帽/重组/扭亏），radar 白名单 re-include 的 ST 股 */}
+      {card.st_play && (
+        <div className="text-sm text-emerald-600">ST-play：{card.st_play}（carve-out 保留）</div>
+      )}
+
       {missing.length > 0 && (
         <div className="text-sm text-warning">
           <div className="mb-1">未取得：</div>

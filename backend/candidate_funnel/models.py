@@ -152,6 +152,7 @@ class DiagnosisCard(BaseModel):
     activity: ActivityAssessment
     stabilization: StabilizationSignals
     risk_flags: list[str] = []  # ST/新股/停牌/极端估值 等客观标注
+    st_play: Optional[str] = None  # S148：ST carve-out 正向标（摘帽/重组/扭亏），radar 白名单 re-include 的 ST 股带此标
     as_of: datetime
     eight_standards: Optional["EightStandardResult"] = None
     capped: bool = False  # 八项未过≥3 → 最终得分封顶 55
