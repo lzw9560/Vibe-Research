@@ -22,12 +22,6 @@ vi.mock("@/lib/query", () => ({
   usePreMarketBriefing: qMocks.usePreMarketBriefing,
 }));
 
-// S093 T14：ForwardTabSection 调 useCrossValidationGroups，mock 避免真 hook 链
-// S146：CV 重定向涨停叉内（final∩scored）——breakoutOnly→strategyOnly
-vi.mock("@/lib/query/useCrossValidation", () => ({
-  useCrossValidationGroups: () => ({ dual: [], funnelOnly: [], strategyOnly: [], isLoading: false }),
-}));
-
 // mock useQuery（advisory 摘要等）+ request（避免真请求）
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: undefined }),
@@ -39,9 +33,6 @@ vi.mock("@/lib/api/client", () => ({
 // S093 T14：mock 前瞻 Tab 新组件 imports（避免复杂内部链）
 vi.mock("@/components/workflow/CandidateFunnelEmbed", () => ({
   default: () => <div data-testid="candidate-funnel-embed" />,
-}));
-vi.mock("@/components/workflow/CrossValidationBadge", () => ({
-  CrossValidationBadge: () => null,
 }));
 vi.mock("@/components/workflow/P2RiskPanel", () => ({
   P2RiskPanel: () => null,
@@ -383,10 +374,10 @@ describe("Workflow 三 Tab 容器 (S092)", () => {
     expect(pmb.getAttribute("data-stage")).toBe("post_market");
   });
 
-  it("选股 Tab → PipelineFlow 收 dateTriplet.F（S146；breakout 移 2 级导航，PipelineFlow 收 F 不收 forward）", async () => {
+  it("选股 Tab → PipelineFlow 收 urlDate ?? forward（CV 删后 SelectionStageView 传 urlDate ?? forward，非 triplet.F）", async () => {
     renderAt();
     fireEvent.click(getTabButton("选股"));
     const pf = await waitFor(() => screen.getByTestId("pipeline-flow"));
-    expect(pf.getAttribute("data-F")).toBe("2026-08-21"); // = triplet.F
+    expect(pf.getAttribute("data-F")).toBe("2026-08-22"); // = urlDate ?? forward（无 urlDate → forward=2026-08-22）
   });
 });

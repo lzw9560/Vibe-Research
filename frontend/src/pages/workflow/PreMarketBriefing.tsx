@@ -199,7 +199,7 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
 
       {/* S093 T17：done 状态——盯盘执行台核心内容（WatchlistBoard + 持仓 chips + 市场情绪） */}
       {status === "done" && F && (
-        <WatchlistBoard F={F} date={_date} />
+        <WatchlistBoard date={_date} />
       )}
 
       {/* S093 T17：持仓 chips——useWorkflowStates 取候选/观察/监控/持仓/已结计数 */}

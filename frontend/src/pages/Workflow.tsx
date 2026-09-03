@@ -315,7 +315,7 @@ export default function Workflow() {
           <PreMarketBriefing date={triplet.today} stage={triplet.stage} />
         )}
         {view === "forward" && triplet && (
-          <SelectionStageView F={triplet.F} forward={triplet.forward} urlDate={urlDate} today={triplet.today} />
+          <SelectionStageView forward={triplet.forward} urlDate={urlDate} today={triplet.today} />
         )}
       </Suspense>
 

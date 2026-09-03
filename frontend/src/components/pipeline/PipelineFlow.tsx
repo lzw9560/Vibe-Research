@@ -1,19 +1,16 @@
 // S146: 选股 pipeline 流——2 并行列（涨停叉 ‖ 非涨停叉）+ ④ 涨停叉内交叉验证。
 // 取代 PipelineTopology 的 echarts graph。breakout 降级 2 级导航研究（§44 naive lift=1.36x <2x，4 方向特征里最弱，
 // 非可信 standalone edge，移 SelectionStageView 2 级导航研究 tab）。
-// ④ 重定向涨停叉内：final_candidates(漏斗终选) ∩ scored_candidates(战法命中)——都涨停股有交集；
-// 涨停∩非涨停 by 构造 disjoint（非涨停=板块TOP非涨停股），breakout 曾是唯一可交集第二输入，现移研究。
-// 保：CandidateFunnelEmbed(①) / StrategySubPipelineView(②战法匹配) / CrossValidationSummary(④叉内CV)
-//     / CandidateFactorTable(★候选因子表) / NonLimitupLane(⑤⑥⑦⑧非涨停叉)。
-import { useMemo, useState, type ReactNode } from "react";
+// 交叉验证（原 ④叉内 CV: finals∩scored）已删——两 <2x 弱信号交集无 validated edge（§44），且 scored⊆finals 非真双路。
+// 保：CandidateFunnelEmbed(①) / StrategySubPipelineView(②战法匹配)
+//     / CandidateFactorTable(★候选因子表) / NonLimitupLane(⑤⑥⑧非涨停叉)。
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { StrategySubPipelineView } from "./StrategySubPipelineView";
 import { NonLimitupLane } from "./NonLimitupPlaceholder";
-import { CrossValidationSummary } from "./CrossValidationSummary";
 import CandidateFunnelEmbed from "@/components/workflow/CandidateFunnelEmbed";
 import { CandidateFactorTable } from "@/components/workflow/CandidateFactorTable";
-import { computeLimitupInternalCV } from "@/lib/query/useCrossValidation";
 import type { PreMarketBriefing, FunnelLayer } from "@/lib/api";
 
 interface Props {
@@ -57,7 +54,6 @@ function PipelineStep({
   );
 }
 
-// CV 计算用共享 computeLimitupInternalCV（@/lib/query/useCrossValidation）——选股 ④ + 盯盘 WatchlistBoard 同源。
 
 /** 选股 pipeline 流（2 并行列 + ④ 涨停叉内 CV；breakout 移 2 级导航研究）。 */
 export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
@@ -67,7 +63,6 @@ export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
   const finals = briefing?.final_candidates ?? [];
   const ztCount = briefing?.market_emotion?.zt_count ?? undefined;
   const dataDate = briefing?.data_date ?? F;
-  const cv = useMemo(() => computeLimitupInternalCV(finals, scored), [finals, scored]);
 
   return (
     <div className="space-y-2">
@@ -97,10 +92,6 @@ export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
           {/* ② 战法匹配——StrategySubPipelineView（limitup lane；relabel 去"因子"防误导） */}
           <PipelineStep step="②" title="战法匹配" sub="7 战法分组" count={scored.length}>
             <StrategySubPipelineView scoredCandidates={scored} marketScanScored={marketScan} lane="limitup" scoredTotal={scored.length} />
-          </PipelineStep>
-          {/* ④ 交叉验证——涨停叉内（漏斗终选 ∩ 战法命中；breakout 移研究后重定向叉内） */}
-          <PipelineStep step="④" title="交叉验证" sub="漏斗终选 ∩ 战法命中" count={cv.dual.length}>
-            <CrossValidationSummary groups={cv} />
           </PipelineStep>
           {/* ★ 候选因子表——CandidateFactorTable（八项标准+量价/资金+基因因子，DiagnosisCard 形状） */}
           <PipelineStep step="★" title="候选因子表" sub="基因分 · 八项标准 · 量价/资金" count={finals.length}>

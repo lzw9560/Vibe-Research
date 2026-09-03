@@ -1,6 +1,6 @@
 // S140 R5 + S146: 选股（forward）语境视图——2 级导航（pipeline | breakout 研究）+ context 降级。
 // S146 Round 3：breakout 降级 2 级导航研究（§44 naive lift=1.36x <2x 最弱方向特征，非 standalone edge，
-//   后续继续优化）；主 pipeline = 2 并行列（涨停叉 ‖ 非涨停叉）+ ④ 涨停叉内 CV（PipelineFlow 自算，不依赖 useCrossValidationGroups）。
+//   后续继续优化）；主 pipeline = 2 并列涨停叉 ‖ 非涨停叉。交叉验证（④叉内 CV）已删——两 <2x 弱信号交集无 validated edge（§44）。
 //   echarts graph（PipelineTopology）弃；原始功能组件全保。
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 
 type SubTab = "pipeline" | "breakout";
 
-export function SelectionStageView({ F, forward, urlDate, today }: { F: string; forward: string; urlDate?: string; today?: string }) {
-  const { data: briefing, isLoading: briefingLoading } = usePreMarketBriefing(F);
+export function SelectionStageView({ forward, urlDate, today }: { forward: string; urlDate?: string; today?: string }) {
+  const { data: briefing, isLoading: briefingLoading } = usePreMarketBriefing(urlDate ?? forward);
   const { data: advisory } = useQuery({
     queryKey: ["advisory-summary"],  // S094 audit: advisory 是 latest（backend /advisory/summary 不支持 date），非 per-F
     queryFn: () => api.advisorySummary(5),
@@ -39,7 +39,7 @@ export function SelectionStageView({ F, forward, urlDate, today }: { F: string; 
       <CandidateStateRail date={today} />
 
       {/* 前置共享区（顶折叠——context，展开按需） */}
-      <PreSharedRegion F={F} briefing={briefing} />
+      <PreSharedRegion F={urlDate ?? forward} briefing={briefing} />
 
       {/* 2 级导航：选股 pipeline | breakout 因子研究（breakout 降级研究，后续继续优化） */}
       <div className="flex gap-1 rounded-lg bg-muted/20 p-1">
@@ -63,7 +63,7 @@ export function SelectionStageView({ F, forward, urlDate, today }: { F: string; 
 
       {/* S146: 主视图——pipeline（2 列 + ④叉内CV） 或 breakout 研究（PremarketSelectionSection） */}
       {subtab === "pipeline" ? (
-        <PipelineFlow briefing={briefing} F={F} funnelLayers={funnelLayers} />
+        <PipelineFlow briefing={briefing} F={urlDate ?? forward} funnelLayers={funnelLayers} />
       ) : (
         <BreakoutResearchView forward={forward} />
       )}

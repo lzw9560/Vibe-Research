@@ -1,31 +1,27 @@
 // S093 T16 + S146：前瞻结论标的看板（spec R6 第一层）
-// breakout 降级研究后 CV 重定向涨停叉内：三组分组 dual(漏斗终选∩战法命中) / funnelOnly / strategyOnly
-// 每只票卡片：实时价格/涨跌幅/封板状态/持仓状态
+// 交叉验证（dual=finals∩scored）已删——两 <2x 弱信号交集无 validated edge（§44），且 scored⊆finals 非真双路。
+// 改用 final_candidates（漏斗终选）直接列 52 只，去 CV 分组 + badges + CollapsibleGroup。
+// 每只票卡片：股票名/基因分 + 实时价格/涨跌幅/封板状态/持仓状态
 // 点击跳 IntradayMonitor 个股详情
 // 工程底线：不臆造——query 无数据返空数组；quote 缺字段标"—"；历史统计特征标注。
 import { Link } from "react-router-dom";
-import { useState } from "react";
-import { useCrossValidationGroups } from "@/lib/query/useCrossValidation";
-import { useQuote, useWorkflowStates } from "@/lib/query";
-import { CrossValidationBadge } from "@/components/workflow/CrossValidationBadge";
+import { usePreMarketBriefing, useQuote, useWorkflowStates } from "@/lib/query";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { STATUS_COLORS, STATUS_LABELS } from "@/components/workflow/statusMeta";
 import type { Quote } from "@/lib/api/types";
-import type { CrossValidationGroup } from "@/lib/query/useCrossValidation";
 
 interface WatchlistBoardProps {
-  /** 前瞻数据日（briefing 数据源：final_candidates + scored_candidates 都从 briefing 取） */
-  F: string;
-  /** 当日数据日（useWorkflowStates 持仓状态查询用） */
+  /** 当日数据日（briefing final_candidates + useWorkflowStates 持仓状态都用此） */
   date: string;
 }
 
-export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
-  const cv = useCrossValidationGroups(F);
+export function WatchlistBoard({ date }: WatchlistBoardProps) {
+  const { data: briefing, isLoading } = usePreMarketBriefing(date);
+  const finals = briefing?.final_candidates ?? [];
 
-  const allCodes = [...cv.dual, ...cv.funnelOnly, ...cv.strategyOnly].map((c) => c.code);
+  const allCodes = finals.map((c) => c.code);
   const codesStr = allCodes.join(",");
   const { data: quoteMap } = useQuote(codesStr);
   const { data: workflowStates } = useWorkflowStates(date);
@@ -36,10 +32,10 @@ export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
     stateMap.set(s.code, s.status);
   }
 
-  if (cv.isLoading) {
+  if (isLoading) {
     return (
       <div className="mb-6">
-        <SectionHeader title="前瞻结论标的看板" subtitle="双指标重叠 / 仅漏斗终选 / 仅战法命中" />
+        <SectionHeader title="前瞻结论标的看板" subtitle="漏斗终选 final_candidates · §44 未 validated" />
         <GlassCard className="p-4">
           <Skeleton variant="rounded" className="h-32" />
         </GlassCard>
@@ -51,7 +47,7 @@ export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
   if (total === 0) {
     return (
       <div className="mb-6">
-        <SectionHeader title="前瞻结论标的看板" subtitle="双指标重叠 / 仅漏斗终选 / 仅战法命中" />
+        <SectionHeader title="前瞻结论标的看板" subtitle="漏斗终选 final_candidates · §44 未 validated" />
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">
             前瞻 Tab 尚无选股结论，待 17:15 漏斗预计算完成后产出。
@@ -61,40 +57,26 @@ export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
     );
   }
 
-  const groups: { key: CrossValidationGroup; items: typeof cv.dual }[] = [
-    { key: "dual", items: cv.dual },
-    { key: "funnelOnly", items: cv.funnelOnly },
-    { key: "strategyOnly", items: cv.strategyOnly },
-  ];
-
   return (
     <div className="mb-6">
       <SectionHeader
         title="前瞻结论标的看板"
-        subtitle="双指标重叠 / 仅漏斗终选 / 仅战法命中 · 点击展开 · 点击标的跳个股盯盘"
+        subtitle={`漏斗终选 ${total} 只 · §44 未 validated · 点击标的跳个股盯盘`}
       />
-      <div className="space-y-2">
-        {groups.map(
-          (g) =>
-            g.items.length > 0 && (
-              <CollapsibleGroup key={g.key} group={g.key} count={g.items.length}>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {g.items.map((item) => (
-                    <WatchlistCard
-                      key={item.code}
-                      code={item.code}
-                      name={item.name}
-                      strategyName={item.strategyName}
-                      strategyScore={item.strategyScore}
-                      geneScore={item.geneScore}
-                      quote={quoteMap?.[item.code]}
-                      status={stateMap.get(item.code)}
-                    />
-                  ))}
-                </div>
-              </CollapsibleGroup>
-            ),
-        )}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {finals.map((item) => {
+          const gs = item.gene_score?.total_score;
+          return (
+            <WatchlistCard
+              key={item.code}
+              code={item.code}
+              name={item.name}
+              geneScore={typeof gs === "number" ? gs : undefined}
+              quote={quoteMap?.[item.code]}
+              status={stateMap.get(item.code)}
+            />
+          );
+        })}
       </div>
       <p className="mt-2 text-[10px] text-muted-foreground/60">
         参考值，非执行指令；市场有风险
@@ -103,49 +85,16 @@ export function WatchlistBoard({ F, date }: WatchlistBoardProps) {
   );
 }
 
-/** 可收缩分组——双重确认默认展开，其余默认收缩；懒渲染（仅 open 时渲染候选网格）。 */
-function CollapsibleGroup({
-  group,
-  count,
-  children,
-}: {
-  group: CrossValidationGroup;
-  count: number;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(group === "dual");
-  return (
-    <GlassCard className="p-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 text-left"
-      >
-        <CrossValidationBadge group={group} />
-        <span className="text-xs text-muted-foreground">{count} 只</span>
-        <span className="ml-auto text-[10px] text-muted-foreground/60">
-          {open ? "▼" : "▶"}
-        </span>
-      </button>
-      {open && <div className="mt-3">{children}</div>}
-    </GlassCard>
-  );
-}
-
-/** 单只票卡片——股票名/战法/分数 + 实时价格/涨跌幅/封板状态/持仓状态。 */
+/** 单只票卡片——股票名/基因分 + 实时价格/涨跌幅/封板状态/持仓状态。 */
 function WatchlistCard({
   code,
   name,
-  strategyName,
-  strategyScore,
   geneScore,
   quote,
   status,
 }: {
   code: string;
   name: string;
-  strategyName?: string;
-  strategyScore?: number;
   geneScore?: number;
   quote?: Quote;
   status?: string;
@@ -176,10 +125,8 @@ function WatchlistCard({
             </span>
           )}
         </div>
-        {/* 第二行：战法 + 分数 */}
+        {/* 第二行：基因分 */}
         <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/70">
-          {strategyName && <span>{strategyName}</span>}
-          {strategyScore != null && <span className="font-mono">战法分 {strategyScore.toFixed(1)}</span>}
           {geneScore != null && <span className="font-mono">基因 {geneScore.toFixed(1)}</span>}
         </div>
         {/* 第三行：价格 + 涨跌幅 */}

@@ -56,13 +56,14 @@ export function SelectionPipeline({
   const layers = funnelResult?.layers ?? funnelLayers ?? [];
   const finals = funnelResult?.final_candidates ?? finalCandidates ?? [];
   const r1 = layers.find((l) => l.layer_id === "R1");
-  // 今日涨停总数优先取 screenerPoolSize（briefing.market_emotion.zt_count 传入）；
+  // 涨停股池 = screenerPoolSize（briefing.market_emotion.zt_count 传入）= T-1（昨日）涨停池，
+  // 盘前选股输入（screener 据昨日涨停选今日候选），非今日涨停数。今日实际涨停见 zt_history（is_final=1）。
   // 缺失时 fallback r1.input_count（采集源输入，非涨停总数）并标注，不冒充涨停数。
   const hasZtTotal = screenerPoolSize != null;
   const rootSize = screenerPoolSize ?? r1?.input_count;
   const rootSub = hasZtTotal
-    ? "今日涨停 · screener 选 T+1"
-    : "今日涨停数未取得 · 显 R1 输入（非涨停总数）";
+    ? "T-1 涨停池（昨日）· screener 据此选今日候选"
+    : "T-1 涨停数未取得 · 显 R1 输入（非涨停总数）";
 
   return (
     <div className="space-y-1.5">
