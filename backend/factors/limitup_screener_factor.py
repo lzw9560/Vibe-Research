@@ -7,29 +7,15 @@
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 from datetime import datetime
 from typing import Any
 
 from candidate_funnel.models import FilterRecord, FunnelLayer
 from factors.base import Candidate, FactorResult
+from utils.async_utils import run_coro_sync  # C3 缓解：async↔sync 桥接（避嵌套 loop）
 
 FACTOR_ID = "limitup_screener"
 FACTOR_NAME = "涨停基因选股（八项标准+战法匹配）"
-
-
-def _await(coro):
-    """在 sync 上下文跑 async PreMarketWorkflow.run。"""
-    try:
-        asyncio.get_running_loop()
-        running = True
-    except RuntimeError:
-        running = False
-    if running:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            return ex.submit(asyncio.run, coro).result()
-    return asyncio.run(coro)
 
 
 class LimitupScreenerFactor:
@@ -43,7 +29,7 @@ class LimitupScreenerFactor:
         from pre_market_workflow import PreMarketWorkflow
 
         wf = PreMarketWorkflow(date=date)
-        report = _await(wf.run())
+        report = run_coro_sync(wf.run())
 
         # 构建 candidates + qualified（合并 strong_candidates + candidates，去重）
         seen: set[str] = set()
