@@ -46,7 +46,9 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 // 重跑今日选股触发的选股 task（按 task_type 找 id，DB id 可能变）
 const SELECTION_TASK_TYPES = ["candidate_funnel_precompute", "first_board_filter"] as const;
 
-// 盘后判定：北京时间（Asia/Shanghai）工作日 ≥15:00。节假日不查（盘后按钮在节假日无害）。
+// 盘后/非交易时段判定：北京时间（Asia/Shanghai），交易时段（工作日 9:00-15:00）禁用，
+// 其余（盘后≥15:00 + 隔夜 + 盘前<9:00 + 周末）激活——隔夜属前一日盘后窗口，该能重跑。
+// 节假日不查（按钮在节假日无害，触发仅重跑任务）。
 function isPostMarket(): boolean {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Shanghai",
@@ -57,7 +59,8 @@ function isPostMarket(): boolean {
   const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
   const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
   const isWeekday = !["Sat", "Sun"].includes(weekday);
-  return isWeekday && hour >= 15;
+  const isTradingHours = isWeekday && hour >= 9 && hour < 15;
+  return !isTradingHours;
 }
 
 export function ScheduledTasks() {
@@ -232,7 +235,7 @@ export function ScheduledTasks() {
             disabled={!isPostMarket() || rerunning}
             variant={isPostMarket() ? "primary" : "ghost"}
             className="gap-2"
-            title={isPostMarket() ? "重跑今日选股（漏斗+首板筛选）" : "仅盘后（工作日 ≥15:00 北京时间）可激活"}
+            title={isPostMarket() ? "重跑今日选股（漏斗+首板筛选）" : "交易时段（工作日 9:00-15:00 北京时间）禁用"}
           >
             <RefreshCw className={rerunning ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
             {rerunning ? "重跑中..." : "重跑今日选股"}
