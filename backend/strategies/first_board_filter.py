@@ -1559,11 +1559,14 @@ def list_score_dates() -> list[str]:
     return dates
 
 
-def run_first_board_filter(date: str) -> dict:
+def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
     """主入口：串联 003-010（数据层 + 三层剔除）。
 
     Args:
         date: 交易日，YYYYMMDD 或 YYYY-MM-DD。
+        pool: 可选，注入涨停池（list[dict]）——S148 Phase 2 (a) 接入涨停叉时由调用方
+              共享 zt_pool 源传入，跳过自取 fetch_zt_pool（dedup + 让涨停叉 R1 过滤
+              覆盖 first-board）。None（默认）→ 自取 fetch_zt_pool（向后兼容）。
 
     Returns:
         dict 含：
@@ -1604,8 +1607,8 @@ def run_first_board_filter(date: str) -> dict:
             "env_flags": {},
         }
 
-    # 003 取涨停池
-    pool = fetch_zt_pool(compact_date)
+    # 003 取涨停池（S148 Phase 2 (a)：pool 注入时跳过自取，由调用方共享 zt_pool 源）
+    pool = fetch_zt_pool(compact_date) if pool is None else pool
     zt_pool_count = len(pool)
     print(f"[fb_filter] 涨停池: {zt_pool_count}", flush=True)
 

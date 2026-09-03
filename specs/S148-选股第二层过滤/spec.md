@@ -29,7 +29,7 @@
 - [ ] R8 北交所（8/4 开头）一并排除（推断：用户无 100 万权限，已确认同意）
 
 **Phase 2 — first-board (a) 接入（独立 PR，后行）**
-- [ ] R6 `first_board_filter.rank_candidates` 改吃 涨停叉 R1 滤后输出（不自 fetch zt_pool）；9 维分作描述性 context + 诚实标签；`select_for_entry` 仓位不作可操作信号（§44）
+- [ ] R6 first-board (a) 接入：**基础 done**（`run_first_board_filter(date, pool=None)` 加注入参数，跳过自取 fetch_zt_pool，2 TDD 测试绿）；**剩余 substance**：调用方接线（共享 zt_pool 源）+ 9 维评分→涨停叉 lane 候选作描述性 context（诚实标签，复合分标"无 validated edge"）+ `select_for_entry` 仓位不作可操作信号（§44）
 
 **前端**
 - [ ] R7 候选卡 `st_play` 标展示（摘帽/重组/扭亏）+ first-board 复合分若显示标"无 validated edge"。**依赖**：`st_play` 现已在 R1 passed（funnel_layers 可读），但 `final_candidates` 诊断卡（WatchlistBoard 用）需透传 st_play 进 `DiagnosisCard` 契约（dataclass+builder+API+前端，独立改动，后行）
