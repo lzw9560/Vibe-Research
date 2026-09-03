@@ -111,8 +111,8 @@ export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
           <PipelineStep step="②" title="战法匹配" sub="7 战法分组" count={scored.length}>
             <StrategySubPipelineView scoredCandidates={scored} marketScanScored={marketScan} lane="limitup" scoredTotal={scored.length} />
           </PipelineStep>
-          {/* ★ 候选因子表——CandidateFactorTable（八项标准+量价/资金+基因因子，DiagnosisCard 形状） */}
-          <PipelineStep step="★" title="候选因子表" sub="基因分 · 八项标准 · 量价/资金" count={finals.length}>
+          {/* ★ 候选因子表——CandidateFactorTable（八项标准+量价/资金+基因因子，DiagnosisCard 形状）——默认平铺，行点击展开 */}
+          <PipelineStep step="★" title="候选因子表" sub="基因分 · 八项标准 · 量价/资金" count={finals.length} defaultOpen={true}>
             <CandidateFactorTable candidates={finals} date={dataDate} />
           </PipelineStep>
         </div>

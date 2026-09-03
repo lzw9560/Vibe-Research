@@ -86,7 +86,7 @@ const candidatesWithFunnel: ScoredCandidate[] = [
 ];
 
 describe("StrategySubPipelineView · S097 漏斗渲染", () => {
-  it("渲染漏斗摘要：触发率 + 逐条件 input→passed + pass_rate", () => {
+  it("渲染战法行触发率（inline）+ 展开候选可见", () => {
     renderWithRouter(
       <StrategySubPipelineView
         scoredCandidates={candidatesWithFunnel}
@@ -94,22 +94,15 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
       />,
     );
 
-    // 卡片默认收缩——先点击展开再断言 FunnelSummary
-    clickFirstCard();
-
-    // 触发率 2/5 → 40%（展开后 FunnelSummary 内的"触发率"文本）
-    expect(screen.getByText(/触发率/)).toBeInTheDocument();
-    expect(screen.getByText(/2\/5/)).toBeInTheDocument();
+    // 首板挖掘行显触发率 2/5（40%）——inline 文本（非 FunnelSummary viz，已删）
+    expect(screen.getByText(/触发 2\/5/)).toBeInTheDocument();
     expect(screen.getByText(/40%/)).toBeInTheDocument();
 
-    // 条件 1：基因得分合格 5→3 60%（data_unavailable=0 不显黄条纹）
-    expect(screen.getByText("基因得分合格")).toBeInTheDocument();
-    expect(screen.getByText(/5→3.*60%/)).toBeInTheDocument();
-
-    // 条件 2：量比≥1.5 3→2 67% + 数据缺失 1（F2：黄条纹段 title 标注）
-    expect(screen.getByText("量比≥1.5")).toBeInTheDocument();
-    expect(screen.getByText(/3→2.*67%/)).toBeInTheDocument();
-    expect(screen.getByTitle("数据缺失 1")).toBeInTheDocument();
+    // 点击展开候选
+    clickFirstCard();
+    // 候选名可见
+    expect(screen.getByText("平安银行")).toBeInTheDocument();
+    expect(screen.getByText("万科A")).toBeInTheDocument();
   });
 
   it("候选行渲染三态命中标记（hit ✓ / miss ✗ / data_unavailable —）", () => {
@@ -158,12 +151,13 @@ describe("StrategySubPipelineView · S097 漏斗渲染", () => {
     expect(screen.getByText("58.0")).toBeInTheDocument();
   });
 
-  it("无候选时显空态标题 + 副标题（0 战法命中），不崩", () => {
+  it("无候选时显副标题（0 战法命中）+ 灰行 0 只，不崩", () => {
     render(
       <StrategySubPipelineView scoredCandidates={[]} lane="limitup" />,
     );
-    // 空态折叠默认收起，但标题 + 副标题（含"无命中 0/7"）始终可见
-    expect(screen.getByText("涨停战法匹配")).toBeInTheDocument();
-    expect(screen.getByText(/无命中（0\/7 战法）/)).toBeInTheDocument();
+    // list 无标题（② PipelineStep 提供外层"战法匹配"）；副标题含 0/7 战法命中
+    expect(screen.getByText(/0\/7 战法命中/)).toBeInTheDocument();
+    // 7 个无命中战法各显"0 只"
+    expect(screen.getAllByText("0 只").length).toBe(7);
   });
 });

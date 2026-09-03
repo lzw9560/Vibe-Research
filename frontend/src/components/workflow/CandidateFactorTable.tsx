@@ -120,6 +120,13 @@ export function CandidateFactorTable({ candidates }: Props) {
                           <div>
                             <span className="text-muted-foreground/60">K线:</span> 最高涨幅 {ind.max_high_pct?.toFixed(1) ?? "—"}% / 上影线 {ind.shadow_length_pct?.toFixed(1) ?? "—"}% / MA5状态 {ind.ma_5_status ?? "—"} / 前日换手 {ind.prev_turnover_pct?.toFixed(1) ?? "—"}%
                           </div>
+                          {/* 未取得数据源（补充 missing 数据源显示——哪些字段缺数据 + 原因）*/}
+                          {ind.missing && Object.keys(ind.missing).length > 0 && (
+                            <div className="text-yellow-500/70">
+                              <span className="text-muted-foreground/60">未取得:</span>{" "}
+                              {Object.entries(ind.missing).map(([k, v]) => `${k}(${v})`).join(" · ")}
+                            </div>
+                          )}
                           {c.cap_reason && <div className="text-amber-200/70">{c.cap_reason}</div>}
                           {c.risk_flags.length > 0 && <div className="text-red-300/70">风险: {c.risk_flags.join("、")}</div>}
                         </div>
