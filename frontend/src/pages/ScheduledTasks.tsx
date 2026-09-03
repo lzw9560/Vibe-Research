@@ -22,7 +22,43 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   portfolio_refresh: "持仓刷新",
   market_data_sync: "市场数据同步",
   cleanup_old_runs: "清理旧运行记录",
+  candidate_funnel_precompute: "盘后漏斗预计算",
+  first_board_filter: "盘后首板筛选",
+  kline_refresh: "K线日更",
+  forward_test_daily: "前向测试记录",
+  forward_test_t1_settle: "T+1收益结算",
+  first_board_t1_review: "首板T+1复盘",
+  first_board_quote_probe: "首板报价探测",
+  zt_history_snapshot: "涨停史快照",
+  derived_precompute: "衍生预计算",
+  sti_post_market: "STI盘后",
+  seal_intraday_collect: "盘中封单采集",
+  s066_validation_checkpoint: "§44复验检查点",
+  daily_backtest_run: "每日回测快照",
+  daily_ai_summary: "AI盘后总结",
+  monthly_vacuum: "月度VACUUM",
+  premarket_auction_notify: "盘前竞价通知",
+  premarket_open_notify: "盘前开盘通知",
+  premarket_t1_review: "盘前T+1复盘",
+  st_play_radar: "ST异动雷达",
 };
+
+// 重跑今日选股触发的选股 task（按 task_type 找 id，DB id 可能变）
+const SELECTION_TASK_TYPES = ["candidate_funnel_precompute", "first_board_filter"] as const;
+
+// 盘后判定：北京时间（Asia/Shanghai）工作日 ≥15:00。节假日不查（盘后按钮在节假日无害）。
+function isPostMarket(): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    hour: "numeric",
+    hour12: false,
+    weekday: "short",
+  }).formatToParts(new Date());
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+  const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+  const isWeekday = !["Sat", "Sun"].includes(weekday);
+  return isWeekday && hour >= 15;
+}
 
 export function ScheduledTasks() {
   // T9：原 useState/useEffect + getScheduledTasks/getScheduledTaskRuns
@@ -32,6 +68,7 @@ export function ScheduledTasks() {
   // 注：hook 的 queryFn 返回 Promise<ScheduledTask[]>/Promise<TaskRun[]>，
   //   但 options 透传泛型摩擦使 useQuery 推断为 {}，就地窄→宽 cast（同 Health.tsx 模板）。
   const [runningId, setRunningId] = useState<number | null>(null);
+  const [rerunning, setRerunning] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
 
   const {
@@ -125,6 +162,31 @@ export function ScheduledTasks() {
     }
   };
 
+  // 重跑今日选股：按 task_type 找选股 task id，顺序触发（避并发冲突）。
+  // 仅盘后激活（isPostMarket gate 在按钮层，API 仍开放供调试/管理）。
+  const handleRerunSelection = async () => {
+    const ids = SELECTION_TASK_TYPES
+      .map((tt) => taskList.find((t) => t.task_type === tt)?.id)
+      .filter((id): id is number => typeof id === "number");
+    if (ids.length === 0) {
+      toast.error("未找到选股任务（candidate_funnel_precompute / first_board_filter）");
+      return;
+    }
+    setRerunning(true);
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        await runScheduledTaskNow(id);
+        ok += 1;
+      } catch {
+        // 单个失败不阻断其余
+      }
+    }
+    await refetchTasks();
+    setRerunning(false);
+    toast.success(`选股重跑：${ok}/${ids.length} 成功`);
+  };
+
   const toggleExpand = (taskId: number) => {
     if (expandedTaskId === taskId) {
       setExpandedTaskId(null);
@@ -164,10 +226,22 @@ export function ScheduledTasks() {
         <div className="text-xs text-muted-foreground">
           共 {taskList.length} 个任务，{taskList.filter((t) => t.enabled).length} 个已启用
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          新建任务
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleRerunSelection}
+            disabled={!isPostMarket() || rerunning}
+            variant={isPostMarket() ? "primary" : "ghost"}
+            className="gap-2"
+            title={isPostMarket() ? "重跑今日选股（漏斗+首板筛选）" : "仅盘后（工作日 ≥15:00 北京时间）可激活"}
+          >
+            <RefreshCw className={rerunning ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            {rerunning ? "重跑中..." : "重跑今日选股"}
+          </Button>
+          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            新建任务
+          </Button>
+        </div>
       </div>
 
       {showForm && (
