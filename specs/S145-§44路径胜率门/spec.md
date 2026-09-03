@@ -12,9 +12,15 @@
   - random_path（universe 默认 -3%/+8%/3）= 35.71%。
   - **path_lift = 0.978x（< 1，比随机还差）**——§44 真·gate 答案：breakout 在真实出场规则下不能交易（path_lift<1<2x）。
   - 3-date 子集曾显 1.426x（小样本不代表），全 31-day 才诚实：<1。
+- **Tier 3 敏感性分析（tools/s145_sensitivity.py，12 dates × 5 params 集，picks+universe 同 params 隔离 selection）**：
+  - 5 组 params（-3/+8/3、-5/+12/2、-3/+6/1、-7/+15/5、-5/+10/5）**全 path_lift<1（0.87–0.97）**。
+  - **path_lift<1 robust（方法论独立）**——selection 劣于随机不依赖出场规则。越松出场越接近 1（都往 ~36% 收敛）但 picks 始终低于 universe。
+- **verdict 切纯 path 的决定**：**reverted，保 Tier 2 escape-hatch**（path 双报，o2c 作 verdict）。
+  - 理由（独立判断）：path_lift 已在 Tier 2 dual-report 可见；切纯 path（s_settled path-based）排除近期 picks（n 缩）+ 13 测试 churn（o2c-only data 全改 path）——marginal value（official validation_status 改"劣于随机"）vs 高 churn + n 缩。escape-hatch 更稳。
+  - 切纯 path 留 Tier 3/future（需全窗口 path 数据 + 决定接受"劣于随机"作 official verdict）。
 - **顺手修 pattern_scan.py:29 str-return 脆弱**（`resolve_data_dir() / "str"` → `Path(...) / "..."`）——S145 settle-task import 链触发的预存 bug。
-- 全量测试中（deselect newsradar_global_intel/s032/s040 flaky）。
-- **§44 verdict 强化**：endpoint（1.008x ~随机）→ path（0.978x <1 更差）。诚实不软化（A6）。
+- 全量 2661 passed / 0 failed（deselect newsradar_global_intel/s032/s040 flaky）。
+- **§44 verdict 强化**：endpoint（1.008x ~随机）→ path（0.978x <1 更差）→ 敏感性（0.87–0.97 robust <1）。诚实不软化（A6）。
 
 
 ## 1. 问题 / 目标
