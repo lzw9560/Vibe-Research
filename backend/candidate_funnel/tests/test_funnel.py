@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""漏斗引擎测试（S002 B9/B10，TDD RED）。
+"""漏斗引擎测试（S002 B9/B10 + S148(b) 重构）。
 
-mock 各 source，端到端跑 R1→R2→R3 + 自选并行 + 空层。
+mock 各 source，端到端跑 R1(纯 fetch)→R2(tradability) + 自选并行 + 空层。
+S148(b)：R1 不再滤 ST（退纯 fetch），ST+board 排除挪到 R2 classify_tradability，替代原 R2/R3 annotate 层。
 """
 
 from __future__ import annotations
@@ -23,11 +24,11 @@ from candidate_funnel.models import ThresholdConfig
 _GENES = {
     "600519": {"name": "贵州茅台", "gene_score": 80.0, "high_gene": True, "qualify": True},
     "000001": {"name": "平安银行", "gene_score": 65.0, "high_gene": False, "qualify": True},
-    "603555": {"name": "ST贵人", "gene_score": 70.0, "high_gene": False, "qualify": True},  # 应被 ST 过滤
+    "603555": {"name": "ST贵人", "gene_score": 70.0, "high_gene": False, "qualify": True},  # R2 tradability 滤 ST（radar 未建→flat）
 }
 _BOARD_LADDER = {"lianban_stocks": []}
 _ACTIVITY = {
-    # 600519 活跃；000001 冷股应被 R2 过滤
+    # 600519 活跃；000001 冷股（S148(b)：R2 tradability 不过滤冷股，000001 主板保留）
     "600519": {"name": "贵州茅台", "price": 1800.0, "change_pct": 5.0, "turnover_pct": 25.0,
                "vol_ratio": 3.0, "amount_yi": 50.0, "amplitude_pct": 6.0,
                "limit_up": 1890.0, "limit_down": 1710.0},
@@ -75,19 +76,23 @@ class TestRunFunnelEndToEnd(unittest.TestCase):
         layer_ids = [l.layer_id for l in result.layers]
         self.assertIn("R1", layer_ids)
         self.assertIn("R2", layer_ids)
-        self.assertIn("R3", layer_ids)
+        self.assertIn("SELF", layer_ids)
+        self.assertNotIn("R3", layer_ids)  # S148(b)：原 R2/R3 annotate 层已删，R2=tradability
         r1 = next(l for l in result.layers if l.layer_id == "R1")
-        self.assertNotIn("603555", r1.output_codes)
+        # S148(b)：R1 退纯 fetch 不过滤——603555(ST) 仍在 R1（ST 移到 R2 tradability 滤）
+        self.assertIn("603555", r1.output_codes)
         self.assertEqual(r1.input_count, 3)
-        self.assertEqual(r1.output_count, 2)
+        self.assertEqual(r1.output_count, 3)
         r2 = next(l for l in result.layers if l.layer_id == "R2")
-        # S084 R1-only：R2 不过滤活跃度，000001（冷股）保留在 R2 输出
+        # S148(b)：R2=tradability，603555(ST) 被滤（radar 未建→ST flat），000001/600519(主板) 保留
+        self.assertNotIn("603555", r2.output_codes)
         self.assertIn("000001", r2.output_codes)
         self.assertIn("600519", r2.output_codes)
         final_codes = [c.code for c in result.final_candidates]
-        # S084 R1-only：final = R1 全涨停 ∪ 自选（不经 R2/R3 收敛）
+        # S148(b)：final = R2 可交易 ∪ 自选（不经原 R2/R3 收敛）
         self.assertIn("600519", final_codes)
-        self.assertIn("000001", final_codes)  # R2 不再过滤冷股 → 进最终候选
+        self.assertIn("000001", final_codes)
+        self.assertNotIn("603555", final_codes)  # ST 在 R2 被滤，不进最终候选
         self.assertIn("002594", final_codes)  # 自选并行通道
         self.assertEqual(result.sentiment_phase, "晴天")
 
@@ -99,9 +104,9 @@ class TestRunFunnelEndToEnd(unittest.TestCase):
         funnel_mod.clear_funnel_cache()
         cfg = ThresholdConfig(mode="manual")
         result = run_funnel(stage="all", date="2026-07-28", cfg=cfg)
-        r1, r2, r3 = (next(l for l in result.layers if l.layer_id == x) for x in ("R1", "R2", "R3"))
+        r1, r2 = (next(l for l in result.layers if l.layer_id == x) for x in ("R1", "R2"))
+        # S148(b)：R2 tradability 输出 ⊆ R1（纯 fetch）输出
         self.assertTrue(set(r2.output_codes) <= set(r1.output_codes))
-        self.assertTrue(set(r3.output_codes) <= set(r2.output_codes))
 
     def test_watchlist_parallel_channel_merged(self):
         patches = self._patch_sources()

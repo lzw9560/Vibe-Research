@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
-"""漏斗编排（S002 B9 / S084 R1-only）：R1 宽源 + 自选并行。
+"""漏斗编排（S002 B9 / S148(b) 重构）：R1 宽源（纯 fetch）+ R2 可交易性过滤 + 自选并行。
 
-S084 TASK A：选股池 R1-only——R2/R3 过滤已下放战法层，本层仅展示全量候选
-（data_status 标「已下放战法」）。final_candidates = R1 全涨停 ∪ 自选，不再经 R2/R3 收敛。
+S148(b)：R1 退为纯宽源 fetch（不再滤 ST），ST + board 排除挪到 R2 classify_tradability
+（ST radar carve-out 摘帽/重组/扭亏 + 创业板/科创板/北交所排除），替代原 R2/R3 annotate 层。
+final_candidates = R2 可交易 ∪ 自选。活跃度/资金/竞价/催化 采集保留供诊断卡（不再独立成层）。
 R2/R3 的 _filter_r2/_filter_r3 函数保留供战法层与单测调用（diagnose 不依赖）。
 """
 
 from __future__ import annotations
 
+import logging
 import threading
 from datetime import datetime
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from candidate_funnel import sources
 from candidate_funnel.diagnosis import build_diagnosis_card, build_indicator_set
@@ -77,10 +81,10 @@ def _funnel_cache_key(date: str, cfg: ThresholdConfig) -> str:
     return f"{date}|{json.dumps(cfg_dict, sort_keys=True, ensure_ascii=False)}"
 
 
-def _filter_r1(
+def _filter_tradability(
     codes: list[str], genes: dict[str, dict], radar_set: dict[str, str] | None = None,
 ) -> tuple[list[str], list[FilterRecord], dict[str, str]]:
-    """R1 入口过滤（S148）：classify_tradability = ST(radar carve-out) + board 排除 + 退市/新股。
+    """R2 可交易性过滤（S148(b)）：classify_tradability = ST(radar carve-out) + board 排除 + 退市/新股。
 
     ST 在 radar 白名单 → re-include + st_play 标（摘帽/重组/扭亏 carve-out）。
     radar_set=None → 空白名单 → ST flat 排除（radar 未上线前的安全默认）。
@@ -347,119 +351,70 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         genes, board = {}, {}
         r1_data_status = "未取得"
         r1_data_reason = f"R1 宽源采集失败: {exc}"
-    r1_input = list(genes.keys())
-    radar_set = load_st_play_radar()
-    r1_kept, r1_filtered, r1_st_play = _filter_r1(r1_input, genes, radar_set)
-    # S004 R3：top-N 限界——R2 采集前按 gene_score 降序取前 max_r2（R1 全量保留展示）
-    r2_input_codes = _top_n_by_gene_score(r1_kept, genes, max_r2)
+    r1_codes = list(genes.keys())
     r1 = FunnelLayer(
         layer_id="R1", name="宽源", as_of=as_of,
-        input_count=len(r1_input), output_count=len(r1_kept),
-        filtered_out=r1_filtered, output_codes=r1_kept,
-        conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）",
-                    "板别/ST 可交易性过滤（S148）", *base_conditions],
+        input_count=len(r1_codes), output_count=len(r1_codes),
+        filtered_out=[], output_codes=r1_codes,
+        conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）", *base_conditions],
         passed=[
             {"code": c, "name": genes.get(c, {}).get("name", c),
              "gene_score": genes.get(c, {}).get("gene_score"),
-             "consec_boards": _consec_boards_for(c, board),
-             "st_play": r1_st_play.get(c)}
-            for c in r1_kept
+             "consec_boards": _consec_boards_for(c, board)}
+            for c in r1_codes
         ],
         data_status=r1_data_status, data_reason=r1_data_reason,
     )
     layers: list[FunnelLayer] = [r1]
 
-    # ---- R2 收敛（并行）——S084 R1-only：活跃度过滤已下放战法层，本层仅展示全量 ----
-    # S085 A4/A3：盘前所有因子取 T-1（S084 盘前边界实现缺口）——盘前 fetch_activity 用
-    # yesterday_date 走 kline T-1 路径（算 prev_amount_yi/K线派生，修放量比降级 limitup_strategy:922）；
-    # 历史日保 date（replay 取该日）。
+    # ---- R2 可交易性过滤（S148(b)：替代原 R2/R3 annotate 层）----
+    # classify_tradability = ST(radar carve-out 摘帽/重组/扭亏) + 创业板/科创板/北交所排除 + 退市/新股。
+    # R1 不再滤 ST（ST 移到此层，carve-out 生效）。radar_set=None→ST flat（radar 未跑前安全默认）。
+    radar_set = load_st_play_radar()
+    r2_kept, r2_filtered, r2_st_play = _filter_tradability(r1_codes, genes, radar_set)
+    r2 = FunnelLayer(
+        layer_id="R2", name="可交易性", as_of=as_of,
+        input_count=len(r1_codes), output_count=len(r2_kept),
+        filtered_out=r2_filtered, output_codes=r2_kept,
+        conditions=["板别/ST 可交易性过滤（S148 b）：ST radar carve-out + 创业板/科创板/北交所排除", *base_conditions],
+        passed=[
+            {"code": c, "name": genes.get(c, {}).get("name", c),
+             "gene_score": genes.get(c, {}).get("gene_score"),
+             "consec_boards": _consec_boards_for(c, board),
+             "st_play": r2_st_play.get(c)}
+            for c in r2_kept
+        ],
+    )
+    layers.append(r2)
+
+    # ---- 活跃度/资金/竞价/催化 采集（供诊断卡；S148(b) 原 R2/R3 annotate 层已并入 R2 tradability，不再独立成层）----
     _is_pre_market = (date or "")[:10] >= _date.today().isoformat()
     act_date = (yesterday_date or date) if _is_pre_market else date
-    r2_data_status: str | None = None
-    r2_data_reason: str | None = None
+    fetch_input = _top_n_by_gene_score(r2_kept, genes, max_r2)  # top-N 限界采集（性能预算）
+    activity, fund = {}, {}
     try:
         activity, fund = _fetch_pair(
-            lambda: sources.activity.fetch_activity(r2_input_codes, act_date),
-            lambda: sources.fund_flow.fetch_fund_flow(r2_input_codes, date, sectors=sectors, industry_map=industry_map),
+            lambda: sources.activity.fetch_activity(fetch_input, act_date),
+            lambda: sources.fund_flow.fetch_fund_flow(fetch_input, date, sectors=sectors, industry_map=industry_map),
         )
-    except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
-        activity, fund = {}, {}
-        r2_data_status = "未取得"
-        r2_data_reason = f"R2 收敛采集失败: {exc}"
-    # R1 passed 补齐 activity 字段——矩阵展示 R1-only 候选换手率/量比/成交额/振幅。
-    # activity 已在 R2 采集（fetch_activity 输入=r2_input_codes top-N 限界），回填 R1 passed；
-    # 超出 top-N 的候选 activity 缺失 → 这些列 None，不臆造。
+    except Exception as exc:  # noqa: BLE001 — 采集失败不阻断，诊断卡降级 missing
+        logger.warning("activity/fund 采集失败 %s: %s", date, exc)
+    # R2 passed 补齐 activity 字段（矩阵展示换手/量比/成交额/振幅）
     if activity:
-        for _p in r1.passed:
+        for _p in r2.passed:
             _a = activity.get(_p.get("code"), {}) or {}
             _p["turnover_pct"] = _a.get("turnover_pct")
             _p["vol_ratio"] = _a.get("vol_ratio")
             _p["amount_yi"] = _a.get("amount_yi")
             _p["amplitude_pct"] = _a.get("amplitude_pct")
-    # S084 TASK A：R2 不再过滤活跃度——下放战法层。r2_kept = R1 全量，filtered_out 留空。
-    r2_kept = list(r1_kept)
-    r2_filtered: list[FilterRecord] = []
-    if r2_data_status is None:
-        r2_data_status = "R2 已下放战法"
-        r2_data_reason = "活跃度过滤已下放战法层，本层保留 R1 全量候选（不过滤）"
-    r2 = FunnelLayer(
-        layer_id="R2", name="收敛", as_of=as_of,
-        input_count=len(r1_kept), output_count=len(r2_kept),
-        filtered_out=r2_filtered, output_codes=r2_kept,
-        conditions=["R2 已下放战法（不过滤活跃度）", *base_conditions],
-        passed=[
-            {"code": c, "name": activity.get(c, {}).get("name", c),
-             "gene_score": genes.get(c, {}).get("gene_score"),
-             "consec_boards": _consec_boards_for(c, board),
-             "turnover_pct": activity.get(c, {}).get("turnover_pct"),
-             "vol_ratio": activity.get(c, {}).get("vol_ratio"),
-             "amount_yi": activity.get(c, {}).get("amount_yi"),
-             "amplitude_pct": activity.get(c, {}).get("amplitude_pct"),
-             "main_net_inflow": (fund.get(c, {}) or {}).get("main_net_inflow"),
-             "main_net_5d": (fund.get(c, {}) or {}).get("main_net_5d"),
-             "northbound": (fund.get(c, {}) or {}).get("northbound")}
-            for c in r2_kept
-        ],
-        data_status=r2_data_status, data_reason=r2_data_reason,
-    )
-    layers.append(r2)
-
-    # ---- R3 定稿（并行）——S084 R1-only：竞价/催化过滤已下放战法层，本层仅展示全量 ----
-    r3_data_status: str | None = None
-    r3_data_reason: str | None = None
+    auction, catalyst = {}, {}
     try:
         auction, catalyst = _fetch_pair(
             lambda: sources.auction.fetch_auction(date),
             lambda: sources.catalyst.fetch_catalyst(r2_kept, date),
         )
-    except Exception as exc:  # noqa: BLE001 — 采集失败标记层（S023 C2）
-        auction, catalyst = {}, {}
-        r3_data_status = "未取得"
-        r3_data_reason = f"R3 定稿采集失败: {exc}"
-    # S084 TASK A：R3 不再过滤竞价/催化——下放战法层。r3_kept = R2 全量（=R1），filtered_out 留空。
-    # 原 exp-3 降级（auction/catalyst 均空时保留 R2）已成默认行为，不再单独标降级。
-    r3_kept = list(r2_kept)
-    r3_filtered: list[FilterRecord] = []
-    if r3_data_status is None:
-        r3_data_status = "R3 已下放战法"
-        r3_data_reason = "竞价/催化过滤已下放战法层，本层保留 R2 全量候选（不过滤）"
-    r3 = FunnelLayer(
-        layer_id="R3", name="定稿", as_of=as_of,
-        input_count=len(r2_kept), output_count=len(r3_kept),
-        filtered_out=r3_filtered, output_codes=r3_kept,
-        conditions=["R3 已下放战法（不过滤竞价/催化）", *base_conditions],
-        passed=[
-            {"code": c, "name": _resolve_name(c, genes, activity, auction, catalyst),
-             "gene_score": genes.get(c, {}).get("gene_score"),
-             "consec_boards": _consec_boards_for(c, board),
-             "auction_open_pct": auction.get(c, {}).get("auction_open_pct"),
-             "matched_triggers": _r3_triggers(c, auction, catalyst),
-             "catalyst_summary": _catalyst_summary(c, catalyst)}
-            for c in r3_kept
-        ],
-        data_status=r3_data_status, data_reason=r3_data_reason,
-    )
-    layers.append(r3)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("auction/catalyst 采集失败 %s: %s", date, exc)
 
     # ---- 自选/手动并行 ----
     wl = sources.watchlist_in.get_watchlist_codes()
@@ -470,8 +425,8 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     )
     layers.append(self_layer)
 
-    # ---- 最终候选 = R1 全涨停 ∪ 自选（S084 R1-only：不经 R2/R3 收敛）----
-    final_codes = list(dict.fromkeys(r1_kept + list(wl)))
+    # ---- 最终候选 = R2 可交易 ∪ 自选（S148(b)：R2 tradability 替代原 R2/R3）----
+    final_codes = list(dict.fromkeys(r2_kept + list(wl)))
     cards = []
     # S084 R3：derived source 懒加载（per code 取 T-1 昨日派生，盘前未采集→None 降级）
     from candidate_funnel.sources import derived_source
@@ -493,7 +448,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         cards.append(build_diagnosis_card(
             code, name, ind, eff, market_ctx=board, as_of=as_of,
             gene_obj=gene_obj, pool_item=pool_item, derived=derived,
-            st_play=r1_st_play.get(code),  # S148：ST carve-out 标透传到诊断卡（摘帽/重组/扭亏）
+            st_play=r2_st_play.get(code),  # S148(b)：ST carve-out 标透传到诊断卡（摘帽/重组/扭亏）
             # S085 B2：bulk 漏斗 with_seat_detail=False（默认）——席位聚合 per-code 调
             # compute_consensus_signal（3 次 datacenter/code），N 候选会拖垮响应；
             # 选股池列表跳过，单股 diagnose() 才开 with_seat_detail=True。
