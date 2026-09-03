@@ -331,11 +331,12 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
 
         stop_loss = round(entry_price * (1 + cfg.stop_loss_pct / 100), 2)
         take_profit = round(entry_price * (1 + cfg.take_profit_pct / 100), 2)
-        # §44 诚实更正（2026-09-02 专家会诊）：此非实测历史胜率，是 confidence→winrate 合成映射公式。
-        # 展示层须标"置信度映射(非实测)"，不得称"历史胜率"（§1.2 不臆造底线）。接 win_rate_tracker 实测属 Tier 2。
-        historical_win_rate = min(confidence * 0.8 + 0.2, 0.95)
-        historical_avg_return = round(
-            (cfg.take_profit_pct - cfg.stop_loss_pct) / 2 * historical_win_rate, 2,
+        # §1.2 诚实命名（S147）：confidence→winrate 合成映射 heuristic（非实测历史胜率）。
+        # 可复现、作 sort fallback 合法；winrate_source="confidence_map_synthetic" 显式标源不误读为实测。
+        # 真实测 winrate 由 position_advisor_v2 的 run_strategy_backtest 覆写（不在此）。
+        confidence_mapped_winrate = min(confidence * 0.8 + 0.2, 0.95)
+        mapped_avg_return = round(
+            (cfg.take_profit_pct - cfg.stop_loss_pct) / 2 * confidence_mapped_winrate, 2,
         )
 
         # S081 A8/B7：PRD 战法参数标注"参考值，非执行指令"
@@ -345,7 +346,7 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
 
         risk_notes = [
             f"历史统计样本量：{ctx.gene.zt_count_250d}次",
-            f"策略逻辑上，该战法历史平均收益：{historical_avg_return}%",
+            f"策略逻辑上，该战法映射平均收益：{mapped_avg_return}%（合成，非实测）",
             "历史统计特征不代表未来行为，仅作研究参考",
         ]
         if prd_disclaimer:
@@ -373,8 +374,9 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
             take_profit_condition=cfg.take_profit_condition,
             max_hold_days=cfg.max_hold_days,
             exit_condition=cfg.exit_condition,
-            historical_win_rate=round(historical_win_rate, 2),
-            historical_avg_return=historical_avg_return,
+            confidence_mapped_winrate=round(confidence_mapped_winrate, 2),
+            mapped_avg_return=mapped_avg_return,
+            winrate_source="confidence_map_synthetic",
             sample_size=ctx.gene.zt_count_250d,
             risk_reward_ratio=round(abs(cfg.take_profit_pct / cfg.stop_loss_pct), 2),
             conditions={
@@ -388,8 +390,8 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
             volume_signal=volume_signal,  # S094 R4：per-strategy 量能信号下沉 match 层
         ))
 
-    # 按风险收益比 × 历史胜率排序（与旧 match_strategies 一致）
-    signals.sort(key=lambda s: s.risk_reward_ratio * s.historical_win_rate, reverse=True)
+    # 按风险收益比 × mapped winrate 排序（合成 heuristic fallback；position_advisor_v2 用真 backtest winrate 覆写）
+    signals.sort(key=lambda s: s.risk_reward_ratio * s.confidence_mapped_winrate, reverse=True)
     return signals
 
 

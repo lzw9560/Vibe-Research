@@ -144,7 +144,7 @@ class TestDispatchMatch:
         assert [s.strategy_code for s in sigs] == ["first_plate"]  # boom 跳过
 
     def test_signals_sorted_by_risk_reward_times_winrate(self):
-        """输出按 risk_reward_ratio × historical_win_rate 降序。"""
+        """输出按 risk_reward_ratio × confidence_mapped_winrate 降序（合成 heuristic）。"""
         from strategies.impl import BreakResealStrategy, FirstPlateStrategy
         # first_plate: stop=-3/tp=8 → rr=2.67; break_reseal: stop=-3/tp=6 → rr=2.0
         # first_plate confidence=0.7→winrate=0.76; break_reseal confidence=0.7→winrate=0.76

@@ -96,9 +96,10 @@ class StrategySignal(BaseModel):
     # 持仓管理
     max_hold_days: int = 0          # 最大持仓天数
     exit_condition: str = ""        # 主动离场条件
-    # 历史统计
-    historical_win_rate: float = 0.0   # 历史成功率
-    historical_avg_return: float = 0.0 # 历史平均收益率
+    # 合成映射（非实测历史；§1.2 诚实命名 S147）
+    confidence_mapped_winrate: float = 0.0  # confidence→winrate 合成映射（非实测）；见 winrate_source
+    mapped_avg_return: float = 0.0          # 由 mapped winrate 推算的平均收益（合成，非实测）
+    winrate_source: str = "confidence_map_synthetic"  # 胜率来源：confidence_map_synthetic / backtest_90d / none
     sample_size: int = 0            # 统计样本量
     # 综合指标
     risk_reward_ratio: float = 0.0  # 风险收益比

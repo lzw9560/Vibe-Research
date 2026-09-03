@@ -123,7 +123,7 @@ class PositionAdvisor:
         reasons = [
             f"战法「{signal.strategy_name}」匹配",
             f"信号强度 {signal.signal_strength}%",
-            f"置信度映射 {signal.historical_win_rate:.0%}（非实测）",
+            f"置信度映射 {signal.confidence_mapped_winrate:.0%}（非实测）",
         ]
         if weather_state and weather_state != "晴天":
             reasons.append(f"天气={weather_state}，仓位上限调整为 {int(weather_cap * 100)}%")

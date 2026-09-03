@@ -97,7 +97,7 @@ class StrategyMatcher:
         return results
 
     def get_best_strategy(self, gene: GeneScore) -> StrategySignal | None:
-        """获取匹配度最高的战法信号（按 risk_reward_ratio * historical_win_rate 排序）。"""
+        """获取匹配度最高的战法信号（按 risk_reward_ratio * confidence_mapped_winrate 排序，合成 heuristic）。"""
         signals = self.match(gene)
         if not signals:
             return None
