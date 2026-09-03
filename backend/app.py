@@ -87,6 +87,8 @@ async def _warmup_advisory_backtest() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # startup
+    from routers.workflow import set_main_loop  # S148：存主 loop 供 sync executor 触发 _collect
+    set_main_loop(asyncio.get_running_loop())
     await _st.start_scheduler()  # CronScheduler 主循环 ticker + seed 默认任务（R13）
     _pf_refresh_task = await pf.start_scheduler(1800)  # 持仓后台刷新 task
     # S052 D4：启动缺口补跑——回测快照缺失日后台排队回填

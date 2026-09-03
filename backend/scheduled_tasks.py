@@ -995,6 +995,17 @@ class TaskExecutor:
                 )
 
             logger.info("[candidate_funnel_precompute] %s 漏斗预计算完成（缓存已预热+落库）", target)
+            # S148：顺手触发 briefing _collect——precompute 写 funnel_cache 但 briefing 端点不读它，
+            # 须 _collect 采集才让选股页显数据（fire-and-forget，主 loop 后台跑，不阻塞 executor）。
+            try:
+                from routers.workflow import trigger_collect  # noqa: PLC0415
+                triggered = trigger_collect(target)
+                logger.info(
+                    "[candidate_funnel_precompute] briefing _collect 触发%s（target=%s）",
+                    "成功" if triggered else "跳过（主 loop 未设/已在跑）", target,
+                )
+            except Exception as exc:  # noqa: BLE001 — briefing 触发失败不阻断 precompute 主流程
+                logger.warning("[candidate_funnel_precompute] briefing _collect 触发失败: %s", exc)
             return {
                 "date": target,
                 "status": "ok",

@@ -53,6 +53,45 @@ _cache: dict[str, Any] = {
 # done 回调从 set 中移除，避免无限增长。对照 intraday_sentiment._task 的正确范式。
 _pending_collections: set[asyncio.Task] = set()
 
+# S148: 主 event loop 引用——sync executor（to_thread，无 loop 访问）触发 _collect 用
+# call_soon_threadsafe 调度到主 loop。lifespan startup 调 set_main_loop 存。
+_MAIN_LOOP: asyncio.AbstractEventLoop | None = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """lifespan startup 调，存主 loop 供 sync executor 触发 async _collect 用。"""
+    global _MAIN_LOOP
+    _MAIN_LOOP = loop
+
+
+def _trigger_collect_main(target_date: str) -> str | None:
+    """主 loop 上触发 _collect（check→set→create_task，原子——单 loop 内无 await 间隔）。
+
+    refresh_pre_market 端点 + trigger_collect（sync executor 经 call_soon_threadsafe）共用。
+    返 run_id（已调度）或 None（status==running 跳过）。
+    """
+    if _cache.get("status") == "running":
+        return None
+    run_id = uuid.uuid4().hex[:8]
+    _cache.update(run_id=run_id, status="running", data_date=target_date, error=None, as_of=_now_iso())
+    task = asyncio.create_task(_collect(run_id, target_date))
+    _pending_collections.add(task)
+    task.add_done_callback(_pending_collections.discard)
+    return run_id
+
+
+def trigger_collect(target_date: str) -> bool:
+    """从 sync 上下文（to_thread executor）触发 briefing _collect（fire-and-forget）。
+
+    candidate_funnel_precompute 写 funnel_cache 但 briefing 端点不读它——须 _collect
+    采集才让选股页显数据。本函数让 precompute 末尾顺手触发 _collect（主 loop 后台跑）。
+    返 True=已调度到主 loop，False=主 loop 未设（startup 前调）。
+    """
+    if _MAIN_LOOP is None:
+        return False
+    _MAIN_LOOP.call_soon_threadsafe(_trigger_collect_main, target_date)
+    return True
+
 # ============ S048 R4：盘前快照持久化（历史不可变，纯读盘零请求） ============
 # S050：读侧（_load_snapshot/_list_snapshot_dates）抽至 snapshot_store.py 共用；
 # _save_snapshot 仍留此处（写盘是采集链路职责，settlement 只读不写）。
@@ -705,15 +744,9 @@ async def refresh_pre_market(date: Optional[str] = Query(None, description="日�
     # 今日（== 最近交易日）允许重采（当日采集可更新）；历史无快照允许补采（no_snapshot 链路）。
     if target_date < last_trading_date_str() and _load_snapshot(target_date) is not None:
         raise HTTPException(409, f"{target_date} 历史快照已存在，不可覆写（历史不可变；补采请先删快照）")
-    if _cache["status"] == "running":
-        return {"run_id": _cache["run_id"], "status": "running", "msg": "已有采集在跑"}
-    run_id = uuid.uuid4().hex[:8]
-    _cache.update(run_id=run_id, status="running", data_date=target_date, error=None, as_of=_now_iso())
-    # S068 R2：保留强引用防 CPython GC 在 task 挂起（await/to_thread）时回收；
-    # done 回调从 set 移除，避免无限增长。
-    task = asyncio.create_task(_collect(run_id, target_date))
-    _pending_collections.add(task)
-    task.add_done_callback(_pending_collections.discard)
+    run_id = _trigger_collect_main(target_date)
+    if run_id is None:
+        return {"run_id": _cache.get("run_id"), "status": "running", "msg": "已有采集在跑"}
     return {"run_id": run_id, "status": "running"}
 
 
