@@ -1660,6 +1660,32 @@ def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
     return result
 
 
+def attach_first_board_analysis(final_cards: list[dict], target_date: str) -> None:
+    """S148 Phase 2 (a)：把首板 9 维评分（load_scores 缓存）接到涨停叉 lane final_candidates。
+
+    首板子集（code 在 cached.scored_candidates）→ card 加 first_board_analysis
+    ={scores,total,market_phase}。非首板/缓存空/失败 → 不加（None 降级，不阻断 briefing）。
+    §44：total 是未 validated 复合分，前端须标"§44 未 validated"（不作物买卖信号）。
+    """
+    try:
+        compact = target_date.replace("-", "") if "-" in target_date else target_date
+        cached = load_scores(compact)
+        if not cached:
+            return
+        fb_map = {s.get("code"): s for s in cached.get("scored_candidates", []) if s.get("code")}
+        for c in final_cards:
+            code = c.get("code")
+            if code in fb_map:
+                s = fb_map[code]
+                c["first_board_analysis"] = {
+                    "scores": s.get("scores", {}),
+                    "total": s.get("total"),
+                    "market_phase": s.get("market_phase"),
+                }
+    except Exception as e:  # noqa: BLE001 — 9 维是增强，失败不阻断 briefing
+        _logger.warning("attach_first_board_analysis 失败 date=%s err=%s", target_date, e)
+
+
 if __name__ == "__main__":
     # 骨架自测：python -m strategies.first_board_filter 20260818
     d = sys.argv[1] if len(sys.argv) > 1 else "20260818"

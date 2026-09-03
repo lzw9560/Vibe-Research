@@ -253,6 +253,12 @@ async def _collect(run_id: str, target_date: str) -> None:
                 final_cards = [c.model_dump(mode="json") for c in funnel_result.final_candidates]
         except Exception as exc:  # noqa: BLE001 — 诊断卡构建失败不影响快照主态
             logger.warning("final_candidates 诊断卡构建失败 %s: %s", target_date, exc)
+        # S148 Phase 2 (a)：首板 9 维评分接到 lane final_candidates（load_scores 缓存，不 live run）
+        try:
+            from strategies.first_board_filter import attach_first_board_analysis  # noqa: PLC0415
+            attach_first_board_analysis(final_cards, target_date)
+        except Exception as exc:  # noqa: BLE001 — 9 维接入失败不阻断 briefing
+            logger.warning("attach_first_board_analysis 接入失败 %s: %s", target_date, exc)
 
         p2_fields = _extract_p2_fields(results)
         _cache.update(

@@ -37,5 +37,34 @@ class TestRunFirstBoardFilterInjectedPool(unittest.TestCase):
         mock_fetch.assert_called_once()  # 未注入 → 自取（向后兼容）
 
 
+class TestAttachFirstBoardAnalysis(unittest.TestCase):
+    """S148 Phase 2 (a)：首板 9 维评分接到 lane final_candidates（load_scores 缓存）。"""
+
+    def test_merges_for_matching_codes(self):
+        from strategies.first_board_filter import attach_first_board_analysis
+        cards = [{"code": "600001"}, {"code": "000002"}]
+        cached = {"scored_candidates": [
+            {"code": "600001", "scores": {"seal_time": 80}, "total": 75.0, "market_phase": "普通"}
+        ]}
+        with mock.patch("strategies.first_board_filter.load_scores", return_value=cached):
+            attach_first_board_analysis(cards, "2026-09-03")
+        self.assertEqual(cards[0]["first_board_analysis"]["total"], 75.0)
+        self.assertNotIn("first_board_analysis", cards[1])  # 非首板不加
+
+    def test_no_cache_no_change(self):
+        from strategies.first_board_filter import attach_first_board_analysis
+        cards = [{"code": "600001"}]
+        with mock.patch("strategies.first_board_filter.load_scores", return_value={}):
+            attach_first_board_analysis(cards, "2026-09-03")
+        self.assertNotIn("first_board_analysis", cards[0])
+
+    def test_failure_does_not_crash(self):
+        from strategies.first_board_filter import attach_first_board_analysis
+        cards = [{"code": "600001"}]
+        with mock.patch("strategies.first_board_filter.load_scores", side_effect=RuntimeError("db")):
+            attach_first_board_analysis(cards, "2026-09-03")  # 不崩
+        self.assertNotIn("first_board_analysis", cards[0])
+
+
 if __name__ == "__main__":
     unittest.main()
