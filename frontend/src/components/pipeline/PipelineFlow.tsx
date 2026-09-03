@@ -63,14 +63,32 @@ export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
   const finals = briefing?.final_candidates ?? [];
   const ztCount = briefing?.market_emotion?.zt_count ?? undefined;
   const dataDate = briefing?.data_date ?? F;
+  const [lane, setLane] = useState<"limitup" | "nonlimitup">("limitup");
 
   return (
     <div className="space-y-2">
-      {/* 2 并行列（涨停叉 ‖ 非涨停叉；breakout 移 2 级导航研究，非主 pipeline peer lane） */}
-      <div className="grid gap-2 lg:grid-cols-2 items-start">
-        {/* 涨停叉 */}
+      {/* 涨停叉‖非涨停叉 改 tab 切换（原 2 并排列太紧凑，单 lane 全宽更舒展） */}
+      <div className="inline-flex gap-1 rounded-xl border border-border/40 bg-muted/30 p-1">
+        <button
+          type="button"
+          onClick={() => setLane("limitup")}
+          className={cn("rounded-lg px-4 py-1.5 text-sm font-semibold transition-all",
+            lane === "limitup" ? "bg-primary/16 text-primary" : "text-muted-foreground hover:text-foreground")}
+        >
+          涨停叉 <span className="ml-1 text-[10px] text-muted-foreground/60">已实现 {scored.length}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setLane("nonlimitup")}
+          className={cn("rounded-lg px-4 py-1.5 text-sm font-semibold transition-all",
+            lane === "nonlimitup" ? "bg-primary/16 text-primary" : "text-muted-foreground hover:text-foreground")}
+        >
+          非涨停叉 <span className="ml-1 text-[10px] text-muted-foreground/60">{marketScan.length}</span>
+        </button>
+      </div>
+
+      {lane === "limitup" ? (
         <div className="space-y-2 border-l-2 border-primary/30 pl-2">
-          <p className="text-[10px] font-semibold text-primary/70">涨停叉</p>
           {/* ① 涨停股池+漏斗——CandidateFunnelEmbed */}
           <PipelineStep
             step="①"
@@ -98,16 +116,14 @@ export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
             <CandidateFactorTable candidates={finals} date={dataDate} />
           </PipelineStep>
         </div>
-
-        {/* 非涨停叉（⑧ 候选终选为 ScoredCandidate 简表——无八项标准/gene_score 数据形状，不硬塞全"—"的因子表，诚实留简表） */}
+      ) : (
         <div className="space-y-2 border-l-2 border-muted/40 pl-2">
-          <p className="text-[10px] font-semibold text-muted-foreground/70">非涨停叉</p>
-          {/* ⑤⑥⑦⑧ 非涨停叉——NonLimitupLane（自管四节点） */}
+          {/* ⑤⑥⑦⑧ 非涨停叉——NonLimitupLane（自管四节点；简表，无八项标准/gene_score 不硬塞"—"） */}
           <PipelineStep step="⑤⑥⑦⑧" title="非涨停叉" sub="选股宇宙 · K线 · 战法 · 候选终选" count={marketScan.length}>
             <NonLimitupLane date={dataDate} candidates={marketScan} />
           </PipelineStep>
         </div>
-      </div>
+      )}
     </div>
   );
 }
