@@ -1559,11 +1559,14 @@ def list_score_dates() -> list[str]:
     return dates
 
 
-def run_first_board_filter(date: str) -> dict:
+def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
     """主入口：串联 003-010（数据层 + 三层剔除）。
 
     Args:
         date: 交易日，YYYYMMDD 或 YYYY-MM-DD。
+        pool: 可选，注入涨停池（list[dict]）——S148 Phase 2 (a) 接入涨停叉时由调用方
+              共享 zt_pool 源传入，跳过自取 fetch_zt_pool（dedup + 让涨停叉 R1 过滤
+              覆盖 first-board）。None（默认）→ 自取 fetch_zt_pool（向后兼容）。
 
     Returns:
         dict 含：
@@ -1604,8 +1607,8 @@ def run_first_board_filter(date: str) -> dict:
             "env_flags": {},
         }
 
-    # 003 取涨停池
-    pool = fetch_zt_pool(compact_date)
+    # 003 取涨停池（S148 Phase 2 (a)：pool 注入时跳过自取，由调用方共享 zt_pool 源）
+    pool = fetch_zt_pool(compact_date) if pool is None else pool
     zt_pool_count = len(pool)
     print(f"[fb_filter] 涨停池: {zt_pool_count}", flush=True)
 
@@ -1655,6 +1658,32 @@ def run_first_board_filter(date: str) -> dict:
         _logger.warning("save_scores 落盘失败 date=%s err=%s", compact_date, e)
 
     return result
+
+
+def attach_first_board_analysis(final_cards: list[dict], target_date: str) -> None:
+    """S148 Phase 2 (a)：把首板 9 维评分（load_scores 缓存）接到涨停叉 lane final_candidates。
+
+    首板子集（code 在 cached.scored_candidates）→ card 加 first_board_analysis
+    ={scores,total,market_phase}。非首板/缓存空/失败 → 不加（None 降级，不阻断 briefing）。
+    §44：total 是未 validated 复合分，前端须标"§44 未 validated"（不作物买卖信号）。
+    """
+    try:
+        compact = target_date.replace("-", "") if "-" in target_date else target_date
+        cached = load_scores(compact)
+        if not cached:
+            return
+        fb_map = {s.get("code"): s for s in cached.get("scored_candidates", []) if s.get("code")}
+        for c in final_cards:
+            code = c.get("code")
+            if code in fb_map:
+                s = fb_map[code]
+                c["first_board_analysis"] = {
+                    "scores": s.get("scores", {}),
+                    "total": s.get("total"),
+                    "market_phase": s.get("market_phase"),
+                }
+    except Exception as e:  # noqa: BLE001 — 9 维是增强，失败不阻断 briefing
+        _logger.warning("attach_first_board_analysis 失败 date=%s err=%s", target_date, e)
 
 
 if __name__ == "__main__":

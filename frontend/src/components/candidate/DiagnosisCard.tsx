@@ -86,6 +86,33 @@ export function DiagnosisCardView({ card }: { card: Card }) {
         <div className="text-sm text-warning">风险标注：{card.risk_flags.join("、")}</div>
       )}
 
+      {/* S148 R7：ST carve-out 正向标（摘帽/重组/扭亏），radar 白名单 re-include 的 ST 股 */}
+      {card.st_play && (
+        <div className="text-sm text-emerald-600">ST-play：{card.st_play}（carve-out 保留）</div>
+      )}
+
+      {/* S148 Phase 2：首板 9 维分析（§44 未 validated，描述性 context，非买卖信号） */}
+      {card.first_board_analysis && (
+        <div className="text-sm">
+          <div className="text-muted-foreground mb-1">
+            首板 9 维分析 <span className="text-warning">（§44 未 validated，仅参考）</span>：
+          </div>
+          <div className="grid grid-cols-3 gap-x-4 gap-y-1">
+            {Object.entries(card.first_board_analysis.scores).map(([dim, score]) => (
+              <div key={dim} className="flex justify-between">
+                <span className="text-muted-foreground">{dim}</span>
+                <span>{(score as number) < 0 ? "—" : String(score)}</span>
+              </div>
+            ))}
+          </div>
+          {card.first_board_analysis.total != null && (
+            <div className="mt-1 text-xs text-warning">
+              复合分 {card.first_board_analysis.total}（§44 未 validated，不作物买卖信号）
+            </div>
+          )}
+        </div>
+      )}
+
       {missing.length > 0 && (
         <div className="text-sm text-warning">
           <div className="mb-1">未取得：</div>

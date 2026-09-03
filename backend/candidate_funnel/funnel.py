@@ -21,7 +21,8 @@ from candidate_funnel.models import (
     IndicatorSet,
     ThresholdConfig,
 )
-from candidate_funnel.sources._filters import classify_exclusion
+from candidate_funnel.sources._filters import classify_tradability
+from candidate_funnel.sources.st_play_radar import load_st_play_radar
 from candidate_funnel.sources.catalyst import classify_announcement
 from candidate_funnel.thresholds import resolve_thresholds
 
@@ -76,17 +77,28 @@ def _funnel_cache_key(date: str, cfg: ThresholdConfig) -> str:
     return f"{date}|{json.dumps(cfg_dict, sort_keys=True, ensure_ascii=False)}"
 
 
-def _filter_r1(codes: list[str], genes: dict[str, dict]) -> tuple[list[str], list[FilterRecord]]:
+def _filter_r1(
+    codes: list[str], genes: dict[str, dict], radar_set: dict[str, str] | None = None,
+) -> tuple[list[str], list[FilterRecord], dict[str, str]]:
+    """R1 入口过滤（S148）：classify_tradability = ST(radar carve-out) + board 排除 + 退市/新股。
+
+    ST 在 radar 白名单 → re-include + st_play 标（摘帽/重组/扭亏 carve-out）。
+    radar_set=None → 空白名单 → ST flat 排除（radar 未上线前的安全默认）。
+    返回 (kept, filtered, kept_st_play)。
+    """
     kept: list[str] = []
+    kept_st_play: dict[str, str] = {}
     filtered: list[FilterRecord] = []
     for c in codes:
         name = genes.get(c, {}).get("name", c)
-        excluded, reason = classify_exclusion(name, c)
-        if excluded:
-            filtered.append(FilterRecord(code=c, name=name, reason=reason or "剔除"))
-        else:
+        keep, reason, st_play = classify_tradability(name, c, radar_set)
+        if keep:
             kept.append(c)
-    return kept, filtered
+            if st_play:
+                kept_st_play[c] = st_play
+        else:
+            filtered.append(FilterRecord(code=c, name=name, reason=reason or "剔除"))
+    return kept, filtered, kept_st_play
 
 
 def _top_n_by_gene_score(codes: list[str], genes: dict[str, dict], n: int) -> list[str]:
@@ -336,18 +348,21 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         r1_data_status = "未取得"
         r1_data_reason = f"R1 宽源采集失败: {exc}"
     r1_input = list(genes.keys())
-    r1_kept, r1_filtered = _filter_r1(r1_input, genes)
+    radar_set = load_st_play_radar()
+    r1_kept, r1_filtered, r1_st_play = _filter_r1(r1_input, genes, radar_set)
     # S004 R3：top-N 限界——R2 采集前按 gene_score 降序取前 max_r2（R1 全量保留展示）
     r2_input_codes = _top_n_by_gene_score(r1_kept, genes, max_r2)
     r1 = FunnelLayer(
         layer_id="R1", name="宽源", as_of=as_of,
         input_count=len(r1_input), output_count=len(r1_kept),
         filtered_out=r1_filtered, output_codes=r1_kept,
-        conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）", *base_conditions],
+        conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）",
+                    "板别/ST 可交易性过滤（S148）", *base_conditions],
         passed=[
             {"code": c, "name": genes.get(c, {}).get("name", c),
              "gene_score": genes.get(c, {}).get("gene_score"),
-             "consec_boards": _consec_boards_for(c, board)}
+             "consec_boards": _consec_boards_for(c, board),
+             "st_play": r1_st_play.get(c)}
             for c in r1_kept
         ],
         data_status=r1_data_status, data_reason=r1_data_reason,
@@ -478,6 +493,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         cards.append(build_diagnosis_card(
             code, name, ind, eff, market_ctx=board, as_of=as_of,
             gene_obj=gene_obj, pool_item=pool_item, derived=derived,
+            st_play=r1_st_play.get(code),  # S148：ST carve-out 标透传到诊断卡（摘帽/重组/扭亏）
             # S085 B2：bulk 漏斗 with_seat_detail=False（默认）——席位聚合 per-code 调
             # compute_consensus_signal（3 次 datacenter/code），N 候选会拖垮响应；
             # 选股池列表跳过，单股 diagnose() 才开 with_seat_detail=True。
@@ -583,9 +599,11 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     gene_obj = genes.get(code, {}).get("gene_obj")
     pool_item = zt_pool_map.get(code)
     derived = derived_source.fetch_derived(code, yesterday_date) if yesterday_date else None
+    _radar = load_st_play_radar()  # S148：单股 diagnose 也带 ST carve-out 标（若该 code 在 radar 白名单）
     return build_diagnosis_card(
         code, name, ind, eff, market_ctx=board, as_of=as_of,
         gene_obj=gene_obj, pool_item=pool_item, derived=derived,
         trade_date=yesterday_date,  # S085 B2：单股 diagnose 开席位聚合（1 code 开销可接受）
         with_seat_detail=True,
+        st_play=_radar.get(code),  # S148
     )

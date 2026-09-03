@@ -58,6 +58,12 @@ export interface DiagnosisCard {
   activity: ActivityAssessment;
   stabilization: StabilizationSignals;
   risk_flags: string[];
+  st_play?: string | null;  // S148：ST carve-out 正向标（摘帽/重组/扭亏），radar 白名单 re-include 的 ST 股带
+  first_board_analysis?: {
+    scores: Record<string, number>;  // 9 维各分（描述性，-1=数据缺失）
+    total: number | null;  // 复合分（§44 未 validated，仅参考）
+    market_phase?: string | null;
+  } | null;  // S148 Phase 2：首板 9 维评分（仅首板子集带）
   as_of: string;
   eight_standards?: EightStandardResult | null;  // S057
   capped?: boolean;  // S057：未过≥3 → 封顶 55

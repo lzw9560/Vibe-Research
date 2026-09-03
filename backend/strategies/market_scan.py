@@ -206,6 +206,18 @@ def gather_non_limitup_candidates(
     industry_map = load_industry_map()
     cache = _get_kline_cache()
     candidates = build_non_limitup_candidates(top, industry_map, cache, per_sector)
+    # S148 接入点②：可交易性过滤（ST radar carve-out + 创业板/科创板/北交所 排除），与涨停叉 R1 同口径
+    from candidate_funnel.sources._filters import classify_tradability  # noqa: PLC0415
+    from candidate_funnel.sources.st_play_radar import load_st_play_radar  # noqa: PLC0415
+    radar_set = load_st_play_radar()
+    kept_cands: list[dict] = []
+    for cand in candidates:
+        keep, _reason, st_play = classify_tradability(cand.get("name", ""), str(cand.get("code", "")), radar_set)
+        if keep:
+            if st_play:
+                cand = {**cand, "st_play": st_play}
+            kept_cands.append(cand)
+    candidates = kept_cands
     sector_rank_map = {s["industry"]: s.get("rank", 99) for s in top}  # 板块间
     produced = run_non_limitup_funnel(candidates, weather_state=None, sector_rank_map=sector_rank_map)
     scored = score_candidates(produced, None, "market_scan")
