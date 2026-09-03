@@ -461,6 +461,7 @@ class TaskExecutor:
             "premarket_auction_notify": self._execute_premarket_auction_notify,  # S101：9:25 竞价确认通知
             "premarket_open_notify": self._execute_premarket_open_notify,  # S101：9:35 开盘表现通知
             "premarket_t1_review": self._execute_premarket_t1_review,  # S101：T+1 复盘通知
+            "st_play_radar": self._execute_st_play_radar,  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
         }
 
     def execute(self, task: ScheduledTask) -> TaskRun:
@@ -1459,6 +1460,21 @@ class TaskExecutor:
             logger.warning("[zt_history_snapshot] 采集失败: %s", e)
             return {"status": f"error: {e}"}
 
+    def _execute_st_play_radar(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S148 R3：盘后 ST-play radar——扫 ST 股公告 → 摘帽/重组/扭亏 白名单 → st_play_radar.json。
+
+        供 classify_tradability 做 ST carve-out（re-include + st_play 标）。失败 catch 不抛，
+        返 error（radar 是增强；失败则 loader 返空→ST flat 排除，安全降级，不阻断主流程）。
+        """
+        try:
+            from candidate_funnel.sources.st_play_radar import run_st_play_radar  # noqa: PLC0415
+            radar = run_st_play_radar()
+            logger.info("[st_play_radar] 白名单写入 %s 只（摘帽/重组/扭亏）", len(radar))
+            return {"count": len(radar), "status": "ok"}
+        except Exception as e:
+            logger.warning("[st_play_radar] 采集失败: %s", e)
+            return {"status": f"error: {e}"}
+
 
     # ===========================================================================
     # S084 C1/C2：盘后 derived 异步预采集 executor（17:00 工作日，龙虎榜 16:30 更新后）
@@ -2287,6 +2303,19 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 seal_intraday_collect 已创建（cron * 9-15 * * 0-4）")
+
+    # S148 R3：盘后 ST-play radar——摘帽/重组/扭亏 白名单（供 classify_tradability ST carve-out）。
+    # 17:30 工作日：晚 candidate_funnel_precompute 17:15（gene_scores 写完）+ zt_history_snapshot 17:15 后。
+    if "st_play_radar" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="st_play_radar",
+            description="S148 盘后 ST-play radar：扫 ST 股公告 → 摘帽/重组/扭亏 白名单（ST carve-out）",
+            task_type="st_play_radar",
+            cron_expr="30 17 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 st_play_radar 已创建（cron 30 17 * * 0-4）")
 
     # S123 R3：既有 DB 迁移——seed 仅 `if not in existing` 建任务，旧库仍存 cron
     # `* 9-14 * * 0-4`（末次触发 14:59，漏采 15:00 收盘集合竞价终态）。幂等更新：
