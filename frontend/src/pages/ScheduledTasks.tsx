@@ -12,6 +12,7 @@ import {
   runScheduledTaskNow,
   type ScheduledTask,
 } from "@/lib/api";
+import { refreshPreMarket } from "@/lib/api/workflow";
 import { useScheduledTasks, useScheduledTaskRuns } from "@/lib/query";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 
@@ -165,29 +166,37 @@ export function ScheduledTasks() {
     }
   };
 
-  // 重跑今日选股：按 task_type 找选股 task id，顺序触发（避并发冲突）。
+  // 重跑今日选股：①按 task_type 找选股 task 重跑（预热 funnel_cache）
+  // ②触发 briefing refresh（/api/workflow/pre-market/refresh）填 selection 页数据——
+  // briefing 不读 funnel_cache，须单独采集，否则前端选股页 idle 空白。
   // 仅盘后激活（isPostMarket gate 在按钮层，API 仍开放供调试/管理）。
   const handleRerunSelection = async () => {
     const ids = SELECTION_TASK_TYPES
       .map((tt) => taskList.find((t) => t.task_type === tt)?.id)
       .filter((id): id is number => typeof id === "number");
-    if (ids.length === 0) {
-      toast.error("未找到选股任务（candidate_funnel_precompute / first_board_filter）");
-      return;
-    }
     setRerunning(true);
-    let ok = 0;
+    let taskOk = 0;
     for (const id of ids) {
       try {
         await runScheduledTaskNow(id);
-        ok += 1;
+        taskOk += 1;
       } catch {
         // 单个失败不阻断其余
       }
     }
+    // 触发 briefing 采集（async，返 running；前端轮询 usePreMarketBriefing 见 done）
+    let briefingTriggered = false;
+    try {
+      await refreshPreMarket();
+      briefingTriggered = true;
+    } catch {
+      // briefing refresh 失败不阻断（funnel_cache 已预热）
+    }
     await refetchTasks();
     setRerunning(false);
-    toast.success(`选股重跑：${ok}/${ids.length} 成功`);
+    toast.success(
+      `选股重跑：${taskOk}/${ids.length} task${briefingTriggered ? " + briefing 采集已触发" : ""}`,
+    );
   };
 
   const toggleExpand = (taskId: number) => {
