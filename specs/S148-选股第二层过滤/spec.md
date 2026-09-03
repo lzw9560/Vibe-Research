@@ -1,6 +1,6 @@
 # Spec: S148 — 选股第二层过滤（板别排除 + ST 摘帽/重组 carve-out）
 
-> 状态：实现中（Phase 1a：R1/R2/R4 done + 23 测试绿）
+> 状态：已实现（2026-09-03，4 commit：0b1812e/fbecd22/879ed81/c4675f6）
 > 作者：lzw9560  日期：2026-09-03
 > 关联：S094（双 pipeline）/ S144（§44 测量地基）/ S084（R1-only）/ grill-decisions.md（创业板"不剔除只分组"旧决定，本 spec 反转）/ S070（first-board 链）
 
@@ -25,14 +25,14 @@
 - [x] R2 新建 `classify_tradability(name, code, radar_set) → (keep, reason, st_play?)`：ST（radar 白名单 carve-out）+ 创业板/科创板/北交所 排除；停牌不在此函数（descope）
 - [x] R3 日级 ST-play radar（盘后 scheduled）：done——`run_st_play_radar` orchestrator + `_collect_st_codes`（code_industry 全量 ST，覆盖双 lane）+ `_execute_st_play_radar` scheduled task（cron `30 17 * * 0-4`）+ catalyst `_ANN_KEYWORDS` 摘帽型；16 测试绿。news_radar 摘帽/扭亏 = optional（公告 path 已覆盖检测，YAGNI 不做）
 - [x] R4 接入点①：`_filter_r1` 改调 `classify_tradability` + `_load_st_play_radar` 加载器（graceful 空）+ `st_play` 进 R1 passed
-- [ ] R5 接入点②：`market_scan.gather_non_limitup_candidates`（或其候选产出处）接 `classify_tradability`（非涨停叉首次滤 ST + board）
-- [ ] R8 北交所（8/4 开头）一并排除（推断：用户无 100 万权限，已确认同意）
+- [x] R5 接入点②：`market_scan.gather_non_limitup_candidates` 注入 `classify_tradability`（非涨停叉首次滤 ST + board，与涨停叉 R1 同口径）
+- [x] R8 北交所（8/4 开头 + 920）一并排除（`classify_board`，推断：用户无 100 万权限，已确认同意）
 
 **Phase 2 — first-board (a) 接入（独立 PR，后行）**
 - [x] R6 first-board (a) 接入：基础（`run_first_board_filter(date, pool=None)` 注入参数）+ substance（`attach_first_board_analysis` 把首板 9 维 load_scores 缓存接到 lane final_candidates + DiagnosisCard `first_board_analysis` 字段 + 前端 9 维各分描述性展示 + 复合分标"§44 未 validated 不作物买卖信号"）done；`select_for_entry` 仓位不进 spine（保持）；TDD 绿
 
 **前端**
-- [ ] R7 候选卡 `st_play` 标展示（摘帽/重组/扭亏）+ first-board 复合分若显示标"无 validated edge"。**依赖**：`st_play` 现已在 R1 passed（funnel_layers 可读），但 `final_candidates` 诊断卡（WatchlistBoard 用）需透传 st_play 进 `DiagnosisCard` 契约（dataclass+builder+API+前端，独立改动，后行）
+- [x] R7 候选卡 `st_play` 标展示（摘帽/重组/扭亏）+ first-board 复合分标"§44 未 validated"。done：`st_play` 透传 DiagnosisCard 契约（field + build_diagnosis_card 参数 + funnel final_candidates + diagnose）+ 前端 badge；first-board 9 维各分描述性展示 + 复合分诚实标签（§44 边界：各分 OK，复合分标"未 validated 不作物买卖信号"，select_for_entry 仓位不进 spine）
 
 ## 4. 受影响文件
 
