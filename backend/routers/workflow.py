@@ -182,15 +182,15 @@ async def _collect(run_id: str, target_date: str) -> None:
             genes = await asyncio.to_thread(load_gene_scores, target_date)
             logger.info("[_collect] load_gene_scores: %.1fs genes=%d", _time.time() - _t4, len(genes) if genes else 0)
             if genes:
-                # S073 修数据链断：scored 用 R3 幸存者（非 DB 全量），R3→scored 真串联
-                r3_layer = next((l for l in (funnel_layers or []) if l.get("layer_id") == "R3"), None)
-                r3_codes = set(r3_layer.get("output_codes", []) if r3_layer else [])
-                if r3_codes:
-                    genes_filtered = [g for g in genes if g.code in r3_codes]
-                    logger.info("scored 接 R3：%d 只幸存者（原全量 %d）", len(genes_filtered), len(genes))
+                # S148(b)：scored 用 R2 可交易性 幸存者（非 DB 全量），R2→scored 真串联（原 R3 已删，R2=tradability 替代）
+                r2_layer = next((l for l in (funnel_layers or []) if l.get("layer_id") == "R2"), None)
+                r2_codes = set(r2_layer.get("output_codes", []) if r2_layer else [])
+                if r2_codes:
+                    genes_filtered = [g for g in genes if g.code in r2_codes]
+                    logger.info("scored 接 R2：%d 只可交易幸存者（原全量 %d）", len(genes_filtered), len(genes))
                     genes = genes_filtered
                 else:
-                    logger.info("R3 无幸存者或无 R3 层，scored 降级全量 %d 只", len(genes))
+                    logger.info("R2 无幸存者或无 R2 层，scored 降级全量 %d 只", len(genes))
                 cand_input = [
                     {
                         "code": g.code,
