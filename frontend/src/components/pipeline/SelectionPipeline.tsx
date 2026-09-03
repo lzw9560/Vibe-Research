@@ -85,9 +85,10 @@ export function SelectionPipeline({
       {activeLane === "limitup" ? (
         <div className="space-y-1.5">
           <LaneHeader title="涨停叉" sub="已实现" />
-          {/* S084 TASK A：R2/R3 已下放战法层（直通透传），只显 R1 + SELF，不显 R2/R3 假漏斗。
-              R1 与 SELF 是并行旁路（非上下游），不传 next 避免 52≠0 误显"失配"。 */}
-          {layers.filter((l) => l.layer_id === "R1" || l.layer_id === "SELF").map((layer) => (
+          {/* S148(b)：R2=可交易性过滤（替代原 R2/R3 annotate 层），显 R1+R2+SELF。
+              R2 是真过滤层（ST carve-out + 板别排除），非 S084 的假漏斗，须展示。
+              R1→R2 串联（fetch→tradability），R2 与 SELF 并行旁路（都进 final），不传 next 避免失配误显。 */}
+          {layers.filter((l) => l.layer_id === "R1" || l.layer_id === "R2" || l.layer_id === "SELF").map((layer) => (
             <LayerStep
               key={layer.layer_id}
               layer={layer}
