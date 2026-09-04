@@ -57,7 +57,7 @@
 
 **验证 harness**：
 - `day_paired_lift`（非池化，复用 first_board_layer_lift 防 4.686x→1.723x 池化假象）
-- **`day_cluster_permutation` 新建**（T1.2 CRITICAL3：codebase 不存在，spec 删"已有"引用）——打乱日期标签建 null lift 分布（per-date shuffle 重算 day_paired_lift），observed lift 须在 null 分布 P95 以上。**permutation 打乱日期非 code**（code 标签 within-day 不打乱，因 day_paired_lift 已 per-day 算，打乱 code 无意义；打乱日期测 day-cluster 随机基线）
+- **`day_cluster_permutation` 新建**（T1.2 CRITICAL3：codebase 不存在）——**within-day survivor resampling** 建 null lift 分布（surv⊆raw 同 ret，逐日内随机选同大小子集当 survivor 重算 day_paired_lift，n_perm=2000 seed=42），observed lift 须在 null 分布 P95 以上。**null 模型选 within-day survivor resampling 非 date-shuffle**（R7-R8 设计 workflow 调查：filter-edge 锐检验是"随机同大小子集是否优于 observed survivor"，date-shuffle 与 day_paired_lift 去池化重复）。pre-register 冻结此 null 模型。
 - **rolling walk-forward**（T1.2 CRITICAL3：非单 60/40 split）——按时间滚动 train/test（如 train 100 日→test 20 日→前移 20 日→再 train 100→test 20...），避 look-ahead + 提高功效（非单 18 日 test）。train 段**不优化阈值**（用预冻结 6.0），只算 observed+permutation null；test 段验。
 - **Bonferroni K=6-8**（T1.2 HIGH：K=4 低估）——H1-H4 主比较 4 + H3 子比较 2（H3 vs H1, H3 vs H2）+ regime subset re-run 2 = K=8，α_adj=0.05/8=0.00625
 - `bars[:idx+1]` 切片 gotcha（防 consolidation 按最后一根 bar 算错）
