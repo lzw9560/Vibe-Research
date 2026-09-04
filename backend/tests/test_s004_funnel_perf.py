@@ -84,7 +84,7 @@ class TestParallelFunnel(unittest.TestCase):
         cfg = ThresholdConfig(mode="manual")
         result = run_funnel(stage="all", date="2026-08-13", cfg=cfg)
         layer_ids = [l.layer_id for l in result.layers]
-        self.assertEqual(layer_ids, ["R1", "R2", "R3", "SELF"])
+        self.assertEqual(layer_ids, ["R1", "R2", "SELF"])  # S148(b)：R3 层已删（annotate 并入 R2 tradability）
 
     def test_parallel_with_topn_limit(self):
         """top-N 限界 + 并行：120 只 → R2 只采 top-80（mock activity 输入验证）。"""
@@ -169,12 +169,12 @@ class TestPrecomputeExecutor(unittest.TestCase):
 
 
 class TestR3DegradationContract(unittest.TestCase):
-    """S004 R3 降级契约——auction/catalyst 双空时 R3 = R2 输出（非 0）。
+    """S004 R3 降级契约——S148(b) 删 R3 层后的不变量守护。
 
-    固化 funnel.py:390-395 修复：双空场景原 _filter_r3 全过滤致 R3=0 候选，
-    修复后降级保留 R2 输出，标注 data_status="降级"。
-    现有 test_parallel_collects_all_sources 用 auction={}+catalyst={} 但 activity 也空
-    致 R2 output=0，掩盖 R3 全过滤问题；本组用合格 activity 让 R2 output=3 暴露 R3 行为。
+    原 R3 层（auction/catalyst annotate）已在 S148(b) 并入 R2 tradability（funnel.py
+    _filter_tradability + R2 passed backfill matched_triggers）。本组从"R3 = R2 pass-through"
+    改为守护：① R3 层不回归（防误加回）② auction/catalyst 双空或有数据时 final_candidates
+    不丢候选（原契约核心意图：数据缺失不致候选清零）。
     """
 
     def _patch_sources(self, genes, activity, auction, catalyst):
@@ -214,43 +214,32 @@ class TestR3DegradationContract(unittest.TestCase):
         return run_funnel(stage="all", date="2026-08-13", cfg=cfg)
 
     def test_r3_degradation_when_auction_catalyst_both_empty(self):
-        """S084 reframe：R3 不再过滤（竞价/催化下放战法层），auction/catalyst 双空时 R3 = R2 全量。
+        """S148(b) 删 R3 后：auction/catalyst 双空时 final_candidates 不丢候选（原 R3 pass-through 契约核心）。
 
-        S084 前：_filter_r3 双空跳过过滤标 data_status="降级"。
-        S084 后（funnel.py:411-413）：R3 永不过滤，r3_kept=R2 全量，data_status="R3 已下放战法"。
-        原"降级保留"已成默认行为。本测试验 R3 不丢候选（核心契约 1/2/4 仍守）+ 新标签。
+        原 R3 层已删——本测守护：① "R3" 不在 layer_ids（防误加回 R3 层）
+        ② R2 保留全量 ③ final_candidates 含全部 3 只（数据缺失不清零候选）。
         """
         genes = self._three_genes()
         activity = self._three_activity(genes)
         result = self._run(genes, activity, auction={}, catalyst={})
 
         layers_by_id = {l.layer_id: l for l in result.layers}
-        r2, r3 = layers_by_id["R2"], layers_by_id["R3"]
-
+        # 契约 0：R3 层不回归（S148(b) 已删，防误加回）
+        self.assertNotIn("R3", layers_by_id)
+        r2 = layers_by_id["R2"]
         # 前提：R2 确实保留 3 只（否则测试本身失效，掩盖问题未暴露）
         self.assertEqual(r2.output_count, 3, "R2 应保留 3 只（activity 全合格），否则测试场景失效")
         self.assertEqual(sorted(r2.output_codes), ["600001", "600002", "600003"])
-
-        # 契约 1：R3 output_count == R2 output_count（pass-through，非 0）
-        self.assertEqual(r3.output_count, 3)
-        # 契约 2：R3 passed 的 code 集合 == R2 passed 的 code 集合
-        self.assertEqual(
-            sorted(p["code"] for p in r3.passed),
-            sorted(p["code"] for p in r2.passed),
-        )
-        # 契约 3：S084 reframe——data_status="R3 已下放战法"（不再标"降级"）
-        self.assertEqual(r3.data_status, "R3 已下放战法")
-        self.assertIn("下放", r3.data_reason or "")
-        # 契约 4：final_candidates 含全部 3 只（下游自动正确）
+        # 契约：final_candidates 含全部 3 只（auction/catalyst 双空不清零候选）
         final_codes = {c.code for c in result.final_candidates}
         self.assertEqual(final_codes, {"600001", "600002", "600003"})
 
     def test_r3_normal_filter_when_auction_present(self):
-        """S084 reframe：即便 auction 有数据，R3 也不再过滤（竞价过滤下放战法层）。
+        """S148(b) 删 R3 后：auction 有数据时 final_candidates 仍含全量（auction 不再收敛候选）。
 
-        S084 前：auction 有数据 → R3 走 _filter_r3 只保留有 auction_open_pct 的票（1 只）。
-        S084 后：R3 永不过滤，auction 有无都保留 R2 全量。本测试验 reframe 不回退（R3 不因
-        auction 存在而过滤——若未来 R3 过滤回归战法层以外的漏斗层，本测试会先红）。
+        原 R3 层已删——auction 存在不再经漏斗层过滤（下放战法层）。本测守护：
+        ① "R3" 不在 layer_ids ② auction 存在时 final_candidates 仍含全部 3 只
+        （不收缩到仅有 auction_open_pct 的 600001——若未来漏斗层误加回 auction 过滤，本测会先红）。
         """
         genes = self._three_genes()
         activity = self._three_activity(genes)
@@ -258,17 +247,8 @@ class TestR3DegradationContract(unittest.TestCase):
         result = self._run(genes, activity, auction=auction, catalyst={})
 
         layers_by_id = {l.layer_id: l for l in result.layers}
-        r3 = layers_by_id["R3"]
-
-        # 契约 1：R3 output_count == 3（S084 reframe：auction 存在也不过滤，保留 R2 全量）
-        self.assertEqual(r3.output_count, 3)
-        # 契约 2：R3 passed 含全部 3 只（非仅 600001）
-        self.assertEqual(
-            sorted(p["code"] for p in r3.passed), ["600001", "600002", "600003"]
-        )
-        # 契约 3：data_status="R3 已下放战法"（auction 存在同样不下放过滤回漏斗层）
-        self.assertEqual(r3.data_status, "R3 已下放战法")
-        # 契约 4：final_candidates 含全部 3 只（auction 不再收敛候选）
+        self.assertNotIn("R3", layers_by_id)
+        # 契约：final_candidates 含全部 3 只（auction 不再收敛候选）
         self.assertEqual({c.code for c in result.final_candidates}, {"600001", "600002", "600003"})
 
 

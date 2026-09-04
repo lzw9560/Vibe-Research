@@ -10,19 +10,30 @@ scheduled_tasks（R3，复用 catalyst 公告分类 + news_radar 摘帽/扭亏�
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
+
+_logger = logging.getLogger(__name__)
 
 
 def load_st_play_radar() -> dict[str, str]:
-    """加载 ST-play radar 白名单。文件不存在/损坏 → 返空（ST flat 排除，安全降级，不阻断主流程）。"""
+    """加载 ST-play radar 白名单。文件不存在 → 返空（ST flat 排除，安全降级，不阻断主流程）。
+
+    S148 审计修复：原 bare except 零日志——JSON 损坏/权限错/路径异常静默返空 → ST carve-out
+    静默失效无信号。现记 warning（返空仍是安全降级，但留痕供排查）。
+    """
     try:
         from vr_paths import resolve_data_dir  # noqa: PLC0415
         p: Path = resolve_data_dir() / "st_play_radar.json"
         if not p.exists():
             return {}
         data = json.loads(p.read_text(encoding="utf-8"))
-        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
-    except Exception:
+        if not isinstance(data, dict):
+            _logger.warning("st_play_radar.json 非对象（%s），ST flat 降级", type(data).__name__)
+            return {}
+        return {str(k): str(v) for k, v in data.items()}
+    except Exception as exc:  # noqa: BLE001 — 返空是安全降级，但记 warning 留痕
+        _logger.warning("load_st_play_radar 加载失败（ST flat 降级）: %s", exc)
         return {}
 
 

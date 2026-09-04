@@ -415,6 +415,16 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("auction/catalyst 采集失败 %s: %s", date, exc)
+    # S148 审计修复：R2 passed 补齐 trigger 字段——原 R3 层删后 intraday_coach
+    # _build_funnel_index 读 R3 matched_triggers 恒空（coach checklist 静默丢 trigger 标签）。
+    # backfill 进 R2 passed（同 activity backfill 范式），coach 改读 R2（见 intraday_coach.py）。
+    if auction or catalyst:
+        for _p in r2.passed:
+            _c = _p.get("code")
+            _au = auction.get(_c, {}) or {}
+            _p["auction_open_pct"] = _au.get("auction_open_pct")
+            _p["matched_triggers"] = _r3_triggers(_c, auction, catalyst)
+            _p["catalyst_summary"] = _catalyst_summary(_c, catalyst)
 
     # ---- 自选/手动并行 ----
     wl = sources.watchlist_in.get_watchlist_codes()

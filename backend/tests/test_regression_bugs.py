@@ -60,6 +60,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "seal_intraday_collect",
             "candidate_funnel_precompute",
             "first_board_filter",
+            "st_play_radar",  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
             "s066_validation_checkpoint",
             "forward_test_daily",
             "forward_test_t1_settle",

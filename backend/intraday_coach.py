@@ -301,8 +301,12 @@ def _strategy_meta(strategy_name: str | None) -> Any:
 
 
 def _build_funnel_index(date: str) -> dict[str, dict[str, Any]]:
-    """从 funnel 缓存读 R3 passed（matched_triggers 数据源）。
+    """从 funnel 缓存读 R2 passed（matched_triggers 数据源）。
 
+    S148 审计修复：原读 R3 layer，但 S148(b) 删了 R3 层（漏斗重构 R2=tradability 替代
+    原 R2/R3）→ filter 恒 skip → 恒返 {} → coach checklist 静默丢全部 trigger 标签
+    （竞价异动/公告催化/概念联动），即使 funnel 采集了 auction/catalyst。改读 R2
+    （R2 passed 现 backfill matched_triggers/auction_open_pct/catalyst_summary，见 funnel.py）。
     缓存未预热时返空 dict（不触发采集，不臆造）。
     """
     try:
@@ -314,7 +318,7 @@ def _build_funnel_index(date: str) -> dict[str, dict[str, Any]]:
         if not key.startswith(f"{date}|"):
             continue
         for layer in result.layers:
-            if layer.layer_id != "R3":
+            if layer.layer_id != "R2":
                 continue
             for p in layer.passed:
                 code = p.get("code")

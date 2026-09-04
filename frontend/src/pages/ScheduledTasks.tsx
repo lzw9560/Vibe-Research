@@ -170,6 +170,8 @@ export function ScheduledTasks() {
   // ②触发 briefing refresh（/api/workflow/pre-market/refresh）填 selection 页数据——
   // briefing 不读 funnel_cache，须单独采集，否则前端选股页 idle 空白。
   // 仅盘后激活（isPostMarket gate 在按钮层，API 仍开放供调试/管理）。
+  // S148 审计修复：refreshPreMarket 失败返 null 不抛（workflow.ts 约定），原 try/catch
+  // 是死代码→briefingTriggered 恒 true→后端 5xx 也报绿"已触发"。改判返回值；全失败报红/黄。
   const handleRerunSelection = async () => {
     const ids = SELECTION_TASK_TYPES
       .map((tt) => taskList.find((t) => t.task_type === tt)?.id)
@@ -180,23 +182,33 @@ export function ScheduledTasks() {
       try {
         await runScheduledTaskNow(id);
         taskOk += 1;
-      } catch {
-        // 单个失败不阻断其余
+      } catch (err) {
+        // 单个失败不阻断其余，但记日志（原空 catch 静默吞）
+        console.error("[重跑选股] task", id, "触发失败", err);
       }
     }
-    // 触发 briefing 采集（async，返 running；前端轮询 usePreMarketBriefing 见 done）
+    // 触发 briefing 采集——判返回值而非 try/catch（refreshPreMarket 返 null 不抛）
     let briefingTriggered = false;
     try {
-      await refreshPreMarket();
-      briefingTriggered = true;
-    } catch {
-      // briefing refresh 失败不阻断（funnel_cache 已预热）
+      const resp = await refreshPreMarket();
+      briefingTriggered = resp != null;
+      if (resp == null) {
+        console.error("[重跑选股] briefing refresh 返 null（API 失败/网络断）");
+      }
+    } catch (err) {
+      // 防御：refreshPreMarket 约定不抛，但 client 层抛了也接住
+      console.error("[重跑选股] briefing refresh 异常", err);
     }
     await refetchTasks();
     setRerunning(false);
-    toast.success(
-      `选股重跑：${taskOk}/${ids.length} task${briefingTriggered ? " + briefing 采集已触发" : ""}`,
-    );
+    // 诚实 toast：全失败不报绿（原 toast.success 在 taskOk=0 时仍报绿）
+    if (taskOk === 0 && !briefingTriggered) {
+      toast.error("选股重跑全失败：0 task 触发 + briefing 未触发（查后端/网络）");
+    } else if (taskOk < ids.length || !briefingTriggered) {
+      toast.warning(`选股重跑部分失败：${taskOk}/${ids.length} task${briefingTriggered ? " + briefing 已触发" : "（briefing 未触发）"}`);
+    } else {
+      toast.success(`选股重跑：${taskOk}/${ids.length} task + briefing 采集已触发`);
+    }
   };
 
   const toggleExpand = (taskId: number) => {

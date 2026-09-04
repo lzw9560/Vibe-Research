@@ -76,7 +76,7 @@ export function StrategySubPipelineView({ scoredCandidates = [], marketScanScore
   const candidates = lane === "limitup" ? scoredCandidates : marketScanScored;
   const evalTotal = scoredTotal ?? candidates.length;
   const subtitle = lane === "limitup"
-    ? `战法评估 ${evalTotal} 只 · 7 战法分组 · §44 已验证`
+    ? `战法评估 ${evalTotal} 只 · 7 战法分组 · §44 无 validated edge`
     : `战法评估 ${evalTotal} 只 · 5 战法分组 · §44 未验证`;
   const byCode = groupByStrategyCode(candidates);
   const totalHits = candidates.length;

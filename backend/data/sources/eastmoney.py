@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-"""S008 东财源（em_get 系 + 直 requests 研报/公告/热门概念）。
+"""S008 东财源（em_get 系；研报/热门概念走直 requests 待统一）。
 
 从 ``astock.py`` 迁出。取数逻辑一字不改，仅换文件组织。
 
 **防封底线（CLAUDE.md §1.2）**：东财 push2/push2ex/push2his/datacenter 端点全部走
 ``data.transport.eastmoney_get``（限流 QPS≤2 + 熔断 + 直连/代理探测），**不裸调 requests**。
-仅 reportapi（研报）/ np-anotice（公告）/ emappdata（热门概念）走直 requests——
-这些是原 astock 的非封 IP 域，保留；如需收紧另开任务。
+仅 reportapi（研报）/ emappdata（热门概念）走直 requests（待统一 em_get）；
+np-anotice（公告）已迁 em_get——S148 审计：st_play_radar/first_board_filter 遍历
+ST/首板候选每日数百次裸调 → §3 防封底线违规，公告不再例外（原"非封 IP 域"假设被放大证伪）。
 
 公开函数（``astock`` 门面同名 re-export，返回 raw dict 不变）：
 - em_get 系：``em_zt_topic_pool``、``market_turnover_rank``、``eastmoney_datacenter``
@@ -111,10 +112,14 @@ def pdf_url(info_code: str) -> str:
 
 
 def announcements(code: str, limit: int = 15) -> list[dict]:
-    """个股近期公告（东财公开接口，仅 requests，稳定）。返回 日期/标题/类型/详情链接。"""
-    import requests
+    """个股近期公告（东财 np-anotice，走 em_get 限流/熔断/代理探测防封）。返回 日期/标题/类型/详情链接。
 
-    r = requests.get(
+    S148 审计修复：原裸 ``import requests; requests.get`` 绕过 em_get——st_play_radar
+    遍历 ~325 ST 股 + first_board_filter score_dim9_event 遍历 ~52 首板候选，每日定时
+    数百次裸调东财 → §3/§1.2 防封底线违规（封 IP 波及涨停池/龙虎榜/行情全链）。改走
+    em_get（本模块 line 33 已 import）：0.3s/次串行限流 + 5 失败熔断 + 直连/代理探测。
+    """
+    r = em_get(
         "https://np-anotice-stock.eastmoney.com/api/security/ann",
         params={"sr": -1, "page_size": limit, "page_index": 1, "ann_type": "A",
                 "client_source": "web", "stock_list": code, "f_node": 0, "s_node": 0},

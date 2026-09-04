@@ -1001,8 +1001,8 @@ class TaskExecutor:
                 from routers.workflow import trigger_collect  # noqa: PLC0415
                 triggered = trigger_collect(target)
                 logger.info(
-                    "[candidate_funnel_precompute] briefing _collect 触发%s（target=%s）",
-                    "成功" if triggered else "跳过（主 loop 未设/已在跑）", target,
+                    "[candidate_funnel_precompute] briefing _collect %s（target=%s；实际采集由 dedup status=running 决定）",
+                    "已调度到主 loop" if triggered else "跳过（主 loop 未设/已关）", target,
                 )
             except Exception as exc:  # noqa: BLE001 — briefing 触发失败不阻断 precompute 主流程
                 logger.warning("[candidate_funnel_precompute] briefing _collect 触发失败: %s", exc)

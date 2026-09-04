@@ -75,6 +75,10 @@ def classify_tradability(
     board = classify_board(code)
     if board in ("创业板", "科创板", "北交所"):
         return False, f"{board} 不可交易（无权限）", None
+    # 名称缺失 → 无法判定 ST（ST 靠名称子串），fail-closed 排除（S148 审计：原空 name
+    # 走 classify_exclusion 返 (False,None) → keep=True 泄漏 ST 股为可交易，unsafe direction）。
+    if not name or not name.strip():
+        return False, "名称缺失，无法判定 ST/可交易性（fail-closed）", None
     # 沿用 classify_exclusion 的 ST/退市/新股 客观分类
     excluded, reason = classify_exclusion(name, code)
     if not excluded:

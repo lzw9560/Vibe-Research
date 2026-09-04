@@ -39,12 +39,12 @@
 | 文件 | 改动 |
 |---|---|
 | `backend/candidate_funnel/sources/_filters.py` | 新增 `classify_board` + `classify_tradability`；`classify_exclusion` 保留（radar 复用） |
-| `backend/candidate_funnel/funnel.py` | `_filter_r1`（:79-89）改用 `classify_tradability`；`run_funnel`/`_run_funnel_impl` 透传 radar_set |
+| `backend/candidate_funnel/funnel.py` | `_filter_r1` → `_filter_tradability`（改用 `classify_tradability`）；`_run_funnel_impl` 内部 `load_st_play_radar()` 加载 radar（非透传） |
 | `backend/strategies/market_scan.py` / `non_limitup_funnel.py` | 候选产出接 `classify_tradability`（impl 时 grep 确认具体注入点） |
 | `backend/candidate_funnel/sources/catalyst.py` | `_ANN_KEYWORDS` 补摘帽关键词 |
 | `backend/strategies/news_radar_context.py` | 摘帽/扭亏扫描接线产出 radar 白名单（impl 时确认 :195 上下文产出形态） |
 | `backend/scheduled_tasks.py` | 新增日级 ST-play radar task（盘后） |
-| `backend/routers/workflow.py` | `_collect` 加载 radar 白名单传给 `run_funnel` |
+| `backend/routers/workflow.py` | （S148 radar 无改动：radar 由 `funnel.py` 内部 `load_st_play_radar()` 加载，非 `_collect` 传入。briefing `trigger_collect` 属 97b8ccb 非 S148） |
 | `backend/strategies/first_board_filter.py` | (Phase2) `rank_candidates` 改吃外部候选输入；9 维分描述性 + 标签 |
 | `frontend/src/components/candidate/*` | `st_play` 标 + 诚实标签（impl 时确认具体组件 DiagnosisCard/FunnelLayers） |
 
@@ -64,7 +64,7 @@
 - else → (保留, None, None)
 - 停牌：不在此函数（descope；盘中自行跳过）
 
-**ST-play radar（日级盘后）**：扫 ST 股池（从 zt_pool/gene_scores 取 name 含 ST 的 ~150-200 只）→ `astock.announcements`（em_get 限流 + circuit_breaker）公告分类 + `news_radar_context` 摘帽/扭亏 → 白名单 `{code: play_type}` 存 `VR_DATA_DIR/st_play_radar.json`。失败降级空白名单（ST 全 flat 排除，不崩，不阻断主流程）。
+**ST-play radar（日级盘后）**：扫 ST 股池（从 `code_industry` 取 name 含 ST 的 ~325 只）→ `astock.announcements`（走 em_get 限流/熔断/代理探测，S148 审计修：原裸 requests 已改）公告分类 + `news_radar_context` 摘帽/扭亏 → 白名单 `{code: play_type}` 存 `VR_DATA_DIR/st_play_radar.json`。失败降级空白名单（ST 全 flat 排除，不崩，不阻断主流程）。
 
 **为何不选其他**：
 - 不在 R1 之外加执行层 gate（停牌 descope 后无需；过滤全在 R1 建池时，架构干净）

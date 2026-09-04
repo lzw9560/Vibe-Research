@@ -39,8 +39,12 @@ from market import _emotion  # noqa: E402  私有函数，任务要求；后续�
 
 _logger = logging.getLogger(__name__)
 
-# 9 维度评分落盘目录（与 vr_paths 对齐，但本模块独立不依赖 vr_paths）
-_SCORES_DIR = Path.home() / ".vibe-research"
+# 9 维度评分落盘目录——走 vr_paths.resolve_data_dir（§1.2 私有数据隔离：只落 VR_DATA_DIR，不进 home）。
+# S148 审计修复：原硬编码 Path.home()/".vibe-research" 违反隔离底线（数据落错地方，home 的 .vibe-research 是红鲱鱼）。
+from vr_paths import resolve_data_dir  # noqa: PLC0415
+_SCORES_DIR = resolve_data_dir()
+# legacy 读 fallback：旧快照曾误落 home 目录，load/list 双查保历史不丢（save 只写新址）。
+_SCORES_DIR_LEGACY = Path.home() / ".vibe-research"
 
 # 沪深300 涨跌幅模块级缓存（date → pct%），避免 _market_drop_pct 重复 baostock login。
 # baostock 查历史指数不入 kline_cache（缓存只含个股），故用 baostock 库实时查历史。
@@ -1521,7 +1525,10 @@ def load_scores(date: str) -> dict | None:
     compact = date.replace("-", "") if "-" in date else date
     path = _SCORES_DIR / f"first_board_scores_{compact}.json"
     if not path.exists():
-        return None
+        # legacy fallback：旧快照曾误落 home 目录，新址缺则查旧址（保历史不丢）
+        path = _SCORES_DIR_LEGACY / f"first_board_scores_{compact}.json"
+        if not path.exists():
+            return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as e:
@@ -1547,14 +1554,18 @@ def list_score_dates() -> list[str]:
     扫描 _SCORES_DIR 下的 first_board_scores_YYYYMMDD.json 文件，
     返回日期字符串列表（最近的在前）。目录不存在/无文件 → []。
     """
-    if not _SCORES_DIR.exists():
-        return []
     dates: list[str] = []
-    for p in _SCORES_DIR.glob("first_board_scores_*.json"):
-        # 文件名 first_board_scores_20260818.json → stem first_board_scores_20260818
-        stem = p.stem.replace("first_board_scores_", "")
-        if stem.isdigit() and len(stem) == 8:
-            dates.append(stem)
+    seen: set[str] = set()
+    # 双查新址 + legacy 旧址，去重（旧快照曾误落 home 目录）
+    for _dir in (_SCORES_DIR, _SCORES_DIR_LEGACY):
+        if not _dir.exists():
+            continue
+        for p in _dir.glob("first_board_scores_*.json"):
+            # 文件名 first_board_scores_20260818.json → stem first_board_scores_20260818
+            stem = p.stem.replace("first_board_scores_", "")
+            if stem.isdigit() and len(stem) == 8 and stem not in seen:
+                seen.add(stem)
+                dates.append(stem)
     dates.sort(reverse=True)
     return dates
 

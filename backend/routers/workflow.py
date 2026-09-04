@@ -85,11 +85,22 @@ def trigger_collect(target_date: str) -> bool:
 
     candidate_funnel_precompute 写 funnel_cache 但 briefing 端点不读它——须 _collect
     采集才让选股页显数据。本函数让 precompute 末尾顺手触发 _collect（主 loop 后台跑）。
-    返 True=已调度到主 loop，False=主 loop 未设（startup 前调）。
+    返 True=已调度到主 loop（实际采集是否启动由 _trigger_collect_main dedup status=running 决定），
+    False=主 loop 未设/已关（startup 前或 shutdown 期调）。
+
+    S148 审计修复：原只查 None 不查 is_closed()——shutdown 期 call_soon_threadsafe 抛
+    RuntimeError（被 precompute catch，但 API 不一致）；且返 True 时 _trigger_collect_main
+    可能因 status=running 跳过 → 调用方 log 误报"触发成功"。现加 is_closed 检查 + call_soon
+    竞态兜底 + 返值语义诚实化（True=已调度，非=已启动采集）。
     """
-    if _MAIN_LOOP is None:
+    if _MAIN_LOOP is None or _MAIN_LOOP.is_closed():
         return False
-    _MAIN_LOOP.call_soon_threadsafe(_trigger_collect_main, target_date)
+    try:
+        _MAIN_LOOP.call_soon_threadsafe(_trigger_collect_main, target_date)
+    except RuntimeError as exc:
+        # loop 在 is_closed 检查后关闭（shutdown 竞态）——记日志返 False，不抛
+        logger.warning("trigger_collect call_soon_threadsafe 失败（loop 关闭?）: %s", exc)
+        return False
     return True
 
 # ============ S048 R4：盘前快照持久化（历史不可变，纯读盘零请求） ============

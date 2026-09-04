@@ -1,4 +1,4 @@
-// S146: 选股 pipeline 流——2 并行列（涨停叉 ‖ 非涨停叉）+ ④ 涨停叉内交叉验证。
+// S146: 选股 pipeline 流——2 并行列（涨停叉 ‖ 非涨停叉）。④ 涨停叉内 CV 已删（§44 无 edge，见 line 4）。
 // 取代 PipelineTopology 的 echarts graph。breakout 降级 2 级导航研究（§44 naive lift=1.36x <2x，4 方向特征里最弱，
 // 非可信 standalone edge，移 SelectionStageView 2 级导航研究 tab）。
 // 交叉验证（原 ④叉内 CV: finals∩scored）已删——两 <2x 弱信号交集无 validated edge（§44），且 scored⊆finals 非真双路。
@@ -55,7 +55,7 @@ function PipelineStep({
 }
 
 
-/** 选股 pipeline 流（2 并行列 + ④ 涨停叉内 CV；breakout 移 2 级导航研究）。 */
+/** 选股 pipeline 流（2 并行列；breakout 移 2 级导航研究；④ 涨停叉内 CV 已删，见上 line 4）。 */
 export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
   const navigate = useNavigate();
   const scored = briefing?.scored_candidates ?? [];

@@ -208,7 +208,7 @@ class FilterRecord(BaseModel):
 class FunnelLayer(BaseModel):
     """漏斗单层：输入/输出/被过滤原因（AC1 每层可检视）。"""
 
-    layer_id: str  # R1/R2/R3/SELF
+    layer_id: str  # R1/R2/SELF（S148(b) 删 R3，R2=tradability 替代原 R2/R3）
     name: str
     as_of: datetime
     input_count: int

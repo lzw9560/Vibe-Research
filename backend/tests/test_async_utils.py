@@ -48,3 +48,25 @@ def test_run_coro_sync_propagates_exception():
 
     with pytest.raises(ValueError, match="boom"):
         run_coro_sync(_boom())
+
+
+def test_run_coro_sync_thread_fallback_propagates_exception():
+    """thread-fallback 路径（async 上下文）异常也须传播，不被 ThreadPoolExecutor 吞。
+
+    S148 审计补测：run_coro_sync 在有 running loop 时走 ThreadPoolExecutor.submit(
+    asyncio.run).result()——.result() 重抛子线程异常。原 exception 测只在 sync 上下文
+    （直 asyncio.run 路径），未覆盖 thread-fallback；若有人误包 try 吞 .result() 异常，
+    原测不报。本测在 async caller 内抛，锁住 thread-fallback 异常传播。
+    """
+    import asyncio
+
+    async def _boom():
+        raise ValueError("boom-thread")
+
+    async def _caller_inside_running_loop():
+        # running loop 存在 → run_coro_sync 走线程兜底；_boom 在子线程抛 ValueError
+        return run_coro_sync(_boom())
+
+    # 外层 asyncio.run 建 loop；_caller 在其内执行；thread-fallback 的 .result() 须重抛
+    with pytest.raises(ValueError, match="boom-thread"):
+        asyncio.run(_caller_inside_running_loop())
