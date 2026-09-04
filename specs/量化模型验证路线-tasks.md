@@ -36,8 +36,8 @@
 | T1.11 | R8 low_absorption_c3_lift.py | T1.8,T1.9 | harness 跑通 | ⬜ |
 | T1.12 | R9 预注册冻结（**spec git commit hash 锁定**，train 不优化阈值） | T1.10,T1.11 | commit hash 锁 | ⬜ |
 | T1.13 | R10 测试（C3 + 4-tuple + max_high line336 + guard） | T1.4-1.8 | pytest 绿 | ⬜ |
-| T1.14 | 跑验证（day_paired_lift + permutation + rolling walk-forward + Bonferroni K=6-8） | T1.12,T1.13 | lift+p+verdict | ⬜ |
-| T1.15 | 诚实标注结果 | T1.14 | 如实报告 | ⬜ |
+| T1.14 | 跑验证（day_paired_lift + permutation + rolling walk-forward + Bonferroni K=6-8） | ✅done — H1-H4 全无 edge（H1 0.9606劣于随机/H2 1.0791/H3 1.2177/H4 1.0015，p全远α_adj） | done |
+| T1.15 | 诚实标注结果 | ✅done — 不事后调参，matrix 落档 .scratch/s153-*/matrix.json | done |
 
 ---
 

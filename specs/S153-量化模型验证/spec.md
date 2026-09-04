@@ -122,3 +122,20 @@
 **纠正**：filter≠edge 非数学定理（独立 lift 可乘积>2x），是经验观察——不数学判死 H1-H4 交互，但仍需预注册验证。
 
 **solo 审 6 疑点**：5 真 1 伪（见 §5）。
+
+## 11. 阶段1 跑完结果（2026-09-05，诚实标注不调参）
+
+预注册冻结 commit 74295b9 跑完 H1-H4，**全无样本外 edge**：
+
+| 假设 | lift | n | p | verdict | sig |
+|---|---|---|---|---|---|
+| H1 紧度（amplitude≤6.0） | 0.9606 | 414 | 0.6195 | **劣于随机** | False |
+| H2 D+1收盘确认 | 1.0791 | 946 | 0.1585 | 未validated | False |
+| H3 紧度+确认双过滤 | 1.2177 | 118 | 0.0990 | 未validated | False |
+| H4 C3缩量（vol_brk<1.0） | 1.0015 | 92308 | 0.3890 | 未validated（≈随机） | False |
+
+- α_adj=0.00625（Bonferroni K=8），H1-H4 p 全远不显著
+- H1 紧度**劣于随机**（lift<1，紧平台子集比 raw 还差）；H4 缩量≈随机（lift=1.0015）；H2/H3 弱正（>1）但未过 Bonferroni
+- **结论**：platform_breakout + low_absorption 的 C3 交互假设在现有 T-1 日线数据上无样本外 edge。和 §44 verdict + 12 战法 workflow 一致——选股维度（含交互）无 edge
+- **不事后调参**（预注册冻结 74295b9，跑数据后不改阈值/params/null 模型凑显著）。matrix 落档 `.scratch/s153-{platform-breakout,low-absorption-c3}-lift/matrix.json`
+- **转阶段2**：盘中数据满 30 天后跑 first_plate H2 质量门（封板时间×开板次数，唯一未证伪维度）+ weak_turn_strong/reverse_package/end_of_day_sneak 盘中交互
