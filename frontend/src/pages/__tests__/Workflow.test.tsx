@@ -1,5 +1,5 @@
-// S093 T14：适配前瞻 Tab 重构——ForwardTabSection 调 usePreMarketBriefing + useCrossValidationGroups
-// + 新组件 imports（CandidateFunnelEmbed/CrossValidationBadge/P2RiskPanel/WeatherDecisionBar/T1Tab/ContextTab/FactorSection）。
+// S093 T14：适配前瞻 Tab 重构——ForwardTabSection 调 usePreMarketBriefing（交叉验证已删：§44 无 validated edge）
+// + 新组件 imports（CandidateFunnelEmbed/P2RiskPanel/WeatherDecisionBar/T1Tab/ContextTab/FactorSection）。
 // mock @/lib/query（useDateTriplet/usePreMarketRefresh/usePreMarketBriefing）、@/lib/useMarketClock、
 // @/components/workflow/TaskStatusCard + 三个视图组件（避免 lazy import 复杂度）。
 // MemoryRouter 驱动 useSearchParams（?view= + ?date=）。

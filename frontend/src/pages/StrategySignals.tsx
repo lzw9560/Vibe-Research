@@ -23,8 +23,9 @@ interface StrategySignalItem {
   take_profit_condition: string;
   max_hold_days: number;
   exit_condition: string;
-  historical_win_rate: number;
-  historical_avg_return: number;
+  confidence_mapped_winrate: number;
+  mapped_avg_return: number;
+  winrate_source: string;
   sample_size: number;
   risk_reward_ratio: number;
   reasoning: string[];

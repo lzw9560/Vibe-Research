@@ -17,8 +17,8 @@ interface Props {
   weatherRecommended?: Set<string>;
 }
 
-/** S031 R22：战法胜率对比——左列真实回测（R20）/ 右列合成 historical_win_rate（标注"估算"）。
- * 合成公式 min(confidence_value*0.8+0.2, 0.95)（limitup_strategy.py:685），按战法取均值，
+/** S031 R22：战法胜率对比——左列真实回测（R20）/ 右列合成 confidence_mapped_winrate（标注"估算"）。
+ * 合成公式 min(confidence_value*0.8+0.2, 0.95)（strategy_base.py dispatch_match），按战法取均值，
  * 与真实回测并列对比，让用户看清合成 vs 真实差异。
  * S049 D8：战法行可展开——当日命中（l2Passed 按 best_strategy 分组，限未持仓态=建仓语义）。
  * grill Q7：weatherRecommended 传入时，战法行名后挂绿色「推荐」徽标（所有战法仍可用）。 */

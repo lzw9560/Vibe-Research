@@ -24,7 +24,7 @@ export function useStrategyBacktest(lookback_days = 60, options?: Opts<StrategyB
   });
 }
 
-/** 合成 historical_win_rate 公式（limitup_strategy.py:685）：min(confidence*0.8+0.2, 0.95)。
+/** 合成 confidence_mapped_winrate 公式（strategy_base.py dispatch_match）：min(confidence*0.8+0.2, 0.95)。
  * 供 WinRateComparePanel 右列重算（标注"估算"），与真实回测对比。 */
 export function syntheticWinRate(confidence: number): number {
   return Math.min(confidence * 0.8 + 0.2, 0.95);
