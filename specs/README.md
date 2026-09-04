@@ -28,7 +28,7 @@ specs/
 
 ## 编号
 
-`SNNN` 三位递增。下一个新 spec 用 S103。
+`SNNN` 三位递增。下一个新 spec 用 S152。
 
 > 历史里程碑索引见 [`MILESTONES.md`](MILESTONES.md)。已完成的 M0-M3 归档在 `archive/`。
 
@@ -133,6 +133,10 @@ specs/
 | [S100](archive/m7-战法卡片对齐/S100-战法卡片对齐/spec.md) | 战法卡片对齐 match 条件（S097 收尾 + fa4514e 阈值同步） | ✅已实现 2026-08-27 | spec | 12 卡片 + docstring + S097§5.2 + registry entry_condition + 一致性测试；fa4514e 残局顺手修；2281 passed |
 | [S101](archive/m7-战法卡片对齐/S101-飞书多点通知/spec.md) | 飞书多点通知（T-1 选股 / 9:25 竞价 / 9:35 开盘 / T+1 复盘） | ✅已实现 2026-08-27 | spec | T-1 cron 17:15 + final=0 guard + 3 新 executor + 内容函数 + seed；2295 passed（medium） |
 | [S102](S102-战法卡片历史战绩/spec.md) | 战法卡片运行时拼接历史战绩段 | 🟡草案 2026-08-29 | spec | S100 延伸；strategy_backtest 12h 缓存拼接进卡片；§44 口径 |
+| [S149](S149-vibe-astock语义吸收/spec.md) | vibe-astock 语义吸收（4 阶段框架 spec） | 🟡草案 2026-09-04 | spec | fork 回流选择性吸收；Phase 0 审计→P4 试点→P2 冲突审查→P3 边界测试→P1 视需求；Oracle 审查 1 轮 + grill 1 轮（8 🔴 已修） |
+| [S150](S150-盘中采集堵塞修复/spec.md) | 盘中采集 stale-run 堵塞修复 | ✅已实现 2026-09-04 | spec · [路线plan](量化模型验证路线.md) | R1 timeout+R2 reaper 防 collect_once 挂死堵 dedup（根因 B）；6 unit test + 2676 回归绿；审查 workflow 在跑；:8900 重启待用户 |
+| [S151](S151-漏斗评价层/spec.md) | 漏斗评价层（预登记+降权梯度+回溯+诚实标注+即时处理） | 🟡草案 2026-09-04 | spec | DIMENSION_LIFT_REGISTRY+lift_to_multiplier+_apply_evaluation_layer（funnel.py:466）；复用 judge_lift_four_states/PASS_LIFT_FLOOR；§F breakout ×0.5 vs ×0.1 待用户拍板 |
+| [S153](S153-量化模型验证/spec.md) | 量化模型验证（platform_breakout+low_absorption 预注册交互假设） | 🟡草案 2026-09-04 | spec | H1-H4 预注册+R1-R10+harness（walk-forward+day-cluster置换+Bonferroni）；solo审6疑点待 T1.2 审查 workflow；日线可得不卡 intraday |
 
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 

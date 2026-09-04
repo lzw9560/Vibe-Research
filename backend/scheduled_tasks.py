@@ -12,6 +12,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("vibe-research")
@@ -277,6 +278,39 @@ class ScheduledTaskManager:
         finally:
             conn.close()
 
+    def reap_stale_running(self, stale_seconds: int) -> List[int]:
+        """S150 R2：reap 挂死的 stale running run——started_at 早于 now-stale_seconds 的
+        running run 标 failed，返被 reap 的 task_id 列表（供 CronScheduler.discard 去堵）。
+
+        根因 B 真修：collect_once 挂死致 run 永驻 running + _running_task_ids 堵 dedup，
+        即使 R1 timeout 兜底（双保险），reaper 每轮清 DB stale + 返 task_id 让调度器 discard。
+        """
+        from datetime import datetime as _dt, timedelta
+        cutoff = (_dt.now() - timedelta(seconds=stale_seconds)).isoformat()
+        conn = _get_connection()
+        try:
+            stale = conn.execute(
+                "SELECT id, task_id FROM scheduled_task_runs "
+                "WHERE status = 'running' AND started_at < ?",
+                (cutoff,),
+            ).fetchall()
+            if not stale:
+                return []
+            reaped_task_ids: List[int] = []
+            for row in stale:
+                conn.execute(
+                    "UPDATE scheduled_task_runs SET status = 'failed', "
+                    "finished_at = ?, error = ? WHERE id = ?",
+                    (_dt.now().isoformat(),
+                     f"reaped stale (>{stale_seconds}s, S150 R2)", row["id"]),
+                )
+                if row["task_id"] is not None:
+                    reaped_task_ids.append(int(row["task_id"]))
+            conn.commit()
+            return reaped_task_ids
+        finally:
+            conn.close()
+
     def update_task_status(self, task_id: int, status: Optional[str], last_run_at: Optional[str] = None) -> None:
         conn = _get_connection()
         try:
@@ -432,6 +466,26 @@ def get_backtest_snapshots(days: int = 90) -> List[Dict[str, Any]]:
         conn.close()
 
 
+# S150 R1：per-task_type 超时（秒），防 collect_once 挂死永堵（fork 根因 B：em_get
+# 网络挂顿→collect_once 永挂→_running_task_ids 堵 dedup→task 永不触发）。
+# seal collect 应 <60s（交易时段每分钟跑），120s 兜底；limitup_precompute 内部
+# asyncio.run(wait_for 600s)（line 652），外层 700s 双保险；默认 300s。
+_TASK_TIMEOUTS: Dict[str, int] = {
+    "seal_intraday_collect": 120,
+    "limitup_precompute": 700,
+    "kline_refresh": 1200,  # S150 审查 HIGH2: 全A~5540股 baostock 稳态>300s, 加显式高值防误杀（当日 bar 缺失回归）
+}
+_DEFAULT_TASK_TIMEOUT = 300
+
+# S150 R2：stale run reaper 阈值（秒）——超此的 running run 视为挂死，reap 为 failed
+_REAPER_STALE_SECONDS = 1300  # > max(_TASK_TIMEOUTS)=1200(kline_refresh) + buffer
+
+
+def _task_timeout(task: "ScheduledTask") -> int:
+    """S150 R1：按 task_type 返回超时秒数。"""
+    return _TASK_TIMEOUTS.get(task.task_type, _DEFAULT_TASK_TIMEOUT)
+
+
 class TaskExecutor:
     """内置任务执行器。"""
 
@@ -463,6 +517,9 @@ class TaskExecutor:
             "premarket_t1_review": self._execute_premarket_t1_review,  # S101：T+1 复盘通知
             "st_play_radar": self._execute_st_play_radar,  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
         }
+        # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
+        # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
+        self._thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="scheduler")
 
     def execute(self, task: ScheduledTask) -> TaskRun:
         run = TaskRun(task_id=task.id or 0, status="running")
@@ -525,9 +582,16 @@ class TaskExecutor:
 
         try:
             if inspect.iscoroutinefunction(handler):  # py3.16: asyncio.iscoroutinefunction 已移除，用 inspect
-                result = await handler(task.payload)
+                result = await asyncio.wait_for(handler(task.payload), timeout=_task_timeout(task))
             else:
-                result = await asyncio.to_thread(handler, task.payload)
+                # S150 R1 + 审查 HIGH1 根治：同步 handler 走调度器独占 _thread_pool
+                #（run_in_executor 替代 asyncio.to_thread），隔离泄漏——调度器线程全挂
+                # 也不影响路由器默认池。wait_for 超时仍 cancel future（底层线程不可取消，
+                # 但独占池爆炸半径限在调度器，不冻 API；HIGH3 重复写库另由 subprocess/async 根治）。
+                result = await asyncio.wait_for(
+                    asyncio.get_running_loop().run_in_executor(self._thread_pool, handler, task.payload),
+                    timeout=_task_timeout(task),
+                )
             run.status = "success"
             run.result = result
             run.finished_at = datetime.now().isoformat()
@@ -542,7 +606,11 @@ class TaskExecutor:
         except Exception as e:
             logger.exception("[scheduled_task] 任务执行失败: %s", e)
             run.status = "failed"
-            run.error = str(e)
+            # S150 R1：TimeoutError 标明确（str(asyncio.TimeoutError) 为空）
+            if isinstance(e, asyncio.TimeoutError):
+                run.error = f"timeout ({_task_timeout(task)}s, S150 R1)"
+            else:
+                run.error = str(e)
             run.finished_at = datetime.now().isoformat()
             _manager.update_run(run)
             _manager.update_task_status(task.id or 0, "failed", started_at)
@@ -2174,7 +2242,10 @@ class CronScheduler:
         """
         if self._running:
             return
-        # R4 重启恢复：DB 残留 running 行的任务加入去重集合，防重启后重放
+        # R4 重启恢复：DB 残留 running 行的任务加入去重集合，防重启后重放。
+        # S150 R2：重建前先 reap stale running（>800s 挂死），避免把挂死 run 重新加回
+        # _running_task_ids 致重启也救不了（fork 根因 B：line 2180 重建回 stale）。
+        self._reap_stale_runs()
         for t in _manager.list_tasks():
             if t.id is not None and _manager.count_running(t.id) > 0:
                 self._running_task_ids.add(t.id)
@@ -2212,6 +2283,9 @@ class CronScheduler:
         # R9：统一 BEIJING_TZ——now 带时区，cron 命中按北京时间比较（懒导入避免模块级重依赖）
         from limitup_screener import BEIJING_TZ
         now = datetime.now(BEIJING_TZ)
+        # S150 R2：每轮 reap stale running run（>800s 视挂死）→ DB 标 failed + discard
+        # _running_task_ids，防 collect_once 挂死堵 dedup（根因 B 真修，与 R1 timeout 双保险）
+        self._reap_stale_runs()
         tasks = [t for t in _manager.list_tasks() if t.enabled]
         for task in tasks:
             # R4：cron 命中且未在执行中的任务才触发，避免同一任务并发重复执行
@@ -2232,6 +2306,21 @@ class CronScheduler:
     def _should_run(self, task: ScheduledTask, now: datetime) -> bool:
         """cron 匹配：委托模块级纯函数 cron_match。"""
         return cron_match(task.cron_expr, now)
+
+    def _reap_stale_runs(self) -> None:
+        """S150 R2：reap stale running run → discard _running_task_ids（去堵 dedup）。
+
+        每轮 _tick + start 重建前调，清 DB stale（>800s 挂死）→ 返 task_id 列表 →
+        从 _running_task_ids discard，让被堵 task 能再触发（根因 B 真修）。
+        """
+        try:
+            reaped = _manager.reap_stale_running(_REAPER_STALE_SECONDS)
+            for task_id in reaped:
+                self._running_task_ids.discard(task_id)
+            if reaped:
+                logger.info("[scheduler] reap stale runs (task_ids): %s", reaped)
+        except Exception as e:  # noqa: BLE001 — reap 失败不阻断 tick
+            logger.warning("[scheduler] reap stale runs 失败: %s", e)
 
 
 _scheduler: Optional[CronScheduler] = None
