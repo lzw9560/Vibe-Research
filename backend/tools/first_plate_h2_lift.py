@@ -33,7 +33,8 @@ from tools.first_board_layer_lift import day_paired_lift, four_state  # noqa: E4
 EARLY_LOCK_CUTOFF = "100000000"   # 早封板 = first_lock time <= 10:00
 LATE_LOCK_CUTOFF = "140000000"     # 晚封板（尾盘）= first_lock time > 14:00（end_of_day_sneak）
 HIGH_DROP_PCT = 3.0               # 大回撤阈值（max_drop_pct > 3%）
-ALPHA_ADJ = 0.05 / 5              # Bonferroni K=5（早封板/一字板/开板/晚封板/大回撤）
+AUCTION_HIGH_PCT = 0.03            # 竞价高开阈值（fraction > 3%，auction_open_pct 存 fraction）
+ALPHA_ADJ = 0.05 / 6              # Bonferroni K=6（早封板/一字板/开板/晚封板/大回撤/晚封×竞价高开）
 N_PERM = 2000
 PERM_SEED = 42
 BAOSTOCK_SLEEP = 0.1             # baostock fetch 礼貌间隔（非防封必需）
@@ -86,8 +87,9 @@ def fetch_5min_bars(code: str, date: str, days: int = 1) -> list[dict]:
     return bars
 
 
-def compute_h2_features(today_bars: list[dict], next_bars: list[dict]) -> dict | None:
-    """R3：5min bars → H2 特征 + next_day_return。
+def compute_h2_features(today_bars: list[dict], next_bars: list[dict],
+                         prev_close: float | None = None) -> dict | None:
+    """R3：5min bars → H2 特征 + next_day_return + auction_open_pct。
 
     涨停价 = max(close) 当日（涨停股必触涨停价）。
     first_lock_time = 首 bar close>=涨停价 的 time。
@@ -95,6 +97,9 @@ def compute_h2_features(today_bars: list[dict], next_bars: list[dict]) -> dict |
     broken_duration_min = open_count × 5。
     is_one_word = first_lock 为首 bar（09:35）且 open_count==0。
     next_day_return = (次日 close - 次日 open) / 次日 open（T+0 intraday 基线，对齐 S144 o2c）。
+    auction_open_pct = (今日 open - 前日 close) / 前日 close × 100（集合竞价高开幅度；
+        今日 open = today_bars[0].open 即 09:35 首 bar 撮合后开盘价≈竞价开盘价）。
+        存 fraction（÷100，如 0.021）匹配 DiagnosisCard.tsx 显示约定。prev_close 缺→ None。
     缺数据返 None（不臆造）。
     """
     if not today_bars or len(today_bars) < 2:
@@ -119,6 +124,12 @@ def compute_h2_features(today_bars: list[dict], next_bars: list[dict]) -> dict |
         nc = next_bars[-1]  # 次日末 bar（15:00）= close
         if nb.get("open") and nc.get("close") and nb["open"] > 0:
             next_day_return = round((nc["close"] - nb["open"]) / nb["open"] * 100, 4)
+    # auction_open_pct：今日 open（= today_bars[0].open，09:35 首 bar 撮合后≈竞价开盘价）
+    # vs 前日 close。存 fraction（÷100）匹配 DiagnosisCard.tsx:43 显示约定。
+    auction_open_pct = None
+    today_open = today_bars[0].get("open")
+    if prev_close and today_open and prev_close > 0:
+        auction_open_pct = round((today_open - prev_close) / prev_close, 4)  # fraction, e.g. 0.021=2.1%
     return {
         "zt_price": zt_price,
         "first_lock_time": first_lock_time,
@@ -127,7 +138,39 @@ def compute_h2_features(today_bars: list[dict], next_bars: list[dict]) -> dict |
         "broken_duration_min": broken_duration_min,
         "is_one_word": is_one_word,
         "next_day_return": next_day_return,
+        "auction_open_pct": auction_open_pct,
     }
+
+
+def fetch_prev_close(code: str, date: str) -> float | None:
+    """baostock 前日 daily close（auction_open_pct 用）。取 date 前 5 日范围，最大 < date 的 close。
+
+    复用 _ensure_bs_login（单次 session）。baostock daily kline frequency='d'。
+    """
+    import baostock as bs  # noqa: PLC0415
+    _ensure_bs_login()
+    bc = _six_to_baostock(code)
+    from datetime import datetime, timedelta
+    start = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=8)).strftime("%Y-%m-%d")
+    end = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    try:
+        rs = bs.query_history_k_data_plus(
+            bc, "date,close", start_date=start, end_date=end,
+            frequency="d", adjustflag="2",
+        )
+        rows = []
+        while rs.error_code == "0" and rs.next():
+            rows.append(rs.get_row_data())
+    except Exception:
+        return None
+    if not rows:
+        return None
+    # 取最大 date < date 的 close
+    rows.sort(key=lambda r: r[0])
+    try:
+        return float(rows[-1][1])
+    except (ValueError, IndexError):
+        return None
 
 
 def _time_suffix(time_str: str) -> str:
@@ -153,6 +196,19 @@ def _is_open_board(feat: dict) -> bool:
 def _is_high_drop(feat: dict) -> bool:
     """T2.3 大回撤 = max_drop_pct > 3%（weak_turn_strong 候选：回撤大可能转强）。"""
     return (feat.get("max_drop_pct") or 0) > HIGH_DROP_PCT
+
+
+def _is_auction_high(feat: dict) -> bool:
+    """竞价高开 = auction_open_pct > 3%（fraction > 0.03）。"""
+    return (feat.get("auction_open_pct") or 0) > AUCTION_HIGH_PCT
+
+
+def _is_late_x_auction_high(feat: dict) -> bool:
+    """预注册单一交互：晚封板（尾盘突袭）× 竞价高开——测 late_lock 弱正是否随竞价 context 增强。
+
+    synthesis 警告：多维交互 Bonferroni 膨胀，仅预注册此单一假设（非 data-mining 全组合）。
+    """
+    return _is_late_lock(feat) and _is_auction_high(feat)
 
 
 def day_cluster_permutation(surv_by_day, raw_by_day, n_perm=N_PERM, seed=PERM_SEED):
@@ -251,7 +307,9 @@ def main() -> int:
                 next_bars = [b for b in next_bars if b["date"] > date]
                 if next_bars:
                     next_bars = [b for b in next_bars if b["date"] == next_bars[0]["date"]]
-                feat = compute_h2_features(today_bars, next_bars)
+                time.sleep(BAOSTOCK_SLEEP)
+                prev_close = fetch_prev_close(code, date)  # 竞价 auction_open_pct 用
+                feat = compute_h2_features(today_bars, next_bars, prev_close=prev_close)
                 if feat is None or feat["next_day_return"] is None:
                     skipped += 1
                     continue
@@ -291,6 +349,7 @@ def main() -> int:
     open_by_day: dict[str, list[float]] = defaultdict(list)
     late_by_day: dict[str, list[float]] = defaultdict(list)
     drop_by_day: dict[str, list[float]] = defaultdict(list)
+    latexa_by_day: dict[str, list[float]] = defaultdict(list)
     for f in features:
         ret = f["next_day_return"]
         raw_by_day[f["date"]].append(ret)
@@ -304,6 +363,8 @@ def main() -> int:
             late_by_day[f["date"]].append(ret)
         if _is_high_drop(f):
             drop_by_day[f["date"]].append(ret)
+        if _is_late_x_auction_high(f):
+            latexa_by_day[f["date"]].append(ret)
 
     groups = {
         "early_lock": early_by_day,      # T2.2 早封板
@@ -311,6 +372,7 @@ def main() -> int:
         "open_board": open_by_day,       # T2.3 开板（reverse_package 近似）
         "late_lock": late_by_day,        # T2.3 晚封板（end_of_day_sneak 近似）
         "high_drop": drop_by_day,        # T2.3 大回撤（weak_turn_strong 候选）
+        "late_x_auction": latexa_by_day,  # 预注册交互：晚封×竞价高开
     }
     results = {}
     for name, surv in groups.items():
@@ -331,7 +393,7 @@ def main() -> int:
 
     print("\n=== S152 H2 verdict（baostock 5min, day_paired_lift 非池化, within-day survivor null）===")
     print(f"universe: {len(features)} features across {len(raw_by_day)} 日")
-    print(f"Bonferroni K=5 α_adj={ALPHA_ADJ}（早封板/一字板/开板/晚封板/大回撤）")
+    print(f"Bonferroni K=6 α_adj={ALPHA_ADJ}（早封板/一字板/开板/晚封板/大回撤/晚封×竞价高开）")
     for name, r in results.items():
         print(f"  {name}: n={r['n']} lift={r['lift']} state={r['state']} "
               f"null_p95={r['null_p95']} pass_filter_edge={r['pass_filter_edge']}")

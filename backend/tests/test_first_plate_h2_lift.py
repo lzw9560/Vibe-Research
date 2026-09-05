@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from tools.first_plate_h2_lift import (
     compute_h2_features, _is_early_lock, _is_late_lock,
-    _is_open_board, _is_high_drop, _time_suffix,
+    _is_open_board, _is_high_drop, _is_auction_high, _is_late_x_auction_high,
+    _time_suffix,
 )
 
 
@@ -93,6 +94,19 @@ class TestComputeH2Features:
         feat = compute_h2_features(bars, [_next_bar(10.0, 10.5)])  # open=10, close=10.5
         assert feat["next_day_return"] == 5.0  # (10.5-10)/10*100=5.0
 
+    def test_auction_open_pct_with_prev_close(self):
+        """auction_open_pct = (今日 open - 前日 close) / 前日 close（fraction，÷100 约定）。"""
+        bars = [_bar(t, 11.0, opn=10.3) for t in _TIMES_48[:3]]  # 今日 open=10.3
+        feat = compute_h2_features(bars, [_next_bar(10.0, 10.5)], prev_close=10.0)
+        # (10.3-10)/10 = 0.03 fraction（=3% 高开）
+        assert feat["auction_open_pct"] == 0.03
+
+    def test_auction_open_pct_none_without_prev_close(self):
+        """prev_close 缺 → auction_open_pct None（不臆造）。"""
+        bars = [_bar(t, 11.0) for t in _TIMES_48[:3]]
+        feat = compute_h2_features(bars, [_next_bar(10.0, 10.5)])
+        assert feat["auction_open_pct"] is None
+
 
 def test_time_suffix_extraction():
     """baostock time（17 字符 YYYYMMDDHHMMSSmmm）后 9 位 = HHMMSSmmm，用于早封板比较。"""
@@ -115,6 +129,14 @@ def test_t23_predicates():
     # 大回撤（>3%，weak_turn_strong 候选）
     assert not _is_high_drop(one_word)
     assert _is_high_drop(high_drop)
+    # 竞价高开（auction_open_pct > 0.03 fraction）
+    assert _is_auction_high({"auction_open_pct": 0.04})
+    assert not _is_auction_high({"auction_open_pct": 0.02})
+    assert not _is_auction_high({"auction_open_pct": None})
+    # 晚封×竞价高开交互
+    assert _is_late_x_auction_high(late_lock | {"auction_open_pct": 0.04})
+    assert not _is_late_x_auction_high(late_lock | {"auction_open_pct": 0.02})  # 竞价不高
+    assert not _is_late_x_auction_high(one_word | {"auction_open_pct": 0.04})  # 非晚封
 
 
 def test_day_paired_lift_interface_reused():
