@@ -72,6 +72,34 @@ export interface DiagnosisCard {
   gene_score?: Record<string, unknown> | null;  // 涨停基因完整对象 dump
   pool_item?: Record<string, unknown> | null;   // 涨停池原始 dict
   derived?: Record<string, unknown> | null;     // S070 R7 分时派生
+  evaluation?: CardEvaluation | null;  // S151 R4：评价层子对象（降权+即时处理+诚实标注）
+}
+
+// ---- S151 评价层（对齐 backend/candidate_funnel/evaluation.py）----
+/** 单维度 §44 验证结果 + 降权权重（冻结值，frozen_commit 锁定事后不调）。 */
+export interface DimensionValidation {
+  dimension_id: string;
+  label: string;
+  lift: number | null;        // rho for gene（无方向性→<1）
+  n: number;
+  status: string;             // validated / 未validated / 劣于随机 / 探索性 / 待复验
+  weight_multiplier: number;  // ×1.0 / ×0.5 / ×0.1
+  note: string;
+}
+/** run 级评价层诚实标注（对齐 FunnelResult.evaluation_summary）。 */
+export interface EvaluationSummary {
+  honest_label: string;
+  dimensions: DimensionValidation[];   // 5 条（vol_surge_ref 被 _ref 后缀过滤）
+  pending_dims: string[];
+  frozen_commit: string;
+}
+/** per-card 评价层子对象（对齐 DiagnosisCard.evaluation）。 */
+export interface CardEvaluation {
+  score_weight: number;        // 累计降权 1.0=正常 / 0.1=命中劣于随机维度
+  lift_status: string;         // normal / demoted / unranked
+  demoted_dims: string[];
+  honest_label: string;
+  validation_note: string;
 }
 export interface FilterRecord { code: string; name?: string | null; reason: string }
 
@@ -133,6 +161,7 @@ export interface FunnelResult {
   threshold_config: ThresholdConfig;
   sentiment_phase?: string | null;
   as_of: string;
+  evaluation_summary?: EvaluationSummary | null;  // S151 R4：run 级诚实标注（5 维度降权梯度表）
 }
 export interface FunnelConfigResponse { config: ThresholdConfig; sources: Record<string, boolean> }
 

@@ -255,6 +255,21 @@ export function useForwardTestSummary(options?: Opts<ForwardTestSummary>) {
   });
 }
 
+/** S151：评价层诚实标注 hook（供 HonestyBanner 无 prop 调用点兜底，prop 优先）。
+ *  queryKey 与 readFunnelCache 不同——只取 evaluation_summary，staleTime 5min 同窗口去重。 */
+import { candidatesApi, type EvaluationSummary } from "@/lib/candidates";
+export function useEvaluationSummary(date?: string, options?: Opts<EvaluationSummary | null>) {
+  return useQuery({
+    queryKey: ["workflow", "candidates", "funnel", "evaluation-summary", date ?? "latest"] as const,
+    queryFn: async () => {
+      const fr = await candidatesApi.readFunnelCache(date);
+      return fr.evaluation_summary ?? null;
+    },
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
 /** S066 §0e 某信号日前向测试推荐明细。 */
 export function useForwardTestDaily(signalDate: string, options?: Opts<ForwardTestRecord[]>) {
   return useQuery({
