@@ -121,3 +121,4 @@
 - 改代码前先读 `ARCHITECTURE.md` 定位模块；改 AI/数据相关先过 §1 合规自查。
 - 实现后用 `pytest -m "not live"` 自测；涉及数据输出跑 §5 工具验算。
 - 不确定的地方标注并实测，不臆测。
+- **并行会话 worktree 隔离**（2026-09-05 加入项目实践）：当多个会话/agent 并发改同仓库时（如 opencode + Claude 并行），用 `git worktree add ../Vibe-Research-<branch> <branch>` 创独立 worktree 隔离工作，不切主 worktree 分支（避免干扰其他会话）。worktree commit 后 `git worktree remove` 清理。数据目录 `.vibe-research/` 不 in git——worktree 须 `ln -sf <主仓库>/.vibe-research .vibe-research` 链接（test/数据可得）。commit 前必 `git branch --show-current` 确认分支（并发会话可能切分支，误 commit 到他人 feature 分支）。显式 `git add <具体文件>` 绝不 `add -A`（避打包他人改动）。
