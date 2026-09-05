@@ -26,6 +26,9 @@ import cli_runtime
 import ai.tools  # noqa: F401 — 副作用：注册工具
 from ai.tools import registry
 
+# S149 P4-T3：PromptPack 可替换口径层（默认 RESEARCH_PACK 对齐 S010 放宽，本地包可覆盖）
+from prompt_pack import PACK
+
 MAX_ROUNDS = 6  # 工具调用最大轮数，防死循环
 _TOOL_RESULT_CAP = 6000  # 单次工具结果注入上限（控 token）
 
@@ -69,6 +72,10 @@ SYSTEM_PROMPT = f"""你是 Vibe-Research 里的投研助理。你可以调用工
 
 {ANALYSIS_FRAMEWORK}
 
+【分析风格（{PACK.name}）】{PACK.analyst_style}
+篇幅：{PACK.analyst_len}
+个股约束：{PACK.chat_guidance}
+
 当前页面上下文：
 {{context}}"""
 
@@ -83,6 +90,10 @@ SYSTEM_PROMPT_NO_TOOLS = f"""你是 Vibe-Research 里的投研助理。
 - 用简洁中文回答。
 
 {ANALYSIS_FRAMEWORK}
+
+【分析风格（{PACK.name}）】{PACK.analyst_style}
+篇幅：{PACK.analyst_len}
+个股约束：{PACK.chat_guidance}
 
 当前页面上下文：
 {{context}}"""

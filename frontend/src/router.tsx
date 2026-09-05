@@ -39,6 +39,7 @@ export const router = createBrowserRouter([
       { path: "/sectors", element: lazyEl(() => import("@/pages/Sectors"), "Sectors") },
       { path: "/sectors/:key", element: lazyEl(() => import("@/pages/SectorDetail"), "SectorDetail") },
       { path: "/portfolio", element: lazyEl(() => import("@/pages/Portfolio"), "Portfolio") },
+      { path: "/journal", element: lazyEl(() => import("@/pages/Journal"), "Journal") },
       { path: "/stock-data", element: lazyEl(() => import("@/pages/StockData"), "StockData") },
       { path: "/stock/:code", element: lazyEl(() => import("@/pages/StockDeep"), "StockDeep") },
       { path: "/watchlist", element: lazyEl(() => import("@/pages/Watchlist"), "Watchlist") },

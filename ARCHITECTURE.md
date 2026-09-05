@@ -58,6 +58,14 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 | `portfolio.py` | 持仓管理 + 后台调度（持仓刷新） | `refresh_all`、`CACHE_DIR`、`start_scheduler(interval)` |
 | `circuit_breaker.py` | 数据源熔断器 | `get_breaker("eastmoney")` → `allow_request/record_success/record_failure` |
 | `notification/` | 多通道通知（15+ sender） | `notification_service`、senders/(feishu/dingtalk/email/discord/slack/telegram/...) |
+| **S149 移植模块**（vibe-astock@3c3b7c8 语义吸收，Apache-2.0 署名） | | |
+| `utils/vibe_astock_util.py` | P4 移植：atomic_write_json/china_now/validate_trade_date + trade_calendar 4 函数（is_settled/trade_dates_ending_at/live_quotes_are_close_of/quote_trade_day） | `atomic_write_json`、`is_settled`、`trade_dates_ending_at` |
+| `prompt_pack.py` | P4 可替换 PromptPack（analyst_style/analyst_len/chat_guidance，importlib 加载本地包 fallback 默认包） | `PACK`、`load_pack`、`PromptPack` |
+| `emotion_metrics_ext.py` | P2 派生情绪指标（赚钱效应/连板溢价/情绪周期/day_summary 落盘归档） | `money_effect`、`consec_premium`(+`_detail`分层带个股名独立路由)、`cycle_position`(双源规则不进 AI/journal)、`build_metrics`、`day_summary` |
+| `daily_review.py` | P3 critical#1 磁盘持久化层（precompute_daily 落盘 JSON + get_daily_review 三级读 _CACHE→磁盘→fallback；money_effect_median 盖章字段） | `get_daily_review`、`precompute_daily`、`get_reviewer` |
+| `journal.py` | P3 交易日志（成交时序结算 + 移动加权 + threading.Lock 防静默丢单 + _market_context 零网络盖章） | `add_trade`、`update_trade`、`_settle`、`list_trades`、`stats` |
+| `at_risk.py`/`risk_rules.py`/`excursion.py`/`attribution.py`/`inbox.py` | P3 个人风控家族（在险资金/风险宪法/MFE-MAE/判断执行归因/异常收件箱）⛔ 不接入 AI prompt | `at_risk.report`、`risk_rules.{load_rules,violations,rolling}`、`excursion.{bars(kline_multi防封),summary}`、`attribution.attribution`(降级)、`inbox.build` |
+| `routers/journal.py` | P3 journal 7 + risk 9 端点（与既有 routers/risk.py 市场级无碰撞分文件隔离） | `/api/journal/{list,stats,add,update,delete,fees}`、`/api/risk/{report,at-risk,excursion,attribution,inbox,rules,equity-base}` |
 
 ---
 

@@ -43,22 +43,29 @@ def _save_review_params(params: Dict[str, Any]) -> None:
 async def get_daily_review(date: str = Query(None, description="交易日期 YYYY-MM-DD")) -> Dict[str, Any]:
     """
     获取指定日期的每日复盘报告。
-    
+
     包含：市场情绪总结、板块热度排名、涨停股统计、昨日涨停表现、竞价回顾。
+
+    S149 P3：先读磁盘持久化层（precompute_daily 落盘的 JSON，零网络），
+    未命中才 fallback precompute_daily（含 generate_review 网络）。
     """
     if date is None:
         date = last_trading_date_str()
 
     try:
-        reviewer = dr.get_reviewer()
-        # generate_review 同步打东财外部 API，阻塞事件循环 → 用 asyncio.to_thread 卸到线程池。
-        # 参考 routers/strategy.py:72 既有模式。
-        result = await asyncio.to_thread(reviewer.generate_review, date)
-        return result.model_dump()
+        # get_daily_review 先读磁盘 → fallback precompute（generate_review 同步打东财，
+        # 用 to_thread 卸线程池；磁盘命中时不触网）。
+        result = await asyncio.to_thread(dr.get_daily_review, date)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"复盘报告生成失败: {date}")
+        return result
     except ValueError as e:
         # 非交易日/日期格式错误 → 422（客户端输入语义错，非服务器故障）
-        # daily_review.generate_review 的交易日守门抛 ValueError，不应误报为 500。
         raise HTTPException(status_code=422, detail=f"复盘报告生成失败: {str(e)}")
+    except HTTPException:
+        # S149 P3 审查修复：HTTPException（如上面 404）是 Exception 子类，须先于
+        # except Exception 放行，否则被改抛 500（404 不可达）。
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"复盘报告生成失败: {str(e)}")
 
