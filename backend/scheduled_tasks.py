@@ -480,6 +480,10 @@ _DEFAULT_TASK_TIMEOUT = 300
 # S150 R2：stale run reaper 阈值（秒）——超此的 running run 视为挂死，reap 为 failed
 _REAPER_STALE_SECONDS = 1300  # > max(_TASK_TIMEOUTS)=1200(kline_refresh) + buffer
 
+# S150 T0.7 根治：seal_intraday_collect subprocess 超时（< R1 wait_for 120 避免竞态——
+# subprocess 先 SIGKILL+线程返回，R1 wait_for 不触发，无孤儿线程）。
+_SEAL_COLLECT_SUBPROCESS_TIMEOUT = 110
+
 
 def _task_timeout(task: "ScheduledTask") -> int:
     """S150 R1：按 task_type 返回超时秒数。"""
@@ -907,99 +911,39 @@ class TaskExecutor:
     # ============================================================================
 
     def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """S055：盘中封单时序采集——交易时段每 60s 轮询 em_zt_topic_pool 写快照。
+        """S055：盘中封单时序采集（S150 T0.7 根治：subprocess 跑全逻辑）。
 
-        采集后对每只票跑规则引擎（C1-C6）→ 去重落库 bomb_alert_history。
-        非交易时段不落库、不请求东财（门控）。采集前先 prune 旧数据（保留期外）。
-        缺数据诚实标注，不臆造。
-
-        S070 R3 扩展：采集成功后对每只票跑 R1 trajectory + R7 派生计算 → 落库
-        intraday_features / seal_derived_features。派生失败不阻塞主采集
-        （标 degraded，不抛异常）。
+        全逻辑（prune + collect_once + rules + trajectory/derived）在子进程跑——
+        asyncio 线程（run_in_executor/to_thread）不可中断，R1 wait_for 超时后底层线程
+        继续跑：孤儿线程并发 em_get（rate limiter TOCTOU→跳限流→IP 封禁，HIGH1）+ 写库
+        （INSERT OR REPLACE 覆盖 seal_derived/intraday_features 陈旧派生 / bomb_alert_history
+        重复行 / 若线程持 _DB_LOCK 瞬间超时→锁泄漏死线程永久持有→后续 collect_once 永久
+        阻塞 acquire()，HIGH3）。subprocess.run(timeout=110) 超时 SIGKILL 子进程，OS 回收
+        DB 连接+lock，根治孤儿线程+死锁。逻辑在 risk.seal_intraday_collect_cli（线程→子进程，
+        逻辑不变）。timeout=110 < R1 wait_for 120 避免竞态（subprocess 先 kill+线程返回）。
         """
-        from risk.seal_intraday_collector import collect_once, archive_old_partitions, get_latest_snapshots
-        from risk.bomb_alert_rules import check_all_rules
-        from risk.bomb_alert_dispatcher import process_alerts
+        import json as _json
+        import subprocess
+        import sys
+        from pathlib import Path
 
-        # S089 C4：每日首调归档（payload 带 prune=True 触发）。
-        # 废弃旧 prune 删除逻辑，改为 archive_old_partitions 标记冷热（不删数据）。
-        # 保留 result["pruned"] = 0 字段向后兼容（= 未删除行数）。
-        if payload.get("prune"):
-            retention = int(payload.get("retention_days", 30))
-            archive_result = archive_old_partitions(retention)
-            pruned = archive_result.get("archived", 0)
-        else:
-            pruned = 0
-
-        result = collect_once()
-        result["pruned"] = pruned  # 向后兼容（archive 后恒 0，未删行）
-        # 补写 date（collect_once 内部用 datetime.now()，executor 回填便于追溯）
-        from datetime import datetime
-        _now = datetime.now()
-        if "date" not in result:
-            result["date"] = _now.strftime("%Y-%m-%d")
-
-        # 采集成功后跑规则引擎（仅对本次采集的票）
-        if result.get("written", 0) > 0:
-            from datetime import datetime
-            now = datetime.now()
-            date_str = result.get("date") or now.strftime("%Y-%m-%d")
-            latest_snaps = get_latest_snapshots(date_str)
-            triggered_total = 0
-            for snap in latest_snaps:
-                code = snap.get("code")
-                name = snap.get("name") or code
-                if not code:
-                    continue
-                # 取该 code 全部时序（规则需窗口）
-                from risk.seal_intraday_collector import get_snapshots_by_code
-                snaps = get_snapshots_by_code(code, date_str)
-                results = check_all_rules(snaps, code, name, now=now)
-                active = process_alerts(code, name, results, now=now)
-                triggered_total += len(active)
-            result["alerts_triggered"] = triggered_total
-
-            # S070 R3：R1 trajectory + R7 派生计算落库（采集成功后、return 前）
-            # 派生失败不阻塞主采集（try/except，标 degraded，不抛异常）
-            traj_written = 0
-            derived_written = 0
-            try:
-                from strategies.intraday_features import (
-                    compute_trajectory, persist_trajectory,
-                    compute_derived_features, persist_derived_features,
-                )
-                from risk.seal_intraday_collector import _get_conn, _DB_LOCK, get_snapshots_by_code
-                conn = _get_conn()
-                try:
-                    with _DB_LOCK:
-                        for snap in latest_snaps:
-                            code = snap.get("code")
-                            name = snap.get("name") or code
-                            if not code:
-                                continue
-                            snaps = get_snapshots_by_code(code, date_str)
-                            if not snaps:
-                                continue  # 缺快照跳过派生，不臆造
-                            # R1 trajectory
-                            traj = compute_trajectory(snaps)
-                            persist_trajectory(date_str, code, name, traj, conn)
-                            traj_written += 1
-                            # R7 派生
-                            derived = compute_derived_features(snaps)
-                            persist_derived_features(date_str, code, name, derived, conn)
-                            derived_written += 1
-                        conn.commit()
-                finally:
-                    conn.close()
-            except Exception as exc:
-                logger.warning("[seal_intraday] S070 派生计算落库失败（不阻塞主采集）: %s", exc)
-                # 标 degraded 但不改写已成功的 collect_once data_status
-                result["derived_status"] = "degraded"
-            else:
-                result["derived_status"] = "ok"
-            result["trajectory_written"] = traj_written
-            result["derived_written"] = derived_written
-
+        backend_dir = str(Path(__file__).resolve().parent)
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-m", "risk.seal_intraday_collect_cli"],
+                input=_json.dumps(payload, ensure_ascii=False),
+                capture_output=True, text=True, timeout=_SEAL_COLLECT_SUBPROCESS_TIMEOUT, cwd=backend_dir,
+            )
+        except subprocess.TimeoutExpired:
+            return {"error": f"collect subprocess timeout {_SEAL_COLLECT_SUBPROCESS_TIMEOUT}s (SIGKILL, no orphan thread)",
+                    "timeout": True, "date": datetime.now().strftime("%Y-%m-%d")}
+        try:
+            result = _json.loads(proc.stdout) if proc.stdout.strip() else {}
+        except _json.JSONDecodeError:
+            result = {"error": f"subprocess stdout not JSON: {(proc.stdout or '')[-200:]}"}
+        if proc.returncode != 0:
+            result.setdefault(
+                "error", f"subprocess exit {proc.returncode}: {(proc.stderr or '')[-200:]}")
         return result
 
     def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:

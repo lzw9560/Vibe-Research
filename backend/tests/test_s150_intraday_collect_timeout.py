@@ -170,3 +170,66 @@ def test_thread_pool_isolated_from_default():
         assert te._thread_pool is not default_exec, "调度器池应独占，非默认池"
     finally:
         loop.close()
+
+
+# ============================================================================
+# T0.7 根治：_execute_seal_intraday_collect 改 subprocess（HIGH3 孤儿线程+死锁根治）
+# ============================================================================
+import subprocess  # noqa: E402
+
+
+class _FakeProc:
+    """subprocess.run 返值替身（stdout/stderr/returncode）。"""
+
+    def __init__(self, stdout="", stderr="", returncode=0):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+
+def test_seal_intraday_collect_subprocess_timeout_returns_killed(monkeypatch):
+    """T0.7：subprocess.run 超时→TimeoutExpired→返 {timeout:True}（SIGKILL 无孤儿线程）。
+
+    原 HIGH3：线程不可中断，wait_for 超时后孤儿线程继续 em_get+写库+_DB_LOCK 泄漏。
+    subprocess.run(timeout=110) 超时 SIGKILL 子进程，线程返 timeout result 不泄漏。
+    """
+
+    def _boom(*a, **k):
+        raise subprocess.TimeoutExpired(cmd="cli", timeout=110)
+
+    monkeypatch.setattr("subprocess.run", _boom)
+    r = st.TaskExecutor()._execute_seal_intraday_collect({})
+    assert r["timeout"] is True
+    assert "110s" in r["error"] or "SIGKILL" in r["error"]
+
+
+def test_seal_intraday_collect_subprocess_success_parses_json(monkeypatch):
+    """T0.7：subprocess 成功→parse stdout JSON 为 result。"""
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: _FakeProc(
+            stdout='{"written": 5, "date": "2026-09-04", "alerts_triggered": 2}'),
+    )
+    r = st.TaskExecutor()._execute_seal_intraday_collect({})
+    assert r["written"] == 5
+    assert r["alerts_triggered"] == 2
+    assert r["date"] == "2026-09-04"
+
+
+def test_seal_intraday_collect_subprocess_error_returncode_captured(monkeypatch):
+    """T0.7：subprocess returncode!=0→error 捕获（CLI 内异常→JSON error+exit 1）。"""
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: _FakeProc(
+            stdout='{"error": "collect_once boom"}', stderr="traceback...", returncode=1),
+    )
+    r = st.TaskExecutor()._execute_seal_intraday_collect({})
+    # CLI 返 JSON error（returncode=1）→ setdefault 保留 CLI 具体 error（不覆盖）
+    assert "boom" in r["error"]
+
+
+def test_seal_intraday_collect_subprocess_timeout_lt_r1_waitfor():
+    """T0.7：subprocess timeout(110) < R1 wait_for(120)——避免竞态（subprocess 先 kill+线程返回）。"""
+    assert st._task_timeout(_FakeTask("seal_intraday_collect")) == 120
+    assert st._SEAL_COLLECT_SUBPROCESS_TIMEOUT == 110
+    assert st._SEAL_COLLECT_SUBPROCESS_TIMEOUT < st._task_timeout(_FakeTask("seal_intraday_collect"))
