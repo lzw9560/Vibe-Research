@@ -1,6 +1,6 @@
 # S149 — vibe-astock 语义吸收（4 阶段框架 spec）
 
-> **状态：** ✅ 审核通过 + 实现完成（large，Phase 0 审计 ✅ + 终审 grill ✅ PASS + 多专家对抗审查 ✅ 9 confirmed 已落 spec 修订；**Phase 4+2+3 已实现 2026-09-05，Phase 1 YAGNI 关闭**——见 task.md P1-T0 判据）
+> **状态：** ✅ 审核通过（large，Phase 0 审计 ✅ + 终审 grill ✅ PASS + 多专家对抗审查 ✅ 9 confirmed 已落 spec 修订；Phase 1–4 G 门已定稿，待实施）
 > **日期：** 2026-09-04
 > **级别：** large — 触碰外部数据源 + AI 提示词 + 交易信号，按 AGENTS.md 自动判 large
 > **来源：** github.com/lzw9560/vibe-astock@3c3b7c8（Apache-2.0，fork of Vibe-Research）

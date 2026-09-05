@@ -10,9 +10,8 @@ import astock
 import limitup_screener as _ls
 import time
 from datetime import date as _date
-from vr_paths import is_trading_day, last_trading_date_str
 
-import emotion_metrics_ext as _emotion_ext
+from vr_paths import is_trading_day
 
 router = APIRouter(tags=["limitup"])
 
@@ -33,7 +32,7 @@ async def limitup_metrics(date: str = Query(None, description="日期 YYYY-MM-DD
 
 async def _compute_limitup_metrics(date: str | None) -> Dict[str, Any]:
     """内部：计算涨停策略聚合指标。"""
-    trade_date = date or last_trading_date_str()  # S149: 默认最近交易日（非今日），周末不返全零
+    trade_date = date or datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
     cache_key = f"metrics:{trade_date}"
 
     # 检查缓存
@@ -102,86 +101,6 @@ async def _compute_limitup_metrics(date: str | None) -> Dict[str, Any]:
 
     # 写入缓存
     _METRICS_CACHE[cache_key] = (result, now)
-    return result
-
-
-# ───────────────── S149 Phase 2：派生情绪指标（赚钱效应/连板溢价/情绪周期）─────────────────
-# build_metrics 路由挂载点（audit O4 定死 → routers/limitup/metrics.py）。
-# aggregate 口径（无个股名）—— cycle_position 作 STIPhase 展示层补充（双源规则）。
-_EMOTION_CACHE: dict = {}
-_EMOTION_CACHE_TTL = 600  # 10 分钟
-
-
-@router.get("/api/limitup/emotion-metrics")
-async def emotion_metrics(date: str = Query(None, description="日期 YYYY-MM-DD，不传则最近交易日")) -> Dict[str, Any]:
-    """派生情绪指标：赚钱效应 / 连板溢价（aggregate） / 情绪周期。
-
-    §1.4 范围冻结：3 个新指标（money_effect/consec_premium/cycle）。
-    aggregate 无个股名（守 market.py:166 零个股名契约）。
-    ⚠️ cycle_position 是 STIPhase 辅助读数（双源规则）——前端同屏须标注主辅关系。
-    """
-    try:
-        return await _compute_emotion_metrics(date)
-    except Exception as e:
-        raise HTTPException(502, f"emotion-metrics 异常：{e}") from e
-
-
-@router.get("/api/limitup/consec-premium-detail")
-async def consec_premium_detail(
-    date: str = Query(None, description="日期 YYYY-MM-DD，不传则最近交易日"),
-) -> Dict[str, Any]:
-    """连板溢价**按股明细**：昨日 2 板以上个股逐只表现（带 code/name）。
-
-    ⚠️ 带个股名——独立路由，**不进 AI context / journal 盖章**
-    （守 market.py:166 零个股名契约 + spec §2 分层处置）。aggregate 见 emotion-metrics。
-    """
-    try:
-        trade_date = date or last_trading_date_str()  # S149: 默认最近交易日（非今日），周末不返全零
-        # 非交易日守卫（与 emotion-metrics 一致——非交易日不打东财，防封）
-        try:
-            parsed = _date.fromisoformat(trade_date)
-        except ValueError:
-            parsed = _date.today()
-        if not is_trading_day(parsed):
-            return {"date": trade_date, "available": False,
-                    "reason": "非交易日，无连板溢价明细", "count": 0, "detail": []}
-        result = await asyncio.to_thread(_emotion_ext.consec_premium_detail, trade_date)
-        return {"date": trade_date, **result}
-    except Exception as e:
-        raise HTTPException(502, f"consec-premium-detail 异常：{e}") from e
-
-
-async def _compute_emotion_metrics(date: str | None) -> Dict[str, Any]:
-    """内部：算派生情绪指标（aggregate）。非交易日 → 空结果（与 em_zt_topic_pool 返空一致）。"""
-    trade_date = date or last_trading_date_str()  # S149: 默认最近交易日（非今日），周末不返全零
-    cache_key = f"emotion:{trade_date}"
-    now = time.time()
-    if cache_key in _EMOTION_CACHE:
-        data, ts = _EMOTION_CACHE[cache_key]
-        if now - ts < _EMOTION_CACHE_TTL:
-            return data
-
-    try:
-        parsed = _date.fromisoformat(trade_date)
-    except ValueError:
-        parsed = _date.today()
-    if not is_trading_day(parsed):
-        # 子对象带 reason（前端读 me?.reason/cp?.reason/cy?.reason——顶层 reason 不可达）
-        result = {
-            "date": trade_date, "available": False,
-            "reason": "非交易日，无派生情绪指标",
-            "money_effect": {"available": False, "reason": "非交易日"},
-            "consec_premium": {"available": False, "reason": "非交易日"},
-            "cycle": {"available": False, "reason": "非交易日"},
-        }
-        _EMOTION_CACHE[cache_key] = (result, now)
-        return result
-
-    metrics = await asyncio.to_thread(_emotion_ext.build_metrics, trade_date, True)
-    rendered = await asyncio.to_thread(_emotion_ext.render_metrics, metrics)
-    result = {**metrics, "rendered": rendered,
-              "disclaimer": "历史统计特征，市场有风险。"}
-    _EMOTION_CACHE[cache_key] = (result, now)
     return result
 
 

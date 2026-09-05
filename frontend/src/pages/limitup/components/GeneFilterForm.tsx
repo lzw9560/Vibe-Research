@@ -33,7 +33,7 @@ const VIEW_TABS: { key: ViewMode; label: string }[] = [
 export function GeneFilterForm({ onSearch, onSwitchView, viewMode, onRecompute, recomputeBusy }: Props) {
   const [minScore, setMinScore] = useState(50);  // 跟后端 GENE_QUALIFY_THRESHOLD 默认对齐，getGeneParams 返回后覆盖
   const [maxScore, setMaxScore] = useState(100);
-  const [date, setDate] = useState("");  // S149: 默认空（非今日）——mount 搜 date=""→后端 resolve last_trading（周末/盘前今日无 zt 池→0）；用户选日期再按选日查
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [qualify, setQualify] = useState(50);
   const [high, setHigh] = useState(60);
   const [lookback, setLookback] = useState(252);

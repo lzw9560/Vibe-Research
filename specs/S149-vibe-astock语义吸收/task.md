@@ -104,7 +104,6 @@
 - **先列映射表**（ret/prev_boards/limit_price/close → em_zt_topic_pool 字段）→ 实现 `_settled_pool`（:165）改写
 - 依赖：P2-T1a
 - 验收：映射表 + 改写 + 不裸调
-- **⚠️ 实现发现（2026-09-05）**：push2ex `getYesterdayZTPool` 必须用 `sort=zs:desc`（akshare 源码同款）——默认 `fbt:asc` 实测返空池（`tc=44, pool=[]`）。字段映射：`c→code / n→name / zdp→ret / ylbc→prev_boards / yfbt→seal_time / hybk→sector / p(厘)→close(元,÷1000) / ztp(厘)→limit_price(元,÷1000)`。÷1000 对齐 `market.py:370`。
 
 ### P2-T2c is_limit_up→字段判定 [S]
 - 基于映射后字段机械判定（close ≈ limit_price，定容差阈值）
@@ -298,14 +297,6 @@
 - P2 定稿后：历史对比能否由 sti_timeline/weather_history/既有快照满足→满足则关闭 Phase 1（记理由）
 - 依赖：P2-G
 - 验收：判据决策
-- **✅ 决策：关闭 Phase 1（2026-09-05，YAGNI）**
-- **理由**：P2 历史对比需求已由既有数据满足——
-  1. `emotion_metrics_ext.day_summary(date)` 已落盘归档 per-day 原始读数（limit_up/highest_consec/broken_rate）到 `<VR_DATA_DIR>/zt_summary/<date>.json`（cycle_position 走它取 10 日序列）；
-  2. `astock.em_zt_topic_pool(endpoint, date_yyyymmdd)` 支持历史日期 fetch（getTopicZTPool/getYesterdayZTPool 带 24h HTTP 缓存 + 历史日 push2ex 可达），money_effect/consec_premium 历史回算可走它（定稿记录优先）；
-  3. 既有 `sti_timeline` 表 + `weather_history.py` + `snapshot_store`（盘前快照）已覆盖情绪历史曲线/天气历史/盘前预期归档。
-  - archive.capture_day（原始响应归档）与 P2 day_summary 汇总归档重叠（day_summary 存 per-day 汇总，em_zt_topic_pool 24h 缓存），边际价值低；
-  - drift（数据源变 vs 市场变 漂移检测）是 P2 未覆盖的独立诊断功能，但属诊断非核心交易功能，YAGNI——若日后需要数据源漂移检测，走新 spec。
-- **S149 收尾**：P4+P2+P3 全 done + P1 closed → S149 实现完成（feature/S149-vibe-astock-吸收 分支 13+ commit）。
 
 ### P1-T1a archive.py capture_day 改走 em_get+缓存 [M]（条件）
 - `_fetch_prev_pool`→em_zt_topic_pool+em_get；pools 路径→astock 缓存

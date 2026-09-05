@@ -19,7 +19,6 @@ import {
   getAuctionParams,
   getReviewParams,
 } from "@/lib/api";
-import { getEmotionMetrics, getConsecPremiumDetail } from "@/lib/limitup";
 import type { Opts } from "./types";
 import type { WinRateRecordInput } from "@/lib/api";
 import { AUCTION_START_MIN, AUCTION_END_MIN, isWeekday } from "@/lib/auction";
@@ -336,32 +335,6 @@ export function useAuctionMonitor(
       return [monitor, watchlist] as [typeof monitor, typeof watchlist];
     },
     refetchInterval: () => (isInAuctionWindow() ? 15_000 : false),
-    ...options,
-  });
-}
-
-// ── S149 Phase 2：派生情绪指标（aggregate 无个股名 + 明细带个股名独立路由）──
-
-/** 派生情绪指标 aggregate（赚钱效应/连板溢价/情绪周期）。5min 刷新（与气象站同频）。 */
-export function useEmotionMetrics(
-  date?: string,
-  options?: Opts<Awaited<ReturnType<typeof getEmotionMetrics>>>,
-) {
-  return useQuery({
-    queryKey: ["limitup", "emotionMetrics", date] as const,
-    queryFn: () => getEmotionMetrics(date),
-    ...options,
-  });
-}
-
-/** 连板溢价按股明细（带个股名，独立路由，不进 AI context）。 */
-export function useConsecPremiumDetail(
-  date?: string,
-  options?: Opts<Awaited<ReturnType<typeof getConsecPremiumDetail>>>,
-) {
-  return useQuery({
-    queryKey: ["limitup", "consecPremiumDetail", date] as const,
-    queryFn: () => getConsecPremiumDetail(date),
     ...options,
   });
 }

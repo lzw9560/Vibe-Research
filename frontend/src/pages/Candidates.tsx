@@ -27,24 +27,7 @@ export function Candidates() {
     finally { setLoading(false); }
   };
 
-  // S149 修复：mount 读缓存（GET cache，秒开，默认最近交易日→非交易日也有数据），
-  // 不再 POST run（慢 46s + 旧默认今日→周末/盘前 0 候选→空页）。
-  // cache 404（首次/缓存清）回退 run（POST，后端默认最近交易日→有数据）。
-  // "重跑漏斗"按钮才 POST run。
-  const loadCache = async () => {
-    setLoading(true); setErr(null);
-    try {
-      const r = await candidatesApi.readFunnelCache();
-      setResult(r);
-      setFinalCards(r.final_candidates);
-      setLoading(false);
-    } catch {
-      // cache miss → 回退 run（POST，后端默认 last_trading_date_str→有候选）
-      await run();
-    }
-  };
-
-  useEffect(() => { loadCache(); }, []);
+  useEffect(() => { run(); }, []);
 
   const openDiagnosis = async (code: string) => {
     try { setActive(await candidatesApi.diagnosis(code)); }

@@ -49,7 +49,6 @@ import reflection as reflect_layer
 # Router imports
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
 from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
-from routers import journal as journal_router  # S149 P3：交易日志 + 个人风控
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import coach as coach_router  # S064：盯盘教练
 from routers import debate as debate_router  # main：多空辩论 + 反思审计
@@ -232,7 +231,6 @@ app.include_router(strategy_router.router)
 app.include_router(premarket_router.router)  # S071：盘前选股
 app.include_router(sector_divergence.router)
 app.include_router(risk_router.router)
-app.include_router(journal_router.router)  # S149 P3：/api/journal/* + /api/risk/{report,at-risk,...}
 app.include_router(extreme_market.router)
 app.include_router(sentiment_weather.router)
 app.include_router(workflow.router)

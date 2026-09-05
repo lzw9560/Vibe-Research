@@ -64,14 +64,8 @@ async def post_funnel(stage: str = "all", date: str | None = None):
 
     实跑 run_funnel（慢，全市场）+ save_funnel_result（落库供前端读缓存秒开）。
     前端 tab 默认读 GET /candidates/funnel/cache，"重新跑"按钮才调本端点。
-
-    S149 修复：默认 date 从 _today() 改 last_trading_date_str()——周末/节假日/盘前
-    （precompute 17:15 才写当日）"今日"无 zt 池→run 出 0 候选→前端空。改最近交易日
-    后"重跑漏斗"默认重算最近交易日（有 zt 池→有候选）。显式传 date 不受影响。
     """
-    from vr_paths import last_trading_date_str  # noqa: PLC0415
-
-    d = date or last_trading_date_str()
+    d = date or _today()
     result = await asyncio.to_thread(funnel_mod.run_funnel, stage, d, _store["config"])
     await asyncio.to_thread(save_funnel_result, d, stage, result)
     return result
@@ -104,8 +98,7 @@ async def list_candidates(date: str | None = None):
     """GET → 最终候选 DiagnosisCard 列表（AC1）。
     H8 修复：优先读 SQLite 持久化缓存（POST /candidates/funnel 落库），
     缓存缺失时 fallback 实跑 run_funnel。"""
-    from vr_paths import last_trading_date_str  # noqa: PLC0415
-    d = date or last_trading_date_str()
+    d = date or _today()
     cached = load_funnel_result(d, "all")
     if cached is not None:
         return cached.final_candidates
@@ -117,8 +110,7 @@ async def list_candidates(date: str | None = None):
 @cache_response(ttl=60)
 async def get_diagnosis(code: str, date: str | None = None):
     """GET → 单股 DiagnosisCard（AC3/AC4/AC6）。"""
-    from vr_paths import last_trading_date_str  # noqa: PLC0415
-    return await asyncio.to_thread(funnel_mod.diagnose, code, date or last_trading_date_str(), _store["config"])
+    return await asyncio.to_thread(funnel_mod.diagnose, code, date or _today(), _store["config"])
 
 
 @router.get("/funnel/layers")
@@ -126,8 +118,7 @@ async def get_diagnosis(code: str, date: str | None = None):
 async def get_layers(run_id: str | None = None, date: str | None = None):
     """GET → 各层 FunnelLayer（AC1 每层可检视）。
     H8 修复：优先读 SQLite 持久化缓存，缓存缺失时 fallback 实跑。"""
-    from vr_paths import last_trading_date_str  # noqa: PLC0415
-    d = date or last_trading_date_str()
+    d = date or _today()
     cached = load_funnel_result(d, "all")
     if cached is not None:
         return cached.layers
@@ -163,8 +154,7 @@ async def rerun_layer(layer_id: str, date: str | None = None, body: dict | None 
         cfg_data = {k: v for k, v in body.items() if k != "sources"}
         if cfg_data:
             _store["config"] = ThresholdConfig(**cfg_data)
-    from vr_paths import last_trading_date_str  # noqa: PLC0415
-    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or last_trading_date_str(), _store["config"])
+    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or _today(), _store["config"])
     layer = next((l for l in result.layers if l.layer_id == layer_id), None)
     if layer is None:
         raise HTTPException(404, f"未知漏斗层: {layer_id}")
@@ -174,8 +164,7 @@ async def rerun_layer(layer_id: str, date: str | None = None, body: dict | None 
 @router.post("/funnel/layers/{layer_id}/rerun-downstream")
 async def rerun_downstream(layer_id: str, date: str | None = None):
     """下游全跑（S023 F4）：用户确认后往下重跑，返回全部层。"""
-    from vr_paths import last_trading_date_str  # noqa: PLC0415
-    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or last_trading_date_str(), _store["config"])
+    result = await asyncio.to_thread(funnel_mod.run_funnel, "all", date or _today(), _store["config"])
     idx = next((i for i, l in enumerate(result.layers) if l.layer_id == layer_id), None)
     if idx is None:
         raise HTTPException(404, f"未知漏斗层: {layer_id}")

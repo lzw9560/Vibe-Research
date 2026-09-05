@@ -73,7 +73,6 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: PieChart,
     tabs: [
       { to: "/portfolio", label: "组合" },
-      { to: "/journal", label: "交易日志" },
       { to: "/my-reports", label: "我的研报" },
       { to: "/sentiment/weather", label: "情绪气象" },
       { to: "/scheduled-tasks", label: "定时任务" },

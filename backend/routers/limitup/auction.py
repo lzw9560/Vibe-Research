@@ -8,7 +8,6 @@ from typing import Any, Dict
 
 import limitup_screener as _ls
 import auction_screener as asc
-from vr_paths import last_trading_date_str
 from routers.common import load_json_params, save_json_params
 
 router = APIRouter(tags=["limitup"])
@@ -23,8 +22,7 @@ async def get_auction_top(date: str = Query(None, description="交易日期 YYYY
     非实时扫描，而是历史竞价模式回放 + 次日预案生成。
     """
     if date is None:
-        # S149 修复：默认最近交易日（非今日）——周末/节假日/盘前今日无竞价数据→空。
-        date = last_trading_date_str()
+        date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
     
     try:
         screener = asc.get_screener()

@@ -14,13 +14,11 @@ import {
   useSentimentWeatherAuction,
   useSentimentWeatherSealRisk,
   useSentimentWeatherPardon,
-  useEmotionMetrics,
 } from "@/lib/query";
 import { WeatherHero } from "@/components/sentiment-weather/WeatherHero";
 import { AuctionMetricsCard } from "@/components/sentiment-weather/AuctionMetricsCard";
 import { SealRiskCard } from "@/components/sentiment-weather/SealRiskCard";
 import { PardonManagement } from "@/components/sentiment-weather/PardonManagement";
-import { EmotionMetricsCard } from "@/components/sentiment-weather/EmotionMetricsCard";
 import { STITimelineChart } from "@/components/sti/STITimelineChart";
 
 type TabId = "realtime" | "history" | "strategy" | "fuse";
@@ -47,8 +45,6 @@ export default function SentimentWeather() {
   const auctionQ = useSentimentWeatherAuction({ refetchInterval: REFRESH_MS });
   const sealRiskQ = useSentimentWeatherSealRisk({ refetchInterval: REFRESH_MS });
   const pardonQ = useSentimentWeatherPardon({ refetchInterval: REFRESH_MS });
-  // S149 Phase 2：派生情绪指标（赚钱效应/连板溢价/情绪周期）——aggregate 无个股名。
-  const emotionQ = useEmotionMetrics(undefined, { refetchInterval: REFRESH_MS });
 
   // 派生数据槽（保持原变量名，JSX 渲染逻辑不动）
   // latest/strategy 端点返裸类型（无信封），hook data 已类型化，无需 cast。
@@ -103,7 +99,6 @@ export default function SentimentWeather() {
     void auctionQ.refetch();
     void sealRiskQ.refetch();
     void pardonQ.refetch();
-    void emotionQ.refetch();
   };
 
   const weatherState = weather?.weather_state ?? "未知";
@@ -181,15 +176,6 @@ export default function SentimentWeather() {
                 </div>
               )}
             </GlassCard>
-
-            {/* S149 Phase 2：派生情绪指标（赚钱效应/连板溢价/情绪周期）。
-                补充卡片——error 不进 firstError（不阻塞整页），但传给卡片就地呈现（不静默吞错）。*/}
-            {(emotionQ.data || emotionQ.isError) && (
-              <EmotionMetricsCard
-                metrics={emotionQ.data}
-                error={emotionQ.isError ? emotionQ.error : undefined}
-              />
-            )}
 
             {/* Auction Metrics */}
             {auctionMetrics && (
