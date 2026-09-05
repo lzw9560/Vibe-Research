@@ -1,8 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import type { FunnelLayer, PassedItem } from "@/lib/candidates";
+import type { FunnelLayer, PassedItem, EvaluationSummary } from "@/lib/candidates";
 import { useWorkflowStates } from "@/lib/query";
 import { STATUS_COLORS } from "@/components/workflow/statusMeta";
+import { DimensionValidationBadge } from "@/components/ui/DimensionValidationBadge";
 
 // S031 R16/R17：漏斗层公共卡片——conditions + passed + filtered_out + 输入→输出计数。
 // 候选池页（FunnelLayers，neutral）与盘前简报因子层（FactorSection，info）共用。
@@ -52,10 +53,12 @@ interface Props {
   footer?: ReactNode;
   /** 交易日：传了则叠加 workflow_state 状态徽标（S033） */
   date?: string;
+  /** S151：评价层 run 级诚实标注（从 FunnelResult 下传，orphan 调用点不传→降级不显） */
+  evaluationSummary?: EvaluationSummary | null;
   className?: string;
 }
 
-export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, date, className }: Props) {
+export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, date, evaluationSummary, className }: Props) {
   const missing = layer.data_status === "未取得";
   // S033 决策 ⑥：一次取全日状态再前端 Map filter（React hooks 不得在 map callback 调）。
   // date 缺省（如单测/无日期上下文）时 enabled=false，不发请求。
@@ -119,6 +122,11 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
         <div className="font-medium">
           <span className="mr-2 text-xs text-muted-foreground">{layer.layer_id}</span>
           {layer.name}
+          {evaluationSummary && (
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-500">
+              选股层无 validated 维度
+            </span>
+          )}
         </div>
         <div className="text-xs text-muted-foreground">
           输入 <span className="text-foreground">{layer.input_count}</span> → 输出{" "}
@@ -216,6 +224,12 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
                     {disp !== null && (
                       <span className="text-xs font-medium text-primary">{disp}</span>
                     )}
+                    {(() => {
+                      const geneDim = evaluationSummary?.dimensions?.find(d => d.dimension_id === "gene_score");
+                      return c.gene_score != null && geneDim && geneDim.weight_multiplier < 1 ? (
+                        <DimensionValidationBadge validation={geneDim} compact />
+                      ) : null;
+                    })()}
                   </div>
                   {factors && (
                     <div className="pl-4 text-[10px] text-muted-foreground/70">{factors}</div>
