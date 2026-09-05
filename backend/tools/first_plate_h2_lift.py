@@ -31,7 +31,9 @@ from tools.first_board_layer_lift import day_paired_lift, four_state  # noqa: E4
 
 # 预注册冻结参数
 EARLY_LOCK_CUTOFF = "100000000"   # 早封板 = first_lock time <= 10:00
-ALPHA_ADJ = 0.05 / 2              # Bonferroni K=2（早封板 / 一字板）
+LATE_LOCK_CUTOFF = "140000000"     # 晚封板（尾盘）= first_lock time > 14:00（end_of_day_sneak）
+HIGH_DROP_PCT = 3.0               # 大回撤阈值（max_drop_pct > 3%）
+ALPHA_ADJ = 0.05 / 5              # Bonferroni K=5（早封板/一字板/开板/晚封板/大回撤）
 N_PERM = 2000
 PERM_SEED = 42
 BAOSTOCK_SLEEP = 0.1             # baostock fetch 礼貌间隔（非防封必需）
@@ -138,6 +140,21 @@ def _is_early_lock(feat: dict) -> bool:
     return _time_suffix(feat["first_lock_time"]) <= EARLY_LOCK_CUTOFF
 
 
+def _is_late_lock(feat: dict) -> bool:
+    """T2.3 晚封板（尾盘突袭）= first_lock time > 14:00（end_of_day_sneak 近似）。"""
+    return _time_suffix(feat["first_lock_time"]) > LATE_LOCK_CUTOFF
+
+
+def _is_open_board(feat: dict) -> bool:
+    """T2.3 开板 = broken_duration_min > 0（盘中开过板，reverse_package 近似）。"""
+    return (feat.get("broken_duration_min") or 0) > 0
+
+
+def _is_high_drop(feat: dict) -> bool:
+    """T2.3 大回撤 = max_drop_pct > 3%（weak_turn_strong 候选：回撤大可能转强）。"""
+    return (feat.get("max_drop_pct") or 0) > HIGH_DROP_PCT
+
+
 def day_cluster_permutation(surv_by_day, raw_by_day, n_perm=N_PERM, seed=PERM_SEED):
     """within-day survivor resampling null（复用 platform_breakout_lift 范式）。
 
@@ -199,56 +216,81 @@ def main() -> int:
     ap.add_argument("--max-per-day", type=int, default=15,
                     help="每日取 top N 涨停股（preliminary；None=全量，default 15）")
     ap.add_argument("--full", action="store_true", help="全量跑（忽略 max-per-day）")
+    ap.add_argument("--no-cache", action="store_true", help="强制 re-fetch（忽略 features cache）")
     args = ap.parse_args()
     max_per_day = None if args.full else args.max_per_day
 
-    _ensure_bs_login()  # 单次 login（避免 per-fetch 840 次登录拖垮）
-    universe = _load_universe(max_per_day=max_per_day)
-    total_pairs = sum(len(v) for v in universe.values())
-    print(f"universe: {len(universe)} 信号日, {total_pairs} (date, code) pairs"
-          f"{' [preliminary top-' + str(max_per_day) + '/day]' if max_per_day else ' [full]'}", flush=True)
+    # features cache（re-run 秒级，避免 re-fetch baostock ~13min）
+    from vr_paths import resolve_data_dir
+    suffix = "_full" if args.full else f"_top{max_per_day or 'all'}"
+    cache_path = Path(resolve_data_dir()) / f"h2_features_cache{suffix}.json"
 
-    # R2-R3: fetch 5min + compute H2 features per (date, code)
-    features: list[dict] = []  # [{date, code, feat}]
-    skipped = 0
-    for di, (date, codes) in enumerate(universe.items()):
-        print(f"  [{di+1}/{len(universe)}] {date}: {len(codes)} codes fetching...", flush=True)
-        for code in codes:
-            time.sleep(BAOSTOCK_SLEEP)
-            today_bars = fetch_5min_bars(code, date, days=1)
-            from datetime import datetime, timedelta
-            next_start = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-            time.sleep(BAOSTOCK_SLEEP)
-            next_bars = fetch_5min_bars(code, next_start, days=1)
-            next_bars = [b for b in next_bars if b["date"] > date]
-            if next_bars:
-                next_bars = [b for b in next_bars if b["date"] == next_bars[0]["date"]]
-            feat = compute_h2_features(today_bars, next_bars)
-            if feat is None or feat["next_day_return"] is None:
-                skipped += 1
-                continue
-            features.append({"date": date, "code": code, **feat})
-    print(f"computed: {len(features)} features (skipped {skipped} 缺数据)", flush=True)
-    # baostock logout（单次 login 的收尾）
-    try:
-        import baostock as bs
-        bs.logout()
-    except Exception:
-        pass
+    _ensure_bs_login()  # 单次 login（避免 per-fetch 840 次登录拖垮）
+    if cache_path.exists() and not args.no_cache:
+        features = json.loads(cache_path.read_text(encoding="utf-8"))
+        print(f"loaded {len(features)} features from cache {cache_path.name}", flush=True)
+        skipped = -1  # cache 路径不报告 skipped
+    else:
+        universe = _load_universe(max_per_day=max_per_day)
+        total_pairs = sum(len(v) for v in universe.values())
+        print(f"universe: {len(universe)} 信号日, {total_pairs} (date, code) pairs"
+              f"{' [preliminary top-' + str(max_per_day) + '/day]' if max_per_day else ' [full]'}", flush=True)
+
+        # R2-R3: fetch 5min + compute H2 features per (date, code)
+        features = []  # [{date, code, feat}]
+        skipped = 0
+        for di, (date, codes) in enumerate(universe.items()):
+            print(f"  [{di+1}/{len(universe)}] {date}: {len(codes)} codes fetching...", flush=True)
+            for code in codes:
+                time.sleep(BAOSTOCK_SLEEP)
+                today_bars = fetch_5min_bars(code, date, days=1)
+                from datetime import datetime, timedelta
+                next_start = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                time.sleep(BAOSTOCK_SLEEP)
+                next_bars = fetch_5min_bars(code, next_start, days=1)
+                next_bars = [b for b in next_bars if b["date"] > date]
+                if next_bars:
+                    next_bars = [b for b in next_bars if b["date"] == next_bars[0]["date"]]
+                feat = compute_h2_features(today_bars, next_bars)
+                if feat is None or feat["next_day_return"] is None:
+                    skipped += 1
+                    continue
+                features.append({"date": date, "code": code, **feat})
+        print(f"computed: {len(features)} features (skipped {skipped} 缺数据)", flush=True)
+        # baostock logout（单次 login 的收尾）
+        try:
+            import baostock as bs
+            bs.logout()
+        except Exception:
+            pass
+        try:
+            cache_path.write_text(json.dumps(features, ensure_ascii=False), encoding="utf-8")
+            print(f"cached {len(features)} features → {cache_path.name}", flush=True)
+        except Exception:
+            pass
 
     if len(features) < 30:
         print(f"n={len(features)} < 30 → 探索性，不足 verdict")
         # 仍输出描述性统计
         early = [f for f in features if _is_early_lock(f)]
         one_word = [f for f in features if f["is_one_word"]]
+        open_board = [f for f in features if _is_open_board(f)]
+        late_lock = [f for f in features if _is_late_lock(f)]
+        high_drop = [f for f in features if _is_high_drop(f)]
         print(f"  早封板(<=10:00): {len(early)}/{len(features)}")
         print(f"  一字板: {len(one_word)}/{len(features)}")
+        print(f"  开板(broken>0): {len(open_board)}/{len(features)}")
+        print(f"  晚封板(>14:00): {len(late_lock)}/{len(features)}")
+        print(f"  大回撤(>3%): {len(high_drop)}/{len(features)}")
         return 0
 
-    # R4: day_paired_lift 两组 + null
+    # R4: day_paired_lift 5 组 + null（T2.2 early/one_word + T2.3 open/late/drop）
     raw_by_day: dict[str, list[float]] = defaultdict(list)
     early_by_day: dict[str, list[float]] = defaultdict(list)
     oneword_by_day: dict[str, list[float]] = defaultdict(list)
+    open_by_day: dict[str, list[float]] = defaultdict(list)
+    late_by_day: dict[str, list[float]] = defaultdict(list)
+    drop_by_day: dict[str, list[float]] = defaultdict(list)
     for f in features:
         ret = f["next_day_return"]
         raw_by_day[f["date"]].append(ret)
@@ -256,8 +298,20 @@ def main() -> int:
             early_by_day[f["date"]].append(ret)
         if f["is_one_word"]:
             oneword_by_day[f["date"]].append(ret)
+        if _is_open_board(f):
+            open_by_day[f["date"]].append(ret)
+        if _is_late_lock(f):
+            late_by_day[f["date"]].append(ret)
+        if _is_high_drop(f):
+            drop_by_day[f["date"]].append(ret)
 
-    groups = {"early_lock": early_by_day, "one_word": oneword_by_day}
+    groups = {
+        "early_lock": early_by_day,      # T2.2 早封板
+        "one_word": oneword_by_day,      # T2.2 一字板
+        "open_board": open_by_day,       # T2.3 开板（reverse_package 近似）
+        "late_lock": late_by_day,        # T2.3 晚封板（end_of_day_sneak 近似）
+        "high_drop": drop_by_day,        # T2.3 大回撤（weak_turn_strong 候选）
+    }
     results = {}
     for name, surv in groups.items():
         lr = day_paired_lift(surv, raw_by_day)
@@ -277,7 +331,7 @@ def main() -> int:
 
     print("\n=== S152 H2 verdict（baostock 5min, day_paired_lift 非池化, within-day survivor null）===")
     print(f"universe: {len(features)} features across {len(raw_by_day)} 日")
-    print(f"Bonferroni K=2 α_adj={ALPHA_ADJ}（早封板 / 一字板）")
+    print(f"Bonferroni K=5 α_adj={ALPHA_ADJ}（早封板/一字板/开板/晚封板/大回撤）")
     for name, r in results.items():
         print(f"  {name}: n={r['n']} lift={r['lift']} state={r['state']} "
               f"null_p95={r['null_p95']} pass_filter_edge={r['pass_filter_edge']}")

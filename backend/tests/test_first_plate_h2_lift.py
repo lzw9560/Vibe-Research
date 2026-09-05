@@ -9,7 +9,10 @@
 """
 from __future__ import annotations
 
-from tools.first_plate_h2_lift import compute_h2_features, _is_early_lock, _time_suffix
+from tools.first_plate_h2_lift import (
+    compute_h2_features, _is_early_lock, _is_late_lock,
+    _is_open_board, _is_high_drop, _time_suffix,
+)
 
 
 def _bar(time: str, close: float, opn: float = 10.0) -> dict:
@@ -95,6 +98,23 @@ def test_time_suffix_extraction():
     """baostock time（17 字符 YYYYMMDDHHMMSSmmm）后 9 位 = HHMMSSmmm，用于早封板比较。"""
     assert _time_suffix("20260817093500000") == "093500000"  # HH=09 MM=35 SS=00 mmm=000
     assert _time_suffix("20260817140000000") == "140000000"
+
+
+def test_t23_predicates():
+    """T2.3 盘中交互谓词：开板/晚封板/大回撤。"""
+    one_word = {"first_lock_time": "20260817093500000", "broken_duration_min": 0.0, "max_drop_pct": 0.0}
+    open_board = {"first_lock_time": "20260817094500000", "broken_duration_min": 10.0, "max_drop_pct": 1.5}
+    late_lock = {"first_lock_time": "20260817143000000", "broken_duration_min": 0.0, "max_drop_pct": 0.5}
+    high_drop = {"first_lock_time": "20260817100000000", "broken_duration_min": 5.0, "max_drop_pct": 4.2}
+    # 开板（broken_duration>0）
+    assert not _is_open_board(one_word)
+    assert _is_open_board(open_board)
+    # 晚封板（>14:00，end_of_day_sneak 近似）
+    assert not _is_late_lock(one_word)
+    assert _is_late_lock(late_lock)
+    # 大回撤（>3%，weak_turn_strong 候选）
+    assert not _is_high_drop(one_word)
+    assert _is_high_drop(high_drop)
 
 
 def test_day_paired_lift_interface_reused():
