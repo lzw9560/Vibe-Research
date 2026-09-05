@@ -172,9 +172,9 @@ class TestComputeStrategyScore:
         # 中文键名（gene_scores 口径）；英文权重键经 _FACTOR_NAME_MAP 映射查值。
         factors = {"封板率": 90, "涨停频次": 20}
         score, breakdown = compute_strategy_score(factors, "storm_reversal")
-        # seal 90×0.6=54, (100-20)×0.4=32, total=86
-        assert score == 86.0
-        assert breakdown["factor_seal_rate"] == 54.0
+        # seal 90×0.6=54, (100-20)×0.4=32, total=86; S151 R2 gene-based ×0.1: seal 5.4 + freq 3.2 = 8.6
+        assert score == 8.6
+        assert breakdown["factor_seal_rate"] == 5.4
 
     def test_reverse_factor_uses_100_minus_value(self, monkeypatch):
         """反向因子（freq）用 (100-value) 反转。"""
@@ -185,8 +185,8 @@ class TestComputeStrategyScore:
         # 中文键名（gene_scores 口径）
         factors = {"封板率": 90, "涨停频次": 20}
         _, breakdown = compute_strategy_score(factors, "storm_reversal")
-        # freq 反向：100-20=80, 80×0.4=32
-        assert breakdown["factor_freq_score"] == 32.0
+        # freq 反向：100-20=80, 80×0.4=32, S151 R2 gene-based ×0.1 = 3.2
+        assert breakdown["factor_freq_score"] == 3.2
 
     def test_missing_weights_fallback_equal(self):
         """权重加载失败 → 等权兜底（不崩）。"""

@@ -422,6 +422,18 @@ def compute_strategy_score(
             breakdown = {}
         return round(score, 4), breakdown
 
+    # S151 R2：评价层降权注入——gene-based 因子（封板率/红盘率/炸板后溢价/涨停频次/次日溢价率）
+    # proxy 映射 gene composite rho≈0 → 推断无方向性 → ×0.1（indirect, 非 direct measurement, spec §E）
+    # 非 gene 因子（相对强度/均线多头/量能信号/板块强度）×1.0
+    _GENE_BASED_FACTORS = {
+        "factor_seal_rate", "factor_red_rate", "factor_rebound_rate",
+        "factor_freq_score", "factor_premium",
+    }
+    try:
+        from candidate_funnel.evaluation import DIMENSION_LIFT_REGISTRY  # 懒导入避循环
+        gene_multiplier = DIMENSION_LIFT_REGISTRY["gene_score"].weight_multiplier  # 0.1
+    except Exception:  # noqa: BLE001 — import 失败降级默认（gene rho≈0 → ×0.1）
+        gene_multiplier = 0.1
     total = 0.0
     breakdown = {}
     for factor_name, w_info in weights.items():
@@ -432,7 +444,9 @@ def compute_strategy_score(
         val = factors.get(cn_name, 0)
         if reverse:
             val = 100 - val
-        contribution = val * w
+        # S151 R2：gene-based 因子 ×0.1 proxy 降权，非 gene 因子 ×1.0
+        multiplier = gene_multiplier if factor_name in _GENE_BASED_FACTORS else 1.0
+        contribution = val * w * multiplier
         total += contribution
         breakdown[factor_name] = round(contribution, 4)
 
