@@ -93,13 +93,15 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         note="S152 全量唯一弱正（>null_p95=1.117 pass_filter_edge=True 但<2）；尾盘突袭 end_of_day_sneak 近似；"
              "raw-shadow 观察，不驱动交易；caveat: T+0 o2c+5min 粒度+top15/full 一致",
     ),
-    # 参照（非选股层，不参与降权）
+    # 参照（非选股层，不参与降权）— S155 证伪：pooled 2.046 look-ahead，per-T 1.974<2 + net<1x cost-killed
     "vol_surge_ref": DimensionValidation(
-        dimension_id="vol_surge_ref", label="vol_surge(参照,非选股层)",
-        lift=2.046, n=43691, days_robust=42,
-        validation_status="validated", weight_multiplier=1.0,
+        dimension_id="vol_surge_ref", label="vol_surge(参照,非选股层,T-1非盘中)",
+        lift=1.974, n=43691, days_robust=42,   # per-T quintile（无 look-ahead；pooled 2.046 是全局 quintile artifact）
+        validation_status="未validated", weight_multiplier=0.5,  # per-T<2→未validated；参照不参与选股降权(never applied)
         source_script="tools/kline_ta_validation.py",
-        note="非选股层参照，不参与降权（盘中维度）",
+        note="S155 证伪：pooled 2.046(全局quintile look-ahead)→per-T 1.974(<2未validated); "
+             "net path-winrate 扣0.70%cost=0.945x 劣于随机(cost-killed,非tradeable); "
+             "原'盘中维度'是mislabel(实为T-1特征); 参照不参与选股降权",
     ),
     # S153 R7/R8 选股层 breakout 精细化（闭合 breakout 家族，2026-09-05 跑出）
     "platform_breakout": DimensionValidation(

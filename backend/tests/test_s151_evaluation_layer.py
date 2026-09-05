@@ -63,7 +63,7 @@ class TestDimensionLiftRegistry:
         assert p.lift == pytest.approx(0.978)
         assert p.weight_multiplier == 0.1
         v = DIMENSION_LIFT_REGISTRY["vol_surge_ref"]
-        assert v.weight_multiplier == 1.0  # 参照非选股层不降权
+        assert v.weight_multiplier == 0.5  # S155 证伪：per-T 1.974<2→未validated×0.5（参照不参与选股降权，never applied）
 
     def test_source_script_non_empty(self):
         # 禁臆造溯源：每维度 source_script 非空
