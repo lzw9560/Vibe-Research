@@ -46,6 +46,7 @@ _EXPECTED_TASK_TYPES = {
     "first_board_filter",
     "st_play_radar",  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
     "s066_validation_checkpoint",
+    "evaluation_backtest",  # S151 R3：评价层 30日首次/60日复验检查点
     "forward_test_daily",
     "forward_test_t1_settle",
     "first_board_t1_review",

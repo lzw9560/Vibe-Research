@@ -503,6 +503,7 @@ class TaskExecutor:
             "candidate_funnel_precompute": self._execute_candidate_funnel_precompute,  # S004 R5：盘后漏斗预计算
             "first_board_filter": self._execute_first_board_filter,  # S075：盘后首板流筛选+评分
             "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,  # §44 60 天复验检查点（提醒任务）
+            "evaluation_backtest": self._execute_evaluation_backtest,  # S151 R3：评价层 30日首次/60日复验检查点（提醒任务）
             "forward_test_daily": self._execute_forward_test_daily,  # S069 R1：每日记 forward_test picks+universe
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,  # S069 R2：T+1 收益回填
             "first_board_t1_review": self._execute_first_board_t1_review,  # S075：T+1 溢价评分+复盘报告+飞书
@@ -1264,6 +1265,77 @@ class TaskExecutor:
             pass
         logger.warning(
             "[s066_checkpoint] §44 60 天复验 DUE：eastmoney_live=%d 日 → 跑 backfill --weather 查 lift", days)
+        return ckpt
+
+
+    def _execute_evaluation_backtest(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S151 R3：评价层回溯检查点（提醒任务，复用 s066_validation_checkpoint 范式）。
+
+        数 forward_test_records 信号日 + buyable picks；两档门槛：
+        - 30 日 + n≥100 → 首次回溯 DUE（跑 per-dimension day_paired_lift 非池化，
+          写 VR_DATA_DIR/evaluation_lifts.db，DIMENSION_LIFT_REGISTRY 升级 DB-backed 动态读）
+        - 60 日 → 复验 DUE（重跑 lift + 判升级/降级：lift≥2+CI不重叠→validated×1.0；
+          lift<1 robust→劣于随机×0.1）
+        到点只提醒不自动验证（同 s066）——由人/会话跑 harness。未到期返 not_due + 进度（静默）。
+        """
+        from config import GENE_SCORES_DB_PATH
+        from vr_paths import resolve_data_dir
+        from db_health import get_healthy_conn
+
+        first_threshold = int(payload.get("first_threshold", 30))
+        reverify_threshold = int(payload.get("reverify_threshold", 60))
+        min_n = int(payload.get("min_n", 100))
+
+        conn = get_healthy_conn(GENE_SCORES_DB_PATH)
+        try:
+            days = conn.execute(
+                "SELECT COUNT(DISTINCT signal_date) FROM forward_test_records"
+            ).fetchone()[0]
+            # S144 buyable 口径（剔 is_unbuyable=1 一字板，与 verdict 同源）
+            n = conn.execute(
+                "SELECT COUNT(*) FROM forward_test_records WHERE is_unbuyable = 0"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        # 未到期：返进度（静默）
+        if days < first_threshold:
+            return {"status": "not_due", "signal_days": days, "picks_n": n,
+                    "first_threshold": first_threshold, "reverify_threshold": reverify_threshold,
+                    "min_n": min_n,
+                    "note": f"日数积累中 {days}/{first_threshold}（n={n}），到点提醒 §44 首次回溯"}
+        if n < min_n:
+            return {"status": "not_due", "signal_days": days, "picks_n": n,
+                    "first_threshold": first_threshold, "reverify_threshold": reverify_threshold,
+                    "min_n": min_n,
+                    "note": f"日数 {days}≥{first_threshold} 达首档但 n={n}/{min_n} 不足，picks 积累中"}
+
+        # 到期：判阶段 + 写 checkpoint + WARNING + 返操作指引
+        phase = "first_retrospective" if days < reverify_threshold else "reverify"
+        if phase == "first_retrospective":
+            action = (
+                "cd backend && .venv/bin/python tools/first_board_layer_lift.py --baostock "
+                "→ 跑 per-dimension day_paired_lift（非池化防 4.686x→1.723x 假象）写 "
+                "evaluation_lifts.db → DIMENSION_LIFT_REGISTRY 升级 DB-backed 动态读（spec S151 R3）"
+            )
+        else:
+            action = (
+                "cd backend && .venv/bin/python tools/first_board_layer_lift.py --baostock-history "
+                "→ 重跑 lift + 判升级/降级（lift≥2+CI不重叠→validated×1.0；lift<1 robust→劣于随机×0.1；"
+                "1≤lift<2→未validated×0.5）——更新 DIMENSION_LIFT_REGISTRY updated_*"
+            )
+        ckpt = {"status": "due", "phase": phase, "signal_days": days, "picks_n": n,
+                "first_threshold": first_threshold, "reverify_threshold": reverify_threshold,
+                "min_n": min_n, "action": action,
+                "checked_at": datetime.now().isoformat()}
+        try:
+            ckpt_path = Path(resolve_data_dir()) / "s151_evaluation_backtest_due.json"
+            ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        logger.warning(
+            "[evaluation_backtest] S151 回溯 DUE（%s）：signal_days=%d picks_n=%d → %s",
+            phase, days, n, action)
         return ckpt
 
 
@@ -2123,6 +2195,11 @@ def _execute_s066_validation_checkpoint(ctx, payload):
     return TaskExecutor()._execute_s066_validation_checkpoint(payload)
 
 
+def _execute_evaluation_backtest(ctx, payload):
+    """S151 R3 评价层回溯检查点（模块级兼容包装；ctx 占位忽略）。"""
+    return TaskExecutor()._execute_evaluation_backtest(payload)
+
+
 def _execute_forward_test_daily(ctx, payload):
     """S069 R1 每日 forward_test picks 记录（模块级兼容包装；ctx 占位忽略）。"""
     return TaskExecutor()._execute_forward_test_daily(payload)
@@ -2485,6 +2562,21 @@ def _ensure_seed_tasks() -> None:
             notify_on_success=True,
         ))
         logger.info("[scheduler] seed 默认任务 s066_validation_checkpoint 已创建（cron 0 18 * * 1，§44 60 天复验提醒）")
+
+    # S151 R3：评价层回溯检查点（提醒任务）：周一 18:05 数 forward_test 信号日 + buyable picks，
+    # 30 日 + n≥100 → 首次回溯 DUE（写 s151_evaluation_backtest_due.json + WARNING）；
+    # 60 日 → 复验 DUE。到点只提醒不自动验证（同 s066）——由人/会话跑 day_paired_lift harness。
+    if "evaluation_backtest" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="evaluation_backtest",
+            description="S151 R3：评价层 30日首次/60日复验回溯检查点（§44 per-dimension lift 提醒）",
+            task_type="evaluation_backtest",
+            cron_expr="5 18 * * 1",  # 周一 18:05（晚 s066 18:00，同窗口周一一次）
+            payload={"first_threshold": 30, "reverify_threshold": 60, "min_n": 100},
+            enabled=True,
+            notify_on_success=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 evaluation_backtest 已创建（cron 5 18 * * 1，S151 回溯提醒）")
 
     # S069 R1：每日 post-market 记当日 forward_test picks + universe（晚 limitup_precompute 15min）。
     # weather 用 build_context（完整架构）；T+1 收益由 R2 次日回填（待接）。
