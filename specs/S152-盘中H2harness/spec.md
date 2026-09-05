@@ -14,12 +14,15 @@
 **"唯一未证伪维度" H2 现证否**——盘中封板时间也无 edge，与选股无 edge（forward lift=0.983）一致。"edge 在盘中"对封板时间维度不成立。
 
 **T2.3 扩展（5 组，Bonferroni K=5）**：开板（reverse_package 近似）/晚封板（end_of_day_sneak 近似）/大回撤（weak_turn_strong 候选）：
-- open_board: n=548 lift=0.9924 劣于随机（开板无 edge）
-- **late_lock: n=94 lift=1.3326 > null_p95=1.2612 pass_filter_edge=True——5 组唯一弱正信号**（但<2 未validated；同 grill memory breakout 1.67x<2 同款弱正）
-- high_drop: n=0（5min 粒度对涨停股 max_drop>3% 太粗，探索性）
-- 其余 early_lock/one_word 同上
 
-late_lock（尾盘突袭）是 5min-testable 盘中族**唯一 >1 的弱正**——其余全无 edge。未 validated（<2x），不驱动交易，但值得随数据积累观察（raw-shadow stance）。
+**Full run verdict（2717 features / 31 日，--full 全量）**：
+- early_lock: n=1125 lift=0.8273 劣于随机（确认无 edge）
+- open_board（开板 reverse_package 近似）: n=2537 lift=0.9976 劣于随机（确认无 edge）
+- **late_lock（晚封板>14:00 end_of_day_sneak 近似）: n=422 lift=1.3559 > null_p95=1.1165 pass_filter_edge=True——ROBUST 弱正**（preliminary 1.33 n=94 → full 1.36 n=422，4.5x 数据下信号 HELD；但<2 未validated ×0.5）
+- high_drop: n=0（5min 粒度对涨停股 max_drop>3% 太粗，探索性）
+- one_word: n=1 探索性
+
+**late_lock（尾盘突袭）是整个测试空间（选股+盘中5min族）唯一 >1 的 robust 弱正**——1.36x n=422 pass_filter_edge，但<2x 未validated，不驱动交易（raw-shadow 观察）。DIMENSION_LIFT_REGISTRY 加 first_plate_h2（劣于随机×0.1）+ late_lock（未validated×0.5）。
 
 caveat: T+0 o2c（未剔 unbuyable 一字板，S144 口径 follow-up）+ 5min 粒度（60s→5min coarser，broken_duration<5min 漏标）+ top15/day 采样（full run 后续，但 n=311-548 robust）。
 

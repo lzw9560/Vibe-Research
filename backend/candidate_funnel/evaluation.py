@@ -79,11 +79,19 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     # S152 盘中 H2（baostock 5min 历史补，突破 seal_intraday 30 天 live 卡点）
     "first_plate_h2": DimensionValidation(
         dimension_id="first_plate_h2", label="盘中 H2 早封板(<=10:00)",
-        lift=0.7843, n=311, days_robust=41,           # 606 features / 41 日 top-15/day preliminary
+        lift=0.8273, n=1125, days_robust=31,           # full run 2717 features / 31 日
         validation_status="劣于随机", weight_multiplier=0.1,
-        source_script="tools/first_plate_h2_lift.py",
-        note="S152 baostock 5min 早封板 lift<1（null_p95=1.083，pass_filter_edge=False）；"
-             "盘中 H2 也证否——'edge 在盘中'对封板时间维度不成立；caveat: T+0 o2c+5min 粒度+top15/day 采样",
+        source_script="tools/first_plate_h2_lift.py --full",
+        note="S152 baostock 5min 早封板 lift<1（null_p95=1.048，pass_filter_edge=False）；"
+             "盘中封板时间无 edge；caveat: T+0 o2c+5min 粒度",
+    ),
+    "late_lock": DimensionValidation(
+        dimension_id="late_lock", label="盘中晚封板/尾盘突袭(>14:00)",
+        lift=1.3559, n=422, days_robust=31,             # full run robust（preliminary 1.33 n=94 → full 1.36 n=422）
+        validation_status="未validated", weight_multiplier=0.5,   # 1≤lift<2 → ×0.5（<2 不 validated）
+        source_script="tools/first_plate_h2_lift.py --full",
+        note="S152 全量唯一弱正（>null_p95=1.117 pass_filter_edge=True 但<2）；尾盘突袭 end_of_day_sneak 近似；"
+             "raw-shadow 观察，不驱动交易；caveat: T+0 o2c+5min 粒度+top15/full 一致",
     ),
     # 参照（非选股层，不参与降权）
     "vol_surge_ref": DimensionValidation(
