@@ -652,3 +652,37 @@ def test_run_daily_forward_test_degrades_when_fetch_zt_pool_fails(monkeypatch):
     ft.run_daily_forward_test("2026-08-18", "晴天")
     # 失败降级为空 map（不抛、不阻断；entry_price 走 A7 gene.total_score 代理）
     assert captured["pool_item_map"] == {}
+
+
+def test_run_daily_forward_test_filters_none_placeholder_no_crash(monkeypatch):
+    """S151 修：score_candidates 空候选返 "none" 占位（无 code key）→ 过滤不崩。
+
+    场景：某信号日 gene_scores 有候选但无一通过战法 hard_standards → score_candidates 返
+    [{"strategy_code":"none",...}]（无 code，strategy_funnel_registry:741 占位）。
+    修复前 forward_test.py:645 s["code"] KeyError 崩（forward_test_backfill --weather 跑到
+    无候选匹配日触发，DELETE-then-crash 清空 forward_test_records）；修复后过滤占位→0 picks。
+    """
+    from strategies import forward_test as ft
+    from limitup_screener.models import GeneScore
+
+    gene = GeneScore(
+        code="000001", name="X", total_score=70.0,
+        factors={"封板率": 80, "涨停频次": 30, "次日溢价率": 50, "红盘率": 60, "炸板后溢价": 0},
+        wilson_adjusted=70.0, qualify=True, high_gene=False,
+        last_zt_dates=[], zt_count_250d=3, date="2026-08-18",
+    )
+    monkeypatch.setattr("limitup_screener.data.load_gene_scores", lambda d: [gene])
+    monkeypatch.setattr("strategies.first_board_filter.fetch_zt_pool", lambda d: [])
+
+    # score_candidates 返 "none" 占位（无 code key，模拟全候选被 hard_standards 滤掉）
+    def _fake_score(cands, weather, funnel_type, trade_date=None, pool_item_map=None):
+        return [{"strategy_code": "none", "note": "候选股因子值不满足入场条件",
+                 "strategy_score": 0, "strategy": "无符合条件标的", "factors": {}}]
+    monkeypatch.setattr("strategies.strategy_funnel_registry.score_candidates", _fake_score)
+    monkeypatch.setattr("strategies.calendar_factor.calendar_factor", lambda d: (1.0, ""))
+    monkeypatch.setattr("strategies.forward_test.record_daily_recommendations", lambda d, recs: len(recs))
+    monkeypatch.setattr("strategies.forward_test._record_universe_codes", lambda d, genes: None)
+
+    r = ft.run_daily_forward_test("2026-08-18", "晴天")
+    # "none" 占位被过滤 → 0 recommendations，不崩 KeyError
+    assert r["recommendations"] == 0

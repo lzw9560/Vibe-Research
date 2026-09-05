@@ -639,6 +639,9 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
     scored = score_candidates(candidates, weather_state, "limitup", signal_date, pool_item_map)
     mult, _ = calendar_factor(signal_date)
 
+    # S151 修：score_candidates 空候选返 "none" 占位（无 code key，strategy_funnel_registry:741）
+    # → 过滤避免 s["code"] KeyError；占位仅作 note，不进 picks。
+    real_scored = [s for s in scored if s.get("code")]
     recommendations = [
         DailyRecommendation(
             signal_date=signal_date,
@@ -650,7 +653,7 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
             position_multiplier=mult,
             recommended_position=round(5.0 * mult, 2),  # base 5% × 日历因子
         )
-        for s in scored[:20]  # top-20 推荐（picks）
+        for s in real_scored[:20]  # top-20 推荐（picks，过滤 none 占位）
     ]
 
     count = record_daily_recommendations(signal_date, recommendations)
