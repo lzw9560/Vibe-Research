@@ -76,6 +76,15 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         source_script="tools/s145_recompute_path.py",
         note="选股整体 path_lift<1，s145 敏感性 5 组 0.87-0.97 robust",
     ),
+    # S152 盘中 H2（baostock 5min 历史补，突破 seal_intraday 30 天 live 卡点）
+    "first_plate_h2": DimensionValidation(
+        dimension_id="first_plate_h2", label="盘中 H2 早封板(<=10:00)",
+        lift=0.7843, n=311, days_robust=41,           # 606 features / 41 日 top-15/day preliminary
+        validation_status="劣于随机", weight_multiplier=0.1,
+        source_script="tools/first_plate_h2_lift.py",
+        note="S152 baostock 5min 早封板 lift<1（null_p95=1.083，pass_filter_edge=False）；"
+             "盘中 H2 也证否——'edge 在盘中'对封板时间维度不成立；caveat: T+0 o2c+5min 粒度+top15/day 采样",
+    ),
     # 参照（非选股层，不参与降权）
     "vol_surge_ref": DimensionValidation(
         dimension_id="vol_surge_ref", label="vol_surge(参照,非选股层)",

@@ -33,7 +33,7 @@ class TestDimensionLiftRegistry:
     def test_has_five_selection_dimensions_plus_vol_surge_ref(self):
         ids = set(DIMENSION_LIFT_REGISTRY.keys())
         assert ids == {"gene_score", "breakout", "turnover", "seal_amount",
-                       "path_lift", "vol_surge_ref"}
+                       "path_lift", "first_plate_h2", "vol_surge_ref"}
 
     def test_all_dimensions_have_frozen_commit(self):  # A1
         for dim_id, dim in DIMENSION_LIFT_REGISTRY.items():
@@ -155,10 +155,11 @@ class TestApplyEvaluationLayer:
     def test_evaluation_summary_shape(self):  # A5
         _, summary = _apply_evaluation_layer([], {}, {}, None, "2026-09-05")
         assert summary["honest_label"] == "选股层无validated维度,edge待盘中验证"
-        # 5 维度（排 vol_surge_ref 参照）
-        assert len(summary["dimensions"]) == 5
+        # 6 维度（排 vol_surge_ref 参照；含 S152 first_plate_h2）
+        assert len(summary["dimensions"]) == 6
         dim_ids = {d["dimension_id"] for d in summary["dimensions"]}
-        assert dim_ids == {"gene_score", "breakout", "turnover", "seal_amount", "path_lift"}
+        assert dim_ids == {"gene_score", "breakout", "turnover", "seal_amount",
+                           "path_lift", "first_plate_h2"}
         assert "seal_amount" in summary["pending_dims"]  # 探索性
         assert summary["frozen_commit"] == FROZEN_COMMIT
 

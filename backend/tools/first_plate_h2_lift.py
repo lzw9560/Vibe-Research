@@ -35,6 +35,17 @@ ALPHA_ADJ = 0.05 / 2              # Bonferroni K=2（早封板 / 一字板）
 N_PERM = 2000
 PERM_SEED = 42
 BAOSTOCK_SLEEP = 0.1             # baostock fetch 礼貌间隔（非防封必需）
+_BS_READY = False                # baostock 单次 login（避免 per-call 840 次登录）
+
+
+def _ensure_bs_login() -> None:
+    """单次 baostock login（main 调用前 ensure，避免 per-fetch login 840 次拖垮）。"""
+    global _BS_READY
+    if _BS_READY:
+        return
+    import baostock as bs  # noqa: PLC0415
+    bs.login()
+    _BS_READY = True
 
 
 def _six_to_baostock(code: str) -> str:
@@ -46,20 +57,16 @@ def fetch_5min_bars(code: str, date: str, days: int = 1) -> list[dict]:
     """baostock 5min kline（qfq）。date 起 days 个交易日。
 
     返 [{date, time, open, high, low, close, volume}, ...]。缺数据/非交易日返 []。
-    baostock login→fetch→logout 在本函数内（per-call，线程安全）。
+    baostock login 单次（main 起 _ensure_bs_login，不 per-call 重登）。
     """
     import baostock as bs  # noqa: PLC0415
+    _ensure_bs_login()
     bars: list[dict] = []
     bc = _six_to_baostock(code)
-    # days=1 取当日；days=2 取当日+次日（next_day_return 用）
-    start = date
-    # end 算法：baostock 端到端含 start..end 交易日，多给几天余量取够 days 个交易日
     from datetime import datetime, timedelta
+    start = date
     end = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=days * 2 + 3)).strftime("%Y-%m-%d")
     try:
-        lg = bs.login()
-        if getattr(lg, "error_code", "0") != "0":
-            return []
         rs = bs.query_history_k_data_plus(
             bc, "date,time,open,high,low,close,volume",
             start_date=start, end_date=end, frequency="5", adjustflag="2",
@@ -74,11 +81,6 @@ def fetch_5min_bars(code: str, date: str, days: int = 1) -> list[dict]:
             })
     except Exception:
         return []
-    finally:
-        try:
-            bs.logout()
-        except Exception:
-            pass
     return bars
 
 
@@ -158,44 +160,66 @@ def day_cluster_permutation(surv_by_day, raw_by_day, n_perm=N_PERM, seed=PERM_SE
     return nulls
 
 
-def _load_universe() -> dict[str, list[str]]:
-    """R1：gene_scores eastmoney_live 信号日 → {date: [涨停股 codes]}。"""
+def _load_universe(max_per_day: int | None = None) -> dict[str, list[str]]:
+    """R1：gene_scores eastmoney_live 信号日 → {date: [涨停股 codes]}。
+
+    max_per_day：按 total_score desc 取 top N（preliminary verdict 控 fetch 预算；
+    None=全量）。caveat：cap 后 raw 基线=当日 top N 而非全涨停股（采样，非全量）。
+    """
     from config import GENE_SCORES_DB_PATH
     from db_health import get_healthy_conn
     conn = get_healthy_conn(GENE_SCORES_DB_PATH)
     try:
-        rows = conn.execute(
-            "SELECT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-        ).fetchall()
+        if max_per_day:
+            rows = conn.execute(
+                "SELECT date, code, total_score FROM gene_scores "
+                "WHERE data_source='eastmoney_live' ORDER BY date, total_score DESC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
+            ).fetchall()
     finally:
         conn.close()
-    by_day: dict[str, list[str]] = defaultdict(list)
+    by_day: dict[str, list] = defaultdict(list)
     for r in rows:
         code = str(r[1]).strip()
         if code:
-            by_day[r[0]].append(code)
-    # 每日去重
+            by_day[r[0]].append((code, r[2]) if max_per_day else code)
+    if max_per_day:
+        # 每日去重（按 code 保首）后取 top N
+        return {d: [c for c, _ in list(dict.fromkeys(codes))[:max_per_day]]
+                for d, codes in by_day.items()}
     return {d: list(dict.fromkeys(codes)) for d, codes in by_day.items()}
 
 
 def main() -> int:
-    universe = _load_universe()
+    import argparse
+    ap = argparse.ArgumentParser(description="S152 盘中 H2 harness（baostock 5min 封板时间×开板次数 lift）")
+    ap.add_argument("--max-per-day", type=int, default=15,
+                    help="每日取 top N 涨停股（preliminary；None=全量，default 15）")
+    ap.add_argument("--full", action="store_true", help="全量跑（忽略 max-per-day）")
+    args = ap.parse_args()
+    max_per_day = None if args.full else args.max_per_day
+
+    _ensure_bs_login()  # 单次 login（避免 per-fetch 840 次登录拖垮）
+    universe = _load_universe(max_per_day=max_per_day)
     total_pairs = sum(len(v) for v in universe.values())
-    print(f"universe: {len(universe)} 信号日, {total_pairs} (date, code) pairs")
+    print(f"universe: {len(universe)} 信号日, {total_pairs} (date, code) pairs"
+          f"{' [preliminary top-' + str(max_per_day) + '/day]' if max_per_day else ' [full]'}", flush=True)
 
     # R2-R3: fetch 5min + compute H2 features per (date, code)
     features: list[dict] = []  # [{date, code, feat}]
     skipped = 0
-    for date, codes in universe.items():
+    for di, (date, codes) in enumerate(universe.items()):
+        print(f"  [{di+1}/{len(universe)}] {date}: {len(codes)} codes fetching...", flush=True)
         for code in codes:
             time.sleep(BAOSTOCK_SLEEP)
             today_bars = fetch_5min_bars(code, date, days=1)
-            # 次日 bars：date+1 起取 2 天余量
             from datetime import datetime, timedelta
             next_start = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             time.sleep(BAOSTOCK_SLEEP)
             next_bars = fetch_5min_bars(code, next_start, days=1)
-            # next_bars 只取次日（非 date 当日）
             next_bars = [b for b in next_bars if b["date"] > date]
             if next_bars:
                 next_bars = [b for b in next_bars if b["date"] == next_bars[0]["date"]]
@@ -204,7 +228,13 @@ def main() -> int:
                 skipped += 1
                 continue
             features.append({"date": date, "code": code, **feat})
-    print(f"computed: {len(features)} features (skipped {skipped} 缺数据)")
+    print(f"computed: {len(features)} features (skipped {skipped} 缺数据)", flush=True)
+    # baostock logout（单次 login 的收尾）
+    try:
+        import baostock as bs
+        bs.logout()
+    except Exception:
+        pass
 
     if len(features) < 30:
         print(f"n={len(features)} < 30 → 探索性，不足 verdict")
