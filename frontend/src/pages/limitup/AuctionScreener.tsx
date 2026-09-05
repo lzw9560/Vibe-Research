@@ -23,7 +23,7 @@ const TABS: { key: AuctionTab; label: string }[] = [
 // ── 主页面：竞价选股（竞价预案 + 盘中监控页内 TabBar）──────────────────
 export function AuctionScreener() {
   const [activeTab, setActiveTab] = useState<AuctionTab>("auction");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState("");  // S149: 默认空（非今日）——useAuctionTop("")→后端 resolve last_trading（周末/盘前今日无竞价→空）；用户选日期再按选日查
   // T9：原 useState(result/loading/error) + useCallback(loadAuction) + useEffect([selectedDate])
   // → useAuctionTop(date)。date 在 queryKey 中，切换日期自动重新查询（arg-driven requery），
   // 移除手动 date-change effect；手动刷新走 refetch()。

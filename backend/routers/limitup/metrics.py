@@ -10,8 +10,8 @@ import astock
 import limitup_screener as _ls
 import time
 from datetime import date as _date
+from vr_paths import is_trading_day, last_trading_date_str
 
-from vr_paths import is_trading_day
 import emotion_metrics_ext as _emotion_ext
 
 router = APIRouter(tags=["limitup"])
@@ -33,7 +33,7 @@ async def limitup_metrics(date: str = Query(None, description="日期 YYYY-MM-DD
 
 async def _compute_limitup_metrics(date: str | None) -> Dict[str, Any]:
     """内部：计算涨停策略聚合指标。"""
-    trade_date = date or datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
+    trade_date = date or last_trading_date_str()  # S149: 默认最近交易日（非今日），周末不返全零
     cache_key = f"metrics:{trade_date}"
 
     # 检查缓存
@@ -136,7 +136,7 @@ async def consec_premium_detail(
     （守 market.py:166 零个股名契约 + spec §2 分层处置）。aggregate 见 emotion-metrics。
     """
     try:
-        trade_date = date or datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
+        trade_date = date or last_trading_date_str()  # S149: 默认最近交易日（非今日），周末不返全零
         # 非交易日守卫（与 emotion-metrics 一致——非交易日不打东财，防封）
         try:
             parsed = _date.fromisoformat(trade_date)
@@ -153,7 +153,7 @@ async def consec_premium_detail(
 
 async def _compute_emotion_metrics(date: str | None) -> Dict[str, Any]:
     """内部：算派生情绪指标（aggregate）。非交易日 → 空结果（与 em_zt_topic_pool 返空一致）。"""
-    trade_date = date or datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
+    trade_date = date or last_trading_date_str()  # S149: 默认最近交易日（非今日），周末不返全零
     cache_key = f"emotion:{trade_date}"
     now = time.time()
     if cache_key in _EMOTION_CACHE:

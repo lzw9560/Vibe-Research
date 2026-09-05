@@ -17,7 +17,7 @@ from typing import Any, Callable, Protocol
 from fastapi import APIRouter, Query
 
 import astock
-from vr_paths import is_trading_day
+from vr_paths import is_trading_day, last_trading_date_str
 # cache_response 定义在 app.py（cache_response 段之后才 include 本路由）。
 # 用守卫 import：app 先加载（生产/uvicorn）时拿到真装饰器；topology 被单独
 # import（单测）时触发循环 import，回退到透传装饰器，纯逻辑仍可独立测试。
@@ -246,7 +246,10 @@ def _collect_shared_sets(
 
 
 def _today_iso() -> str:
-    return _date.today().isoformat()
+    # S149 修复：默认 pool/funnel date 用最近交易日（非今日）——周末/节假日/盘前
+    # 今日无 zt 池→run_funnel 0 候选→关系图/梯队树空。改 last_trading_date_str 后
+    # 自动回退最近交易日（有数据）。3 个 call site（126/324/380）一并生效。
+    return last_trading_date_str()
 
 
 def _compact(iso_date: str) -> str:

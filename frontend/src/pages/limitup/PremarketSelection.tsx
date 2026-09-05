@@ -1,16 +1,22 @@
 // S071 盘前选股 — breakout 弱信号（§44 naive lift=1.36x <2x 最弱方向特征）。
 // R:R 1:2 只设盈亏平衡门槛不创造 edge；honest 标签前置。breakout 已降级 2 级导航研究（本页为独立入口）。
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { usePremarketSelection } from "@/lib/query/premarket";
+import { useDateTriplet } from "@/lib/query/workflow";
 
 export function PremarketSelection() {
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // S149: 默认空（非今日）——useDateTriplet 锚 last_trading(forward) 后注入；
+  // usePremarketSelection enabled:Boolean(date) 守卫——空 date 不查（防周末今日空）。
+  const [date, setDate] = useState("");
   const [topN, setTopN] = useState(20);
   const [minScore, setMinScore] = useState(0.9);
+
+  const { data: triplet } = useDateTriplet();
+  useEffect(() => { if (triplet?.forward && !date) setDate(triplet.forward); }, [triplet, date]);
 
   const { data, isLoading, error, refetch, isFetching } = usePremarketSelection(date, topN, minScore);
 

@@ -4,6 +4,7 @@ LimitUp seats router.
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from typing import Any, Dict
+from vr_paths import last_trading_date_str
 
 router = APIRouter(tags=["limitup"])
 
@@ -47,7 +48,7 @@ async def get_consensus_signal(
     try:
         import seat_engine as se
         engine = se.get_engine()
-        td = trade_date or datetime.now(se.BEIJING_TZ).strftime("%Y-%m-%d")
+        td = trade_date or last_trading_date_str()  # S149: 默认最近交易日（非今日），周末不静默空
         signal = engine.compute_consensus_signal(td, stock_code)
         if signal is None:
             return {"signal": None, "details": {}, "disclaimer": se.SEAT_DISCLAIMER}
