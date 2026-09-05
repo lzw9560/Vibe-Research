@@ -1392,12 +1392,29 @@ class TaskExecutor:
 
         conn = get_healthy_conn(GENE_SCORES_DB_PATH)
         try:
-            rows = conn.execute(
-                "SELECT DISTINCT signal_date FROM forward_test_records "
-                "WHERE return_open2close IS NULL AND signal_date < ? "
-                "ORDER BY signal_date DESC LIMIT 3", (today,)
-            ).fetchall()
-            dates = [r[0] for r in rows if r[0] not in stuck]
+            # S151 fix：stuck 在 SQL 内排除（LIMIT 前），避免 newest 3 全 stuck 时够不着
+            # 非 stuck 旧日期（原 post-filter 在 LIMIT 后，stuck 占满 LIMIT→空）。
+            # bulk=True 提 LIMIT 处理全 non-stuck（默认 3=每日 cron 轻量）。
+            bulk = bool(payload.get("bulk"))
+            limit = 50 if bulk else 3
+            stuck_dates = list(stuck.keys())
+            if stuck_dates:
+                stuck_ph = ",".join("?" * len(stuck_dates))
+                rows = conn.execute(
+                    "SELECT DISTINCT signal_date FROM forward_test_records "
+                    "WHERE return_open2close IS NULL AND signal_date < ? "
+                    f"AND signal_date NOT IN ({stuck_ph}) "
+                    "ORDER BY signal_date DESC LIMIT ?",
+                    [today] + stuck_dates + [limit],
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT DISTINCT signal_date FROM forward_test_records "
+                    "WHERE return_open2close IS NULL AND signal_date < ? "
+                    "ORDER BY signal_date DESC LIMIT ?",
+                    [today, limit],
+                ).fetchall()
+            dates = [r[0] for r in rows]  # stuck 已在 SQL 排除
         finally:
             conn.close()
         if not dates:

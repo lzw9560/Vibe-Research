@@ -487,3 +487,41 @@ class TestForwardTestT1Settle:
         r = st._execute_forward_test_t1_settle(None, {})
         assert r["status"] == "nothing_to_settle"
         assert called["n"] == 0
+
+    def test_stuck_excluded_before_limit_reaches_older_non_stuck(self, tmp_path, monkeypatch):
+        """S151 fix：stuck 在 SQL LIMIT 前排除——newest 3 全 stuck 时够着非 stuck 旧日期。
+
+        原 bug：ORDER BY DESC LIMIT 3 取 newest 3（全 stuck）→ post-filter 空 →
+        nothing_to_settle，旧 non-stuck 日永不到（forward_test_backfill 重跑后 08-28~09-03
+        stuck 卡住 08-17~08-27 non-stuck）。fix：SQL 内 NOT IN stuck 后 LIMIT。
+        """
+        import scheduled_tasks as st
+        import strategies.forward_test as ft
+        from strategies.forward_test import (
+            record_daily_recommendations, _ensure_table, DailyRecommendation,
+        )
+        import json
+
+        db = tmp_path / "ft.db"
+        monkeypatch.setattr(ft, "_DB", str(db))
+        monkeypatch.setattr("config.GENE_SCORES_DB_PATH", str(db))
+        monkeypatch.setattr("vr_paths.resolve_data_dir", lambda: str(tmp_path))
+        monkeypatch.setattr("vr_paths.last_trading_date_str", lambda d=None: "2026-08-30")
+        _ensure_table()
+        # 3 newest NULL dates 全 stuck + 1 older non-stuck（08-20）
+        for d in ("2026-08-29", "2026-08-28", "2026-08-27", "2026-08-20"):
+            record_daily_recommendations(d, [DailyRecommendation(d, "000001", "A", "first_plate", 70.0)])
+        stuck = {d: "2026-09-04T15:50:00" for d in ("2026-08-29", "2026-08-28", "2026-08-27")}
+        (tmp_path / "t1_stuck_dates.json").write_text(json.dumps(stuck), encoding="utf-8")
+
+        # mock compute 返有 next_bar；record 返 len（不落盘也够验证 dates_processed）
+        monkeypatch.setattr("strategies.kline_returns.compute_returns_for_codes",
+            lambda sd, codes, strategy_params_map=None:
+                {c: {"return_open2close": 1.0, "return_close2close": 1.0, "next_pctChg": 1.0} for c in codes})
+        monkeypatch.setattr("strategies.forward_test.record_actual_returns", lambda d, r: len(r))
+        monkeypatch.setattr("strategies.forward_test.record_universe_returns", lambda d, r: len(r))
+
+        r = st._execute_forward_test_t1_settle(None, {})
+        # 够着 non-stuck 旧日 08-20（非 nothing_to_settle；原 bug 返 nothing_to_settle）
+        assert r.get("dates_processed"), f"应处理非 stuck 旧日，got {r}"
+        assert any(d["signal_date"] == "2026-08-20" for d in r["dates_processed"])
