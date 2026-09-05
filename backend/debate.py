@@ -48,6 +48,9 @@ _DOSSIER_SPEC: list[tuple[str, dict, str, bool, bool]] = [
     ("query_concepts", {}, "板块与概念归属", False, False),
     ("query_reports", {}, "近期研报", True, True),
     ("query_news", {}, "近期新闻", True, True),
+    # S154 T6.1：盘中封单特征（辅助非 edge）——§44 H2 证否 lift=0.7843，仅供 AI 看盘中结构
+    # parallel=True（读本地 SQLite 不触 em_get 防封）；empty_ok=True（多数股无 seal_derived_features，空正常）
+    ("query_intraday_features", {"days": 5}, "盘中封单特征（辅助，非 edge）", True, True),
 ]
 
 _SECTION_CAP = 1800  # 单个小节注入上限，防止某项数据把整份底稿撑爆

@@ -80,6 +80,47 @@ def query_global_stock(symbol: str) -> dict:
     return mappers.global_stock_from_gstock(raw).model_dump(mode="json")
 
 
+@register_tool(
+    "query_intraday_features",
+    "查个股近期盘中封单特征（last_lock_time 最后封死时刻 / broken_duration_min 开板时长 / "
+    "max_drop_pct 最大回撤 / limit_price 涨停价）。读 seal_derived_features 预采集表。"
+    "T6.1 辅助层——辅助非 edge：§44 H2 verdict lift=0.7843 劣于随机（封板时间无 edge），"
+    "仅供 AI 看盘中结构，非买卖信号、非 validated edge。",
+    params={
+        "code": {"description": "6 位股票代码"},
+        "days": {"description": "近 N 日（默认 5）"},
+    },
+)
+def query_intraday_features(code: str, days: int = 5) -> list[dict]:
+    # 懒导入：stock_tools import 时 risk 可能未就绪 + 避免循环；fresh env 表不存在返 []
+    import sqlite3  # noqa: PLC0415
+    from risk.seal_intraday_collector import _get_conn  # noqa: PLC0415
+    note = "辅助非 edge（§44 H2 lift=0.7843 劣于随机，仅供看盘中结构）"
+    try:
+        conn = _get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT date, last_lock_time, broken_duration_min, max_drop_pct, "
+                "limit_price, data_status FROM seal_derived_features "
+                "WHERE code = ? ORDER BY date DESC LIMIT ?",
+                (str(code), int(days)),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:
+        # fresh env 未跑迁移 / 表不存在 → [] 不臆造（交调用方降级，非 edge 标注仍诚实）
+        return []
+    return [
+        {
+            "date": r["date"], "last_lock_time": r["last_lock_time"],
+            "broken_duration_min": r["broken_duration_min"], "max_drop_pct": r["max_drop_pct"],
+            "limit_price": r["limit_price"], "data_status": r["data_status"],
+            "note": note,
+        }
+        for r in rows
+    ]
+
+
 # ── 2 个预测工具（S017 T11，研究参考性 payload + 免责） ───────────────
 # 懒导入 routers.prediction：避免 stock_tools → routers → app → chat →
 # ai.tools → stock_tools 的循环（chat.py import 时 routers 可能尚未就绪）。

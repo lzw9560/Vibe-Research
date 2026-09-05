@@ -174,4 +174,5 @@ def test_registry_only_objective_and_research_tools():
         "query_global_stock", "prediction_short_sector", "prediction_intraday_framework",
         "worldmonitor_query", "query_strategy_card",
         "query_skyrocket", "query_hot_stock", "query_anomaly",
+        "query_intraday_features",  # S154 T6.1：debate 辅助层（盘中封单特征，辅助非 edge）
     }
