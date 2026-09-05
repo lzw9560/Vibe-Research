@@ -56,7 +56,7 @@ export function DiagnosisCardView({ card }: { card: Card }) {
       </div>
 
       {/* S084 Q6=B：3 子对象——选股池一站式战法盘前因子 */}
-      {card.gene_score && <GeneScoreBlock data={card.gene_score} />}
+      {card.gene_score && <GeneScoreBlock data={card.gene_score} evaluation={card.evaluation} />}
       {card.pool_item && <PoolItemBlock data={card.pool_item} />}
       {card.derived && <DerivedBlock data={card.derived} />}
 
@@ -168,13 +168,13 @@ function sig(label: string, v: boolean | null | undefined) {
   );
 }
 
-// S084 Q6=B：3 子对象展示块（gene_score/pool_item/derived）
-function GeneScoreBlock({ data }: { data: Record<string, unknown> }) {
+// S084 Q6=B：3 子对象展示块（gene_score/pool_item/derived）+ S151 §44 标签+降权 pill
+function GeneScoreBlock({ data, evaluation }: { data: Record<string, unknown>; evaluation?: { score_weight: number; demoted_dims: string[]; validation_note: string } | null }) {
   const gs = data as { total_score?: number; zt_count_250d?: number; high_gene?: boolean; qualify?: boolean; factors?: Record<string, number | null> };
   const factorEntries = gs.factors ? Object.entries(gs.factors) : [];
   return (
     <div className="text-sm">
-      <div className="text-muted-foreground mb-1">涨停基因（GeneScore）：</div>
+      <div className="text-muted-foreground mb-1">涨停基因（GeneScore）<span className="text-amber-500">（§44 rho≈0，无方向性）</span>{evaluation?.demoted_dims?.includes("gene_score") && <span className="ml-1 text-[10px] text-red-500" title={evaluation.validation_note}>×{evaluation.score_weight}</span>}：</div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-1">
         {row("基因总分", gs.total_score)}
         {row("250日涨停", gs.zt_count_250d)}
