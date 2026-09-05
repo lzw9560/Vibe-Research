@@ -24,6 +24,11 @@
 
 **late_lock（尾盘突袭）是整个测试空间（选股+盘中5min族）唯一 >1 的 robust 弱正**——1.36x n=422 pass_filter_edge，但<2x 未validated，不驱动交易（raw-shadow 观察）。DIMENSION_LIFT_REGISTRY 加 first_plate_h2（劣于随机×0.1）+ late_lock（未validated×0.5）。
 
+**交互验证（workflow 审计后补 auction_open_pct，preliminary top15/day）**：
+- late_x_auction（晚封×竞价高开>3%）：n=44 lift=1.1064 null_p95=1.38 pass_filter_edge=False
+- **加竞价 context 反而弱化 late_lock（1.33→1.10）**，Bonferroni 膨胀（K=5→6）让 null_p95 升高——印证 synthesis 警告"多维交互让显著性更难过非更容易"。
+- 5min 可测盘中族全探索完（单一+交互），无 edge。
+
 caveat: T+0 o2c（未剔 unbuyable 一字板，S144 口径 follow-up）+ 5min 粒度（60s→5min coarser，broken_duration<5min 漏标）+ top15/day 采样（full run 后续，但 n=311-548 robust）。
 
 ## 1. 问题 / 目标
