@@ -101,6 +101,41 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         source_script="tools/kline_ta_validation.py",
         note="非选股层参照，不参与降权（盘中维度）",
     ),
+    # S153 R7/R8 选股层 breakout 精细化（闭合 breakout 家族，2026-09-05 跑出）
+    "platform_breakout": DimensionValidation(
+        dimension_id="platform_breakout", label="平台突破(breakout精细化)",
+        lift=1.0791, n=946, days_robust=130,   # confirm 臂（D+1 high>cons_max 无 look-ahead，n=946 最稳健）
+        validation_status="未validated", weight_multiplier=0.5,
+        source_script="tools/platform_breakout_lift.py",
+        note="S153 R7 tight0.9606劣于随机/confirm1.0791/both1.2177全<2x is_sig=False; "
+             "regime_bull both1.4152 p=0.018 但 Bonferroni α_adj=0.00625 fail; "
+             "walk-forward0.77-1.05; pre_register 74295b9; 闭合 breakout 家族",
+    ),
+    "low_absorption": DimensionValidation(
+        dimension_id="low_absorption", label="低吸缩量(C3 vol_brk<1)",
+        lift=1.0015, n=92308, days_robust=145,   # lift≈1.0 null（大样本）
+        validation_status="未validated", weight_multiplier=0.5,
+        source_script="tools/low_absorption_c3_lift.py",
+        note="S153 R8 C3 vol_brk<1.0 lift≈1.0 null n=92308; regime_strong0.997<1; "
+             "walk-forward0.99-1.04; pre_register 74295b9; 无 edge",
+    ),
+    # 板块/regime 层（2026-09-05 跑出，闭合 verdict 外推缺口——此层原未测）
+    "sector_heat": DimensionValidation(
+        dimension_id="sector_heat", label="板块热度→次日新涨停",
+        lift=1.359, n=466, days_robust=41,   # zt≥3 臂（CI 不重叠但<2x，最高）
+        validation_status="未validated", weight_multiplier=0.5,
+        source_script="tools/sector_heat_validation.py",
+        note="5 定义全<2x(top1 1.23/top3 1.07/top5 1.29/zt≥3 1.359 CI不重叠/zt≥5 1.28); "
+             "n=41日 eastmoney_live; 情绪/regime 是 moderator 非 standalone signal; 60日后复验",
+    ),
+    "sector_phase": DimensionValidation(
+        dimension_id="sector_phase", label="板块周期相位",
+        lift=None, n=2319, days_robust=25,   # winrate-based 非 lift（非单调→无方向 edge）
+        validation_status="劣于随机", weight_multiplier=0.1,
+        source_script="tools/sector_phase_regression.py",
+        note="winrate 0.52-0.60 非单调(启动0.563→发酵0.565→高潮0.605→退潮0.569回落); "
+             "CI 重叠; label-only(B); 修饰方向单调=False; 无 edge",
+    ),
 }
 
 
