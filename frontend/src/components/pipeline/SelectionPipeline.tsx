@@ -6,8 +6,9 @@ import { useState } from "react";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
 import { useMultiRotation } from "@/lib/query/strategy";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
+import { DimensionValidationBadge } from "@/components/ui/DimensionValidationBadge";
 import { NonLimitupLane } from "./NonLimitupPlaceholder";
-import type { FunnelLayer, FunnelResult, DiagnosisCard } from "@/lib/candidates";
+import type { FunnelLayer, FunnelResult, DiagnosisCard, EvaluationSummary } from "@/lib/candidates";
 import type { ScoredCandidate } from "@/lib/api";
 import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
 import { NODE, ArrowDown, FunnelShrinkBar } from "@/components/pipeline/primitives";
@@ -67,7 +68,7 @@ export function SelectionPipeline({
 
   return (
     <div className="space-y-1.5">
-      {showHonestyBanner !== false && <HonestyBanner />}
+      {showHonestyBanner !== false && <HonestyBanner evaluationSummary={funnelResult?.evaluation_summary} />}
 
       {/* S094 §11 附录 A1：LaneSwitcher 已移除——切换由父组件 ForwardTabSection 的 ForwardLaneSwitcher 控制 */}
 
@@ -96,6 +97,7 @@ export function SelectionPipeline({
               onPick={onPick}
               rerunHandlers={rerunHandlers}
               date={date}
+              evaluationSummary={funnelResult?.evaluation_summary}
             />
           ))}
           <ArrowDown />
@@ -280,12 +282,19 @@ function RerunFooter({ layer, handlers, date }: { layer: FunnelLayer; handlers: 
 }
 
 // 简洁节点 + 点击展开 FunnelLayerCard 详情（折叠不显收缩条，展开才显详情+收缩条）
-function LayerStep({ layer, next, onPick, rerunHandlers, date }: {
+// S151 LAYER_DIMENSION_MAP：漏斗层→§44 验证维度映射（R1=breakout 琥珀/R2=turnover 红/SELF 无）
+const LAYER_DIMENSION_MAP: Record<string, string> = {
+  R1: "breakout",
+  R2: "turnover",
+};
+
+function LayerStep({ layer, next, onPick, rerunHandlers, date, evaluationSummary }: {
   layer: FunnelLayer;
   next?: FunnelLayer;
   onPick?: (code: string) => void;
   rerunHandlers?: RerunHandlers;
   date?: string;
+  evaluationSummary?: EvaluationSummary | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const mismatch = next != null && layer.output_count !== next.input_count;
@@ -309,6 +318,11 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date }: {
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{layer.layer_id}</span>
             <span className="text-sm font-medium">{layer.name}</span>
+            {(() => {
+              const dimId = LAYER_DIMENSION_MAP[layer.layer_id];
+              const dim = dimId ? evaluationSummary?.dimensions?.find((d) => d.dimension_id === dimId) : undefined;
+              return dim ? <DimensionValidationBadge validation={dim} compact /> : null;
+            })()}
             {missing && <span className="text-[10px] text-warning">未取得</span>}
             {mismatch && next && <span className="text-[10px] text-warning">失配</span>}
           </div>
@@ -337,6 +351,7 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date }: {
           <FunnelLayerCard
             layer={layer}
             variant="neutral"
+            evaluationSummary={evaluationSummary}
             date={date}
             onPick={onPick}
             footer={rerunHandlers ? <RerunFooter layer={layer} handlers={rerunHandlers} date={date} /> : undefined}
