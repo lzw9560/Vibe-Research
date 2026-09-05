@@ -1,8 +1,19 @@
 # Spec: S152 — 盘中 H2 harness（baostock 5min 历史补，封板时间×开板次数 lift）
 
-> 状态：草案→实现中（2026-09-05）
+> 状态：已实现 + verdict 出（2026-09-05，5432af5）——H2 早封板 lift=0.7843 劣于随机，盘中封板时间证否
 > 作者：Claude  日期：2026-09-05
 > 关联：S151（评价层）、S153（量化验证）、[edge-in-intraday-not-selection memory]、S150（采集修复）
+
+## 0. Verdict（2026-09-05 跑出）
+
+**H2 证否**——baostock 5min 历史补（突破 seal_intraday 30 天 live 卡点），41 日 / 606 features（top 15/day preliminary）：
+- **early_lock（早封板 ≤10:00）: n=311, lift=0.7843 < 1.0 → 劣于随机**, null_p95=1.083, pass_filter_edge=False
+- one_word（一字板）: n=1（top15 多非一字板，检测严）, 探索性
+- overall: **未validated/劣于随机**
+
+**"唯一未证伪维度" H2 现证否**——盘中封板时间也无 edge，与选股无 edge（forward lift=0.983）一致。"edge 在盘中"对封板时间维度不成立。
+
+caveat: T+0 o2c（未剔 unbuyable 一字板，S144 口径 follow-up）+ 5min 粒度（60s→5min coarser）+ top15/day 采样（full run 后续，但 n=311 robust）。
 
 ## 1. 问题 / 目标
 
