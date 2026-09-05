@@ -50,6 +50,7 @@ class PatternScan:
     # S094 R5 新增（PatternReversal 长上影洗盘修复形态）
     shadow_length_pct: float | None = None   # 上影线长度 = (high/close - 1)*100
     ma5_slope: float | None = None           # MA5 斜率 = (ma5_now - ma5_prev)/ma5_prev
+    consolidation_max_high: float | None = None  # S153 R2：完整窗口 max_high（供 D+1 突破确认）
 
 
 # ===========================================================================
@@ -294,14 +295,16 @@ def compute_ma5_slope(bars: list[dict]) -> float | None:
         return None
 
 
-def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: int = 5) -> tuple[int | None, float | None]:
-    """横盘形态：N 日振幅 < 阈值（spec §5.5）。
+def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: int = 5) -> tuple[int | None, float | None, float | None, float | None]:
+    """横盘形态：N 日振幅 < 阈值（spec §5.5）。S153 R1：返 4-tuple (days, amplitude, max_high, min_low)。
 
+    max_high/min_low 从**完整 consolidation_days 窗口**算（下方 line 336 段，非循环内 line 318
+    子窗口的 max_high——后者只用于判 amplitude<threshold），供 simulate_holding_with_confirm
+    的 D+1 突破确认（bars[D+1].high > max_high）。T1.2 审查 CRITICAL2 修。
     从最后一天往前找连续满足振幅 < threshold 的天数。
-    返回 (横盘天数, 区间振幅%)。
     """
     if len(bars) < min_days:
-        return None, None
+        return None, None, None, None
 
     # 从最后一天往前找
     consolidation_days = 0
@@ -315,11 +318,11 @@ def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: in
         lows = [float(b.get("low", 0)) for b in window if b.get("low")]
         if not highs or not lows:
             break
-        max_high = max(highs)
-        min_low = min(lows)
-        if min_low <= 0:
+        sub_max_high = max(highs)
+        sub_min_low = min(lows)
+        if sub_min_low <= 0:
             break
-        amplitude = (max_high - min_low) / min_low * 100
+        amplitude = (sub_max_high - sub_min_low) / sub_min_low * 100
         if amplitude < threshold:
             consolidation_days += 1
             window_start -= 1
@@ -327,18 +330,20 @@ def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: in
             break
 
     if consolidation_days == 0:
-        return 0, None
+        return 0, None, None, None
 
-    # 计算横盘区间振幅
+    # 计算横盘区间振幅 + max_high/min_low（完整 consolidation_days 窗口，S153 R1 CRITICAL2）
     window = bars[len(bars) - consolidation_days:]
     if len(window) < 2:
-        return consolidation_days, None
+        return consolidation_days, None, None, None
     highs = [float(b.get("high", 0)) for b in window if b.get("high")]
     lows = [float(b.get("low", 0)) for b in window if b.get("low")]
     if not highs or not lows or min(lows) <= 0:
-        return consolidation_days, None
-    amplitude = (max(highs) - min(lows)) / min(lows) * 100
-    return consolidation_days, round(amplitude, 4)
+        return consolidation_days, None, None, None
+    max_high = max(highs)  # 完整窗口 max_high（供 D+1 突破确认）
+    min_low = min(lows)
+    amplitude = (max_high - min_low) / min_low * 100
+    return consolidation_days, round(amplitude, 4), round(max_high, 4), round(min_low, 4)
 
 
 def compute_volume_breakout(bars: list[dict], lookback: int = 5) -> float | None:
@@ -379,7 +384,7 @@ def scan_patterns(code: str, bars: list[dict], sector_bars: list[dict] | None = 
     rel_str = compute_relative_strength(bars, sector_bars)
     ma_bull = check_ma_bullish(bars)
     ma5_prox = compute_ma5_proximity(bars)
-    cons_days, cons_amp = compute_consolidation(bars)
+    cons_days, cons_amp, cons_max_high, cons_min_low = compute_consolidation(bars)  # S153 R3：4-tuple
     vol_breakout = compute_volume_breakout(bars)
     amt_yi = compute_amount_yi(bars)
     # S094 R5：PatternReversal 长上影洗盘修复形态因子
@@ -393,6 +398,7 @@ def scan_patterns(code: str, bars: list[dict], sector_bars: list[dict] | None = 
         ma5_proximity=ma5_prox,
         consolidation_days=cons_days,
         consolidation_amplitude=cons_amp,
+        consolidation_max_high=cons_max_high,  # S153 R2
         volume_breakout_ratio=vol_breakout,
         amount_yi=amt_yi,
         shadow_length_pct=shadow_pct,

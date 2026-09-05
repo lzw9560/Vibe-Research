@@ -119,6 +119,32 @@ def simulate_holding(
             "exit_reason": "max_hold", "exit_date": _bar_get(bars[exit_idx], "date", "")}
 
 
+def simulate_holding_with_confirm(
+    bars: list, signal_date: str, cons_max_high: float | None,
+    stop_pct: float, take_profit_pct: float, max_hold_days: int,
+) -> dict | None:
+    """S153 R6：D+1 收盘确认突破后入场 D+2（无 look-ahead）。T1.2 CRITICAL1 修。
+
+    cons_max_high 是 D 日横盘窗口 max_high（compute_consolidation 4-tuple 第 3 项，完整窗口）。
+    signal_date=D+1（D 日选股后次日）。确认 bars[D+1].high > cons_max_high（D+1 收盘方知，
+    无 look-ahead——D+1 收盘后确认，D+2 入场）→ 调 simulate_holding(bars, signal_date=D+1)
+    入场 D+2 open（T+2 检查 stop/take）。假突破（D+1 high<=cons_max_high）返 None。
+
+    guard（T1.2 HIGH）：idx+2>=len(bars) 前置返 None（防 IndexError，simulate_holding:99 guard 前置）+
+    cons_max_high is None 返 None（compute_consolidation early return 致 TypeError）。
+    """
+    if not bars or cons_max_high is None:
+        return None
+    idx = next((i for i, b in enumerate(bars)
+                if str(_bar_get(b, "date", ""))[:10] == signal_date), None)
+    if idx is None or idx + 2 >= len(bars):  # 前置 guard（防 IndexError）
+        return None
+    d1_high = _bar_get(bars[idx], "high", 0)  # signal_date=D+1 当日 high（收盘方知）
+    if not d1_high or d1_high <= cons_max_high:  # 假突破（D+1 未破横盘 max_high）
+        return None
+    return simulate_holding(bars, signal_date, stop_pct, take_profit_pct, max_hold_days)  # 入场 D+2 open
+
+
 def fetch_klines(bs_code: str, start_date: str, end_date: str) -> list[dict]:
     """baostock qfq 日K（含 next_bar，故 start..end 需覆盖 signal_date + 次日）。
 

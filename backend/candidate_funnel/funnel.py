@@ -464,6 +464,11 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
             # 选股池列表跳过，单股 diagnose() 才开 with_seat_detail=True。
         ))
 
+    # S151 R5：评价层注入（降权+即时处理+诚实标注），在 card 构建后、return 前
+    # 透明嵌入——precompute/_collect/candidates router 调 run_funnel 自动获得 evaluation_summary
+    from candidate_funnel.evaluation import _apply_evaluation_layer
+    cards, evaluation_summary = _apply_evaluation_layer(cards, genes, activity, None, date)
+
     # S085 B1：run 级市场聚合上下文（4 率 + lianban_stocks + date），
     # 复用 board_ladder.get_market_emotion_raw shared cache（零额外外调）。
     # 非个股字段（S049 B 已剥离三率）；仅展示/审计，不参与 capped/胜率/结算。
@@ -499,6 +504,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         date=date,
         layers=layers,
         final_candidates=cards,
+        evaluation_summary=evaluation_summary,
         threshold_config=cfg,
         sentiment_phase=phase,
         as_of=as_of,

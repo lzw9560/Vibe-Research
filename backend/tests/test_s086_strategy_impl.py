@@ -176,8 +176,8 @@ class TestLowAbsorption:
 
     def test_hit_near_ma5_and_bullish(self):
         s = LowAbsorptionStrategy()
-        r = s.match(_ctx(market_scan_ctx=_msc(ma5_proximity=2.0, ma_bullish=True)))
-        assert r.fired and r.hit_count == 2
+        r = s.match(_ctx(market_scan_ctx=_msc(ma5_proximity=2.0, ma_bullish=True, volume_breakout_ratio=0.8)))  # S153 R5 C3 vol_brk<1.0 hit
+        assert r.fired and r.hit_count == 3
         assert r.confidence == 0.5
 
     def test_miss_far_from_ma5(self):
@@ -224,8 +224,8 @@ class TestPlatformBreakout:
 
     def test_hit_consolidation_and_volume_breakout(self):
         s = PlatformBreakoutStrategy()
-        r = s.match(_ctx(market_scan_ctx=_msc(consolidation_days=6, volume_breakout_ratio=2.5)))
-        assert r.fired and r.hit_count == 2
+        r = s.match(_ctx(market_scan_ctx=_msc(consolidation_days=6, volume_breakout_ratio=2.5, consolidation_amplitude=5.0)))  # S153 R4 C3 amplitude≤6.0 hit
+        assert r.fired and r.hit_count == 3
         assert r.confidence == 0.5
 
     def test_miss_low_consolidation(self):

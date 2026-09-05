@@ -171,15 +171,17 @@ class LowAbsorptionStrategy(BaseStrategy):
     name = "低吸龙头"
 
     def match(self, ctx) -> StrategyMatchResult:
-        # S097：拆 C1 回调MA5 + C2 均线多头；无 pattern（limitup 路径）→ data_ok=False 整战法降级
+        # S097 + S153 R5：C1 回调MA5 + C2 均线多头 + C3 缩量 vol_brk<1.0；无 pattern → data_ok=False
         pattern = _get_pattern(ctx)
         if pattern is None:
             return make_data_unavailable_result(self.code, self.name, [
                 ("low_absorption.c1", "回调MA5", "ma5_proximity", "<= 3"),
                 ("low_absorption.c2", "均线多头", "ma_bullish", "True"),
+                ("low_absorption.c3", "缩量回调", "volume_breakout_ratio", "< 1.0"),
             ])
         ma5_prox = pattern.ma5_proximity
         ma_bull = pattern.ma_bullish
+        vol_brk = pattern.volume_breakout_ratio
         if ma5_prox is None:
             c1_state, c1_desc, c1_val = "data_unavailable", "ma5_proximity 数据缺失", None
         elif ma5_prox <= 3:
@@ -194,6 +196,15 @@ class LowAbsorptionStrategy(BaseStrategy):
             c2_state = "hit" if ma_bull else "miss"
             c2_desc = f"均线{'多头' if ma_bull else '非多头'}排列"
             c2_val = str(ma_bull)
+        # S153 R5 C3：缩量回调（vol_brk<1.0=回调日量<5日均量，mirror of platform C2 放量>2）
+        if vol_brk is None:
+            c3_state, c3_desc, c3_val = "data_unavailable", "volume_breakout_ratio 数据缺失", None
+        elif vol_brk < 1.0:
+            c3_state, c3_desc = "hit", f"量比 {vol_brk:.2f}（<1.0，回调日缩量）"
+            c3_val = f"{vol_brk:.2f}"
+        else:
+            c3_state, c3_desc = "miss", f"量比 {vol_brk:.2f}（≥1.0，未缩量）"
+            c3_val = f"{vol_brk:.2f}"
         conditions = [
             ConditionEval(condition_id="low_absorption.c1", condition_name="回调MA5",
                 factor="ma5_proximity", threshold="<= 3", actual_value=c1_val,
@@ -201,9 +212,12 @@ class LowAbsorptionStrategy(BaseStrategy):
             ConditionEval(condition_id="low_absorption.c2", condition_name="均线多头",
                 factor="ma_bullish", threshold="True", actual_value=c2_val,
                 state=c2_state, description=c2_desc),
+            ConditionEval(condition_id="low_absorption.c3", condition_name="缩量回调",
+                factor="volume_breakout_ratio", threshold="< 1.0", actual_value=c3_val,
+                state=c3_state, description=c3_desc),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
-        fired = c1_state == "hit" and c2_state == "hit"
+        fired = c1_state == "hit" and c2_state == "hit" and c3_state == "hit"
         return StrategyMatchResult(
             strategy_code=self.code, strategy_name=self.name, conditions=conditions,
             hit_count=hit_count, total_count=len(conditions), fired=fired,
@@ -266,15 +280,17 @@ class PlatformBreakoutStrategy(BaseStrategy):
     name = "平台突破"
 
     def match(self, ctx) -> StrategyMatchResult:
-        # S097：拆 C1 横盘≥5 + C2 放量突破>2；无 pattern → data_ok=False 整战法降级
+        # S097 + S153 R4：C1 横盘≥5 + C2 放量突破>2 + C3 紧平台 amplitude≤6.0；无 pattern → data_ok=False
         pattern = _get_pattern(ctx)
         if pattern is None:
             return make_data_unavailable_result(self.code, self.name, [
                 ("platform_breakout.c1", "横盘", "consolidation_days", ">= 5"),
                 ("platform_breakout.c2", "放量突破", "volume_breakout_ratio", "> 2"),
+                ("platform_breakout.c3", "紧平台", "consolidation_amplitude", "<= 6.0"),
             ])
         cons = pattern.consolidation_days
         vol_brk = pattern.volume_breakout_ratio
+        cons_amp = pattern.consolidation_amplitude
         if cons is None:
             c1_state, c1_desc, c1_val = "data_unavailable", "consolidation_days 数据缺失", None
         elif cons >= 5:
@@ -289,6 +305,15 @@ class PlatformBreakoutStrategy(BaseStrategy):
         else:
             c2_state, c2_desc = "miss", f"量比 {vol_brk:.2f}（≤2，未放量）"
             c2_val = f"{vol_brk:.2f}"
+        # S153 R4 C3：紧平台（consolidation_amplitude≤6.0，预注册冻结值）
+        if cons_amp is None:
+            c3_state, c3_desc, c3_val = "data_unavailable", "consolidation_amplitude 数据缺失", None
+        elif cons_amp <= 6.0:
+            c3_state, c3_desc = "hit", f"振幅 {cons_amp:.2f}%（≤6.0，紧平台蓄势）"
+            c3_val = f"{cons_amp:.2f}"
+        else:
+            c3_state, c3_desc = "miss", f"振幅 {cons_amp:.2f}%（>6.0，平台松散）"
+            c3_val = f"{cons_amp:.2f}"
         conditions = [
             ConditionEval(condition_id="platform_breakout.c1", condition_name="横盘",
                 factor="consolidation_days", threshold=">= 5", actual_value=c1_val,
@@ -296,9 +321,12 @@ class PlatformBreakoutStrategy(BaseStrategy):
             ConditionEval(condition_id="platform_breakout.c2", condition_name="放量突破",
                 factor="volume_breakout_ratio", threshold="> 2", actual_value=c2_val,
                 state=c2_state, description=c2_desc),
+            ConditionEval(condition_id="platform_breakout.c3", condition_name="紧平台",
+                factor="consolidation_amplitude", threshold="<= 6.0", actual_value=c3_val,
+                state=c3_state, description=c3_desc),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
-        fired = c1_state == "hit" and c2_state == "hit"
+        fired = c1_state == "hit" and c2_state == "hit" and c3_state == "hit"
         return StrategyMatchResult(
             strategy_code=self.code, strategy_name=self.name, conditions=conditions,
             hit_count=hit_count, total_count=len(conditions), fired=fired,

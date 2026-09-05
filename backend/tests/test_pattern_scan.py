@@ -209,7 +209,7 @@ class TestConsolidation:
             {"high": 10.0, "low": 10.0}, {"high": 10.1, "low": 10.0},
             {"high": 10.2, "low": 10.0},
         ]
-        days, amp = compute_consolidation(bars, threshold=5.0, min_days=3)
+        days, amp, _, _ = compute_consolidation(bars, threshold=5.0, min_days=3)
         assert days is not None
         assert days >= 0
 
@@ -219,12 +219,12 @@ class TestConsolidation:
             {"high": 15.0, "low": 10.0}, {"high": 14.0, "low": 9.0},
             {"high": 13.0, "low": 8.0}, {"high": 12.0, "low": 7.0},
         ]
-        days, amp = compute_consolidation(bars, threshold=5.0, min_days=3)
+        days, amp, _, _ = compute_consolidation(bars, threshold=5.0, min_days=3)
         assert days == 0 or days is None
 
     def test_insufficient_data(self):
         bars = [{"high": 10, "low": 10}]
-        days, amp = compute_consolidation(bars, threshold=5.0, min_days=5)
+        days, amp, _, _ = compute_consolidation(bars, threshold=5.0, min_days=5)
         assert days is None
 
 

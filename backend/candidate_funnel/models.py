@@ -167,6 +167,9 @@ class DiagnosisCard(BaseModel):
     # {buy_one_ratio, buy_seat_types, sell_seat_types, score_modifier, risk_label, data_status}
     # 无龙虎榜/取数失败 → None 降级（不臆造）。不参与 capped/胜率/结算，仅选股池呈现。
     seat_detail: Optional[dict] = None
+    # S151 R4：评价层子对象（{score_weight, lift_status, demoted_dims, honest_label, validation_note}）
+    # None=未接评价层时不阻断既有路径（复用 gene_score/seat_detail 同款 Optional[dict] 降级）
+    evaluation: Optional[dict] = None
     # S139（s066 task 039）：板块周期阶段纯 LABEL（不改策略分/排序/capped，§5.4 Q2 修饰方向被驳）。
     # {industry, phase, stay_days, phase_note, count_today, count_avg_3d, momentum}。
     # 无 pool_item/无 hybk/sector_cycle 失败 → None 降级不臆造。仅选股池呈现。
@@ -236,3 +239,6 @@ class FunnelResult(BaseModel):
     # shared cache 透传（零额外外调）。非个股 IndicatorSet 字段（S049 B 已剥离——全市场同值
     # 塞个股无信息量）。仅展示/审计，不参与 capped/胜率/结算（final_candidates 仍唯一承重出口）。
     market_context: Optional[dict] = None
+    # S151 R4：评价层 run 级诚实标注（{honest_label, dimensions, pending_dims, frozen_commit}）
+    # None=未接评价层时不阻断既有路径（复用 market_context 同款 Optional[dict]）
+    evaluation_summary: Optional[dict] = None
