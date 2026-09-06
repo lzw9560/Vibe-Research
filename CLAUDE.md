@@ -56,10 +56,13 @@
 - **用户私有数据隔离**（持仓/研报/API key）只存项目目录内 `.vibe-research/`（`VR_DATA_DIR`，见 `backend/vr_paths.py`），**绝不进 git（已 .gitignore）、不上传、不落 home 目录**。
 - **东财端点走 `em_get`** 限流/熔断/代理探测（已迁 `backend/data/transport.py`），不裸调 requests（防封 IP）。
 
-> **§44（lift bar）已降级为参考性建议**（2026-08-19，S084 reframe）：§44 原为出 winrate/r/verdict 前的「必过 gate」——须过三步（口径 sanity 验荒谬值 / n+CI+lift / 随机基准 lift<2x=噪声），未过只报「待验」不出结论。现降为**参考性建议，不强制、不阻塞实现**——设计方案经深度调研（grill），不因 §44 未过而阻断落地。§44 验证移至两处而非实现前 gate：（1）**设计期**——验证设计方案本身的统计有效性；（2）**回溯模块**——独立模块，引入 §44 作为回溯方案之一，长期积累数据后跑（阈值/胜率回溯校准）。其余工程底线（不臆造 / 私有数据隔离 / `em_get` 防封）不变。
+> **§44（lift bar）已降级为参考性建议**（2026-08-19，S084 reframe；2026-09-06 v2 应用规约细化，见 S159 spec）：§44 原为出 winrate/r/verdict 前的「必过 gate」——须过三步（口径 sanity 验荒谬值 / n+CI+lift / 随机基准 lift<2x=噪声），未过只报「待验」不出结论。现降为**参考性建议，不强制、不阻塞实现**——设计方案经深度调研（grill），不因 §44 未过而阻断落地。§44 验证移至两处而非实现前 gate：（1）**设计期**——验证设计方案本身的统计有效性；（2）**回溯模块**——独立模块，引入 §44 作为回溯方案之一，长期积累数据后跑（阈值/胜率回溯校准）。其余工程底线（不臆造 / 私有数据隔离 / `em_get` 防封）不变。
+>
+> **§44 v2 应用规约（2026-09-06，S159，已接受方向）**：v1 在 D+1-开盘→D+4 path 错窗口测 ~20 因子全否，是**窗口偏差假象非真无 edge**（隔夜 gap D 收盘→D+1 开盘 +1.30%/54.3% 才是真 edge，框架 entry=D+1 开盘 miss 了）。v2 保留方法论（day_paired+零分布+Bonferroni+walk-forward sound），改 5 件事：① **前置窗口 sanity**——任何 §44 验证前先多窗口对比（隔夜/D+1 日内/path，算 mean+胜率+base rate）定位优势在哪，无窗口优势不上重方法论（不抬杠）② **重方法论只在对窗口+n 够时上**（≥200 picks 或 ≥60 天；小 n 短窗标"探索性/underpowered"不判"劣于随机"）③ **§44 不每阶段参与**——spec 自查降为设计期轻 sanity，6-lens grill 只留给重大方法论变更非每因子 ④ **回溯模块是 §44 主场**（scheduled_tasks R3 30/60 天复验）⑤ **激进度调低**——Bonferroni 按 n 调，不在负 base 窗口测。evidence 待 6 专家+8 域 workflow 补。
 
 ### 1.3 边界变更记录
 
+- **2026-09-06**（S159 §44 v2 应用规约）：§44 v1 在 D+1-开盘→D+4 path 错窗口测 ~20 因子全否（窗口偏差假象非真无 edge；隔夜 gap +1.30%/54.3% 是真 edge 框架 miss）。v2 保留方法论改 5 件事——前置窗口 sanity 定位 / 重方法论只在对窗口+n 够上（小 n 标 underpowered 不判劣于随机）/ §44 不每阶段参与（spec 轻 sanity + grill 只留重大方法论变更）/ 回溯模块主场 / Bonferroni 按 n 调不 over-correct。DIMENSION_LIFT_REGISTRY 加窗口偏差告警。受影响：`CLAUDE.md` §1.2、`evaluation.py`（降权逻辑待改基于长期 lift）、`specs/_template.md`（加前置窗口 sanity 步骤）。详见 `specs/S159-§44应用规约v2/spec.md` + memory `s44-quant-validation-loop`、`s44-v1-wrong-window-retrospective`、`methodology-window-before-no-edge-conclusion`。
 - **2026-08-19**（S084 reframe）：§44（lift bar，出 winrate/r/verdict 前的必过 gate）从工程底线降级为**参考性建议**——不强制、不阻塞实现（设计方案经深度调研/grill）；§44 验证移设计期（验设计方案统计有效性）+ 回溯模块（独立模块，引入 §44 作回溯方案之一，长期积累数据后跑）。其余工程底线（不臆造/私有数据隔离/`em_get` 防封）不变。受影响：`CLAUDE.md` §1.2。
 - **2026-07-30**：私人助理定位明确，合规红线降级为弱合规（风险提醒）。仪式类（免责声明/中立措辞/不代客决策/四池零个股名）→ 风险提醒级；`lianban_stocks` 可如实呈现。保留工程底线：可复现/不臆造、私有数据隔离、`em_get` 防封。受影响：S017 免责墙可简化、S010 SYSTEM_PROMPT 放宽、S008 `lianban_stocks` 不再强制剥离（仍可分层作设计选择）、相关 spec 合规自查栏按弱合规重审。
 - 2026-07-29：原 §1「只返回客观数据、不推荐/不给买卖时机」放宽为允许教育研究性判断（战法匹配/买卖时机研判/风险标注），仍守底层红线。
