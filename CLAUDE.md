@@ -5,6 +5,18 @@
 
 ---
 
+## 会话开始协议（最高优先级）
+
+**每次会话开始，在做任何工作之前，先读知识图谱投研子区**：
+
+1. 读 `/Users/lizhiwei/Documents/Obsidian Vault/10_Reference/investing/MOC.md` — 投研知识图谱入口，了解实体类导航 + 四构件结构（实体/关系/逻辑规则/动作）+ 质量门状态
+2. 读 `/Users/lizhiwei/Documents/Obsidian Vault/10_Reference/index/MASTER_INDEX.md` — 跨项目全局索引，看活跃项目 + 知识图谱子区入口
+3. 按需读 `10_Reference/investing/` 下与本次任务相关的实体文件夹（如改战法读 `strategies/`，改数据源读 `data-sources/`，改 spec 读 `specs/`）
+
+**知识图谱是本项目的认知层**——代码改了实体/关系/决策，要同步更新图谱（新建或更新实体到对应文件夹，维护 `[[]]` 链接）。图谱位置：`/Users/lizhiwei/Documents/Obsidian Vault/`（GitHub 同步仓 `lzw9560/knowledge`，私有）。四构件方法论详见 skill `ontology-knowledge-graph`。使用引导见 `docs/obsidian-vault-guide.md`。
+
+---
+
 ## 0. 规范驱动开发（Spec-Driven Development, SDD）— 强制流程
 
 **任何非平凡的功能/重构/修复，必须先写规范、后写代码。** 琐碎修复（typo、单行注释）可豁免。
@@ -126,3 +138,5 @@
 - 不确定的地方标注并实测，不臆测。
 - **并行会话 worktree 隔离**（2026-09-05 加入项目实践）：当多个会话/agent 并发改同仓库时（如 opencode + Claude 并行），用 `git worktree add ../Vibe-Research-<branch> <branch>` 创独立 worktree 隔离工作，不切主 worktree 分支（避免干扰其他会话）。worktree commit 后 `git worktree remove` 清理。数据目录 `.vibe-research/` 不 in git——worktree 须 `ln -sf <主仓库>/.vibe-research .vibe-research` 链接（test/数据可得）。commit 前必 `git branch --show-current` 确认分支（并发会话可能切分支，误 commit 到他人 feature 分支）。显式 `git add <具体文件>` 绝不 `add -A`（避打包他人改动）。
 - **工具实践：用已装的 MCP + skill，别让它们闲着**（2026-09-06 加入项目实践）：会话开头查可用 MCP 工具（`mcp__*` deferred tools / ToolSearch 关键名），发现断连的（如 codebase-memory "Connection closed"）提示重启 CC。代码结构查询优先 `codegraph` CLI（`codegraph init` 建图 → `codegraph explore/node/query` 代替 grep，减 tool calls；MCP `mcp__codegraph__*` 须重启 CC 才连，CLI 即时可跑）+ 一次性多格式图谱用 `graphify` skill；库文档用 `context7` MCP；web 调研用 `firecrawl`；GH 操作用 `github` MCP（clone 走 gh-proxy 镜像，[[github-clone-needs-mirror-2026-08-07]]）；架构图用 `archify` skill；对抗审查用 `grill-me`/`grilling` skill；§44 统计 DSR/PBO/purged-kfold/haircut 用 `skill-backtest-overfit`（vendor + ~/.claude/skills/）；多 TUI 编排若 codex 修好可用 OMC omc-teams。优秀工具用顺了固化进本节 + memory，不一次性。
+- **用人话沟通**（2026-09-06 加入项目实践）：提问/选项/回复用人话直白说，别堆术语一锅端（enum/lift/Bonferroni/not_validated/dsr_method 这类），术语最多括号注一次。AskUserQuestion 选项描述用人话（"弱信号"非"not_validated 第 5 值 enum"）。状态标签客观反映真实情况有什么加什么，决策（降权/不交易）是下游层不混。[[feedback-style-plain-chinese]]
+- **秘密（API key 等）走 .env env 变量**（2026-09-06 加入项目实践，用户定"以后都这么用"）：hithink key / 任何 API key 永远用 .env 配的值（项目 load_dotenv 载入 os.environ，source 读 `os.environ['HITHINK_FINANCE_API_KEY']` 等），**不在对话贴 key 值**（hithink sk-fuyaro- 这么泄漏的，[[hithink-apikey-泄漏待轮换]] 待轮换）；主 agent 不读 .env（core-invariant），子 agent 用项目 source 读 env 变量。

@@ -7,6 +7,18 @@
 
 ---
 
+## 会话开始协议（跨工具共守，最高优先级）
+
+**所有 AI 编码代理（Claude Code / opencode / 其他）在本仓库工作时，每次会话开始先读知识图谱投研子区**：
+
+1. 读 `/Users/lizhiwei/Documents/Obsidian Vault/10_Reference/investing/MOC.md` — 投研知识图谱入口
+2. 读 `/Users/lizhiwei/Documents/Obsidian Vault/10_Reference/index/MASTER_INDEX.md` — 跨项目全局索引
+3. 按需读 `10_Reference/investing/` 下与本次任务相关的实体文件夹
+
+**知识图谱是认知层，代码是执行层**——代码改了实体/关系/决策，同步更新图谱。图谱位置：`/Users/lizhiwei/Documents/Obsidian Vault/`（GitHub `lzw9560/knowledge`，私有）。四构件方法论详见 skill `ontology-knowledge-graph`。
+
+---
+
 ## 分级工作流（2026-08-04 落地，替代原 Feature 分支工作流）
 
 **改动按规模分级，匹配不同的流程门。** 不再对所有改动一刀切走 feature 分支 + 完整验收。
