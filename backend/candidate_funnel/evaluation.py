@@ -40,6 +40,10 @@ class DimensionValidation:
 
 
 # R1：DIMENSION_LIFT_REGISTRY 初始冻结值（全部来自 §44 已跑脚本输出，禁臆造）
+# ⚠️ 2026-09-06 窗口偏差更正：以下 lift 值全在 D+1-开盘→D+4 path 窗口测（隔夜正之后的反转负段），
+# 是"该窗口无 edge"≠"无 edge"。隔夜 gap（D 收盘→D+1 开盘 +1.30%/54.3%）才是真 edge（框架 miss 了）。
+# §44 v2 待修（已接受方向）：前置窗口 sanity + 重方法论只在对窗口+n够时上 + 不每阶段参与 + 回溯主场 + 小n不抬杠。
+# 当前降权仍基于这些值（诚实标注该窗口无 edge），但非"绝对无 edge"。详见 memory s44-quant-validation-loop。
 DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     "gene_score": DimensionValidation(
         dimension_id="gene_score", label="gene 综合分",
