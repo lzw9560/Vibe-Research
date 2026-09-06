@@ -262,3 +262,32 @@ class Recorder:
             return int(row["n"])
         finally:
             conn.close()
+
+    def list_records(self, limit: int = 100) -> list[VerifierRecord]:
+        """List records, most recent first (DESC by timestamp).
+
+        Bounded by ``limit`` (default 100) per unbounded-query rule.
+        Used by GET /api/verifier/records (S165 frontend wiring).
+        """
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM verifier_records ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [
+                VerifierRecord(
+                    recorder_id=row["recorder_id"],
+                    data_snapshot_id=row["data_snapshot_id"],
+                    input_hashes=json.loads(row["input_hashes"]),
+                    return_series=json.loads(row["return_series"]),
+                    dates=json.loads(row["dates"]) if row["dates"] else None,
+                    params=json.loads(row["params"]),
+                    frozen_commit=row["frozen_commit"],
+                    verdict=json.loads(row["verdict"]),
+                    timestamp=row["timestamp"],
+                )
+                for row in rows
+            ]
+        finally:
+            conn.close()

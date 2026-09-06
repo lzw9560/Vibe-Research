@@ -7,6 +7,7 @@ import { HonestyBanner } from "@/components/ui/HonestyBanner";
 import { useMultiRotation } from "@/lib/query/strategy";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { DimensionValidationBadge } from "@/components/ui/DimensionValidationBadge";
+import { DimensionValidationGrid } from "@/components/DimensionValidationGrid";
 import { NonLimitupLane } from "./NonLimitupPlaceholder";
 import type { FunnelLayer, FunnelResult, DiagnosisCard, EvaluationSummary } from "@/lib/candidates";
 import type { ScoredCandidate } from "@/lib/api";
@@ -70,6 +71,9 @@ export function SelectionPipeline({
     <div className="space-y-1.5">
       {showHonestyBanner !== false && <HonestyBanner evaluationSummary={funnelResult?.evaluation_summary} />}
 
+      {/* S165: §44 维度验证卡网格——折叠态（不 break pipeline 视觉流），展开显 12 维 DimensionValidationCard */}
+      <DimensionValidationCollapsible />
+
       {/* S094 §11 附录 A1：LaneSwitcher 已移除——切换由父组件 ForwardTabSection 的 ForwardLaneSwitcher 控制 */}
 
       {/* 共享节点：涨停股池（两模式都显，不在切换范围） */}
@@ -117,6 +121,32 @@ export function SelectionPipeline({
 }
 
 // S094 §11 附录 A1：LaneSwitcher 已删除——双叉切换由父组件 ForwardTabSection 控制
+
+// S165: §44 维度验证卡折叠区——默认折叠（不 break pipeline 视觉流），展开显 12 维卡片网格。
+// DimensionValidationGrid 自管数据获取（useEvaluationDims + mock fallback）。
+function DimensionValidationCollapsible() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-lg border border-border/40 bg-card/10 p-2">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span className="text-xs font-medium text-muted-foreground">
+          §44 维度验证（12 维 verdict）
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          {expanded ? "▼ 收起" : "▶ 展开"}
+        </span>
+      </button>
+      {expanded && (
+        <div className="mt-2">
+          <DimensionValidationGrid />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PipelineNode({ label, sub, count }: { label: string; sub?: string; count?: number }) {
   return (

@@ -50,11 +50,17 @@ async def get_daily_review(date: str = Query(None, description="交易日期 YYY
         date = last_trading_date_str()
 
     try:
-        reviewer = dr.get_reviewer()
-        # generate_review 同步打东财外部 API，阻塞事件循环 → 用 asyncio.to_thread 卸到线程池。
-        # 参考 routers/strategy.py:72 既有模式。
-        result = await asyncio.to_thread(reviewer.generate_review, date)
-        return result.model_dump()
+        # S149 P3：先读磁盘持久化层（precompute_daily 落盘的 JSON，零网络），
+        # 未命中才 fallback precompute_daily（含 generate_review 网络）。
+        # get_daily_review 同步（generate_review 打东财），用 to_thread 卸线程池；磁盘命中时不触网。
+        result = await asyncio.to_thread(dr.get_daily_review, date)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"复盘报告生成失败: {date}")
+        return result
+    except HTTPException:
+        # HTTPException（如上面 404）是 Exception 子类，须先于 except Exception 放行，
+        # 否则被改抛 500（404 不可达）。
+        raise
     except ValueError as e:
         # 非交易日/日期格式错误 → 422（客户端输入语义错，非服务器故障）
         # daily_review.generate_review 的交易日守门抛 ValueError，不应误报为 500。

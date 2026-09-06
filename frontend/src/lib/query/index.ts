@@ -9,4 +9,5 @@ export * from "./workflow";
 export * from "./winrate";  // S050 W0：影子对照
 export * from "./intraday";  // S063：盘中情绪辅助决策
 export * from "./coach";  // S064：盯盘教练
+export * from "./verifier";  // S165：§44 verifier + evaluation dims
 export type { Opts } from "./types";

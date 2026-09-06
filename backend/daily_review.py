@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -20,7 +21,8 @@ from pydantic import BaseModel
 
 import astock
 from data.mappers import zt_pool_item_from_dict
-from vr_paths import is_trading_day
+from utils.journal_util import atomic_write_json
+from vr_paths import is_trading_day, resolve_data_dir
 
 BEIJING_TZ = datetime.now().astimezone().tzinfo
 
@@ -88,7 +90,11 @@ class ReviewReport(BaseModel):
     
     # 竞价回顾 TOP N
     auction_top: list[dict[str, Any]] = field(default_factory=list)
-    
+
+    # S149 P3 盖章字段（journal._market_context 零网络读这里）：
+    # money_effect 中位数——precompute_daily 算并落盘（emotion_metrics_ext 缺失时 None，不臆造）。
+    money_effect_median: float | None = None
+
     updated: str                     # 更新时间
     disclaimer: str = REVIEW_DISCLAIMER
 
@@ -209,7 +215,11 @@ class DailyReviewer:
     def _get_sti_data(self, trade_date: str) -> dict[str, Any]:
         """获取 STI 情绪数据。"""
         try:
-            from backend.limitup_sti import STIEngine
+            # backend 非 package（无 __init__.py，uvicorn 从 backend/ 以 app:app 启动）→
+            # `from backend.limitup_sti` 生产 ModuleNotFoundError 被裸 except 吞掉 → sti_phase 恒
+            # None → journal.market.emotion_phase 盖章坏。改 `from limitup_sti import`（同进程
+            # 根包路径，已验证可用——auction_screener.py:454 同款写法）。
+            from limitup_sti import STIEngine
             engine = STIEngine()
             result = engine.get_latest(trade_date)
             if result and result.source_ok:
@@ -329,14 +339,61 @@ class DailyReviewer:
             return []
     
     def precompute_daily(self, date: str) -> ReviewReport:
-        """每日预计算入口 — 由 app.py 15:35 调度器触发。"""
+        """每日预计算入口 — 由 app.py 15:35 调度器触发。
+
+        S149 P3 critical #1：算完后落盘 JSON 到 ``<VR_DATA_DIR>/daily-review/<date>.json``，
+        供 journal._market_context 零网络盖章读取（generate_review 同步打东财，违背 journal
+        零网络契约）。
+        """
         result = self.generate_review(date)
-        
-        # 写入缓存
+
+        # 盖章字段：money_effect 中位数（emotion_metrics_ext，em_zt_topic_pool 防封）。
+        # emotion_metrics_ext 暂缺（S149 P2 未恢复）→ import 失败被 except 吞 → median=None，
+        # journal 如实记 None。不臆造。待 P2 恢复后自动激活。
+        try:
+            import emotion_metrics_ext as _emotion_ext
+            me = _emotion_ext.money_effect(date)
+            result.money_effect_median = me.get("median") if me.get("available") else None
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("vibe-research").warning(
+                "[daily_review %s] money_effect 中位数取失败，盖章 median=None: %s", date, e)
+
+        # 写入内存缓存 + 磁盘持久化层（journal 盖章零网络读这里）
         cache_key = f"daily_review_{date}"
         _CACHE[cache_key] = (time.time(), result)
-        
+        try:
+            atomic_write_json(_daily_review_path(date), result.model_dump(mode="json"))
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("vibe-research").warning(
+                "[daily_review %s] 磁盘落盘失败: %s", date, e)
+
         return result
+
+    def get_daily_review(self, date: str) -> dict | None:
+        """先读内存缓存 → 磁盘 → fallback precompute_daily（含网络）。
+
+        journal._market_context 走这里——盘后复盘已 precompute 落盘时**零网络**盖章。
+        三级读：_CACHE（内存快路径，12h TTL）→ 磁盘 JSON → fallback 重算（触网）。磁盘未命中
+        （precompute 没跑/损坏）才 fallback（此时触网，非 journal 理想路径，但不臆造——
+        如实 fallback + 落盘供下次零网络读）。
+        """
+        cache_key = f"daily_review_{date}"
+        cached = _CACHE.get(cache_key)
+        if cached:
+            ts, result = cached
+            if time.time() - ts < _CACHE_TTL:
+                return result.model_dump(mode="json")
+        path = _daily_review_path(date)
+        if os.path.isfile(path):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    data = json.load(fh)
+                if isinstance(data, dict) and data.get("date") == date:
+                    return data
+            except Exception:  # noqa: BLE001  损坏 → fallback 重算 + 覆盖
+                pass
+        result = self.precompute_daily(date)
+        return result.model_dump(mode="json") if result else None
     
     def backfill(self, start_date: str, end_date: str | None = None) -> list[ReviewReport]:
         """
@@ -383,3 +440,20 @@ def get_reviewer() -> DailyReviewer:
     if _reviewer_instance is None:
         _reviewer_instance = DailyReviewer()
     return _reviewer_instance
+
+
+def _daily_review_path(date: str) -> str:
+    """复盘报告磁盘持久化路径 ``<VR_DATA_DIR>/daily-review/<date>.json``。
+
+    journal._market_context 零网络盖章读这里（经 vr_paths.resolve_data_dir，不硬编码 home）。
+    """
+    return str(resolve_data_dir() / "daily-review" / f"{date}.json")
+
+
+def get_daily_review(date: str) -> dict | None:
+    """模块级便捷入口：先读磁盘 → fallback precompute_daily（含网络）。
+
+    journal._market_context 调本函数——盘后复盘已 precompute 落盘时**零网络**盖章
+    （守 journal.py 零网络契约 + em_get 防封底线）。
+    """
+    return get_reviewer().get_daily_review(date)

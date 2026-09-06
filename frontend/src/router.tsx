@@ -85,6 +85,8 @@ export const router = createBrowserRouter([
       { path: "/scheduled-tasks", element: lazyEl(() => import("@/pages/ScheduledTasks"), "ScheduledTasks") },
       { path: "/industry", element: lazyEl(() => import("@/pages/Industry"), "Industry") },
       { path: "/debate", element: lazyEl(() => import("@/pages/Debate"), "Debate") },
+      // S165: §44 验证实验记录（RecorderRecord[]）+ 维度验证卡网格
+      { path: "/verifier-records", element: lazyEl(() => import("@/pages/VerifierRecords"), "VerifierRecords") },
     ],
   },
 ]);

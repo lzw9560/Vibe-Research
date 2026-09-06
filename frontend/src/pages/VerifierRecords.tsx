@@ -1,10 +1,11 @@
 // S165 R2: 实验记录页——list RecorderRecord（recorder_id + data_snapshot_id + hash + params + n_trials + verdict + timestamp）。
-// MOCK: 数据来自 dimension-validation.mock.ts，待 wire /api/verifier/records。
-// 一条 recorder_id 可复现（点 → stub onClick，无真实导航）。
 // v2: 加 not_validated pill + edge_type 标签 + data_snapshot_id 显示。
+// S165 wire: 接 GET /api/verifier/records（useVerifierRecords）。后端未就绪/空 → mock fixture fallback + "mock" 徽标。
+// 一条 recorder_id 可复现（点 → stub onClick，无真实导航）。
 import { useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/lib/utils";
+import { useVerifierRecords } from "@/lib/query";
 import { recorderRecordMocks } from "@/lib/__fixtures__/dimension-validation.mock";
 import type { RecorderRecord, VerifierStatus } from "@/lib/verifier-contract";
 
@@ -93,15 +94,37 @@ function VerifierRecordRow({
 
 export function VerifierRecords() {
   const [selected, setSelected] = useState<string | null>(null);
-  const records = recorderRecordMocks;
+  const { data, isLoading, error } = useVerifierRecords();
+
+  // honest fallback: 后端未就绪/空 → mock fixture + "mock" 徽标（不 break UI）。
+  const hasReal = !!data && data.length > 0;
+  const records: readonly RecorderRecord[] = hasReal ? data! : recorderRecordMocks;
+  const isMock = !hasReal;
 
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">实验记录（Recorder Records）</h1>
-        <span className="text-xs text-muted-foreground">
-          MOCK — 待 wire /api/verifier/records
-        </span>
+        <div className="flex items-center gap-1.5">
+          {isLoading && (
+            <span className="text-xs text-muted-foreground">加载中…</span>
+          )}
+          {error && !isLoading && (
+            <span className="text-xs text-red-500">
+              后端未就绪，显示 mock
+            </span>
+          )}
+          {isMock && !isLoading && (
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600">
+              MOCK
+            </span>
+          )}
+          {!isMock && (
+            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-600">
+              LIVE
+            </span>
+          )}
+        </div>
       </div>
 
       {selected && (

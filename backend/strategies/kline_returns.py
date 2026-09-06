@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 # 容差 0.01 元（float 噪声；覆盖 ¥5-50 涨停股，高价股更宽松不误判）。
 # 涨停阈值 9.8% 粗判覆盖主板 10%/创业板科创板 20%/北交所 30%。
 # 注：只覆盖涨停方向（做多策略只有涨停封死不可买；一字跌停对做多可买，有人抛、买家成交）。
+# S162 后 _is_unbuyable_next_bar 委托 engine.bar_utils（board-aware），本模块不再
+# 直接用这些常量；保留供外部 import 兼容（engine.bar_utils 有同名同值副本）。
 UNBUYABLE_PRICE_TOL: float = 0.01
 UNBUYABLE_PCT_THRESHOLD: float = 9.8
 
@@ -48,22 +50,17 @@ def strategy_params_for(strategy_code: str) -> dict:
     }
 
 
-def _is_unbuyable_next_bar(nb: dict) -> bool:
-    """检测 next_bar（T+1）是否一字板涨停封死（不可买）。
+def _is_unbuyable_next_bar(nb: dict, code: str = "") -> bool:
+    """检测 next_bar（T+1）是否一字板涨停封死（不可买）——薄委托 engine.bar_utils。
 
-    四价相等（high≈low≈open≈close）+ pctChg≥9.8% → 一字板涨停 → 不可买。
-    正常上涨/有区间/跌停均返 False（可买）。
+    S162 拆分重构：_is_unbuyable_next_bar 归 Executor fillability check（engine 层），
+    本函数保留 backward compat（lianban_lift/zt_pool_seal_time_lift/multifactor 等
+    tools 直接 import 此函数）。engine 版 board-aware（code="" → 9.8% 主板阈值，
+    匹配原口径；code="300xxx" → 19.8% 创业板；isST → 4.8%）+ 用 _bar_get 支持
+    dict/SimpleNamespace（原版只支持 dict .get，engine 版超集）。
     """
-    nb_open = nb.get("open") or 0.0
-    nb_high = nb.get("high") or 0.0
-    nb_low = nb.get("low") or 0.0
-    nb_close = nb.get("close") or 0.0
-    nb_pct = nb.get("pctChg") or 0.0
-    return (
-        abs(nb_high - nb_low) <= UNBUYABLE_PRICE_TOL
-        and abs(nb_open - nb_close) <= UNBUYABLE_PRICE_TOL
-        and nb_pct >= UNBUYABLE_PCT_THRESHOLD  # 涨停方向（非 abs：跌停一字板对做多可买）
-    )
+    from engine.bar_utils import is_unbuyable_next_bar  # noqa: PLC0415
+    return is_unbuyable_next_bar(nb, code=code)
 
 
 def _bs_code(code: str) -> str:
@@ -84,39 +81,37 @@ def _bar_get(bar: object, key: str, default: float = 0.0) -> float | str:
 def simulate_holding(
     bars: list, signal_date: str, stop_pct: float, take_profit_pct: float, max_hold_days: int,
 ) -> dict | None:
-    """S145 R1：SL/TP/max_hold 路径模拟（抽取自 strategy_backtest._backtest_single，T+1 规则）。
+    """S145 R1 + S162 拆分重构：委托 Executor.fill + Accounting.path_return（非复用）。
+
+    S162 三层解耦——FillPolicy.fill→Executor（line 101 entry=bars[idx+1].open）
+    / path_return→Accounting（lines 104-119 stop/take/max_hold+return）。apply_cost=False
+    保持原口径（无 cost，精确 backward compat）。T+1 guard（idx+2>=len→None）保。
 
     A 股 T+1：买 T+1 open（bars[idx+1]），买入日不可卖，T+2（idx+2）起检查 stop/take，
-    max_hold 收盘或 stop/take 提前平。返 {won, return_pct, exit_reason, exit_date} 或 None（缺 T+2）。
+    max_hold 收盘或 stop/take 提前平。返 {won, return_pct, exit_reason, exit_date} 或 None。
     stop_pct 负（如 -3）、take_profit_pct 正（如 8）、max_hold_days 正整数。
     bars: dict 或 SimpleNamespace 列表（含 date/open/high/low/close）。
     与 strategy_backtest._backtest_single 行为一致（S144 Tier 1 T+1 Option B）。
+
+    S162 新增（更正确，不改既有测试）：Executor 层 A 股规则 fillability check
+    （is_unbuyable/is_halted）→ untradeable 无 return。compute_returns_for_codes 预过滤
+    unbuyable 不受影响；test bar 无 pctChg/volume 不误判。
     """
+    from engine.accounting import path_return_as_dict  # noqa: PLC0415
+    from engine.decision import DEFAULT_LOT_SIZE, FILL_T_PLUS_1_OPEN, Trades  # noqa: PLC0415
+    from engine.executor import Executor  # noqa: PLC0415
+    from engine.fill_policies import T1OpenFill  # noqa: PLC0415
+
     if not bars:
         return None
-    idx = next((i for i, b in enumerate(bars)
-                if str(_bar_get(b, "date", ""))[:10] == signal_date), None)
-    if idx is None or idx + 2 >= len(bars):
-        return None  # 需 T+1（入场）+ T+2（首可卖日）
-    entry = _bar_get(bars[idx + 1], "open", 0)
-    if not entry or entry <= 0:
-        return None
-    for j in range(idx + 2, min(idx + 2 + max_hold_days, len(bars))):
-        low = _bar_get(bars[j], "low", 0)
-        high = _bar_get(bars[j], "high", 0)
-        if low and low <= entry * (1 + stop_pct / 100):
-            return {"won": False, "return_pct": float(stop_pct),
-                    "exit_reason": "stop", "exit_date": _bar_get(bars[j], "date", "")}
-        if high and high >= entry * (1 + take_profit_pct / 100):
-            return {"won": True, "return_pct": float(take_profit_pct),
-                    "exit_reason": "take", "exit_date": _bar_get(bars[j], "date", "")}
-    exit_idx = min(idx + 1 + max_hold_days, len(bars) - 1)
-    exit_price = _bar_get(bars[exit_idx], "close", 0)
-    if not exit_price:
-        return None
-    ret = (exit_price - entry) / entry * 100
-    return {"won": ret > 0, "return_pct": round(ret, 2),
-            "exit_reason": "max_hold", "exit_date": _bar_get(bars[exit_idx], "date", "")}
+    t = Trades(
+        code="", signal_date=signal_date, fill_type=FILL_T_PLUS_1_OPEN,
+        direction="long", size=DEFAULT_LOT_SIZE,
+    )
+    filled = Executor().execute(t, bars, T1OpenFill())
+    return path_return_as_dict(
+        filled, bars, stop_pct, take_profit_pct, max_hold_days, apply_cost=False,
+    )
 
 
 def simulate_holding_with_confirm(
