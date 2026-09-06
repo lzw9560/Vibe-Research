@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, Optional
@@ -27,19 +28,53 @@ router = APIRouter(tags=["feishu_bot"])
 # ── 飞书交互卡片格式化 ──────────────────────────────────────────────
 
 
+_OBSIDIAN_REVIEWS_URI = (
+    "obsidian://open?vault=Obsidian%20Vault"
+    "&file=10_Reference/investing/reviews"
+)
+
+
+def _button_action(actions: list[dict]) -> dict:
+    """构造飞书卡片 action 元素（按钮组容器）。"""
+    return {"tag": "action", "actions": actions}
+
+
+def _url_button(text: str, url: str, btn_type: str = "primary") -> dict:
+    """跳转 URL 按钮（不触发回调）。"""
+    return {
+        "tag": "button",
+        "text": {"content": text, "tag": "plain_text"},
+        "type": btn_type,
+        "url": url,
+    }
+
+
+def _callback_button(text: str, value: dict, btn_type: str = "primary") -> dict:
+    """触发回调的按钮（value 由 /bot/callback 解析）。"""
+    return {
+        "tag": "button",
+        "text": {"content": text, "tag": "plain_text"},
+        "type": btn_type,
+        "value": value,
+    }
+
+
 def _format_kg_card(kg_result: Any, title: str = "投研知识图谱") -> dict:
-    """把 KG 工具结果格式化成飞书交互卡片 JSON。
+    """把 KG 工具结果格式化成飞书交互卡片 JSON（含按钮 + Obsidian URI 跳转）。
 
     支持 3 种 KG 结果：
     - kg_audit → `{by_type: {folder: count}, total_entities, vault_path}` 表格式
+      + "查看完整审查" 按钮（Obsidian URI 跳转 reviews 文件夹）
     - query_kg_entities → `list[dict]`（frontmatter 列表）
+      + "查前 N 只行情" 按钮（回调 query_quote）
     - query_kg_relations → `{entity, relations: [{target, link}], total}` 关系列表
 
-    返回飞书卡片 JSON（可作 `msg_type: "interactive"` 的 content 传入）。
+    返回飞书卡片 JSON（顶层 config/header/elements，可作
+    `msg_type: "interactive"` 的 content 传入 send_feishu_card）。
     """
     elements: list[dict] = []
 
-    # 1. kg_audit 结果 → 分类型计数
+    # 1. kg_audit 结果 → 分类型计数 + 审查跳转按钮
     if isinstance(kg_result, dict) and kg_result.get("by_type"):
         total = kg_result.get("total_entities", 0)
         elements.append({
@@ -48,10 +83,15 @@ def _format_kg_card(kg_result: Any, title: str = "投研知识图谱") -> dict:
         })
         elements.append({"tag": "hr"})
         for folder, count in sorted(kg_result["by_type"].items()):
+            emoji = "✅" if count > 0 else "❌"
             elements.append({
                 "tag": "div",
-                "text": {"content": f"- `{folder}`：{count}", "tag": "lark_md"},
+                "text": {"content": f"{emoji} `{folder}`：{count}", "tag": "lark_md"},
             })
+        # 按钮：跳 Obsidian 审查目录
+        elements.append(_button_action([
+            _url_button("查看完整审查", _OBSIDIAN_REVIEWS_URI),
+        ]))
 
     # 2. query_kg_relations 结果 → 关系列表
     elif isinstance(kg_result, dict) and kg_result.get("relations") is not None:
@@ -72,7 +112,7 @@ def _format_kg_card(kg_result: Any, title: str = "投研知识图谱") -> dict:
             target = item.get("target", "")
             elements.append({
                 "tag": "div",
-                "text": {"content": f"- {target}", "tag": "lark_md"},
+                "text": {"content": f"- → {target}", "tag": "lark_md"},
             })
         if len(relations) > 20:
             elements.append({
@@ -80,14 +120,15 @@ def _format_kg_card(kg_result: Any, title: str = "投研知识图谱") -> dict:
                 "text": {"content": f"_…共 {total} 条，仅显示前 20_", "tag": "lark_md"},
             })
 
-    # 3. query_kg_entities 结果 → 实体列表（list[dict]）
+    # 3. query_kg_entities 结果 → 实体列表（list[dict]）+ 查行情按钮
     elif isinstance(kg_result, list):
         if not kg_result:
             elements.append({
                 "tag": "div",
                 "text": {"content": "_无匹配实体_", "tag": "lark_md"},
             })
-        for item in kg_result[:20]:
+        shown = kg_result[:20]
+        for item in shown:
             code = item.get("code") or item.get("_filename", "")
             name = item.get("name") or item.get("title", "")
             elements.append({
@@ -99,6 +140,18 @@ def _format_kg_card(kg_result: Any, title: str = "投研知识图谱") -> dict:
                 "tag": "div",
                 "text": {"content": f"_…共 {len(kg_result)} 条，仅显示前 20_", "tag": "lark_md"},
             })
+        # 按钮：查前 N 只行情（回调 query_quote）
+        quote_codes = [
+            item.get("code") for item in shown
+            if isinstance(item, dict) and item.get("code")
+        ][:5]
+        if quote_codes:
+            elements.append(_button_action([
+                _callback_button(
+                    f"查前 {len(quote_codes)} 只行情",
+                    {"action": "query_quote", "codes": quote_codes},
+                ),
+            ]))
 
     # 4. error dict 或未知结构 → 回退纯文本
     elif isinstance(kg_result, dict) and kg_result.get("error"):
@@ -113,7 +166,7 @@ def _format_kg_card(kg_result: Any, title: str = "投研知识图谱") -> dict:
         })
 
     return {
-        "config": {"wide_screen_mode": True},
+        "config": {"wide_screen_mode": True, "enable_forward": False},
         "header": {
             "title": {"content": title, "tag": "plain_text"},
             "template": "blue",
@@ -238,9 +291,11 @@ async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
 
     # 4. 回复消息（用 feishu_sender 的 App Bot；send_to_feishu 用实例 chat_id）
     #
-    # 回复策略（spec 2.3）：
-    # - LLM 回复用纯文本（LLM 输出已是 markdown，send_to_feishu 支持）
-    # - 若 LLM 失败但 KG 直查能答，用 _format_kg_card 格式化成飞书交互卡片
+    # 回复策略（spec 2.3 + 优化）：
+    # - KG 直查能答 → 用 _format_kg_card 格式化成飞书交互卡片（含按钮）
+    # - KG 不可答、LLM 成功 → 用纯文本（LLM 输出已是 markdown）
+    # - LLM 失败但 KG 能答 → 用卡片（与第一条合并，自然降级）
+    # - LLM 失败且 KG 不可答 → 文本报错
     try:
         from notification.senders.feishu_sender import FeishuSender
 
@@ -254,16 +309,34 @@ async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
             config.feishu_prefer_app_bot = True
         sender = FeishuSender(config)
 
-        # KG 直查（不经 LLM）：意图能匹配时立刻可答，作 LLM 失败的降级
+        # KG 直查（不经 LLM）：意图能匹配时立刻可答
         kg_result = _direct_kg_lookup(text)
-        if reply.startswith("查询失败") and kg_result is not None:
-            # LLM 失败但 KG 能答 → 用飞书交互卡片
-            card = _format_kg_card(kg_result, title="投研知识图谱")
+        llm_failed = reply.startswith("查询失败")
+
+        if kg_result is not None:
+            # KG 可答 → 卡片（含按钮 + Obsidian URI 跳转）
+            # 若 LLM 也成功，把 LLM 回答追加到卡片尾部作补充上下文
+            title = "投研知识图谱"
+            if not llm_failed and reply:
+                # LLM 也答了：卡片标题区分一下，但主体仍是 KG 数据
+                title = "投研知识图谱（含 AI 解读）"
+            card = _format_kg_card(kg_result, title=title)
+            if not llm_failed and reply:
+                # 在卡片末尾追加 AI 解读块
+                card["elements"].append({"tag": "hr"})
+                card["elements"].append({
+                    "tag": "div",
+                    "text": {"content": f"**AI 解读**：{reply[:1500]}", "tag": "lark_md"},
+                })
             ok = sender.send_feishu_card(card)
+        elif not llm_failed:
+            # KG 不可答、LLM 成功 → 纯文本
+            ok = sender.send_to_feishu(reply)
         else:
+            # LLM 失败且 KG 不可答 → 文本报错
             ok = sender.send_to_feishu(reply)
         if not ok:
-            logger.warning("飞书 bot 回复发送未成功（send_to_feishu 返回 False）")
+            logger.warning("飞书 bot 回复发送未成功（send_to_feishu/send_feishu_card 返回 False）")
     except Exception as e:  # noqa: BLE001 — 回复失败不抛 5xx，回结构化错误
         logger.error("飞书 bot 回复失败: %s", e)
         return {"ok": False, "error": str(e)}
@@ -359,47 +432,116 @@ async def feishu_bot_direct(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/api/feishu/bot/stream")
-async def feishu_bot_stream(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """流式 bot 对话（先返回 KG 直查结果，LLM 回复异步推送）。
+async def feishu_bot_stream(payload: Dict[str, Any]):
+    """真流式 bot 对话（SSE）。
 
     用法：
     POST /api/feishu/bot/stream  body={"text":"600519 关联"}
     POST /api/feishu/bot/stream  body={"text":"查所有股票"}
     POST /api/feishu/bot/stream  body={"text":"图谱健康"}
 
-    两阶段回复：
-    - 第一步：立刻返回 KG 直查结果（不经 LLM），前端可即时渲染卡片
-    - 第二步：异步调 LLM（若配置了），llm_reply 字段填充；未配置或失败时
-      source="kg_only"，前端只用 KG 结果
+    事件流（每个事件形如 `data: <json>\n\n`）：
+    - `{"type":"kg","data":<kg_result>}`  立刻：KG 直查结果（不经 LLM）
+    - `{"type":"llm","data":"<reply>"}`  异步：LLM 回答（若配置可用）
+    - `{"type":"error","data":"<msg>"}`  LLM 调用异常
+    - `{"type":"done"}`                  结束标记
 
-    合规：KG 直查只返回图谱客观数据（实体元数据/关系链接），方向性研判
-    由 LLM 在 SYSTEM_PROMPT 约束下给出。
+    合规：KG 直查只返回图谱客观数据（实体元数据/关系链接），方向性
+    研判由 LLM 在 SYSTEM_PROMPT 约束下给出。
     """
+    from fastapi.responses import StreamingResponse
+
     text = (payload.get("text") or "").strip()
+
+    async def event_stream():
+        # 事件 1：KG 直查（立刻）
+        try:
+            kg_result = _direct_kg_lookup(text)
+            if kg_result is not None:
+                payload_kg = {"type": "kg", "data": kg_result}
+                # 带上格式化好的卡片，前端可即时渲染
+                try:
+                    payload_kg["card"] = _format_kg_card(kg_result)
+                except Exception as e:  # noqa: BLE001 — 卡片格式化失败不阻断流
+                    logger.warning("stream KG 卡片格式化失败: %s", e)
+                yield f"data: {json.dumps(payload_kg, ensure_ascii=False)}\n\n"
+        except Exception as e:  # noqa: BLE001 — KG 工具异常不阻断后续 LLM
+            logger.warning("stream KG 直查异常: %s", e)
+            yield f"data: {json.dumps({'type': 'error', 'data': f'kg: {e}'}, ensure_ascii=False)}\n\n"
+
+        # 事件 2：LLM 回答（异步等待）
+        try:
+            cfg = chat._get_env_llm_config()
+            if cfg.get("baseURL") and cfg.get("apiKey") and cfg.get("model"):
+                # run_chat 是同步阻塞调用，丢到线程池避免阻塞事件循环
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None, lambda: chat.run_chat(cfg, [{"role": "user", "content": text}])
+                )
+                reply = result.get("content", "") or ""
+                if reply:
+                    yield f"data: {json.dumps({'type': 'llm', 'data': reply}, ensure_ascii=False)}\n\n"
+        except Exception as e:  # noqa: BLE001 — LLM 不可用时只推 error 不阻断 done
+            yield f"data: {json.dumps({'type': 'error', 'data': str(e)}, ensure_ascii=False)}\n\n"
+
+        # 事件 3：结束
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    # text 为空时仍返回 SSE（带 error + done），保持流式契约一致
     if not text:
-        return {"ok": False, "error": "text 不能为空"}
+        async def empty_stream():
+            yield f"data: {json.dumps({'type': 'error', 'data': 'text 不能为空'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        return StreamingResponse(empty_stream(), media_type="text/event-stream")
 
-    # 第一步：立刻返回 KG 直查结果（不经 LLM）
-    kg_result = _direct_kg_lookup(text)
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-    # 第二步：异步调 LLM（如果配置了）
-    llm_reply: Optional[str] = None
+
+@router.post("/api/feishu/bot/callback")
+async def feishu_bot_callback(request: Request) -> Dict[str, Any]:
+    """飞书交互卡片按钮回调。
+
+    飞书配置：开放平台 → 事件订阅 → 卡片交互回调地址指向本端点。
+    按钮点击时飞书 POST 一个 `{"action": {"value": {...}, ...}}` body。
+
+    支持 action：
+    - ``{"action": "query_quote", "codes": ["600519", ...]}``
+      → 调 query_quote 工具，返回更新后的卡片 JSON（飞书会替换原卡片）
+
+    返回 ``{"card": <new_card>}`` 让飞书原地更新卡片内容；未知 action 时
+    返回结构化错误（卡片不变）。
+
+    合规：query_quote 返回行情客观数据（价格/涨跌），不做方向性建议。
+    """
     try:
-        cfg = chat._get_env_llm_config()
-        if cfg.get("baseURL") and cfg.get("apiKey") and cfg.get("model"):
-            result = chat.run_chat(cfg, [{"role": "user", "content": text}])
-            llm_reply = result.get("content")
-    except Exception as e:  # noqa: BLE001 — LLM 不可用时只用 KG 结果
-        logger.warning("飞书 bot stream LLM 调用失败，降级为 kg_only: %s", e)
+        body = await request.json()
+    except Exception as e:  # noqa: BLE001 — 非合法 JSON 回 400 结构化错误
+        return {"ok": False, "error": f"invalid json: {e}"}
 
-    return {
-        "ok": True,
-        "text": text,
-        "kg_result": kg_result,
-        "kg_card": _format_kg_card(kg_result) if kg_result is not None else None,
-        "llm_reply": llm_reply,
-        "source": "both" if llm_reply else ("kg_only" if kg_result is not None else "llm_only"),
-    }
+    # 飞书回调可能把 action 包在 challenge 校验里（与事件回调一致）
+    if "challenge" in body:
+        return {"challenge": body["challenge"]}
+
+    action = body.get("action", {}) or {}
+    value = action.get("value", {}) or {}
+    action_name = value.get("action")
+
+    if action_name == "query_quote":
+        codes = value.get("codes", [])
+        if not codes:
+            return {"ok": False, "error": "codes 为空"}
+        try:
+            from ai.tools.registry import execute as exec_tool
+
+            result = exec_tool("query_quote", {"codes": codes})
+        except Exception as e:  # noqa: BLE001 — 工具执行失败回结构化错误
+            logger.error("callback query_quote 失败: %s", e)
+            return {"ok": False, "error": str(e)}
+        card = _format_kg_card(result, title=f"{len(codes)} 只股票行情")
+        return {"card": card}
+
+    logger.warning("callback 未知 action: %s", action_name)
+    return {"ok": False, "error": f"未知 action: {action_name}"}
 
 
 __all__ = ["router"]
