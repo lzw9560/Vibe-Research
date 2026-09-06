@@ -140,6 +140,14 @@ async def lifespan(_app: FastAPI):
         _storm_daemon.start()
     except Exception as _e:  # noqa: BLE001 — daemon 启动失败不阻断服务
         logger.warning("[S088] storm_daemon 启动失败（不影响服务）: %s", _e)
+    # 飞书 WebSocket 长连接：后端主动连飞书 WS，接收消息事件，不需要公网回调 URL。
+    # 本地开发直接可用（无需 ngrok / 公网域名 / 事件回调配置）。
+    # 缺 SDK 或缺凭据时静默降级（仅 warning log），不阻断服务。
+    try:
+        from notification.feishu_ws_client import start_feishu_ws  # noqa: PLC0415
+        start_feishu_ws()
+    except Exception as _fw_err:  # noqa: BLE001 — 飞书长连接失败不阻断服务
+        logger.warning("飞书 WebSocket 长连接启动失败（不影响服务）: %s", _fw_err)
     yield
     # shutdown
     await intraday_sentiment_router.stop_sampler()
