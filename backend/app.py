@@ -66,6 +66,7 @@ from routers import prediction_ledger_router as prediction_ledger_router_mod
 from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
 from routers import notes as notes_router  # 投研记录笔记（后端 SQLite 落盘，全局可见）
 from routers import feishu_bot as feishu_bot_router  # 飞书 Bot 双向对话（事件回调 + KG 工具）
+from routers import wechat_bot as wechat_bot_router  # 微信 Bot 双向对话（企业微信回调 + KG 工具）
 try:
     from routers import value_funnel as value_funnel_router
 except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 quality.py 时不挡 app 启动
@@ -243,6 +244,7 @@ app.include_router(recommendation.router)
 app.include_router(win_rate.router)
 app.include_router(feishu.router)
 app.include_router(feishu_bot_router.router)  # 飞书 Bot 双向对话（事件回调 + KG 工具）
+app.include_router(wechat_bot_router.router)  # 微信 Bot 双向对话（企业微信回调 + KG 工具）
 app.include_router(backtest.router)
 app.include_router(bidding.router)
 app.include_router(strategy_router.router)

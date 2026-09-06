@@ -60,6 +60,8 @@ class NotificationConfig:
     report_summary_only: bool = False
     report_integrity_enabled: bool = False
     wechat_webhook_url: str = ""
+    wechat_token: str = ""  # 企业微信回调 token（签名校验，被动接收消息用）
+    wechat_encoding_aes_key: str = ""  # 消息加解密 key（可选，不配则明文模式）
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     email_sender: str = ""
@@ -104,6 +106,8 @@ NOTIFICATION_ENV_MAP: dict[str, str] = {
     "REPORT_LANGUAGE": "report_language",
     "REPORT_SUMMARY_ONLY": "report_summary_only",
     "REPORT_INTEGRITY_ENABLED": "report_integrity_enabled",
+    "WECHAT_TOKEN": "wechat_token",
+    "WECHAT_ENCODING_AES_KEY": "wechat_encoding_aes_key",
 }
 
 
