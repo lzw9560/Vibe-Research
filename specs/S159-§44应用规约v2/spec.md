@@ -79,10 +79,25 @@
 - [x] §44 降级参考性建议：v2 强化"前置 sanity+回溯主场"，不强制不阻塞
 - [x] verdict 外推禁令：§44 v1 各 harness 结论标"窗口偏差待修"，不外推"绝对无 edge"
 
-## 8. evidence 待补充
+## 8. evidence（6 专家审计 + decisive gap 测试已补，2026-09-06）
 
-- 6 专家对抗 workflow（w3vznuh6q）：深查"全劣于随机"根因 + 方法论修复方向 → 回来补 §0/§2 证据。
-- 8 域因子脑暴+对抗过滤 workflow（w0gt0y1xt）：列出所有可能因子 + 真伪/可测/可捕获过滤 → 回来补"对窗口+有优势因子"清单，指导 §44 v2 在对窗口验哪些因子。
+**6 专家对抗审计 verdict（置信度 0.9，code-verified）**：
+- **(A) 所测窗口（D+1 开盘 post-gap 续涨选股）无 edge = 真非 bug**——D+1 开盘入场对"次日买续涨"是正确可实现口径（涨停 D 收盘封死买不到，gene_scores 信号 D 收盘后才就绪）；path_lift=0.978 五参 0.87-0.97 robust，所有选股维度≤1.363，base WR 24-35% 结构性负。
+- **(B) 但"打板无 edge" blanket verdict = artifact（外推禁令违反）**——框架系统性 miss 了项目自己已验证的隔夜 gap（`first_board_premium_baseline.py`: N=899, mean +1.33%, t=10.65, p≈0, 56.8% 正, net +0.93%）。所有 verdict 口径（o2c/path/layer_lift）从 D+1 开盘起算=gap 之后。代码自己写 `first_board_layer_lift.py:13 "≠ Phase 0 隔夜口径"` 但从未把 gap 折进 lift；gap-inclusive c2c 躺 DB 里从没进 winrate/lift。
+- **根因**：① 窗口错位（code-verified 最强）② verdict 外推越界（c2c 在 DB 未 aggregate）③ gap edge 真实但薄+部分不可捕获（14 天/66% 活跃 regime/未排除一字板/net_pos 50.6%）④ unbuyable 过滤器相关选择偏倚（高因子股更易 D+1 一字板被滤→lift 压低，次级）⑤ 成本口径不一致（0.4 vs 0.7，但反向切不支 bug 论）⑥ survivorship（LOW，方向有利 edge）。
+
+**decisive gap-window lift 测试**（`backend/tools/gap_window_lift.py`，6 专家 recommended_next_test，数据已在 DB 秒级）：
+- gap（D 收→D+1 开）all: mean +1.15%, net +0.45%（扣 0.70% cost）, net_WR 46.5%（薄，<50%）。
+- top-quintile（高 gene_score）vs all: **lift 0.942x 劣于随机**；pearson(score, gap)=-0.075 弱负。
+- **gene_score 无 gap 选股力**（不预测哪个涨停股 gap 大）→ §44"无 selection edge"在**对窗口（gap）也成立**，真非 bug。
+- gap 本身是真**事件 edge**（薄+不可选+部分不可交易，sealed D 收买不到，需盘中打板 intraday）。
+
+**refined 结论**（替代前"窗口偏差"粗框）：
+- §44"无 selection edge"**是真的 + robust**（post-gap continuation + gap 两窗口均验证 gene_score 无选股力）——不是窗口偏差（对 selection 而言）。
+- §44 overreach = 把"无 selection edge"外推成"无 edge"——但**事件 edge（涨停→隔夜 gap +1.15%）真实**，只是薄+不可选+部分不可交易+需 intraday 捕获。
+- **答用户"全因子劣于随机"**：无因子有**选股力**（预测哪个涨停股 gap 大/续涨好）——对窗口也验证，真；gap 是**薄事件 edge** 非选股 edge，需盘中打板 intraday 入场（live-only）。
+
+**待 8 域因子 discovery workflow（w0gt0y1xt）补**：其他因子（vol_surge/volatility/连板/封单/竞价量比/筹码分布等）是否预测 gap——本 decisive 只测了 gene_score。workflow 回来后补"对窗口+有优势因子"清单，指导 §44 v2 在 gap 窗口验哪些因子。
 
 ## 9. 分级
 
