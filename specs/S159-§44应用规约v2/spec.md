@@ -4,22 +4,32 @@
 > 作者：Claude  日期：2026-09-06
 > 关联：[s44-quant-validation-loop memory]、[methodology-window-before-no-edge-conclusion memory]、S153/S155-S158（§44 v1 各 harness，结论窗口偏差待修）
 
-## 0. 问题（窗口偏差 + 斤斤计较失真 + 每阶段激进）
+## 0. 问题（外推越界 + scope 盲区 + 斤斤计较失真 + 每阶段激进）
 
-§44 v1 在 D+1-开盘→D+4 path 窗口测了 ~20 因子跨数据源全 net lift<1"劣于随机"。用户质疑"跟设计思路出入太大"——独立验证三窗口**证实是窗口偏差假象，非真无 edge**：
+> ⚠️ 2026-09-06 专家审查后重构（原 §0 框"窗口偏差假象"与 §8 refined 矛盾，已改）。数源全 committed 脚本（overnight_gap_decomposition.py / first_board_premium_baseline.py / gap_window_lift.py）。
+
+§44 v1 在 D+1-开盘→D+4 path 窗口测 ~20 因子跨数据源全 net lift<1"劣于随机"。6 专家审计 + decisive gap 测试 **refined verdict（置信 0.9）**：
+
+**(A) §44 v1"无 selection edge"是真的 + robust**——decisive gap_window_lift.py 证 gene_score 在**对窗口（gap）也无选股力**（top-quintile lift 0.942x 劣于随机，pearson -0.075）。D+1-开盘入场对"次日买续涨"是**正确可实现口径**（涨停 D 收盘封死买不到，gene_scores 信号 D 收盘后才就绪）。**对 selection 而言不是窗口偏差**——§44 v1 测对了。
+
+**(B) 但"打板无 edge" blanket verdict = 外推越界（外推禁令违反）**——框架系统性 miss 了项目自己已验证的隔夜 gap（`first_board_premium_baseline.py`：N=899, mean +1.33% gross, net +0.93% after 0.40% cost, 56.8% positive, t=10.65, p≈0）。所有 verdict 口径（o2c/path/layer_lift target_return）从 D+1 开盘起算 = gap 之后。代码 `first_board_layer_lift.py:13` 写"≠ Phase 0 隔夜口径"但**从未把 gap 折进 lift**；gap-inclusive c2c 躺 DB 里从没进 winrate/lift。
+
+**三窗口分解**（`overnight_gap_decomposition.py`，baostock kline_cache + gene_scores 3362 obs）证 edge 在 gap 段：
 
 | 窗口 | 平均 | 中位数 | 胜率 |
 |---|---|---|---|
-| 隔夜 gap（D 收盘→D+1 开盘） | +1.30% | +0.28% | 54.3% ← 真 edge（合 Chen2017） |
+| 隔夜 gap（D 收盘→D+1 开盘） | +1.30% | +0.28% | 54.3% ← 真**事件** edge（合 Chen2017） |
 | D+1 日内（开→收，H2 o2c） | +0.03% | 0.00% | 46.2% |
 | path（D+1 开→exit，§44 v1 框架） | +0.67% | -3.00% | 36.3% ← 反转负段 |
 
-**根因**：§44 v1 `simulate_holding(signal_date=D)` 入场 D+1 开盘 = 隔夜 gap **之后**，测的是隔夜正之后的反转负段。**系统性 miss 了隔夜正 edge**。"全因子劣于随机" = "D+1-open 窗口无 edge"，≠"无 edge"。
+**根因（refined，替代原"窗口偏差"框）**：① **外推越界**——把"无 selection edge"泛化成"无 edge"，但 gap 事件 edge 真实（薄+不可选+部分不可交易）。② **scope 盲区**——gap 没折进 §44 lift（c2c 在 DB 未 aggregate）。③ gap edge 真实但薄（premium_baseline net +0.93% WR 50.6% 边际，14 天/66% 活跃 regime）+部分不可捕获（sealed D 收盘买不到，需盘中打板 intraday）。**不是"§44 测错窗口"（对 selection 是对的）——是外推 + scope 盲区。**
+
+⚠️ **自相矛盾 caveat**（专家审查抓）：gap 测试 14 天 < v2 自己 R2 的 ≥60 天门槛。按 v2 规则，14 天 gap 测试应标"探索性/underpowered"——所以"gap 是真 event edge"是 **hypothesis 待 60 天数据复验**，非定论。premium_baseline t=10.65 显著但 14 天 regime 集中，需更长样本 robust。
 
 用户判断（统计上成立）：
-1. **斤斤计较失真**：Bonferroni K=6-8 假设大 n；在 13-42 天 modest n 上 over-conservative → false negative 爆炸 → 真优势被误否 → 失真。
-2. **每阶段激进**：§44 散在 5 层（spec 自查+evaluation 降权+回溯+6-lens grill+每 harness），每 spec 上 grill+full 重方法论，背离 §1.2"降级非阻塞"本意。
-3. **该拉长时间维度**：短窗噪声大+regime 依赖（秒板 13 天 1.31x→31 天 0.22x 翻转）；复杂因子需更长样本。
+1. **斤斤计较失真**：Bonferroni K=6-8 假设大 n；在 13-42 天 modest n 上 over-conservative → false negative 爆炸。
+2. **每阶段激进**：§44 散在 5 层，每 spec 上 grill+full 重方法论，背离 §1.2"降级非阻塞"本意。
+3. **该拉长时间维度**：短窗噪声大+regime 依赖（秒板 13 天 1.31x→31 天 0.22x 翻转）。
 
 ## 1. 目标
 
