@@ -192,16 +192,36 @@ def main():
 
     # honest label 60d
     print("\n=== HONEST LABEL (60d) ===", flush=True)
-    if v60.event_metrics and v60.event_metrics.mean_return > 0:
-        print("mean>0 but event t-test STUBBED -> event_thin_positive", flush=True)
-    print(f"60d status: {v60.status}", flush=True)
-    if v60.status == "exploratory" and v60.event_metrics and v60.event_metrics.mean_return > 0:
-        print(f"-> exploratory + event_thin_positive (positive, NOT robust_edge: lift<2x or t-test stubbed)", flush=True)
+    es = v60.event_status
+    if es == "event_robust":
+        print(f"-> event_robust: t-test p<0.05 + days>=60 + net>0.3% -> status={v60.status}", flush=True)
+    elif es == "event_thin_positive":
+        if v60.event_metrics and v60.event_metrics.p_one_sided is not None:
+            if v60.event_metrics.p_one_sided < 0.05:
+                print(f"-> event_thin_positive: p<0.05 BUT (days<60 OR net<=0.3%) -> status={v60.status}", flush=True)
+            else:
+                print(f"-> event_thin_positive: p>={v60.event_metrics.p_one_sided:.4f} >= 0.05 (positive but NOT statistically significant) -> status={v60.status}", flush=True)
+        else:
+            print(f"-> event_thin_positive -> status={v60.status}", flush=True)
+    elif es == "event_falsified":
+        print(f"-> event_falsified: day_mean<=0 -> status={v60.status}", flush=True)
+    else:
+        print(f"-> event_not_tested -> status={v60.status}", flush=True)
 
     # comparison
     print("\n=== vs 14-DAY NAIVE BASELINE ===", flush=True)
     print("14d (cost 0.40%): N=899 gross_mean=1.3345% net=0.9345% t=10.6549 net_wr=0.5061 (14d, NAIVE POOLED t)", flush=True)
-    print(f"60d (cost 0.70%): N={s60['n']} gross_mean={s60['gross']:.4f}% net={s60['net']:.4f}% net_wr={s60['wr']:.4f} naive_t={s60['t']:.4f} (day-clustered days_robust={v60.days_robust}, event t-test STUBBED)", flush=True)
+    em60 = v60.event_metrics
+    t_clust = em60.t_stat_day_clustered if em60 else "N/A"
+    p_clust = em60.p_one_sided if em60 and em60.p_one_sided is not None else "N/A"
+    n_days = em60.n_days if em60 and em60.n_days is not None else "N/A"
+    print(
+        f"60d (cost 0.70%): N={s60['n']} gross_mean={s60['gross']:.4f}% net={s60['net']:.4f}% "
+        f"net_wr={s60['wr']:.4f} naive_pooled_t={s60['t']:.4f} | "
+        f"day_clustered_t={t_clust} p_one_sided={p_clust} n_days={n_days} "
+        f"days_robust={v60.days_robust} event_status={v60.event_status}",
+        flush=True,
+    )
     print("NOTE: 60d cost more conservative (0.70 vs 0.40); net_mean lower but gross_mean matches 14d (~1.32 vs 1.33).", flush=True)
     print("DONE.", flush=True)
 
@@ -214,8 +234,21 @@ def _print_verdict(v):
     if v.event_metrics:
         em = v.event_metrics
         print(f"  mean_return  = {em.mean_return:.6f} ({em.mean_return*100:.4f}%)", flush=True)
+        if em.net_mean is not None:
+            print(f"  net_mean     = {em.net_mean:.6f} ({em.net_mean*100:.4f}%)  [day-clustered]", flush=True)
+        else:
+            print(f"  net_mean     = None", flush=True)
         print(f"  win_rate     = {em.win_rate:.4f}", flush=True)
-        print(f"  t_stat_day_clust = {em.t_stat_day_clustered}  (STUB TODO)", flush=True)
+        print(f"  t_stat_day_clust = {em.t_stat_day_clustered}", flush=True)
+        if em.p_one_sided is not None:
+            print(f"  p_one_sided  = {em.p_one_sided}", flush=True)
+        if em.n_days is not None:
+            print(f"  n_days       = {em.n_days}", flush=True)
+        if em.day_mean is not None:
+            print(f"  day_mean     = {em.day_mean:.8f} ({em.day_mean*100:.4f}%)", flush=True)
+        if em.day_std is not None:
+            print(f"  day_std      = {em.day_std:.8f} ({em.day_std*100:.4f}%)", flush=True)
+        print(f"  base_rate    = {em.base_rate}", flush=True)
         print(f"  n_event      = {em.n_event}", flush=True)
     print(f"event_status   = {v.event_status}", flush=True)
     print(f"dsr            = {v.dsr} ({v.dsr_method})", flush=True)
