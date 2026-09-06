@@ -78,14 +78,4 @@ print(f"  all:            net_WR={wr_all*100:.1f}%")
 print(f"  lift(top/all)={lift:.3f}x {'VALIDATED' if lift>=2 else ('未validated' if lift>=1 else '劣于随机')}")
 # Spearman rank corr score vs gap (selection power)
 import math
-def spearman(xs, ys):
-    n=len(xs); rx={v:i for i,v in enumerate(sorted(set(xs)))}; ry={v:i for i,v in enumerate(sorted(set(ys)))}
-    # simple pearson on ranks (approx)
-    return 0  # placeholder
-# 直接 pearson score vs premium
-xs=[o["score"] for o in obs]; ys=[o["premium"] for o in obs]
-mx,my=statistics.mean(xs),statistics.mean(ys)
-cov=sum((x-mx)*(y-my) for x,y in zip(xs,ys))/len(xs)
-sx=math.sqrt(sum((x-mx)**2 for x in xs)/len(xs)); sy=math.sqrt(sum((y-my)**2 for y in ys)/len(xs))
-r = cov/(sx*sy) if sx and sy else 0
-print(f"\npearson(score, gap%) = {r:.4f} (因子预测 gap 的选股力, |r|>0.1 弱, >0.3 中)")
+# pearson(score, gap)
