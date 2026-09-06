@@ -63,6 +63,7 @@ _EP_SKYROCKET = "/api/a-share/special-data/skyrocket-list"
 _EP_HOT_STOCK = "/api/a-share/special-data/hot-stock-list"
 _EP_ANOMALY_LIST = "/api/a-share/special-data/anomaly-analysis-list"
 _EP_ANOMALY_STOCK = "/api/a-share/special-data/anomaly-analysis-stock"
+_EP_LIMIT_UP_POOL = "/api/a-share/special-data/limit-up-pool"  # 涨停池（按历史日期）
 
 # 估值快照 5min TTL 缓存（盘中估值不变，省请求）
 _valuation_cache: dict[tuple[str, ...], tuple[float, dict[str, dict]]] = {}
@@ -279,6 +280,40 @@ def anomaly_stock(codes: list[str]) -> list[dict]:
     if data is None:
         return []
     return _normalize_anomaly_items(_items(data))
+
+
+def limit_up_pool(date_str: str) -> list[dict]:
+    """涨停池（按历史日期，盘后可查）——交叉验证 baostock 派生涨停。
+
+    date_str: 'YYYY-MM-DD'。转 Beijing 午夜 ms（hithink ``date_ms`` 契约）。
+    返 [{code, name, lbc?}]（lbc 连板数若 hithink 提供，字段名未实测取多个候选）。
+    hithink 失败/熔断/Key 缺 → 返 []（不伪装，调用方降级，防封路径仍走 circuit_breaker）。
+    """
+    from datetime import datetime, timedelta, timezone
+
+    tz_bj = timezone(timedelta(hours=8))
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=tz_bj)
+    except ValueError:
+        logger.warning("[hithink] limit_up_pool 非法日期 %s", date_str)
+        return []
+    date_ms = int(dt.timestamp() * 1000)
+    data = _http_get(_EP_LIMIT_UP_POOL, {"date_ms": date_ms}, _TIMEOUT_SPECIAL)
+    if data is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for it in _items(data):
+        ths = it.get("thscode") or it.get("code") or ""
+        bare = _strip_thscode(ths)
+        if not bare:
+            continue
+        row: dict[str, Any] = {"code": bare, "name": it.get("name", "")}
+        for k in ("limit_times", "continuous", "lianban", "lbc", "limit_up_times"):
+            if k in it:
+                row["lbc"] = it.get(k)
+                break
+        out.append(row)
+    return out
 
 
 def _normalize_rank_items(items: list[dict[str, Any]]) -> list[dict]:
