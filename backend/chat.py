@@ -18,6 +18,18 @@ import socket
 from urllib.parse import urlparse
 
 import requests
+import urllib3
+
+# 内网自签证书（阿里百炼走 Tailscale 内网 HTTPS）经全局代理拦截后验证书失败，
+# 默认关闭 LLM 请求的 SSL 验证；公网部署可设 VR_LLM_VERIFY_SSL=true 强制校验。
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+_LLM_VERIFY_SSL = os.environ.get("VR_LLM_VERIFY_SSL", "false").lower() == "true"
+
+# LLM 端点常走内网/Tailscale，必须绕开全局 http(s)_proxy（否则代理对内网自签证书不友好，
+# 会 Connection reset）。用模块级 Session(trust_env=False) 仅作用于 LLM 请求，
+# 不改 requests 全局配置，不影响其它模块（东财数据源已有自己的 trust_env=False 处理）。
+_LLM_SESSION = requests.Session()
+_LLM_SESSION.trust_env = False
 
 import cli_runtime
 
@@ -179,11 +191,12 @@ def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
     if use_tools:
         payload["tools"] = TOOLS
         payload["tool_choice"] = "auto"
-    r = requests.post(
+    r = _LLM_SESSION.post(
         f"{base}/chat/completions",
         headers={"Authorization": f"Bearer {cfg['apiKey']}", "Content-Type": "application/json"},
         json=payload, timeout=90,
         allow_redirects=False,  # M8 修复：禁重定向，防 SSRF 绕过
+        verify=_LLM_VERIFY_SSL,
     )
     if r.status_code != 200:
         raise RuntimeError(f"模型接口 HTTP {r.status_code}: {r.text[:300]}")
@@ -268,11 +281,12 @@ def _call_llm_stream(cfg: dict, messages: list, use_tools: bool):
     if use_tools:
         payload["tools"] = TOOLS
         payload["tool_choice"] = "auto"
-    r = requests.post(
+    r = _LLM_SESSION.post(
         f"{_resolve_base(cfg)}/chat/completions",
         headers={"Authorization": f"Bearer {cfg['apiKey']}", "Content-Type": "application/json"},
         json=payload, timeout=120, stream=True,
         allow_redirects=False,  # M8 修复：禁重定向，防 SSRF 绕过
+        verify=_LLM_VERIFY_SSL,
     )
     if r.status_code != 200:
         raise RuntimeError(f"模型接口 HTTP {r.status_code}: {r.text[:300]}")

@@ -494,6 +494,80 @@ class FeishuSender:
         # App Bot mode: upload file via SDK.
         return self._send_file_via_app_bot(path)
 
+    def send_feishu_card(self, card: dict) -> bool:
+        """Send a pre-built interactive card to the Feishu chat.
+
+        Unlike ``send_to_feishu`` (which wraps arbitrary text/markdown in a
+        fixed-header card), this method accepts a complete card body dict
+        produced by the caller (e.g. ``routers.feishu_bot._format_kg_card``),
+        allowing custom headers, multiple sections, and structured elements.
+
+        Routing mirrors ``send_to_feishu``:
+           1. **Webhook** – when ``feishu_webhook_url`` is configured, posts
+              ``{"msg_type": "interactive", "card": <card>}``.
+           2. **App Bot** – otherwise, sends via the lark-oapi SDK with
+              ``msg_type="interactive"`` (with text fallback on failure).
+
+        Args:
+            card: A Feishu interactive-card body dict (config/header/elements).
+
+        Returns:
+            Whether the send succeeded.
+        """
+        if not isinstance(card, dict):
+            logger.error("send_feishu_card: card 必须是 dict，实际 %s", type(card).__name__)
+            return False
+
+        # Webhook path
+        if self._feishu_url:
+            payload = {"msg_type": "interactive", "card": card}
+            security_fields = self._build_security_fields()
+            request_payload = dict(payload)
+            request_payload.update(security_fields)
+            try:
+                response = requests.post(
+                    self._feishu_url,
+                    json=request_payload,
+                    timeout=_WEBHOOK_SEND_TIMEOUT_SECONDS,
+                    verify=self._webhook_verify_ssl,
+                )
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout,
+                    requests.exceptions.RequestException) as e:
+                logger.error("飞书 Webhook 卡片发送网络异常: %s", e)
+                return False
+            if response.status_code == 200:
+                try:
+                    result = response.json()
+                except (ValueError, AttributeError):
+                    logger.error("飞书 Webhook 返回非 JSON 响应: %s", response.text[:200])
+                    return False
+                code = result.get("code", result.get("StatusCode", -1))
+                if code in (0, 200):
+                    return True
+                logger.error("飞书 Webhook 卡片发送失败: %s", result)
+                return False
+            logger.error("飞书 Webhook 卡片发送 HTTP %s: %s", response.status_code, response.text[:200])
+            return False
+
+        # App Bot path
+        client = self._ensure_app_client()
+        if client is None:
+            return False
+        if not self._feishu_chat_id:
+            logger.warning("FEISHU_CHAT_ID 未配置，跳过 App Bot 卡片推送")
+            return False
+        card_payload = json.dumps(card, ensure_ascii=False)
+        if self._app_send_raw(client, "interactive", card_payload):
+            return True
+        # Fallback: render card elements as plain text
+        try:
+            text_fallback = json.dumps(card, ensure_ascii=False, indent=2)[:4000]
+        except Exception:  # noqa: BLE001
+            text_fallback = "（卡片渲染失败）"
+        text_payload = json.dumps({"text": text_fallback}, ensure_ascii=False)
+        return self._app_send_raw(client, "text", text_payload)
+
     def _send_file_via_app_bot(self, path: Path) -> bool:
         """Upload *path* to Feishu via App Bot SDK and send as file message."""
         if not FEISHU_FILE_SDK_AVAILABLE:

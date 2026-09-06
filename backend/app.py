@@ -14,6 +14,16 @@ from dotenv import load_dotenv
 # 仓库根 .env 统一收拢 env（VR_DATA_DIR/VR_LLM_*/飞书 key）——import 前读，让 vr_paths.resolve_data_dir() 能用 VR_DATA_DIR
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+# Python 3.14 标准库 asyncio.coroutines._iscoroutinefunction 内部触发的弃用警告噪音——
+# 每次 HTTP 请求 run_in_threadpool → asyncio.to_thread → call_soon 都会打，刷屏日志。
+# 只压这一条，不全量静默，保留其它真实 DeprecationWarning。
+import warnings as _warnings
+_warnings.filterwarnings(
+    "ignore",
+    message=r"'asyncio\.iscoroutinefunction' is deprecated.*",
+    category=DeprecationWarning,
+)
+
 import asyncio
 import hashlib
 import json
@@ -55,6 +65,7 @@ from routers import debate as debate_router  # main：多空辩论 + 反思审�
 from routers import prediction_ledger_router as prediction_ledger_router_mod
 from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
 from routers import notes as notes_router  # 投研记录笔记（后端 SQLite 落盘，全局可见）
+from routers import feishu_bot as feishu_bot_router  # 飞书 Bot 双向对话（事件回调 + KG 工具）
 try:
     from routers import value_funnel as value_funnel_router
 except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 quality.py 时不挡 app 启动
@@ -89,6 +100,12 @@ async def lifespan(_app: FastAPI):
     # startup
     from routers.workflow import set_main_loop  # S148：存主 loop 供 sync executor 触发 _collect
     set_main_loop(asyncio.get_running_loop())
+    # S164 R4：secrets gate 启动校验（非阻塞，只 log warning）
+    try:
+        from secrets_gate import validate as _validate_secrets  # noqa: PLC0415
+        _validate_secrets()
+    except Exception as _sg_err:  # noqa: BLE001 — 密钥校验失败不阻断服务
+        logger.warning("[S164] secrets_gate 启动校验失败（不影响服务）: %s", _sg_err)
     await _st.start_scheduler()  # CronScheduler 主循环 ticker + seed 默认任务（R13）
     _pf_refresh_task = await pf.start_scheduler(1800)  # 持仓后台刷新 task
     # S052 D4：启动缺口补跑——回测快照缺失日后台排队回填
@@ -225,6 +242,7 @@ app.include_router(metrics.router)
 app.include_router(recommendation.router)
 app.include_router(win_rate.router)
 app.include_router(feishu.router)
+app.include_router(feishu_bot_router.router)  # 飞书 Bot 双向对话（事件回调 + KG 工具）
 app.include_router(backtest.router)
 app.include_router(bidding.router)
 app.include_router(strategy_router.router)
