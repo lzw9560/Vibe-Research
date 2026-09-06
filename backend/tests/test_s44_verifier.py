@@ -607,3 +607,274 @@ def test_event_thin_positive_when_positive_but_not_significant():
     assert v.event_metrics.p_one_sided >= 0.05
     assert v.event_metrics.day_mean is not None
     assert v.event_metrics.day_mean > 0  # positive but not significant
+
+
+# ── HIGH #8: NaN crash regression (verifier.py:170) ──────────────────────────
+
+
+def test_nan_returns_with_dates_does_not_crash():
+    """HIGH #8: NaN-stripped r (line 114) passed with original-length dates
+    → IndexError at stats.py:150 (mask length mismatch). Fix: pass original
+    `returns` so day_clustered_t_test does its own aligned NaN masking.
+    """
+    # Arrange: 60 days, 5 picks/day, 1 NaN per day (12.5% NaN rate)
+    rng = np.random.default_rng(42)
+    returns, dates = [], []
+    for i in range(60):
+        day_rets = rng.normal(0.005, 0.01, 5)
+        day_rets[0] = float("nan")  # inject NaN
+        returns.extend(day_rets.tolist())
+        dates.extend([f"2026-01-{i + 1:02d}"] * 5)
+
+    # Act: must NOT crash (was: IndexError: mask length mismatch)
+    v = verify(np.array(returns), n_trials=1, edge_type="event", dates=dates)
+
+    # Assert: event verdict computed successfully
+    assert v.event_metrics is not None
+    assert v.event_metrics.n_event == 240  # 300 - 60 NaN = 240 valid
+    assert v.event_metrics.n_days == 60  # all days have at least 1 valid return
+    # day_means should match manual sync-NaN-drop
+    arr = np.asarray(returns, dtype=float)
+    d = np.asarray(dates, dtype=object)
+    mask = ~np.isnan(arr)
+    r_valid, d_valid = arr[mask], d[mask]
+    unique_dates = sorted(set(d_valid.tolist()))
+    manual_day_means = [
+        float(r_valid[d_valid == dt].mean()) for dt in unique_dates
+    ]
+    assert v.event_metrics.day_mean is not None
+    assert abs(v.event_metrics.day_mean - np.mean(manual_day_means)) < 1e-8
+
+
+# ── MEDIUM #1: permutation p +1 convention (Phipson & Smyth 2010) ────────────
+
+
+def test_permutation_p_never_zero():
+    """MEDIUM #1: +1 convention ensures min p = 1/(m+1), never 0.0.
+    Even if all nulls < observed, p = 1/(m+1) > 0 (not 0/m = 0.0).
+    """
+    # Arrange: survivors all positive, universe mixed (observed lift very high)
+    survivors = {"d1": [0.5, 0.3, 0.8]}
+    universe = {"d1": [0.5, 0.3, 0.8, -0.1, -0.2, 0.9, -0.4, -0.3]}
+
+    # Act: observed_lift extremely high (all nulls should be below)
+    p = permutation_p_value(survivors, universe, observed_lift=100.0, n_perm=50, seed=42)
+
+    # Assert: p = 1/(50+1) ≈ 0.0196, NOT 0.0
+    assert p > 0.0
+    assert p == pytest.approx(1 / 51, abs=0.002)
+
+
+def test_permutation_p_plus_one_convention():
+    """MEDIUM #1: p = (count(x >= obs) + 1) / (m + 1), not count(x >= obs) / m."""
+    # Arrange: use a case where count >= 1 (not all nulls below observed)
+    survivors = {"d1": [0.5, 0.3, 0.8]}
+    universe = {"d1": [0.5, 0.3, 0.8, -0.1, -0.2, 0.9, -0.4, -0.3]}
+
+    # Act
+    p = permutation_p_value(survivors, universe, observed_lift=1.5, n_perm=100, seed=42)
+
+    # Assert: p > 0 (+1 ensures floor), p <= 1.0
+    assert 0.0 < p <= 1.0
+
+
+# ── MEDIUM #4: R5 window sanity (enforced + skipped paths) ───────────────────
+
+
+def test_r5_window_sanity_no_advantage_forces_exploratory():
+    """MEDIUM #4: when window_sanity shows no advantage for the edge_type's
+    window, verify() must force 'exploratory' + skip heavy methodology.
+    """
+    # Arrange: 60 days of positive returns (would normally be event_robust)
+    rng = np.random.default_rng(42)
+    returns, dates = [], []
+    for i in range(60):
+        day_rets = rng.normal(0.005, 0.01, 10)
+        returns.extend(day_rets.tolist())
+        dates.extend([f"2026-01-{i + 1:02d}"] * 10)
+
+    # window_sanity: overnight_gap has NO advantage (mean<0, winrate<base_rate)
+    window_sanity = {
+        "overnight_gap": {"mean": -0.01, "median": -0.005, "winrate": 0.40, "base_rate": 0.50},
+        "d1_intraday": {"mean": 0.001, "median": 0.0, "winrate": 0.51, "base_rate": 0.50},
+        "path": {"mean": 0.005, "median": 0.003, "winrate": 0.52, "base_rate": 0.50},
+    }
+
+    # Act
+    v = verify(
+        np.array(returns), n_trials=1, edge_type="event", dates=dates,
+        window_sanity=window_sanity,
+    )
+
+    # Assert: forced exploratory (no advantage in overnight_gap window)
+    assert v.status == "exploratory"
+    assert v.event_status is None  # heavy methodology skipped
+    assert "no advantage" in v.note.lower()
+    assert "overnight_gap" in v.note
+
+
+def test_r5_window_sanity_none_notes_skipped():
+    """MEDIUM #4: when window_sanity=None, note must state 'skipped'."""
+    rng = np.random.default_rng(42)
+    returns = rng.normal(0.001, 0.012, 100)
+    dates = [f"2026-01-{i % 10 + 1:02d}" for i in range(100)]
+
+    # Act
+    v = verify(returns, n_trials=1, edge_type="event", dates=dates)
+
+    # Assert: note mentions R5 skipped
+    assert "r5" in v.note.lower()
+    assert "skipped" in v.note.lower()
+
+
+def test_r5_window_sanity_with_advantage_proceeds_normally():
+    """MEDIUM #4: when window_sanity shows advantage, verify() proceeds
+    with heavy methodology (not forced to exploratory).
+    """
+    rng = np.random.default_rng(42)
+    returns, dates = [], []
+    for i in range(60):
+        day_rets = rng.normal(0.005, 0.01, 10)
+        returns.extend(day_rets.tolist())
+        dates.extend([f"2026-01-{i + 1:02d}"] * 10)
+
+    # window_sanity: overnight_gap HAS advantage (mean>0, winrate>base_rate)
+    window_sanity = {
+        "overnight_gap": {"mean": 0.013, "median": 0.012, "winrate": 0.543, "base_rate": 0.50},
+        "d1_intraday": {"mean": 0.0003, "median": 0.0001, "winrate": 0.462, "base_rate": 0.50},
+        "path": {"mean": 0.006, "median": -0.03, "winrate": 0.363, "base_rate": 0.50},
+    }
+
+    # Act
+    v = verify(
+        np.array(returns), n_trials=1, edge_type="event", dates=dates,
+        window_sanity=window_sanity,
+    )
+
+    # Assert: not forced to exploratory (advantage found → heavy methodology runs)
+    assert v.event_metrics is not None  # heavy methodology NOT skipped
+
+
+# ── MEDIUM #7: materiality floor boundary (extracted from magic 0.003) ───────
+
+
+def test_event_materiality_floor_boundary():
+    """MEDIUM #7: day_mean=0.0029 → event_thin_positive, 0.0031 → event_robust.
+
+    Default floor = _EVENT_MATERIALITY_FLOOR = 0.003 (0.3%). With round_trip_cost=0,
+    effective_floor = max(0.003, 0*0.5) = 0.003.
+    """
+    # Arrange: 60 days, 10 picks/day, all identical day_mean
+    # day_mean slightly below or above the 0.003 floor
+    for day_mean, expected_status in [(0.0029, "event_thin_positive"), (0.0031, "event_robust")]:
+        returns, dates = [], []
+        for i in range(60):
+            returns.extend([day_mean] * 10)
+            dates.extend([f"2026-01-{i + 1:02d}"] * 10)
+
+        # Act
+        v = verify(np.array(returns), n_trials=1, edge_type="event", dates=dates)
+
+        # Assert
+        assert v.event_status == expected_status, (
+            f"day_mean={day_mean} should be {expected_status}, got {v.event_status}"
+        )
+
+
+def test_event_materiality_floor_cost_relative():
+    """MEDIUM #7: with round_trip_cost=0.01, effective_floor = max(0.003, 0.01*0.5) = 0.005.
+
+    day_mean=0.004 → above 0.003 default but below 0.005 cost-relative → thin_positive.
+    day_mean=0.006 → above 0.005 cost-relative → event_robust.
+    """
+    for day_mean, expected_status in [(0.004, "event_thin_positive"), (0.006, "event_robust")]:
+        returns, dates = [], []
+        for i in range(60):
+            returns.extend([day_mean] * 10)
+            dates.extend([f"2026-01-{i + 1:02d}"] * 10)
+
+        # Act: round_trip_cost=0.01 → effective_floor = max(0.003, 0.005) = 0.005
+        v = verify(
+            np.array(returns), n_trials=1, edge_type="event", dates=dates,
+            round_trip_cost=0.01,
+        )
+
+        # Assert
+        assert v.event_status == expected_status, (
+            f"day_mean={day_mean} cost=0.01 should be {expected_status}, got {v.event_status}"
+        )
+
+
+# ── Recorder tests (HIGH #2 reproducibility) ─────────────────────────────────
+
+
+def test_recorder_save_load_reproduce(tmp_path):
+    """HIGH #2: Recorder saves + loads + reproduces verdict deterministically."""
+    from s44_verifier.recorder import Recorder
+
+    # Arrange
+    rng = np.random.default_rng(42)
+    returns, dates = [], []
+    for i in range(60):
+        day_rets = rng.normal(0.005, 0.01, 10)
+        returns.extend(day_rets.tolist())
+        dates.extend([f"2026-01-{i + 1:02d}"] * 10)
+
+    v = verify(np.array(returns), n_trials=1, edge_type="event", dates=dates)
+
+    recorder = Recorder(db_path=str(tmp_path / "test_recorder.db"))
+
+    # Act: save
+    recorder_id = recorder.save(
+        data_snapshot_id="test_snap_123",
+        input_hashes={"universe": "abc", "kline_cache": "def"},
+        return_series=returns,
+        dates=dates,
+        params={"edge_type": "event", "n_trials": 1, "round_trip_cost": 0.007},
+        frozen_commit="b4e7446",
+        verdict={"status": v.status, "event_status": v.event_status},
+    )
+
+    # Assert: load
+    record = recorder.load(recorder_id)
+    assert record is not None
+    assert record.data_snapshot_id == "test_snap_123"
+    assert len(record.return_series) == len(returns)
+
+    # Act: reproduce (criterion a — deterministic)
+    v_repro = recorder.reproduce_verdict(recorder_id)
+    assert v_repro is not None
+    assert v_repro.status == v.status
+    assert v_repro.event_status == v.event_status  # deterministic reproduction
+
+    # Act: revalidate (criterion b — hash compare)
+    matches, label = recorder.revalidate_data(recorder_id, returns, dates)
+    assert matches is True
+    assert "match" in label.lower()
+
+    # Act: revalidate with mismatched series
+    wrong_series = [r + 0.001 for r in returns]
+    matches2, label2 = recorder.revalidate_data(recorder_id, wrong_series, dates)
+    assert matches2 is False
+    assert "re-baseline" in label2.lower() or "mismatch" in label2.lower() or "weight" in label2.lower()
+
+
+def test_compute_composite_snapshot_id(tmp_path):
+    """HIGH #2: composite data_snapshot_id = f"{universe_hash[:12]}+{cache_hash[:12]}"."""
+    from s44_verifier.recorder import compute_composite_snapshot_id
+
+    # Arrange: two small files
+    uni_file = tmp_path / "universe.json"
+    uni_file.write_text('{"test": true}')
+    cache_file = tmp_path / "cache.json"
+    cache_file.write_text('{"data": 123}')
+
+    # Act
+    snap_id = compute_composite_snapshot_id(uni_file, cache_file)
+
+    # Assert: composite format "hash1+hash2"
+    assert "+" in snap_id
+    parts = snap_id.split("+")
+    assert len(parts) == 2
+    assert len(parts[0]) == 12
+    assert len(parts[1]) == 12

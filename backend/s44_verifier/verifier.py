@@ -14,11 +14,21 @@ import pandas as pd
 
 from . import wiring  # noqa: TID252  (relative import within package)
 from . import stats as stats_mod  # noqa: TID252  (R3 merged methodology)
+from .stats import _EVENT_MATERIALITY_FLOOR  # noqa: TID252
 
 _EdgeType = Literal["selection", "event", "population"]
 _Status = Literal["robust_edge", "underpowered", "falsified", "not_validated", "exploratory"]
 _DsrMethod = Literal["cross_trial_variance", "lenient_single_estimate", "N/A"]
 _EventStatus = Literal["event_robust", "event_thin_positive", "event_falsified", "event_not_tested"]
+
+#: R5 window sanity — maps edge_type to the window that should show advantage.
+#: event (gap) → overnight_gap; selection → path (full path return);
+#: population → overnight_gap (same as event, the population-level gap).
+_WINDOW_FOR_EDGE: dict[str, str] = {
+    "event": "overnight_gap",
+    "selection": "path",
+    "population": "overnight_gap",
+}
 
 
 @dataclass(frozen=True)
@@ -99,6 +109,13 @@ def verify(
     perm_seed: int = 42,
     walk_train: int = 100,
     walk_test: int = 20,
+    # ── R5: window sanity (S159 §5A, enforced per spec) ─────────────────────
+    # window_sanity = {"overnight_gap": {mean,median,winrate,base_rate}, ...}
+    # When provided, checks edge_type's window for advantage; no advantage →
+    # force exploratory + skip heavy methodology. When None, note says skipped.
+    # ── MEDIUM #7: materiality floor (extracted from magic 0.003) ──────────
+    event_materiality_floor: float = _EVENT_MATERIALITY_FLOOR,
+    round_trip_cost: float = 0.0,
 ) -> Verdict:
     """Statistical judge. Pure: same inputs -> same Verdict.
 
@@ -109,6 +126,14 @@ def verify(
     effective n (non-pooled). When ``survivors_by_day`` + ``universe_by_day``
     supplied, computes selection_lift (day_paired non-pooled), permutation
     p-value, Bonferroni/BH correction, and walk-forward OOS.
+
+    R5 window sanity: when ``window_sanity`` dict provided, validates
+    per-window {mean, median, winrate, base_rate} for the edge_type's matching
+    window. No advantage → force ``"exploratory"`` + skip heavy methodology
+    (treats §44v1 wrong-window root cause). When None, note states skipped.
+
+    MEDIUM #7: ``event_materiality_floor`` extracted from magic 0.003;
+    ``round_trip_cost`` enables cost-relative floor = max(floor, cost*0.5).
     """
     r = np.asarray(returns, dtype=float)
     r = r[~np.isnan(r)]
@@ -130,6 +155,33 @@ def verify(
         n_effective = None
         days_robust = n
 
+    # ── R5: window sanity (S159 §5A, enforced per spec line 61) ───────────
+    # When window_sanity provided, check edge_type's matching window for
+    # advantage (mean > 0 AND winrate > base_rate). No advantage → skip heavy
+    # methodology + force exploratory (treats §44v1 wrong-window root cause).
+    r5_skip_heavy = False
+    r5_note = ""
+    if window_sanity is not None:
+        edge_window = _WINDOW_FOR_EDGE.get(edge_type)
+        if edge_window and edge_window in window_sanity:
+            ws = window_sanity[edge_window]
+            ws_mean = float(ws.get("mean", 0.0))
+            ws_winrate = float(ws.get("winrate", 0.0))
+            ws_base_rate = float(ws.get("base_rate", 0.5))
+            has_advantage = ws_mean > 0 and ws_winrate > ws_base_rate
+            if not has_advantage:
+                r5_skip_heavy = True
+                r5_note = (
+                    f"R5 window sanity: no advantage in '{edge_window}' window "
+                    f"(mean={ws_mean:.4f}, winrate={ws_winrate:.4f}, "
+                    f"base_rate={ws_base_rate:.4f}) → exploratory, "
+                    f"heavy methodology skipped"
+                )
+        # edge_window not in window_sanity → R5 can't check this edge_type,
+        # proceed normally (honest: we tried but no data for this window)
+    else:
+        r5_note = "R5 window sanity: not provided, skipped"
+
     # ── selection lift + permutation + walk-forward ───────────────────────
     selection_lift: Optional[float] = None
     p_perm: Optional[float] = None
@@ -139,7 +191,7 @@ def verify(
     wf_mean_lift: Optional[float] = None
 
     has_lift_data = survivors_by_day is not None and universe_by_day is not None
-    if has_lift_data:
+    if has_lift_data and not r5_skip_heavy:
         lift_res = stats_mod.day_paired_lift(survivors_by_day, universe_by_day)
         selection_lift = lift_res.winrate_lift_avg
 
@@ -165,9 +217,15 @@ def verify(
     # ── event metrics + event_status (day-clustered one-sample t-test) ────
     event_metrics: Optional[EventMetrics] = None
     event_status: Optional[_EventStatus] = None
-    if edge_type == "event" and n > 0:
+    if edge_type == "event" and n > 0 and not r5_skip_heavy:
         t_res = (
-            stats_mod.day_clustered_t_test(r, dates) if dates is not None else None
+            # HIGH #8: pass original `returns` (with NaN), NOT stripped `r`.
+            # day_clustered_t_test does its own NaN masking aligned to both
+            # r and d (stats.py:148-150). Passing stripped `r` (line 114)
+            # with original-length `dates` → mask length mismatch → IndexError.
+            # mean_return/win_rate/n_event still use stripped `r` below
+            # (NaN must NOT count toward mean/winrate/count).
+            stats_mod.day_clustered_t_test(returns, dates) if dates is not None else None
         )
         mean_return = float(r.mean())
         win_rate = float((r > 0).mean())
@@ -181,7 +239,12 @@ def verify(
                 event_status = "event_falsified"
             elif t_res.p_one_sided < 0.05:
                 # Directionally confirmed (p < 0.05)
-                if days_robust >= 60 and t_res.day_mean > 0.003:
+                # MEDIUM #7: materiality floor extracted from magic 0.003.
+                # Cost-relative: floor = max(param, round_trip_cost * 0.5)
+                # ensures day-mean must clear half the round-trip cost to be
+                # "robust" (not just barely positive + statistically significant).
+                effective_floor = max(event_materiality_floor, round_trip_cost * 0.5)
+                if days_robust >= 60 and t_res.day_mean > effective_floor:
                     event_status = "event_robust"
                 else:
                     event_status = "event_thin_positive"
@@ -208,7 +271,10 @@ def verify(
         )
 
     # ── status: R6 gate + edge-type-specific logic ──────────────────────
-    if edge_type == "event":
+    if r5_skip_heavy:
+        # R5 window sanity found no advantage → exploratory, skip heavy methodology
+        status: _Status = "exploratory"
+    elif edge_type == "event":
         # Event edges: status driven by event_status (not selection_lift)
         if days_robust < 60:
             status: _Status = "underpowered"
@@ -234,6 +300,8 @@ def verify(
         status = "exploratory"
 
     notes: list[str] = []
+    if r5_note:
+        notes.append(r5_note)
     if status == "underpowered" and days_robust < 60:
         notes.append(f"underpowered: days_robust={days_robust}<60 (R6 gate)")
     if wf_status == "insufficient_skipped":

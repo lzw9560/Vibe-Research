@@ -17,6 +17,7 @@ comparison is therefore not cost-matched (disclosed in report).
 """
 from __future__ import annotations
 
+import bisect
 import json
 import sqlite3
 import sys
@@ -28,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from s44_verifier.verifier import verify  # noqa: E402
+from s44_verifier.recorder import compute_composite_snapshot_id  # noqa: E402
 
 VR = ROOT / ".vibe-research"
 UNIVERSE = VR / "first_board_universe_baostock_60d.json"
@@ -36,7 +38,7 @@ GENE_DB = VR / "gene_scores.db"
 
 COST = 0.0070  # 0.70% round-trip (task spec; baseline.json used 0.40%)
 FROZEN_COMMIT = "b4e7446"
-DATA_SNAPSHOT_ID = "94d33018a4bd"  # sha256[:12] of universe json
+# data_snapshot_id computed at runtime (HIGH #2: composite universe+cache hash)
 
 
 def load_universe() -> list[dict]:
@@ -54,7 +56,7 @@ def load_universe() -> list[dict]:
 def build_kline_index():
     """Load kline cache once; build per-code date->index map for O(1) D+1 lookup.
 
-    Returns (code -> list[bars], code -> {date_str: idx}).
+    Returns (code -> list[bars], code -> {date_str: idx}, trading_calendar).
     """
     print("[kline] loading 160MB cache ...")
     with open(KLINE, encoding="utf-8") as f:
@@ -62,30 +64,56 @@ def build_kline_index():
     print(f"[kline] codes={len(cache)}")
     # global max date across all codes
     max_date = ""
+    all_dates: set[str] = set()
     for bars in cache.values():
         if bars:
             d = bars[-1]["date"]
             if d > max_date:
                 max_date = d
+            for b in bars:
+                all_dates.add(b["date"])
     print(f"[kline] global max date={max_date}")
+    trading_calendar = sorted(all_dates)
+    print(f"[calendar] {len(trading_calendar)} trading dates")
     # build date->idx maps lazily per code on demand (5226 codes * avg ~120 bars
     # = ~600k entries, fine). Build all upfront for speed.
     idx_maps: dict[str, dict[str, int]] = {}
     for code, bars in cache.items():
         idx_maps[code] = {b["date"]: i for i, b in enumerate(bars)}
-    return cache, idx_maps
+    return cache, idx_maps, trading_calendar
 
 
-def compute_gap_series(fbs, cache, idx_maps):
-    """For each 首板 (code, D, close) -> gap_return = open(D+1)/close - 1 - COST.
+def calendar_next(calendar: list[str], date_str: str) -> str | None:
+    """Next trading day after date_str in the calendar. None if date is last.
 
-    Returns (returns list, dates list, unbuyable count, skipped-no-code count).
+    MEDIUM #3 date adjacency: ensures bars[i+1] is the calendar-next of D
+    (not D+2 or later, which means D+1 was suspended).
+    """
+    idx = bisect.bisect_left(calendar, date_str)
+    if idx < len(calendar) and calendar[idx] == date_str:
+        return calendar[idx + 1] if idx + 1 < len(calendar) else None
+    if idx < len(calendar):
+        return calendar[idx]
+    return None
+
+
+def compute_gap_series(fbs, cache, idx_maps, calendar):
+    """For each (code, D, close) -> gap_return = open(D+1)/close - 1 - COST.
+
+    Fixes applied:
+    - MEDIUM #3 date adjacency: bars[i+1]['date'] must == calendar_next(D)
+    - LOW #9 volume guard: zero-volume bars are suspended (fake returns)
+    - HIGH #2 adj-epoch check: cache close at D must match universe close_d
+
+    Returns (returns, dates, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mismatch).
     """
     returns: list[float] = []
     dates: list[str] = []
     n_unbuyable = 0
     n_no_code = 0
     n_bad_close = 0
+    n_suspended = 0
+    n_adj_mismatch = 0
     for r in fbs:
         code = r["code"]
         d = r["date"]
@@ -119,22 +147,45 @@ def compute_gap_series(fbs, cache, idx_maps):
             if nxt is None:
                 n_unbuyable += 1
                 continue
+            # date adjacency: nxt must be the calendar-next trading day (D+1)
+            expected_next = calendar_next(calendar, d)
+            if expected_next is not None and nxt["date"] != expected_next:
+                n_suspended += 1
+                continue
             open_next = nxt["open"]
+            # volume guard (LOW #9)
+            if nxt.get("volume", 0) <= 0:
+                n_unbuyable += 1
+                continue
         else:
+            # adjustment-epoch consistency: cache close at D must match universe close_d
+            cache_close_d = bars[i].get("close")
+            if cache_close_d is not None and abs(cache_close_d - close_d) > 0.01:
+                n_adj_mismatch += 1
+                continue
             if i + 1 >= len(bars):
                 n_unbuyable += 1
                 continue
+            # date adjacency: bars[i+1] must be the calendar-next trading day (D+1)
+            expected_next = calendar_next(calendar, d)
+            if expected_next is not None and bars[i + 1]["date"] != expected_next:
+                n_suspended += 1
+                continue
             open_next = bars[i + 1]["open"]
+            # volume guard (LOW #9)
+            if bars[i + 1].get("volume", 0) <= 0:
+                n_unbuyable += 1
+                continue
         if open_next is None or open_next <= 0:
             n_unbuyable += 1
             continue
         gap = open_next / close_d - 1.0 - COST
         returns.append(gap)
         dates.append(d)
-    return returns, dates, n_unbuyable, n_no_code, n_bad_close
+    return returns, dates, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mismatch
 
 
-def event_verdict(returns, dates):
+def event_verdict(returns, dates, snap_id):
     arr = np.asarray(returns, dtype=float)
     v = verify(
         returns=arr,
@@ -142,12 +193,13 @@ def event_verdict(returns, dates):
         edge_type="event",
         dates=dates,
         frozen_commit=FROZEN_COMMIT,
-        data_snapshot_id=DATA_SNAPSHOT_ID,
+        data_snapshot_id=snap_id,
+        round_trip_cost=COST,
     )
     return v
 
 
-def selection_verdict(fbs, cache, idx_maps, returns, dates):
+def selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id):
     """Attempt selection verdict: can gene_score select which 首板 gaps bigger?
 
     Join: for 首板 (code, D) with gap_return, gene_score available before D+1 open
@@ -182,10 +234,24 @@ def selection_verdict(fbs, cache, idx_maps, returns, dates):
                     hi = mid
             if not (lo < len(bars) and bars[lo]["date"] > d):
                 continue
+            # date adjacency (MEDIUM #3)
+            expected_next = calendar_next(calendar, d)
+            if expected_next is not None and bars[lo]["date"] != expected_next:
+                continue
+            # volume guard (LOW #9)
+            if bars[lo].get("volume", 0) <= 0:
+                continue
             open_next = bars[lo]["open"]
             next_td = bars[lo]["date"]
         else:
             if i + 1 >= len(bars):
+                continue
+            # date adjacency (MEDIUM #3)
+            expected_next = calendar_next(calendar, d)
+            if expected_next is not None and bars[i + 1]["date"] != expected_next:
+                continue
+            # volume guard (LOW #9)
+            if bars[i + 1].get("volume", 0) <= 0:
                 continue
             open_next = bars[i + 1]["open"]
             next_td = bars[i + 1]["date"]
@@ -267,16 +333,21 @@ def selection_verdict(fbs, cache, idx_maps, returns, dates):
         universe_by_day=universe_by_day,
         n_comparisons=1,
         frozen_commit=FROZEN_COMMIT,
-        data_snapshot_id=DATA_SNAPSHOT_ID,
+        data_snapshot_id=snap_id,
     )
     return v, survivors_by_day, universe_by_day
 
 
 def main():
     fbs = load_universe()
-    cache, idx_maps = build_kline_index()
-    returns, dates, n_unbuyable, n_no_code, n_bad_close = compute_gap_series(
-        fbs, cache, idx_maps
+    cache, idx_maps, calendar = build_kline_index()
+
+    # composite data_snapshot_id (HIGH #2: pins BOTH universe + kline cache)
+    snap_id = compute_composite_snapshot_id(UNIVERSE, KLINE)
+    print(f"[snapshot] composite data_snapshot_id = {snap_id}")
+
+    returns, dates, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(
+        fbs, cache, idx_maps, calendar
     )
     arr = np.asarray(returns, dtype=float)
     n = arr.size
@@ -293,6 +364,8 @@ def main():
     print("\n=== GAP SERIES STATS ===")
     print(f"n picks (valid gap)   = {n}")
     print(f"n unbuyable (no D+1)  = {n_unbuyable}")
+    print(f"n suspended (D+1 skip) = {n_suspended}")
+    print(f"n adj_mismatch         = {n_adj_mm}")
     print(f"n no_code in kline     = {n_no_code}")
     print(f"n bad close            = {n_bad_close}")
     print(f"unique dates (days_robust raw) = {days_robust}")
@@ -310,7 +383,7 @@ def main():
         print(f"naive pooled t-stat  = {t_naive:.4f}  (ref 14d baseline t=10.6549)")
 
     print("\n=== EVENT VERDICT (primary: is gap a real edge?) ===")
-    ev = event_verdict(returns, dates)
+    ev = event_verdict(returns, dates, snap_id)
     print(f"status               = {ev.status}")
     print(f"edge_type            = {ev.edge_type}")
     print(f"tradeable            = {ev.tradeable}")
@@ -323,7 +396,7 @@ def main():
         print(f"  mean_return        = {em.mean_return:.6f} ({em.mean_return*100:.4f}%)")
         print(f"  net_mean           = {em.net_mean}")
         print(f"  win_rate           = {em.win_rate:.4f}")
-        print(f"  t_stat_day_clust   = {em.t_stat_day_clustered}  (STUB: TODO)")
+        print(f"  t_stat_day_clust   = {em.t_stat_day_clustered}")
         print(f"  n_event            = {em.n_event}")
         print(f"  base_rate          = {em.base_rate}")
     print(f"event_status         = {ev.event_status}")
@@ -351,15 +424,19 @@ def main():
     # honest label
     print("\n=== HONEST LABEL ===")
     if ev.event_metrics and ev.event_metrics.mean_return > 0:
-        print(f"mean>0 but event t-test STUBBED -> event_thin_positive "
-              f"(positive but NOT statistically confirmed; day-clustered t-test TODO)")
+        if ev.event_status == "event_robust":
+            print(f"event_robust: p<0.05 + days>=60 + day_mean>{ev.event_metrics.day_mean} -> robust_edge")
+        elif ev.event_status == "event_thin_positive":
+            print(f"event_thin_positive: positive but NOT fully confirmed (p={ev.event_metrics.p_one_sided})")
+        else:
+            print(f"event_status={ev.event_status}")
     label = ev.status
     if ev.event_metrics and ev.event_metrics.mean_return > 0 and ev.event_status == "event_not_tested":
         label = f"{ev.status} + event_thin_positive"
     print(f"final honest label   = {label}")
 
     print("\n=== SELECTION VERDICT (secondary: can factors select bigger gaps?) ===")
-    sv, surv, univ = selection_verdict(fbs, cache, idx_maps, returns, dates)
+    sv, surv, univ = selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id)
     if sv is None:
         print("selection verdict: NOT RUN (stubbed)")
         if univ:
@@ -386,7 +463,7 @@ def main():
     print(f"  net_win_rate={win_rate:.4f} days_robust={ev.days_robust}")
     print("NOTE: cost not matched (0.70% vs 0.40%); 60d more conservative.")
     print("NOTE: 14d t=10.65 is NAIVE POOLED (inflates n); 60d uses day-clustered")
-    print("  days_robust (honest effective n). Verifier event t-test is STUBBED.")
+    print("  days_robust (honest effective n). Volume guard + date-adjacency applied.")
     print("DONE.")
 
 

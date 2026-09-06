@@ -32,6 +32,12 @@ _WALK_TEST_DEFAULT = 20        # platform_breakout_lift.py WALK_TEST
 _WALK_STEP_DEFAULT = 20        # platform_breakout_lift.py WALK_STEP
 _MAX_BONFERRONI_K = 8          # §44v2: cap K at 8, NEVER K=20 (v1 over-correction)
 
+#: Minimum net-of-cost day-mean to distinguish "robust" from "thin positive"
+#: (spec S161 §3 line 83: mean>0 not mean>0.3%; 0.003 = 0.3% floor). Callers
+#: should override via verify(event_materiality_floor=...) relative to their
+#: round-trip cost: floor = max(_EVENT_MATERIALITY_FLOOR, cost * 0.5).
+_EVENT_MATERIALITY_FLOOR = 0.003
+
 
 @dataclass(frozen=True)
 class DayPairedResult:
@@ -300,6 +306,11 @@ def permutation_p_value(
 ) -> float:
     """Within-day permutation p-value = P(null_lift >= observed).
 
+    Uses the +1 convention (Phipson & Smyth 2010): p = (count(x >= obs) + 1)
+    / (m + 1). This ensures min p = 1/(m+1), never 0.0 (a zero p-value
+    implies the observed is impossible under the null, which is never true
+    with finite permutations).
+
     Returns 1.0 if observed is None or no nulls generated.
     """
     if observed_lift is None:
@@ -307,7 +318,7 @@ def permutation_p_value(
     nulls = _generate_null_distribution(survivors_by_day, universe_by_day, n_perm, seed)
     if not nulls:
         return 1.0
-    return round(sum(1 for x in nulls if x >= observed_lift) / len(nulls), 4)
+    return round((sum(1 for x in nulls if x >= observed_lift) + 1) / (len(nulls) + 1), 4)
 
 
 def bonferroni_bh(
