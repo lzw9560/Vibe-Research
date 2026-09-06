@@ -296,4 +296,68 @@ def _limitup_analysis_sync(code: str) -> Dict[str, Any]:
     return _asyncio.run(_run())
 
 
+@router.get("/api/stock/{code}/kg-summary")
+def stock_kg_summary(code: str) -> Dict[str, Any]:
+    """个股知识图谱关联摘要（ora-3 §1.5 替代方案）。
+
+    读 vault markdown，返回该股票在投研知识图谱中的关联实体数 + 关联列表 +
+    Obsidian URI（前端用此 URI 做「在知识图谱中查看」外链，不做节点数徽标）。
+
+    合规：只返回图谱客观数据（实体元数据/关系链接），无方向性研判。
+    复用 backend/ai/tools/kg_tools.py 的 query_kg_relations（不依赖 Obsidian 运行）。
+    """
+    from routers.common import _validate
+
+    code = _validate(code)
+
+    # kg_tools 用相对导入（from .registry import），按 package 方式导入
+    import importlib
+
+    try:
+        kg_mod = importlib.import_module("ai.tools.kg_tools")
+    except ModuleNotFoundError:
+        # ai 包不在 sys.path 时降级：直接读 vault markdown
+        return {"data": {"code": code, "in_graph": False, "reason": "kg_tools 不可用"}}
+
+    try:
+        result = kg_mod.query_kg_relations(code, entity_type="stock")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"知识图谱查询异常：{e}") from e
+
+    if result.get("error"):
+        return {
+            "data": {
+                "code": code,
+                "in_graph": False,
+                "reason": result["error"],
+                "obsidian_uri": f"obsidian://search?vault=Obsidian%20Vault&query={code}",
+            }
+        }
+
+    relations = result.get("relations", [])
+    # 按关联类型粗分类计数（target 路径前缀）
+    by_folder: Dict[str, int] = {}
+    for r in relations:
+        target = r.get("target", "")
+        # target 形如 "stocks/600519" 或 "industries/食品饮料"
+        parts = target.split("/")
+        folder = parts[0] if parts else "other"
+        by_folder[folder] = by_folder.get(folder, 0) + 1
+
+    return {
+        "data": {
+            "code": code,
+            "in_graph": True,
+            "path": result.get("path"),
+            "total_relations": result.get("total", 0),
+            "by_folder": by_folder,
+            "relations": relations,
+            "obsidian_uri": (
+                f"obsidian://open?vault=Obsidian%20Vault&"
+                f"file=10_Reference%2Finvesting%2Fstocks%2F{code}"
+            ),
+        }
+    }
+
+
 __all__ = ["router"]

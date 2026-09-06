@@ -524,6 +524,22 @@ export interface StockDeep {
   reports: Report[] | null;
 }
 
+// ora-3 §1.5：个股知识图谱关联摘要（替代节点数徽标，前端用外链跳 Obsidian）
+export interface KgRelation {
+  target: string;
+  link: string;
+}
+export interface StockKgSummary {
+  code: string;
+  in_graph: boolean;
+  reason?: string;
+  path?: string;
+  total_relations?: number;
+  by_folder?: Record<string, number>;
+  relations?: KgRelation[];
+  obsidian_uri: string;
+}
+
 export interface ScreenerResult {
   date: string;
   gene_scores: GeneScore[];

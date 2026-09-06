@@ -11,7 +11,7 @@ import { AskAiButton } from "@/components/ui/AskAiButton";
 import { ErrorState, PageSkeleton } from "@/components/ui/State";
 import { KLineChart } from "@/components/charts/KLineChart";
 import { EarningsSnapshot } from "@/components/ui/EarningsSnapshot";
-import { useStockDeep } from "@/lib/query";
+import { useStockDeep, useStockKgSummary } from "@/lib/query";
 import type { FundFlowRow, Quote, Valuation, Financials, ValPercentile } from "@/lib/api";
 
 // ─── 格式化（A 股红涨绿跌口径）──────────────────────────────────────────
@@ -133,6 +133,56 @@ function FundFlowTable({ rows }: { rows: FundFlowRow[] | null }) {
   );
 }
 
+// ─── 知识图谱关联（ora-3 §1.5 替代方案：外链跳 Obsidian，不做节点数徽标）──
+
+function KgRelationCard({ code }: { code: string }) {
+  const { data, isLoading } = useStockKgSummary(code);
+  // loading 时不占位（图谱查询是增强，不阻塞主页面）
+  if (isLoading || !data?.data) return null;
+  const kg = data.data;
+  if (!kg.in_graph) {
+    return (
+      <GlassCard className="p-4">
+        <h3 className="mb-2 text-sm font-semibold">📚 知识图谱</h3>
+        <p className="text-xs text-muted-foreground">
+          该股未入投研知识图谱。{kg.reason ? `（${kg.reason}）` : ""}
+        </p>
+      </GlassCard>
+    );
+  }
+  const byFolder = kg.by_folder ?? {};
+  const folderEntries = Object.entries(byFolder).sort((a, b) => b[1] - a[1]);
+  return (
+    <GlassCard className="p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">📚 知识图谱关联</h3>
+        <a
+          href={kg.obsidian_uri}
+          className="text-xs text-primary hover:underline"
+          title="在 Obsidian 中打开此实体"
+        >
+          在图谱中查看 →
+        </a>
+      </div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        关联实体 {kg.total_relations ?? 0} 个
+      </p>
+      {folderEntries.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {folderEntries.map(([folder, count]) => (
+            <span
+              key={folder}
+              className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
+            >
+              {folder}·{count}
+            </span>
+          ))}
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
 // ─── 页面 ─────────────────────────────────────────────────────────────────
 
 export function StockDeep() {
@@ -226,6 +276,8 @@ export function StockDeep() {
         <QuoteSummary quote={quote} />
         <FinancialsBlock val={data.valuation} fin={data.financials} pctl={data.percentile} />
       </div>
+
+      <KgRelationCard code={code ?? ""} />
 
       <FundFlowTable rows={data.fund_flow} />
 

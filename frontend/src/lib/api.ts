@@ -9,6 +9,7 @@ import type {
   DragonTiger, Lockup, Blocks, HotConcept, QaRow, IndustryData, MyReport, ScreenerResult,
   LimitUpAnalysis, AuctionScreenerResult, DailyReviewReport, SeatProfile, ConsensusSignal,
   StockDeep, StrategyRecommendation, WeatherState, WeatherFactor, FuseState,
+  StockKgSummary,
   WeatherTimelineItem,
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord,
   StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, WinRateTrendPoint,
@@ -22,6 +23,8 @@ import type {
   BombAlertsResult,
   SealSnapshotsResult,
 } from "./api/types";
+// S165: verifier-contract 是 UI 契约 source-of-truth（Verdict/RecorderRecord/DimensionValidationRecord）。
+import type { RecorderRecord, DimensionValidationRecord } from "./verifier-contract";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
   getReviewParams, saveReviewParams, getLlmEnvStatus,
@@ -141,6 +144,9 @@ export const api = {
   sentimentWeatherPardonRevoke: (pardonId: string) =>
     request<{ data: { success: boolean } }>(`/sentiment/weather/pardon/revoke?pardon_id=${pardonId}`, "POST"),
   stockDeep: (code: string) => get<StockDeep>(`/stock/${code}/deep`),
+  // ora-3 §1.5：图谱关联摘要（替代节点数徽标，前端做外链跳 Obsidian）
+  stockKgSummary: (code: string) =>
+    get<{ data: StockKgSummary }>(`/stock/${code}/kg-summary`),
   // 性能监控（PRD V2.0.2 三层拆分）
   metricsDataFetch: () => get<any>("/metrics/data_fetch"),
   metricsCompute: () => get<any>("/metrics/compute"),
@@ -257,4 +263,9 @@ export const api = {
     get<{ date: string; attention_mode: string; rules: import("./api/types").CoachModeRules }>(`/coach/attention-mode${date ? `?date=${date}` : ""}`),
   coachAttentionModeSet: (mode: string) =>
     request<{ date: string; attention_mode: string }>("/coach/attention-mode", "POST", { mode }),
+  // S165: §44 验证实验记录 + 评价层维度（contract-first，verifier-contract.ts 为 source-of-truth）。
+  // 后端 /api/verifier/records 返 RecorderRecord[]；/api/evaluation/dims 返 DimensionValidationRecord[]。
+  // 未就绪时 client 抛 ApiError，前端组件降级到 mock fixture + "mock" 徽标（诚实过渡）。
+  verifierRecords: () => get<RecorderRecord[]>("/verifier/records"),
+  evaluationDims: () => get<DimensionValidationRecord[]>("/evaluation/dims"),
 };

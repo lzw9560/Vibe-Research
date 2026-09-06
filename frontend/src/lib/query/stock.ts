@@ -170,3 +170,15 @@ export function useStockDeep(code: string, options?: Opts<Awaited<ReturnType<typ
     ...options,
   });
 }
+
+// ora-3 §1.5：个股知识图谱关联摘要（GET /stock/{code}/kg-summary）。
+// 前端用此数据渲染「在知识图谱中查看」外链 + 关联数，不做节点数徽标。
+export function useStockKgSummary(code: string, options?: Opts<Awaited<ReturnType<typeof api.stockKgSummary>>>) {
+  return useQuery({
+    queryKey: ["stock", "kg-summary", code] as const,
+    queryFn: () => api.stockKgSummary(code),
+    enabled: !!code,
+    staleTime: 5 * 60 * 1000, // 图谱结构低频变，缓存 5 分钟
+    ...options,
+  });
+}
