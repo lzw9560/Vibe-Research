@@ -475,6 +475,7 @@ _TASK_TIMEOUTS: Dict[str, int] = {
     "limitup_precompute": 700,
     "kline_refresh": 1200,  # S150 审查 HIGH2: 全A~5540股 baostock 稳态>300s, 加显式高值防误杀（当日 bar 缺失回归）
     "intraday_microstructure_snapshot": 120,  # S167：hithink 3 端点 + tencent 1 批，<60s 稳态，120s 兜底
+    "intraday_auction_dense": 90,  # S167：竞价密集采集，hithink limit_up_pool + auction_snapshot 2 调用，<30s 稳态，90s 兜底
     "baostock_5min_freeze": 600,  # S167：~100 股 baostock 5min fetch（无 IP 限制，单次 login）
 }
 _DEFAULT_TASK_TIMEOUT = 300
@@ -524,6 +525,7 @@ class TaskExecutor:
             "premarket_t1_review": self._execute_premarket_t1_review,  # S101：T+1 复盘通知
             "st_play_radar": self._execute_st_play_radar,  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
             "intraday_microstructure_snapshot": self._execute_intraday_microstructure_snapshot,  # S167：盘中微结构周期快照（hithink 排名 + tencent 量比，10min）
+            "intraday_auction_dense": self._execute_intraday_auction_dense,  # S167：竞价密集采集（auction live only，每 2min，is_auction_time 门控）
             "baostock_5min_freeze": self._execute_baostock_5min_freeze,  # S167：次日冻结 prev_trading_date 涨停股 5min bars
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
@@ -1683,6 +1685,57 @@ class TaskExecutor:
             "degraded_sources": degraded,
         }
 
+    def _execute_intraday_auction_dense(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S167 竞价密集采集——09:15-09:25 每 2min 采 auction_snapshot(live) 累积 trajectory。
+
+        比 ``intraday_microstructure_snapshot`` 更密（cron */2 vs */10），但只采竞价
+        live（跳过排名/量比——盘前未开盘无意义）。cron ``*/2 9-9 * * 0-4`` 触发
+        09:00-09:59，但 ``vr_paths.is_auction_time`` 门控（09:15-09:25 交易日）——窗口外
+        no-op（防封 + 省请求）。竞价窗口约 5 ticks（09:16/18/20/22/24，``*/2`` 偶数分），
+        相比原 ``*/10 9-15`` 在竞价窗口只命中 09:20 一次，trajectory 密度提升 5x。
+
+        codes 取 ``prev_trading_date`` 涨停池（昨日涨停 = 今日竞价 continuation 候选集，
+        §44 reframe 标记的最未证否盘中 edge）。save_auction_snapshots PK(date,ts,stage,code)
+        INSERT OR REPLACE 幂等——与 microstructure 同 ts 同 code 重跑覆盖不翻倍。
+        hithink 端点走 circuit_breaker，失败记 degraded 不抛（与 microstructure 同范式）。
+        """
+        from datetime import datetime as _dt
+        from vr_paths import is_auction_time, last_trading_date_str, prev_trading_date_str
+        now = _dt.now()
+        if not is_auction_time(now):
+            return {"status": "skipped", "reason": "非竞价时段（09:15-09:25 交易日）"}
+
+        from data.sources import hithink_src
+        from data.intraday_accumulation_store import save_auction_snapshots
+
+        date = last_trading_date_str()
+        ts = now.strftime("%Y-%m-%dT%H:%M")
+        degraded: list[str] = []
+
+        # 竞价 codes：prev_trading_date 涨停池（昨日涨停 = 今日竞价 continuation 候选）
+        auction_codes: list[str] = []
+        try:
+            auction_codes = [r["code"] for r in hithink_src.limit_up_pool(prev_trading_date_str())
+                             if r.get("code")]
+        except Exception as e:  # noqa: BLE001 — 涨停池失败则竞价 codes 空，跳过竞价
+            degraded.append(f"auction_pool: {type(e).__name__}")
+
+        auction_items: list[dict] = []
+        if auction_codes:
+            try:
+                auction_items = hithink_src.auction_snapshot(auction_codes, stage="live")
+            except Exception as e:  # noqa: BLE001
+                degraded.append(f"auction_live: {type(e).__name__}")
+        save_auction_snapshots(date, ts, "live", auction_items)
+
+        return {
+            "date": date, "ts": ts,
+            "auction": {"stage": "live", "count": len(auction_items)},
+            "codes": len(auction_codes),
+            "data_status": "degraded" if degraded else ("ok" if auction_items else "empty"),
+            "degraded_sources": degraded,
+        }
+
     def _execute_baostock_5min_freeze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S167 次日冻结——09:00 冻结 prev_trading_date 涨停股 5min bars（bars 稳定）。
 
@@ -2620,6 +2673,23 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 intraday_microstructure_snapshot 已创建（cron */10 9-15 * * 0-4）")
+
+    # S167 竞价密集采集——09:15-09:25 每 2min 采 auction_snapshot(live) 累积 trajectory。
+    # cron `*/2 9-9 * * 0-4` 触发 09:00-09:59（偶数分），is_auction_time 门控只放行
+    # 09:15-09:25（约 5 ticks：09:16/18/20/22/24）。原 `*/10` 在竞价窗口只命中 09:20
+    # 一次，trajectory 过稀无法刻画 auction_volume_ratio 演化（§44 reframe 标记最未证否
+    # 盘中 edge）。轻量 auction-only（跳过排名/量比，盘前无意义），save_auction_snapshots
+    # PK 幂等——与 microstructure 同 ts 重跑覆盖不翻倍。
+    if "intraday_auction_dense" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="intraday_auction_dense",
+            description="S167 竞价密集采集（auction live only，每 2min，is_auction_time 门控 09:15-09:25）",
+            task_type="intraday_auction_dense",
+            cron_expr="*/2 9-9 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 intraday_auction_dense 已创建（cron */2 9-9 * * 0-4）")
 
     # S167 baostock 5min 次日冻结——09:00 冻结 prev_trading_date 涨停股 5min bars
     # （当日 bar T+1 lag，次日 09:00 bars 稳定）。is_trading_day 门控（节假日跳）。

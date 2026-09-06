@@ -24,7 +24,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 # 校验维度（spec R1）：shape + content + missing rate + anomaly + freshness
-_Shape = Literal["list_of_dicts", "dict_of_dicts"]
+_Shape = Literal["list_of_dicts", "dict_of_dicts", "list_of_lists"]
 _Op = Literal[">=", "<=", ">", "<"]
 
 
@@ -42,6 +42,8 @@ class SourceSchema:
       - freshness_field / freshness_max_age_days：时效字段 + stale 阈值天数，last_date 距 as_of
         超阈值 → error。as_of=None 不校验时效（无法判定）。
       - min_rows：行数下限，空数据当 non-empty 期望时 → error（拒绝空污染）。
+      - list_fields：list_of_lists 形状的位置字段名元组（date 在 [0]、close 在 [1]…），
+        ``_rows_of`` 据此把每行 list 转成 dict 供下游 content/freshness 校验。
     """
 
     source_id: str
@@ -55,6 +57,7 @@ class SourceSchema:
     freshness_field: str | None = None
     freshness_max_age_days: float = 7.0
     min_rows: int = 0
+    list_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -198,6 +201,97 @@ _AKSHARE_FORECAST = SourceSchema(
     min_rows=0,  # 无机构覆盖时空合法
 )
 
+# ---------------------------------------------------------------------------
+# R1 schema 扩展（4 源）——baostock 指数 K / akshare 涨停池 / baostock 盈利 / 东财大宗
+# ---------------------------------------------------------------------------
+
+_BAOSTOCK_INDEX_KLINE = SourceSchema(
+    source_id="baostock_index_kline",
+    label="baostock 指数日 K 线",
+    expected_shape="list_of_lists",
+    # verified: baostock query_history_k_data_plus("sh.000001", "date,close") →
+    # get_row_data() 返 list[str]，每行 [date_str, close_str]。非个股 OHLCV，
+    # 仅 date+close（指数 regime 派生用，非 §44 verdict 直接输入）。
+    list_fields=("date", "close"),
+    required_fields=("date", "close"),
+    field_types={
+        "date": (str,),
+        "close": (str, float, int),  # baostock 返字符串，下游 float() 转
+    },
+    value_ranges={
+        "close": (0.0, 1000000.0),  # 上证指数 ~600-6000+，留 slack
+    },
+    max_missing_rate=0.05,
+    freshness_field="date",
+    freshness_max_age_days=7.0,
+    min_rows=1,
+)
+
+_AKSHARE_ZT_POOL = SourceSchema(
+    source_id="akshare_stock_zt_pool_em",
+    label="akshare 涨停池",
+    expected_shape="list_of_dicts",
+    # verified: akshare stock_zt_pool_em → 脚本 build rows = [{code, seal_amount,
+    # first_lock, last_lock, turnover, float_mv}]。code 承重（6 位裸码 str）。
+    # 非涨停日池空合法（min_rows=0）；seal_amount/turnover/float_mv 均 float（脚本 float() 转）。
+    required_fields=("code",),
+    field_types={
+        "code": (str,),
+        "seal_amount": (float, int),
+        "first_lock": (str,),
+        "last_lock": (str,),
+        "turnover": (float, int),
+        "float_mv": (float, int),
+    },
+    value_ranges={
+        "seal_amount": (0.0, 1e15),
+        "turnover": (0.0, 100.0),  # 换手率 0-100%
+        "float_mv": (0.0, 1e13),
+    },
+    max_missing_rate=0.05,
+    min_rows=0,  # 非涨停日空合法
+)
+
+_BAOSTOCK_PROFIT_DATA = SourceSchema(
+    source_id="baostock_profit_data",
+    label="baostock 盈利数据缓存",
+    expected_shape="dict_of_dicts",
+    # verified: profit_data_cache.json = {code: {quarter: {epsTTM, pubDate}}}（3 级 dict）。
+    # 3 级嵌套超出 dict_of_dicts 2 级模型 → 脚本 flatten 到 2 级 {code_quarter: {epsTTM, pubDate}}
+    # 再过 validate_or_reject，使 field_types 可校验最内层。epsTTM 可 None（季度无 EPS）。
+    required_fields=(),
+    field_types={
+        "epsTTM": (float, int, type(None)),
+        "pubDate": (str, type(None)),
+    },
+    # epsTTM 可空（季度无 EPS），小 n 单股 None=100% 会假拦（同 hithink 逻辑）——
+    # 靠 type+min_rows+shape 把关，missing_rate 不作 gate。
+    max_missing_rate=1.0,
+    min_rows=1,
+)
+
+_EASTMONEY_BLOCK_TRADE = SourceSchema(
+    source_id="eastmoney_block_trade",
+    label="东财大宗交易",
+    expected_shape="list_of_dicts",
+    # verified: block_trade_raw.json = [{date, code, premium_ratio, ...}]（eastmoney
+    # RPT_DATA_BLOCKTRADE 市场全量）。date+code 承重；premium_ratio 折价率可 None（无成交价）。
+    required_fields=("date", "code"),
+    field_types={
+        "date": (str,),
+        "code": (str, int),  # 裸码可 int 或 str（脚本 zfill 补零）
+        "premium_ratio": (float, int, type(None)),
+    },
+    value_ranges={
+        "premium_ratio": (-1.0, 1.0),  # 折价率 -100%~100%
+    },
+    # premium_ratio 可 None（无成交价），部分行缺正常；不因小样本 None 占比高假拦
+    max_missing_rate=0.5,
+    freshness_field="date",
+    freshness_max_age_days=7.0,
+    min_rows=0,  # 无大宗交易日空合法
+)
+
 #: schema 注册表（新增源只加一项）
 SCHEMA_REGISTRY: dict[str, SourceSchema] = {
     s.source_id: s for s in (
@@ -206,6 +300,10 @@ SCHEMA_REGISTRY: dict[str, SourceSchema] = {
         _EM_ZT_TOPIC_POOL,
         _HITHINK_VALUATION,
         _AKSHARE_FORECAST,
+        _BAOSTOCK_INDEX_KLINE,
+        _AKSHARE_ZT_POOL,
+        _BAOSTOCK_PROFIT_DATA,
+        _EASTMONEY_BLOCK_TRADE,
     )
 }
 
@@ -214,10 +312,13 @@ SCHEMA_REGISTRY: dict[str, SourceSchema] = {
 # 校验引擎
 # ---------------------------------------------------------------------------
 
-def _rows_of(data: Any, shape: _Shape) -> tuple[list[dict], int]:
+def _rows_of(
+    data: Any, shape: _Shape, list_fields: tuple[str, ...] = ()
+) -> tuple[list[dict], int]:
     """按 shape 把输入归一成待校验行列表 + row_count。
 
     list_of_dicts → data 本身；dict_of_dicts → data.values()（内层 dict）。
+    list_of_lists → 每行 list 按 list_fields 位置映射成 dict（date=[0], close=[1]…）。
     结构不符 → 返 ([], -1) 哨兵，调用方据此报 shape error。
     """
     if shape == "list_of_dicts":
@@ -229,6 +330,18 @@ def _rows_of(data: Any, shape: _Shape) -> tuple[list[dict], int]:
         if not isinstance(data, dict):
             return [], -1
         rows = [v for v in data.values() if isinstance(v, dict)]
+        return rows, len(data)
+    if shape == "list_of_lists":
+        if not isinstance(data, list):
+            return [], -1
+        fields = list_fields or ()
+        rows: list[dict] = []
+        for r in data:
+            if isinstance(r, list):
+                row = {fields[i]: v for i, v in enumerate(r) if i < len(fields)} if fields else {}
+                rows.append(row)
+            elif isinstance(r, dict):
+                rows.append(r)  # 容错：dict 输入直接用
         return rows, len(data)
     return [], -1
 
@@ -265,7 +378,15 @@ def _check_content(rows: list[dict], schema: SourceSchema) -> list[str]:
                 errors.append(f"行{i} {f} 类型 {type(v).__name__} 不符 {types}")
         for f, (lo, hi) in schema.value_ranges.items():
             v = r.get(f)
-            if v is None or not isinstance(v, (int, float)):
+            if v is None:
+                continue
+            # baostock 等源返字符串数值 → 尝试 float 转换后查值域
+            if isinstance(v, str):
+                try:
+                    v = float(v)
+                except ValueError:
+                    continue  # 非数值字符串由 type check 管
+            elif not isinstance(v, (int, float)):
                 continue
             if v < lo or v > hi:
                 errors.append(f"行{i} {f}={v} 越界 [{lo}, {hi}]")
@@ -328,7 +449,7 @@ def validate(
             errors=(f"未知数据源 {source_id!r}（未在 SCHEMA_REGISTRY）",),
         )
 
-    rows, row_count = _rows_of(data, schema.expected_shape)
+    rows, row_count = _rows_of(data, schema.expected_shape, schema.list_fields)
     if row_count < 0:  # shape 不符
         return SchemaValidationResult(
             source_id=source_id, ok=False, row_count=0,

@@ -36,7 +36,8 @@ print("=" * 72)
 t0 = time.time()
 print("Loading block trades...", end=" ", flush=True)
 bt_raw = json.loads(BLOCK.read_bytes())
-# NOTE: block_trade_raw（eastmoney RPT_DATA_BLOCKTRADE，list_of_dicts）无对应 schema — 待新建
+# S163 R1: bad data gate — eastmoney block_trade
+validate_or_reject("eastmoney_block_trade", bt_raw, as_of=datetime.date.today().isoformat())
 print(f"{len(bt_raw)} records ({time.time()-t0:.1f}s)")
 
 print("Loading kline cache...", end=" ", flush=True)

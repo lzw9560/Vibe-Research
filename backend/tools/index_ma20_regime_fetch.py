@@ -3,12 +3,15 @@
 compute MA20, and label each trading day's regime (strong=close>MA20 / weak=close<MA20).
 Caches result to .vibe-research/index_ma20_regime.json for downstream §44 lift scripts.
 """
+import datetime
 import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 OUT = ROOT / ".vibe-research" / "index_ma20_regime.json"
+sys.path.insert(0, str(ROOT / "backend"))
+from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 
 import baostock as bs
 
@@ -37,9 +40,8 @@ while rs.error_code == "0" and rs.next():
 
 bs.logout()
 
-# S163 R1 NOTE: baostock index kline（sh.000001，list_of_lists，仅 date+close）
-# 不匹配 baostock_kline schema（需 OHLCV list_of_dicts）—— 待新建 'baostock_index_kline' schema
-# （shape=list_of_lists，fields=date+close，用于指数 regime 派生，非个股 §44 verdict 输入）
+# S163 R1: bad data gate — baostock index kline（list_of_lists，date+close）
+rows = validate_or_reject("baostock_index_kline", rows, as_of=datetime.date.today().isoformat())
 
 print(f"fetched {len(rows)} index daily bars")
 if not rows:

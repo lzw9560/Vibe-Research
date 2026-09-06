@@ -405,6 +405,79 @@ def test_baostock_freeze_skips_non_trading_day(monkeypatch):
     assert result["status"] == "skipped"
 
 
+# ── intraday_auction_dense executor 门控（不联网，mock is_auction_time）──────────
+
+def test_auction_dense_skips_outside_auction_window(monkeypatch):
+    """非竞价时段 → no-op，不发请求（cron */2 在 09:00-09:59 触发但 is_auction_time 门控）。"""
+    # Arrange：mock 竞价门控返 False
+    import scheduled_tasks as st
+    import vr_paths
+    monkeypatch.setattr(vr_paths, "is_auction_time", lambda now=None: False)
+    executor = st.TaskExecutor()
+
+    # Act
+    result = executor._execute_intraday_auction_dense({})
+
+    # Assert：skipped，未触达数据源
+    assert result["status"] == "skipped"
+
+
+def test_auction_dense_captures_live_during_auction(monkeypatch, tmp_path):
+    """竞价窗口（09:15-09:25）→ 采 auction_snapshot(live) 落库，跳过排名/量比。"""
+    # Arrange
+    import scheduled_tasks as st
+    import vr_paths
+    import data.intraday_accumulation_store as ias
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    monkeypatch.setattr(vr_paths, "is_auction_time", lambda now=None: True)
+    monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda: "2026-09-05")
+    monkeypatch.setattr(vr_paths, "prev_trading_date_str", lambda: "2026-09-04")
+    executor = st.TaskExecutor()
+    # mock hithink 涨停池（prev 日）+ auction_snapshot
+    import data.sources.hithink_src as hs
+    monkeypatch.setattr(hs, "limit_up_pool",
+                        lambda d: [{"code": "600519"}, {"code": "000001"}])
+    monkeypatch.setattr(hs, "auction_snapshot",
+                        lambda codes, stage="final": [dict(it, stage=stage) for it in _AUCTION_LIVE])
+
+    # Act
+    result = executor._execute_intraday_auction_dense({})
+
+    # Assert：竞价 live 落库，stage 恒 live（无 final / 排名 / 量比）
+    assert result["auction"] == {"stage": "live", "count": 2}
+    assert result["codes"] == 2
+    rows = ias.load_auctions("2026-09-05", "2026-09-05")
+    assert len(rows) == 2
+    assert all(r["stage"] == "live" for r in rows)
+    # §44 关键信号 auction_volume_ratio 正确落库
+    r = next(r for r in rows if r["code"] == "600519")
+    assert r["auction_volume_ratio"] == 1.7089
+
+
+def test_auction_dense_degrades_on_hithink_failure(monkeypatch, tmp_path):
+    """hithink 涨停池/竞价 snapshot 失败 → degraded 不崩，记错误源。"""
+    # Arrange
+    import scheduled_tasks as st
+    import vr_paths
+    import data.intraday_accumulation_store as ias
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    monkeypatch.setattr(vr_paths, "is_auction_time", lambda now=None: True)
+    monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda: "2026-09-05")
+    monkeypatch.setattr(vr_paths, "prev_trading_date_str", lambda: "2026-09-04")
+    executor = st.TaskExecutor()
+    import data.sources.hithink_src as hs
+    monkeypatch.setattr(hs, "limit_up_pool", lambda d: (_ for _ in ()).throw(RuntimeError("hithink down")))
+
+    # Act
+    result = executor._execute_intraday_auction_dense({})
+
+    # Assert：degraded 不崩，auction 空，记错误源
+    assert result["data_status"] == "degraded"
+    assert result["auction"] == {"stage": "live", "count": 0}
+    assert result["codes"] == 0
+    assert any("auction_pool" in s for s in result["degraded_sources"])
+
+
 # ── is_auction_time 集合竞价窗口门控 ────────────────────────────────────────
 
 def test_is_auction_time_boundaries(monkeypatch):

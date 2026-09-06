@@ -63,6 +63,8 @@ _EXPECTED_TASK_TYPES = {
     # S167 盘中微结构累积（hithink 排名 + tencent 量比 10min / baostock 5min 次日冻结）
     "intraday_microstructure_snapshot",
     "baostock_5min_freeze",
+    # S167 竞价密集采集（auction live only，每 2min，is_auction_time 门控 09:15-09:25）
+    "intraday_auction_dense",
 }
 
 

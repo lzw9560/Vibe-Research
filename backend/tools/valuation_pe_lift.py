@@ -22,7 +22,10 @@ validate_or_reject("baostock_kline",
                    [b for bars in cache.values() for b in bars],
                    as_of=datetime.date.today().isoformat())
 pcache = json.loads(PCACHE.read_text())
-# NOTE: profit_data_cache（baostock profit_data，{code:{quarter:{epsTTM,pubDate}}}）无对应 schema — 待新建
+# S163 R1: bad data gate — baostock profit_data (3 级 dict → flatten 2 级 for field 校验)
+_flat_pcache = {f"{c}_{q}": v for c, qs in pcache.items() if isinstance(qs, dict)
+                for q, v in qs.items() if isinstance(v, dict)}
+validate_or_reject("baostock_profit_data", _flat_pcache)
 conn = sqlite3.connect(str(DB), timeout=10)
 pairs = conn.execute("SELECT DISTINCT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
 conn.close()

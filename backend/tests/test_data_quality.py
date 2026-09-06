@@ -177,13 +177,198 @@ class TestAkshareForecast:
         assert result.ok, f"空应合法：{result.errors}"
 
 
-class TestSchemaRegistry:
-    """5 源注册表完整性 + 未知源拒绝 + validate_or_reject 接入点。"""
+class TestBaostockIndexKline:
+    """baostock 指数日 K 线校验（list_of_lists，date+close 字符串）。"""
 
-    def test_registry_has_five_sources(self):
+    GOOD_ROWS = [
+        ["2026-09-04", "3250.5"],
+        ["2026-09-05", "3251.0"],
+        ["2026-09-06", "3252.0"],
+    ]
+
+    def test_good_data_passes(self):
+        result = validate("baostock_index_kline", self.GOOD_ROWS, as_of="2026-09-06")
+        assert result.ok, f"应通过：{result.errors}"
+        assert result.row_count == 3
+        assert result.freshness_ok
+        assert result.last_date == "2026-09-06"
+
+    def test_missing_close_field_rejected(self):
+        # 行只有 1 元素 → close 缺失 → required + missing_rate 双重捕获
+        bad = [["2026-09-04"]]
+        result = validate("baostock_index_kline", bad, as_of="2026-09-04")
+        assert not result.ok
+
+    def test_wrong_type_close_rejected(self):
+        # close 是 list（非 str/float/int）→ 类型不符
+        bad = [["2026-09-04", ["not_a_number"]]]
+        result = validate("baostock_index_kline", bad, as_of="2026-09-04")
+        assert not result.ok
+        assert any("close" in e and "类型" in e for e in result.errors)
+
+    def test_negative_close_out_of_range_rejected(self):
+        # close="-1" → 字符串→float=-1 < 0 → 越界
+        bad = [["2026-09-04", "-1"]]
+        result = validate("baostock_index_kline", bad, as_of="2026-09-04")
+        assert not result.ok
+        assert any("越界" in e for e in result.errors)
+
+    def test_stale_data_rejected(self):
+        stale = [["2026-08-20", "3250.5"]]
+        result = validate("baostock_index_kline", stale, as_of="2026-09-06")
+        assert not result.freshness_ok
+        assert not result.ok
+        assert any("stale" in e for e in result.errors)
+
+    def test_empty_below_min_rejected(self):
+        result = validate("baostock_index_kline", [], as_of="2026-09-04")
+        assert not result.ok
+        assert any("行数" in e for e in result.errors)
+
+    def test_wrong_shape_rejected(self):
+        # 期望 list_of_lists（list），给 dict → shape 不符
+        result = validate("baostock_index_kline", {"000001": []}, as_of="2026-09-04")
+        assert not result.ok
+        assert any("shape" in e for e in result.errors)
+
+
+class TestAkshareZtPool:
+    """akshare 涨停池校验（code 承重，空池合法，seal_amount/turnover 非负）。"""
+
+    GOOD_ROWS = [
+        {"code": "000001", "seal_amount": 1e8, "first_lock": "0930",
+         "last_lock": "0930", "turnover": 5.2, "float_mv": 1e9},
+        {"code": "600519", "seal_amount": 5e7, "first_lock": "1400",
+         "last_lock": "1500", "turnover": 1.1, "float_mv": 2e10},
+    ]
+
+    def test_good_data_passes(self):
+        result = validate("akshare_stock_zt_pool_em", self.GOOD_ROWS)
+        assert result.ok, f"应通过：{result.errors}"
+        assert result.row_count == 2
+
+    def test_empty_pool_is_valid(self):
+        # 非涨停日 / 降级返空合法（min_rows=0）
+        result = validate("akshare_stock_zt_pool_em", [])
+        assert result.ok, f"空池应合法：{result.errors}"
+
+    def test_missing_code_rejected(self):
+        bad = [{"seal_amount": 1e8, "turnover": 5.0}]
+        result = validate("akshare_stock_zt_pool_em", bad)
+        assert not result.ok
+        assert any("code" in e for e in result.errors)
+
+    def test_wrong_type_seal_amount_rejected(self):
+        # seal_amount 是字符串 "abc"（非 float/int）→ 类型不符
+        bad = [{"code": "000001", "seal_amount": "abc", "turnover": 5.0, "float_mv": 1e9}]
+        result = validate("akshare_stock_zt_pool_em", bad)
+        assert not result.ok
+        assert any("seal_amount" in e and "类型" in e for e in result.errors)
+
+    def test_negative_turnover_out_of_range_rejected(self):
+        bad = [{"code": "000001", "seal_amount": 1e8, "turnover": -1.0, "float_mv": 1e9}]
+        result = validate("akshare_stock_zt_pool_em", bad)
+        assert not result.ok
+        assert any("turnover" in e and "越界" in e for e in result.errors)
+
+
+class TestBaostockProfitData:
+    """baostock 盈利数据缓存校验（dict_of_dicts，epsTTM 可 None）。"""
+
+    GOOD_DATA = {
+        "000001_2024Q3": {"epsTTM": 2.5, "pubDate": "2024-10-30"},
+        "000001_2024Q4": {"epsTTM": None, "pubDate": "2025-01-31"},
+        "600519_2024Q3": {"epsTTM": 50.2, "pubDate": "2024-10-30"},
+    }
+
+    def test_good_data_passes(self):
+        result = validate("baostock_profit_data", self.GOOD_DATA)
+        assert result.ok, f"应通过：{result.errors}"
+        assert result.row_count == 3
+
+    def test_empty_dict_rejected(self):
+        # min_rows=1 → 空缓存 = 坏数据
+        result = validate("baostock_profit_data", {})
+        assert not result.ok
+        assert any("行数" in e for e in result.errors)
+
+    def test_wrong_shape_rejected(self):
+        # 期望 dict_of_dicts（dict），给 list → shape 不符
+        result = validate("baostock_profit_data", [1, 2, 3])
+        assert not result.ok
+        assert any("shape" in e for e in result.errors)
+
+    def test_wrong_type_epsTTM_rejected(self):
+        # epsTTM 是字符串 "N/A"（非 float/int/None）→ 类型不符
+        bad = {"000001_2024Q3": {"epsTTM": "N/A", "pubDate": "2024-10-30"}}
+        result = validate("baostock_profit_data", bad)
+        assert not result.ok
+        assert any("epsTTM" in e and "类型" in e for e in result.errors)
+
+    def test_none_epsTTM_valid(self):
+        # epsTTM=None 合法（季度无 EPS，非污染 verdict）
+        data = {"000001_2024Q4": {"epsTTM": None, "pubDate": "2025-01-31"}}
+        result = validate("baostock_profit_data", data)
+        assert result.ok, f"None epsTTM 不应拦：{result.errors}"
+
+
+class TestEastmoneyBlockTrade:
+    """东财大宗交易校验（date+code 承重，premium_ratio 可 None，空合法）。"""
+
+    GOOD_ROWS = [
+        {"date": "2026-09-04", "code": "000001", "premium_ratio": -0.05},
+        {"date": "2026-09-04", "code": "600519", "premium_ratio": 0.02},
+        {"date": "2026-09-05", "code": "000002", "premium_ratio": None},
+    ]
+
+    def test_good_data_passes(self):
+        result = validate("eastmoney_block_trade", self.GOOD_ROWS, as_of="2026-09-06")
+        assert result.ok, f"应通过：{result.errors}"
+        assert result.row_count == 3
+        assert result.last_date == "2026-09-05"
+
+    def test_empty_is_valid(self):
+        # 无大宗交易日空合法（min_rows=0）
+        result = validate("eastmoney_block_trade", [], as_of="2026-09-06")
+        assert result.ok, f"空应合法：{result.errors}"
+
+    def test_missing_date_rejected(self):
+        bad = [{"code": "000001", "premium_ratio": -0.05}]
+        result = validate("eastmoney_block_trade", bad, as_of="2026-09-06")
+        assert not result.ok
+        assert any("date" in e for e in result.errors)
+
+    def test_wrong_type_date_rejected(self):
+        # date 是 int（非 str）→ 类型不符
+        bad = [{"date": 20260904, "code": "000001", "premium_ratio": -0.05}]
+        result = validate("eastmoney_block_trade", bad, as_of="2026-09-06")
+        assert not result.ok
+        assert any("date" in e and "类型" in e for e in result.errors)
+
+    def test_out_of_range_premium_ratio_rejected(self):
+        # premium_ratio=-2.0 < -1.0 → 越界
+        bad = [{"date": "2026-09-04", "code": "000001", "premium_ratio": -2.0}]
+        result = validate("eastmoney_block_trade", bad, as_of="2026-09-06")
+        assert not result.ok
+        assert any("premium_ratio" in e and "越界" in e for e in result.errors)
+
+    def test_stale_data_rejected(self):
+        stale = [{"date": "2026-08-20", "code": "000001", "premium_ratio": -0.05}]
+        result = validate("eastmoney_block_trade", stale, as_of="2026-09-06")
+        assert not result.freshness_ok
+        assert not result.ok
+        assert any("stale" in e for e in result.errors)
+
+
+class TestSchemaRegistry:
+    """9 源注册表完整性 + 未知源拒绝 + validate_or_reject 接入点。"""
+
+    def test_registry_has_nine_sources(self):
         assert set(SCHEMA_REGISTRY.keys()) == {
             "baostock_kline", "ths_limit_up_pool", "em_zt_topic_pool",
             "hithink_valuation", "akshare_profit_forecast",
+            "baostock_index_kline", "akshare_stock_zt_pool_em",
+            "baostock_profit_data", "eastmoney_block_trade",
         }
 
     def test_unknown_source_rejected(self):

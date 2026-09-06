@@ -28,7 +28,8 @@ def fetch_zt_pool(date_compact):  # YYYYMMDD
     if ZT_CACHE.exists():
         cache = json.loads(ZT_CACHE.read_text())
     if date_compact in cache:
-        return cache[date_compact]
+        # S163 R1: bad data gate — cached zt_pool
+        return validate_or_reject("akshare_stock_zt_pool_em", cache[date_compact])
     import akshare as ak
     try:
         df = ak.stock_zt_pool_em(date=date_compact)
@@ -43,7 +44,8 @@ def fetch_zt_pool(date_compact):  # YYYYMMDD
                 "turnover": float(r.get("换手率") or 0),
                 "float_mv": float(r.get("流通市值") or 0),
             })
-        # NOTE: akshare stock_zt_pool_em（zt_pool，list_of_dicts）无对应 schema — 待新建
+        # S163 R1: bad data gate — akshare zt_pool
+        rows = validate_or_reject("akshare_stock_zt_pool_em", rows)
         cache[date_compact] = rows
         ZT_CACHE.write_text(json.dumps(cache, ensure_ascii=False))
         return rows
