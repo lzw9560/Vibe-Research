@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# ⚠️ §44 v2 窗口caveat（2026-09-06）：forward lift=0.983 等 verdict 在 D+1-开盘→D+4 path 窗口（隔夜正之后的反转负段），非绝对无 edge——是"对窗口无 selection edge"。隔夜 gap（D收→D+1开 +1.15%）是真事件 edge 但薄/不可选/部分不可交易；本 harness 用 baostock 5min 推导封板时间（非精确首封），caveat 见 S159 + memory s44-quant-validation-loop。
 """S152 盘中 H2 harness：baostock 5min kline → 封板时间×开板次数 → day_paired_lift。
 
 §44 证否选股（forward lift=0.983 劣于随机），edge 在盘中（未测 60%）。唯一未证伪维度

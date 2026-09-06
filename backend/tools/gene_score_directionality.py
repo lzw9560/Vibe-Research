@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# ⚠️ §44 v2 窗口caveat（2026-09-06）：top-gene"劣于随机"基于 forward path-winrate（D+1-开盘→D+4，隔夜正之后的反转负段），非绝对无 edge——是"对窗口无 selection edge"。gap_window_lift.py 证 gene_score 也不预测隔夜 gap（lift 0.942x, pearson -0.075）——对窗口也验证无选股力，真非 bug。见 S159 + memory s44-quant-validation-loop。
 """§44 后续研究：gene total_score 是否方向性预测 forward path-winrate？
 
 动机（2026-09-03，S145 收尾后）：

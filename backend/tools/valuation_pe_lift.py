@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# ⚠️ §44 v2 窗口caveat（2026-09-06）：以下 verdict 在 D+1-开盘→D+4 path 窗口（隔夜正之后的反转负段，entry=D+1开盘=gap 之后），非绝对无 edge——是"对窗口无 selection edge"。隔夜 gap（D收→D+1开 +1.15%）是真事件 edge 但薄/不可选/部分不可交易。见 S159 spec + memory s44-quant-validation-loop。
 # PE valuation verdict (2026-09-06, baostock profit_data 800股缓存/1126 obs/39天):
 #   all net-WR 34.81% | 低PE 1.031x 未validated | 高PE 1.031x 未validated(低高无差异=零信号)
 # PE(valuation)无 tradeable edge(<2x). value 长期因子非短期涨停, 合 prior.

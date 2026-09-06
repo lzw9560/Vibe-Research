@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# ⚠️ §44 v2 窗口caveat（2026-09-06）：以下 verdict 在 D+1-开盘→D+4 path 窗口（隔夜正之后的反转负段，entry=D+1开盘=gap 之后），非绝对无 edge——是"对窗口无 selection edge"。隔夜 gap（D收→D+1开 +1.15%）是真事件 edge 但薄/不可选/部分不可交易。见 S159 spec + memory s44-quant-validation-loop。
 # S156 verdict (2026-09-06, 13 days/798 obs, zt_pool exact seal time + net-profit-verify):
 #   all net-WR 23.93% | seal_amount 1.004x null | early_lock 1.102x weak | late_lock 0.663x 劣于随机
 #   秒板 1.312x 唯一 net 弱正(<2x, n=121/13d modest, hint 非 tradeable) | broken 0.988x null
