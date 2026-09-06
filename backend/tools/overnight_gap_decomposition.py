@@ -8,7 +8,7 @@
 若隔夜 gap 正 + path 负 = 我框架测错窗口（miss 隔夜正 edge，只测反转负段）。"""
 import json, sqlite3, sys, statistics
 from pathlib import Path
-ROOT = Path("/Users/lizhiwei/project/code/stock/Vibe-Research-S151")
+ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"

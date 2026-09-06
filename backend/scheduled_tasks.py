@@ -474,6 +474,8 @@ _TASK_TIMEOUTS: Dict[str, int] = {
     "seal_intraday_collect": 120,
     "limitup_precompute": 700,
     "kline_refresh": 1200,  # S150 审查 HIGH2: 全A~5540股 baostock 稳态>300s, 加显式高值防误杀（当日 bar 缺失回归）
+    "intraday_microstructure_snapshot": 120,  # S167：hithink 3 端点 + tencent 1 批，<60s 稳态，120s 兜底
+    "baostock_5min_freeze": 600,  # S167：~100 股 baostock 5min fetch（无 IP 限制，单次 login）
 }
 _DEFAULT_TASK_TIMEOUT = 300
 
@@ -521,6 +523,8 @@ class TaskExecutor:
             "premarket_open_notify": self._execute_premarket_open_notify,  # S101：9:35 开盘表现通知
             "premarket_t1_review": self._execute_premarket_t1_review,  # S101：T+1 复盘通知
             "st_play_radar": self._execute_st_play_radar,  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
+            "intraday_microstructure_snapshot": self._execute_intraday_microstructure_snapshot,  # S167：盘中微结构周期快照（hithink 排名 + tencent 量比，10min）
+            "baostock_5min_freeze": self._execute_baostock_5min_freeze,  # S167：次日冻结 prev_trading_date 涨停股 5min bars
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -1572,6 +1576,117 @@ class TaskExecutor:
             logger.warning("[zt_history_snapshot] 采集失败: %s", e)
             return {"status": f"error: {e}"}
 
+    # ===========================================================================
+    # S167：盘中微结构数据累积（"等 live" 路径）——hithink 排名 + tencent 量比 + baostock 5min
+    # 诚实框架：accumulation for future §44v2 testing, prior LOW (S152/S156 refuted
+    # 封板时间/秒板), no edge claim yet — 累积 30-60 天后复测。
+    # ===========================================================================
+
+    def _execute_intraday_microstructure_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S167 盘中微结构周期快照——每 10min 快照 hithink 排名 + tencent 量比 → 累积 DB。
+
+        cron `*/10 9-15 * * 0-4` 触发，executor 内 ``vr_paths.is_intraday_time`` 门控
+        （09:25-11:30 / 13:01-15:05 外 no-op，防封 + 省请求）。涨停池 codes 走 hithink
+        ``limit_up_pool``（非 em_get 防封）；hithink 端点走 circuit_breaker，失败记
+        data_status=degraded 不抛（S120：skyrocket/hot_stock/anomaly_list 失败 raise
+        RuntimeError，此处 catch）。tencent urllib 免费不限流。
+        """
+        from vr_paths import is_intraday_time
+        if not is_intraday_time():
+            return {"status": "skipped", "reason": "非盘中交易时段"}
+
+        from datetime import datetime as _dt
+        from data.sources import hithink_src
+        from data.sources.tencent import fetch_raw
+        from data.intraday_accumulation_store import (
+            save_ranking_snapshots, save_quote_snapshots,
+        )
+        from vr_paths import last_trading_date_str
+
+        date = last_trading_date_str()
+        ts = _dt.now().strftime("%Y-%m-%dT%H:%M")
+        degraded: list[str] = []
+
+        # 1. hithink 三榜（飙升/热股/异动）——实时无历史，不快照即丢失
+        ranking_items: dict[str, list[dict]] = {}
+        for source, fn in (
+            ("skyrocket", hithink_src.skyrocket),
+            ("hot_stock", hithink_src.hot_stock),
+            ("anomaly", hithink_src.anomaly_list),
+        ):
+            try:
+                ranking_items[source] = fn()
+            except RuntimeError as e:
+                degraded.append(f"{source}: {str(e)[:60]}")
+                ranking_items[source] = []
+            except Exception as e:  # noqa: BLE001
+                degraded.append(f"{source}: {type(e).__name__}")
+                ranking_items[source] = []
+
+        for source, items in ranking_items.items():
+            save_ranking_snapshots(date, ts, source, items)
+
+        # 2. tencent 量比——涨停池 codes ∪ 排名 codes，一次批量
+        zt_codes: list[str] = []
+        try:
+            zt_codes = [r["code"] for r in hithink_src.limit_up_pool(date) if r.get("code")]
+        except Exception:  # noqa: BLE001 — hithink 涨停池失败不影响排名快照
+            pass
+        rank_codes = {it["code"] for items in ranking_items.values() for it in items if it.get("code")}
+        codes = list({*zt_codes, *rank_codes})
+        quotes = fetch_raw(codes) if codes else {}
+        save_quote_snapshots(date, ts, quotes)
+
+        ok = any(ranking_items.values()) or bool(quotes)
+        return {
+            "date": date, "ts": ts,
+            "rankings": {s: len(v) for s, v in ranking_items.items()},
+            "quotes": len(quotes), "zt_codes": len(zt_codes),
+            "data_status": "degraded" if degraded else ("ok" if ok else "empty"),
+            "degraded_sources": degraded,
+        }
+
+    def _execute_baostock_5min_freeze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S167 次日冻结——09:00 冻结 prev_trading_date 涨停股 5min bars（bars 稳定）。
+
+        baostock 当日 5min bar T+1 lag（当日未稳定），故次日 09:00 冻结前一交易日
+        涨停股 bars。涨停 codes 走 hithink ``limit_up_pool(prev_date)``。baostock 无 IP
+        限制，单次 login。is_trading_day(today) 门控（节假日跳，prev 由下个交易日补）。
+        幂等：INSERT OR REPLACE，重跑覆盖不翻倍。空 bars 仍写（bar_count=0 诚实记录）。
+        """
+        from vr_paths import is_trading_day, prev_trading_date_str
+        if not is_trading_day():
+            return {"status": "skipped", "reason": "非交易日（节假日跳，prev 由下交易日补）"}
+
+        from data.sources import hithink_src, baostock_src
+        from data.intraday_accumulation_store import freeze_baostock_5min
+
+        prev_date = prev_trading_date_str()
+        try:
+            pool = hithink_src.limit_up_pool(prev_date)
+        except Exception as e:  # noqa: BLE001
+            return {"status": f"error: hithink 涨停池 {e}"}
+
+        if not pool:
+            return {"date": prev_date, "frozen": 0, "reason": "hithink 涨停池空（无涨停/源断）"}
+
+        # end = prev_date（baostock 区间闭）；单日 bars
+        frozen = 0
+        empty = 0
+        for item in pool:
+            code = item.get("code")
+            if not code:
+                continue
+            bars = baostock_src.fetch_5min_bars(code, prev_date, prev_date)
+            freeze_baostock_5min(prev_date, code, item.get("name"), bars)
+            frozen += 1
+            if not bars:
+                empty += 1
+        return {
+            "date": prev_date, "frozen": frozen, "empty_bars": empty,
+            "pool_size": len(pool), "status": "ok",
+        }
+
     def _execute_st_play_radar(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S148 R3：盘后 ST-play radar——扫 ST 股公告 → 摘帽/重组/扭亏 白名单 → st_play_radar.json。
 
@@ -2454,6 +2569,33 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 st_play_radar 已创建（cron 30 17 * * 0-4）")
+
+    # S167：盘中微结构数据累积（"等 live" 路径）——累积实时无历史源供 §44v2 复测。
+    # 周期快照：每 10min（09:00-15:00 触发，is_intraday_time 门控 09:25-11:30/13:01-15:05）。
+    # 诚实：accumulation for future §44v2, prior LOW (S152/S156 refuted), no edge claim yet。
+    if "intraday_microstructure_snapshot" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="intraday_microstructure_snapshot",
+            description="S167 盘中微结构周期快照（hithink 排名 + tencent 量比，每 10min 累积供 §44v2 复测）",
+            task_type="intraday_microstructure_snapshot",
+            cron_expr="*/10 9-15 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 intraday_microstructure_snapshot 已创建（cron */10 9-15 * * 0-4）")
+
+    # S167 baostock 5min 次日冻结——09:00 冻结 prev_trading_date 涨停股 5min bars
+    # （当日 bar T+1 lag，次日 09:00 bars 稳定）。is_trading_day 门控（节假日跳）。
+    if "baostock_5min_freeze" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="baostock_5min_freeze",
+            description="S167 次日冻结 prev_trading_date 涨停股 baostock 5min bars（秒板/封板时间派生，供 §44v2）",
+            task_type="baostock_5min_freeze",
+            cron_expr="0 9 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 baostock_5min_freeze 已创建（cron 0 9 * * 0-4）")
 
     # S123 R3：既有 DB 迁移——seed 仅 `if not in existing` 建任务，旧库仍存 cron
     # `* 9-14 * * 0-4`（末次触发 14:59，漏采 15:00 收盘集合竞价终态）。幂等更新：

@@ -8,7 +8,7 @@
 复用 day_paired per-T top-vs-all + net-profit-verify（S155/S156 教训）。"""
 import json, re, sqlite3, sys, time
 from pathlib import Path
-ROOT = Path("/Users/lizhiwei/project/code/stock/Vibe-Research-S151")
+ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data.sources.eastmoney import ths_limit_up_pool
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar

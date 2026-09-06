@@ -8,7 +8,7 @@
 """用已缓存的 profit_data（800 股）跑 PE_TTM §44 测试，不重新 fetch。"""
 import json, sqlite3, sys
 from pathlib import Path
-ROOT = Path("/Users/lizhiwei/project/code/stock/Vibe-Research-S151")
+ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"

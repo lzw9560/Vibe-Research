@@ -59,6 +59,11 @@ SEAT_PROFILES_DB_PATH = os.path.join(PRIVATE_DATA_DIR, SEAT_PROFILES_DB)
 # 不改动 S037 已有常量（PRIVATE_DATA_DIR / GENE_SCORES_DB / STI_TIMELINE_DB / WINRATE_DB）。
 SEAL_INTRADAY_DIR: str = PRIVATE_DATA_DIR
 
+# S167：盘中微结构数据累积目录（"等 live"路径）——hithink 实时排名 +
+# tencent 量比周期快照 + baostock 5min 次日冻结，累积 30-60 天供 §44v2 复测。
+# 独立子目录（与 seal_intraday 分库隔离），date-keyed，不进 git。
+INTRADAY_ACCUMULATION_DIR: str = os.path.join(PRIVATE_DATA_DIR, "intraday_accumulation")
+
 
 def seal_intraday_db_path(year: str) -> str:
     """返回指定年的 seal_intraday 分库全路径。

@@ -60,6 +60,9 @@ _EXPECTED_TASK_TYPES = {
     "premarket_auction_notify",
     "premarket_open_notify",
     "premarket_t1_review",
+    # S167 盘中微结构累积（hithink 排名 + tencent 量比 10min / baostock 5min 次日冻结）
+    "intraday_microstructure_snapshot",
+    "baostock_5min_freeze",
 }
 
 

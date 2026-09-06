@@ -11,7 +11,7 @@ premium_baseline 899 samples（D 收盘→D+1 开盘 gap）+ gene_scores total_s
 import json, sqlite3, sys, statistics
 from pathlib import Path
 from collections import defaultdict
-ROOT = Path("/Users/lizhiwei/project/code/stock/Vibe-Research-S151")
+ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 PREMIUM = ROOT / ".vibe-research" / "first_board_premium_baseline.json"

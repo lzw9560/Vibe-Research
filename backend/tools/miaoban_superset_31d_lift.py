@@ -9,7 +9,7 @@
 S156 秒板 13 天 1.312x hint → 31 天首 bar 涨停 superset 验证是否 robust。"""
 import json, sys
 from pathlib import Path
-ROOT = Path("/Users/lizhiwei/project/code/stock/Vibe-Research-S151")
+ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 

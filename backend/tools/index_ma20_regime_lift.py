@@ -15,7 +15,7 @@ import json, sqlite3, statistics, random, math
 from pathlib import Path
 from collections import defaultdict
 
-ROOT = Path("/Users/lizhiwei/project/code/stock/Vibe-Research-S151")
+ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
 REGIME_F = ROOT / ".vibe-research" / "index_ma20_regime.json"

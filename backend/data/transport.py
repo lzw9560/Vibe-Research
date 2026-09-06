@@ -3,7 +3,10 @@
 
 抽自 ``astock.em_get``（astock.py:487）。三职责合一：
 - **限流**：``_EM_MIN_INTERVAL`` 保证两次东财请求最小间隔（内置防封节流）+ 抖动。
-- **熔断**：``circuit_breaker.get_breaker("eastmoney")`` —— 5 次失败 OPEN / 60s 恢复 / half-open。
+- **熔断**：``circuit_breaker.get_breaker(breaker_name)`` —— S164 R2 拆 2 组：
+  ``eastmoney``（push2/push2his/push2ex/fflow，IP+ut 敏感）/ ``eastmoney_datacenter``
+  （datacenter-web，不需 ut）。5 次失败 OPEN / 60s 恢复 / half-open。push2his 封禁
+  不连累 datacenter。
 - **代理探测**：``auto`` 模式先直连（``trust_env=False``、短超时不重试），成功固定 ``direct``；
   失败降级系统代理（带瞬态错误退避重试）并固定 ``proxy``。探测结果整进程复用。
   ``VR_DATA_PROXY=1`` 跳过探测、强制走代理。
@@ -23,6 +26,22 @@ from circuit_breaker import get_breaker
 
 # 东财请求最小间隔（秒），内置防封节流
 _EM_MIN_INTERVAL = 0.3
+
+
+def _select_breaker_name(url: str) -> str:
+    """S164 R2：按 URL host 选 eastmoney breaker 分组。
+
+    东财端点拆 2 组（避免 push2his 封禁连累 datacenter）：
+    - ``eastmoney``（push2/push2his/push2ex/push2delay/np-anotice/searchapi）：
+      IP+ut 敏感，同 host family。fflow 是 push2his 上的 path（非独立子域）。
+    - ``eastmoney_datacenter``（datacenter-web）：不需 ut，不同子域。
+
+    其余非东财源（ths/sina_kline/sina_financial/worldmonitor/hithink）已有独立 breaker，
+    不在此函数 scope 内。
+    """
+    if "datacenter" in url:
+        return "eastmoney_datacenter"
+    return "eastmoney"
 _em_last_call = [0.0]           # 上次请求时间戳（可变单元素列表，模块级共享）
 _em_last_call_lock = threading.Lock()  # L1 修复：保护 _em_last_call 读写
 _EM_SESSIONS: dict = {}         # {direct(bool): requests.Session}
@@ -69,9 +88,10 @@ def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = N
     第一次请求探测：先直连（短超时、不重试），成功即固定走直连；失败则降级走系统代理并固定。
     探测结果整个进程复用，避免每次重试。``VR_DATA_PROXY=1`` 可跳过探测、强制走代理。
     """
-    breaker = get_breaker("eastmoney")
+    breaker_name = _select_breaker_name(url)
+    breaker = get_breaker(breaker_name)
     if not breaker.allow_request():
-        raise RuntimeError(f"[CircuitBreaker:eastmoney] 东财数据源熔断中，快速失败（{url}）")
+        raise RuntimeError(f"[CircuitBreaker:{breaker_name}] 东财数据源熔断中，快速失败（{url}）")
 
     # L1 修复：限流时间戳加锁，防并发探测浪费
     with _em_last_call_lock:
