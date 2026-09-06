@@ -6,12 +6,13 @@
 """S158: 连板（high_days）§44 维度——ths_limit_up_pool(date) 42 天覆盖。
 文献 Hua'an 2026: 连板 tail 2.4% 赚 14.5% 利润 +14.6% 92.3% win（强但稀）。
 复用 day_paired per-T top-vs-all + net-profit-verify（S155/S156 教训）。"""
-import json, re, sqlite3, sys, time
+import datetime, json, re, sqlite3, sys, time
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data.sources.eastmoney import ths_limit_up_pool
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
+from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
@@ -26,10 +27,12 @@ def parse_boards(high_days: str) -> int:
 
 def fetch_lb(date_compact):
     cache = json.loads(LB_CACHE.read_text()) if LB_CACHE.exists() else {}
-    if date_compact in cache: return cache[date_compact]
+    if date_compact in cache: return cache[date_compact]  # 派生 artifact（已 transform 为 {code,boards}，非源 schema）
     try:
         rows = ths_limit_up_pool(date_compact)
         time.sleep(0.5)
+        # S163 R1: 坏 ths 行（缺 code/错型/缺失率）拒绝进 §44 verdict
+        validate_or_reject("ths_limit_up_pool", rows)
         out = [{"code": str(r.get("code") or "").zfill(6), "boards": parse_boards(r.get("high_days"))} for r in rows if r.get("code")]
         cache[date_compact] = out
         LB_CACHE.write_text(json.dumps(cache, ensure_ascii=False))
@@ -39,6 +42,10 @@ def fetch_lb(date_compact):
 
 def main():
     cache = json.loads(KLINE.read_bytes())
+    # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
+    validate_or_reject("baostock_kline",
+                       [b for bars in cache.values() for b in bars],
+                       as_of=datetime.date.today().isoformat())
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
         em_dates = [r[0] for r in conn.execute(

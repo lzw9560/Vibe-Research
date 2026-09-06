@@ -82,11 +82,26 @@ def _em_session(direct: bool):
     return s
 
 
-def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = None, timeout: int = 15):
+def _em_request(session, url: str, method: str, params, headers, json, timeout):
+    """按 ``method`` 对 session 发 GET/POST（POST 带 ``json`` body）。
+
+    S164 R3：``hot_concepts`` 走 POST+json（emappdata 热门概念），经此统一走限流/熔断/代理。
+    POST 不经 urllib3 Retry（adapter ``allowed_methods`` 仅 GET），避免重放——对读端点安全。
+    """
+    if method == "POST":
+        return session.post(url, params=params, json=json, headers=headers, timeout=timeout)
+    return session.get(url, params=params, headers=headers, timeout=timeout)
+
+
+def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = None,
+                  timeout: int = 15, *, json: dict | None = None, method: str = "GET"):
     """东财统一请求入口：串行限流 + 直连优先、失败降级系统代理。
 
     第一次请求探测：先直连（短超时、不重试），成功即固定走直连；失败则降级走系统代理并固定。
     探测结果整个进程复用，避免每次重试。``VR_DATA_PROXY=1`` 可跳过探测、强制走代理。
+
+    ``method="POST"`` + ``json=``：POST 端点（如 emappdata 热门概念）也走同一防封路径，
+    不裸调 requests。关键字字参数（keyword-only）以兼容既有 28 个 GET 消费者。
     """
     breaker_name = _select_breaker_name(url)
     breaker = get_breaker(breaker_name)
@@ -102,18 +117,18 @@ def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = N
         with _em_mode_lock:
             mode = _em_mode[0]
         if mode != "auto":
-            r = _em_session(mode == "direct").get(url, params=params, headers=headers, timeout=timeout)
+            r = _em_request(_em_session(mode == "direct"), url, method, params, headers, json, timeout)
             breaker.record_success()
             return r
         # auto：先直连，成功固定 direct；直连失败再走系统代理、成功固定 proxy。
         try:
-            r = _em_session(True).get(url, params=params, headers=headers, timeout=min(timeout, 8))
+            r = _em_request(_em_session(True), url, method, params, headers, json, min(timeout, 8))
             with _em_mode_lock:
                 _em_mode[0] = "direct"
             breaker.record_success()
             return r
         except Exception:
-            r = _em_session(False).get(url, params=params, headers=headers, timeout=timeout)
+            r = _em_request(_em_session(False), url, method, params, headers, json, timeout)
             with _em_mode_lock:
                 _em_mode[0] = "proxy"
             breaker.record_success()

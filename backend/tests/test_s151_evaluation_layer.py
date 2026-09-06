@@ -76,34 +76,84 @@ class TestDimensionLiftRegistry:
 # ---------------------------------------------------------------------------
 class TestLiftToMultiplier:
     def test_turnover_robust_below_1_is_demoted(self):  # A2
-        status, mult = lift_to_multiplier(0.9979, 14366, robust=True)
+        # days≥60 + lift<1 + robust → 劣于随机 ×0.1
+        status, mult = lift_to_multiplier(0.9979, 14366, robust=True, days_robust=167)
         assert status == "劣于随机"
         assert mult == 0.1
 
     def test_breakout_between_1_and_2_is_unvalidated(self):  # A3
-        status, mult = lift_to_multiplier(1.363, 43691, robust=True)
+        status, mult = lift_to_multiplier(1.363, 43691, robust=True, days_robust=60)
         assert status == "未validated"
         assert mult == 0.5
 
     def test_vol_surge_above_2_no_overlap_is_validated(self):  # A4
-        status, mult = lift_to_multiplier(2.046, 43691, ci_overlap=False, robust=True)
+        # days≥60 + lift≥2 + CI不重叠 → validated ×1.0（reconcile: 与 verifier robust_edge 一致）
+        status, mult = lift_to_multiplier(2.046, 43691, ci_overlap=False, robust=True, days_robust=60)
         assert status == "validated"
         assert mult == 1.0
 
     def test_n_below_30_is_exploratory(self):
-        status, mult = lift_to_multiplier(2.5, 29, ci_overlap=False, robust=True)
+        # n<30 + days≥60 → 探索性 ×1.0
+        status, mult = lift_to_multiplier(2.5, 29, ci_overlap=False, robust=True, days_robust=60)
         assert status == "探索性"
         assert mult == 1.0
 
     def test_lift_none_is_exploratory(self):
-        status, mult = lift_to_multiplier(None, 100)
+        # lift=None + days≥60 → 探索性 ×1.0
+        status, mult = lift_to_multiplier(None, 100, days_robust=60)
         assert status == "探索性"
         assert mult == 1.0
 
     def test_lift_above_2_ci_overlap_is_pending_reverify(self):
-        # lift≥2 但 CI 重叠 → 不判 validated，标待复验
-        status, mult = lift_to_multiplier(2.1, 100, ci_overlap=True, robust=True)
+        # lift≥2 + CI 重叠 + days≥60 → 待复验 ×1.0
+        status, mult = lift_to_multiplier(2.1, 100, ci_overlap=True, robust=True, days_robust=60)
         assert status == "待复验"
+        assert mult == 1.0
+
+    # --- R8 §44v2: days_robust<60 provisional cap ×0.5 ---
+
+    def test_days_below_60_lift_above_2_provisional_cap(self):
+        # §44v2 reconcile: lift≥2 but days<60 → 不能 validated → 待复验 ×0.5
+        # (gap 42-day run would get this, not "validated ×1.0")
+        status, mult = lift_to_multiplier(2.5, 500, ci_overlap=False, robust=True, days_robust=42)
+        assert status == "待复验"
+        assert mult == 0.5
+
+    def test_days_below_60_lift_below_1_cannot_falsify(self):
+        # §44v2 R6: lift<1 but days<60 → 不能证否 → 待复验 ×0.5（非 劣于随机 ×0.1）
+        status, mult = lift_to_multiplier(0.03, 2332, robust=True, days_robust=38)
+        assert status == "待复验"
+        assert mult == 0.5
+
+    def test_days_below_60_between_1_and_2_unvalidated(self):
+        # 1≤lift<2 + days<60 → 未validated ×0.5（cap 不变）
+        status, mult = lift_to_multiplier(1.36, 43691, robust=True, days_robust=42)
+        assert status == "未validated"
+        assert mult == 0.5
+
+    def test_days_below_60_n_below_30_exploratory_capped(self):
+        # n<30 + days<60 → 探索性 ×0.5（provisional cap, 非 ×1.0）
+        status, mult = lift_to_multiplier(2.5, 29, ci_overlap=False, robust=True, days_robust=5)
+        assert status == "探索性"
+        assert mult == 0.5
+
+    def test_days_below_60_lift_none_exploratory_capped(self):
+        # lift=None + days<60 → 探索性 ×0.5
+        status, mult = lift_to_multiplier(None, 100, days_robust=5)
+        assert status == "探索性"
+        assert mult == 0.5
+
+    def test_gap_42_day_underpowered_not_validated(self):
+        # §44v2 reconcile: gap days_robust=42<60 → 即使 lift≥2 也不 validated ×1.0
+        # verifier 说 underpowered, lift_to_multiplier 也说 待复验 ×0.5（不再两套不一致判据）
+        status, mult = lift_to_multiplier(2.1, 2700, ci_overlap=False, robust=True, days_robust=42)
+        assert status == "待复验"
+        assert mult == 0.5
+
+    def test_days_exactly_60_sufficient(self):
+        # days=60 → days_sufficient=True（边界值，≥60）
+        status, mult = lift_to_multiplier(2.5, 500, ci_overlap=False, robust=True, days_robust=60)
+        assert status == "validated"
         assert mult == 1.0
 
 
@@ -120,19 +170,22 @@ class TestApplyEvaluationLayer:
         assert "turnover" in cards[0].evaluation["demoted_dims"]
 
     def test_gene_unranked(self):  # A7
+        # R8: gene days_robust=38<60 → lift_to_multiplier 返 待复验 ×0.5（provisional cap）
+        # 非 frozen ×0.1（days<60 不能证否，R6 gate）
         card = SimpleNamespace(code="000001", gene_score={"total_score": 50})
         cards, _ = _apply_evaluation_layer([card], {}, {}, None, "2026-09-05")
         assert cards[0].evaluation["lift_status"] == "unranked"
-        assert cards[0].evaluation["score_weight"] == 0.1
+        assert cards[0].evaluation["score_weight"] == 0.5
         assert "gene_score" in cards[0].evaluation["demoted_dims"]
 
     def test_both_turnover_and_gene_double_demotion(self):
-        # turnover + gene 双命中 → status demoted（turnover 优先），score_weight 0.1×0.1=0.01
+        # R8: turnover ×0.1（days=167≥60, lift<1→劣于随机）+ gene ×0.5（days=38<60→待复验）
+        # score_weight = 0.1 × 0.5 = 0.05
         card = SimpleNamespace(code="000001", gene_score={"total_score": 50})
         activity = {"000001": {"turnover_pct": 35.0}}
         cards, _ = _apply_evaluation_layer([card], {}, activity, None, "2026-09-05")
         assert cards[0].evaluation["lift_status"] == "demoted"
-        assert cards[0].evaluation["score_weight"] == 0.01
+        assert cards[0].evaluation["score_weight"] == 0.05
         assert set(cards[0].evaluation["demoted_dims"]) == {"turnover", "gene_score"}
 
     def test_normal_card_no_demotion(self):

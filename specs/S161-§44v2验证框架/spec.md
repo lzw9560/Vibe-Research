@@ -68,7 +68,6 @@ design-agnostic 成立：验证统计量对任意 return series 算法一致，�
   - `candidate_funnel/evaluation.py` lift_to_multiplier 加 `days_robust` 参数；**days_robust<60 → provisional cap ×0.5**（非 ×1.0 全权重，CLAUDE.md §1.2：seal_amount days=5 不该 ×1.0）。
   - 接线 `_apply_evaluation_layer`（evaluation.py:199/205 替代直读 frozen `weight_multiplier`）+ `strategy_funnel_registry.py:434`（替代 `DIMENSION_LIFT_REGISTRY["gene_score"].weight_multiplier` 直读）——这是 CLAUDE.md §1.2 P0 "lift_to_multiplier 接线生产（替代直接读冻结 weight_multiplier）"。
   - 调和生产 "validated" 标签与 verifier "robust_edge"（DSR>0+Bonferroni+days≥60）；勿留两套不一致判据（gap 42 天 run 否则 verifier 说 underpowered 而 lift_to_multiplier 说 validated ×1.0）。
-  - 删 "REGISTRY 改标"交付项（已完成 evaluation.py:43-46，relabel 是化妆非 wiring）。
 
 ## 3. gap §44v2 run（priority 1 应用，验证 gap 是否 edge）
 
@@ -96,7 +95,7 @@ design-agnostic 成立：验证统计量对任意 return series 算法一致，�
 - 合并 `backend/tools/` Merge-source 集 12 脚本的 day_paired+permutation+Bonferroni/walk-forward 进 verifier（见 R3 两集分离；脚本保留作 CLI wrapper）。
 - 改 `backend/tools/` Parameterize-ROOT 集 10 脚本（见 R3）：`vr_paths.resolve_data_dir()`（VR_DATA_DIR，已含 .vibe-research，改 `DATA_DIR/X`）或 `Path(__file__).resolve().parents[2]`（repo root，须 `ROOT/'.vibe-research'/X`）——**两者非互换**，不硬编码绝对路径 Vibe-Research-S151。
 - 改 `backend/tools/first_board_premium_baseline.py`（加 days_back 参数化 + pool_source 决策 em_zt_topic_pool + 口径一致化 adjusted/raw）。
-- 改 `candidate_funnel/evaluation.py`（lift_to_multiplier 接线生产：加 days_robust 参数 + days<60→×0.5 + 接 _apply_evaluation_layer:199/205 + strategy_funnel_registry:434；REGISTRY 改标已完成 evaluation.py:43-46 不重复）。
+- 改 `candidate_funnel/evaluation.py`（lift_to_multiplier 接线生产：加 days_robust 参数 + days<60→×0.5 + 接 _apply_evaluation_layer:199/205 + strategy_funnel_registry:434）。
 
 ## 5. 验收标准
 
@@ -107,7 +106,7 @@ design-agnostic 成立：验证统计量对任意 return series 算法一致，�
 - [ ] R5 窗口 sanity enforced（mean+中位+胜率+base_rate，不算 lift/IC；无窗口优势标 exploratory）。
 - [ ] R6 n 门槛 enforced（n<200 或 days_robust<60 标 underpowered；证否须 days≥60 且 selection_lift<1；BH 小 n / Bonferroni K=6-8 大 n，单 edge K=1 非 §44v1 的 20）。
 - [ ] R7 edge_type 结构化（selection-falsified 带 note + S165 UI edge_type 主标签）。
-- [ ] R8 lift_to_multiplier 接线生产（days<60→×0.5 + _apply_evaluation_layer + strategy_funnel_registry 替代直读冻结）。
+- [x] R8 lift_to_multiplier 接线生产（days<60→×0.5 + _apply_evaluation_layer + strategy_funnel_registry 替代直读冻结）。
 - [ ] gap §44v2 run（re-run first_board_premium_baseline.py --days 42 → 两个 verdict：event population K=1 t-test + selection K=small BH）→ 42 天结构性 underpowered，落 Recorder。
 - [ ] pytest 单测全绿 + gap run 两复现判据（verdict-reproducibility 恒成功 + data-revalidation as_of hash 比）。
 

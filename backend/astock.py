@@ -39,7 +39,6 @@ from data.sources.tencent import (  # noqa: F401,E402
 from data.transport import eastmoney_get as em_get  # noqa: F401,E402
 from data.sources.eastmoney import (  # noqa: F401,E402
     _numf,
-    _report_session,
     _REPORT_API,
     _PDF_TPL,
     _DATACENTER_URL,

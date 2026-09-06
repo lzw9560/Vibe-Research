@@ -5,7 +5,12 @@
 秒板（prior LOW），但用户选"等 live"——每日累积实时无历史的盘中微结构源，30-60 天
 后用 §44v2 框架复测。本模块只**累积**，不出 edge 结论。
 
-累积三源（date-keyed，不 prune）：
+累积四源（date-keyed，不 prune）：
+- **hithink 集合竞价快照**（auction_volume_ratio 竞价量比，09:15-09:25 live 演化 +
+  09:25 final match 终态）——§44 reframe 标记的最未证否盘中 edge（S152/S156 证否
+  封板时间/秒板，但未证否竞价量比）。今日 only 不可补历史，不快照即丢失 →
+  `intraday_auction_snapshots`。竞价窗口取 ``live``（9:15-9:25 trajectory），
+  盘中首周期取 ``final``（守门只采一次，避免静态终态伪 trajectory）。
 - **hithink 实时排名**（skyrocket 飙升榜 / hot_stock 热股榜 / anomaly 异动榜）——
   实时**无历史**，不快照即永久丢失。每 10min 周期快照 → `intraday_ranking_snapshots`。
 - **tencent 量比 vol_ratio**（资金活跃度代理，实时点）——同周期附 hithink 快照 →
@@ -94,6 +99,34 @@ _INDEX_BAOSTOCK = (
     "CREATE INDEX IF NOT EXISTS idx_bs5_date ON baostock_5min_freeze(date)"
 )
 
+_SCHEMA_AUCTION = """CREATE TABLE IF NOT EXISTS intraday_auction_snapshots (
+    date TEXT NOT NULL,             -- YYYY-MM-DD（交易日）
+    ts TEXT NOT NULL,               -- 快照时间戳 ISO（分钟级）
+    stage TEXT NOT NULL,            -- live / final
+    code TEXT NOT NULL,             -- 6 位裸 code
+    name TEXT,
+    auction_price REAL,             -- 竞价价
+    auction_pct REAL,              -- 竞价涨跌幅 vs 昨收
+    auction_volume REAL,            -- 竞价成交量
+    auction_amount REAL,            -- 竞价成交额（元）
+    auction_unmatched REAL,         -- 未匹配量
+    auction_turnover_pct REAL,      -- 竞价换手率
+    auction_yesterday_ratio_pct REAL,  -- 竞价量 / 昨量 %
+    auction_volume_ratio REAL,      -- §44 关键：竞价量比
+    pre_close_price REAL,
+    open_price REAL,
+    last_price REAL,
+    float_market_cap REAL,
+    source_timestamp REAL,         -- 源响应组装时间戳（ms epoch）
+    auction_phase TEXT,            -- closed / live（源态）
+    data_status TEXT,              -- not_ready / ready（源态）
+    snapshot_at TEXT,
+    PRIMARY KEY (date, ts, stage, code)
+)"""
+_INDEX_AUCTION = (
+    "CREATE INDEX IF NOT EXISTS idx_auct_date_ts ON intraday_auction_snapshots(date, ts)"
+)
+
 
 def _get_conn() -> sqlite3.Connection:
     """建库 + 建三表（幂等）+ 返连接。row_factory=Row。"""
@@ -106,6 +139,8 @@ def _get_conn() -> sqlite3.Connection:
     conn.execute(_INDEX_QUOTES)
     conn.execute(_SCHEMA_BAOSTOCK)
     conn.execute(_INDEX_BAOSTOCK)
+    conn.execute(_SCHEMA_AUCTION)
+    conn.execute(_INDEX_AUCTION)
     return conn
 
 
@@ -255,6 +290,85 @@ def freeze_baostock_5min(
         conn.close()
 
 
+def save_auction_snapshots(
+    date: str, ts: str, stage: str, items: list[dict[str, Any]]
+) -> int:
+    """批量写 hithink 集合竞价快照。stage: ``live`` / ``final``。
+
+    幂等：PK(date, ts, stage, code) INSERT OR REPLACE，同 ts/stage 重跑覆盖不翻倍。
+    live 不同 ts 累积为竞价 trajectory；final 同日多 ts 是同值，由调用方用
+    ``has_auction_snapshot(date, "final")`` 守门只采一次（避免静态数据伪 trajectory）。
+    缺字段 None（不臆造）。空 items 返 0。
+    """
+    if not items:
+        return 0
+    snap_at = datetime.now().isoformat(timespec="seconds")
+    rows = []
+    for it in items:
+        code = str(it.get("code", "") or "").strip()
+        if not code:
+            continue
+        rows.append({
+            "date": date, "ts": ts, "stage": stage, "code": code,
+            "name": it.get("name"),
+            "auction_price": _to_float(it.get("auction_price")),
+            "auction_pct": _to_float(it.get("auction_pct")),
+            "auction_volume": _to_float(it.get("auction_volume")),
+            "auction_amount": _to_float(it.get("auction_amount")),
+            "auction_unmatched": _to_float(it.get("auction_unmatched")),
+            "auction_turnover_pct": _to_float(it.get("auction_turnover_pct")),
+            "auction_yesterday_ratio_pct": _to_float(it.get("auction_yesterday_ratio_pct")),
+            "auction_volume_ratio": _to_float(it.get("auction_volume_ratio")),
+            "pre_close_price": _to_float(it.get("pre_close_price")),
+            "open_price": _to_float(it.get("open_price")),
+            "last_price": _to_float(it.get("last_price")),
+            "float_market_cap": _to_float(it.get("float_market_cap")),
+            "source_timestamp": _to_float(it.get("source_timestamp")),
+            "auction_phase": it.get("auction_phase"),
+            "data_status": it.get("data_status"),
+            "snapshot_at": snap_at,
+        })
+    if not rows:
+        return 0
+    conn = _get_conn()
+    try:
+        with _DB_LOCK:
+            cur = conn.executemany(
+                """INSERT OR REPLACE INTO intraday_auction_snapshots
+                (date, ts, stage, code, name, auction_price, auction_pct,
+                 auction_volume, auction_amount, auction_unmatched,
+                 auction_turnover_pct, auction_yesterday_ratio_pct,
+                 auction_volume_ratio, pre_close_price, open_price, last_price,
+                 float_market_cap, source_timestamp, auction_phase, data_status,
+                 snapshot_at)
+                VALUES (:date, :ts, :stage, :code, :name, :auction_price, :auction_pct,
+                 :auction_volume, :auction_amount, :auction_unmatched,
+                 :auction_turnover_pct, :auction_yesterday_ratio_pct,
+                 :auction_volume_ratio, :pre_close_price, :open_price, :last_price,
+                 :float_market_cap, :source_timestamp, :auction_phase, :data_status,
+                 :snapshot_at)""",
+                rows,
+            )
+            conn.commit()
+            return cur.rowcount
+    finally:
+        conn.close()
+
+
+def has_auction_snapshot(date: str, stage: str) -> bool:
+    """当日某 stage 竞价快照是否已存在（final 守门：同日只采一次，避免静态终态
+    在每 10min 周期重复落库成伪 trajectory）。"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM intraday_auction_snapshots WHERE date=? AND stage=? LIMIT 1",
+            (date, stage),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 读取（供未来 §44v2 复测）
 # ─────────────────────────────────────────────────────────────────────────────
@@ -306,8 +420,31 @@ def load_5min_freeze(start: str, end: str) -> list[dict[str, Any]]:
         conn.close()
 
 
+def load_auctions(start: str, end: str) -> list[dict[str, Any]]:
+    """读 [start, end] 集合竞价快照（date, ts, stage, code 升序）。
+
+    供未来 §44v2 复测：竞价量比（auction_volume_ratio）trajectory。live 行为
+    不同 ts 的竞价演化；final 行为 09:25 match 终态（每只每日一行，守门只采一次）。
+    """
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            """SELECT date, ts, stage, code, name, auction_price, auction_pct,
+               auction_volume, auction_amount, auction_unmatched,
+               auction_turnover_pct, auction_yesterday_ratio_pct,
+               auction_volume_ratio, pre_close_price, open_price, last_price,
+               float_market_cap, source_timestamp, auction_phase, data_status
+               FROM intraday_auction_snapshots
+               WHERE date >= ? AND date <= ? ORDER BY date, ts, stage, code""",
+            (start, end),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def list_accumulation_dates() -> list[str]:
-    """列出有累积快照的日期（YYYY-MM-DD，升序；三表并集）。"""
+    """列出有累积快照的日期（YYYY-MM-DD，升序；四表并集）。"""
     conn = _get_conn()
     try:
         rows = conn.execute(
@@ -315,6 +452,7 @@ def list_accumulation_dates() -> list[str]:
                SELECT date FROM intraday_ranking_snapshots
                UNION SELECT date FROM intraday_quote_snapshots
                UNION SELECT date FROM baostock_5min_freeze
+               UNION SELECT date FROM intraday_auction_snapshots
                ) ORDER BY date"""
         ).fetchall()
         return [r["date"] for r in rows]

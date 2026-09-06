@@ -7,11 +7,12 @@
 """秒板 superset（首 bar 涨停, first_lock_idx==0）31 天 net 验证——补 S156 的 13 天。
 复用 H2 cache (h2_features_cache_full.json, 31 天) + baostock kline + simulate_holding net。
 S156 秒板 13 天 1.312x hint → 31 天首 bar 涨停 superset 验证是否 robust。"""
-import json, sys
+import datetime, json, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
+from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 
 H2_CACHE = ROOT / ".vibe-research" / "h2_features_cache_full.json"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
@@ -19,7 +20,12 @@ ROUND_TRIP_COST = 0.70
 PARAMS = (-3.0, 8.0, 3)
 
 feats = json.loads(H2_CACHE.read_text())
+# NOTE: h2_features_cache_full（5min kline 派生，list_of_dicts）无对应 schema — 派生 artifact
 bars_cache = json.loads(KLINE.read_bytes())
+# S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
+validate_or_reject("baostock_kline",
+                   [b for bars in bars_cache.values() for b in bars],
+                   as_of=datetime.date.today().isoformat())
 print(f"H2 cache: {len(feats)} features across {len(set(f['date'] for f in feats))} 日\n")
 
 obs = []

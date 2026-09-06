@@ -20,7 +20,7 @@
 | hithink skyrocket/hot_stock/anomaly | 异动排名 trajectory | **实时无历史，未累积** | **新建周期快照**（10min） |
 | tencent fetch_raw vol_ratio | 量比 trajectory（资金活跃度代理） | **实时点，未累积** | **新建周期快照**（10min，附 hithink 同周期） |
 | baostock 5min（frequency="5"） | 秒板 / 封板时间派生 | 多年历史可回补（S152 已用）；当日 bar T+1 lag | **新建次日冻结**（09:00 冻结 prev_trading_date 涨停股 5min，bars 稳定） |
-| 竞价量比 9:15-9:25 | 集合竞价量 / 量比 | **无源**：akshare/tencent/astock 均无；hithink 有 auction 快照端点但**未接线**（hithink_src 仅 5 端点） | **flag：needs new source integration**，不实现 |
+| 竞价量比 9:15-9:25 | 集合竞价量 / 量比 | **已接线**（2026-09-07 follow-up）：hithink `market.auction-snapshot`（`/api/a-share/auction/snapshot`）端点已接入 `hithink_src.auction_snapshot(codes, stage)`，累积到 `intraday_auction_snapshots` 表。竞价窗口取 `stage=live`（09:15-09:25 演化），盘中首周期取 `stage=final`（09:25 match 终态，守门只采一次）。`auction_volume_ratio`（竞价量比）= §44 reframe 最未证否盘中 edge。原 spec 时未接线，现已闭合 |
 
 ## 3. 需求清单
 
@@ -69,3 +69,31 @@
 - [私有数据隔离] 全部写 `.vibe-research/intraday_accumulation/`（vr_paths.resolve_data_dir 子目录，gitignored）。✓
 - [防封] 涨停池 codes 走 hithink（非 em_get）；hithink 走 circuit_breaker；tencent urllib 免费不限流。✓
 - §44 verdict：本 spec **不出 edge 结论**，仅累积。prior LOW（S152 H2 lift=0.7843 / S156 秒板）已标注。✓
+
+## 7. 实现补遗：竞价量比接线（2026-09-07）
+
+原 §2 表"竞价量比"行标 `needs new source integration, 不实现`，本 follow-up 闭合：
+
+- **端点**：hithink `market.auction-snapshot` → `/api/a-share/auction/snapshot`
+  （CLI dist `contracts/remote-capabilities.js` 第 633 行；skill `hithink-finance-market/references/market-auction-snapshot.md`）
+- **参数**：`thscodes`（≤100/批，逗号分隔，必填）+ `stage`（`live`|`final`，默认 `final`）。
+  今日 only，不可补历史；无分页。
+- **实测响应 schema**（2026-09-07 真请求 600519/000001 证实）：
+  顶层 `timestamp`/`auction_phase`(`closed`/`live`)/`data_status`(`not_ready`/`ready`)/`total`/`item[]`；
+  每只含 `auction_price`/`auction_pct`/`auction_volume`/`auction_amount`/`auction_unmatched`/
+  `auction_turnover_pct`/`auction_yesterday_ratio_pct`/**`auction_volume_ratio`**（§44 关键信号）/
+  `pre_close_price`/`open_price`/`last_price`/`float_market_cap`。
+- **接线**：
+  - `hithink_src.auction_snapshot(codes, stage="final")`（>100 自动分批，失败返部分不抛）
+  - `intraday_accumulation_store.intraday_auction_snapshots` 表 + `save_auction_snapshots`/
+    `load_auctions`/`has_auction_snapshot`（final 守门避免静态终态伪 trajectory）
+  - `vr_paths.is_auction_time`（09:15-09:25 交易日）
+  - `_execute_intraday_microstructure_snapshot`：竞价窗口（`is_auction_time`）采 `live`（跳过
+    排名/量比，盘前未开盘无意义），盘中首周期采 `final`（守门只一次）；竞价 codes 取
+    `prev_trading_date` 涨停池（昨日涨停 = 今日竞价 continuation 候选集，§44 reframe 候选）。
+- **诚实限制**：现有 cron `*/10 9-15` 在竞价窗口（09:15-09:25）仅命中 09:20 一个 live tick
+  （trajectory 偏稀）。如需更密竞价演化，需独立 cron（如 `*/2 9-9`）+ `is_auction_time` 门控——
+  follow-up，不在本 follow-up 范围。非交易日源返 `phase=closed, status=not_ready`，item 仍返
+  昨日终态——`data_status` 字段透传每行，累积/复测时按其过滤，不臆造当日竞价。
+- **测试**：`test_s104::TestAuctionSnapshot`（6）+ `test_s167` auction store/executor（11）全绿；
+  live 真请求 3/3 codes 返 `auction_volume_ratio=1.7089`（茅台）确认接线正确。

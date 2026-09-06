@@ -7,14 +7,19 @@
 """验证窗口假设：涨停股隔夜 gap（D 收盘→D+1 开盘）vs D+1 intraday（开→收）vs path（D+1 开→D+4）。
 若隔夜 gap 正 + path 负 = 我框架测错窗口（miss 隔夜正 edge，只测反转负段）。"""
 import bisect
-import json, sqlite3, sys, statistics
+import datetime, json, sqlite3, sys, statistics
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding
+from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 cache = json.loads(KLINE.read_bytes())
+# S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
+validate_or_reject("baostock_kline",
+                   [b for bars in cache.values() for b in bars],
+                   as_of=datetime.date.today().isoformat())
 
 # build trading calendar for date-adjacency check (MEDIUM #3)
 _all_dates = sorted({b["date"] for bars in cache.values() for b in bars})

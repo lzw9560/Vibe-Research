@@ -8,10 +8,12 @@
 # §44 overreach=把"无selection edge"外推成"无edge"(外推禁令违反)
 """decisive: gap-window lift（因子是否预测隔夜 gap）——6 专家审计 recommended_next_test。
 premium_baseline 899 samples（D 收盘→D+1 开盘 gap）+ gene_scores total_score + 过滤 D 日一字板 + 0.70% cost。"""
-import json, sqlite3, sys, statistics
+import datetime, json, sqlite3, sys, statistics
 from pathlib import Path
 from collections import defaultdict
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
+sys.path.insert(0, str(ROOT / "backend"))
+from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 PREMIUM = ROOT / ".vibe-research" / "first_board_premium_baseline.json"
@@ -25,8 +27,13 @@ def is_one_word_d(bar):
     return abs(h-l) <= TOL and abs(o-c) <= TOL and abs(h-o) <= TOL
 
 prem = json.loads(PREMIUM.read_text())
+# NOTE: first_board_premium_baseline.json（first_board_premium_baseline 派生产物）无对应 schema — 派生 artifact
 samples = prem["samples"]
 cache = json.loads(KLINE.read_bytes())
+# S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
+validate_or_reject("baostock_kline",
+                   [b for bars in cache.values() for b in bars],
+                   as_of=datetime.date.today().isoformat())
 conn = sqlite3.connect(str(DB), timeout=10)
 # gene_scores total_score per (date, code)
 gs = {}

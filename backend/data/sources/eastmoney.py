@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""S008 东财源（em_get 系；研报/热门概念走直 requests 待统一）。
+"""S008 东财源（em_get 系；研报/热门概念已统一走 em_get）。
 
 从 ``astock.py`` 迁出。取数逻辑一字不改，仅换文件组织。
 
-**防封底线（CLAUDE.md §1.2）**：东财 push2/push2ex/push2his/datacenter 端点全部走
-``data.transport.eastmoney_get``（限流 QPS≤2 + 熔断 + 直连/代理探测），**不裸调 requests**。
-仅 reportapi（研报）/ emappdata（热门概念）走直 requests（待统一 em_get）；
+**防封底线（CLAUDE.md §1.2）**：东财 push2/push2ex/push2his/datacenter/reportapi/emappdata
+端点全部走 ``data.transport.eastmoney_get``（限流 QPS≤2 + 熔断 + 直连/代理探测），
+**不裸调 requests**。S164 R3：研报（reportapi，GET）/热门概念（emappdata，POST+json）
+已从直 requests 迁 em_get——统一防封路径。
 np-anotice（公告）已迁 em_get——S148 审计：st_play_radar/first_board_filter 遍历
 ST/首板候选每日数百次裸调 → §3 防封底线违规，公告不再例外（原"非封 IP 域"假设被放大证伪）。
 
@@ -13,8 +14,9 @@ ST/首板候选每日数百次裸调 → §3 防封底线违规，公告不再�
 - em_get 系：``em_zt_topic_pool``、``market_turnover_rank``、``eastmoney_datacenter``
   及 8 下游（margin_trading / block_trade / holder_num_change / dividend_history /
   stock_fund_flow_120d / dragon_tiger_board / lockup_expiry / concept_blocks / industry_comparison）
-- 直 requests 系：``eastmoney_reports`` / ``eastmoney_industry_reports`` / ``pdf_url``
-  / ``announcements`` / ``hot_concepts``
+  + ``eastmoney_reports`` / ``eastmoney_industry_reports`` / ``announcements`` /
+  ``hot_concepts``（S164 R3 迁入；hot_concepts 走 POST+json）
+- ``pdf_url``：纯 URL 拼接，无请求
 - 五档买卖盘：``bids``（push2/push2delay 双 host 降级，走 em_get 限流；S085 D2）
 - 同花顺交叉验证源：``ths_limit_up_pool``（涨停揭秘，dataapi 域，非东财防封域；
   走 ``_ths_get`` 限流——独立 ths breaker + 0.5s 间隔 + 抖动，不裸调 requests；
@@ -40,24 +42,16 @@ _PDF_TPL = "https://pdf.dfcfw.com/pdf/H3_{info_code}_1.pdf"
 _PUSH2_UT = "fa5fd1943c7b386f172d6893dbbd1"
 
 
-_report_session_cache = None
-
-
-def _report_session():
-    """研报 Session（M20 修复：模块级惰性构建+复用，与 _em_session 模式一致）。"""
-    global _report_session_cache
-    import requests  # 輕依赖，随后端一起装
-
-    if _report_session_cache is None:
-        s = requests.Session()
-        s.headers.update({"User-Agent": UA, "Referer": "https://data.eastmoney.com/"})
-        _report_session_cache = s
-    return _report_session_cache
+# 研报请求头（原 _report_session 设的 UA + Referer，迁 em_get 后显式传入保持一致）
+_REPORT_HEADERS = {"User-Agent": UA, "Referer": "https://data.eastmoney.com/"}
 
 
 def eastmoney_reports(code: str, max_pages: int = 3) -> list[dict]:
-    """按个股代码拉研报列表（qType=0）。"""
-    session = _report_session()
+    """按个股代码拉研报列表（qType=0）。
+
+    S164 R3：走 ``em_get`` 限流/熔断/代理探测防封（原 ``_report_session().get()`` 裸调）。
+    em_get 自带 0.3s+抖动串行限流，去掉原手写 ``time.sleep(0.3)``（避免双重节流）。
+    """
     out: list[dict] = []
     for page in range(1, max_pages + 1):
         params = {
@@ -68,7 +62,7 @@ def eastmoney_reports(code: str, max_pages: int = 3) -> list[dict]:
             "orgCode": "", "code": code, "rcode": "",
             "p": str(page), "pageNum": str(page), "pageNumber": str(page),
         }
-        r = session.get(_REPORT_API, params=params, timeout=30)
+        r = em_get(_REPORT_API, params=params, headers=_REPORT_HEADERS, timeout=30)
         d = r.json()
         rows = d.get("data") or []
         if not rows:
@@ -76,15 +70,16 @@ def eastmoney_reports(code: str, max_pages: int = 3) -> list[dict]:
         out.extend(rows)
         if page >= (d.get("TotalPage", 1) or 1):
             break
-        time.sleep(0.3)
     return out
 
 
 def eastmoney_industry_reports(keywords: list[str] | None = None, days: int = 90, max_pages: int = 3) -> list[dict]:
-    """按行业拉研报（qType=1）——适合产业链 / 主题级检索。keywords 在标题上过滤。"""
+    """按行业拉研报（qType=1）——适合产业链 / 主题级检索。keywords 在标题上过滤。
+
+    S164 R3：走 ``em_get`` 限流/熔断/代理探测防封（原 ``_report_session().get()`` 裸调）。
+    """
     from datetime import date, timedelta
 
-    session = _report_session()
     end = date.today()
     begin = end - timedelta(days=days)
     out: list[dict] = []
@@ -96,12 +91,11 @@ def eastmoney_industry_reports(keywords: list[str] | None = None, days: int = 90
             "pageNo": str(page), "fields": "", "qType": "1",
             "orgCode": "", "code": "", "rcode": "",
         }
-        r = session.get(_REPORT_API, params=params, timeout=30)
+        r = em_get(_REPORT_API, params=params, headers=_REPORT_HEADERS, timeout=30)
         rows = r.json().get("data") or []
         if not rows:
             break
         out.extend(rows)
-        time.sleep(0.3)
     if keywords:
         out = [r for r in out if any(k in r.get("title", "") for k in keywords)]
     return out
@@ -806,15 +800,17 @@ def concept_blocks(code: str, raise_on_failure: bool = False) -> dict:
 
 
 def hot_concepts(code: str) -> list[dict]:
-    """个股当下被市场归到哪些概念在炒（东财热门概念命中，按热度降序）。"""
-    import requests
+    """个股当下被市场归到哪些概念在炒（东财热门概念命中，按热度降序）。
 
+    S164 R3：走 ``em_get``（method="POST"+json）限流/熔断/代理探测防封
+    （原 ``requests.post()`` 裸调 emappdata，绕过防封 backbone 有封 IP 风险）。
+    """
     try:
         prefix = "SH" if code.startswith("6") else "SZ"
-        r = requests.post(
+        r = em_get(
             "https://emappdata.eastmoney.com/stockrank/getHotStockRankList",
             json={"appId": "appId01", "globalId": "786e4c21-70dc-435a-93bb-38", "srcSecurityCode": prefix + code},
-            headers={"User-Agent": UA}, timeout=10)
+            headers={"User-Agent": UA}, timeout=10, method="POST")
         data = r.json().get("data") or []
     except Exception:
         return []

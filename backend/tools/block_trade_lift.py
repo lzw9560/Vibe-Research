@@ -9,12 +9,14 @@ target：D open→exit net（扣 0.70% round-trip cost），day_paired lift vs �
   - block_trade_raw.json（eastmoney RPT_DATA_BLOCKTRADE 市场全量, 20000 records, 136 dates）
   - baostock_kline_cache.json（5226 stocks, daily K-line）
 """
-import json, time, statistics, math
+import datetime, json, sys, time, statistics, math
 from pathlib import Path
 from collections import defaultdict
 import random
 
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
+sys.path.insert(0, str(ROOT / "backend"))
+from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 BLOCK = ROOT / ".vibe-research" / "block_trade_raw.json"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 COST = 0.70
@@ -34,11 +36,16 @@ print("=" * 72)
 t0 = time.time()
 print("Loading block trades...", end=" ", flush=True)
 bt_raw = json.loads(BLOCK.read_bytes())
+# NOTE: block_trade_raw（eastmoney RPT_DATA_BLOCKTRADE，list_of_dicts）无对应 schema — 待新建
 print(f"{len(bt_raw)} records ({time.time()-t0:.1f}s)")
 
 print("Loading kline cache...", end=" ", flush=True)
 cache = json.loads(KLINE.read_bytes())
 print(f"{len(cache)} stocks ({time.time()-t0:.1f}s)")
+# S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
+validate_or_reject("baostock_kline",
+                   [b for bars in cache.values() for b in bars],
+                   as_of=datetime.date.today().isoformat())
 
 # ── 2. Aggregate by (date, code) — most discounted ─────────────────────────
 print("\nAggregating block trades by (date, code)...")

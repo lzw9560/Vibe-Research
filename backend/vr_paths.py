@@ -95,6 +95,12 @@ INTRADAY_PERIODS: list[tuple[_time, _time]] = [
     (_time(13, 1), _time(15, 5)),
 ]
 
+#: A 股集合竞价窗口（S167 竞价累积）。09:25 为集合 match 时刻，含在窗口内
+#: （live 9:15-9:25 演化 + 9:25 match 终态）。与 INTRADAY_PERIODS 仅在 9:25 边界相接。
+AUCTION_PERIODS: list[tuple[_time, _time]] = [
+    (_time(9, 15), _time(9, 25)),
+]
+
 
 def is_intraday_time(now: _dt | None = None) -> bool:
     """是否在盘中交易时段（交易日 + 09:25-11:30 / 13:01-15:05）。
@@ -108,6 +114,21 @@ def is_intraday_time(now: _dt | None = None) -> bool:
         return False
     t = now.time()
     return any(s <= t <= e for s, e in INTRADAY_PERIODS)
+
+
+def is_auction_time(now: _dt | None = None) -> bool:
+    """是否在集合竞价窗口（交易日 + 09:15-09:25）。
+
+    S167 竞价累积：竞价是 §44 reframe 标记的最未证否盘中 edge（S152/S156 证否
+    封板时间/秒板，但未证否竞价量比）。供 intraday_microstructure_snapshot 在
+    09:15-09:25 也放行采集 live 竞价演化（与 is_intraday_time 09:25+ 不重叠，
+    仅 9:25 边界相接）。非交易日返 False。
+    """
+    now = now or _dt.now()
+    if not is_trading_day(now.date()):
+        return False
+    t = now.time()
+    return any(s <= t <= e for s, e in AUCTION_PERIODS)
 
 
 def last_trading_date(d: date | None = None) -> date:

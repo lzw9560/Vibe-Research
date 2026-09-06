@@ -1583,65 +1583,102 @@ class TaskExecutor:
     # ===========================================================================
 
     def _execute_intraday_microstructure_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """S167 盘中微结构周期快照——每 10min 快照 hithink 排名 + tencent 量比 → 累积 DB。
+        """S167 盘中微结构周期快照——每 10min 快照 hithink 排名 + tencent 量比 +
+        集合竞价 → 累积 DB。
 
-        cron `*/10 9-15 * * 0-4` 触发，executor 内 ``vr_paths.is_intraday_time`` 门控
-        （09:25-11:30 / 13:01-15:05 外 no-op，防封 + 省请求）。涨停池 codes 走 hithink
-        ``limit_up_pool``（非 em_get 防封）；hithink 端点走 circuit_breaker，失败记
-        data_status=degraded 不抛（S120：skyrocket/hot_stock/anomaly_list 失败 raise
-        RuntimeError，此处 catch）。tencent urllib 免费不限流。
+        cron `*/10 9-15 * * 0-4` 触发，executor 内 ``vr_paths.is_intraday_time``
+        （09:25-11:30 / 13:01-15:05）∪ ``is_auction_time``（09:15-09:25）门控——
+        两窗口外 no-op（防封 + 省请求）。竞价窗口（盘前未开盘）只采竞价 live 演化，
+        跳过排名/量比（无意义）；盘中窗口采排名 + 量比 + 竞价 final 终态（守门只采
+        一次，避免静态终态伪 trajectory）。涨停池 codes 走 hithink ``limit_up_pool``
+        （非 em_get 防封）；hithink 端点走 circuit_breaker，失败记 data_status=degraded
+        不抛（S120：skyrocket/hot_stock/anomaly_list 失败 raise RuntimeError，此处 catch）。
+        tencent urllib 免费不限流。
+
+        竞价 codes 取 ``prev_trading_date`` 涨停池（昨日涨停 = 今日竞价 continuation
+        候选集，§44 reframe 标记的最未证否盘中 edge）；盘中 ranking/quote codes 取
+        ``last_trading_date``（今日 forming 涨停池，今日空属正常）。
         """
-        from vr_paths import is_intraday_time
-        if not is_intraday_time():
-            return {"status": "skipped", "reason": "非盘中交易时段"}
-
         from datetime import datetime as _dt
+        from vr_paths import is_intraday_time, is_auction_time, last_trading_date_str, prev_trading_date_str
+        now = _dt.now()
+        intraday = is_intraday_time(now)
+        auction = is_auction_time(now)
+        if not intraday and not auction:
+            return {"status": "skipped", "reason": "非盘中交易时段且非竞价时段"}
+
         from data.sources import hithink_src
         from data.sources.tencent import fetch_raw
         from data.intraday_accumulation_store import (
-            save_ranking_snapshots, save_quote_snapshots,
+            save_ranking_snapshots, save_quote_snapshots, save_auction_snapshots,
+            has_auction_snapshot,
         )
-        from vr_paths import last_trading_date_str
 
         date = last_trading_date_str()
-        ts = _dt.now().strftime("%Y-%m-%dT%H:%M")
+        ts = now.strftime("%Y-%m-%dT%H:%M")
         degraded: list[str] = []
 
-        # 1. hithink 三榜（飙升/热股/异动）——实时无历史，不快照即丢失
+        # 1. hithink 三榜（飙升/热股/异动）——仅盘中（竞价窗口盘前未开盘，无意义）
         ranking_items: dict[str, list[dict]] = {}
-        for source, fn in (
-            ("skyrocket", hithink_src.skyrocket),
-            ("hot_stock", hithink_src.hot_stock),
-            ("anomaly", hithink_src.anomaly_list),
-        ):
-            try:
-                ranking_items[source] = fn()
-            except RuntimeError as e:
-                degraded.append(f"{source}: {str(e)[:60]}")
-                ranking_items[source] = []
-            except Exception as e:  # noqa: BLE001
-                degraded.append(f"{source}: {type(e).__name__}")
-                ranking_items[source] = []
+        if intraday:
+            for source, fn in (
+                ("skyrocket", hithink_src.skyrocket),
+                ("hot_stock", hithink_src.hot_stock),
+                ("anomaly", hithink_src.anomaly_list),
+            ):
+                try:
+                    ranking_items[source] = fn()
+                except RuntimeError as e:
+                    degraded.append(f"{source}: {str(e)[:60]}")
+                    ranking_items[source] = []
+                except Exception as e:  # noqa: BLE001
+                    degraded.append(f"{source}: {type(e).__name__}")
+                    ranking_items[source] = []
+            for source, items in ranking_items.items():
+                save_ranking_snapshots(date, ts, source, items)
+        else:
+            ranking_items = {"skyrocket": [], "hot_stock": [], "anomaly": []}
 
-        for source, items in ranking_items.items():
-            save_ranking_snapshots(date, ts, source, items)
-
-        # 2. tencent 量比——涨停池 codes ∪ 排名 codes，一次批量
+        # 2. tencent 量比——涨停池 codes ∪ 排名 codes，一次批量（仅盘中）
+        quotes: dict[str, dict] = {}
         zt_codes: list[str] = []
-        try:
-            zt_codes = [r["code"] for r in hithink_src.limit_up_pool(date) if r.get("code")]
-        except Exception:  # noqa: BLE001 — hithink 涨停池失败不影响排名快照
-            pass
-        rank_codes = {it["code"] for items in ranking_items.values() for it in items if it.get("code")}
-        codes = list({*zt_codes, *rank_codes})
-        quotes = fetch_raw(codes) if codes else {}
-        save_quote_snapshots(date, ts, quotes)
+        if intraday:
+            try:
+                zt_codes = [r["code"] for r in hithink_src.limit_up_pool(date) if r.get("code")]
+            except Exception:  # noqa: BLE001 — hithink 涨停池失败不影响排名快照
+                pass
+            rank_codes = {it["code"] for items in ranking_items.values() for it in items if it.get("code")}
+            quote_codes = list({*zt_codes, *rank_codes})
+            quotes = fetch_raw(quote_codes) if quote_codes else {}
+            save_quote_snapshots(date, ts, quotes)
 
-        ok = any(ranking_items.values()) or bool(quotes)
+        # 3. hithink 集合竞价快照——§44 reframe 标记的最未证否盘中 edge（auction_volume_ratio）
+        #    竞价窗口取 live（9:15-9:25 trajectory），盘中首周期取 final（09:25 match 终态，
+        #    守门只采一次避免静态终态伪 trajectory）。codes 取 prev 涨停池（continuation 候选集）。
+        auction_stage = "live" if (auction and not intraday) else "final"
+        auction_items: list[dict] = []
+        fetch_final = auction_stage == "final" and not has_auction_snapshot(date, "final")
+        if auction or fetch_final:
+            # 竞价 codes：prev_trading_date 涨停池（昨日涨停 = 今日竞价 continuation 候选）
+            auction_codes: list[str] = []
+            try:
+                auction_codes = [r["code"] for r in hithink_src.limit_up_pool(prev_trading_date_str())
+                                 if r.get("code")]
+            except Exception as e:  # noqa: BLE001 — 涨停池失败则竞价 codes 空，跳过竞价
+                degraded.append(f"auction_pool: {type(e).__name__}")
+            if auction_codes:
+                try:
+                    auction_items = hithink_src.auction_snapshot(auction_codes, stage=auction_stage)
+                except Exception as e:  # noqa: BLE001
+                    degraded.append(f"auction_{auction_stage}: {type(e).__name__}")
+            save_auction_snapshots(date, ts, auction_stage, auction_items)
+
+        ok = any(ranking_items.values()) or bool(quotes) or bool(auction_items)
         return {
             "date": date, "ts": ts,
             "rankings": {s: len(v) for s, v in ranking_items.items()},
             "quotes": len(quotes), "zt_codes": len(zt_codes),
+            "auction": {"stage": auction_stage, "count": len(auction_items)},
             "data_status": "degraded" if degraded else ("ok" if ok else "empty"),
             "degraded_sources": degraded,
         }

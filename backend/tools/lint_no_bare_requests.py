@@ -12,14 +12,12 @@ eastmoney/tencent host 绕过防封 backbone，有 IP 封禁风险。
     # exit 0 = 无违规（或仅 known violations）
     # exit 1 = 发现新违规
 
-已知违规（待统一 em_get，advisory 不阻断 CI）：
-- ``data/sources/eastmoney.py`` :: ``eastmoney_reports`` / ``eastmoney_industry_reports``
-  （reportapi.eastmoney.com，走 ``_report_session().get()``）
-- ``data/sources/eastmoney.py`` :: ``hot_concepts``
-  （emappdata.eastmoney.com，走 ``requests.post()``）
+已知违规：无（S164 R3 已清零——研报 reportapi GET / 热门概念 emappdata POST
+均迁 ``em_get`` 防封路径，原 3 处 advisory 全部 resolved）。
 
 白名单（em_get 实现本身 / proxy health-check）：
-- ``data/transport.py`` —— em_get 限流/熔断/代理路径的内部 session.get
+- ``data/transport.py`` —— em_get 限流/熔断/代理路径的内部 session.get/post
+  （含 S164 R3 新增 POST+json 支持，经 ``_em_request`` 分发）
 - ``proxy_pool.py`` —— proxy 健康检查裸调 push2his（deferred optional，by design）
 """
 
@@ -42,12 +40,10 @@ WHITELIST_FILES = {
     "proxy_pool.py",
 }
 
-# 已知违规函数名（待统一 em_get，advisory 不阻断 CI）
-KNOWN_VIOLATION_FUNCS = {
-    "eastmoney_reports",
-    "eastmoney_industry_reports",
-    "hot_concepts",
-}
+# 已知违规函数名（待统一 em_get，advisory 不阻断 CI）。
+# S164 R3：原 3 处（eastmoney_reports / eastmoney_industry_reports / hot_concepts）
+# 已全部迁 em_get，此集合清空——后续若再现裸调即按新违规 fail。
+KNOWN_VIOLATION_FUNCS: set[str] = set()
 
 
 class _BareRequestsFinder(ast.NodeVisitor):

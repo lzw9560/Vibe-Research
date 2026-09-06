@@ -64,6 +64,7 @@ _EP_HOT_STOCK = "/api/a-share/special-data/hot-stock-list"
 _EP_ANOMALY_LIST = "/api/a-share/special-data/anomaly-analysis-list"
 _EP_ANOMALY_STOCK = "/api/a-share/special-data/anomaly-analysis-stock"
 _EP_LIMIT_UP_POOL = "/api/a-share/special-data/limit-up-pool"  # 涨停池（按历史日期）
+_EP_AUCTION_SNAPSHOT = "/api/a-share/auction/snapshot"  # 集合竞价快照（今日 only，不可补历史）
 
 # 估值快照 5min TTL 缓存（盘中估值不变，省请求）
 _valuation_cache: dict[tuple[str, ...], tuple[float, dict[str, dict]]] = {}
@@ -313,6 +314,74 @@ def limit_up_pool(date_str: str) -> list[dict]:
                 row["lbc"] = it.get(k)
                 break
         out.append(row)
+    return out
+
+
+def auction_snapshot(codes: list[str], stage: str = "final") -> list[dict]:
+    """集合竞价快照（今日 only，不可补历史）——§44 reframe 标记的最未证否盘中 edge。
+
+    竞价量比（``auction_volume_ratio``）是 S152/S156 证否封板时间/秒板后仍未证否的
+    盘中维度。本函数把 hithink ``/api/a-share/auction/snapshot`` 端点接线进项目
+    （S167 spec §2 表 "竞价量比 9:15-9:25" 行原标 "needs new source integration"）。
+
+    thscodes ≤100/批（endpoint 硬限 "at most 100 raw tokens"），超出自动分批。
+    stage: ``live``（09:15-09:25 实时竞价演化，orders 可撤/不可撤两段）|
+    ``final``（09:25 集合 match 终态，开盘价确定）。返每只归一 dict，含：
+
+    - ``auction_volume_ratio``（§44 关键信号：竞价量比）
+    - ``auction_price`` / ``auction_pct``（竞价价 / 竞价涨跌幅 vs 昨收）
+    - ``auction_volume`` / ``auction_amount`` / ``auction_unmatched``（竞价量/额/未匹配）
+    - ``auction_turnover_pct`` / ``auction_yesterday_ratio_pct``（竞价换手 / 竞价量占昨量）
+    - ``pre_close_price`` / ``open_price`` / ``last_price`` / ``float_market_cap``
+    - ``source_timestamp`` / ``auction_phase`` / ``data_status``（源态透传，诚实标注：
+      非交易日 ``phase=closed, status=not_ready``，item 仍返昨日终态——累积时由调用方
+      按 ``data_status`` 过滤/标注，不臆造当日竞价）
+
+    hithink 失败/熔断/Key 缺 → 本批跳过返已取部分（最终可能 []），不抛（调用方降级
+    记 data_status=degraded）。返字段缺值 None（不臆造）。
+    """
+    if not codes or stage not in ("live", "final"):
+        return []
+    out: list[dict[str, Any]] = []
+    meta: dict[str, Any] = {}  # 顶层 timestamp/auction_phase/data_status（首批取，透传每行）
+    for i in range(0, len(codes), 100):
+        batch = codes[i:i + 100]
+        thscodes = ",".join(_to_thscode(c) for c in batch)
+        data = _http_get(
+            _EP_AUCTION_SNAPSHOT,
+            {"thscodes": thscodes, "stage": stage},
+            _TIMEOUT_SPECIAL,
+        )
+        if data is None:
+            continue  # 本批失败，下批继续（部分降级，不整体抛）
+        if not meta:
+            meta = {k: data.get(k) for k in ("timestamp", "auction_phase", "data_status")
+                    if k in data}
+        for it in _items(data):
+            ths = it.get("thscode") or it.get("ticker") or ""
+            bare = _strip_thscode(ths) if "." in str(ths) else str(ths)
+            if not bare:
+                continue
+            out.append({
+                "code": bare,
+                "name": it.get("name", ""),
+                "stage": stage,
+                "auction_price": it.get("auction_price"),
+                "auction_pct": it.get("auction_pct"),
+                "auction_volume": it.get("auction_volume"),
+                "auction_amount": it.get("auction_amount"),
+                "auction_unmatched": it.get("auction_unmatched"),
+                "auction_turnover_pct": it.get("auction_turnover_pct"),
+                "auction_yesterday_ratio_pct": it.get("auction_yesterday_ratio_pct"),
+                "auction_volume_ratio": it.get("auction_volume_ratio"),
+                "pre_close_price": it.get("pre_close_price"),
+                "open_price": it.get("open_price"),
+                "last_price": it.get("last_price"),
+                "float_market_cap": it.get("float_market_cap"),
+                "source_timestamp": meta.get("timestamp"),
+                "auction_phase": it.get("auction_phase") or meta.get("auction_phase"),
+                "data_status": it.get("data_status") or meta.get("data_status"),
+            })
     return out
 
 

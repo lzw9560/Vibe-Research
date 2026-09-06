@@ -6,7 +6,8 @@
 - R2 lift_to_multiplier：lift/n/CI/robust → (status, multiplier) 纯函数，复用 judge_lift_four_states + PASS_LIFT_FLOOR
 - R5 _apply_evaluation_layer：在 funnel.py:466 card 构建后注入降权+即时处理+诚实标注
 
-降权梯度：lift<1 robust→×0.1 / 1≤lift<2→×0.5 / ≥2+CI不重叠→×1.0 / n<30→×1.0 探索性
+降权梯度：lift<1 robust+days≥60→×0.1 / 1≤lift<2→×0.5 / ≥2+CI不重叠+days≥60→×1.0 / n<30→探索性
+days_robust<60 → provisional cap ×0.5（不能 validated 也不能证否，R6 gate，R8 接线生产）
 不硬剔（tradability 硬剔保留 R2 _filter_tradability），降权维度保留采数不参与排序。
 """
 from __future__ import annotations
@@ -147,18 +148,37 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
 
 def lift_to_multiplier(
     lift: Optional[float], n: int, ci_overlap: bool = True, robust: bool = True,
+    days_robust: int = 0,
 ) -> tuple[str, float]:
-    """R2：lift/n/CI/robust → (status, multiplier) 纯函数。
+    """R2+R8：lift/n/CI/robust/days_robust → (status, multiplier) 纯函数。
 
-    复用 judge_lift_four_states 四态逻辑 + PASS_LIFT_FLOOR/PASS_LIFT_HARD_FLOOR 常量。
-    映射：lift<1.0 robust → ('劣于随机', 0.1) / 1.0≤lift<2.0 → ('未validated', 0.5) /
-    lift≥2.0 且 CI 不重叠 → ('validated', 1.0) / n<30 → ('探索性', 1.0)。
-    robust=False 时即使 lift≥2 也不判 validated（标'待复验'×1.0）。
+    §44v2 R8 接线生产：days_robust<60 → provisional cap ×0.5（非 ×1.0 全权重，
+    CLAUDE.md §1.2：seal_amount days=5 不该 ×1.0）。days<60 时不能 validated
+    （须 days≥60+lift≥2，与 verifier robust_edge 一致）也不能 劣于随机/证否
+    （须 days≥60+lift<1，R6 gate）。
+
+    映射：
+    - n<30 / lift=None → ('探索性', ×0.5 if days<60 else ×1.0)
+    - days<60: lift<1 → ('待复验', ×0.5) / 1≤lift<2 → ('未validated', ×0.5) / lift≥2 → ('待复验', ×0.5)
+    - days≥60: lift<1 robust → ('劣于随机', 0.1) / 1≤lift<2 → ('未validated', 0.5) /
+      lift≥2+CI不重叠+robust → ('validated', 1.0) / lift≥2 CI重叠/非robust → ('待复验', 1.0)
     """
+    days_sufficient = days_robust >= 60
+
     if n < 30:
-        return ("探索性", 1.0)
+        return ("探索性", 0.5 if not days_sufficient else 1.0)
     if lift is None:
-        return ("探索性", 1.0)
+        return ("探索性", 0.5 if not days_sufficient else 1.0)
+
+    if not days_sufficient:
+        # §44v2 R6: days<60 不能下定论（不能 validated 也不能证否）→ provisional cap ×0.5
+        if lift < PASS_LIFT_HARD_FLOOR:
+            return ("待复验", 0.5)   # would be 劣于随机 but days<60 → 不能证否
+        if lift >= PASS_LIFT_FLOOR:
+            return ("待复验", 0.5)   # would be validated but days<60 → 不能 validated
+        return ("未validated", 0.5)  # 1≤lift<2 → ×0.5（cap 不变）
+
+    # days≥60: existing logic（robust/CI 仍生效）
     if lift < PASS_LIFT_HARD_FLOOR and robust:
         return ("劣于随机", 0.1)
     if lift >= PASS_LIFT_FLOOR and not ci_overlap and robust:
@@ -175,10 +195,12 @@ def _apply_evaluation_layer(
     """R5：在 funnel.py:466（card 构建循环后、return FunnelResult 前）注入评价层。
 
     三步：
-    (1) 即时处理：turnover robust<1 → score_weight×0.1 + status='demoted'（踢出排序留审计）；
-        gene_score 存在 → ×0.1 + status='unranked'（保留采数不参与排序）
+    (1) 即时处理：turnover/gene 维度经 lift_to_multiplier 得降权 → score_weight×mult + status
     (2) 降权梯度：每卡按命中维度查 DIMENSION_LIFT_REGISTRY + lift_to_multiplier 映射
     (3) 诚实标注：构建 evaluation_summary 挂 FunnelResult
+
+    R8 接线生产：turnover/gene 用 lift_to_multiplier(lift, n, days_robust=dim.days_robust)
+    替代直读 frozen weight_multiplier（CLAUDE.md §1.2 P0）。days_robust<60 → provisional cap ×0.5。
 
     返 (mutated_cards, evaluation_summary)。函数签名遵循 _filter_tradability 范式，
     复用 attach_first_board_analysis post-hoc card-mutation 模式（不改 build_diagnosis_card 参数）。
@@ -188,22 +210,31 @@ def _apply_evaluation_layer(
 
     for card in cards:
         code = getattr(card, "code", None) or ""
-        # (1) 即时处理
+        # (1) 即时处理：lift_to_multiplier 替代直读 frozen weight_multiplier（R8 接线）
         demoted_dims: list[str] = []
         score_weight = 1.0
-        # turnover：activity[code].turnover_pct 存在 + turnover 维度 robust<1 → ×0.1 demoted
+        # turnover：activity[code].turnover_pct 存在 → 查 lift_to_multiplier 得降权
         act = activity.get(code, {}) if isinstance(activity, dict) else {}
         turnover_pct = act.get("turnover_pct") if isinstance(act, dict) else None
-        if turnover_pct is not None and turnover_dim and turnover_dim.lift is not None \
-                and turnover_dim.lift < PASS_LIFT_HARD_FLOOR and turnover_dim.days_robust >= 30:
-            score_weight *= turnover_dim.weight_multiplier  # ×0.1
-            demoted_dims.append("turnover")
+        if turnover_pct is not None and turnover_dim and turnover_dim.lift is not None:
+            _t_status, t_mult = lift_to_multiplier(
+                turnover_dim.lift, turnover_dim.n,
+                days_robust=turnover_dim.days_robust,
+            )
+            if t_mult < 1.0:
+                score_weight *= t_mult
+                demoted_dims.append("turnover")
 
-        # gene_score：card.gene_score 存在 + gene 维度 rho≈0 → ×0.1 unranked
+        # gene_score：card.gene_score 存在 → 查 lift_to_multiplier 得降权
         gene_score = getattr(card, "gene_score", None)
-        if gene_score is not None and gene_dim and gene_dim.validation_status == "劣于随机":
-            score_weight *= gene_dim.weight_multiplier  # ×0.1
-            demoted_dims.append("gene_score")
+        if gene_score is not None and gene_dim:
+            _g_status, g_mult = lift_to_multiplier(
+                gene_dim.lift, gene_dim.n,
+                days_robust=gene_dim.days_robust,
+            )
+            if g_mult < 1.0:
+                score_weight *= g_mult
+                demoted_dims.append("gene_score")
 
         # (2) 降权梯度（breakout 等其他维度按 lift_to_multiplier 映射，此处只标 turnover/gene
         #     即时处理，其他维度降权在 compute_strategy_score 注入 multiplier）

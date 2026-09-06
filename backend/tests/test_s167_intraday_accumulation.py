@@ -46,6 +46,26 @@ _BARS = [
      "low": 5.30, "close": 5.30, "volume": 50000.0},
 ]
 
+# hithink auction_snapshot 归一后 item（schema 实测自 /api/a-share/auction/snapshot）
+_AUCTION_LIVE = [
+    {"code": "600519", "name": "贵州茅台", "stage": "live",
+     "auction_price": 1295.88, "auction_pct": -0.231, "auction_volume": 179.43,
+     "auction_amount": 23251975, "auction_unmatched": 0.57,
+     "auction_turnover_pct": 0.0014, "auction_yesterday_ratio_pct": 1.011,
+     "auction_volume_ratio": 1.7089, "pre_close_price": 1298.88,
+     "open_price": 1295.88, "last_price": 1330.0,
+     "float_market_cap": 1662608529330, "source_timestamp": 1788714324149,
+     "auction_phase": "live", "data_status": "ready"},
+    {"code": "000001", "name": "平安银行", "stage": "live",
+     "auction_price": 11.86, "auction_pct": -0.1684, "auction_volume": 5094.0,
+     "auction_amount": 6041484.0, "auction_unmatched": 236.0,
+     "auction_turnover_pct": 0.0026, "auction_yesterday_ratio_pct": 0.4609,
+     "auction_volume_ratio": 2.269, "pre_close_price": 11.88,
+     "open_price": 11.86, "last_price": 11.89,
+     "float_market_cap": 230733594542.99, "source_timestamp": 1788714324149,
+     "auction_phase": "live", "data_status": "ready"},
+]
+
 
 # ── 归一辅助 ────────────────────────────────────────────────────────────────
 
@@ -187,28 +207,117 @@ def test_freeze_baostock_5min_idempotent(monkeypatch, tmp_path):
     assert len(ias.load_5min_freeze("2026-09-05", "2026-09-05")) == 1
 
 
+# ── auction snapshots ───────────────────────────────────────────────────────
+
+def test_save_auction_snapshots_round_trip(monkeypatch, tmp_path):
+    # Arrange
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    # Act
+    n = ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:20", "live", _AUCTION_LIVE)
+    # Assert
+    assert n == 2
+    rows = ias.load_auctions("2026-09-05", "2026-09-05")
+    assert len(rows) == 2
+    r = next(r for r in rows if r["code"] == "600519")
+    assert r["stage"] == "live"
+    assert r["auction_volume_ratio"] == 1.7089  # §44 关键信号
+    assert r["auction_price"] == 1295.88
+    assert r["data_status"] == "ready"
+
+
+def test_save_auction_snapshots_idempotent_no_duplicate(monkeypatch, tmp_path):
+    # Arrange
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    # Act：同 ts 同 stage 写两次
+    ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:20", "live", _AUCTION_LIVE)
+    ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:20", "live", _AUCTION_LIVE)
+    # Assert：仍 2 行（PK 幂等）
+    assert len(ias.load_auctions("2026-09-05", "2026-09-05")) == 2
+
+
+def test_save_auction_snapshots_live_trajectory_accumulates(monkeypatch, tmp_path):
+    # Arrange：live 不同 ts 累积为竞价 trajectory（演化轨迹）
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    # Act：09:16 / 09:20 / 09:24 三个 ts
+    for ts in ("2026-09-05T09:16", "2026-09-05T09:20", "2026-09-05T09:24"):
+        ias.save_auction_snapshots("2026-09-05", ts, "live", _AUCTION_LIVE)
+    # Assert：6 行（2 code × 3 ts，trajectory 累积）
+    assert len(ias.load_auctions("2026-09-05", "2026-09-05")) == 6
+
+
+def test_save_auction_snapshots_live_final_separate_rows(monkeypatch, tmp_path):
+    # Arrange：live 与 final 是不同 stage，同 ts 同 code 各一行
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:25", "live", _AUCTION_LIVE)
+    final = [{**_AUCTION_LIVE[0], "stage": "final", "auction_phase": "closed"}]
+    ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:30", "final", final)
+    # Assert：3 行（2 live + 1 final，PK 含 stage 区分）
+    rows = ias.load_auctions("2026-09-05", "2026-09-05")
+    assert len(rows) == 3
+    stages = {r["stage"] for r in rows}
+    assert stages == {"live", "final"}
+
+
+def test_save_auction_snapshots_missing_field_none(monkeypatch, tmp_path):
+    # Arrange：缺 auction_volume_ratio（不臆造，填 None）
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    items = [{"code": "600519", "name": "x", "stage": "final", "auction_price": 5.0}]
+    # Act
+    ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:30", "final", items)
+    # Assert
+    rows = ias.load_auctions("2026-09-05", "2026-09-05")
+    assert len(rows) == 1
+    assert rows[0]["auction_volume_ratio"] is None
+    assert rows[0]["data_status"] is None
+
+
+def test_save_auction_snapshots_empty_returns_zero(monkeypatch, tmp_path):
+    # Arrange
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    # Act
+    n = ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:20", "live", [])
+    # Assert
+    assert n == 0
+    assert ias.load_auctions("2026-09-05", "2026-09-05") == []
+
+
+def test_has_auction_snapshot_guard(monkeypatch, tmp_path):
+    # Arrange：final 守门——避免静态终态每周期重复落库成伪 trajectory
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    # Act / Assert：写前 False
+    assert ias.has_auction_snapshot("2026-09-05", "final") is False
+    ias.save_auction_snapshots("2026-09-05", "2026-09-05T09:30", "final",
+                                [{**_AUCTION_LIVE[0], "stage": "final"}])
+    # 写后 True（final 已存在）
+    assert ias.has_auction_snapshot("2026-09-05", "final") is True
+    # live 未写，仍 False
+    assert ias.has_auction_snapshot("2026-09-05", "live") is False
+
+
 # ── list_accumulation_dates ──────────────────────────────────────────────────
 
-def test_list_accumulation_dates_union_three_tables(monkeypatch, tmp_path):
+def test_list_accumulation_dates_union_four_tables(monkeypatch, tmp_path):
     # Arrange
     monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
     ias.save_ranking_snapshots("2026-09-04", "2026-09-04T09:30", "skyrocket", _RANKINGS_SKYROCKET)
     ias.save_quote_snapshots("2026-09-05", "2026-09-05T09:30", _QUOTES)
     ias.freeze_baostock_5min("2026-09-03", "600127", "x", _BARS)
+    ias.save_auction_snapshots("2026-09-04", "2026-09-04T09:20", "live", _AUCTION_LIVE)
     # Act
     dates = ias.list_accumulation_dates()
-    # Assert：三表并集，升序
+    # Assert：四表并集，升序（auction 写 09-04 与 ranking 同日，去重）
     assert dates == ["2026-09-03", "2026-09-04", "2026-09-05"]
 
 
-# ── executor 门控（不联网，mock is_intraday_time）──────────────────────────────
+# ── executor 门控（不联网，mock is_intraday_time / is_auction_time）──────────────
 
-def test_intraday_snapshot_skips_outside_trading_hours(monkeypatch):
-    """非盘中时段 is_intraday_time 门控 no-op，不发请求。"""
-    # Arrange：mock is_intraday_time 返 False（executor 内 from vr_paths import 时取到 patched）
+def test_intraday_snapshot_skips_outside_trading_and_auction(monkeypatch):
+    """非盘中时段且非竞价时段 → no-op，不发请求。"""
+    # Arrange：mock 两门控均返 False（executor 内 from vr_paths import 取 patched）
     import scheduled_tasks as st
     import vr_paths
     monkeypatch.setattr(vr_paths, "is_intraday_time", lambda now=None: False)
+    monkeypatch.setattr(vr_paths, "is_auction_time", lambda now=None: False)
     executor = st.TaskExecutor()
 
     # Act
@@ -216,6 +325,70 @@ def test_intraday_snapshot_skips_outside_trading_hours(monkeypatch):
 
     # Assert：skipped，未触达数据源
     assert result["status"] == "skipped"
+
+
+def test_intraday_snapshot_auction_window_captures_live(monkeypatch, tmp_path):
+    """竞价窗口（09:15-09:25）→ 只采竞价 live，跳过排名/量比（盘前未开盘）。"""
+    # Arrange
+    import scheduled_tasks as st
+    import vr_paths
+    import data.intraday_accumulation_store as ias
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    monkeypatch.setattr(vr_paths, "is_intraday_time", lambda now=None: False)
+    monkeypatch.setattr(vr_paths, "is_auction_time", lambda now=None: True)
+    monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda: "2026-09-05")
+    monkeypatch.setattr(vr_paths, "prev_trading_date_str", lambda: "2026-09-04")
+    executor = st.TaskExecutor()
+    # mock hithink 涨停池（prev 日）+ auction_snapshot
+    import data.sources.hithink_src as hs
+    monkeypatch.setattr(hs, "limit_up_pool",
+                        lambda d: [{"code": "600519"}, {"code": "000001"}])
+    monkeypatch.setattr(hs, "auction_snapshot",
+                        lambda codes, stage="final": [dict(it, stage=stage) for it in _AUCTION_LIVE])
+
+    # Act
+    result = executor._execute_intraday_microstructure_snapshot({})
+
+    # Assert：竞价 live 落库，排名/量比空（竞价窗口跳过）
+    assert result["auction"] == {"stage": "live", "count": 2}
+    assert result["rankings"] == {"skyrocket": 0, "hot_stock": 0, "anomaly": 0}
+    assert result["quotes"] == 0
+    rows = ias.load_auctions("2026-09-05", "2026-09-05")
+    assert len(rows) == 2
+    assert all(r["stage"] == "live" for r in rows)
+
+
+def test_intraday_snapshot_intraday_captures_final_once(monkeypatch, tmp_path):
+    """盘中窗口 → 采排名+量比+竞价 final；final 守门只采一次（避免伪 trajectory）。"""
+    # Arrange
+    import scheduled_tasks as st
+    import vr_paths
+    import data.intraday_accumulation_store as ias
+    monkeypatch.setattr(ias, "_DB_PATH", str(tmp_path / "ia.db"))
+    monkeypatch.setattr(vr_paths, "is_intraday_time", lambda now=None: True)
+    monkeypatch.setattr(vr_paths, "is_auction_time", lambda now=None: False)
+    monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda: "2026-09-05")
+    monkeypatch.setattr(vr_paths, "prev_trading_date_str", lambda: "2026-09-04")
+    executor = st.TaskExecutor()
+    import data.sources.hithink_src as hs
+    monkeypatch.setattr(hs, "limit_up_pool", lambda d: [{"code": "600519"}])
+    monkeypatch.setattr(hs, "auction_snapshot",
+                        lambda codes, stage="final": [{**_AUCTION_LIVE[0], "stage": stage}])
+    monkeypatch.setattr(hs, "skyrocket", lambda: [])
+    monkeypatch.setattr(hs, "hot_stock", lambda: [])
+    monkeypatch.setattr(hs, "anomaly_list", lambda: [])
+    import data.sources.tencent as tenc
+    monkeypatch.setattr(tenc, "fetch_raw", lambda codes: {})
+
+    # Act：第一次盘中周期 → final 采集
+    r1 = executor._execute_intraday_microstructure_snapshot({})
+    assert r1["auction"] == {"stage": "final", "count": 1}
+    # Act：第二次盘中周期 → final 已存在，守门跳过（count=0）
+    r2 = executor._execute_intraday_microstructure_snapshot({})
+    assert r2["auction"] == {"stage": "final", "count": 0}
+    # Assert：final 只落库一次（1 行），不是两次伪 trajectory
+    rows = ias.load_auctions("2026-09-05", "2026-09-05")
+    assert len(rows) == 1
 
 
 def test_baostock_freeze_skips_non_trading_day(monkeypatch):
@@ -230,3 +403,29 @@ def test_baostock_freeze_skips_non_trading_day(monkeypatch):
 
     # Assert：skipped，未触达 baostock/hithink
     assert result["status"] == "skipped"
+
+
+# ── is_auction_time 集合竞价窗口门控 ────────────────────────────────────────
+
+def test_is_auction_time_boundaries(monkeypatch):
+    """09:15-09:25 含两端 → True；09:14 / 09:26 / 盘中 → False（交易日）。"""
+    import vr_paths
+    from datetime import datetime as _dt
+    monkeypatch.setattr(vr_paths, "is_trading_day", lambda d=None: True)
+
+    def at(hh, mm):
+        return _dt(2026, 9, 7, hh, mm)
+
+    assert vr_paths.is_auction_time(at(9, 15)) is True   # 左边界含
+    assert vr_paths.is_auction_time(at(9, 20)) is True    # 窗口内（live 演化）
+    assert vr_paths.is_auction_time(at(9, 25)) is True    # 右边界含（match 时刻）
+    assert vr_paths.is_auction_time(at(9, 14)) is False   # 窗口前
+    assert vr_paths.is_auction_time(at(9, 26)) is False   # 窗口后
+    assert vr_paths.is_auction_time(at(10, 30)) is False  # 盘中（非竞价）
+
+
+def test_is_auction_time_non_trading_day_false(monkeypatch):
+    """非交易日 → False（节假日/周末不竞价）。"""
+    import vr_paths
+    monkeypatch.setattr(vr_paths, "is_trading_day", lambda d=None: False)
+    assert vr_paths.is_auction_time() is False

@@ -292,3 +292,79 @@ class TestThscodeMapping:
     ])
     def test_strip_thscode(self, ths, bare):
         assert hs._strip_thscode(ths) == bare
+
+
+# ── S167：auction_snapshot 集合竞价快照（§44 最未证否盘中 edge）────────────────
+
+
+class TestAuctionSnapshot:
+    """S167：集合竞价端点接线（spec §2 "竞价量比 needs new source integration" 闭合）。"""
+
+    _PAYLOAD = {
+        "timestamp": 1788714324149,
+        "auction_phase": "live",
+        "data_status": "ready",
+        "total": 2,
+        "item": [
+            {"thscode": "600519.SH", "ticker": "600519", "name": "贵州茅台",
+             "auction_price": 1295.88, "auction_pct": -0.231, "auction_volume": 179.43,
+             "auction_amount": 23251975, "auction_unmatched": 0.57,
+             "auction_turnover_pct": 0.0014, "auction_yesterday_ratio_pct": 1.011,
+             "auction_volume_ratio": 1.7089, "pre_close_price": 1298.88,
+             "open_price": 1295.88, "last_price": 1330.0,
+             "float_market_cap": 1662608529330},
+            {"thscode": "000001.SZ", "ticker": "000001", "name": "平安银行",
+             "auction_price": 11.86, "auction_pct": -0.1684, "auction_volume": 5094.0,
+             "auction_amount": 6041484.0, "auction_unmatched": 236.0,
+             "auction_turnover_pct": 0.0026, "auction_yesterday_ratio_pct": 0.4609,
+             "auction_volume_ratio": 2.269, "pre_close_price": 11.88,
+             "open_price": 11.86, "last_price": 11.89,
+             "float_market_cap": 230733594542.99},
+        ],
+    }
+
+    def test_strips_thscode_and_maps_auction_fields(self):
+        """归一：thscode→裸 code + 透传竞价字段 + 顶层 phase/status 透传每行。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            out = hs.auction_snapshot(["600519", "000001"], stage="live")
+        assert len(out) == 2
+        r = next(r for r in out if r["code"] == "600519")
+        assert r["name"] == "贵州茅台"
+        assert r["stage"] == "live"
+        assert r["auction_volume_ratio"] == 1.7089  # §44 关键信号
+        assert r["auction_price"] == 1295.88
+        assert r["source_timestamp"] == 1788714324149
+        assert r["auction_phase"] == "live"
+        assert r["data_status"] == "ready"
+
+    def test_empty_codes_no_call(self):
+        with patch("data.sources.hithink_src._http_get") as mock_get:
+            assert hs.auction_snapshot([]) == []
+            mock_get.assert_not_called()
+
+    def test_invalid_stage_returns_empty(self):
+        """stage 非 live/final → 返 []（endpoint enum 校验，不发请求）。"""
+        with patch("data.sources.hithink_src._http_get") as mock_get:
+            assert hs.auction_snapshot(["600519"], stage="invalid") == []
+            mock_get.assert_not_called()
+
+    def test_failure_returns_empty_not_raise(self):
+        """降级：_http_get None（熔断/离线/Key 缺）→ 返 [] 不抛（调用方降级记 degraded）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=None):
+            assert hs.auction_snapshot(["600519"], stage="final") == []
+
+    def test_batches_over_100_codes(self):
+        """endpoint 硬限 ≤100 thscodes/批，>100 自动分批（两批，下批失败部分降级）。"""
+        codes = [f"{i:06d}" for i in range(150)]
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD) as mock_get:
+            out = hs.auction_snapshot(codes, stage="final")
+        assert mock_get.call_count == 2  # 分两批
+        assert len(out) == 4  # 每批返 2，两批合并 4（code 重复无碍，累积时 UPSERT 去重）
+
+    def test_partial_batch_failure_degrades(self):
+        """首批成功次批 None（熔断）→ 返首批部分，不整体抛。"""
+        responses = iter([self._PAYLOAD, None])
+        with patch("data.sources.hithink_src._http_get", side_effect=lambda *a, **k: next(responses)):
+            codes = [f"{i:06d}" for i in range(150)]
+            out = hs.auction_snapshot(codes, stage="final")
+        assert len(out) == 2  # 仅首批 2 行（次批 None 跳过）

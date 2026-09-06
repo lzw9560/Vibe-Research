@@ -37,6 +37,10 @@ while rs.error_code == "0" and rs.next():
 
 bs.logout()
 
+# S163 R1 NOTE: baostock index kline（sh.000001，list_of_lists，仅 date+close）
+# 不匹配 baostock_kline schema（需 OHLCV list_of_dicts）—— 待新建 'baostock_index_kline' schema
+# （shape=list_of_lists，fields=date+close，用于指数 regime 派生，非个股 §44 verdict 输入）
+
 print(f"fetched {len(rows)} index daily bars")
 if not rows:
     print("no data", file=sys.stderr)
