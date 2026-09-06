@@ -78,3 +78,5 @@ frontend/e2e/screenshots/
 backend/gmm_result.txt
 frontend/.vite/
 frontend/data/
+
+vendor/
