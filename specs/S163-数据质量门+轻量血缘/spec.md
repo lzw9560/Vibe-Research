@@ -1,6 +1,6 @@
 # Spec: S163 — 数据质量门 + 轻量血缘（砍 lake/ETL 无消费者）
 
-> 状态：草案（S160 component 3，priority 3，design-agnostic）
+> 状态：已实现 2026-09-07（草案，S160 component 3，priority 3，design-agnostic；lineage 接线 da7ba54 治 dead code）
 > 关联：S160 / grill-foundation-holes-2026-09-06（#3 reuse rot harness 硬编码 + synthesis 臆造前科）
 > 分级：small-medium —— issue 层单轮 review
 

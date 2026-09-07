@@ -1,6 +1,6 @@
 # Spec: S164 — 防封 backbone robust + secrets gate
 
-> 状态：草案（S160 component 4，priority 3，design-agnostic）
+> 状态：已实现 2026-09-07（草案，S160 component 4，priority 3，design-agnostic；CI lint gate da7ba54 补 ci.yml step）
 > 关联：S160 / grill-foundation-holes-2026-09-06（#10 防封 aspirational / #3 hithink key 泄漏）/ hithink-apikey-泄漏待轮换
 > 分级：medium —— issue 层单轮 review
 

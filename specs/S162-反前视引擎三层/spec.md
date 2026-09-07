@@ -1,6 +1,6 @@
 # Spec: S162 — 反前视回测引擎三层（Decision+Accounting design-agnostic / Executor pluggable fill）
 
-> 状态：草案 v2（S160 component 2，priority 2）
+> 状态：已实现 2026-09-07（草案 v2，S160 component 2，priority 2；4 gap fix da7ba54：pit_store→Recorder 接线 + accounting→verify 标 latent）
 > 关联：S160 / S161 v2 / open-source-quant-framework-research-2026-09-06 / grill-foundation-holes-2026-09-06
 > 分级：medium（三层引擎 + A 股规则）—— feature 分支 + grill（反前视架构级变更）+ 分步实施
 > v2 修订：spec-grill 修 Trades.entry_price vs Executor 谁覆盖（两分支都破）/ simulate_holding "复用"实为"拆分重构" / day_paired+walk-forward+Bonferroni+IC 误归 Accounting（应归 verifier） / PIT FeatureStore=被砍 lake 无消费者 defer / parquet/duckdb 未装 / qlib 签名未核实。
