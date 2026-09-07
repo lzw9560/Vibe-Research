@@ -11,7 +11,8 @@
 
 1. 读 `/Users/lizhiwei/Documents/Obsidian Vault/10_Reference/investing/MOC.md` — 投研知识图谱入口，了解实体类导航 + 四构件结构（实体/关系/逻辑规则/动作）+ 质量门状态
 2. 读 `/Users/lizhiwei/Documents/Obsidian Vault/10_Reference/index/MASTER_INDEX.md` — 跨项目全局索引，看活跃项目 + 知识图谱子区入口
-3. 按需读 `10_Reference/investing/` 下与本次任务相关的实体文件夹（如改战法读 `strategies/`，改数据源读 `data-sources/`，改 spec 读 `specs/`）
+3. 读 `/Users/lizhiwei/Documents/Obsidian Vault/10_Reference/investing/reviews/` 下最新审查报告 — 了解图谱健康度（断链/孤立/coverage）
+4. 按需读 `10_Reference/investing/` 下与本次任务相关的实体文件夹（如改战法读 `strategies/`，改数据源读 `data-sources/`，改 spec 读 `specs/`）
 
 **知识图谱是本项目的认知层**——代码改了实体/关系/决策，要同步更新图谱（新建或更新实体到对应文件夹，维护 `[[]]` 链接）。图谱位置：`/Users/lizhiwei/Documents/Obsidian Vault/`（GitHub 同步仓 `lzw9560/knowledge`，私有）。四构件方法论详见 skill `ontology-knowledge-graph`。使用引导见 `docs/obsidian-vault-guide.md`。
 
