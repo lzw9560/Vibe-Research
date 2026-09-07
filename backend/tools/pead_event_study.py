@@ -272,6 +272,7 @@ def compute_all_returns(
 
 
 # ── Step 4: §44 分析 (优化版 permutation) ────────────────────────────────
+# DEPRECATED: category mismatch（selection method on event edge）. See midline_pead_run.py for correct event verdict.
 def day_paired_lift_fast(
     event_by_day: dict[str, list[float]],
     universe_winrate_by_day: dict[str, float],
@@ -313,6 +314,7 @@ def _fast_sample(lst: list, k: int, rng: random.Random) -> list:
     return result
 
 
+# DEPRECATED: category mismatch（selection method on event edge）. See midline_pead_run.py.
 def permutation_null_fast(
     event_by_day: dict[str, list[float]],
     universe_returns_by_day: dict[str, list[float]],
@@ -377,6 +379,7 @@ def spearman_ic(signal: list[float], ret: list[float]) -> float | None:
         return None
 
 
+# DEPRECATED: category mismatch（selection method on event edge）. See midline_pead_run.py.
 def four_state(lift: float | None, n: int) -> str:
     if n < 30:
         return "underpowered"
