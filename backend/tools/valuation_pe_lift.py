@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码�
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 PCACHE = ROOT / ".vibe-research" / "profit_data_cache.json"
@@ -67,3 +68,38 @@ for name, take_high in [("低PE(底quintile)", False), ("高PE(顶quintile)", Tr
     wr = tw/tn; lift = wr/wr_all if wr_all else 0
     st = "≥2x validated" if lift>=2 else ("未validated" if lift>=1 else "劣于随机")
     print(f"  {name}: net-WR {wr*100:.2f}% (n={tn}) vs all {wr_all*100:.2f}% | net lift={lift:.3f}x {st}")
+
+# ── S168 接线：2 verdict（低PE/高PE quintile × selection）落 Recorder + lineage ──
+_FROZEN_S168 = "aa34840"  # frozen commit（last touch S163/S167）
+_all_days = sorted(set(o["D"] for o in obs))
+_day_obs_map = {}  # D -> sorted-by-pe obs (>=10 only, 与 harness 现有 len(day)<10 过滤一致)
+for _D in _all_days:
+    _day_obs = [o for o in obs if o["D"] == _D]
+    if len(_day_obs) >= 10:
+        _day_obs_map[_D] = sorted(_day_obs, key=lambda o: o["pe"])
+universe_by_day = {d: [o["net"] for o in day] for d, day in _day_obs_map.items()}
+for _arm_name, _take_high in [("low_pe", False), ("high_pe", True)]:
+    _surv_by_day = {}
+    for _D, _day_obs in _day_obs_map.items():
+        _q = max(1, len(_day_obs) // 5)
+        _picks = _day_obs[-_q:] if _take_high else _day_obs[:_q]
+        _surv_by_day[_D] = [o["net"] for o in _picks]
+    _rets = [r for rs in _surv_by_day.values() for r in rs]
+    _dts = [d for d, rs in _surv_by_day.items() for _ in rs]
+    if len(_rets) < 2:
+        print(f"[S168] valuation_pe:{_arm_name} skips (n<2)")
+        continue
+    wire_verdict(
+        line_id=f"valuation_pe:{_arm_name}",
+        returns=_rets,
+        dates=_dts,
+        edge_type="selection",
+        frozen_commit=_FROZEN_S168,
+        survivors_by_day=dict(_surv_by_day),
+        universe_by_day=dict(universe_by_day),
+        n_comparisons=2,  # 2 arms（低/高PE quintile）Bonferroni
+        round_trip_cost=COST,
+        script="tools/valuation_pe_lift.py",
+        params={"arm": _arm_name, "quintile": "top" if _take_high else "bottom",
+                "path": list(PARAMS), "cost": COST, "min_day_size": 10},
+    )

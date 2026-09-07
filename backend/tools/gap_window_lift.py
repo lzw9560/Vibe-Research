@@ -14,6 +14,7 @@ from collections import defaultdict
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 PREMIUM = ROOT / ".vibe-research" / "first_board_premium_baseline.json"
@@ -86,3 +87,42 @@ print(f"  lift(top/all)={lift:.3f}x {'VALIDATED' if lift>=2 else ('未validated'
 # Spearman rank corr score vs gap (selection power)
 import math
 # pearson(score, gap)
+
+# ── S168 接线：§44v2 verifier 落 Recorder + lineage ──
+_FROZEN_S168 = "3de6ab0"  # pre-registration commit (gap-window lift decisive test)
+# 从 obs 重建 by_day 结构（harness 现有循环只建 flat list，不破现有逻辑）
+_surv_by_day = {}   # D -> top-quintile net_gap（survivors）
+_univ_by_day = {}   # D -> all net_gap（universe，≥10 picks/day）
+for _D in set(o["D"] for o in obs):
+    _day = [o for o in obs if o["D"] == _D]
+    if len(_day) < 10:
+        continue
+    _ds = sorted(_day, key=lambda o: o["score"])
+    _q = max(1, len(_ds) // 5)
+    _surv_by_day[_D] = [o["net_gap"] for o in _ds[-_q:]]
+    _univ_by_day[_D] = [o["net_gap"] for o in _day]
+if _surv_by_day:
+    _s168_rets = [r for rs in _surv_by_day.values() for r in rs]
+    _s168_dates = [d for d, rs in _surv_by_day.items() for _ in rs]
+    if len(_s168_rets) >= 2:
+        wire_verdict(
+            line_id="gap_window:top",
+            returns=_s168_rets,
+            dates=_s168_dates,
+            edge_type="selection",
+            frozen_commit=_FROZEN_S168,
+            survivors_by_day=dict(_surv_by_day),
+            universe_by_day=dict(_univ_by_day),
+            n_comparisons=1,
+            round_trip_cost=COST,
+            script="tools/gap_window_lift.py",
+            params={
+                "arm": "top", "cost_pct": COST, "quintile": "top_1/5",
+                "min_day_size": 10, "one_word_excluded": True,
+                "tol": TOL,
+            },
+        )
+    else:
+        print("[S168] gap_window:top skips (n<2)")
+else:
+    print("[S168] gap_window:top skips (no survivors_by_day)")

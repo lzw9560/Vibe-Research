@@ -28,6 +28,8 @@ from pathlib import Path
 # 直接执行时把 backend/ 加入 sys.path（tools. 包 + astock import 用；测试 import 时无害）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
+
 # grill-decisions.md 硬剔除阈值（待 B1 验证后校准——本脚本就是验它们的）
 LAYER_THRESHOLDS: dict = {
     "max_break_times": 2,        # 层1：炸板次数 ≥2 剔除
@@ -38,6 +40,9 @@ LAYER_THRESHOLDS: dict = {
 
 # 扣 0.4% 成本（佣金+滑点，弱近似，与 Phase 0 / first_board_settlement 一致）
 COST_PCT: float = 0.4
+
+# S168 接线：harness 冻结 commit（LAYER_THRESHOLDS + 分析逻辑入库点 39736f4）
+FROZEN_COMMIT = "39736f4"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -492,6 +497,36 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
         s = per_layer.get(ln, {})
         print(f"  {ln}: n={s.get('n')} lift={s.get('winrate_lift_avg')} "
               f"status={s.get('validation_status', '-')}")
+
+    # ── S168 接线：3 layer verdict 落 Recorder + lineage（§44v2 verifier）──
+    _raw_universe = dict(by_day["layer0"])
+    s168_verdicts = {}
+    for _arm_name in ("layer1", "layer2", "layer3"):
+        _surv = by_day[_arm_name]
+        _rets = [r for rs in _surv.values() for r in rs]
+        _dts = [d for d, rs in _surv.items() for _ in rs]
+        if len(_rets) < 2:
+            print(f"[S168] first_board_layer:{_arm_name} skips (n<2)")
+            continue
+        _v = wire_verdict(
+            line_id=f"first_board_layer:{_arm_name}",
+            returns=_rets,
+            dates=_dts,
+            edge_type="selection",
+            frozen_commit=FROZEN_COMMIT,
+            survivors_by_day=dict(_surv),
+            universe_by_day=_raw_universe,
+            n_comparisons=3,  # 3 layer 同族 Bonferroni K=3（honest count；非模板 8，§1.2 不臆造）
+            round_trip_cost=0.70,  # A 股 round-trip 0.70%（与 s44_gap_run_60d/platform_breakout 一致；returns 为 percent）
+            script="tools/first_board_layer_lift.py",
+            params={"layer": _arm_name, "thresholds": LAYER_THRESHOLDS,
+                    "cost_pct": COST_PCT, "days_back": days_back},
+        )
+        s168_verdicts[_arm_name] = {
+            "status": _v.status, "selection_lift": _v.selection_lift,
+            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+        }
+    matrix["s168_verdicts"] = s168_verdicts
     return matrix
 
 

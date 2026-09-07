@@ -18,6 +18,7 @@ from collections import defaultdict
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
 REGIME_F = ROOT / ".vibe-research" / "index_ma20_regime.json"
@@ -289,3 +290,46 @@ else:
         print("  → NO EDGE: regime does not meaningfully condition gap (<2x lift, not significant)")
 print("\nNote: regime-edge on overnight gap != full-pipeline edge (intraday 60% untested).")
 print("Note: overnight gap itself is partly untradable (D-close sealed, needs intraday entry).")
+
+# ── S168 接线：§44v2 verifier 落 Recorder + lineage ──
+# 2 arm（strong/weak regime）× selection edge_type：测 regime 是否条件化涨停股隔夜 gap。
+# 从 obs 重建 by_day 结构（harness 现有循环只建 flat list / day_summary，不破现有逻辑）。
+_FROZEN_S168 = "70a68f9"  # pre-registration commit（七重收敛证据脚本归档到 develop）
+_univ_by_day = {}  # D -> all net_gap（universe，全部涨停股隔夜 gap）
+for _D in unique_days:
+    _univ_by_day[_D] = [o["net_gap"] for o in day_data[_D]]
+# 两 arm：strong-regime picks / weak-regime picks
+_s168_arms = [
+    ("strong", strong_days),
+    ("weak", weak_days),
+]
+for _arm_name, _arm_days in _s168_arms:
+    _surv_by_day = {}
+    for _d in _arm_days:
+        _D = _d["D"]
+        _surv_by_day[_D] = [o["net_gap"] for o in day_data[_D]]
+    _rets, _dts = [], []
+    for _d, _rs in _surv_by_day.items():
+        for _r in _rs:
+            _rets.append(_r)
+            _dts.append(_d)
+    if len(_rets) < 2:
+        print(f"[S168] index_ma20_regime:{_arm_name} skips (n<2)")
+        continue
+    _v = wire_verdict(
+        line_id=f"index_ma20_regime:{_arm_name}",
+        returns=_rets,
+        dates=_dts,
+        edge_type="selection",
+        frozen_commit=_FROZEN_S168,
+        survivors_by_day=dict(_surv_by_day),
+        universe_by_day=dict(_univ_by_day),
+        n_comparisons=8,  # Bonferroni K=8（保守，多窗口×多 regime 对比）
+        round_trip_cost=COST,
+        script="tools/index_ma20_regime_lift.py",
+        params={
+            "arm": _arm_name, "cost_pct": COST, "regime": _arm_name,
+            "ma_window": MA_WINDOW, "n_perm": N_PERM,
+            "one_word_excluded": True, "tol": TOL,
+        },
+    )

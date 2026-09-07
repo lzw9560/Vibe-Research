@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from tools.first_board_layer_lift import day_paired_lift, four_state, _winrate  # noqa: E402
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402
 from strategies.kline_returns import simulate_holding, simulate_holding_with_confirm  # noqa: E402
 from strategies.pattern_scan import scan_patterns  # noqa: E402
@@ -212,6 +213,45 @@ def run_platform_breakout_lift():
     out_path = out_dir / "matrix.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[R7] matrix saved: {out_path}")
+
+    # ── S168 接线：6 verdict（3 arm × 2 regime）落 Recorder + lineage ──
+    _FROZEN_S168 = "74295b9"  # pre-registered 冻结 commit
+    _s168_arms = [
+        ("tight", tight_by_day, raw_by_day),
+        ("confirm", confirm_by_day, raw_by_day),
+        ("both", both_by_day, raw_by_day),
+        ("tight_bull", tight_bull, raw_bull),
+        ("confirm_bull", confirm_bull, raw_bull),
+        ("both_bull", both_bull, raw_bull),
+    ]
+    s168_verdicts = {}
+    for _arm_name, _surv, _raw in _s168_arms:
+        _rets, _dts = [], []
+        for _d, _rs in _surv.items():
+            for _r in _rs:
+                _rets.append(_r)
+                _dts.append(_d)
+        if len(_rets) < 2:
+            print(f"[S168] platform_breakout:{_arm_name} skips (n<2)")
+            continue
+        _v = wire_verdict(
+            line_id=f"platform_breakout:{_arm_name}",
+            returns=_rets,
+            dates=_dts,
+            edge_type="selection",
+            frozen_commit=_FROZEN_S168,
+            survivors_by_day=dict(_surv),
+            universe_by_day=dict(_raw),
+            n_comparisons=8,  # Bonferroni K=8 pre-registered
+            round_trip_cost=0.70,
+            script="tools/platform_breakout_lift.py",
+            params={"arm": _arm_name, "tight": TIGHT_THRESHOLD, "path": list(DEFAULT_PATH_PARAMS)},
+        )
+        s168_verdicts[_arm_name] = {
+            "status": _v.status, "selection_lift": _v.selection_lift,
+            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+        }
+    matrix["s168_verdicts"] = s168_verdicts
     return matrix
 
 

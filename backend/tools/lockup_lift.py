@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from tools.first_board_layer_lift import day_paired_lift, four_state, _winrate  # noqa: E402
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 
 KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 LOCKUP_CACHE = ROOT / ".vibe-research" / "lockup_events_cache.json"
@@ -386,6 +387,46 @@ def main() -> int:
     for name, r in results.items():
         print(f"  {name}: lift={r['winrate_lift']} p={r['p_value_neg']} "
               f"verdict={r['verdict']}", flush=True)
+
+    # ── S168 接线：4 verdict（4 stratum × 1 regime）落 Recorder + lineage ──
+    _FROZEN_S168 = "70a68f9"  # pre-registration commit（七重收敛证据脚本归档到 develop）
+    _s168_arms = [
+        ("overall", unlock_by_day),
+        ("high", unlock_by_day_high),
+        ("mid", unlock_by_day_mid),
+        ("low", unlock_by_day_low),
+    ]
+    s168_verdicts = {}
+    for _arm_name, _surv in _s168_arms:
+        _rets, _dts = [], []
+        for _d, _rs in _surv.items():
+            for _r in _rs:
+                _rets.append(_r)
+                _dts.append(_d)
+        if len(_rets) < 2:
+            print(f"[S168] lockup:{_arm_name} skips (n<2)", flush=True)
+            continue
+        _v = wire_verdict(
+            line_id=f"lockup:{_arm_name}",
+            returns=_rets,
+            dates=_dts,
+            edge_type="selection",
+            frozen_commit=_FROZEN_S168,
+            survivors_by_day=dict(_surv),
+            universe_by_day=dict(raw_by_day),
+            n_comparisons=4,  # Bonferroni K=4 pre-registered
+            round_trip_cost=COST_PCT,  # risk filter 规避非入场，cost=0
+            script="tools/lockup_lift.py",
+            params={"arm": _arm_name, "ratio_high": RATIO_HIGH, "ratio_mid": RATIO_MID,
+                    "stop": STOP_PCT, "take": TAKE_PCT, "max_hold": MAX_HOLD,
+                    "cost_pct": COST_PCT, "alpha_adj": ALPHA_ADJ,
+                    "return_metric": "(D+2 close - D+1 open) / D+1 open * 100"},
+        )
+        s168_verdicts[_arm_name] = {
+            "status": _v.status, "selection_lift": _v.selection_lift,
+            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+        }
+    matrix["s168_verdicts"] = s168_verdicts
 
     return 0
 

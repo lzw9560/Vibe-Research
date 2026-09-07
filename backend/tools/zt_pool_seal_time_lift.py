@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码�
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 
 KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
@@ -132,6 +133,61 @@ def main(smoke_days=None):
         wr, n, lift = r
         state = "VALIDATED" if lift>=2 else ("未validated" if lift>=1 else "劣于随机")
         print(f"  {name}: net-WR {wr*100:.2f}% (n={n}) vs all {wr_all*100:.2f}% | net lift={lift:.3f}x {state}")
+
+    # ── S168 接线：5 arm verdict 落 Recorder + lineage ──
+    _FROZEN_S168 = "0204262"  # S156 冻结 commit（methodology pre-register）
+    _ARM_KEYS = {
+        "seal_amount": "seal_amount", "early_lock": "is_early",
+        "late_lock": "is_late", "miaoban": "is_miaoban", "broken": "is_broken",
+    }
+    # universe_by_day: all picks per day (no >=5 filter, matching platform_breakout convention)
+    _universe_by_day = {}
+    for _D in set(o["D"] for o in obs):
+        _universe_by_day[_D] = [o["net"] for o in obs if o["D"] == _D]
+    _s168_verdicts = {}
+    for _arm_name, _is_quintile in [
+        ("seal_amount", True), ("early_lock", False),
+        ("late_lock", False), ("miaoban", False), ("broken", False),
+    ]:
+        _surv_by_day = {}
+        for _D in _universe_by_day:
+            _day = [o for o in obs if o["D"] == _D]
+            if _is_quintile:
+                if len(_day) < 5:
+                    continue  # quintile needs >=5（matching lift_for filter）
+                _ds = sorted(_day, key=lambda o: o["seal_amount"])
+                _q = max(1, len(_ds) // 5)
+                _top = _ds[-_q:]
+            else:
+                _top = [o for o in _day if o[_ARM_KEYS[_arm_name]]]
+            if _top:
+                _surv_by_day[_D] = [o["net"] for o in _top]
+        _rets = [r for rs in _surv_by_day.values() for r in rs]
+        _dts = [d for d, rs in _surv_by_day.items() for _ in rs]
+        if len(_rets) < 2:
+            print(f"[S168] zt_pool_seal_time:{_arm_name} skips (n<2)")
+            continue
+        _v = wire_verdict(
+            line_id=f"zt_pool_seal_time:{_arm_name}",
+            returns=_rets,
+            dates=_dts,
+            edge_type="selection",
+            frozen_commit=_FROZEN_S168,
+            survivors_by_day=_surv_by_day,
+            universe_by_day=_universe_by_day,
+            n_comparisons=5,  # Bonferroni K=5（5 arm，§44v2 按 n 调不 over-correct）
+            round_trip_cost=ROUND_TRIP_COST,
+            script="tools/zt_pool_seal_time_lift.py",
+            params={
+                "arm": _arm_name, "quintile": _is_quintile,
+                "path": list(PARAMS), "cost": ROUND_TRIP_COST,
+            },
+        )
+        _s168_verdicts[_arm_name] = {
+            "status": _v.status, "selection_lift": _v.selection_lift,
+            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+        }
+    print(f"[S168] zt_pool_seal_time wired {len(_s168_verdicts)} verdicts")
 
 if __name__ == "__main__":
     import argparse

@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from tools.first_board_layer_lift import day_paired_lift, four_state  # noqa: E402
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 
 # 预注册冻结参数
 EARLY_LOCK_CUTOFF = "100000000"   # 早封板 = first_lock time <= 10:00
@@ -403,6 +404,44 @@ def main() -> int:
     print(f"overall: {overall}")
     print("caveat: next_day_return=T+0 intraday o2c（未剔 unbuyable 一字板，S144 口径 follow-up）")
     print("caveat: 5min 粒度（60s 封单 60s→5min coarser，broken_duration<5min 漏标）")
+
+    # ── S168 接线：6 verdict（6 arm × 1 regime）落 Recorder + lineage ──
+    _FROZEN_S168 = "ae90a4d"  # pre-registered 冻结 commit（harness 创建时）
+    s168_verdicts = {}
+    for _arm_name, _surv in groups.items():
+        _rets, _dts = [], []
+        for _d, _rs in _surv.items():
+            for _r in _rs:
+                _rets.append(_r)
+                _dts.append(_d)
+        if len(_rets) < 2:
+            print(f"[S168] first_plate_h2:{_arm_name} skips (n<2)")
+            continue
+        _v = wire_verdict(
+            line_id=f"first_plate_h2:{_arm_name}",
+            returns=_rets,
+            dates=_dts,
+            edge_type="selection",
+            frozen_commit=_FROZEN_S168,
+            survivors_by_day=dict(_surv),
+            universe_by_day=dict(raw_by_day),
+            n_comparisons=6,  # Bonferroni K=6 pre-registered
+            round_trip_cost=0.70,
+            script="tools/first_plate_h2_lift.py",
+            params={
+                "arm": _arm_name,
+                "early_lock_cutoff": EARLY_LOCK_CUTOFF,
+                "late_lock_cutoff": LATE_LOCK_CUTOFF,
+                "high_drop_pct": HIGH_DROP_PCT,
+                "auction_high_pct": AUCTION_HIGH_PCT,
+                "alpha_adj": ALPHA_ADJ,
+                "n_perm": N_PERM,
+            },
+        )
+        s168_verdicts[_arm_name] = {
+            "status": _v.status, "selection_lift": _v.selection_lift,
+            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+        }
     return 0
 
 

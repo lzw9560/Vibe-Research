@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码�
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 
 H2_CACHE = ROOT / ".vibe-research" / "h2_features_cache_full.json"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
@@ -66,3 +67,32 @@ for name, key in [("首bar涨停(秒板+近秒, idx==0)", "is_first_bar"),
     st = "VALIDATED" if lift>=2 else ("未validated" if lift>=1 else "劣于随机")
     print(f"  {name}: net-WR {wr*100:.2f}% (n={n}) vs all {wr_all*100:.2f}% | net lift={lift:.3f}x {st}")
 print(f"\n对比: S156 zt_pool 秒板(首封≤09:31) 13天 net lift=1.312x; 本测试 31天首bar涨停 superset")
+
+# ── S168 接线：2 verdict（首bar涨停 / 前2bar涨停）落 Recorder + lineage ──
+_FROZEN_S168 = "b35add7"  # 秒板 superset 31天 冻结 commit（S156 followup）
+_universe_by_day = {}
+for _o in obs:
+    _universe_by_day.setdefault(_o["D"], []).append(_o["net"])
+for _arm_name, _key in [("first_bar", "is_first_bar"), ("early_2bar", "is_early")]:
+    _surv_by_day = {}
+    for _o in obs:
+        if _o[_key]:
+            _surv_by_day.setdefault(_o["D"], []).append(_o["net"])
+    _rets = [_r for _rs in _surv_by_day.values() for _r in _rs]
+    _dts = [_d for _d, _rs in _surv_by_day.items() for _ in _rs]
+    if len(_rets) < 2:
+        print(f"[S168] miaoban_superset_31d:{_arm_name} skips (n<2)")
+        continue
+    wire_verdict(
+        line_id=f"miaoban_superset_31d:{_arm_name}",
+        returns=_rets,
+        dates=_dts,
+        edge_type="selection",
+        frozen_commit=_FROZEN_S168,
+        survivors_by_day=_surv_by_day,
+        universe_by_day=_universe_by_day,
+        n_comparisons=2,  # Bonferroni K=2（本 harness 2 filter：is_first_bar + is_early）
+        round_trip_cost=ROUND_TRIP_COST,
+        script="tools/miaoban_superset_31d_lift.py",
+        params={"arm": _arm_name, "filter_key": _key, "path": list(PARAMS)},
+    )

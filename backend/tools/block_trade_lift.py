@@ -17,6 +17,7 @@ import random
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 BLOCK = ROOT / ".vibe-research" / "block_trade_raw.json"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 COST = 0.70
@@ -307,3 +308,44 @@ print(f"\nOverall: {overall}")
 print(f"\n⚠️ 不外推：此 verdict 仅限「大宗交易折价×选股(D-1大宗→D open入场)」对窗口；")
 print(f"   「无 selection edge」≠「无 edge」（盘中、资金流、动态卖出未测）。")
 print(f"\nElapsed: {time.time()-t0:.1f}s")
+
+# ── S168 接线：9 verdict（3 strata × 3 windows）落 Recorder + lineage ──
+# 不破现有逻辑：从 block_returns[sname][w] 重建 block_by_day，universe 取对应 window
+_FROZEN_S168 = "aa34840"  # 最后修改本 harness 的 commit（S163/S167 follow-up）
+_s168_verdicts = {}
+for _sname in STRATA:
+    for _w in EXIT_WINDOWS:
+        _obs = block_returns[_sname][_w]
+        if not _obs:
+            continue
+        _block_by_day = defaultdict(list)
+        for _bt_date, _code, _ret in _obs:
+            _block_by_day[_bt_date].append(_ret)
+        _univ_by_day = {d: universe_returns[d][_w]
+                        for d in _block_by_day if d in universe_returns}
+        _rets = [r for rs in _block_by_day.values() for r in rs]
+        _dts = [d for d, rs in _block_by_day.items() for _ in rs]
+        if len(_rets) < 2:
+            print(f"[S168] block_trade:{_sname}:{_w}d skips (n<2)")
+            continue
+        _v = wire_verdict(
+            line_id=f"block_trade:{_sname}:{_w}d",
+            returns=_rets,
+            dates=_dts,
+            edge_type="selection",
+            frozen_commit=_FROZEN_S168,
+            survivors_by_day=dict(_block_by_day),
+            universe_by_day=_univ_by_day,
+            n_comparisons=BONF_K,  # Bonferroni K=9 pre-registered (3 strata × 3 windows)
+            round_trip_cost=COST,
+            script="tools/block_trade_lift.py",
+            params={"stratum": _sname, "exit_window": _w,
+                    "bonf_k": BONF_K, "cost": COST,
+                    "strata": list(STRATA.keys()), "exit_windows": EXIT_WINDOWS},
+        )
+        _s168_verdicts[f"{_sname}:{_w}d"] = {
+            "status": _v.status, "selection_lift": _v.selection_lift,
+            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+        }
+print(f"\n[S168] wired {len(_s168_verdicts)} verdicts: " +
+      ", ".join(f"{k}={v['status']}" for k, v in _s168_verdicts.items()))

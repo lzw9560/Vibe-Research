@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from data.sources.eastmoney import ths_limit_up_pool
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
@@ -93,6 +94,46 @@ def main():
         wr = tw / tn; lift = wr / wr_all if wr_all else 0
         st = "VALIDATED" if lift >= 2 else ("未validated" if lift >= 1 else "劣于随机")
         print(f"  {name}: net-WR {wr*100:.2f}% (n={tn}) vs all {wr_all*100:.2f}% | net lift={lift:.3f}x {st}")
+
+    # ── S168 接线：4 verdict（4 arm）落 Recorder + lineage ──
+    _FROZEN_S168 = "44bc42d"  # S158 冻结 commit（引入 harness 参数，后续 commit 仅加防御性 schema gate）
+    _universe_by_day: dict = {}
+    for _o in obs:
+        _universe_by_day.setdefault(_o["D"], []).append(_o["net"])
+    _s168_arms = [
+        ("first_board", lambda o: o["boards"] == 1),
+        ("lianban_2", lambda o: o["boards"] == 2),
+        ("lianban_3plus", lambda o: o["boards"] >= 3),
+        ("lianban_2plus", lambda o: o["boards"] >= 2),
+    ]
+    _s168_verdicts = {}
+    for _arm_name, _pred in _s168_arms:
+        _surv_by_day: dict = {}
+        for _o in obs:
+            if _pred(_o):
+                _surv_by_day.setdefault(_o["D"], []).append(_o["net"])
+        _rets = [r for rs in _surv_by_day.values() for r in rs]
+        _dts = [d for d, rs in _surv_by_day.items() for _ in rs]
+        if len(_rets) < 2:
+            print(f"[S168] lianban:{_arm_name} skips (n<2)")
+            continue
+        _v = wire_verdict(
+            line_id=f"lianban:{_arm_name}",
+            returns=_rets,
+            dates=_dts,
+            edge_type="selection",
+            frozen_commit=_FROZEN_S168,
+            survivors_by_day=dict(_surv_by_day),
+            universe_by_day=dict(_universe_by_day),
+            n_comparisons=4,  # Bonferroni K=4（4 arm，§44v2 按 n 调不 over-correct）
+            round_trip_cost=ROUND_TRIP_COST,
+            script="tools/lianban_lift.py",
+            params={"arm": _arm_name, "path": list(PARAMS), "cost": ROUND_TRIP_COST},
+        )
+        _s168_verdicts[_arm_name] = {
+            "status": _v.status, "selection_lift": _v.selection_lift,
+            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+        }
 
 if __name__ == "__main__":
     main()
