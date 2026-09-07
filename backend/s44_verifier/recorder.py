@@ -202,22 +202,24 @@ class Recorder:
         if record is None:
             return None
 
-        # Reconstruct verify() call from stored params + series
+        # 重算 verify（grill #2 修复：白名单 verify 接受的参数——wire_verdict 存的
+        # params 含 line_id/arm 等 verify 不认的 metadata，全传 verify 致 TypeError 崩。
+        # 过滤到 verify 签名参数，reproduce 对所有 wire_verdict 记录都能跑）。
         from .verifier import verify  # noqa: PLC0415 (avoid circular at module level)
-
+        import inspect  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
 
         params = dict(record.params)
-        # Remove keys that verify() doesn't accept (they're metadata)
-        verify_kwargs = {
-            k: v for k, v in params.items()
-            if k not in ("cost", "description", "run_label")
-        }
+        accepted = set(inspect.signature(verify).parameters.keys())
+        verify_kwargs = {k: v for k, v in params.items() if k in accepted}
         # Ensure returns is ndarray
         verify_kwargs["returns"] = np.asarray(record.return_series, dtype=float)
         # dates: restore from stored if present
         if record.dates is not None:
             verify_kwargs["dates"] = record.dates
+        # n_trials 必填——旧记录（wire_verdict 修前缺 n_trials）默认 1 向后兼容
+        if "n_trials" not in verify_kwargs:
+            verify_kwargs["n_trials"] = 1
 
         return verify(**verify_kwargs)
 

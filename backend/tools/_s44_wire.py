@@ -70,6 +70,7 @@ def wire_verdict(
     round_trip_cost: float = 0.0,
     script: str = "",
     params: dict | None = None,
+    input_files: dict[str, str] | None = None,
 ) -> Verdict:
     """12 harness 共享接线——verify → Recorder → lineage → print 摘要。
 
@@ -107,15 +108,35 @@ def wire_verdict(
             json.dumps(params or {}, default=str, sort_keys=True).encode("utf-8")
         )[:12],
     }
+    # S169 grill #5: pin input data files (forecast_reports/kline_cache) so
+    # data-revalidation can detect 前复权 mutation. Caller passes {path: name}.
+    if input_files:
+        import os
+        for path, name in input_files.items():
+            try:
+                if os.path.exists(path):
+                    with open(path, "rb") as f:
+                        input_hashes[name] = _sha256(f.read())[:12]
+            except Exception:
+                pass
 
     # ── Recorder.save (R4) ──
+    # params 存 round_trip_cost + n_comparisons（reproduce_verdict 重算 verify 要，
+    # 否则 reproduce 缺这些 verify 参数；line_id 是 metadata 被 reproduce whitelist 过滤）
     recorder = Recorder()
     recorder_id = recorder.save(
         data_snapshot_id=data_snapshot_id,
         input_hashes=input_hashes,
         return_series=[float(x) for x in returns],
         dates=dates,
-        params={"line_id": line_id, "edge_type": edge_type, **(params or {})},
+        params={
+            "line_id": line_id,
+            "edge_type": edge_type,
+            "n_trials": n_comparisons,
+            "round_trip_cost": round_trip_cost,
+            "n_comparisons": n_comparisons,
+            **(params or {}),
+        },
         frozen_commit=frozen_commit,
         verdict=verdict_dict,
     )

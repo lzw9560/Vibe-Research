@@ -343,9 +343,21 @@ def verify(
             base_rate_val: Optional[float] = 0.0  # one-sample mean>0: null = 0
             net_mean_val: Optional[float] = t_res.day_mean  # day-clustered net mean
 
+            # 多重比较校正（grill #3）：event 边际多 horizon/arm 重复测，p_one_sided
+            # 须 Bonferroni/BH 校正（同 selection 分支）。by-n：小 n<60 用 BH，大 n≥60
+            # 用 Bonferroni（R6）。K=n_comparisons（arm×horizon 数）。
+            evt_bonf = stats_mod.bonferroni_bh(
+                [t_res.p_one_sided], n_comparisons, "bonferroni",
+            )
+            evt_bh = stats_mod.bonferroni_bh(
+                [t_res.p_one_sided], n_comparisons, "BH",
+            )
+            p_bonf = evt_bonf[0] if evt_bonf else None
+            p_bh = evt_bh[0] if evt_bh else None
+
             if t_res.day_mean <= 0:
                 event_status = "event_falsified"
-            elif t_res.p_one_sided < 0.05:
+            elif (p_bh if p_bh is not None else t_res.p_one_sided) < 0.05:
                 # Directionally confirmed (p < 0.05)
                 # MEDIUM #7: materiality floor extracted from magic 0.003.
                 # Cost-relative: floor = max(param, round_trip_cost * 0.5)
