@@ -145,8 +145,8 @@ async def lifespan(_app: FastAPI):
     # 本地开发直接可用（无需 ngrok / 公网域名 / 事件回调配置）。
     # 缺 SDK 或缺凭据时静默降级（仅 warning log），不阻断服务。
     try:
-        import threading as _threading
-        _fw_started = threading.Event()
+        import threading as _threading_mod
+        _fw_started = _threading_mod.Event()
         def _start_fw():
             try:
                 from notification.feishu_ws_client import start_feishu_ws  # noqa: PLC0415
@@ -155,7 +155,7 @@ async def lifespan(_app: FastAPI):
                 logger.warning("飞书 WebSocket 长连接启动失败（不影响服务）: %s", _fw_err)
             finally:
                 _fw_started.set()
-        _fw_thread = threading.Thread(target=_start_fw, name="feishu-ws-init", daemon=True)
+        _fw_thread = _threading_mod.Thread(target=_start_fw, name="feishu-ws-init", daemon=True)
         _fw_thread.start()
         _fw_started.wait(timeout=5)  # 最多等 5 秒，超时则继续启动服务
         if not _fw_started.is_set():
