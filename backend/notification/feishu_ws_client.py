@@ -223,15 +223,18 @@ def _send_message(chat_id: str, text: str) -> None:
         )
 
         body = (
-            CreateMessageRequestBody()
+            CreateMessageRequestBody.builder()
             .receive_id(chat_id)
-            .msg_type("text")
             .content(json.dumps({"text": text}))
+            .msg_type("text")
+            .uuid(str(__import__("uuid").uuid4()))
+            .build()
         )
         req = (
-            CreateMessageRequest()
+            CreateMessageRequest.builder()
             .receive_id_type("chat_id")
             .request_body(body)
+            .build()
         )
 
         resp = cli.im.v1.message.create(req)
