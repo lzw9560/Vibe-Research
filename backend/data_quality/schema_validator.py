@@ -19,9 +19,16 @@ bad data 抛 ``DataQualityError``，verifier 不把脏数据当 verdict 输入�
 """
 from __future__ import annotations
 
+import logging
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
+
+from data_quality.lineage import LineageError, record
+
+logger = logging.getLogger("vibe-research")
 
 # 校验维度（spec R1）：shape + content + missing rate + anomaly + freshness
 _Shape = Literal["list_of_dicts", "dict_of_dicts", "list_of_lists"]
@@ -480,6 +487,30 @@ def validate(
     )
 
 
+# S163 R2: lineage 接线 —— validate_or_reject 内记血缘（provenance sidecar）
+_REPO_ROOT = Path(__file__).resolve().parents[2]  # backend/data_quality/ → repo root
+
+
+def _caller_script() -> str:
+    """validate_or_reject 调用方脚本相对路径（spec R2 provenance trail）。
+
+    调用链 _caller_script ← validate_or_reject ← 脚本：
+      _getframe(0)=本函数, (1)=validate_or_reject, (2)=调用脚本。
+    非脚本调用（REPL / 无 __file__）→ "unknown"（不臆造）。
+    """
+    try:
+        frame = sys._getframe(2)
+        path_str = frame.f_globals.get("__file__")
+    except (ValueError, AttributeError):
+        return "unknown"
+    if not path_str:
+        return "unknown"
+    try:
+        return str(Path(path_str).resolve().relative_to(_REPO_ROOT))
+    except ValueError:
+        return Path(path_str).name  # 不在 repo 内 → basename（不臆造路径）
+
+
 def validate_or_reject(
     source_id: str, data: Any, as_of: str | None = None
 ) -> Any:
@@ -487,8 +518,38 @@ def validate_or_reject(
 
     §44 脚本接入点：``rows = validate_or_reject("baostock_kline", rows, as_of)``
     bad data 抛错 → verifier 不把脏数据当 verdict 输入（不污染 verdict）。
+
+    S163 R2：每次校验记血缘（script+commit+as_of+io hash+timestamp），覆盖所有
+    调本函数的脚本（集中 + 覆盖广，修复 lineage 0 调用方死代码）。lineage 是
+    provenance sidecar——记录失败（write-once 重复 / 磁盘异常）只 log 不阻断校验门
+    （§1.2 显式 log 非静默吞）。
     """
     result = validate(source_id, data, as_of)
+    # S163 R2: 记血缘 —— inputs/output 用摘要（非全量数据，防 1.3M bars json.dumps 卡死）
+    try:
+        record(
+            artifact_id=source_id,
+            script=_caller_script(),
+            as_of=as_of or "",
+            inputs={
+                "source_id": source_id,
+                "row_count": result.row_count,
+                "as_of": as_of or "",
+            },
+            output={
+                "ok": result.ok,
+                "row_count": result.row_count,
+                "errors": list(result.errors),
+                "freshness_ok": result.freshness_ok,
+                "last_date": result.last_date,
+            },
+            note="schema_validator.validate_or_reject",
+        )
+    except LineageError as e:
+        # write-once 重复（同 artifact+as_of+commit+output 已记）→ 跳过，不阻断校验
+        logger.warning("[lineage] write-once 重复跳过（不阻断校验门）：%s", e)
+    except Exception as e:  # sidecar 不阻断校验门（显式 log 非静默吞）
+        logger.warning("[lineage] 血缘记录失败（不阻断校验门）：%s", e)
     if not result.ok:
         raise DataQualityError(result)
     return data

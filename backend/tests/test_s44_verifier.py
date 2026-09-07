@@ -997,3 +997,54 @@ def test_compute_composite_snapshot_id(tmp_path):
     assert len(parts) == 2
     assert len(parts[0]) == 12
     assert len(parts[1]) == 12
+
+
+def test_latest_snapshot_ids_by_dimension(tmp_path):
+    """S162 R4: batch lookup dimension_id → latest data_snapshot_id."""
+    from s44_verifier.recorder import Recorder
+
+    rec = Recorder(db_path=str(tmp_path / "test_dim_lookup.db"))
+    # Seed: two records for 'gene_score' (different snapshot_ids), one for 'turnover'
+    rec.save(
+        data_snapshot_id="pit:1",
+        input_hashes={"u": "a"},
+        return_series=[0.01],
+        params={"n_trials": 1, "edge_type": "selection", "dimension_id": "gene_score"},
+        verdict={"status": "not_validated"},
+    )
+    rec.save(
+        data_snapshot_id="pit:2",
+        input_hashes={"u": "b"},
+        return_series=[0.02],
+        params={"n_trials": 1, "edge_type": "selection", "dimension_id": "gene_score"},
+        verdict={"status": "falsified"},
+    )
+    rec.save(
+        data_snapshot_id="pit:3",
+        input_hashes={"u": "c"},
+        return_series=[0.03],
+        params={"n_trials": 1, "edge_type": "selection", "dimension_id": "turnover"},
+        verdict={"status": "robust_edge"},
+    )
+
+    # Act: batch lookup
+    result = rec.latest_snapshot_ids_by_dimension(["gene_score", "turnover", "breakout"])
+
+    # Assert: latest per dimension (pit:2 > pit:1 for gene_score); breakout absent
+    assert result["gene_score"] == "pit:2"  # latest, not first
+    assert result["turnover"] == "pit:3"
+    assert "breakout" not in result  # no record → absent (caller defaults None)
+
+    # Empty list → empty dict
+    assert rec.latest_snapshot_ids_by_dimension([]) == {}
+
+    # Dimension with no dimension_id in params → not matched
+    rec.save(
+        data_snapshot_id="pit:4",
+        input_hashes={"u": "d"},
+        return_series=[0.04],
+        params={"n_trials": 1, "edge_type": "event"},  # no dimension_id
+        verdict={"status": "exploratory"},
+    )
+    result2 = rec.latest_snapshot_ids_by_dimension(["gene_score"])
+    assert result2 == {"gene_score": "pit:2"}  # pit:4 not matched (no dimension_id)

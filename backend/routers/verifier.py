@@ -98,12 +98,16 @@ def _verifier_record_to_response(rec: VerifierRecord) -> dict[str, Any]:
     }
 
 
-def _dim_to_response(dim) -> dict[str, Any]:
+def _dim_to_response(dim, data_snapshot_id: str | None = None) -> dict[str, Any]:
     """Map DIMENSION_LIFT_REGISTRY entry → frontend DimensionValidationRecord.
 
     R8 wiring: status + weight_multiplier from lift_to_multiplier (production).
     ci_low/ci_high/n_effective/event_* → null (S161 v2 verdict fields, 待 verifier
     跑出 — field source map, no fabrication).
+
+    S162 R4: ``data_snapshot_id`` from latest Recorder record matching the
+    dimension (params.dimension_id). None when no matching record (honest,
+    no fabrication).
     """
     status_cn, multiplier = lift_to_multiplier(
         dim.lift, dim.n, days_robust=dim.days_robust,
@@ -131,7 +135,7 @@ def _dim_to_response(dim) -> dict[str, Any]:
         "frozen_commit": dim.frozen_commit,
         "updated_commit": None,   # 待回溯 task 填充
         "updated_at": None,       # 待回溯 task 填充
-        "data_snapshot_id": None, # 待 S162 pit_store
+        "data_snapshot_id": data_snapshot_id,  # S162 R4: from recorder
         "layer": "selection",     # R6 三层 reframe
     }
 
@@ -175,8 +179,20 @@ async def list_evaluation_dims() -> list[dict[str, Any]]:
     Reads S151 DIMENSION_LIFT_REGISTRY (12 dims). status + weight_multiplier
     from lift_to_multiplier (R8 production wiring). ci_low/ci_high/overfit_stats
     null where S161 v2 verifier hasn't run yet (honest, no fabrication).
+
+    S162 R4: ``data_snapshot_id`` from latest Recorder record per dimension
+    (params.dimension_id lookup). None when no matching record.
     """
-    return [_dim_to_response(dim) for dim in DIMENSION_LIFT_REGISTRY.values()]
+    dim_ids = list(DIMENSION_LIFT_REGISTRY.keys())
+    try:
+        recorder = Recorder()
+        snapshot_map = recorder.latest_snapshot_ids_by_dimension(dim_ids)
+    except Exception:  # noqa: BLE001 — DB unavailable → all None (honest, not 500)
+        snapshot_map = {}
+    return [
+        _dim_to_response(dim, snapshot_map.get(dim.dimension_id))
+        for dim in DIMENSION_LIFT_REGISTRY.values()
+    ]
 
 
 __all__ = ["router"]

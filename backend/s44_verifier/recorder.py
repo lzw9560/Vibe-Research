@@ -255,6 +255,39 @@ class Recorder:
             f"(stored={stored_hash} vs rederived={rederived_hash})",
         )
 
+    def latest_snapshot_ids_by_dimension(
+        self, dimension_ids: list[str]
+    ) -> dict[str, str]:
+        """Batch lookup: dimension_id → latest data_snapshot_id.
+
+        Queries ``params.dimension_id`` (JSON field) for each dimension.
+        Returns only dimensions that have at least one matching record.
+        Dimensions with no records are absent from the result (caller
+        defaults to None). Used by GET /api/evaluation/dims (S162 R4).
+        """
+        if not dimension_ids:
+            return {}
+        placeholders = ",".join("?" for _ in dimension_ids)
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                f"SELECT json_extract(params, '$.dimension_id') AS dim, "
+                f"data_snapshot_id, recorder_id "
+                f"FROM verifier_records "
+                f"WHERE json_extract(params, '$.dimension_id') IN ({placeholders}) "
+                f"ORDER BY timestamp DESC, recorder_id DESC",
+                dimension_ids,
+            ).fetchall()
+            # Keep only the first (latest, since DESC) per dimension
+            result: dict[str, str] = {}
+            for row in rows:
+                dim = row["dim"]
+                if dim and dim not in result:
+                    result[dim] = row["data_snapshot_id"]
+            return result
+        finally:
+            conn.close()
+
     def count(self) -> int:
         conn = self._conn()
         try:

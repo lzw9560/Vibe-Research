@@ -129,8 +129,33 @@ def test_dims_overfit_all_null():
         }
 
 
-def test_dims_ci_and_v2_fields_null():
-    """ci_low/ci_high/n_effective/event_*/updated_*/data_snapshot_id all null (待 S161 v2)."""
+def test_dims_data_snapshot_id_from_recorder(fresh_recorder_db):
+    """S162 R4: data_snapshot_id read from latest Recorder record matching
+    the dimension (params.dimension_id). Seed a record for 'gene_score'
+    → that dimension's response shows the snapshot id; others stay None."""
+    from s44_verifier.recorder import Recorder
+
+    # Seed a record with dimension_id='gene_score' in params
+    Recorder().save(
+        data_snapshot_id="pit:42",
+        input_hashes={"universe": "abc"},
+        return_series=[0.01, -0.02, 0.005],
+        dates=["2026-09-01", "2026-09-02", "2026-09-03"],
+        params={"n_trials": 3, "edge_type": "selection", "dimension_id": "gene_score"},
+        frozen_commit="b1aba21",
+        verdict={"status": "not_validated", "selection_lift": 0.03},
+    )
+    dims = client.get("/api/evaluation/dims").json()
+    gene = next(d for d in dims if d["dimension_id"] == "gene_score")
+    assert gene["data_snapshot_id"] == "pit:42"
+    # Other dimensions with no matching record → None
+    turn = next(d for d in dims if d["dimension_id"] == "turnover")
+    assert turn["data_snapshot_id"] is None
+
+
+def test_dims_ci_and_v2_fields_null(fresh_recorder_db):
+    """ci_low/ci_high/n_effective/event_*/updated_* all null; data_snapshot_id
+    from recorder (None when no matching record — S162 R4 wiring)."""
     for d in client.get("/api/evaluation/dims").json():
         assert d["ci_low"] is None
         assert d["ci_high"] is None
@@ -139,6 +164,7 @@ def test_dims_ci_and_v2_fields_null():
         assert d["event_status"] is None
         assert d["updated_commit"] is None
         assert d["updated_at"] is None
+        # data_snapshot_id: None when no recorder record for this dimension
         assert d["data_snapshot_id"] is None
 
 

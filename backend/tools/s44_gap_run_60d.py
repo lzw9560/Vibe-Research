@@ -29,7 +29,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from s44_verifier.verifier import verify  # noqa: E402
-from s44_verifier.recorder import compute_composite_snapshot_id  # noqa: E402
+from s44_verifier.recorder import (  # noqa: E402
+    Recorder,
+    compute_composite_snapshot_id,
+    sha256_file,
+)
+from pit_store.store import SnapshotStore  # noqa: E402
 
 VR = ROOT / ".vibe-research"
 UNIVERSE = VR / "first_board_universe_baostock_60d.json"
@@ -197,6 +202,30 @@ def event_verdict(returns, dates, snap_id):
         round_trip_cost=COST,
     )
     return v
+
+
+def _verdict_to_dict(v) -> dict:
+    """Verdict dataclass → JSON-safe dict (numpy scalars → native Python).
+
+    ``dataclasses.asdict`` recursively converts nested dataclasses (Verdict →
+    EventMetrics). Numpy scalars (np.float64, np.int64) are converted via
+    ``.item()`` so ``json.dumps`` serializes them as native numbers, not strings.
+    """
+    from dataclasses import asdict
+
+    def _clean(obj):
+        if isinstance(obj, dict):
+            return {k: _clean(val) for k, val in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_clean(val) for val in obj]
+        if hasattr(obj, "item") and callable(obj.item):
+            try:
+                return obj.item()
+            except (ValueError, TypeError):
+                return obj
+        return obj
+
+    return _clean(asdict(v))
 
 
 def selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id):
@@ -434,6 +463,77 @@ def main():
     if ev.event_metrics and ev.event_metrics.mean_return > 0 and ev.event_status == "event_not_tested":
         label = f"{ev.status} + event_thin_positive"
     print(f"final honest label   = {label}")
+
+    # ── S162 R4: persist gap baseline to pit_store + recorder ─────────────
+    print("\n=== R4 PIT STORE + RECORDER PERSIST ===")
+    store = SnapshotStore()
+
+    # Persist universe (input data — first_board list, 687K)
+    uni_raw = UNIVERSE.read_bytes()
+    uni_sid = store.put(
+        source="first_board_universe_baostock_60d",
+        data_date=None,
+        query_spec={"file": str(UNIVERSE), "window_days": 60, "format": "json"},
+        raw_bytes=uni_raw,
+        generator_commit=FROZEN_COMMIT,
+    )
+    print(f"[pit_store] universe snapshot_id = {uni_sid}")
+
+    # Persist gap baseline (derived series — reproducible verdict input)
+    gap_baseline = json.dumps({
+        "returns": returns,
+        "dates": dates,
+        "cost": COST,
+        "n_picks": len(returns),
+        "frozen_commit": FROZEN_COMMIT,
+    }).encode("utf-8")
+    gap_sid = store.put(
+        source="gap_baseline_60d",
+        data_date=None,
+        query_spec={"universe_snapshot_id": uni_sid, "cost": COST, "window_days": 60},
+        raw_bytes=gap_baseline,
+        generator_commit=FROZEN_COMMIT,
+    )
+    print(f"[pit_store] gap_baseline snapshot_id = {gap_sid}")
+
+    # data_snapshot_id for recorder (pit_store-based, not hash composite)
+    data_snapshot_id = f"pit:{gap_sid}"
+
+    # Verify recompute_input (复现判据 §2.6b: raw retrievable without re-fetch)
+    raw_back = store.recompute_input(uni_sid)
+    assert raw_back == uni_raw, (
+        f"universe recompute mismatch! {len(raw_back)} vs {len(uni_raw)}"
+    )
+    gap_back = store.recompute_input(gap_sid)
+    assert gap_back == gap_baseline, "gap_baseline recompute mismatch!"
+    print(
+        f"[pit_store] recompute_input verified: "
+        f"universe({len(raw_back)}B) + gap({len(gap_back)}B)"
+    )
+
+    # Save event verdict to recorder (S161 R4)
+    recorder = Recorder()
+    recorder_id = recorder.save(
+        data_snapshot_id=data_snapshot_id,
+        input_hashes={
+            "universe": sha256_file(UNIVERSE)[:12],
+            "kline_cache": sha256_file(KLINE)[:12],
+        },
+        return_series=returns,
+        dates=dates,
+        params={
+            "n_trials": 1,
+            "edge_type": "event",
+            "cost": COST,
+            "dimension_id": "overnight_gap",
+            "round_trip_cost": COST,
+            "frozen_commit": FROZEN_COMMIT,
+        },
+        frozen_commit=FROZEN_COMMIT,
+        verdict=_verdict_to_dict(ev),
+    )
+    print(f"[recorder] saved event verdict: recorder_id={recorder_id}")
+    print(f"[recorder] data_snapshot_id={data_snapshot_id}")
 
     print("\n=== SELECTION VERDICT (secondary: can factors select bigger gaps?) ===")
     sv, surv, univ = selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id)

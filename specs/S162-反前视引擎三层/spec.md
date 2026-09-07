@@ -45,7 +45,7 @@ grill #2 证"design-agnostic 回测引擎不可能"——entry/fill 绑方向。
 - [ ] R3 A 股成交规则（T+1 + 涨跌停闸门 + 停牌，Executor 层 _is_unbuyable_next_bar）。
 - [ ] R4 PIT FeatureStore **deferred**（不在 NOW acceptance；S163 §5 改"读 cache"）。
 - [ ] R5 gap run bypasses engine 标注（直接 daily bars 算 D close→D+1 open）。
-- [ ] Accounting 喂 S161 verifier（raw return series → verdict 闭环）。
+- [~] Accounting 喂 S161 verifier（raw return series → verdict 闭环）。latent——accounting→verify latent：path_return 接 simulate_holding ✓（kline_returns.py:113），但 selection-edge backtest 接 verify 待未来；当前只 gap run 接 verify，gap run bypasses accounting per R5 直接 daily bars。YAGNI 不补（无 selection-edge backtest 接 verify 需求）。
 - [ ] simulate_holding 拆分重构（非复用）+ T+1 guard (idx+2>=len) 保。
 - [ ] pytest 单测（三层解耦 + 反前视 + A 股规则）+ tsc 0。
 
