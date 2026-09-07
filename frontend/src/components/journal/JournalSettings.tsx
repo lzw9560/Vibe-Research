@@ -17,6 +17,7 @@ function RulesEditor() {
   const { data, isLoading, error } = useRiskRules();
   const save = useSaveRules();
   const [v, setV] = useState<RiskRules | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   useEffect(() => { if (data) setV(data); }, [data]);
   if (error) return <div className="text-xs text-red-500">后端未就绪：{(error as Error).message}</div>;
   if (isLoading || !v) return <div className="text-xs text-muted-foreground">加载中…</div>;
@@ -50,10 +51,11 @@ function RulesEditor() {
           </label>
         ))}
       </div>
+      {err && <div className="text-xs text-red-500">{err}</div>}
       <button
-        onClick={() => save.mutate(v as SaveRulesInput, {
-          onError: (e) => alert(e instanceof ApiError ? e.message : String(e)),
-        })}
+        onClick={() => { setErr(null); save.mutate(v as SaveRulesInput, {
+          onError: (e) => setErr(e instanceof ApiError ? e.message : String(e)),
+        }); }}
         disabled={save.isPending}
         className="rounded bg-blue-500 px-3 py-1 text-sm text-white disabled:opacity-50"
       >
@@ -67,6 +69,7 @@ function FeesEditor() {
   const { data, isLoading, error } = useJournalFees();
   const save = useSaveFees();
   const [v, setV] = useState<Fees | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   useEffect(() => { if (data) setV(data); }, [data]);
   if (error) return <div className="text-xs text-red-500">后端未就绪：{(error as Error).message}</div>;
   if (isLoading || !v) return <div className="text-xs text-muted-foreground">加载中…</div>;
@@ -98,10 +101,11 @@ function FeesEditor() {
           </label>
         ))}
       </div>
+      {err && <div className="text-xs text-red-500">{err}</div>}
       <button
-        onClick={() => save.mutate(v as SaveFeesInput, {
-          onError: (e) => alert(e instanceof ApiError ? e.message : String(e)),
-        })}
+        onClick={() => { setErr(null); save.mutate(v as SaveFeesInput, {
+          onError: (e) => setErr(e instanceof ApiError ? e.message : String(e)),
+        }); }}
         disabled={save.isPending}
         className="rounded bg-blue-500 px-3 py-1 text-sm text-white disabled:opacity-50"
       >
@@ -115,6 +119,7 @@ function EquityBaseEditor() {
   const { data, isLoading, error } = useEquityBase();
   const save = useSaveEquityBase();
   const [val, setVal] = useState("");
+  const [err, setErr] = useState<string | null>(null);
   useEffect(() => { if (data) setVal(data.equity_base?.toString() ?? ""); }, [data]);
   if (error) return <div className="text-xs text-red-500">后端未就绪：{(error as Error).message}</div>;
   if (isLoading) return <div className="text-xs text-muted-foreground">加载中…</div>;
@@ -126,15 +131,16 @@ function EquityBaseEditor() {
       <div className="flex items-center gap-2">
         <input type="number" value={val} onChange={(e) => setVal(e.target.value)} className={inputCls} placeholder="账户本金（元）" />
         <button
-          onClick={() => save.mutate({ base: Number(val) }, {
-            onError: (e) => alert(e instanceof ApiError ? e.message : String(e)),
-          })}
+          onClick={() => { setErr(null); save.mutate({ base: Number(val) }, {
+            onError: (e) => setErr(e instanceof ApiError ? e.message : String(e)),
+          }); }}
           disabled={save.isPending || !val}
           className="rounded bg-blue-500 px-3 py-1 text-sm text-white disabled:opacity-50"
         >
           {save.isPending ? "保存中…" : "保存"}
         </button>
       </div>
+      {err && <div className="text-xs text-red-500">{err}</div>}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 // 不臆造：attribution available:False 如实呈现 reason（Vibe-Research 暂无 reflection/预测命中数据源），
 // 不假装有命中；excursion bias_note 如实呈现捕获率被系统性低估。
 import { GlassCard } from "@/components/ui/GlassCard";
+import { ApiError } from "@/lib/api";
 import { useExcursion, useAttribution, useInbox } from "@/lib/query";
 import type { ExcursionSummary, AttributionResponse, InboxResponse } from "@/lib/journal-contract";
 
@@ -133,22 +134,28 @@ function InboxCard({ data }: { data: InboxResponse | undefined }) {
 }
 
 export function DiagnosticsSection() {
-  const exc = useExcursion(300);
-  const attr = useAttribution(500);
-  const inbox = useInbox(500);
+  const { data: excData, error: excErr } = useExcursion(300);
+  const { data: attrData, error: attrErr } = useAttribution(500);
+  const { data: inboxData, error: inboxErr } = useInbox(500);
+  const err = excErr || attrErr || inboxErr;
   return (
     <div className="space-y-3">
+      {err && (
+        <div className="rounded bg-red-500/10 p-2 text-xs text-red-500">
+          后端未就绪：{err instanceof ApiError ? err.message : String(err)}
+        </div>
+      )}
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">MFE/MAE（最大浮盈/浮亏 + 盈利回吐）</div>
-        <ExcursionCard data={exc.data} />
+        <ExcursionCard data={excData} />
       </GlassCard>
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">判断/执行归因（四格：判对+亏钱=执行问题）</div>
-        <AttributionCard data={attr.data} />
+        <AttributionCard data={attrData} />
       </GlassCard>
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">异常交易收件箱</div>
-        <InboxCard data={inbox.data} />
+        <InboxCard data={inboxData} />
       </GlassCard>
     </div>
   );

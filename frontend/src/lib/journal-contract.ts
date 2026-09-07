@@ -58,6 +58,7 @@ export interface StockContext {
   sector?: string;
   board_type?: string;
   was_broken?: boolean;
+  has_stock?: boolean; // §1.2 不臆造：fetch 失败/空 pool → false（unknown），不臆造 in_limit_up:False
 }
 
 export interface Trade {

@@ -81,6 +81,13 @@ function AddTradeForm() {
       setErr("日期和代码必填");
       return;
     }
+    // FillEditor 校验：有 fills 时每笔须 date + price>0 + shares>0（否则后端 ValueError）
+    for (let i = 0; i < fills.length; i++) {
+      const f = fills[i];
+      if (!f.date) { setErr(`第 ${i + 1} 笔成交缺日期`); return; }
+      if (!f.price || f.price <= 0) { setErr(`第 ${i + 1} 笔成交价格须 > 0`); return; }
+      if (!f.shares || f.shares <= 0) { setErr(`第 ${i + 1} 笔成交股数须 > 0`); return; }
+    }
     const body: AddTradeInput = {
       date, code: code.trim().padStart(6, "0"), name, playbook,
       pnl_pct: pnlPct === "" ? null : Number(pnlPct),
@@ -163,9 +170,13 @@ function TradeRow({ trade, onDelete }: {
   );
 }
 
-function StatsSummary({ stats }: {
+function StatsSummary({ stats, error }: {
   stats: import("@/lib/journal-contract").StatsResponse | undefined;
+  error: unknown;
 }) {
+  if (error) {
+    return <div className="text-xs text-red-500">后端未就绪：{error instanceof ApiError ? error.message : String(error)}</div>;
+  }
   if (!stats || !stats.available) {
     return <div className="text-xs text-muted-foreground">{stats?.reason || "统计未就绪"}</div>;
   }
@@ -198,8 +209,9 @@ function StatsSummary({ stats }: {
 
 export function TradeJournalSection() {
   const { data, isLoading, error } = useJournalTrades(200);
-  const { data: stats } = useJournalStats();
+  const { data: stats, error: statsError } = useJournalStats();
   const del = useDeleteTrade();
+  const [delErr, setDelErr] = useState<string | null>(null);
   const trades = data?.trades ?? [];
 
   return (
@@ -207,6 +219,7 @@ export function TradeJournalSection() {
       <AddTradeForm />
       <GlassCard className="p-3">
         <div className="mb-2 text-sm font-medium">成交列表（{trades.length}{data ? `/${data.total}` : ""}）</div>
+        {delErr && <div className="mb-2 text-xs text-red-500">删除失败：{delErr}</div>}
         {error ? (
           <div className="rounded bg-red-500/10 p-2 text-xs text-red-500">
             后端未就绪：{error instanceof ApiError ? error.message : String(error)}
@@ -233,7 +246,12 @@ export function TradeJournalSection() {
               </thead>
               <tbody>
                 {trades.map((t) => (
-                  <TradeRow key={t.id} trade={t} onDelete={(id) => del.mutate(id)} />
+                  <TradeRow key={t.id} trade={t} onDelete={(id) => {
+                    setDelErr(null);
+                    del.mutate(id, {
+                      onError: (e) => setDelErr(e instanceof ApiError ? e.message : String(e)),
+                    });
+                  }} />
                 ))}
               </tbody>
             </table>
@@ -242,7 +260,7 @@ export function TradeJournalSection() {
       </GlassCard>
       <GlassCard className="p-3">
         <div className="mb-2 text-sm font-medium">自我体检</div>
-        <StatsSummary stats={stats} />
+        <StatsSummary stats={stats} error={statsError} />
       </GlassCard>
     </div>
   );

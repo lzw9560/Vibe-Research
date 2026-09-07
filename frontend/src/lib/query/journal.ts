@@ -13,12 +13,15 @@ import type {
   SaveRulesInput, SaveRulesResponse, SaveEquityBaseInput, SaveEquityBaseResponse,
 } from "@/lib/journal-contract";
 
+// 5min staleTime——journal 数据变更不频繁；改 rules/equity_base 会显式 invalidate 依赖 query。
+const JOURNAL_STALE_MS = 5 * 60 * 1000;
+
 // ─── 查询（变更不频繁，5min stale；excursion 首次慢逐笔拉行情缓存） ───
 export function useJournalTrades(limit = 200, options?: Opts<TradeListResponse>) {
   return useQuery({
     queryKey: ["journal", "trades", limit] as const,
     queryFn: () => api.journalList(limit),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -26,7 +29,7 @@ export function useJournalStats(options?: Opts<StatsResponse>) {
   return useQuery({
     queryKey: ["journal", "stats"] as const,
     queryFn: () => api.journalStats(),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -34,7 +37,7 @@ export function useJournalFees(options?: Opts<Fees>) {
   return useQuery({
     queryKey: ["journal", "fees"] as const,
     queryFn: () => api.journalFees(),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -42,7 +45,7 @@ export function useRiskReport(options?: Opts<RiskReportResponse>) {
   return useQuery({
     queryKey: ["journal", "risk-report"] as const,
     queryFn: () => api.riskReport(),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -50,7 +53,7 @@ export function useAtRisk(options?: Opts<AtRiskReport>) {
   return useQuery({
     queryKey: ["journal", "at-risk"] as const,
     queryFn: () => api.riskAtRisk(),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -58,7 +61,7 @@ export function useExcursion(limit = 300, options?: Opts<ExcursionSummary>) {
   return useQuery({
     queryKey: ["journal", "excursion", limit] as const,
     queryFn: () => api.riskExcursion(limit),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -66,7 +69,7 @@ export function useAttribution(limit = 500, options?: Opts<AttributionResponse>)
   return useQuery({
     queryKey: ["journal", "attribution", limit] as const,
     queryFn: () => api.riskAttribution(limit),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -74,7 +77,7 @@ export function useInbox(limit = 500, options?: Opts<InboxResponse>) {
   return useQuery({
     queryKey: ["journal", "inbox", limit] as const,
     queryFn: () => api.riskInbox(limit),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -82,7 +85,7 @@ export function useRiskRules(options?: Opts<RiskRules>) {
   return useQuery({
     queryKey: ["journal", "rules"] as const,
     queryFn: () => api.riskRules(),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -90,7 +93,7 @@ export function useEquityBase(options?: Opts<EquityBaseResponse>) {
   return useQuery({
     queryKey: ["journal", "equity-base"] as const,
     queryFn: () => api.riskEquityBase(),
-    staleTime: 5 * 60_000,
+    staleTime: JOURNAL_STALE_MS,
     ...options,
   });
 }
@@ -128,13 +131,15 @@ export function useSaveRules() {
   const qc = useQueryClient();
   return useMutation<SaveRulesResponse, Error, SaveRulesInput>({
     mutationFn: (body) => api.riskSaveRules(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["journal", "rules"] }),
+    // rules 影响 at-risk（load_rules 算超限）+ risk-report（violations）+ inbox（load_rules）——全 invalidate
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["journal"] }),
   });
 }
 export function useSaveEquityBase() {
   const qc = useQueryClient();
   return useMutation<SaveEquityBaseResponse, Error, SaveEquityBaseInput>({
     mutationFn: (body) => api.riskSaveEquityBase(body.base),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["journal", "equity-base"] }),
+    // equity_base 影响 at-risk（占比分母）+ risk-report（violations 单日亏损占比）——全 invalidate
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["journal"] }),
   });
 }

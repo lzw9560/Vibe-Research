@@ -3,10 +3,14 @@
 // ⚠️ R3 grill #8："edge 来自风控"数学谬误——risk_status 如实呈现 stop 对 gap-down 仪式非保护
 // （s144 path_lift<1）/ kill_switch 通知级非阻断 / 真实风控=仓位 sizing + gap-down 诚实标，
 // 不宣称"core 风控保护"，UI 原文呈现不软化。
+// frontend review fixes: error 解构 + ApiError 横幅（#2 HIGH）；后端 honest label 文本带
+// markdown ** → 前端 strip（#11 LOW）；kill_switch_note amber 非灰（contentious#1）；
+// cards 接 | undefined 免 as cast fallback（#12 LOW）。
 import { GlassCard } from "@/components/ui/GlassCard";
+import { ApiError } from "@/lib/api";
 import { useAtRisk, useRiskReport } from "@/lib/query";
 import type {
-  AtRiskReport, RiskReportResponse, HonestRiskLabels, RollingWindow,
+  AtRiskReport, RiskReportResponse, HonestRiskLabels,
 } from "@/lib/journal-contract";
 
 function pct(v: number | null | undefined, digits = 2): string {
@@ -20,15 +24,21 @@ function yuan(v: number | null | undefined): string {
 function wr(v: number | null): string {
   return v == null ? "—" : `${(v * 100).toFixed(1)}%`;
 }
+// 后端 honest label 文本带 markdown **bold**（at_risk.render 会 strip，但 API 返原样）；
+// 前端无 markdown 渲染器，裸显会出字面 **。轻量 strip——不值得引入 markdown 库。
+function stripMd(s: string | null | undefined): string {
+  return (s ?? "").replace(/\*\*/g, "");
+}
 
 function HonestLabels({ rs }: { rs: HonestRiskLabels }) {
   return (
     <div className="space-y-1 rounded bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
       {rs.labels.map((l) => (
-        <div key={l.key}>⚠️ {l.text}</div>
+        <div key={l.key}>⚠️ {stripMd(l.text)}</div>
       ))}
-      <div className="text-muted-foreground">{rs.kill_switch_note}</div>
-      <div className="font-medium">{rs.honest_summary}</div>
+      {/* kill_switch_note amber（非灰）——R3 诚实消息须醒目，不软化（contentious#1 fix） */}
+      <div className="text-amber-600 dark:text-amber-300">{stripMd(rs.kill_switch_note)}</div>
+      <div className="font-medium">{stripMd(rs.honest_summary)}</div>
     </div>
   );
 }
@@ -42,7 +52,7 @@ function AtRiskCard({ data }: { data: AtRiskReport | undefined }) {
     <div className="space-y-2">
       <HonestLabels rs={data.risk_status} />
       {data.unbounded_note && (
-        <div className="rounded bg-red-500/10 p-2 text-xs text-red-500">⚠️ {data.unbounded_note}</div>
+        <div className="rounded bg-red-500/10 p-2 text-xs text-red-500">⚠️ {stripMd(data.unbounded_note)}</div>
       )}
       <div className="flex flex-wrap gap-3 text-xs">
         <span>持仓 {data.position_count} 只</span>
@@ -99,10 +109,10 @@ function AtRiskCard({ data }: { data: AtRiskReport | undefined }) {
   );
 }
 
-function EquityCard({ eq }: { eq: RiskReportResponse["equity"] }) {
-  if (!eq.available) {
-    return <div className="text-xs text-muted-foreground">{eq.reason}</div>;
-  }
+// cards 接 | undefined：loading 时 undefined（不臆造 fallback EquityCurve 再 as cast）。
+function EquityCard({ eq }: { eq: RiskReportResponse["equity"] | undefined }) {
+  if (!eq) return <div className="text-xs text-muted-foreground">加载中…</div>;
+  if (!eq.available) return <div className="text-xs text-muted-foreground">{eq.reason}</div>;
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
@@ -123,10 +133,9 @@ function EquityCard({ eq }: { eq: RiskReportResponse["equity"] }) {
   );
 }
 
-function DisciplineCard({ dp }: { dp: RiskReportResponse["discipline"] }) {
-  if (!dp.available) {
-    return <div className="text-xs text-muted-foreground">{dp.reason}</div>;
-  }
+function DisciplineCard({ dp }: { dp: RiskReportResponse["discipline"] | undefined }) {
+  if (!dp) return <div className="text-xs text-muted-foreground">加载中…</div>;
+  if (!dp.available) return <div className="text-xs text-muted-foreground">{dp.reason}</div>;
   const wi = dp.what_if_only_planned;
   return (
     <div className="space-y-2 text-xs">
@@ -156,10 +165,9 @@ function DisciplineCard({ dp }: { dp: RiskReportResponse["discipline"] }) {
   );
 }
 
-function ViolationsCard({ vi }: { vi: RiskReportResponse["violations"] }) {
-  if (!vi.available) {
-    return <div className="text-xs text-muted-foreground">{vi.reason}</div>;
-  }
+function ViolationsCard({ vi }: { vi: RiskReportResponse["violations"] | undefined }) {
+  if (!vi) return <div className="text-xs text-muted-foreground">加载中…</div>;
+  if (!vi.available) return <div className="text-xs text-muted-foreground">{vi.reason}</div>;
   return (
     <div className="space-y-2 text-xs">
       <div>违反自设规则 <span className="text-red-500">{vi.violation_count} 次</span>
@@ -187,10 +195,11 @@ function ViolationsCard({ vi }: { vi: RiskReportResponse["violations"] }) {
   );
 }
 
-function RollingCard({ ro }: { ro: RiskReportResponse["rolling"] }) {
+function RollingCard({ ro }: { ro: RiskReportResponse["rolling"] | undefined }) {
+  if (!ro) return <div className="text-xs text-muted-foreground">加载中…</div>;
   if (!ro.available) return <div className="text-xs text-muted-foreground">{ro.reason}</div>;
   const w = (n: string) => ro.windows[n];
-  const rows: [string, RollingWindow | undefined][] = [
+  const rows: [string, import("@/lib/journal-contract").RollingWindow | undefined][] = [
     ["终身", ro.lifetime],
     ["近10", w("10")],
     ["近20", w("20")],
@@ -222,29 +231,35 @@ function RollingCard({ ro }: { ro: RiskReportResponse["rolling"] }) {
 }
 
 export function RiskReportSection() {
-  const atRisk = useAtRisk();
-  const report = useRiskReport();
+  const { data: atRiskData, error: atRiskErr } = useAtRisk();
+  const { data: reportData, error: reportErr } = useRiskReport();
+  const err = atRiskErr || reportErr;
   return (
     <div className="space-y-3">
+      {err && (
+        <div className="rounded bg-red-500/10 p-2 text-xs text-red-500">
+          后端未就绪：{err instanceof ApiError ? err.message : String(err)}
+        </div>
+      )}
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">在险资金（⚠️ R3 诚实标签：stop 对隔夜 gap-down 是仪式非保护）</div>
-        <AtRiskCard data={atRisk.data} />
+        <AtRiskCard data={atRiskData} />
       </GlassCard>
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">权益曲线</div>
-        <EquityCard eq={report.data?.equity ?? { available: false, reason: "加载中…" } as RiskReportResponse["equity"]} />
+        <EquityCard eq={reportData?.equity} />
       </GlassCard>
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">滚动窗口（10/20/50 笔对比，看最近退化）</div>
-        <RollingCard ro={report.data?.rolling ?? { available: false, reason: "加载中…", windows: {}, lifetime: { trades: 0 } } as RiskReportResponse["rolling"]} />
+        <RollingCard ro={reportData?.rolling} />
       </GlassCard>
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">纪律归因（只做按计划的会怎样）</div>
-        <DisciplineCard dp={report.data?.discipline ?? { available: false, reason: "加载中…", planned: { count: 0, win_rate: null, avg_pct: null, net_pnl: null }, unplanned: { count: 0, win_rate: null, avg_pct: null, net_pnl: null }, untagged: { count: 0, win_rate: null, avg_pct: null, net_pnl: null }, execution_rate: null, what_if_only_planned: { actual_net: null, planned_only_net: null, cost_of_indiscipline: null } } as RiskReportResponse["discipline"]} />
+        <DisciplineCard dp={reportData?.discipline} />
       </GlassCard>
       <GlassCard className="space-y-2 p-3">
         <div className="text-sm font-medium">规则违反（按你自己写的阈值逐条查）</div>
-        <ViolationsCard vi={report.data?.violations ?? { available: false, reason: "加载中…", rules: {}, is_default_rules: false, rule_status: {}, unchecked: [], violations: [], violation_count: 0, after_loss_streak: { threshold: 0, trades: 0, avg_pct: null, win_rate: null } } as RiskReportResponse["violations"]} />
+        <ViolationsCard vi={reportData?.violations} />
       </GlassCard>
     </div>
   );
