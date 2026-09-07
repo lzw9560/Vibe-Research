@@ -2927,6 +2927,42 @@ def _ensure_seed_tasks() -> None:
             )
 
 
+    def _execute_daily_kg_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """知识图谱每日审查——跑 daily_audit.py 生成审查报告。
+
+        每天收盘后跑，检查断链/孤立/coverage/confidence 覆盖率。
+        报告写到 vault 的 reviews/YYYY-MM-DD-daily-audit.md。
+        """
+        import subprocess
+        from pathlib import Path
+
+        vault_path = Path("/Users/lizhiwei/Documents/Obsidian Vault")
+        script = vault_path / "scripts" / "daily_audit.py"
+
+        if not script.exists():
+            logger.warning("[daily_kg_audit] daily_audit.py 不存在，跳过")
+            return {"status": "script_not_found"}
+
+        try:
+            result = subprocess.run(
+                ["python3", str(script), "--quiet"],
+                capture_output=True, text=True, timeout=60,
+                cwd=str(vault_path),
+            )
+            if result.returncode == 0:
+                logger.info("[daily_kg_audit] %s", result.stdout.strip())
+                return {"status": "ok", "output": result.stdout.strip()}
+            else:
+                logger.error("[daily_kg_audit] 审查失败: %s", result.stderr[:200])
+                return {"status": "error", "error": result.stderr[:200]}
+        except subprocess.TimeoutExpired:
+            logger.warning("[daily_kg_audit] 审查超时（60s）")
+            return {"status": "timeout"}
+        except Exception as e:
+            logger.error("[daily_kg_audit] 异常: %s", e)
+            return {"status": "error", "error": str(e)}
+
+
 async def stop_scheduler() -> None:
     if _scheduler is not None:
         await _scheduler.stop()
