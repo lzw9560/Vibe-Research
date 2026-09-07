@@ -146,8 +146,11 @@ def _handle_message(text: str, chat_id: str) -> None:
 
     与 routers.feishu_bot.feishu_bot_webhook 保持相同的回复优先级：
     KG 直查 → LLM 兜底 → 帮助提示。
+
+    LLM 分支会注入图谱上下文：消息含股票代码 / 行业名时先调 KG 工具
+    预查关联信息，作为 LLM context，让回答更精准。
     """
-    from routers.feishu_bot import _direct_kg_lookup
+    from routers.feishu_bot import _direct_kg_lookup, _build_kg_context
     from routers.wechat_bot import _format_kg_as_text
 
     # 1. KG 直查（轻量，不经 LLM）
@@ -163,12 +166,19 @@ def _handle_message(text: str, chat_id: str) -> None:
         return
 
     # 2. LLM 兜底（如果配置了 VR_LLM_*）
+    # KG 上下文预查：消息含股票代码 / 行业名时先查图谱，注入 LLM context
+    try:
+        kg_context = _build_kg_context(text)
+    except Exception as e:  # noqa: BLE001 — 预查失败降级，不阻断 LLM
+        logger.warning("飞书 WS KG context 构造失败: %s", e)
+        kg_context = ""
+
     reply = None
     try:
         import chat
         cfg = chat._get_env_llm_config()
         if cfg.get("baseURL") and cfg.get("apiKey"):
-            result = chat.run_chat(cfg, [{"role": "user", "content": text}])
+            result = chat.run_chat(cfg, [{"role": "user", "content": text}], context=kg_context)
             reply = result.get("content")
     except Exception as e:  # noqa: BLE001 — LLM 失败降级到帮助提示
         logger.warning("飞书 WS LLM 调用失败: %s", e)

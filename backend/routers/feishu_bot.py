@@ -240,6 +240,76 @@ def _direct_kg_lookup(text: str) -> Optional[dict]:
     return None
 
 
+# ── KG 上下文预查（注入 LLM context，让回答更精准）──────────────────
+
+
+def _build_kg_context(text: str) -> str:
+    """从消息中识别股票代码 / 行业名，预查知识图谱，构造 LLM context 文本。
+
+    与 _direct_kg_lookup 的区别：本函数不替代回复，只把图谱关联信息拼成
+    context 注入 chat.run_chat，让 LLM 在已有 function-calling 之上还多一份
+    预检索的上下文（弱模型 / 工具调用不稳时也能给出带图谱信息的回答）。
+
+    识别规则：
+    - 含 6 位数字（股票代码） → query_kg_relations 拿该股关联
+    - 含「XX 行业」→ query_kg_entities 拿该行业的股票列表
+
+    无法识别 / 工具异常时返回空串（不影响 LLM 正常调用）。
+    """
+    import re
+    from ai.tools.registry import execute as exec_tool
+
+    if not text:
+        return ""
+
+    # 1. 含 6 位股票代码 → 查该股的图谱关联
+    code_match = re.search(r"(\d{6})", text)
+    if code_match:
+        code = code_match.group(1)
+        try:
+            result = exec_tool("query_kg_relations", {
+                "entity_code": code, "entity_type": "stock",
+            })
+            if isinstance(result, dict) and not result.get("error"):
+                entity = result.get("entity", code)
+                relations = result.get("relations", [])
+                total = result.get("total", 0)
+                lines = [f"知识图谱：{entity} 的关联（共 {total} 条）："]
+                for item in relations[:15]:
+                    target = item.get("target", "")
+                    link = item.get("link", "")
+                    lines.append(f"  - {target}" + (f"（{link}）" if link else ""))
+                if len(relations) > 15:
+                    lines.append(f"  …共 {total} 条，仅列前 15")
+                return "\n".join(lines)
+        except Exception as e:  # noqa: BLE001 — 预查失败降级，不阻断 LLM
+            logger.warning("KG context 预查（relations %s）失败: %s", code, e)
+
+    # 2. 含「XX 行业」→ 查该行业的股票列表
+    industry_match = re.search(r"([\u4e00-\u9fa5]{2,6}|[A-Za-z]{2,20})行业", text)
+    if industry_match:
+        industry = industry_match.group(1)
+        try:
+            result = exec_tool("query_kg_entities", {
+                "entity_type": "stock",
+                "filter_field": "industry",
+                "filter_value": industry,
+            })
+            if isinstance(result, list) and result:
+                lines = [f"知识图谱：{industry}行业的股票（共 {len(result)} 只）："]
+                for item in result[:15]:
+                    code = item.get("code") or item.get("_filename", "")
+                    name = item.get("name") or item.get("title", "")
+                    lines.append(f"  - {code} {name}")
+                if len(result) > 15:
+                    lines.append(f"  …共 {len(result)} 只，仅列前 15")
+                return "\n".join(lines)
+        except Exception as e:  # noqa: BLE001 — 预查失败降级，不阻断 LLM
+            logger.warning("KG context 预查（entities %s）失败: %s", industry, e)
+
+    return ""
+
+
 @router.post("/api/feishu/bot")
 async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
     """飞书事件回调入口。
@@ -276,6 +346,13 @@ async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
         return {"ok": False, "reason": "empty text"}
 
     # 3. 调 AI 对话层（复用 chat.run_chat，TOOLS 含 query_kg_entities 等新工具）
+    # KG 上下文预查：消息含股票代码 / 行业名时先查图谱，注入 LLM context
+    try:
+        kg_context = _build_kg_context(text)
+    except Exception as e:  # noqa: BLE001 — 预查失败降级，不阻断 LLM
+        logger.warning("KG context 构造失败: %s", e)
+        kg_context = ""
+
     try:
         cfg = chat._get_env_llm_config()
         if not cfg.get("baseURL") or not cfg.get("apiKey") or not cfg.get("model"):
@@ -283,7 +360,7 @@ async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
                 "ok": False,
                 "error": "后端未配置 VR_LLM_BASE_URL / VR_LLM_API_KEY / VR_LLM_MODEL",
             }
-        result = chat.run_chat(cfg, [{"role": "user", "content": text}])
+        result = chat.run_chat(cfg, [{"role": "user", "content": text}], context=kg_context)
         reply = result.get("content", "") or "（AI 无回复）"
     except Exception as e:  # noqa: BLE001 — 对话失败回错误消息给用户
         logger.error("飞书 bot 对话失败: %s", e)
@@ -359,12 +436,15 @@ async def feishu_bot_test(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "ok": False,
                 "error": "后端未配置 VR_LLM_BASE_URL / VR_LLM_API_KEY / VR_LLM_MODEL",
             }
-        result = chat.run_chat(cfg, [{"role": "user", "content": text}])
+        # KG 上下文预查（与主路由一致）
+        kg_context = _build_kg_context(text)
+        result = chat.run_chat(cfg, [{"role": "user", "content": text}], context=kg_context)
         return {
             "ok": True,
             "reply": result.get("content", ""),
             "trace": result.get("trace", []),
             "rounds": result.get("rounds", 0),
+            "kg_context": kg_context,
         }
     except Exception as e:  # noqa: BLE001 — 测试端点回结构化错误
         return {"ok": False, "error": str(e)}
@@ -470,13 +550,21 @@ async def feishu_bot_stream(payload: Dict[str, Any]):
             yield f"data: {json.dumps({'type': 'error', 'data': f'kg: {e}'}, ensure_ascii=False)}\n\n"
 
         # 事件 2：LLM 回答（异步等待）
+        # KG 上下文预查：与主路由一致，让 LLM 回答时带图谱信息
+        try:
+            kg_context = _build_kg_context(text)
+        except Exception as e:  # noqa: BLE001 — 预查失败不阻断 LLM
+            logger.warning("stream KG context 构造失败: %s", e)
+            kg_context = ""
+
         try:
             cfg = chat._get_env_llm_config()
             if cfg.get("baseURL") and cfg.get("apiKey") and cfg.get("model"):
                 # run_chat 是同步阻塞调用，丢到线程池避免阻塞事件循环
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(
-                    None, lambda: chat.run_chat(cfg, [{"role": "user", "content": text}])
+                    None,
+                    lambda: chat.run_chat(cfg, [{"role": "user", "content": text}], context=kg_context),
                 )
                 reply = result.get("content", "") or ""
                 if reply:
