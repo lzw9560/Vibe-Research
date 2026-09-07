@@ -52,10 +52,13 @@ def start_feishu_ws() -> None:
         logger.warning("lark-oapi 未安装，飞书 WebSocket 长连接不可用")
         return
 
-    cfg = default_config
-    if not cfg.feishu_app_id or not cfg.feishu_app_secret:
+    import os
+    # 用 FEISHU_BOT_* 新配置（独立于原有 FEISHU_APP_* 通知配置）
+    app_id = os.environ.get("FEISHU_BOT_APP_ID", "")
+    app_secret = os.environ.get("FEISHU_BOT_APP_SECRET", "")
+    if not app_id or not app_secret:
         logger.warning(
-            "飞书 app_id/secret 未配置（FEISHU_APP_ID/FEISHU_APP_SECRET），"
+            "飞书 bot app_id/secret 未配置（FEISHU_BOT_APP_ID/FEISHU_BOT_APP_SECRET），"
             "WebSocket 长连接不可用"
         )
         return
@@ -69,8 +72,8 @@ def start_feishu_ws() -> None:
 
     # WebSocket 长连接客户端
     cli = lark.ws.Client(
-        cfg.feishu_app_id,
-        cfg.feishu_app_secret,
+        app_id,
+        app_secret,
         event_handler=event_dispatcher,
         log_level=lark.LogLevel.INFO,
     )
@@ -86,7 +89,7 @@ def start_feishu_ws() -> None:
     _thread.start()
     logger.info(
         "飞书 WebSocket 长连接已启动（app_id=%s…）",
-        cfg.feishu_app_id[:12],
+        app_id[:12],
     )
 
 
@@ -187,9 +190,11 @@ def _send_message(chat_id: str, text: str) -> None:
         logger.warning("飞书 WS 回复跳过：chat_id 为空")
         return
 
-    cfg = default_config
-    if not cfg.feishu_app_id or not cfg.feishu_app_secret:
-        logger.warning("飞书 WS 回复跳过：app_id/secret 未配置")
+    import os
+    app_id = os.environ.get("FEISHU_BOT_APP_ID", "")
+    app_secret = os.environ.get("FEISHU_BOT_APP_SECRET", "")
+    if not app_id or not app_secret:
+        logger.warning("飞书 WS 回复跳过：FEISHU_BOT_APP_ID/SECRET 未配置")
         return
 
     try:
@@ -199,14 +204,11 @@ def _send_message(chat_id: str, text: str) -> None:
             CreateMessageRequestBody,
         )
 
-        # domain：feishu（国内）/ lark（海外）；config 默认 "feishu"
-        domain = cfg.feishu_domain if cfg.feishu_domain in ("feishu", "lark") else "feishu"
-
         cli = (
             lark.Client.builder()
-            .app_id(cfg.feishu_app_id)
-            .app_secret(cfg.feishu_app_secret)
-            .domain(domain)
+            .app_id(app_id)
+            .app_secret(app_secret)
+            .domain("feishu")
             .build()
         )
 
