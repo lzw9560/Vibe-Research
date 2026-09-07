@@ -69,6 +69,10 @@ class Verdict:
     p_permutation: Optional[float] = None
     walk_forward_status: Optional[str] = None
     walk_forward_mean_lift: Optional[float] = None
+    # R2: PurgedKFold.split() OOS — SEPARATE from walk_forward_* (K-Fold vs
+    # rolling are different OOS methods; conflating misleads the verdict).
+    purged_kfold_status: Optional[str] = None
+    purged_kfold_mean_lift: Optional[float] = None
     n_comparisons: int = 1
     frozen_commit: Optional[str] = None
     updated_commit: Optional[str] = None
@@ -88,6 +92,74 @@ def _extract_trial_cols(
     if arr.ndim != 2:
         return None
     return [arr[:, i] for i in range(arr.shape[1])]
+
+
+def _day_means(
+    returns: "pd.Series | np.ndarray",
+    dates: "list[str] | np.ndarray | None",
+) -> "np.ndarray | None":
+    """One mean return per unique date (day-clustered, §44v2 effective-n basis).
+
+    Used for DSR/haircut so they use day-clustered n, NOT pooled per-pick n
+    (the §44v1 artifact: 1000 picks across 14 days → pooled n=1000 inflates
+    t-stat by sqrt(1000/14); day-clustered n=14 is correct). None when dates
+    is None or <2 unique dates with returns → caller falls back to raw r.
+    """
+    if dates is None:
+        return None
+    r = np.asarray(returns, dtype=float)
+    d = np.asarray(dates, dtype=object)
+    mask = ~np.isnan(r)
+    if mask.sum() < 2:
+        return None
+    r_valid = r[mask]
+    d_valid = d[mask]
+    unique = sorted(set(d_valid.tolist()))
+    if len(unique) < 2:
+        return None
+    return np.array([float(r_valid[d_valid == dt].mean()) for dt in unique])
+
+
+def _purged_kfold_oos_lifts(
+    survivors_by_day: dict[str, list[float]],
+    universe_by_day: dict[str, list[float]],
+    dates: "list[str] | np.ndarray | None",
+    n_splits: int = 5,
+    embargo_pct: float = 0.01,
+) -> list[float]:
+    """R2: PurgedKFold OOS lift per fold (label-overlap purge + embargo).
+
+    Calls ``wiring.compute_purged_kfold_splits`` → ``PurgedKFold.split()``
+    (spec R2 acceptance: ``.split()`` invoked in the OOS path, NOT a bare
+    import). For each test fold, compute ``day_paired_lift`` on the fold's
+    dates. Returns [] when inapplicable (no dates, <2 unique dates, or split
+    yielded nothing) — caller treats empty as graceful degradation.
+    """
+    if dates is None:
+        return []
+    dates_iter = dates.tolist() if hasattr(dates, "tolist") else list(dates)
+    sorted_dates = sorted(set(dates_iter))
+    if len(sorted_dates) < 2:
+        return []
+    # Daily-return labels are determined same-day → label_times index = value
+    # = date. Purge/embargo are no-ops for zero-span labels but the splitter
+    # is correct for future holding-period labels (span N days).
+    label_times = pd.Series(sorted_dates, index=sorted_dates)
+    splits = wiring.compute_purged_kfold_splits(label_times, n_splits, embargo_pct)
+    lifts: list[float] = []
+    n_dates = len(sorted_dates)
+    for _tr, te_idx in splits:
+        test_dates_set = {
+            sorted_dates[i] for i in te_idx.tolist() if 0 <= i < n_dates
+        }
+        test_surv = {d: r for d, r in survivors_by_day.items() if d in test_dates_set}
+        test_raw = {d: r for d, r in universe_by_day.items() if d in test_dates_set}
+        if not test_surv or not test_raw:
+            continue
+        fl = stats_mod.day_paired_lift(test_surv, test_raw)
+        if fl.winrate_lift_avg is not None:
+            lifts.append(fl.winrate_lift_avg)
+    return lifts
 
 
 def verify(
@@ -140,20 +212,32 @@ def verify(
     n = int(r.size)
 
     trial_cols = _extract_trial_cols(trials_matrix)
-    dsr, dsr_method = wiring.compute_dsr(r, n_trials, trial_cols)
-    pbo = wiring.compute_pbo(trial_cols)
 
-    # ── day-clustered effective n (replaces naive pooled n) ───────────────
+    # ── day-clustered effective n + day-means (computed BEFORE dsr/haircut so
+    # they use day-clustered n, NOT pooled per-pick n — §44v1 artifact fix:
+    # 1000 picks across 14 days → pooled n=1000 inflates t-stat; correct n=14).
     if dates is not None:
         n_effective = stats_mod.day_paired_effective_n(returns, dates)
         days_robust = n_effective
     elif survivors_by_day is not None:
-        # derive from by-day data: unique days = effective n
         n_effective = len(survivors_by_day)
         days_robust = n_effective
     else:
         n_effective = None
         days_robust = n
+
+    # day-means for DSR/haircut (§44v2 effective-n basis; None → fall back to r).
+    day_means = _day_means(returns, dates)
+    dsr_returns = day_means if day_means is not None else r
+    dsr_n = len(day_means) if day_means is not None else n
+
+    dsr, dsr_method, min_trl = wiring.compute_dsr(dsr_returns, n_trials, trial_cols)
+    pbo = wiring.compute_pbo(trial_cols)
+
+    # R2: multiple-testing haircut (Harvey & Liu 2015). day-clustered n_obs +
+    # method by-n per spec R6 (BH small-n<60, bonferroni mature>=60). K=1 → 0.
+    haircut_method = "BH" if days_robust < 60 else "bonferroni"
+    haircut = wiring.compute_haircut(dsr_returns, dsr_n, n_comparisons, haircut_method)
 
     # ── R5: window sanity (S159 §5A, enforced per spec line 61) ───────────
     # When window_sanity provided, check edge_type's matching window for
@@ -189,6 +273,9 @@ def verify(
     p_bh: Optional[float] = None
     wf_status: Optional[str] = None
     wf_mean_lift: Optional[float] = None
+    pk_status: Optional[str] = None
+    pk_mean_lift: Optional[float] = None
+    pk_n_folds = 0
 
     has_lift_data = survivors_by_day is not None and universe_by_day is not None
     if has_lift_data and not r5_skip_heavy:
@@ -207,12 +294,33 @@ def verify(
         p_bonf = bonf_adj[0] if bonf_adj else None
         p_bh = bh_adj[0] if bh_adj else None
 
-        # walk-forward OOS (graceful: "insufficient_skipped" if 0 windows)
+        # walk-forward OOS (graceful: "insufficient_skipped" if 0 windows).
+        # wf_status/wf_mean_lift are walk-forward ONLY — NOT overwritten by
+        # PurgedKFold (spec R2: 互补 non-redundant, not substitute).
         wf_res = stats_mod.walk_forward_oos(
             survivors_by_day, universe_by_day, walk_train, walk_test,
         )
         wf_status = wf_res.status
         wf_mean_lift = wf_res.mean_test_lift
+
+        # R2: PurgedKFold.split() OOS — SEPARATE field, complementary to
+        # walk-forward. K-Fold with label-overlap purge + embargo; for daily
+        # labels purge/embargo are no-ops but the splitter is wired for
+        # holding-period labels. Always runs when dates supplied (alongside
+        # walk-forward, not only as fallback). .split() invoked here via
+        # _purged_kfold_oos_lifts → wiring.compute_purged_kfold_splits.
+        if dates is not None:
+            pk_lifts = _purged_kfold_oos_lifts(
+                survivors_by_day, universe_by_day, dates,
+            )
+            pk_n_folds = len(pk_lifts)
+            if pk_lifts:
+                pk_mean_lift = round(float(np.mean(pk_lifts)), 4)
+                pk_status = (
+                    "purged_kfold_oos_stable"
+                    if all(l >= 1.0 for l in pk_lifts)
+                    else "purged_kfold_oos_unstable"
+                )
 
     # ── event metrics + event_status (day-clustered one-sample t-test) ────
     event_metrics: Optional[EventMetrics] = None
@@ -302,10 +410,19 @@ def verify(
     notes: list[str] = []
     if r5_note:
         notes.append(r5_note)
+    # R7: anti-extrapolation — selection-falsified must warn a population event
+    # edge may still exist (spec R7 须; §44v1 wrong-window disaster guard).
+    if status == "falsified" and edge_type == "selection":
+        notes.append("selection falsified; population event edge may exist (see event verdict)")
     if status == "underpowered" and days_robust < 60:
         notes.append(f"underpowered: days_robust={days_robust}<60 (R6 gate)")
     if wf_status == "insufficient_skipped":
         notes.append("walk-forward: insufficient data, skipped")
+    if pk_status is not None:
+        notes.append(
+            f"PurgedKFold: {pk_status} ({pk_n_folds} folds; "
+            f"walk-forward {'insufficient' if wf_status == 'insufficient_skipped' else 'ran'})"
+        )
 
     return Verdict(
         status=status,
@@ -321,12 +438,16 @@ def verify(
         dsr=dsr,
         dsr_method=dsr_method,
         pbo=pbo,
+        haircut=haircut,
+        min_trl=min_trl,
         days_robust=days_robust,
         n=n,
         n_effective=n_effective,
         p_permutation=p_perm,
         walk_forward_status=wf_status,
         walk_forward_mean_lift=wf_mean_lift,
+        purged_kfold_status=pk_status,
+        purged_kfold_mean_lift=pk_mean_lift,
         n_comparisons=n_comparisons,
         frozen_commit=frozen_commit,
         data_snapshot_id=data_snapshot_id,

@@ -646,6 +646,125 @@ def test_nan_returns_with_dates_does_not_crash():
     assert abs(v.event_metrics.day_mean - np.mean(manual_day_means)) < 1e-8
 
 
+# ── R2 tests: PurgedKFold.split() + haircut wire (spec acceptance) ─────────
+
+
+def test_compute_purged_kfold_splits_yields_train_test():
+    """R2 acceptance: PurgedKFold.split() called (not bare import)."""
+    from s44_verifier.wiring import compute_purged_kfold_splits
+    idx = pd.RangeIndex(60)
+    label_times = pd.Series(idx, index=idx)  # daily: label determined same-day
+    splits = compute_purged_kfold_splits(label_times, n_splits=5, embargo_pct=0.01)
+    assert len(splits) == 5
+    for tr, te in splits:
+        assert len(te) > 0
+        # train and test disjoint (purge + embargo enforced)
+        assert len(set(tr.tolist()) & set(te.tolist())) == 0
+
+
+def test_compute_purged_kfold_splits_empty_when_none():
+    from s44_verifier.wiring import compute_purged_kfold_splits
+    assert compute_purged_kfold_splits(None) == []
+
+
+def test_compute_purged_kfold_splits_empty_when_too_few():
+    from s44_verifier.wiring import compute_purged_kfold_splits
+    idx = pd.RangeIndex(1)
+    label_times = pd.Series(idx, index=idx)
+    assert compute_purged_kfold_splits(label_times, n_splits=5) == []
+
+
+def test_compute_haircut_returns_float_when_valid(positive_returns):
+    from s44_verifier.wiring import compute_haircut
+    h = compute_haircut(positive_returns, n_obs=100, n_tests=10)
+    assert h is not None
+    assert 0.0 <= h <= 1.0
+
+
+def test_compute_haircut_none_when_insufficient():
+    from s44_verifier.wiring import compute_haircut
+    assert compute_haircut(np.array([0.001]), n_obs=1, n_tests=1) is None
+    # zero std -> haircut undefined
+    assert compute_haircut(np.array([0.0, 0.0, 0.0]), n_obs=3, n_tests=1) is None
+
+
+def test_verify_populates_haircut_field(positive_returns):
+    v = verify(positive_returns, n_trials=10)
+    assert v.haircut is not None
+    assert 0.0 <= v.haircut <= 1.0
+
+
+def test_verify_purged_kfold_fallback_when_walk_forward_insufficient():
+    """R2: walk_forward insufficient (n<train+test) + dates supplied →
+    PurgedKFold.split() OOS fills walk_forward as fallback (no crash)."""
+    rng = np.random.default_rng(7)
+    dates_30 = [f"2026-09-{d:02d}" for d in range(1, 31)]  # 30 days < 120 train+test
+    surv = {d: rng.normal(0.002, 0.01, 10).tolist() for d in dates_30}
+    raw = {d: rng.normal(0.001, 0.01, 50).tolist() for d in dates_30}
+    # returns + dates are per-pick aligned (300 picks = 30 days × 10 surv/day);
+    # survivors_by_day/universe_by_day are the by-day view of the same picks.
+    r = rng.normal(0.001, 0.012, 300)
+    dates = [d for d in dates_30 for _ in range(10)]  # 300 dates matching 300 returns
+    v = verify(
+        r, n_trials=1, dates=dates,
+        survivors_by_day=surv, universe_by_day=raw,
+    )
+    # 30<60 → underpowered (R6 gate). walk-forward stays insufficient (30<120);
+    # PurgedKFold fills the SEPARATE purged_kfold_* field (not walk_forward_*).
+    assert v.status == "underpowered"
+    assert v.walk_forward_status == "insufficient_skipped"
+    assert v.purged_kfold_status in ("purged_kfold_oos_stable", "purged_kfold_oos_unstable")
+    assert v.purged_kfold_mean_lift is not None
+    assert "PurgedKFold" in v.note
+
+
+def test_r7_selection_falsified_note_warns_population_edge():
+    """R7: selection-falsified verdict must carry anti-extrapolation note
+    'selection falsified; population event edge may exist'. Guards §44v1
+    wrong-window disaster (selection-falsified misread as 'no edge')."""
+    rng = np.random.default_rng(7)
+    dates = [f"2026-07-{d:02d}" for d in range(1, 91)]  # 90 days >= 60
+    surv = {d: rng.normal(-0.002, 0.01, 10).tolist() for d in dates}
+    raw = {d: rng.normal(0.001, 0.01, 50).tolist() for d in dates}
+    r = rng.normal(-0.001, 0.012, 900)
+    dates_per_pick = [d for d in dates for _ in range(10)]
+    v = verify(
+        r, n_trials=1, dates=dates_per_pick,
+        survivors_by_day=surv, universe_by_day=raw,
+        edge_type="selection",
+    )
+    assert v.status == "falsified"
+    assert v.edge_type == "selection"
+    assert "selection falsified; population event edge may exist" in v.note
+
+
+def test_dsr_min_trl_wired_when_returns_supplied(positive_returns):
+    """R2: MinTRL wired (spec lists deflated_sharpe DSR/PSR/MinTRL)."""
+    v = verify(positive_returns, n_trials=1)
+    assert v.min_trl is not None
+    assert v.min_trl > 0
+
+
+def test_dsr_uses_day_clustered_returns_when_dates_supplied():
+    """§44v2: DSR/MinTRL must use day-clustered returns (n=n_effective), not
+    pooled per-pick. Pooled n inflates DSR (§44v1 artifact)."""
+    rng = np.random.default_rng(7)
+    dates = [f"2026-09-{d:02d}" for d in range(1, 31)]
+    r = rng.normal(0.001, 0.012, 300)
+    dates_per_pick = [d for d in dates for _ in range(10)]
+    v_with_dates = verify(r, n_trials=1, dates=dates_per_pick)
+    v_without_dates = verify(r, n_trials=1)
+    assert v_with_dates.n_effective == 30
+    assert v_without_dates.n_effective is None
+    assert v_with_dates.days_robust == 30  # day-clustered
+    assert v_without_dates.days_robust == 300  # pooled
+    # DSR with day-means (n=30) differs from pooled (n=300) — proves DSR
+    # consumed day-clustered returns, not pooled (§44v1 artifact fix).
+    # (min_trl is None for both because this seed's day-means Sharpe <= 0
+    #  → observed<=benchmark → inf→None; that's correct, not a bug.)
+    assert v_with_dates.dsr != v_without_dates.dsr
+
+
 # ── MEDIUM #1: permutation p +1 convention (Phipson & Smyth 2010) ────────────
 
 

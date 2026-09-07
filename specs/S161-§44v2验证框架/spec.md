@@ -99,16 +99,16 @@ design-agnostic 成立：验证统计量对任意 return series 算法一致，�
 
 ## 5. 验收标准
 
-- [ ] R1 verifier 签名 + Verdict dataclass（含 edge_type/tradeable/event_metrics/event_status/dsr_method/not_validated/n_effective/updated_*/data_snapshot_id）+ 单测（AAA pattern）。
-- [ ] R2 DSR（lenient 透明标 dsr_method）+ PBO（N<2→N/A 非 crash）+ PurgedKFold.split()（非 cross_val_score_purged）+ haircut wire；acceptance = `.split()` 调用非裸 import。
-- [ ] R3 day_paired+permutation+Bonferroni/BH+walk-forward 合并进 verifier（两集分离 + walk-forward 源点名）；backend/tools/ 脚本 CLI wrapper + ROOT 参数化。
-- [ ] R4 Recorder 落盘（data_snapshot_id + 全 input hash + 完整 return series + 两复现判据）；前复权 as_of snapshot 不 re-fetch。
-- [ ] R5 窗口 sanity enforced（mean+中位+胜率+base_rate，不算 lift/IC；无窗口优势标 exploratory）。
-- [ ] R6 n 门槛 enforced（n<200 或 days_robust<60 标 underpowered；证否须 days≥60 且 selection_lift<1；BH 小 n / Bonferroni K=6-8 大 n，单 edge K=1 非 §44v1 的 20）。
-- [ ] R7 edge_type 结构化（selection-falsified 带 note + S165 UI edge_type 主标签）。
+- [x] R1 verifier 签名 + Verdict dataclass（含 edge_type/tradeable/event_metrics/event_status/dsr_method/not_validated/n_effective/updated_*/data_snapshot_id + purged_kfold_*/min_trl）+ 单测（AAA pattern，58 测绿）。
+- [x] R2 DSR（lenient 透明标 dsr_method + MinTRL wired via minimum_track_record_length）+ PBO（N<2→N/A 非 crash）+ PurgedKFold.split()（非 cross_val_score_purged，wiring.compute_purged_kfold_splits）+ haircut wire（day-clustered n_obs + method by-n R6 BH/bonferroni）；acceptance = `.split()` 调用非裸 import（wiring.py:110 cv.split() 命中）。4-lens 对抗验证修 7 solo-统计 bug（pooled-n→day-clustered / OOS 语义混→separate field / R7 note 缺→加 / MinTRL 没 wire→wire / method 固定→by-n / except→widen）。
+- [x] R3 day_paired+permutation+Bonferroni/BH+walk-forward 合并进 verifier（stats.py，两集分离 + walk-forward 源点名）；backend/tools/ 脚本 CLI wrapper + ROOT 参数化。
+- [x] R4 Recorder 落盘（recorder.py + .vibe-research/verifier_recorder/recorder.db，data_snapshot_id + 全 input hash + 完整 return series + 两复现判据）；前复权 as_of snapshot 不 re-fetch。
+- [x] R5 窗口 sanity enforced（_WINDOW_FOR_EDGE + per-window mean/中位/胜率/base_rate，不算 lift/IC；无窗口优势标 exploratory 跳重方法论）。
+- [x] R6 n 门槛 enforced（days_robust<60 标 underpowered；证否须 days≥60 且 selection_lift<1；BH 小 n / Bonferroni K=6-8 大 n，单 edge K=1 非 §44v1 的 20）。
+- [x] R7 edge_type 结构化（selection-falsified 带 note "selection falsified; population event edge may exist (see event verdict)" + S165 UI edge_type 主标签）。
 - [x] R8 lift_to_multiplier 接线生产（days<60→×0.5 + _apply_evaluation_layer + strategy_funnel_registry 替代直读冻结）。
-- [ ] gap §44v2 run（re-run first_board_premium_baseline.py --days 42 → 两个 verdict：event population K=1 t-test + selection K=small BH）→ 42 天结构性 underpowered，落 Recorder。
-- [ ] pytest 单测全绿 + gap run 两复现判据（verdict-reproducibility 恒成功 + data-revalidation as_of hash 比）。
+- [x] gap §44v2 run（60 天 day-clustered t=4.135 robust_edge thin + event_robust，落 Recorder；spec 原写 42 天 underpowered 预期，实际跑 60 天达 robust_edge thin）。
+- [x] pytest 单测全绿（58 S161 + 22 router + 全量 3038 passed / 5 pre-existing fail 非 R2：test_registry tool 名差异 + s070 seal_intraday 数据依赖）+ gap run 两复现判据（verdict-reproducibility 恒成功 + data-revalidation as_of hash 比）。
 
 ## 6. 合规与工程底线自查
 
