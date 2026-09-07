@@ -523,6 +523,7 @@ class TaskExecutor:
             "premarket_auction_notify": self._execute_premarket_auction_notify,  # S101：9:25 竞价确认通知
             "premarket_open_notify": self._execute_premarket_open_notify,  # S101：9:35 开盘表现通知
             "premarket_t1_review": self._execute_premarket_t1_review,  # S101：T+1 复盘通知
+            "daily_kg_audit": self._execute_daily_kg_audit,  # 知识图谱每日审查
             "st_play_radar": self._execute_st_play_radar,  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
             "intraday_microstructure_snapshot": self._execute_intraday_microstructure_snapshot,  # S167：盘中微结构周期快照（hithink 排名 + tencent 量比，10min）
             "intraday_auction_dense": self._execute_intraday_auction_dense,  # S167：竞价密集采集（auction live only，每 2min，is_auction_time 门控）
