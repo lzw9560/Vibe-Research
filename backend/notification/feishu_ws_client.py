@@ -208,7 +208,7 @@ def _send_message(chat_id: str, text: str) -> None:
             lark.Client.builder()
             .app_id(app_id)
             .app_secret(app_secret)
-            .domain("feishu")
+            .domain(lark.FEISHU_DOMAIN)
             .build()
         )
 
