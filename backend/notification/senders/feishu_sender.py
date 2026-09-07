@@ -125,14 +125,24 @@ FEISHU_SDK_AVAILABLE = False  # 保留向后兼容；真实状态通过 _is_feis
 FEISHU_FILE_SDK_AVAILABLE = False
 _CreateFileRequest: Any = None
 _CreateFileRequestBody: Any = None
-try:
-    from lark_oapi.api.im.v1 import (
-        CreateFileRequest as _CreateFileRequest,
-        CreateFileRequestBody as _CreateFileRequestBody,
-    )
-    FEISHU_FILE_SDK_AVAILABLE = True
-except ImportError:
-    pass
+# 延迟到首次使用时才探测（lark_oapi 导入 60s+，不能在模块级触发）
+# _ensure_file_sdk_loaded() 在实际需要发文件时才调用
+def _ensure_file_sdk_loaded() -> bool:
+    """延迟探测文件上传 SDK 可用性。"""
+    global FEISHU_FILE_SDK_AVAILABLE, _CreateFileRequest, _CreateFileRequestBody
+    if FEISHU_FILE_SDK_AVAILABLE is not None:
+        return FEISHU_FILE_SDK_AVAILABLE
+    try:
+        from lark_oapi.api.im.v1 import (
+            CreateFileRequest as _CFR,
+            CreateFileRequestBody as _CFRB,
+        )
+        _CreateFileRequest = _CFR
+        _CreateFileRequestBody = _CFRB
+        FEISHU_FILE_SDK_AVAILABLE = True
+    except ImportError:
+        FEISHU_FILE_SDK_AVAILABLE = False
+    return FEISHU_FILE_SDK_AVAILABLE
 
 # ---------------------------------------------------------------------------
 # Constants
