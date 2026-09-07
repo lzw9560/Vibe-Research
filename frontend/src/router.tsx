@@ -87,6 +87,8 @@ export const router = createBrowserRouter([
       { path: "/debate", element: lazyEl(() => import("@/pages/Debate"), "Debate") },
       // S165: §44 验证实验记录（RecorderRecord[]）+ 维度验证卡网格
       { path: "/verifier-records", element: lazyEl(() => import("@/pages/VerifierRecords"), "VerifierRecords") },
+      // S166: 交易日志 + 风险账本（Trade Journal + Risk Ledger，fresh-impl）
+      { path: "/journal", element: lazyEl(() => import("@/pages/Journal"), "Journal") },
     ],
   },
 ]);

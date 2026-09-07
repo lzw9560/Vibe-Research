@@ -25,6 +25,14 @@ import type {
 } from "./api/types";
 // S165: verifier-contract 是 UI 契约 source-of-truth（Verdict/RecorderRecord/DimensionValidationRecord）。
 import type { RecorderRecord, DimensionValidationRecord } from "./verifier-contract";
+// S166: journal-contract 是交易日志 + 风险账本 UI 契约 source-of-truth（16 端点 EXACTLY）。
+import type {
+  TradeListResponse, StatsResponse, RiskReportResponse, AtRiskReport,
+  ExcursionSummary, AttributionResponse, InboxResponse, RiskRules, Fees,
+  EquityBaseResponse, AddTradeInput, AddTradeResponse, UpdateTradeInput,
+  UpdateTradeResponse, DeleteTradeResponse, SaveFeesInput, SaveFeesResponse,
+  SaveRulesInput, SaveRulesResponse, SaveEquityBaseResponse,
+} from "./journal-contract";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
   getReviewParams, saveReviewParams, getLlmEnvStatus,
@@ -268,4 +276,28 @@ export const api = {
   // 未就绪时 client 抛 ApiError，前端组件降级到 mock fixture + "mock" 徽标（诚实过渡）。
   verifierRecords: () => get<RecorderRecord[]>("/verifier/records"),
   evaluationDims: () => get<DimensionValidationRecord[]>("/evaluation/dims"),
+  // S166: 交易日志 + 风险账本（contract-first，journal-contract.ts 为 source-of-truth）。
+  // 后端 /api/journal/* (6) + /api/risk/* (10，与 S055 routers/risk.py 不同子路径共存) 16 端点。
+  // request() 返 payload?.data ?? payload——后端返 {ok/trades/available} 无 .data 包裹 → 原样返回。
+  // 未就绪时 client 抛 ApiError，组件降级"后端未就绪"诚实横幅（不臆造 mock 交易）。
+  journalList: (limit = 200) => get<TradeListResponse>(`/journal/list?limit=${limit}`),
+  journalStats: () => get<StatsResponse>("/journal/stats"),
+  journalAdd: (body: AddTradeInput) => request<AddTradeResponse>("/journal/add", "POST", body),
+  journalUpdate: (tradeId: string, body: UpdateTradeInput) =>
+    request<UpdateTradeResponse>(
+      `/journal/update?trade_id=${encodeURIComponent(tradeId)}`, "POST", body ?? {}),
+  journalDelete: (tradeId: string) =>
+    request<DeleteTradeResponse>(`/journal/delete?trade_id=${encodeURIComponent(tradeId)}`, "POST"),
+  journalFees: () => get<Fees>("/journal/fees"),
+  journalSaveFees: (body: SaveFeesInput) => request<SaveFeesResponse>("/journal/fees", "POST", body),
+  riskReport: () => get<RiskReportResponse>("/risk/report"),
+  riskAtRisk: () => get<AtRiskReport>("/risk/at-risk"),
+  riskExcursion: (limit = 300) => get<ExcursionSummary>(`/risk/excursion?limit=${limit}`),
+  riskAttribution: (limit = 500) => get<AttributionResponse>(`/risk/attribution?limit=${limit}`),
+  riskInbox: (limit = 500) => get<InboxResponse>(`/risk/inbox?limit=${limit}`),
+  riskRules: () => get<RiskRules>("/risk/rules"),
+  riskSaveRules: (body: SaveRulesInput) => request<SaveRulesResponse>("/risk/rules", "POST", body),
+  riskEquityBase: () => get<EquityBaseResponse>("/risk/equity-base"),
+  riskSaveEquityBase: (base: number) =>
+    request<SaveEquityBaseResponse>("/risk/equity-base", "POST", { base }),
 };
