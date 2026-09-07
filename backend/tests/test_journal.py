@@ -270,8 +270,13 @@ class TestStamp:
         assert m["limit_up_count"] == 33
         assert m["has_review"] is True
 
-    def test_stock_context_no_limit_up_when_pool_empty(self, fresh):
+    def test_stock_context_pool_empty_marks_unknown_not_fabricated(self, fresh):
+        """grill HIGH §1.2 不臆造：pool 空（em_zt_topic_pool fetch 失败/返 []，
+        raise_on_failure=False 故 except 抓不到）→ has_stock:False（unknown），
+        不臆造 in_limit_up:False（与 verified 非涨停不可区分，会污染 stats by_boards 分桶）。"""
         r = fresh.add_trade("2026-08-01", "600519", "茅台", "打板",
                             fills=[{"side": "buy", "date": "2026-08-01",
                                     "price": 10.0, "shares": 100}])
-        assert r["trade"]["stock"]["in_limit_up"] is False
+        stock = r["trade"]["stock"]
+        assert stock["has_stock"] is False  # pool 空 → unknown，不臆造
+        assert "in_limit_up" not in stock   # 不伪造 False（与 verified 非涨停不可区分）

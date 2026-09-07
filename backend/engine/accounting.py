@@ -154,7 +154,8 @@ def path_return(
             gross = float(take_profit_pct)
             net = gross - cost
             return PathReturn(
-                won=True, return_pct=round(net, 2) if apply_cost else gross,
+                won=(net if apply_cost else gross) > 0,
+                return_pct=round(net, 2) if apply_cost else gross,
                 exit_reason="take", exit_date=str(_bar_get(bars[j], "date", "")),
                 cost_pct=cost, gross_return_pct=gross,
             )

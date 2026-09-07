@@ -250,14 +250,24 @@ def _stock_context(date: str, code: str) -> dict:
     读 astock.em_zt_topic_pool（push2ex，em_get 防封）。字段映射
     c→code / lbc→boards / fbt→first_seal / lbt→last_seal / zbc→broken_times / hybk→sector。
     board_type 按代码推（push2ex 无 board 字段）。
+
+    ⚠️ §1.2 不臆造（grill HIGH confirmed）：em_zt_topic_pool raise_on_failure=False →
+    fetch 失败（em_get 熔断/限流/JSON 错）返 [] 非 raise，except 抓不到，空 pool 会落到
+    `in_limit_up:False`——那是伪造的"非涨停"（与 verified 非涨停不可区分），且永久钉在
+    trade.stock 上（add_trade 时写，update_trade 不重取），污染 stats() by_boards 分桶。
+    须加 has_stock 区分：pool 非空且不在 → verified 非（in_limit_up:False, has_stock:True）；
+    pool 空/fetch 失败 → unknown（has_stock:False，不臆造 in_limit_up）。对照 _market_context
+    的 has_review 诚实模式。
     """
     code = str(code).zfill(6)
     compact = date.replace("-", "")
     try:
         zt = astock.em_zt_topic_pool("getTopicZTPool", compact, "fbt:asc")
         zb = astock.em_zt_topic_pool("getTopicZBPool", compact, "fbt:asc")
-    except Exception:  # noqa: BLE001  取不到如实给空，不臆造
-        return {}
+    except Exception:  # noqa: BLE001  取不到如实标 unknown，不臆造
+        return {"has_stock": False}
+    # 空 pool = fetch 失败/无数据（unknown），非"不在池"（verified 非）
+    pool_has_data = bool(zt or zb)
     for r in zt or []:
         if str(r.get("c", "")).zfill(6) == code:
             return {
@@ -266,13 +276,18 @@ def _stock_context(date: str, code: str) -> dict:
                 "last_seal": str(r.get("lbt") or "") or None,
                 "broken_times": int(r.get("zbc") or 0),
                 "sector": r.get("hybk") or "", "board_type": _board_type(code),
+                "has_stock": True,
             }
     for r in zb or []:
         if str(r.get("c", "")).zfill(6) == code:
             return {"in_limit_up": False, "was_broken": True,
                     "broken_times": int(r.get("zbc") or 0),
-                    "sector": r.get("hybk") or "", "board_type": _board_type(code)}
-    return {"in_limit_up": False}
+                    "sector": r.get("hybk") or "", "board_type": _board_type(code),
+                    "has_stock": True}
+    # pool 非空 + stock 不在 → verified 非涨停；pool 空 → fetch 失败/无数据 → unknown
+    if pool_has_data:
+        return {"in_limit_up": False, "has_stock": True}
+    return {"has_stock": False}  # 不臆造 in_limit_up:False——与 verified 非涨停不可区分
 
 
 # 「没传这个参数」与「显式传了 None」是两件事：前者保持原值，后者是清空。
@@ -668,8 +683,10 @@ def stats() -> dict:
         if st.get("in_limit_up"):
             b = int(st.get("boards") or 1)
             key = "首板" if b == 1 else ("2板" if b == 2 else "3板及以上")
+        elif st.get("has_stock") is True:
+            key = "非涨停"  # verified 非（pool 非空且不在）
         else:
-            key = "非涨停"
+            key = "未记录"  # has_stock False/absent → fetch 失败/空 pool，不臆造非涨停
         by_boards.setdefault(key, []).append(t)
         st = t.get("settled") or {}
         hd = st.get("hold_days")

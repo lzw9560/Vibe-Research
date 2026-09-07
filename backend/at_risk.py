@@ -117,8 +117,10 @@ def positions(trades: list[dict]) -> list[dict]:
             "planned_stop": stop, "planned_target": t.get("planned_target"),
         }
         if stop:
-            # ⚠️ 止损价高于成本时在险为 0（已经锁定盈利），不算负数——负的在险会把总数拉低，
-            # 看着像"风险更小"，其实是另一回事。
+            # 止损价高于成本时 in-risk 为 0（max(0, cost-stop)=0）。注：这不等于"已经锁定
+            # 盈利"——stop 对隔夜 gap-down 是仪式非保护（s144 path_lift<1），隔夜跳空可击穿
+            # 止损价开盘。这里只算"按计划止损价能守住多少"的下限，非真实锁定盈利。
+            # 不算负数——负的在险会把总数拉低，看着像"风险更小"，其实是另一回事。
             item["at_risk"] = round(max(0.0, (float(cost) - float(stop)) * shares), 2)
             item["at_risk_pct"] = round(max(0.0, (1 - float(stop) / float(cost))) * 100, 2)
             item["bounded"] = True

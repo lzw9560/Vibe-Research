@@ -167,8 +167,16 @@ async def risk_inbox(limit: int = Query(500, ge=1, le=5000)) -> Dict[str, Any]:
 
 @router.get("/api/risk/rules")
 async def risk_rules_get() -> Dict[str, Any]:
-    """风险宪法（用户自设阈值；is_default 标是否初值）。"""
-    return await asyncio.to_thread(risk_rules.load_rules)
+    """风险宪法（用户自设阈值；is_default 标是否初值）。
+
+    ⚠️ load_rules() 内部用 `_is_default`（下划线=私有标记），API 对外统一 `is_default`
+    （与 at_risk.report / inbox.build 一致），否则前端契约读 is_default 永远 undefined
+    → "还在用初值" 警告永不渲染（frontend review contract-mismatch HIGH finding）。
+    """
+    rules = await asyncio.to_thread(risk_rules.load_rules)
+    return {k: v for k, v in rules.items() if k != "_is_default"} | {
+        "is_default": bool(rules.get("_is_default", False)),
+    }
 
 
 class SaveRulesBody(BaseModel):

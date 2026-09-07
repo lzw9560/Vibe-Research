@@ -350,8 +350,13 @@ class TestRouter:
         assert fees["is_default"] is True
 
     def test_risk_rules_get_default(self, client):
+        # frontend review contract-mismatch fix：router 转换 _is_default→is_default
+        # （load_rules 内部 _is_default，API 对外 is_default，与 at_risk/inbox 一致）
         r = client.get("/api/risk/rules")
-        assert r.status_code == 200 and r.json()["_is_default"] is True
+        body = r.json()
+        assert r.status_code == 200
+        assert body["is_default"] is True   # API 对外 is_default
+        assert "_is_default" not in body    # 内部 _is_default 不泄漏给前端
 
     def test_risk_rules_save(self, client):
         r = client.post("/api/risk/rules", json={"max_positions": 5})
