@@ -547,6 +547,7 @@ def update_trade(trade_id: str, *, fills=None, note=None, as_planned=_UNSET,
         if fills is not None:
             norm = _norm_fills(fills)
             settled = _settle(norm)             # 超卖等录入错误会在这里抛 ValueError
+            old_first_buy = (t.get("settled") or {}).get("first_buy")
             t["fills"] = norm
             t["settled"] = settled
             # 盈亏以明细算出来的为准（与 add_trade 同口径）
@@ -556,8 +557,12 @@ def update_trade(trade_id: str, *, fills=None, note=None, as_planned=_UNSET,
                 t["pnl_pct"] = round(float(settled["realized_pct"]), 2)
             else:
                 t["pnl_pct"] = None
-            # 卖出日的市场环境跟着变；不再有跨日卖出时同样要清掉旧的
+            # fills 变 → 入场日/卖出日可能变。入场日变了须刷新 market/stock（否则 stale），
+            # 不变则跳过（避免冗余网络）。卖出日变 → exit_market 跟着刷新/清掉。
             first_buy, last_sell = settled.get("first_buy"), settled.get("last_sell")
+            if first_buy and first_buy != old_first_buy:
+                t["market"] = _market_context(first_buy)
+                t["stock"] = _stock_context(first_buy, t.get("code") or "")
             t["exit_market"] = (_market_context(last_sell)
                                 if last_sell and last_sell != (first_buy or t.get("date"))
                                 else None)

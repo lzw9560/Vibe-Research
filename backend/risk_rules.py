@@ -447,9 +447,11 @@ def rolling(trades: list[dict]) -> dict:
 
 def report() -> dict:
     """风控总报告：权益曲线 + 纪律归因 + 规则违反。全部基于用户自己的数据。"""
-    from journal import list_trades
+    # ⚠️ 用 all_trades 不截断——list_trades(limit) 会漏未平仓记录
+    # （持仓/权益/违反统计须全量，截断会让未平仓少算、权益曲线缺尾）。
+    from journal import all_trades
 
-    trades = list_trades(limit=5000)["trades"]
+    trades = all_trades()
     rules = load_rules()
     return {
         "equity": equity_curve(trades),

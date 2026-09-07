@@ -28,8 +28,11 @@ from engine.executor import fillability_check
 
 #: round-trip spread+slippage 成本（百分点，不含佣金/印花）。
 ROUND_TRIP_COST_PCT: float = 0.70
-#: 印花税（sell-side，百分点）。
-STAMP_DUTY_PCT: float = 0.10
+#: A 股印花税（sell-side，百分点）。2023-08-28 起减半至 0.05%（原 0.10%）。
+STAMP_DUTY_PCT: float = 0.05
+STAMP_DUTY_PCT_PRE_2023_08_28: float = 0.10
+#: 印花税减半生效日（A 股 2023-08-28 印花税减半）。
+STAMP_DUTY_HALVING_DATE: str = "2023-08-28"
 #: 最低佣金（per side，元——A 股散户最低 5 元/笔）。
 COMMISSION_MIN_YUAN: float = 5.0
 
@@ -51,18 +54,29 @@ class PathReturn:
     gross_return_pct: float = 0.0
 
 
-def _cost_pct(entry_price: float, size: float) -> float:
+def _stamp_duty_for_date(entry_date: str) -> float:
+    """A 股印花税随成交日：2023-08-28 前 0.10%，起 0.05%（sell-side）。
+
+    entry_date YYYY-MM-DD；空/无法解析 → 当前 0.05%（保守低估，多数近期 backtest 适用）。
+    """
+    if entry_date and entry_date[:10] < STAMP_DUTY_HALVING_DATE:
+        return STAMP_DUTY_PCT_PRE_2023_08_28
+    return STAMP_DUTY_PCT
+
+
+def _cost_pct(entry_price: float, size: float, entry_date: str = "") -> float:
     """A 股 round-trip 成本（百分点 of notional）。
 
-    = ROUND_TRIP_COST_PCT + STAMP_DUTY_PCT + 佣金（5 元×2 side / notional × 100）。
+    = ROUND_TRIP_COST_PCT + 印花税（随成交日 0.10%/0.05%）+ 佣金（5 元×2 side / notional × 100）。
     notional=entry_price×size（size 默认 100 = 1 手）。
     佣金按最低 5 元/side 算（散户小单普遍触发最低，保守）。
     """
     notional = entry_price * size
+    stamp = _stamp_duty_for_date(entry_date)
     if notional <= 0:
-        return ROUND_TRIP_COST_PCT + STAMP_DUTY_PCT
+        return ROUND_TRIP_COST_PCT + stamp
     commission_pct = (COMMISSION_MIN_YUAN * 2 / notional) * 100
-    return ROUND_TRIP_COST_PCT + STAMP_DUTY_PCT + commission_pct
+    return ROUND_TRIP_COST_PCT + stamp + commission_pct
 
 
 def _find_signal_idx(bars: list, signal_date: str) -> int | None:
@@ -98,6 +112,10 @@ def path_return(
 
     if not bars:
         return None
+    # max_hold_days 须 ≥1：A 股 T+1（买 T+1 open，最早 T+2 卖），max_hold=0 会让 exit 落在
+    # entry bar（T+1）违 T+1 结算。非法值→None（不臆算）。
+    if not isinstance(max_hold_days, int) or max_hold_days < 1:
+        return None
     idx = _find_signal_idx(bars, trades.signal_date)
     if idx is None or idx + 2 >= len(bars):
         return None  # T+1 guard：需 T+2（首可卖日）
@@ -113,7 +131,7 @@ def path_return(
         if not fillable:
             return None  # unbuyable/halted 即使标 accepted 也跳过
 
-    cost = _cost_pct(entry, trades.size) if apply_cost else 0.0
+    cost = _cost_pct(entry, trades.size, entry_date=str(_bar_get(bars[entry_idx], "date", ""))) if apply_cost else 0.0
 
     # stop/take 循环（simulate_holding lines 104-112）——T+2 起检查
     for j in range(idx + 2, min(idx + 2 + max_hold_days, len(bars))):

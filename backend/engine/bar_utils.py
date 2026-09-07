@@ -60,19 +60,27 @@ def is_unbuyable_next_bar(nb: object, code: str = "") -> bool:
     nb_low = _bar_get(nb, "low", 0.0)
     nb_close = _bar_get(nb, "close", 0.0)
     nb_pct = _bar_get(nb, "pctChg", 0.0)
-    # board-specific limit（ST 检测：baostock isST 字段，1=ST）
-    is_st = _bar_get(nb, "isST", 0)
+    # board-specific limit（ST 检测：baostock isST 字段，1=ST）。
+    # ⚠️ baostock/缓存返 isST 为字符串 '0'/'1'——Python 非空字符串 '0' 也 truthy，
+    # 直接 `5.0 if is_st` 会让所有非 ST 股（isST='0'）误用 5% ST 阈值，board-aware 失效。
+    # 归一化：int(float(is_st))==1 才判 ST（兼容 int 1 / str '1' / str '0' / 缺省 0）。
+    is_st_raw = _bar_get(nb, "isST", 0)
+    try:
+        is_st = int(float(is_st_raw)) == 1
+    except (TypeError, ValueError):
+        is_st = False
     limit_pct = 5.0 if is_st else _limit_pct_for_code(code)
     threshold = limit_pct - LIMIT_TOLERANCE
     try:
         pct_f = float(nb_pct)
+        return (
+            abs(float(nb_high) - float(nb_low)) <= UNBUYABLE_PRICE_TOL
+            and abs(float(nb_open) - float(nb_close)) <= UNBUYABLE_PRICE_TOL
+            and pct_f >= threshold  # 涨停方向（非 abs：跌停一字板对做多可买）
+        )
     except (TypeError, ValueError):
-        pct_f = 0.0
-    return (
-        abs(float(nb_high) - float(nb_low)) <= UNBUYABLE_PRICE_TOL
-        and abs(float(nb_open) - float(nb_close)) <= UNBUYABLE_PRICE_TOL
-        and pct_f >= threshold  # 涨停方向（非 abs：跌停一字板对做多可买）
-    )
+        # high/low/open/close/pct 任一非数值（坏 bar）→ 不判 unbuyable（保守可买）
+        return False
 
 
 def is_halted(bar: object) -> bool:

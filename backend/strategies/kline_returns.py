@@ -79,7 +79,8 @@ def _bar_get(bar: object, key: str, default: float = 0.0) -> float | str:
 
 
 def simulate_holding(
-    bars: list, signal_date: str, stop_pct: float, take_profit_pct: float, max_hold_days: int,
+    bars: list, signal_date: str, stop_pct: float, take_profit_pct: float,
+    max_hold_days: int, code: str = "",
 ) -> dict | None:
     """S145 R1 + S162 拆分重构：委托 Executor.fill + Accounting.path_return（非复用）。
 
@@ -105,7 +106,7 @@ def simulate_holding(
     if not bars:
         return None
     t = Trades(
-        code="", signal_date=signal_date, fill_type=FILL_T_PLUS_1_OPEN,
+        code=code, signal_date=signal_date, fill_type=FILL_T_PLUS_1_OPEN,
         direction="long", size=DEFAULT_LOT_SIZE,
     )
     filled = Executor().execute(t, bars, T1OpenFill())
@@ -165,7 +166,14 @@ def fetch_klines(bs_code: str, start_date: str, end_date: str) -> list[dict]:
                 "high": float(d[2]) if d[2] else 0.0,
                 "low": float(d[3]) if d[3] else 0.0,
                 "close": float(d[4]) if d[4] else 0.0,
+                # ⚠️ S162 R3：engine.is_halted 读 volume/amount 判停牌，
+                # is_unbuyable_next_bar 读 isST 判 ST ±5%——fetch_klines 必须存这些字段，
+                # 否则生产路径（compute_returns_for_codes→simulate_holding）is_halted 恒 False、
+                # ST 检测失效（test 用合成 bar 带这些字段，掩盖了生产 gap）。
+                "volume": float(d[5]) if len(d) > 5 and d[5] else 0.0,
+                "amount": float(d[6]) if len(d) > 6 and d[6] else 0.0,
                 "pctChg": float(d[8]) if d[8] else 0.0,
+                "isST": d[9] if len(d) > 9 and d[9] else "0",  # baostock 返字符串 '0'/'1'，bar_utils 归一化
             })
         except (ValueError, IndexError):
             continue
@@ -254,8 +262,8 @@ def compute_returns_for_codes(
             # S144 R5：return_open2next_close = (T+2 close - T+1 open)/T+1 open*100（可实现 T+1 口径）
             nnb_close = nnb["close"] if nnb and nnb.get("close") else None
             o2nc = round((nnb_close - next_open) / next_open * 100, 4) if (nnb_close is not None and next_open) else None
-            # S144 R1：一字板涨停封死（T+1=买入日 不可买）检测
-            is_unbuyable = _is_unbuyable_next_bar(nb)
+            # S144 R1：一字板涨停封死（T+1=买入日 不可买）检测。传 code 启用 board-aware 阈值。
+            is_unbuyable = _is_unbuyable_next_bar(nb, code=code)
             # S145 R2：path-dependent 收益（SL/TP/max_hold 模拟）。unbuyable → path=NULL（不可买无意义）。
             # strategy_params_map 有则用其战法 params，无（universe）用 DEFAULT_PATH_PARAMS。
             if is_unbuyable:
@@ -265,6 +273,7 @@ def compute_returns_for_codes(
                 sim = simulate_holding(
                     bars, signal_date,
                     params["stop_pct"], params["take_profit_pct"], params["max_hold_days"],
+                    code=code,
                 )
                 if sim is None:
                     path_ret, path_won, path_reason = None, None, None

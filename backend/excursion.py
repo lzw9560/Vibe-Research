@@ -124,10 +124,16 @@ def bars(code: str, start: str, end: str) -> Optional[list[dict]]:
         return None
     if not all_bars:
         return None
-    rows = [{"date": str(b.get("date")), "high": float(b["high"]),
-             "low": float(b["low"]), "close": float(b["close"])}
-            for b in all_bars
-            if b.get("date") and start <= str(b["date"]) <= end]
+    rows = []
+    for b in all_bars:
+        d = b.get("date")
+        if not d or not (start <= str(d) <= end):
+            continue
+        try:
+            rows.append({"date": str(d), "high": float(b["high"]),
+                         "low": float(b["low"]), "close": float(b["close"])})
+        except (KeyError, TypeError, ValueError):
+            continue  # 坏 bar（缺 high/low/close 或非数值）→ 跳过，不 crash excursion
     if not rows:
         return None  # 默认窗口未覆盖 [start,end]（老交易）——诚实 unavailable
     os.makedirs(_cache_dir(), exist_ok=True)

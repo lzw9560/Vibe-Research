@@ -136,7 +136,9 @@ def report() -> dict:
     import risk_rules as risk
 
     try:
-        trades = (journal.list_trades(limit=1000) or {}).get("trades") or []
+        # ⚠️ 用 all_trades 不截断——list_trades(limit=N) 会静默漏掉较早但仍未平仓的记录
+        # （journal.all_trades docstring 明确警告此陷阱），持仓少一只、在险资金偏小且不报错。
+        trades = journal.all_trades() or []
     except Exception as exc:  # noqa: BLE001
         return {"available": False, "reason": f"读交易日志失败：{exc}"}
 
