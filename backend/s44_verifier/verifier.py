@@ -181,6 +181,9 @@ def verify(
     perm_seed: int = 42,
     walk_train: int = 100,
     walk_test: int = 20,
+    # S171 R3: step 透传给 walk_forward_oos（None→用 stats._WALK_STEP_DEFAULT=20
+    # 日步长；月度 harness 传 step=12，否则月度 60 月 walk_forward OOS 仅 0 窗口）
+    step: Optional[int] = None,
     # ── R5: window sanity (S159 §5A, enforced per spec) ─────────────────────
     # window_sanity = {"overnight_gap": {mean,median,winrate,base_rate}, ...}
     # When provided, checks edge_type's window for advantage; no advantage →
@@ -299,6 +302,7 @@ def verify(
         # PurgedKFold (spec R2: 互补 non-redundant, not substitute).
         wf_res = stats_mod.walk_forward_oos(
             survivors_by_day, universe_by_day, walk_train, walk_test,
+            step if step is not None else stats_mod._WALK_STEP_DEFAULT,
         )
         wf_status = wf_res.status
         wf_mean_lift = wf_res.mean_test_lift

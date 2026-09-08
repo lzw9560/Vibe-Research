@@ -68,6 +68,13 @@ def wire_verdict(
     universe_by_day: dict | None = None,
     n_comparisons: int = 1,
     round_trip_cost: float = 0.0,
+    # S171 R3: 月度参数透传（None=不传→verify 用自身日频默认，保 14 旧 harness
+    # 向后兼容；月度 harness 传 walk_train=36/walk_test=12/step=12，否则月度
+    # walk_forward OOS 失效——默认 step=20 日步长对月度 60 月仅 0 窗口）
+    window_sanity: dict | None = None,
+    walk_train: int | None = None,
+    walk_test: int | None = None,
+    step: int | None = None,
     script: str = "",
     params: dict | None = None,
     input_files: dict[str, str] | None = None,
@@ -86,7 +93,9 @@ def wire_verdict(
     data_snapshot_id = f"{frozen_commit[:8]}:{line_id}:{rs_hash}"
 
     # ── verify (R8 诚实 gate 内建) ──
-    v = verify(
+    # S171 R3: 条件透传月度参数（None 不传→verify 用自身默认，非 None-override
+    # ——否则 verify 的 int 默认被 None 覆盖致 walk_forward_oos(surv,univ,None,None) 崩）
+    verify_kwargs = dict(
         returns=arr,
         n_trials=n_comparisons,
         edge_type=edge_type,
@@ -98,6 +107,15 @@ def wire_verdict(
         data_snapshot_id=data_snapshot_id,
         round_trip_cost=round_trip_cost,
     )
+    if window_sanity is not None:
+        verify_kwargs["window_sanity"] = window_sanity
+    if walk_train is not None:
+        verify_kwargs["walk_train"] = walk_train
+    if walk_test is not None:
+        verify_kwargs["walk_test"] = walk_test
+    if step is not None:
+        verify_kwargs["step"] = step
+    v = verify(**verify_kwargs)
     verdict_dict = _verdict_to_dict(v)
 
     # ── input_hashes ──
@@ -136,6 +154,14 @@ def wire_verdict(
             "round_trip_cost": round_trip_cost,
             "n_comparisons": n_comparisons,
             **(params or {}),
+            # S171 R3: 存月度方法论参数供 reproduce_verdict 重算（criterion a：
+            # reproduce_verdict 用 inspect.signature(verify) 白名单重建 verify_kwargs，
+            # 4 参数在 verify 签名内→存了才能 re-pass，否则 reproduce 用默认 step=20
+            # ≠ 原录 step=12 verdict→walk_forward status mismatch）
+            **({"window_sanity": window_sanity} if window_sanity is not None else {}),
+            **({"walk_train": walk_train} if walk_train is not None else {}),
+            **({"walk_test": walk_test} if walk_test is not None else {}),
+            **({"step": step} if step is not None else {}),
         },
         frozen_commit=frozen_commit,
         verdict=verdict_dict,
