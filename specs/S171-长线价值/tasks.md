@@ -7,7 +7,9 @@
 ## T1 R3 event_materiality_floor 第 5 参数（先做，TDD）
 
 - [ ] T1.1 `wire_verdict` 加 `event_materiality_floor` 参数（第 5，None 默认，条件透传 verify + 存 Recorder params）——依赖：无；验收：py_compile + 条件透传 None 不破 14 旧 harness
-- [ ] T1.2 TDD 2 测试：`test_passes_event_materiality_floor` + `test_stores_for_reproduce`——依赖 T1.1；验收：2 测试 GREEN + 原 7 wire 测试无回归
+- [ ] T1.2a TDD `test_passes_event_materiality_floor`（wire_verdict 传 floor=0.001 → verify 收到 event_materiality_floor=0.001）——依赖 T1.1；验收：RED（TypeError unexpected）→ GREEN
+- [ ] T1.2b TDD `test_stores_event_materiality_floor_for_reproduce`（floor 存 Recorder params，reproduce_verdict 重算用 harness 值非默认 0.003）——依赖 T1.1；验收：RED→GREEN + reproduce status 一致
+- [ ] T1.2c 跑原 7 wire + 64 verifier 测试无回归——依赖 T1.2a/b；验收：全绿（R3 additive 向后兼容）
 - [ ] T1.3 跑 `pytest tests/test_s44_wire.py`——验收：全绿
 
 ## T2 R1 Layer0.5 stock_basic 采集
@@ -46,7 +48,8 @@
 ## T8 R2 harness 月度 rebalance + PIT earnings gate + quintile
 
 - [ ] T8.1 月末最后交易日 `query_trade_dates` rebalance 日 D——依赖 T4；验收：非 calendar 月末
-- [ ] T8.2 `get_pit_profit_row(code, D)` helper：`pubDate < D` 严格小于（bug 7，改 compute_pe `<=` 为 `<`）+ `(pubDate, quarter_key)` 元组降序 sort tie-breaking（bug 8，quarter_key parse (year, quarter_num)）——依赖 T5；验收：同 pubDate 取最新 quarter 非 Q4-dict-顺序 + pubDate<D PIT 断言
+- [ ] T8.2a 改 `compute_pe` `<=` 为 `<`（pubDate < D 严格小于，bug 7——A 股盘后披露同日=lookahead ~25% 月）——依赖 T5；验收：PIT 断言每只 Q1/Q5 股 epsTTM quarter pubDate<D，记录 pubDate>=D 为 PIT violation
+- [ ] T8.2b `get_pit_profit_row(code, D)` helper + `(pubDate, quarter_key)` 元组降序 sort tie-breaking（bug 8——compute_pe line 144 同 pubDate 取原 dict 顺序 Q4-dict-顺序错误，quarter_key parse (year, quarter_num) 非字符串）——依赖 T8.2a；验收：同 pubDate 时取最新 quarter（2026Q1 > 2025Q4）非 Q4-dict-顺序
 - [ ] T8.3 不复权 close PE quintile 选股（bug 1，bottom+top quintile）——依赖 T4(adjustflag=3)+T8.2；验收：quintile 跨调整法（前复权 vs 不复权 vs basis-adjusted）stability 验证
 - [ ] T8.4 compute_pe epsTTM>0 过滤排除率统计（>30% 标 low-coverage）——依赖 T8.2；验收：~32% 排除率报告
 
@@ -73,7 +76,9 @@
 ## T13 R2 wire_verdict 5 参数 + 三 gate
 
 - [ ] T13.1 wire_verdict 传 window_sanity/walk_train=36/walk_test=12/step=12/event_materiality_floor=0.001——依赖 T1+T9+T10+T11；验收：5 参数全传 + 存 Recorder params
-- [ ] T13.2 互验 gate（①② status 一致）+ sensitivity 一致性 gate（T12.2）+ 严格覆盖率 gate（T6.4 ≥50%）——依赖 T13.1；验收：三 gate 全过才 robust，矛盾降级 exploratory
+- [ ] T13.2a **互验 gate**（co-PRIMARY ①② status 一致：都 edge 或都无 edge 才 PASS，矛盾→降级 exploratory 标"双 PRIMARY 不一致"）——依赖 T13.1；验收：①② status 字符串比对（R5 skip 时 selection_lift=None 不崩，用 status 非 lift）
+- [ ] T13.2b **sensitivity 一致性 gate**（退市 -0.5/-1.0 两档 status 一致→稳，不一致→降级 exploratory 标"依赖退市 return 假设"）——依赖 T12.2+T13.1；验收：两档 status 字符串全等 + lift 差值 |lift_-0.5 - lift_-1.0|>0.3 标敏感 flag
+- [ ] T13.2c **严格覆盖率 gate**（退市覆盖率≥50% 才 robust，<50% 降级 exploratory，0 bars 股计入分母算 0% 覆盖，bug 4）——依赖 T6.4+T13.1；验收：严格覆盖率（ipoDate..outDate≥80% 占退市股 %）≥50% 才 PASS
 
 ## T14 dry-run + mini-wire 测试
 
