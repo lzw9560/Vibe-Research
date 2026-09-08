@@ -15,7 +15,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from tools.first_board_premium_baseline import CACHE_PATH, _load_kline_cache  # noqa: E402
+from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402
+from tools.pead_event_study import CACHE_PATH  # noqa: E402
 from tools.pead_event_study import build_calendar  # noqa: E402
 from tools.midline_event_harness import run_event_verdict  # noqa: E402
 from tools.scan_st_removal_history import CACHE as REMOVAL_CACHE, scan  # noqa: E402
