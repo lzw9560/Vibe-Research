@@ -131,6 +131,72 @@ export interface DimensionValidationRecord {
   layer: LayerType; // R6 三层 reframe
 }
 
+// S171 R1: 价值因子月度验证 bundle 专属类型（追加，S165 R4 双向锁）。
+// 长期价值因子（低 PE）月度调仓 §44v2 验证——价值溢价在 A 股成不成立。
+// 复用 S165 既有 Verdict/RecorderRecord/VerifierStatus/EdgeType/EventMetrics/EventStatus，不重复定义。
+// S171-NEW 字段（coverage_audit / combined_status / gates）若落 Recorder params 须同步入本文件。
+
+// 退市覆盖率审计（spec R5）——退市股 kline 数据全不全，不全→幸存者偏差残留。
+export interface S171CoverageAudit {
+  lenient_pct: number;        // 宽松口径：返 >0 根 K 线的退市股占比
+  strict_pct: number;        // 严格口径：上市到退市完整覆盖 ≥80% 的占比
+  zero_bars_count: number;   // 一根 K 线都没有的退市股（无法补，偏差方向=高估价值）
+  total_delisted: number;     // 退市股总数（outDate 非空）
+  bias_direction: "favors_value"; // 偏差方向：缺的退市股=value trap 极端=高估价值溢价
+}
+
+// 退市敏感度两档（spec R5）——退市股按亏多少算，verdict 翻不翻。
+export interface S171SensitivityRow {
+  delisting_return: number;           // -0.5（温和，退市亏一半）或 -1.0（保守，归零）
+  primary_1_event_status: EventStatus; // 角度① 对冲版子结论
+  primary_2_status: VerifierStatus;    // 角度② 只做多版结论
+  primary_2_lift: number;              // 角度② 选股准不准倍数
+  combined: VerifierStatus;            // 这一档的综合结论
+}
+
+// 三道关结果（UI 算，非 API 字段，前端从各角度 verdict 推）
+export interface S171GateResult {
+  passed: boolean;
+  label: string;             // "方向一致" / "方向矛盾" / "过" / "不过"
+  detail: string;           // 一句人话原因
+  severity: "good" | "warning" | "critical";
+}
+
+// 9 个 bug 诚实标注（spec R1-R3 bug 清单，静态）
+export interface S171BugFix {
+  id: number;
+  title: string;
+  detail: string;           // 原来错在哪
+  fix: string;              // 怎么修的
+  severity: "critical" | "high" | "latent"; // 承重=红 / 重要=琥珀 / 潜在=灰
+  status: "fixed" | "pending" | "annotated"; // 已修 / 未验 / 已标注
+}
+
+// ValueVerificationBundle——聚合多条 RecorderRecord + 关卡元数据
+export interface S171ValueBundle {
+  // 多条 RecorderRecord（按角色 + 退市档位分组，params.experiment_id==='S171' 过滤）
+  co_primary_1_tier1: RecorderRecord;  // 角度① 对冲版，退市 -0.5 档
+  co_primary_2_tier1: RecorderRecord;  // 角度② 只做多版，退市 -0.5 档
+  co_primary_1_tier2: RecorderRecord;  // 角度① 对冲版，退市 -1.0 档
+  co_primary_2_tier2: RecorderRecord;  // 角度② 只做多版，退市 -1.0 档
+  auxiliary: { low_pe: RecorderRecord; high_pe: RecorderRecord } | null;
+  secondary: RecorderRecord | null;    // 角度③ 跑赢沪深 300（Family B）
+
+  gates: {
+    cross_check: S171GateResult;    // 第一关：两个角度方向一致吗
+    sensitivity: S171GateResult;     // 第二关：退市按亏多少算，结论翻不翻
+    coverage: S171GateResult;        // 第三关：退市股数据全不全
+  };
+  combined_status: VerifierStatus;  // 三关全过才"稳"，任一不过降级
+  coverage_audit: S171CoverageAudit;
+  sensitivity_rows: S171SensitivityRow[];  // 2 行（-0.5 / -1.0）
+  bug_fixes: S171BugFix[];              // 9 项
+  extrapolation_warnings: string[];     // 5 条不可外推
+  st_separation: { verification: string; capture: string };
+  deferred_factors: string[];          // F2/F3/PE-proxy 留待
+  caveats: string[];                   // restatement/turnover/autocorrelation 等
+}
+
 // S151 validation_status（中文）→ S161 Verdict.status（英文）映射。
 // 纯函数，不可变。后端 REGISTRY 存中文，UI 契约用英文枚举。
 // v2: "未validated"→not_validated（非 underpowered——breakout n=43691 是 lift 弱非 n 小）;

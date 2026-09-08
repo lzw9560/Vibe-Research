@@ -89,6 +89,8 @@ export const router = createBrowserRouter([
       { path: "/verifier-records", element: lazyEl(() => import("@/pages/VerifierRecords"), "VerifierRecords") },
       // S166: 交易日志 + 风险账本（Trade Journal + Risk Ledger，fresh-impl）
       { path: "/journal", element: lazyEl(() => import("@/pages/Journal"), "Journal") },
+      // S171: 价值因子月度验证看板（低 PE 价值溢价 §44v2 验证，UI 先行 mock，真 verdict 待 long_value_run.py）
+      { path: "/value-verdict", element: lazyEl(() => import("@/pages/S171ValueVerdict"), "S171ValueVerdict") },
     ],
   },
 ]);

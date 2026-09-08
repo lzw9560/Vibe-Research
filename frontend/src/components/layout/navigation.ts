@@ -65,6 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/candidates", label: "候选池" },
       { to: "/value-funnel", label: "价值漏斗" },
       { to: "/verifier-records", label: "§44 验证" },
+      { to: "/value-verdict", label: "价值因子验证" },
       { to: "/watchlist", label: "自选股" },
       { to: "/behavior-loop", label: "行为闭环" },
     ],
