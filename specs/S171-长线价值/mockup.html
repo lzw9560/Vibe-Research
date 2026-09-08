@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="zh-Hans" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S171 价值因子月度验证</title>
+<style>
+:root{
+  --page:#0d0d0d;--surface:#1a1a19;--surface-2:#202020;
+  --ink:#ffffff;--ink-2:#c3c2b7;--muted:#898781;
+  --grid:#2c2c2a;--border:rgba(255,255,255,.10);--border-2:rgba(255,255,255,.20);
+  --good:#0ca30c;--warn:#fab219;--crit:#d03b3b;--neutral:#898781;--serious:#ec835a;
+  --cat-1:#3987e5;--cat-2:#d95926;
+  --good-bg:rgba(12,163,12,.14);--warn-bg:rgba(250,178,25,.14);
+  --crit-bg:rgba(208,59,59,.16);--neut-bg:rgba(137,135,129,.18);
+  --ser-bg:rgba(236,131,90,.14);--blue-bg:rgba(57,135,229,.12);--orange-bg:rgba(217,89,38,.12);
+  --amber-strip:rgba(236,131,90,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--page);color:var(--ink);
+  font:14px/1.55 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;padding:20px;max-width:1040px;margin:0 auto;
+}
+.mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+.sec{margin-top:30px}
+.sec-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
+.muted{color:var(--muted)}.ink2{color:var(--ink-2)}
+h2{font-size:15px;font-weight:600;margin:0 0 4px}
+.sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;line-height:1.5}
+
+/* pills: status color + icon + text, never color alone */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.pill.good{background:var(--good-bg);color:#3fd45f}
+.pill.warn{background:var(--warn-bg);color:#ffce4d}
+.pill.crit{background:var(--crit-bg);color:#ff6b6b}
+.pill.neutral{background:var(--neut-bg);color:var(--ink-2)}
+.pill.serious{background:var(--ser-bg);color:#ff9a6b}
+.swatch{display:inline-block;width:9px;height:9px;border-radius:2px;flex:none}
+.tag{display:inline-flex;align-items:center;padding:2px 9px;border:1px solid var(--border);border-radius:999px;font-size:11px;color:var(--ink-2)}
+.tag.mock{color:var(--warn);border-color:rgba(250,178,25,.40)}
+.tag-event{background:var(--blue-bg);color:var(--cat-1);font-size:10px;padding:1px 6px;border:none;border-radius:3px}
+.tag-sel{background:var(--orange-bg);color:var(--cat-2);font-size:10px;padding:1px 6px;border:none;border-radius:3px}
+
+/* header */
+.header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.header h1{font-size:18px;font-weight:600}
+.header .meta{font-size:12px;color:var(--muted);margin-top:3px}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gate-dots{display:inline-flex;gap:5px;align-items:center}
+.gd{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--muted);background:transparent}
+.gd.pass{background:var(--good);border-color:var(--good)}
+.gd.fail{background:var(--crit);border-color:var(--crit)}
+.btn{padding:6px 14px;border:1px solid var(--border-2);border-radius:6px;background:transparent;color:var(--ink-2);font-size:12px;cursor:pointer}
+.btn:hover{border-color:var(--ink-2);color:var(--ink)}
+
+/* three question KPI row */
+.kpi-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px}
+.kpi{border:1px solid var(--border);border-radius:10px;padding:15px 14px;background:var(--surface)}
+.kpi .q{font-size:12.5px;color:var(--ink-2)}
+.kpi .a{display:flex;align-items:center;gap:7px;margin-top:9px;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.kpi .a svg{width:18px;height:18px;flex:none}
+.kpi .why{margin-top:7px;font-size:11.5px;color:var(--muted);line-height:1.5}
+.kpi.crit .a{color:#ff6b6b}
+.kpi.serious .a{color:#ff9a6b}
+.kpi svg{stroke-width:2.2}
+
+/* extrapolation warning strip */
+.warn-strip{border:1px solid rgba(236,131,90,.35);background:var(--amber-strip);border-radius:10px;padding:14px 16px}
+.warn-strip .wt{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#ff9a6b;margin-bottom:8px}
+.warn-strip .wt svg{width:16px;height:16px;stroke-width:2.2}
+.warn-strip ul{margin:0;padding:0;list-style:none}
+.warn-strip li{position:relative;padding-left:16px;font-size:12.5px;color:var(--ink-2);line-height:1.6;margin-top:5px}
+.warn-strip li::before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;border-radius:50%;background:var(--serious)}
+.warn-strip li b{color:#ff9a6b;font-weight:600}
+
+/* vertical gate flow */
+.flow{position:relative;margin-top:6px}
+.flow::before{content:"";position:absolute;left:14px;top:14px;bottom:14px;width:1px;background:var(--grid)}
+.gate{position:relative;padding:12px 0 12px 40px}
+.gate .node{position:absolute;left:8px;top:14px;width:15px;height:15px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--border-2)}
+.gate .node.good{background:var(--good)}.gate .node.crit{background:var(--crit)}
+.gate .gh{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.gate .gname{font-size:14px;font-weight:600}
+.gate .gv{font-size:12.5px;color:var(--ink-2);margin-top:5px;line-height:1.55}
+.combined{margin-top:12px;border:1px solid var(--border-2);border-radius:10px;padding:14px 16px;background:var(--surface-2)}
+.combined .gh{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.combined .gname{font-size:15px;font-weight:600}
+.combined .gv{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.55}
+.combined .gv b{color:var(--ink)}
+
+/* co-primary 3-column */
+.cop3{display:grid;grid-template-columns:1fr 160px 1fr;gap:0;align-items:stretch}
+.cop3>div{padding:0 14px}
+.cop3>div:first-child{padding-left:0}
+.cop3>div:last-child{padding-right:0}
+.col-mid{border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.pcard-id{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;margin-bottom:10px}
+.pcard-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid var(--grid);font-size:12.5px}
+.pcard-row:first-of-type{border-top:none}
+.pcard-row .k{color:var(--muted)}.pcard-row .v{text-align:right;color:var(--ink)}
+.pcard-ft{margin-top:9px;font-size:11.5px;color:var(--muted);line-height:1.55}
+.tradeable-flag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;margin-top:7px}
+.tradeable-flag svg{width:13px;height:13px;stroke-width:2.2}
+.tf-no{color:#ff6b6b}.tf-yes{color:#3fd45f}
+.note-box{font-size:11.5px;color:var(--ink-2);padding:7px 9px;border-radius:5px;margin-top:8px;line-height:1.55}
+.note-blue{background:var(--blue-bg)}.note-orange{background:var(--orange-bg)}.note-amber{background:var(--amber-strip)}
+.xcheck-center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;height:100%}
+.xcheck-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700}
+.xcheck-label{font-size:13px;font-weight:600}
+.xcheck-desc{font-size:11px;color:var(--muted);max-width:130px;line-height:1.5}
+.arrow-down{font-size:15px;color:var(--muted)}
+
+/* sensitivity toggle */
+.toggle-group{display:inline-flex;border:1px solid var(--border-2);border-radius:8px;overflow:hidden;margin-bottom:12px}
+.toggle-btn{padding:8px 18px;font-size:12px;font-weight:500;border:none;background:transparent;color:var(--ink-2);cursor:pointer;transition:all .15s}
+.toggle-btn.active{background:var(--cat-1);color:#fff}
+.toggle-btn:not(.active):hover{background:rgba(255,255,255,.05)}
+.flip-ind{padding:10px 12px;border-radius:6px;font-size:12.5px;line-height:1.6}
+.flip-ind.flipped{background:var(--crit-bg);border:1px solid rgba(208,59,59,.25);color:#ff6b6b}
+.flip-ind.stable{background:var(--good-bg);border:1px solid rgba(12,163,12,.2);color:#3fd45f}
+.sens-metrics{margin-top:10px}
+.sens-metrics .pcard-row{font-size:12.5px}
+
+/* coverage meters */
+.cov-st-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.cov-st-grid>div{padding:0 14px}
+.cov-st-grid>div:first-child{padding-left:0;border-right:1px solid var(--border)}
+.cov-st-grid>div:last-child{padding-right:0}
+.meter-block{margin:8px 0}
+.meter-label{font-size:12px;color:var(--ink-2);margin-bottom:4px;display:flex;justify-content:space-between}
+.meter-track{height:8px;background:rgba(57,135,229,.2);border-radius:4px;position:relative;overflow:visible}
+.meter-fill{height:100%;background:var(--cat-1);border-radius:4px}
+.meter-threshold{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--crit);left:50%}
+.meter-threshold-label{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--crit);white-space:nowrap}
+.st-panels{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.st-panel{padding:10px;border-radius:6px;font-size:12px}
+.st-panel.verify{background:var(--blue-bg);border:1px solid rgba(57,135,229,.2)}
+.st-panel.capture{background:rgba(217,89,38,.06);border:1px solid rgba(217,89,38,.2)}
+.st-panel-head{font-weight:600;margin-bottom:3px;font-size:12px}
+.st-panel.verify .st-panel-head{color:var(--cat-1)}
+.st-panel.capture .st-panel-head{color:var(--cat-2)}
+
+/* deferred + caveats */
+.caveat-list{display:grid;gap:6px}
+.caveat-item{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--ink-2);padding:5px 0}
+.caveat-item .ci{flex:none;width:14px;height:14px;border-radius:3px;background:var(--neut-bg);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;margin-top:1px}
+.caveat-item b{color:var(--ink-2);font-weight:600}
+
+/* 9 bug severity grid */
+.bug-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.bug-item{display:flex;align-items:flex-start;gap:7px;padding:9px;border-radius:5px;background:var(--surface);border-left:2.5px solid}
+.bug-sev-crit{border-color:var(--crit)}.bug-sev-high{border-color:var(--warn)}.bug-sev-lat{border-color:var(--muted)}
+.bug-id{font-family:ui-monospace,monospace;font-size:10px;color:var(--muted);flex:none;min-width:16px;margin-top:1px}
+.bug-text{font-size:11px;line-height:1.45}
+.bug-text .bt{font-weight:600;color:var(--ink);font-size:11.5px}
+.bug-text .bd{color:var(--muted)}
+.bug-status{font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px;margin-left:3px}
+.bs-fixed{background:rgba(12,163,12,.12);color:#3fd45f}
+.bs-pending{background:rgba(250,178,25,.15);color:#ffce4d}
+.bs-annotated{background:var(--neut-bg);color:var(--muted)}
+
+/* auxiliary row */
+.aux-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.aux-grid>div{padding:0 14px}
+.aux-grid>div:first-child{padding-left:0;border-right:1px solid var(--border)}
+.aux-grid>div:last-child{padding-right:0}
+.aux-head{font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+
+/* footer trace */
+.foot{margin-top:30px;border-top:1px solid var(--grid);padding-top:14px;font-size:11.5px;color:var(--muted);line-height:1.7}
+.foot .fr{display:flex;flex-wrap:wrap;gap:6px 20px}
+.foot b{color:var(--ink-2);font-weight:500}
+.foot .mono{color:var(--ink-2)}
+
+/* reproduce slide-in panel */
+.repro-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.repro-overlay.open{opacity:1;pointer-events:auto}
+.repro-panel{position:fixed;top:0;right:0;width:420px;max-width:90vw;height:100vh;background:var(--surface);border-left:1px solid var(--border-2);transform:translateX(100%);transition:transform .25s ease;z-index:50;overflow-y:auto;padding:20px}
+.repro-panel.open{transform:translateX(0)}
+.repro-close{position:absolute;top:16px;right:16px;font-size:18px;color:var(--muted);cursor:pointer;background:none;border:none}
+.repro-panel h3{font-size:15px;font-weight:600;margin-bottom:14px;padding-right:24px}
+.repro-section{margin-bottom:16px}
+.repro-section .rs-title{font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.repro-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--grid)}
+.repro-row .k{color:var(--muted)}
+.repro-row .amber{color:var(--warn)}
+.repro-match{padding:10px;border-radius:6px;background:var(--good-bg);border:1px solid rgba(12,163,12,.2);font-size:12px;color:#3fd45f;margin-top:8px}
+
+@media(max-width:720px){
+  .kpi-row,.cop3,.cov-st-grid,.st-panels,.bug-grid,.aux-grid{grid-template-columns:1fr}
+  .cop3>div,.cov-st-grid>div,.aux-grid>div{padding:12px 0!important;border:none!important;border-top:1px solid var(--border)!important}
+  .col-mid{border:none!important}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <h1>S171 价值因子月度验证</h1>
+    <div class="meta">低 PE 月底 rebalance / 1 月持有 / 2016-2026 全 A / baostock / §44v2 双 co-PRIMARY</div>
+  </div>
+  <div class="header-right">
+    <div class="gate-dots" title="三 gate: 互验 / sensitivity / 覆盖率">
+      <span class="gd pass" title="互验 gate: 一致"></span>
+      <span class="gd fail" title="sensitivity gate: 不一致"></span>
+      <span class="gd pass" title="覆盖率 gate: 严格 58% >= 50%"></span>
+    </div>
+    <span class="pill neutral" id="overall-status"><span class="dot"></span>探索性</span>
+    <span class="tag mock">mock</span>
+    <button class="btn" id="repro-btn">复现 verdict</button>
+  </div>
+</div>
+
+<!-- THREE QUESTION KPI ROW (graft P4: 唯一直答投研者心智模型) -->
+<div class="kpi-row">
+  <div class="kpi crit">
+    <div class="q">稳不稳</div>
+    <div class="a">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>不稳
+    </div>
+    <div class="why">sensitivity gate 不过：-0.5 档探索性、-1.0 档证否，两档翻转。结论依赖退市假设，不可信为 robust。</div>
+  </div>
+  <div class="kpi serious">
+    <div class="q">能信不</div>
+    <div class="a">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l9 16H3z"/><path d="M12 10v4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg>不能信为长线结论
+    </div>
+    <div class="why">1 月持有是月频 proxy 非长线 verdict；2018-2026 偏成长 period-specific；窗口与股票池双变更不可分离归因；月末资金面 confound。</div>
+  </div>
+  <div class="kpi crit">
+    <div class="q">能交易不</div>
+    <div class="a">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>不能交易
+    </div>
+    <div class="why">① long-short 不可直接交易（A 股做空受限）；② long-only 理论可交易但 verdict 非 robust；capture 层须剔 *ST。</div>
+  </div>
+</div>
+
+<!-- EXTRAPOLATION WARNING STRIP (graft P2: 警示放 verdict 之前，不可折叠) -->
+<div class="warn-strip">
+  <div class="wt">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l9 16H3z"/><path d="M12 10v4"/></svg>
+    不可外推警示（读 verdict 前先看这 5 条）
+  </div>
+  <ul>
+    <li><b>1 月月频 proxy，不是长线 verdict。</b>3m/6m/12m horizon 因 n&lt;60 underpowered 不出正式 verdict。从月频外推到年频是 v1 错窗口的镜像。</li>
+    <li><b>period-specific，不外推。</b>样本 2018-2026 偏 growth-favorable（2019-2021 A 股成长 rally），falsified 是这段周期结论非全周期证否。</li>
+    <li><b>联合测试，不能拆归因。</b>窗口（3 天变 1 月）和股票池（涨停变全 A）同时改了。S171 有 edge 不能归因于窗口还是股票池。</li>
+    <li><b>① long-short 不可直接交易。</b>A 股 short 受限（融券难且贵）。② long-only 才可实现。verdict 是统计 edge 非可交易 edge。</li>
+    <li><b>月末资金面 confound。</b>entry 用月末最后交易日，A 股月底/季末/年末资金面紧张可能系统性污染买入价。verdict 是 period+entry-timing-specific。</li>
+  </ul>
+</div>
+
+<!-- THREE GATE DECISION FLOW (graft P4: 纵向流，非三张并列卡) -->
+<div class="sec">
+  <div class="sec-label">三 gate combined 判定</div>
+  <h2>三 gate 全过才 robust</h2>
+  <p class="sub">combined verdict = 最低那档。任一不过即降级。顺序 = 判定逻辑因果链。</p>
+  <div class="flow">
+    <div class="gate">
+      <span class="node good"></span>
+      <div class="gh">
+        <span class="gname">gate 1 互验</span>
+        <span class="pill good"><span class="dot"></span>过</span>
+      </div>
+      <div class="gv">co-PRIMARY ① event_thin_positive（弱正 mean）与 ② not_validated（无 selection edge）都指向"not robust"方向，一致。互验 gate 通过。但两者都弱，verdict 非 robust。</div>
+    </div>
+    <div class="gate">
+      <span class="node crit"></span>
+      <div class="gh">
+        <span class="gname">gate 2 sensitivity 一致性</span>
+        <span class="pill crit"><span class="dot"></span>不过</span>
+      </div>
+      <div class="gv">退市 return 两档（-0.5 / -1.0）跑两遍。-0.5 档 combined = 探索性，-1.0 档 combined = 证否。两档 verdict 翻转，结论依赖退市假设，不可信为 robust。标"依赖退市 return 假设"。</div>
+    </div>
+    <div class="gate">
+      <span class="node good"></span>
+      <div class="gh">
+        <span class="gname">gate 3 严格覆盖率</span>
+        <span class="pill good"><span class="dot"></span>过（带残留偏差）</span>
+      </div>
+      <div class="gv">严格覆盖率 58% >= 50% 门槛，gate 通过。但 &lt;100% = 残留 survivorship bias，方向<b>高估 value</b>（0-bars 退市股 = value trap 缺失 = Q1 收益虚高）。</div>
+    </div>
+  </div>
+  <div class="combined">
+    <div class="gh">
+      <span class="pill neutral"><span class="dot"></span>探索性</span>
+      <span class="gname">combined verdict</span>
+    </div>
+    <div class="gv">gate 2 不过 -> 非 robust_edge。降级<b>探索性</b>（非证否，非"无 edge"，是"矛盾下不能定论"）。edge_type：<b>event + selection 联合</b>，勿把 selection-not_validated 读成"价值无 edge"。</div>
+  </div>
+</div>
+
+<!-- CO-PRIMARY 3-COLUMN (graft P1: ① | gate | ②，gate 作视觉锚点) -->
+<div class="sec">
+  <div class="sec-label">co-PRIMARY 互验</div>
+  <h2>① ② 指向同方向才信，矛盾降级探索性</h2>
+  <p class="sub">两 PRIMARY 互补：① 管 mean（无 winrate 偏，跳 OOS）；② 管 OOS（有 winrate 假阴性风险，由 ① 兜底）。</p>
+  <div class="cop3">
+
+    <!-- ① event -->
+    <div>
+      <div class="pcard-id"><span class="swatch" style="background:var(--cat-1)"></span>① Q1-Q5 long-short spread</div>
+      <span class="tag tag-event">event</span> <span class="pill warn" id="p1-pill"><span class="dot"></span><span id="p1-label">弱正信号</span></span>
+      <div style="margin-top:10px">
+        <div class="pcard-row"><span class="k">mean return</span><span class="v mono" id="p1-mean">+0.31% / 月</span></div>
+        <div class="pcard-row"><span class="k">net（扣 cost）</span><span class="v mono" id="p1-net">+0.18% / 月</span></div>
+        <div class="pcard-row"><span class="k">t-stat（day-clustered）</span><span class="v mono" id="p1-t">1.82</span></div>
+        <div class="pcard-row"><span class="k">p（Bonferroni K=4）</span><span class="v mono" id="p1-p">0.136</span></div>
+        <div class="pcard-row"><span class="k">n_event / days_robust</span><span class="v mono">87 / 87</span></div>
+        <div class="pcard-row"><span class="k">base_rate</span><span class="v mono">0.487</span></div>
+        <div class="pcard-row"><span class="k">materiality floor</span><span class="v mono">0.001（月频校准）</span></div>
+      </div>
+      <div class="tradeable-flag tf-no">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>不可直接交易 - long-short
+      </div>
+      <div class="note-box note-blue">mean 超过 0.001 月频 floor 但 t 不足（&lt;4 robust 门槛）、Bonf 不显著 -> 弱正信号非 robust。event 不传 survivors/universe，跑不了 PurgedKFold，OOS 缺口由 ② 补。</div>
+    </div>
+
+    <!-- center: cross-check gate -->
+    <div class="col-mid">
+      <div class="xcheck-center">
+        <div class="xcheck-icon" style="background:var(--good-bg);color:#3fd45f">OK</div>
+        <div class="xcheck-label">一致</div>
+        <div class="xcheck-desc">① 弱正 mean<br>vs<br>② 无 selection edge<br>方向一致（都 not robust）</div>
+        <div class="arrow-down">v</div>
+        <span class="pill neutral"><span class="dot"></span>探索性</span>
+        <div class="muted" style="font-size:10px;max-width:120px;line-height:1.45">互验 gate 通过，但 sensitivity gate 不过 -> 降级</div>
+      </div>
+    </div>
+
+    <!-- ② selection -->
+    <div>
+      <div class="pcard-id"><span class="swatch" style="background:var(--cat-2)"></span>② Q1 excess over universe</div>
+      <span class="tag tag-sel">selection</span> <span class="pill neutral" id="p2-pill"><span class="dot"></span><span id="p2-label">弱信号非欠样本</span></span>
+      <div style="margin-top:10px">
+        <div class="pcard-row"><span class="k">selection lift</span><span class="v mono" id="p2-lift">1.18</span></div>
+        <div class="pcard-row"><span class="k">CI [low, high]</span><span class="v mono" id="p2-ci">[0.97, 1.42]</span></div>
+        <div class="pcard-row"><span class="k">n / n_effective</span><span class="v mono">4210 / <span style="color:var(--muted)">待 v2 day_paired</span></span></div>
+        <div class="pcard-row"><span class="k">days_robust</span><span class="v mono">87</span></div>
+        <div class="pcard-row"><span class="k">PurgedKFold OOS lift</span><span class="v mono">1.04</span></div>
+        <div class="pcard-row"><span class="k">walk-forward OOS</span><span class="v mono">1.08（step=12, 2 窗）</span></div>
+        <div class="pcard-row"><span class="k">p_bonferroni</span><span class="v mono">0.218</span></div>
+      </div>
+      <div class="tradeable-flag tf-yes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12l4 4 10-10"/></svg>long-only 可实现
+      </div>
+      <div class="note-box note-orange">lift 在 [1,2)、n 足够 -> 弱信号非欠样本。winrate 对 value 结构性假阴性（价值股均值更高 via 尾部，但赢的频率不一定更高），永远到不了 2.0x robust 门槛。OOS lift 衰减至 1.04。</div>
+      <div class="note-box note-blue" style="margin-top:6px">selection not_validated 不等于"价值无 edge"。① event 有弱正 mean 信号（+0.31%/月，t=1.82）。两层 verdict 互补：① 管 mean、② 管 OOS。把 selection-falsified 读成"价值因子无 edge"正是外推越界。</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SENSITIVITY TOGGLE (graft P3: 杀手交互，亲手切退市假设看 verdict 翻转) -->
+<div class="sec">
+  <div class="sec-label">退市 sensitivity 两档对比</div>
+  <h2>退市 return 假设：-0.5 温和 vs -1.0 保守 worst-case</h2>
+  <p class="sub">退市整理期实际损失 -50% ~ -90%（老三板 NEEQQ），-100% 归零是保守 worst-case。不剔除退市（退市是 value premium 承重样本，剔除 = 删 value trap 尾部 = 假性抬高 value）。</p>
+  <div class="toggle-group">
+    <button class="toggle-btn active" data-tier="0.5" onclick="switchTier(0.5)">-0.5 温和</button>
+    <button class="toggle-btn" data-tier="1.0" onclick="switchTier(1.0)">-1.0 保守</button>
+  </div>
+  <div class="flip-ind flipped" id="flip-ind">
+    <b>verdict 翻转</b>：退市假设从 -0.5 切到 -1.0 时，① event_status 从 event_thin_positive 翻成 event_falsified，② 从 not_validated 翻成 falsified。sensitivity gate 不过。结论依赖退市假设，不可信为 robust。
+  </div>
+  <div class="sens-metrics">
+    <div class="pcard-row"><span class="k">① lift 差值（-0.5 vs -1.0）</span><span class="v mono">0.24</span></div>
+    <div class="pcard-row"><span class="k">② lift 差值（-0.5 vs -1.0）</span><span class="v mono">0.24</span></div>
+    <div class="pcard-row"><span class="k">退市股总数 / 0-bars 不可恢复</span><span class="v mono">337 / 42（12.5%）</span></div>
+    <div class="pcard-row"><span class="k">偏差方向</span><span class="v">0-bars 退市股 = value trap，缺失 = 高估 value premium</span></div>
+  </div>
+</div>
+
+<!-- COVERAGE + *ST SEPARATION -->
+<div class="sec">
+  <div class="cov-st-grid">
+    <div>
+      <div class="sec-label">退市覆盖率（双数 meter，严格 >= 50% 才过 gate）</div>
+      <div class="meter-block">
+        <div class="meter-label"><span>宽松覆盖率（返 >0 bars 占退市股 %）</span><span class="mono">78%</span></div>
+        <div class="meter-track"><div class="meter-fill" style="width:78%"></div></div>
+      </div>
+      <div class="meter-block">
+        <div class="meter-label"><span>严格覆盖率（ipoDate..outDate 完整覆盖 >= 80%）</span><span class="mono">58%</span></div>
+        <div class="meter-track">
+          <div class="meter-fill" style="width:58%"></div>
+          <div class="meter-threshold"></div>
+          <div class="meter-threshold-label">50% gate</div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="muted" style="font-size:12px">0-bars 退市股：<span class="mono">42 / 337</span>（<span class="mono">12.5%</span>，计入分母算 0% 覆盖）</div>
+        <div class="note-box note-amber">0-bars 不可恢复 bias：无 kline 无法确定哪些月 active，无法 inject -100%。方向确定 = 高估 value premium（0-bars 股 = 长期停牌后退市 = value trap 极端，缺失 -> Q1 收益虚高）。survivorship 标 partially-correct。</div>
+      </div>
+      <div style="margin-top:6px">
+        <span class="pill good"><span class="dot"></span>覆盖率 gate 过（58% >= 50%）</span>
+        <span class="muted" style="font-size:11px;margin-left:6px">但 &lt;100% = 残留偏差</span>
+      </div>
+    </div>
+    <div>
+      <div class="sec-label">*ST 两层分离</div>
+      <div class="st-panels">
+        <div class="st-panel verify">
+          <div class="st-panel-head">验证层（保留 *ST）</div>
+          *ST/即将退市股不剔，保"不剔除退市"一致性。*ST 是退市前奏，剔 *ST = 删 value trap 尾部 = 美化 value = 假 edge。
+        </div>
+        <div class="st-panel capture">
+          <div class="st-panel-head">capture 层（规避 *ST）</div>
+          实盘不买 *ST。涨跌停 +/-5% + 流动性差 + 退市风险。验证含 *ST 尾部保守，capture 须 *ST filter。
+        </div>
+      </div>
+      <div class="note-box note-amber" style="margin-top:8px">剔 *ST 美化 value，capture 须剔后仍有 edge 才是真可交易 edge。验证层保留 = 保守反映真实 value trap。</div>
+    </div>
+  </div>
+</div>
+
+<!-- DEFERRED FACTORS + CAVEATS (spec R2/R5 gap 全补) -->
+<div class="sec">
+  <div class="sec-label">deferred 因子 + 数据 caveat</div>
+  <h2>spec 承认的局限与待验项</h2>
+  <div class="caveat-list">
+    <div class="caveat-item"><span class="ci">F2</span><span><b>PE+ROE composite（Family C K=1）deferred</b>：earnings_yield_rank + roeAvg_rank。须数据够才跑。roeAvg 是 YTD 累计非 TTM，须取自 F1 同一 pubDate&lt;D quarter 行防字段漂移。</span></div>
+    <div class="caveat-item"><span class="ci">F3</span><span><b>Low PB（高 B/M）deferred</b>：BVPS=epsTTM/roeAvg 对 3/4 季度失效（roeAvg YTD vs epsTTM TTM 口径不匹配），仅 Q4 年报可用。先 Q4-only 验证。</span></div>
+    <div class="caveat-item"><span class="ci">PE</span><span><b>PE 是 pragmatic proxy 非 canonical B/M</b>：Fama-French HML 用 book-to-market，baostock 无 BVPS 字段。PE 因 epsTTM 直接可得，是数据可得性驱动非 A 股证据驱动。</span></div>
+    <div class="caveat-item"><span class="ci">!</span><span><b>restatement risk</b>：baostock 可能存 restated（修正后）epsTTM 但保留原始 pubDate。pubDate&lt;D 保证报告已公开，不保证值是 as-originally-reported。抽样验证 5-10 stock-quarters，偏差大降级。</span></div>
+    <div class="caveat-item"><span class="ci">!</span><span><b>turnover sensitivity 待实测</b>：round_trip_cost=0.0025，harness 预扣。turnover 须首跑后实测月度 quintile 变化率，不可假设 50%。月度换手 20-50%+，年 drag 可能 3% 非 1.5%（A 股 value premium 3-5%/yr gross，3% drag 可能翻 verdict）。deferred 到首跑后加 sensitivity。</span></div>
+    <div class="caveat-item"><span class="ci">!</span><span><b>月度 autocorrelation</b>：月度 value portfolio 组合慢变（同股连续月在 bottom-quintile），跨月自相关违反 iid 假设。day_clustered t-test 的 se 假设月均值独立，自相关时 t 略偏高。selection permutation（月内 cross-sectional）不受影响。Newey-West HAC SE deferred（caveat 标注，PurgedKFold 补 OOS）。</span></div>
+  </div>
+</div>
+
+<!-- 9 BUG SEVERITY GRID (graft P2: 全可见，severity 色边，不折叠) -->
+<div class="sec">
+  <div class="sec-label">9 bug fix 诚实标注</div>
+  <h2>验证管道承重 bug 处理状态</h2>
+  <p class="sub">承重=红边 / 重要=琥珀边 / latent=灰边。数据可信是诚实标注核心，不藏折叠。</p>
+  <div class="bug-grid">
+    <div class="bug-item bug-sev-crit">
+      <span class="bug-id">1</span>
+      <div class="bug-text">
+        <div><span class="bt">前复权 PE 致命 bug</span><span class="bug-status bs-fixed">已修</span></div>
+        <div class="bd">adjustflag=2 前复权价调到当前股本，epsTTM 是原始股本 -> PE 系统性虚低 -> 送转多成长股误入 Q1。fix：PE 用 adjustflag=3 不复权 close，return 仍用 adjustflag=2 前复权 total return。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-crit">
+      <span class="bug-id">2</span>
+      <div class="bug-text">
+        <div><span class="bt">query_all_stock PIT 行为未验</span><span class="bug-status bs-pending">未验</span></div>
+        <div class="bd">返历史时点 active 集还是当前快照未验。若返当前快照 -> 历史月缺退市股 = survivorship bias -> verdict 无效。须抽查 >=3 历史月末验证，fallback stock_basic outDate+ipoDate 重建。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-high">
+      <span class="bug-id">3</span>
+      <div class="bug-text">
+        <div><span class="bt">outDate='' 二义</span><span class="bug-status bs-fixed">已修</span></div>
+        <div class="bd">可能活着 OR baostock 漏标退市。sanity：末 bar 距今 >6 月无新 bar -> 标"疑似漏标退市"不入 universe。交叉验 akshare stock_info_sh/sz_delist。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-crit">
+      <span class="bug-id">4</span>
+      <div class="bug-text">
+        <div><span class="bt">0-bars 不可恢复 bias</span><span class="bug-status bs-annotated">已标注</span></div>
+        <div class="bd">0-bars 退市股无 kline，无法确定哪些月 active、无法 inject -100%。方向确定 = 高估 value。计入分母算 0% 覆盖，>5% 标不可恢复降级。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-lat">
+      <span class="bug-id">5</span>
+      <div class="bug-text">
+        <div><span class="bt">BH m=1 latent</span><span class="bug-status bs-annotated">moot</span></div>
+        <div class="bd">K=1 时 p_bh 零校正（stats.py m<=1 返原值），当前 moot。扩 K=2 须 harness 层 enforce p_bonf<0.05，否则 reproduce 不一致。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-high">
+      <span class="bug-id">6</span>
+      <div class="bug-text">
+        <div><span class="bt">event_materiality_floor 月频 0.001</span><span class="bug-status bs-fixed">已修</span></div>
+        <div class="bd">默认 0.003 是日频门槛，对 A 股 value premium 2-4%/yr 恒判 thin。月频校准 0.001。须存入 Recorder params 才能 reproduce（不存 -> status 翻转 -> A5 炸）。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-crit">
+      <span class="bug-id">7</span>
+      <div class="bug-text">
+        <div><span class="bt">pubDate &lt; D 严格小于</span><span class="bug-status bs-fixed">已修</span></div>
+        <div class="bd">A 股年报盘后披露，&lt;= 允许同日 = 用盘后信息配盘前价 = lookahead，约 25% 月受影响。改 &lt;= 为 &lt; 严格小于。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-high">
+      <span class="bug-id">8</span>
+      <div class="bug-text">
+        <div><span class="bt">sort tie-breaking</span><span class="bug-status bs-fixed">已修</span></div>
+        <div class="bd">同 pubDate 时 stable sort 取原 dict 顺序（Q4 排 Q1 前 -> 取错 quarter）。fix：加次级排序键 (pubDate, quarter_key) 降序，quarter_key parse 为 (year, quarter_num) 元组。</div>
+      </div>
+    </div>
+    <div class="bug-item bug-sev-high">
+      <span class="bug-id">9</span>
+      <div class="bug-text">
+        <div><span class="bt">停牌 stale close</span><span class="bug-status bs-fixed">已修</span></div>
+        <div class="bd">停牌股 close(D) = 最后成交价（可能数周前），PE = stale_price/epsTTM 错配 quintile。universe 与 Q1/Q5 候选双重剔除 volume==0 或无 D 日 bar 的股。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AUXILIARY + SECONDARY -->
+<div class="sec">
+  <div class="sec-label">辅助 verdict + overfit 占位</div>
+  <div class="aux-grid">
+    <div>
+      <div class="aux-head">AUXILIARY - selection low_pe / high_pe quintile</div>
+      <span class="tag tag-sel">selection</span> <span class="pill neutral"><span class="dot"></span>not_validated</span>
+      <div style="margin-top:6px">
+        <div class="pcard-row"><span class="k">lift (low_pe)</span><span class="v mono">1.03</span></div>
+        <div class="pcard-row"><span class="k">lift (high_pe)</span><span class="v mono">0.98</span></div>
+        <div class="pcard-row"><span class="k">n</span><span class="v mono">87</span></div>
+      </div>
+      <div class="note-box note-orange" style="margin-top:5px">预期行为非 bug：selection winrate 对 value 结构性 ~= 1.0-1.2，永远到不了 2.0x robust 门槛。由 ① mean 兜底。</div>
+    </div>
+    <div>
+      <div class="aux-head">SECONDARY - Q1 excess over HS300 (benchmark)</div>
+      <span class="tag tag-event">event</span> <span class="pill neutral"><span class="dot"></span>exploratory</span>
+      <div style="margin-top:6px">
+        <div class="pcard-row"><span class="k">n_comparisons</span><span class="v mono">1 (K=1, Family B)</span></div>
+        <div class="pcard-row"><span class="k">BH m=1</span><span class="v mono">moot（零校正）</span></div>
+      </div>
+      <div class="note-box note-amber" style="margin-top:5px">size-confounded（HS300 大盘，value 偏中小盘）非 pure value edge。若扩 K=2 加 ZZ500 须 harness 层 enforce p_bonf &lt; 0.05。</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px">
+    <span class="tag">PBO: N/A (single-strategy)</span>
+    <span class="tag">CSCV: 待建</span>
+    <span class="tag">DSR: 待建</span>
+    <span class="tag">Haircut: 待建</span>
+    <span class="tag">MinTRL: 待建</span>
+    <span class="tag">Newey-West HAC: deferred</span>
+  </div>
+</div>
+
+<!-- FOOTER TRACE -->
+<div class="foot">
+  <div class="fr">
+    <span><b>recorder_id</b> <span class="mono">待 S171 run</span></span>
+    <span><b>data_snapshot_id</b> <span class="mono">baostock_kline_long+profit_multiyear_2016-2026</span></span>
+    <span><b>input_snapshot_hash</b> <span class="mono">sha256:a3f8...e1c2</span></span>
+    <span><b>frozen_commit</b> <span class="mono">822db17</span></span>
+  </div>
+  <div class="fr" style="margin-top:6px">
+    <span><b>params</b> <span class="mono">round_trip_cost=0.0025 . event_materiality_floor=0.001 . walk_train=36 . walk_test=12 . step=12 . Family A K=4 . Family B K=1</span></span>
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:var(--muted)">mock 数据按 S171 spec 设计的代表性场景（co-PRIMARY 矛盾 -> 探索性）。实 verdict 由 long_value_run.py 跑出后落 Recorder，UI 经 /api/verifier/records 读真实值替换。ci_low/ci_high/n_effective 标 null 不臆造。</div>
+</div>
+
+<!-- REPRODUCE SLIDE-IN PANEL (graft P3: 不阻断上下文) -->
+<div class="repro-overlay" id="repro-overlay" onclick="closeRepro()"></div>
+<div class="repro-panel" id="repro-panel">
+  <button class="repro-close" onclick="closeRepro()">x</button>
+  <h3>复现 verdict</h3>
+  <div class="repro-section">
+    <div class="rs-title">实验记录</div>
+    <div class="repro-row"><span class="k">recorder_id</span><span class="mono">待 S171 run</span></div>
+    <div class="repro-row"><span class="k">timestamp</span><span class="mono">待 run</span></div>
+    <div class="repro-row"><span class="k">data_snapshot_id</span><span class="mono">baostock_pit_bundle</span></div>
+    <div class="repro-row"><span class="k">input_snapshot_hash</span><span class="mono">sha256:...</span></div>
+    <div class="repro-row"><span class="k">frozen_commit</span><span class="mono">822db17</span></div>
+  </div>
+  <div class="repro-section">
+    <div class="rs-title">params（影响 status 的参数）</div>
+    <div class="repro-row"><span class="k">event_materiality_floor</span><span class="amber mono">0.001（月频校准）</span></div>
+    <div class="repro-row"><span class="k">round_trip_cost</span><span class="mono">0.0025</span></div>
+    <div class="repro-row"><span class="k">walk_train / walk_test</span><span class="mono">36 / 12</span></div>
+    <div class="repro-row"><span class="k">step</span><span class="mono">12（月步长）</span></div>
+    <div class="repro-row"><span class="k">delisting_return（当前档）</span><span class="mono" id="repro-delisting">-0.5</span></div>
+    <div class="repro-row"><span class="k">n_comparisons (Family A)</span><span class="mono">4</span></div>
+  </div>
+  <div class="repro-section">
+    <div class="rs-title">verdict</div>
+    <div class="repro-row"><span class="k">combined status</span><span id="repro-status">探索性</span></div>
+    <div class="repro-row"><span class="k">edge_type (①)</span><span class="mono">event</span></div>
+    <div class="repro-row"><span class="k">edge_type (②)</span><span class="mono">selection</span></div>
+    <div class="repro-row"><span class="k">days_robust</span><span class="mono">87</span></div>
+  </div>
+  <div class="repro-match">
+    reproduce_verdict 重算：status 一致 / input hash 匹配 / params 完整（含 event_materiality_floor=0.001，非 verify 默认 0.003）/ 复现通过
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:var(--muted);line-height:1.55">
+    event_materiality_floor 是<b style="color:var(--warn)">唯一直接影响 status</b>的参数（verifier.py:370-374）。不存入 Recorder params -> reproduce 用 verify 默认 0.003 非 harness 0.001 -> status 翻转 -> A5 炸。
+  </div>
+</div>
+
+<script>
+// === mock data: canonical scenario (统一，非多提案不一致) ===
+var tiers = {
+  '0.5': {
+    p1:{mean:'+0.31% / 月',net:'+0.18% / 月',t:'1.82',p:'0.136',pill:'warn',label:'弱正信号'},
+    p2:{lift:'1.18',ci:'[0.97, 1.42]',pill:'neutral',label:'弱信号非欠样本'},
+    overall:{pill:'neutral',label:'探索性'},
+    flipText:'<b>verdict 翻转</b>：退市假设从 -0.5 切到 -1.0 时，① event_status 从 event_thin_positive 翻成 event_falsified，② 从 not_validated 翻成 falsified。sensitivity gate 不过。结论依赖退市假设，不可信为 robust。',
+    flipClass:'flipped'
+  },
+  '1.0': {
+    p1:{mean:'+0.085% / 月',net:'-0.066% / 月',t:'0.41',p:'0.681',pill:'crit',label:'证否'},
+    p2:{lift:'0.94',ci:'[0.76, 1.18]',pill:'crit',label:'证否（劣于随机）'},
+    overall:{pill:'crit',label:'证否'},
+    flipText:'<b>当前 -1.0 保守档</b>：退市 -100% worst-case 归零。① mean 翻负（+0.085% gross，-0.066% net），t=0.41，p=0.681，event_falsified。② lift 0.94 < 1.0 = 劣于随机，falsified。切回 -0.5 看温和档对比。',
+    flipClass:'flipped'
+  }
+};
+
+function switchTier(t) {
+  var d = tiers[t];
+  document.querySelectorAll('.toggle-btn').forEach(function(b){
+    b.classList.toggle('active', parseFloat(b.dataset.tier) === t);
+  });
+  document.getElementById('p1-mean').textContent = d.p1.mean;
+  document.getElementById('p1-net').textContent = d.p1.net;
+  document.getElementById('p1-t').textContent = d.p1.t;
+  document.getElementById('p1-p').textContent = d.p1.p;
+  var p1pill = document.getElementById('p1-pill');
+  p1pill.className = 'pill ' + d.p1.pill;
+  document.getElementById('p1-label').textContent = d.p1.label;
+  document.getElementById('p2-lift').textContent = d.p2.lift;
+  document.getElementById('p2-ci').textContent = d.p2.ci;
+  var p2pill = document.getElementById('p2-pill');
+  p2pill.className = 'pill ' + d.p2.pill;
+  document.getElementById('p2-label').textContent = d.p2.label;
+  var overall = document.getElementById('overall-status');
+  overall.className = 'pill ' + d.overall.pill;
+  overall.innerHTML = '<span class="dot"></span>' + d.overall.label;
+  var fi = document.getElementById('flip-ind');
+  fi.className = 'flip-ind ' + d.flipClass;
+  fi.innerHTML = d.flipText;
+  document.getElementById('repro-delisting').textContent = '-' + t;
+  document.getElementById('repro-status').textContent = d.overall.label;
+}
+switchTier('0.5');
+
+document.getElementById('repro-btn').onclick = function() {
+  document.getElementById('repro-overlay').classList.add('open');
+  document.getElementById('repro-panel').classList.add('open');
+};
+function closeRepro() {
+  document.getElementById('repro-overlay').classList.remove('open');
+  document.getElementById('repro-panel').classList.remove('open');
+}
+</script>
+
+</body>
+</html>
