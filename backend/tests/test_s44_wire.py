@@ -248,3 +248,76 @@ def test_wire_verdict_legacy_no_methodology_params_in_recorder(monkeypatch):
     assert "walk_train" not in stored
     assert "walk_test" not in stored
     assert "window_sanity" not in stored
+
+
+# ── S171 T1: event_materiality_floor 第 5 参数（bug 6，reproduce-storage gate）──
+
+
+def test_wire_verdict_passes_event_materiality_floor_to_verify(monkeypatch):
+    """S171 T1.2a: wire_verdict 传 event_materiality_floor=0.001 → verify 收到。
+
+    event_materiality_floor 是唯一直接影响 status 的参数（verifier.py:370-374
+    effective_floor=max(event_materiality_floor, round_trip_cost*0.5) 决定
+    event_robust vs event_thin_positive）。月频须传 0.001（默认 0.003=日频
+    3.6%/年对 A 股 value 2-4%/年恒 thin_positive）。
+    """
+    captured = {"verify": None}
+
+    def _fake_verify(**kwargs):
+        captured["verify"] = kwargs
+        return _FakeVerdict()
+
+    monkeypatch.setattr(_s44_wire, "verify", _fake_verify)
+    monkeypatch.setattr(_s44_wire, "Recorder", type("R", (), {"save": lambda self, **k: "rec"}))
+    monkeypatch.setattr(_s44_wire, "lineage_record", lambda **kw: None)
+
+    _s44_wire.wire_verdict(
+        line_id="monthly_floor",
+        returns=[0.01] * 5,
+        edge_type="event",
+        frozen_commit="abc1234",
+        event_materiality_floor=0.001,
+    )
+    assert captured["verify"]["event_materiality_floor"] == 0.001
+
+
+def test_wire_verdict_stores_event_materiality_floor_for_reproduce(monkeypatch):
+    """S171 T1.2b: event_materiality_floor 须存 Recorder params——reproduce_verdict
+    用 inspect.signature(verify) 白名单重建 verify_kwargs，存了才能 re-pass，
+    否则 reproduce 用 verify 默认 0.003 非 harness 0.001→effective_floor 翻→status 翻→A5 炸。
+    """
+    captured = {"recorder_save": None}
+
+    def _fake_verify(**kwargs):
+        return _FakeVerdict()
+
+    monkeypatch.setattr(_s44_wire, "verify", _fake_verify)
+    monkeypatch.setattr(_s44_wire, "Recorder", type("R", (), {"save": lambda self, **k: captured.__setitem__("recorder_save", k) or "rec"}))
+    monkeypatch.setattr(_s44_wire, "lineage_record", lambda **kw: None)
+
+    _s44_wire.wire_verdict(
+        line_id="monthly_floor_repro",
+        returns=[0.01] * 5,
+        edge_type="event",
+        frozen_commit="abc1234",
+        event_materiality_floor=0.001,
+    )
+    stored = captured["recorder_save"]["params"]
+    assert stored["event_materiality_floor"] == 0.001
+
+
+def test_wire_verdict_legacy_no_event_materiality_floor(monkeypatch):
+    """S171 T1 向后兼容：旧 harness 不传→recorder params 不含 event_materiality_floor。"""
+    captured = {"recorder_save": None}
+    monkeypatch.setattr(_s44_wire, "verify", lambda **kw: _FakeVerdict())
+    monkeypatch.setattr(_s44_wire, "Recorder", type("R", (), {"save": lambda self, **k: captured.__setitem__("recorder_save", k) or "rec"}))
+    monkeypatch.setattr(_s44_wire, "lineage_record", lambda **kw: None)
+
+    _s44_wire.wire_verdict(
+        line_id="legacy_no_floor",
+        returns=[0.01] * 5,
+        edge_type="event",
+        frozen_commit="abc1234",
+    )
+    stored = captured["recorder_save"]["params"]
+    assert "event_materiality_floor" not in stored

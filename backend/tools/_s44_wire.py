@@ -75,6 +75,10 @@ def wire_verdict(
     walk_train: int | None = None,
     walk_test: int | None = None,
     step: int | None = None,
+    # S171 T1: event_materiality_floor 第 5 月度参数（bug 6 reproduce-storage：
+    # verifier.py:370-374 effective_floor=max(event_materiality_floor, cost*0.5)
+    # 是唯一直接影响 status 的参数，不存→reproduce 用默认 0.003 非 harness 值→status 翻）
+    event_materiality_floor: float | None = None,
     script: str = "",
     params: dict | None = None,
     input_files: dict[str, str] | None = None,
@@ -115,6 +119,8 @@ def wire_verdict(
         verify_kwargs["walk_test"] = walk_test
     if step is not None:
         verify_kwargs["step"] = step
+    if event_materiality_floor is not None:
+        verify_kwargs["event_materiality_floor"] = event_materiality_floor
     v = verify(**verify_kwargs)
     verdict_dict = _verdict_to_dict(v)
 
@@ -162,6 +168,10 @@ def wire_verdict(
             **({"walk_train": walk_train} if walk_train is not None else {}),
             **({"walk_test": walk_test} if walk_test is not None else {}),
             **({"step": step} if step is not None else {}),
+            # S171 T1: event_materiality_floor 须存——verifier.py:370-374 唯一
+            # 直接影响 status 的参数，不存→reproduce 用默认 0.003 非 harness 0.001
+            # →effective_floor 翻→event_robust↔thin_positive 翻→A5 status 炸
+            **({"event_materiality_floor": event_materiality_floor} if event_materiality_floor is not None else {}),
         },
         frozen_commit=frozen_commit,
         verdict=verdict_dict,
