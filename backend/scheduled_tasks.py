@@ -524,6 +524,7 @@ class TaskExecutor:
             "premarket_open_notify": self._execute_premarket_open_notify,  # S101：9:35 开盘表现通知
             "premarket_t1_review": self._execute_premarket_t1_review,  # S101：T+1 复盘通知
             "daily_kg_audit": self._execute_daily_kg_audit,  # 知识图谱每日审查
+            "daily_kg_sync": self._execute_daily_kg_sync,  # 知识图谱每日数据同步（拉情绪更新 DASHBOARD）
             "st_play_radar": self._execute_st_play_radar,  # S148 R3：ST-play radar 白名单（摘帽/重组/扭亏 carve-out）
             "intraday_microstructure_snapshot": self._execute_intraday_microstructure_snapshot,  # S167：盘中微结构周期快照（hithink 排名 + tencent 量比，10min）
             "intraday_auction_dense": self._execute_intraday_auction_dense,  # S167：竞价密集采集（auction live only，每 2min，is_auction_time 门控）
@@ -1996,6 +1997,82 @@ class TaskExecutor:
             logger.warning("[kline_refresh] 刷新失败（不阻塞）: %s", exc)
             return {"status": "degraded", "reason": str(exc)}
 
+    # ── 知识图谱同步/审查（daily_kg_sync 16:00 + daily_kg_audit）──────────
+
+    def _execute_daily_kg_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """知识图谱每日审查——跑 daily_audit.py 生成审查报告。
+
+        每天收盘后跑，检查断链/孤立/coverage/confidence 覆盖率。
+        报告写到 vault 的 reviews/YYYY-MM-DD-daily-audit.md。
+        """
+        import subprocess
+        from pathlib import Path
+
+        vault_path = Path("/Users/lizhiwei/Documents/Obsidian Vault")
+        script = vault_path / "scripts" / "daily_audit.py"
+
+        if not script.exists():
+            logger.warning("[daily_kg_audit] daily_audit.py 不存在，跳过")
+            return {"status": "script_not_found"}
+
+        try:
+            result = subprocess.run(
+                ["python3", str(script), "--quiet"],
+                capture_output=True, text=True, timeout=60,
+                cwd=str(vault_path),
+            )
+            if result.returncode == 0:
+                logger.info("[daily_kg_audit] %s", result.stdout.strip())
+                return {"status": "ok", "output": result.stdout.strip()}
+            else:
+                logger.error("[daily_kg_audit] 审查失败: %s", result.stderr[:200])
+                return {"status": "error", "error": result.stderr[:200]}
+        except subprocess.TimeoutExpired:
+            logger.warning("[daily_kg_audit] 审查超时（60s）")
+            return {"status": "timeout"}
+        except Exception as e:
+            logger.error("[daily_kg_audit] 异常: %s", e)
+            return {"status": "error", "error": str(e)}
+
+    def _execute_daily_kg_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """知识图谱每日数据同步——从后端 API 拉情绪数据更新 scores/ + DASHBOARD。
+
+        每天 16:00（收盘后）跑 daily_sync.py：拉 /api/market/emotion + /api/indices →
+        写 scores/YYYY-MM-DD_score.md → 刷新情绪仪表盘预编译块 → 重跑 precompile/
+        refresh_stats/daily_audit → git commit + push。超时 300s，错误不阻断主调度循环。
+
+        与 daily_kg_audit 的分工：audit 跑结构审查（断链/孤立/coverage），sync 跑数据更新
+        （拉 API 写 scores 刷 DASHBOARD）。sync 先跑（16:00）audit 后跑（可晚于 sync）。
+        """
+        import subprocess
+        from pathlib import Path
+
+        vault_path = Path("/Users/lizhiwei/Documents/Obsidian Vault")
+        script = vault_path / "scripts" / "daily_sync.py"
+
+        if not script.exists():
+            logger.warning("[daily_kg_sync] daily_sync.py 不存在，跳过")
+            return {"status": "script_not_found"}
+
+        try:
+            result = subprocess.run(
+                ["python3", str(script)],
+                capture_output=True, text=True, timeout=300,
+                cwd=str(vault_path),
+            )
+            if result.returncode == 0:
+                logger.info("[daily_kg_sync] %s", result.stdout.strip()[-500:])
+                return {"status": "ok", "output": result.stdout.strip()[-500:]}
+            else:
+                logger.warning("[daily_kg_sync] 同步失败: %s", result.stderr[:300])
+                return {"status": "error", "error": result.stderr[:300]}
+        except subprocess.TimeoutExpired:
+            logger.warning("[daily_kg_sync] 同步超时（300s）")
+            return {"status": "timeout"}
+        except Exception as e:
+            logger.error("[daily_kg_sync] 异常: %s", e)
+            return {"status": "error", "error": str(e)}
+
 
 _manager = ScheduledTaskManager()
 
@@ -2926,41 +3003,20 @@ def _ensure_seed_tasks() -> None:
                 old_cron,
             )
 
-
-    def _execute_daily_kg_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """知识图谱每日审查——跑 daily_audit.py 生成审查报告。
-
-        每天收盘后跑，检查断链/孤立/coverage/confidence 覆盖率。
-        报告写到 vault 的 reviews/YYYY-MM-DD-daily-audit.md。
-        """
-        import subprocess
-        from pathlib import Path
-
-        vault_path = Path("/Users/lizhiwei/Documents/Obsidian Vault")
-        script = vault_path / "scripts" / "daily_audit.py"
-
-        if not script.exists():
-            logger.warning("[daily_kg_audit] daily_audit.py 不存在，跳过")
-            return {"status": "script_not_found"}
-
-        try:
-            result = subprocess.run(
-                ["python3", str(script), "--quiet"],
-                capture_output=True, text=True, timeout=60,
-                cwd=str(vault_path),
-            )
-            if result.returncode == 0:
-                logger.info("[daily_kg_audit] %s", result.stdout.strip())
-                return {"status": "ok", "output": result.stdout.strip()}
-            else:
-                logger.error("[daily_kg_audit] 审查失败: %s", result.stderr[:200])
-                return {"status": "error", "error": result.stderr[:200]}
-        except subprocess.TimeoutExpired:
-            logger.warning("[daily_kg_audit] 审查超时（60s）")
-            return {"status": "timeout"}
-        except Exception as e:
-            logger.error("[daily_kg_audit] 异常: %s", e)
-            return {"status": "error", "error": str(e)}
+    # 知识图谱每日数据同步——16:00（收盘后，工作日）。跑 vault/scripts/daily_sync.py：
+    # 拉 /api/market/emotion + /api/indices → 写 scores/ + 刷情绪仪表盘 → 重跑 precompile/
+    # refresh_stats/daily_audit → git commit + push。超时 300s，错误不阻断主调度循环。
+    # 与 daily_kg_audit 分工：sync 拉数据写文件（16:00），audit 跑结构审查（可晚于 sync）。
+    if "daily_kg_sync" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="daily_kg_sync",
+            description="知识图谱每日数据同步（拉后端 API 情绪数据更新 scores/ + 情绪仪表盘，16:00 收盘后）",
+            task_type="daily_kg_sync",
+            cron_expr="0 16 * * 0-4",  # 16:00 工作日（收盘后）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 daily_kg_sync 已创建（cron 0 16 * * 0-4，16:00 收盘后）")
 
 
 async def stop_scheduler() -> None:
