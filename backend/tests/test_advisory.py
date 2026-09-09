@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from strategies import position_advisor_v2 as adv
+from strategies import position_advisor as adv
 
 
 # S067：模块级 TTL 缓存（winrate/kline）跨测试串数据，autouse 清缓存隔离。

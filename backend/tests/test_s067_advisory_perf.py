@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from strategies import position_advisor_v2 as adv
+from strategies import position_advisor as adv
 from data.sources import tencent as tencent_src
 
 

@@ -91,7 +91,7 @@ async def _warmup_advisory_backtest() -> None:
     """
     try:
         import anyio
-        from strategies.position_advisor_v2 import _win_rate_map
+        from strategies.position_advisor import _win_rate_map
         await anyio.to_thread.run_sync(_win_rate_map)
         logging.info("[S067] advisory 回测预热完成")
     except Exception as _we:  # noqa: BLE001 — 预热失败不阻断启动

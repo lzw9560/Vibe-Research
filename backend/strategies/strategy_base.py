@@ -333,7 +333,7 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
         take_profit = round(entry_price * (1 + cfg.take_profit_pct / 100), 2)
         # §1.2 诚实命名（S147）：confidence→winrate 合成映射 heuristic（非实测历史胜率）。
         # 可复现、作 sort fallback 合法；winrate_source="confidence_map_synthetic" 显式标源不误读为实测。
-        # 真实测 winrate 由 position_advisor_v2 的 run_strategy_backtest 覆写（不在此）。
+        # 真实测 winrate 由 position_advisor 的 run_strategy_backtest 覆写（不在此）。
         confidence_mapped_winrate = min(confidence * 0.8 + 0.2, 0.95)
         mapped_avg_return = round(
             (cfg.take_profit_pct - cfg.stop_loss_pct) / 2 * confidence_mapped_winrate, 2,
@@ -390,7 +390,7 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
             volume_signal=volume_signal,  # S094 R4：per-strategy 量能信号下沉 match 层
         ))
 
-    # 按风险收益比 × mapped winrate 排序（合成 heuristic fallback；position_advisor_v2 用真 backtest winrate 覆写）
+    # 按风险收益比 × mapped winrate 排序（合成 heuristic fallback；position_advisor 用真 backtest winrate 覆写）
     signals.sort(key=lambda s: s.risk_reward_ratio * s.confidence_mapped_winrate, reverse=True)
     return signals
 
@@ -443,7 +443,7 @@ def match_strategies(
     """旧签名兼容包装：build StrategyContext → dispatch_match。
 
     保留原签名以兼容所有既有调用方（strategy_matcher / strategy_backtest /
-    position_advisor_v2 / prediction_ingest / score_candidates + 测试）。
+    position_advisor / prediction_ingest / score_candidates + 测试）。
     card 非空时从 card 子对象 override 读 pool_item/indicators/derived（S084 R5）。
     S081：derived 参数优先（pre_market_workflow 无 card 时直传 fetch_derived 结果）。
     """
