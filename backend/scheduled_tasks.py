@@ -2057,7 +2057,7 @@ class TaskExecutor:
         try:
             result = subprocess.run(
                 ["python3", str(script)],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True, timeout=600,
                 cwd=str(vault_path),
             )
             if result.returncode == 0:
