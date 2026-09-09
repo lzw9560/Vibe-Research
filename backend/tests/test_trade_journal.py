@@ -297,3 +297,49 @@ class TestStatsHelpers:
         result = _daily_aggregate_sharpe([], [])
         assert result["sharpe"] is None
         assert result["n_days"] == 0
+
+
+class TestS44VerdictAndDormantStubs:
+    """S175 T9 — aggregate_by_arm 加 s44_verdict + dormant 臂 stub（limitup/trend）。"""
+
+    def test_aggregate_emits_s44_verdict_per_arm(self, tmp_path):
+        tj = TradeJournal(db_path=tmp_path / "s44.db")
+        tj.insert(JournalRecord.create(
+            arm="floor", stock_code="512890", entry_price=1.0, entry_date="2026-01-15",
+            net_pnl=10.0, is_realized=1,
+        ))
+        tj.insert(JournalRecord.create(
+            arm="breakout", stock_code="000001", entry_price=10.0, entry_date="2026-01-15",
+            net_pnl=5.0, is_realized=1,
+        ))
+        agg = tj.aggregate_by_arm()
+        # 存活臂带 s44_verdict（诚实标签）
+        assert agg["floor"]["s44_verdict"] == "externally_validated"
+        assert agg["breakout"]["s44_verdict"] == "§44_falsified"
+        # dormant 臂 stub（limitup/trend 无记录 → 显式 dormant stub）
+        assert "limitup" in agg
+        assert agg["limitup"]["s44_verdict"] == "mock_not_ready"
+        assert agg["limitup"]["dormant"] is True
+        assert agg["limitup"]["n_picks"] == 0
+        assert "trend" in agg
+        assert agg["trend"]["dormant"] is True
+
+    def test_gap_dead_arm_not_in_aggregate(self, tmp_path):
+        """gap 是 dead_arm（is_dead_arm=1 记录），不进 aggregate（防污染存活臂统计）——非 dormant stub。"""
+        tj = TradeJournal(db_path=tmp_path / "gap.db")
+        tj.insert(JournalRecord.create(
+            arm="gap", stock_code="mock_gap", entry_price=10.0, entry_date="2026-01-15",
+            net_pnl=1.3, is_realized=1, is_dead_arm=1,
+        ))
+        agg = tj.aggregate_by_arm()
+        assert "gap" not in agg  # dead_arm 排除，不作为 dormant stub
+
+    def test_dormant_stub_uses_empty_stats_shape(self, tmp_path):
+        """dormant 臂 stub = _compute_arm_stats([]) shape + s44_verdict + dormant。"""
+        tj = TradeJournal(db_path=tmp_path / "stub.db")
+        agg = tj.aggregate_by_arm()
+        stub = agg["limitup"]
+        assert stub["status"] == "empty"  # _compute_arm_stats([]) 返 empty
+        assert stub["s44_verdict"] == "mock_not_ready"
+        assert stub["dormant"] is True
+        assert "dormant_note" in stub

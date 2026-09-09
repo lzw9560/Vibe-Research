@@ -53,6 +53,19 @@ MAX_BONFERRONI_K: int = 8
 #: 初始资本默认值（drawdown 百分比分母）
 DEFAULT_INITIAL_CAPITAL: float = 100000.0
 
+#: S175 T9 — 各臂 §44 verdict 静态标签（诚实呈现，grill C7：falsified ≠ weak ≠ 待复验）
+#: externally_validated=外部文献验证（非本系统 §44）；§44_falsified=S168 证否；dead_arm=§44 成本假象 falsified
+ARM_VERDICT: dict[str, str] = {
+    "floor": "externally_validated",   # 红利低波 9-12% 三重定论（学术+卖方+指数），非本系统 §44
+    "breakout": "§44_falsified",        # S168 12 harness 全 falsified，selection 无 edge
+    "gap": "dead_arm",                   # §44 falsified 成本假象 net -0.48% t=-3.79
+    "limitup": "mock_not_ready",         # signal 生成器未建，mock_entry=10.0
+    "trend": "mock_not_ready",           # 同
+}
+#: dormant 臂（不跑生产/mock 未就绪，无记录）——aggregate 显式加 stub 让 UI 显诚实标签。
+#: gap 不在此（gap 有 is_dead_arm=1 记录，走 RecordRow dead badge，不进 aggregate 防污染存活臂统计）
+DORMANT_ARMS: tuple[str, ...] = ("limitup", "trend")
+
 
 @dataclass(frozen=True)
 class JournalRecord:
@@ -299,9 +312,19 @@ class TradeJournal:
         for a in arms:
             records = self.query_records(arm=a, is_realized=1, is_dead_arm=0)
             stats = _compute_arm_stats(records)
+            stats["s44_verdict"] = ARM_VERDICT.get(a, "untested")  # S175 T9 诚实标签
             result[a] = stats
             if stats.get("p_one_sided") is not None:
                 p_values.append(stats["p_one_sided"])
+
+        # S175 T9：dormant 臂 stub（不跑生产/已证否/mock）——显式加让 UI 显诚实标签
+        for a in DORMANT_ARMS:
+            if a not in result:
+                stats = _compute_arm_stats([])
+                stats["s44_verdict"] = ARM_VERDICT.get(a, "untested")
+                stats["dormant"] = True
+                stats["dormant_note"] = "dormant—未跑生产/已证否/mock，结构在等插槽"
+                result[a] = stats
 
         # 4 臂多重检验（H1：bonferroni_bh，K cap 8）
         if len(p_values) > 1:

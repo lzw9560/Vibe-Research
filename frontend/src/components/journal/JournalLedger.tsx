@@ -37,6 +37,18 @@ function dsrMethodLabel(method: string): string {
   return method;
 }
 
+// S175 T9：§44 verdict 人话标签 + 颜色（C7：falsified ≠ weak ≠ 待复阅）
+function verdictLabel(verdict: string | undefined): { text: string; cls: string } {
+  if (!verdict || verdict === "untested") return { text: "未测", cls: "bg-gray-500/15 text-gray-500" };
+  const map: Record<string, { text: string; cls: string }> = {
+    externally_validated: { text: "外部验证", cls: "bg-blue-500/15 text-blue-600" },
+    "§44_falsified": { text: "§44证否", cls: "bg-red-500/15 text-red-600" },
+    dead_arm: { text: "已证否·dead", cls: "bg-red-500/15 text-red-500" },
+    mock_not_ready: { text: "mock·未就绪", cls: "bg-gray-500/15 text-gray-500" },
+  };
+  return map[verdict] ?? { text: verdict, cls: "bg-gray-500/15 text-gray-500" };
+}
+
 // S175 T9（SH）：纸面≠真盘警告横幅（静态 + 动态 gap 占位）
 function PaperNotRealBanner() {
   return (
@@ -50,15 +62,23 @@ function PaperNotRealBanner() {
 
 function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
   const isUnderpowered = stats.status === "underpowered";
+  const isDormant = stats.dormant === true;
   const sharpeNotAnnualized = stats.sharpe_n_days < 60;
+  const verdict = verdictLabel(stats.s44_verdict);
   return (
-    <GlassCard className={`p-3 ${isUnderpowered ? "border-yellow-400/60 bg-yellow-50/30" : ""}`}>
+    <GlassCard className={`p-3 ${isUnderpowered ? "border-yellow-400/60 bg-yellow-50/30" : ""} ${isDormant ? "opacity-60" : ""}`}>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">{arm}</span>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusBadge(stats.status)}`}>
-          {stats.status}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${verdict.cls}`}>{verdict.text}</span>
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusBadge(stats.status)}`}>{stats.status}</span>
+        </div>
       </div>
+      {isDormant && (
+        <div className="mb-2 rounded bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">
+          {stats.dormant_note ?? "dormant"}
+        </div>
+      )}
       {isUnderpowered && (
         <div className="mb-2 rounded bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-700">
           样本不足·待积累（当前 {stats.n_days} 天 / 目标 60 天）——不判"劣于随机"

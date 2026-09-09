@@ -491,6 +491,9 @@ export interface ArmAggregate {
   min_trl: number | null;
   haircut: number | null;
   net_excess_mean_cny: number;
+  s44_verdict: string; // S175 T9：§44 verdict（externally_validated/§44_falsified/dead_arm/mock_not_ready/untested）
+  dormant?: boolean; // S175 T9：dormant 臂 stub（不跑生产/已证否/mock）
+  dormant_note?: string;
 }
 export interface ClosedLoopResponse {
   available: boolean;
