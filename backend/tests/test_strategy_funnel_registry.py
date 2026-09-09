@@ -151,8 +151,8 @@ class TestComputeStrategyScore:
     def test_limitup_score_uses_3_significant_factors(self, monkeypatch):
         """涨停类用 seal/rebound/red 三因子（Phase 0d 显著因子）。"""
         from strategies import strategy_funnel_registry as sfr
-        monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
-        monkeypatch.setattr(sfr, "_WEIGHTS_PATH", Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json")
+        monkeypatch.setattr("strategies.funnel.registry._WEIGHTS_CACHE", None)
+        monkeypatch.setattr("strategies.funnel.registry._WEIGHTS_PATH", Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json")
         # factors 来自 gene_scores 用中文键名（见 compute_strategy_score docstring）；
         # 英文权重键经 _FACTOR_NAME_MAP 映射到中文键查值，故测试须传中文键。
         factors = {"封板率": 90, "炸板后溢价": 80, "红盘率": 70}
@@ -167,8 +167,8 @@ class TestComputeStrategyScore:
         from strategies import strategy_funnel_registry as sfr
         # 指向真实 weights 文件
         real_weights = Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json"
-        monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
-        monkeypatch.setattr(sfr, "_WEIGHTS_PATH", real_weights)
+        monkeypatch.setattr("strategies.funnel.registry._WEIGHTS_CACHE", None)
+        monkeypatch.setattr("strategies.funnel.registry._WEIGHTS_PATH", real_weights)
         # 中文键名（gene_scores 口径）；英文权重键经 _FACTOR_NAME_MAP 映射查值。
         factors = {"封板率": 90, "涨停频次": 20}
         score, breakdown = compute_strategy_score(factors, "storm_reversal")
@@ -180,8 +180,8 @@ class TestComputeStrategyScore:
         """反向因子（freq）用 (100-value) 反转。"""
         from strategies import strategy_funnel_registry as sfr
         real_weights = Path(__file__).resolve().parent.parent.parent / ".vibe-research" / "strategy_weights.json"
-        monkeypatch.setattr(sfr, "_WEIGHTS_CACHE", None)
-        monkeypatch.setattr(sfr, "_WEIGHTS_PATH", real_weights)
+        monkeypatch.setattr("strategies.funnel.registry._WEIGHTS_CACHE", None)
+        monkeypatch.setattr("strategies.funnel.registry._WEIGHTS_PATH", real_weights)
         # 中文键名（gene_scores 口径）
         factors = {"封板率": 90, "涨停频次": 20}
         _, breakdown = compute_strategy_score(factors, "storm_reversal")
