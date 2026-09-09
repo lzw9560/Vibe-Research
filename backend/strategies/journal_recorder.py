@@ -33,7 +33,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from engine.trade_journal import TradeJournal, JournalRecord
-from engine.accounting import path_return, gap_net_return
+from engine.accounting import path_return, gap_net_return, _find_signal_idx
 from engine.executor import Executor
 from engine.fill_policies import T1OpenFill
 from engine.decision import Trades, FILL_T_PLUS_1_OPEN, FILL_ACCEPTED
@@ -88,10 +88,13 @@ class JournalRecorder:
         """
         arms = arms or DEFAULT_ARMS
         if target_date is None:
-            from vr_paths import last_trading_date_str  # noqa: PLC0415
-            target_date = last_trading_date_str()
+            from vr_paths import prev_trading_date_str  # noqa: PLC0415
+            target_date = prev_trading_date_str()  # S175 R4：T-1 信号日，T1OpenFill 在 T 成交（C5 fix no_t1_bar 误标 unbuyable）
 
         _logger.info("journal_recorder run_daily target_date=%s arms=%s", target_date, arms)
+
+        # S175 R3：settle_pending 先重算昨日未平 'hold'（path_return T+1 guard 需 T+2+ bars）
+        self.settle_pending_breakout()
 
         results: dict[str, Any] = {}
         for arm in arms:
@@ -110,6 +113,91 @@ class JournalRecorder:
                 _logger.warning("journal_recorder arm=%s failed: %s", arm, e)
                 results[arm] = {"status": "error", "error": str(e), "n_candidates": 0}
         return results
+
+    # ── S175 R3 settle_pending_breakout（重算昨日 'hold'，C2/SH5）─────────
+
+    def settle_pending_breakout(self) -> dict:
+        """S175 R3 — 重算昨日未平 breakout 'hold' 记录（C2/SH5/SH7）。
+
+        path_return T+1 guard（accounting.py:120 idx+2>=len→None）需 T+2+ 天 bar——
+        盘后 T 跑 breakout 全记 is_realized=0 'hold'。次日 bars 增长后，此方法回头
+        重算：query is_realized=0 'hold' → bars_provider 取 bars（已含 T+2+）→
+        path_return → 若完整 exit（非截断 max_hold）→ INSERT OR REPLACE **同 signal_id**
+        （绕过 .create() 生新 UUID）更新 is_realized=1 + net_pnl + exit_price=pr.exit_price。
+
+        **截断 max_hold（SH5）**：path_return max_hold exit（accounting.py:170
+        exit_idx=min(idx+1+max_hold_days, len-1)）在 bars 不足完整持仓期时截断返非 None
+        PathReturn。须检测 signal_idx+2+max_hold > len(bars) → 留 hold 等更多 bars，
+        否则过早标 realized 后续 stop/take 永不检查 → 胜率错。
+
+        **signal_id bypass .create()**：JournalRecord.create()（trade_journal.py:94）
+        硬编 signal_id=str(uuid.uuid4())，cls(signal_id=uuid,...,**kwargs) 传 signal_id
+        会 TypeError（multiple values）。直接构造 JournalRecord(signal_id=pos.signal_id)
+        绕过 .create()，复用原 id 做 INSERT OR REPLACE 幂等更新。
+        """
+        pending = self._journal.query_records(arm="breakout", is_realized=0, is_dead_arm=0)
+        # query_records 无 exit_reason 参数（trade_journal.py:197），Python 层 filter
+        holds = [r for r in pending if r.exit_reason == "hold"]
+        n_settled = 0
+        for pos in holds:
+            if pos.entry_price is None:
+                continue
+            bars = self._bars_provider(pos.stock_code)
+            if not bars:
+                continue
+            # 构造已 filled Trades（entry_price 预填，不走 Executor——entry 已知 from 'hold' 记录）
+            trades = Trades(
+                code=pos.stock_code,
+                signal_date=pos.entry_date,
+                fill_type=FILL_T_PLUS_1_OPEN,
+                direction="long",
+                size=DEFAULT_SIZE,
+                entry_price=float(pos.entry_price),
+                fill_status=FILL_ACCEPTED,
+            )
+            pr = path_return(
+                trades, bars,
+                stop_pct=BREAKOUT_STOP_PCT,
+                take_profit_pct=BREAKOUT_TAKE_PCT,
+                max_hold_days=BREAKOUT_MAX_HOLD,
+                apply_cost=True,
+            )
+            if pr is None:
+                continue  # 仍 bars 不足，留 hold
+            # 截断检测：max_hold exit 且 bars 不足完整持仓期 → 留 hold（SH5）
+            if pr.exit_reason == "max_hold":
+                signal_idx = _find_signal_idx(bars, pos.entry_date)
+                if signal_idx is not None and signal_idx + 2 + BREAKOUT_MAX_HOLD > len(bars):
+                    continue  # 截断 max_hold，留 hold 等更多 bars
+            # 标 realized——INSERT OR REPLACE 同 signal_id（绕过 .create()）
+            position_notional = float(pos.entry_price) * DEFAULT_SIZE
+            net_pnl = pr.return_pct / 100.0 * position_notional
+            record = JournalRecord(
+                signal_id=pos.signal_id,  # bypass .create()——复用原 id 做 INSERT OR REPLACE
+                arm="breakout", stock_code=pos.stock_code,
+                entry_price=pos.entry_price, entry_date=pos.entry_date,
+                exit_price=pr.exit_price, exit_date=pr.exit_date,
+                exit_reason=pr.exit_reason,
+                net_pnl=round(net_pnl, 2),
+                cost_pct=pr.cost_pct, gross_return=pr.gross_return_pct,
+                is_realized=1,
+                fills_json=json.dumps({
+                    "won": pr.won,
+                    "return_pct": pr.return_pct,
+                    "exit_reason": pr.exit_reason,
+                    "exit_date": pr.exit_date,
+                    "exit_price": pr.exit_price,
+                    "cost_pct": pr.cost_pct,
+                    "gross_return_pct": pr.gross_return_pct,
+                    "optimism_flag": "gap_through_unmodeled",
+                    "settled_by": "settle_pending_breakout",
+                    "position_notional": round(position_notional, 2),
+                }),
+                created_at=pos.created_at,  # 保留原 created_at
+            )
+            self._journal.insert(record)  # INSERT OR REPLACE 同 signal_id 幂等
+            n_settled += 1
+        return {"n_pending": len(holds), "n_settled": n_settled}
 
     # ── breakout 臂（可平仓臂，C2 path_return）─────────────────────────
 
@@ -190,7 +278,7 @@ class JournalRecorder:
             record = JournalRecord.create(
                 arm="breakout", stock_code=cand.code,
                 entry_price=filled.entry_price, entry_date=target_date,
-                exit_price=position_notional / DEFAULT_SIZE if pr.return_pct is not None else None,
+                exit_price=pr.exit_price,  # S175 R6：PathReturn.exit_price（T2 三分支均设），非 position_notional/DEFAULT_SIZE=entry_price bug
                 exit_date=pr.exit_date, exit_reason=pr.exit_reason,
                 net_pnl=round(net_pnl, 2),
                 cost_pct=pr.cost_pct,
@@ -230,14 +318,15 @@ class JournalRecorder:
         5. unrealized_pnl = (current_close - entry_price) × shares（每日 MTM 更新）
         6. trade_journal.insert(is_realized=0)
         """
-        from strategies.index_replication_floor import build_position_batches  # noqa: PLC0415
+        from strategies.index_replication_floor import (  # noqa: PLC0415
+            build_position_batches, ETF_CODE)
 
         batches = build_position_batches(one_shot=True, start_date=target_date)
         if not batches:
             return {"n_candidates": 0, "n_buyable": 0, "n_unbuyable": 0, "n_realized": 0}
 
-        # floor 是 ETF 复制（CSI300 ETF 510300 为默认标的）
-        etf_code = "510300"
+        # floor 是 ETF 复制（S172 ETF_CODE='512890' 红利低波；S175 R5 fix 510300 硬编 bug C1）
+        etf_code = ETF_CODE
         bars = self._bars_provider(etf_code)
         n_realized = 0
 
@@ -271,7 +360,7 @@ class JournalRecorder:
             # C3/C6：floor 不走 path_return，走 mark-to-market
             entry_price = float(filled.entry_price)
             # 当前 close（从 bars 取最新）
-            current_close = self._latest_close(bars)
+            current_close = self._latest_close(bars, target_date=target_date)
             unrealized_pnl = None
             if current_close is not None:
                 unrealized_pnl = round((current_close - entry_price) * DEFAULT_SIZE, 2)
@@ -314,7 +403,7 @@ class JournalRecorder:
             if pos.entry_price is None:
                 continue
             bars = self._bars_provider(pos.stock_code)
-            current_close = self._latest_close(bars)
+            current_close = self._latest_close(bars, target_date=target_date)
             if current_close is None:
                 continue
             unrealized = round(
@@ -399,11 +488,24 @@ class JournalRecorder:
     # ── 辅助 ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _latest_close(bars: list[dict]) -> float | None:
-        """从 bars 取最新 close（日线倒序或正序兼容）。"""
+    def _latest_close(bars: list[dict], target_date: str | None = None) -> float | None:
+        """从 bars 取最新 close（日线倒序或正序兼容）。
+
+        S175 R4b（SH2）：target_date 过滤——只返 date<=target_date 的最后一根 bar
+        close，防历史重跑（run_daily(target_date='2026-09-01')）用未来 close 前视偏差。
+        target_date=None 时不限（生产当日跑安全，bars 最后=当日）。
+        """
         if not bars:
             return None
-        for bar in reversed(bars):
+        candidates = bars
+        if target_date is not None:
+            candidates = [
+                b for b in bars
+                if str(b.get("date", "") if isinstance(b, dict) else "")[:10] <= target_date
+            ]
+            if not candidates:
+                return None
+        for bar in reversed(candidates):
             close = bar.get("close") if isinstance(bar, dict) else None
             try:
                 close_f = float(close) if close else 0.0

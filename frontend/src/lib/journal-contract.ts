@@ -511,3 +511,37 @@ export interface DrawdownStatusResponse {
   portfolio: DrawdownArmStatus & { is_bear_market: boolean };
   initial_capital: number;
 }
+
+// S175 R14/R15 — 跟单 flow + 4 源 gap（dormant 标激活条件不可达）
+export interface FollowDecision {
+  signal_id: string;
+  real_entry_price: number;
+  real_exit_price: number | null;
+  real_exit_date: string | null;
+  real_shares: number;
+  real_cost_pct: number | null; // 用户自报成本占比（匹配 S166 Fill.fee 口径）
+}
+
+export interface FollowOrderGapBreakdown {
+  unbuyable: number | null;
+  slippage: number | null;
+  t1: number | null;
+  cost: number | null;
+  dormant: boolean;
+  dormant_reason: string | null;
+}
+
+export interface FollowOrderResponse {
+  signal_id: string;
+  real_entry_price: number;
+  real_exit_price: number | null;
+  real_exit_date: string | null;
+  real_shares: number;
+  real_cost_pct: number | null;
+  paper_pnl: number | null;
+  real_pnl: number | null;
+  gap: number | null;
+  gap_breakdown: FollowOrderGapBreakdown;
+  status?: string; // "no_follow" 当未跟单
+  label?: string;
+}

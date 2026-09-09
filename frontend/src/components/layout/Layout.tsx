@@ -158,7 +158,7 @@ export function Layout() {
                 </div>
               </div>
               <p className="text-[11px] leading-relaxed text-muted-foreground/60">
-                {APP_VERSION} · 不荐股 · 不预测 · 无倾向
+                {APP_VERSION} · 模拟盘跟踪 · 真盘你定
               </p>
             </>
           )}

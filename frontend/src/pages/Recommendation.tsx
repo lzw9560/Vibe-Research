@@ -7,10 +7,13 @@ import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, type StockRecommendation, type RecommendationLevel } from "@/lib/api";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 
+// S175 R7（SH4 真止血）：§44 12 harness 全 falsified——gene_score 对 path-winrate 无 selection edge。
+// 降 LEVEL_META 饱和（emerald→gray）+ label 加 §44证否 前缀，不诱导"高质量"误读。
+// 横幅 + per-item 标同批加，非只加横幅留矛盾绿色徽章。
 const LEVEL_META: Record<RecommendationLevel, { color: string; bg: string; label: string }> = {
-  "高质量关注": { color: "text-emerald-600", bg: "bg-emerald-50", label: "HIGH" },
-  "中等质量关注": { color: "text-amber-600", bg: "bg-amber-50", label: "MEDIUM" },
-  "低质量关注": { color: "text-gray-600", bg: "bg-gray-50", label: "LOW" },
+  "高质量关注": { color: "text-gray-600", bg: "bg-gray-100", label: "§44证否·HIGH" },
+  "中等质量关注": { color: "text-gray-600", bg: "bg-gray-100", label: "§44证否·MEDIUM" },
+  "低质量关注": { color: "text-gray-500", bg: "bg-gray-50", label: "§44证否·LOW" },
   "策略逻辑上回避": { color: "text-red-600", bg: "bg-red-50", label: "AVOID" },
 };
 
@@ -49,7 +52,7 @@ export default function Recommendation() {
     <div className="space-y-4">
       <PageHeader
         title="推荐关注"
-        subtitle="基于基因得分的教育研究式关注清单（非交易建议）"
+        subtitle="模拟盘跟踪·§44 证否的基因分（无 selection edge）·真盘你定"
         actions={
           <div className="flex items-center gap-2">
             <AskAiButton context={askAiContext} />
@@ -66,6 +69,14 @@ export default function Recommendation() {
       />
 
       <Disclaimer compact />
+
+      {/* S175 R7（SH4 真止血）：§44-falsified 警告横幅——gene_score 已证否无 selection edge */}
+      <div className="rounded-lg border border-amber-300/60 bg-amber-50/80 p-3 text-xs leading-relaxed text-amber-800">
+        <span className="font-semibold">⚠️ §44 已证否提示：</span>
+        本页推荐基于基因得分（gene_score），但 §44v2 12 harness 验证已证否——gene_score 对 path-winrate
+        无选股 edge（rho≈0）。此处仅为历史数据呈现，<b>非已验证的 selection 信号</b>。真盘交易由你决策。
+        S175 多臂推荐 engine rework 后将替换为各臂 honest_label（floor=外部验证 actionable / breakout=§44证否 paper-only / 等）。
+      </div>
 
       {error && (
         <GlassCard>
@@ -89,6 +100,7 @@ export default function Recommendation() {
               </div>
 
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">§44证否·无edge</span>
                 <span>基因得分：<span className="font-medium text-foreground">{item.gene_score.toFixed(1)}</span></span>
                 <span>研究仓位：<span className="font-medium text-foreground">{item.position_suggestion}</span></span>
               </div>

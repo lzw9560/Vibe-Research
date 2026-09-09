@@ -148,7 +148,7 @@ class TestFloorArm:
 
         with patch("strategies.index_replication_floor.build_position_batches",
                    return_value=[{"batch_idx": 0, "date": "2026-01-15", "amount": 100000, "status": "planned"}]):
-            recorder._bars_provider = lambda code: bars if code == "510300" else []
+            recorder._bars_provider = lambda code: bars if code == "512890" else []
             result = recorder._process_floor("2026-01-15")
 
         assert result["n_candidates"] == 1
@@ -163,12 +163,12 @@ class TestFloorArm:
 
         with patch("strategies.index_replication_floor.build_position_batches",
                    return_value=[{"batch_idx": 0, "date": "2026-01-15", "amount": 100000, "status": "planned"}]):
-            recorder._bars_provider = lambda code: bars if code == "510300" else []
+            recorder._bars_provider = lambda code: bars if code == "512890" else []
             recorder._process_floor("2026-01-15")
 
         # 改 bars close → 更新 MTM
         new_bars = [{"date": "2026-01-20", "open": 11.0, "high": 11.5, "low": 10.5, "close": 11.0, "volume": 10000}]
-        recorder._bars_provider = lambda code: new_bars if code == "510300" else []
+        recorder._bars_provider = lambda code: new_bars if code == "512890" else []
         updated = recorder.update_floor_mtm()
         assert updated >= 1
 
@@ -259,3 +259,108 @@ class TestBatchMode:
             assert hasattr(pr, "return_pct")
             assert hasattr(pr, "cost_pct")
             assert hasattr(pr, "gross_return_pct")
+
+
+# ===========================================================================
+# S175 T3：settle_pending_breakout + _latest_close target_date（C2/SH2/SH5/SH7）
+# ===========================================================================
+
+class TestSettlePendingBreakout:
+    """S175 T3 — settle_pending_breakout 重算昨日 'hold'。
+
+    bars 增长后重算 path_return → INSERT OR REPLACE **同 signal_id**（绕过 .create()
+    生新 UUID）→ is_realized=1。截断 max_hold（bars 不足完整持仓期）留 hold 不标
+    realized（SH5）。signal_id bypass .create()（.create() :94 硬编 uuid4，无法
+    INSERT OR REPLACE 同 id）。
+    """
+
+    def test_settle_realizes_hold_when_bars_complete(self, journal, recorder):
+        """bars 延伸到完整 max_hold → 'hold' 重算为 is_realized=1，同 signal_id。"""
+        hold = JournalRecord.create(
+            arm="breakout", stock_code="000001",
+            entry_price=10.5, entry_date="2026-01-15",
+            exit_reason="hold", is_realized=0,
+            fills_json=json.dumps({"optimism_flag": "path_return_none_t1_guard"}),
+        )
+        journal.insert(hold)
+        # bars 延伸到完整 max_hold=3（signal 01-15 idx=0, entry 01-16 idx=1, exit 01-19 idx=4）
+        bars = [
+            {"date": "2026-01-15", "open": 10.0, "high": 10.5, "low": 9.5, "close": 10.0, "volume": 10000},
+            {"date": "2026-01-16", "open": 10.5, "high": 10.6, "low": 10.4, "close": 10.55, "volume": 10000},  # entry=10.5
+            {"date": "2026-01-17", "open": 10.55, "high": 10.7, "low": 10.45, "close": 10.6, "volume": 10000},
+            {"date": "2026-01-18", "open": 10.6, "high": 10.8, "low": 10.5, "close": 10.65, "volume": 10000},
+            {"date": "2026-01-19", "open": 10.65, "high": 10.9, "low": 10.55, "close": 10.7, "volume": 10000},  # max_hold exit close=10.7
+        ]
+        recorder._bars_provider = lambda code: bars if code == "000001" else []
+        settled = recorder.settle_pending_breakout()
+        assert settled["n_settled"] == 1
+        records = journal.query_records(arm="breakout", is_realized=None, is_dead_arm=0)
+        assert len(records) == 1  # INSERT OR REPLACE 同 signal_id，非新行
+        assert records[0].signal_id == hold.signal_id  # 同 id（绕过 .create()）
+        assert records[0].is_realized == 1
+        assert records[0].net_pnl is not None
+        assert records[0].exit_price == pytest.approx(10.7, abs=0.01)  # bars[4].close, != entry 10.5
+        assert records[0].exit_reason == "max_hold"
+
+    def test_settle_leaves_hold_when_bars_truncated(self, journal, recorder):
+        """bars 不足完整 max_hold（截断）→ 留 hold 不标 realized（SH5）。"""
+        hold = JournalRecord.create(
+            arm="breakout", stock_code="000001",
+            entry_price=10.5, entry_date="2026-01-15",
+            exit_reason="hold", is_realized=0,
+            fills_json=json.dumps({"optimism_flag": "path_return_none_t1_guard"}),
+        )
+        journal.insert(hold)
+        # bars 只到 01-17（entry 01-16, max_hold=3 需 01-19, 仅 1 根 post-entry → 截断）
+        bars = [
+            {"date": "2026-01-15", "open": 10.0, "high": 10.5, "low": 9.5, "close": 10.0, "volume": 10000},
+            {"date": "2026-01-16", "open": 10.5, "high": 10.6, "low": 10.4, "close": 10.55, "volume": 10000},  # entry
+            {"date": "2026-01-17", "open": 10.55, "high": 10.7, "low": 10.45, "close": 10.6, "volume": 10000},  # 截断 max_hold
+        ]
+        recorder._bars_provider = lambda code: bars if code == "000001" else []
+        settled = recorder.settle_pending_breakout()
+        assert settled["n_settled"] == 0  # 截断留 hold
+        records = journal.query_records(arm="breakout", is_realized=None, is_dead_arm=0)
+        assert len(records) == 1
+        assert records[0].is_realized == 0  # 仍 hold
+        assert records[0].exit_reason == "hold"
+        assert records[0].signal_id == hold.signal_id  # 未被改
+
+    def test_settle_skips_when_no_hold_records(self, journal, recorder):
+        """无 'hold' breakout 记录 → n_settled=0，不崩。"""
+        settled = recorder.settle_pending_breakout()
+        assert settled["n_settled"] == 0
+        assert settled["n_pending"] == 0
+
+
+class TestLatestCloseTargetDate:
+    """S175 T3 — _latest_close target_date 过滤防前视（SH2）。
+
+    生产当日跑（target_date=T-1）取当日 close 正确；但历史重跑 bars 含至今日，
+    _latest_close 无过滤返今日 close → 前视偏差。加 target_date 过滤 date<=target_date。
+    """
+
+    def test_latest_close_filters_by_target_date(self, recorder):
+        bars = [
+            {"date": "2026-01-01", "close": 10.0},
+            {"date": "2026-01-05", "close": 11.0},
+            {"date": "2026-01-10", "close": 12.0},  # 未来 bar
+        ]
+        # target_date=2026-01-05 → 返 01-05 close=11.0，非未来 01-10 close=12.0
+        assert recorder._latest_close(bars, target_date="2026-01-05") == 11.0
+
+    def test_latest_close_no_target_returns_last(self, recorder):
+        """无 target_date（生产当日跑安全）→ 返最后一根 close（backward compat）。"""
+        bars = [
+            {"date": "2026-01-01", "close": 10.0},
+            {"date": "2026-01-10", "close": 12.0},
+        ]
+        assert recorder._latest_close(bars) == 12.0
+
+    def test_latest_close_target_date_before_all_bars(self, recorder):
+        """target_date 早于所有 bar → None（无 <=target_date 的 bar）。"""
+        bars = [{"date": "2026-01-10", "close": 12.0}]
+        assert recorder._latest_close(bars, target_date="2026-01-01") is None
+
+    def test_latest_close_empty_bars(self, recorder):
+        assert recorder._latest_close([], target_date="2026-01-05") is None

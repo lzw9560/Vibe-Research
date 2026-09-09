@@ -52,6 +52,10 @@ class PathReturn:
     exit_date: str
     cost_pct: float = 0.0
     gross_return_pct: float = 0.0
+    # S175 T2（spec grill SH7）：三分支均设。stop/take=entry*(1±pct/100) 乐观水平
+    # （gap-through 未建模，fills_json 带 optimism_flag='gap_through_unmodeled'）；
+    # max_hold=bars[exit_idx].close（真实 close）。覆写 S173 journal_recorder.py:24 只读约束。
+    exit_price: float = 0.0
 
 
 def _stamp_duty_for_date(entry_date: str) -> float:
@@ -149,6 +153,7 @@ def path_return(
                 won=False, return_pct=round(net, 2) if apply_cost else gross,
                 exit_reason="stop", exit_date=str(_bar_get(bars[j], "date", "")),
                 cost_pct=cost, gross_return_pct=gross,
+                exit_price=entry * (1 + stop_pct / 100),  # S175 T2：stop level（乐观，gap-through 未建模）
             )
         if high_f and high_f >= entry * (1 + take_profit_pct / 100):
             gross = float(take_profit_pct)
@@ -158,6 +163,7 @@ def path_return(
                 return_pct=round(net, 2) if apply_cost else gross,
                 exit_reason="take", exit_date=str(_bar_get(bars[j], "date", "")),
                 cost_pct=cost, gross_return_pct=gross,
+                exit_price=entry * (1 + take_profit_pct / 100),  # S175 T2：take level（乐观）
             )
 
     # max_hold exit（simulate_holding lines 113-119）
@@ -178,6 +184,7 @@ def path_return(
         exit_date=str(_bar_get(bars[exit_idx], "date", "")),
         cost_pct=cost,
         gross_return_pct=round(gross, 2),
+        exit_price=exit_f,  # S175 T2：bars[exit_idx].close（:171 已算，现暴露）
     )
 
 

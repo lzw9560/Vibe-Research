@@ -6,6 +6,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { ApiError } from "@/lib/api";
 import { useClosedLoop, useDrawdownStatus } from "@/lib/query";
 import type { ArmAggregate, ClosedLoopRecord } from "@/lib/journal-contract";
+import { FollowOrderButton } from "./FollowOrderPanel";
 
 function yuan(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "—";
@@ -28,15 +29,41 @@ function statusBadge(status: string): string {
   return map[status] ?? "bg-gray-500/15 text-gray-500";
 }
 
-function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
+// S175 T9（诚实呈现）：DSR method 人话标签（lenient→宽松估计，非严谨跨 trial）
+function dsrMethodLabel(method: string): string {
+  if (method === "lenient_single_estimate") return "宽松估计";
+  if (method === "cross_trial_variance") return "跨trial";
+  if (method === "N/A" || !method) return "不适用";
+  return method;
+}
+
+// S175 T9（SH）：纸面≠真盘警告横幅（静态 + 动态 gap 占位）
+function PaperNotRealBanner() {
   return (
-    <GlassCard className="p-3">
+    <div className="rounded-lg border border-amber-300/60 bg-amber-50/80 p-2 text-[11px] leading-relaxed text-amber-800">
+      <span className="font-semibold">纸面 ≠ 真盘：</span>
+      本页 PnL 为模拟口径（含成本 0.70%/滑点/涨停买不到/T+1 guard），但不等于真盘可执行——
+      真盘滑点/流动性/注意力窗会侵蚀收益。<b>真盘交易由你决策</b>。
+    </div>
+  );
+}
+
+function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
+  const isUnderpowered = stats.status === "underpowered";
+  const sharpeNotAnnualized = stats.sharpe_n_days < 60;
+  return (
+    <GlassCard className={`p-3 ${isUnderpowered ? "border-yellow-400/60 bg-yellow-50/30" : ""}`}>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">{arm}</span>
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusBadge(stats.status)}`}>
           {stats.status}
         </span>
       </div>
+      {isUnderpowered && (
+        <div className="mb-2 rounded bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-700">
+          样本不足·待积累（当前 {stats.n_days} 天 / 目标 60 天）——不判"劣于随机"
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
         <span className="text-muted-foreground">执行胜率</span>
         <span className="text-right font-mono">
@@ -56,9 +83,13 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
         <span className="text-right font-mono">{yuan(stats.total_net_pnl)} CNY</span>
         <span className="text-muted-foreground">盈亏比</span>
         <span className="text-right font-mono">{stats.payoff_ratio != null ? stats.payoff_ratio.toFixed(2) : "—"}</span>
-        <span className="text-muted-foreground">Sharpe</span>
+        <span className="text-muted-foreground">
+          Sharpe{sharpeNotAnnualized && <span className="ml-1 text-[9px] text-yellow-600">未年化</span>}
+        </span>
         <span className="text-right font-mono">{stats.sharpe != null ? stats.sharpe.toFixed(3) : "—"}</span>
-        <span className="text-muted-foreground">DSR</span>
+        <span className="text-muted-foreground">
+          DSR<span className="ml-1 text-[9px] text-muted-foreground/70">({dsrMethodLabel(stats.dsr_method)})</span>
+        </span>
         <span className="text-right font-mono">{stats.dsr != null ? stats.dsr.toFixed(3) : "—"}</span>
         <span className="text-muted-foreground">t-stat</span>
         <span className="text-right font-mono">{stats.t_stat != null ? stats.t_stat.toFixed(2) : "—"}</span>
@@ -72,6 +103,10 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
         </span>
         <span className="text-muted-foreground">n_picks / n_days</span>
         <span className="text-right font-mono">{stats.n_picks} / {stats.n_days}</span>
+      </div>
+      {/* S175 T9（C6 诚实）：cap 标签——lift cap 未接 trade_journal sizing 路径 */}
+      <div className="mt-2 text-[9px] leading-tight text-muted-foreground/70">
+        ×0.5 lift cap 未接 trade_journal sizing（drawdown cap 已接但 underpowered=1.0 no-op）
       </div>
     </GlassCard>
   );
@@ -98,6 +133,11 @@ function RecordRow({ r }: { r: ClosedLoopRecord }) {
         {r.is_realized === 0
           ? <span className="text-yellow-500">持仓 {yuan(r.unrealized_pnl)}</span>
           : <span className="text-green-500">已平</span>}
+      </td>
+      <td className="px-2 py-1 text-xs">
+        {r.is_realized === 1 && r.signal_id
+          ? <FollowOrderButton signal_id={r.signal_id} />
+          : <span className="text-[10px] text-muted-foreground">—</span>}
       </td>
     </tr>
   );
@@ -146,6 +186,7 @@ export function JournalLedger() {
 
   return (
     <div className="space-y-3 p-4">
+      <PaperNotRealBanner />
       {/* 跨臂聚合统计 */}
       <div>
         <h3 className="mb-2 text-sm font-semibold">跨臂聚合统计</h3>
@@ -208,6 +249,7 @@ export function JournalLedger() {
                 <th className="px-2 py-1">成本</th>
                 <th className="px-2 py-1">净 PnL</th>
                 <th className="px-2 py-1">状态</th>
+                <th className="px-2 py-1">跟单</th>
               </tr>
             </thead>
             <tbody>

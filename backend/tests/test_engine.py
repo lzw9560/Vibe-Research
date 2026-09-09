@@ -484,3 +484,55 @@ class TestAccountingCostAndSurvivorship:
         assert hasattr(pr, "gross_return_pct")
         assert hasattr(pr, "exit_reason")
         assert hasattr(pr, "exit_date")
+
+
+# ===========================================================================
+# S175 T2：PathReturn.exit_price 三分支均设（spec grill SH7）
+# ===========================================================================
+
+class TestPathReturnExitPrice:
+    """S175 T2 — PathReturn.exit_price 三分支均设。
+
+    v1 只 max_hold :165 算 exit_price 局部变量；stop/take 分支没设 → 加默认 0.0 后
+    journal_recorder.py:193 读 pr.exit_price 对 stop/take exit 得 0.0（应为
+    entry*(1±pct/100)）。三分支均设。注：R6 覆写 S173 journal_recorder.py:24
+    只读约束（S175 架构演进）。
+    """
+
+    def test_take_exit_price_is_take_level(self):
+        """take 分支 exit_price = entry*(1+take/100)（乐观水平，gap-through 未建模）。"""
+        bars_take = [
+            _bar(SIGNAL, 10.0, 10.5, 9.5, 10.0),
+            _bar("2026-08-02", 10.5, 10.6, 10.5, 11.0),  # entry=10.5
+            _bar("2026-08-03", 11.0, 12.0, 10.5, 11.5),  # high=12>=11.34 take
+        ]
+        filled = Executor().execute(_make_trades(), bars_take, T1OpenFill())
+        pr = path_return(filled, bars_take, -3.0, 8.0, 3, apply_cost=True)
+        assert pr is not None and pr.exit_reason == "take"
+        assert pr.exit_price == pytest.approx(10.5 * 1.08, abs=0.01)  # 11.34
+
+    def test_stop_exit_price_is_stop_level(self):
+        """stop 分支 exit_price = entry*(1+stop/100)（乐观水平，gap-through 未建模）。"""
+        bars_stop = [
+            _bar(SIGNAL, 10.0, 10.5, 9.5, 10.0),
+            _bar("2026-08-02", 10.5, 10.6, 10.5, 11.0),  # entry=10.5
+            _bar("2026-08-03", 10.3, 10.4, 9.5, 9.6),   # low=9.5<=10.185 stop
+        ]
+        filled = Executor().execute(_make_trades(), bars_stop, T1OpenFill())
+        pr = path_return(filled, bars_stop, -3.0, 8.0, 3, apply_cost=True)
+        assert pr is not None and pr.exit_reason == "stop"
+        assert pr.exit_price == pytest.approx(10.5 * 0.97, abs=0.01)  # 10.185
+
+    def test_max_hold_exit_price_is_close(self):
+        """max_hold 分支 exit_price = bars[exit_idx].close（:165 已算，T2 暴露）。"""
+        bars_max = [
+            _bar(SIGNAL, 10.0, 10.5, 9.5, 10.0),
+            _bar("2026-08-02", 10.5, 10.6, 10.4, 10.55),   # entry=10.5
+            _bar("2026-08-03", 10.55, 10.7, 10.45, 10.6),  # 无触发（low>10.185, high<11.34）
+            _bar("2026-08-04", 10.6, 10.8, 10.5, 10.65),   # 无触发
+            _bar("2026-08-05", 10.65, 10.9, 10.55, 10.7),  # max_hold exit close=10.7
+        ]
+        filled = Executor().execute(_make_trades(), bars_max, T1OpenFill())
+        pr = path_return(filled, bars_max, -3.0, 8.0, 3, apply_cost=True)
+        assert pr is not None and pr.exit_reason == "max_hold"
+        assert pr.exit_price == pytest.approx(10.7, abs=0.01)  # bars[exit_idx=4].close

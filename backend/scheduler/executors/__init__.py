@@ -56,6 +56,7 @@ class TaskExecutor:
             "intraday_microstructure_snapshot": self._execute_intraday_microstructure_snapshot,
             "intraday_auction_dense": self._execute_intraday_auction_dense,
             "baostock_5min_freeze": self._execute_baostock_5min_freeze,
+            "trade_journal_daily": self._execute_trade_journal_daily,  # S175 R2 — 模拟盘闭环点火（BREAK-0 fix）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -308,3 +309,8 @@ class TaskExecutor:
     def _execute_baostock_5min_freeze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.intraday import baostock_5min_freeze
         return baostock_5min_freeze(payload)
+
+    def _execute_trade_journal_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S175 R2 — 模拟盘闭环盘后跑（journal_recorder.run_daily 接 scheduler 点火）。"""
+        from scheduler.executors.journal import trade_journal_daily
+        return trade_journal_daily(payload)

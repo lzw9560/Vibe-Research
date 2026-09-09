@@ -189,6 +189,20 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 kline_refresh 已创建（cron 30 16 * * 0-4）")
 
+    # S175 R2：模拟盘闭环盘后跑（journal_recorder.run_daily 接 scheduler 点火，BREAK-0 fix）。
+    # 16:45 盘后（晚 kline_refresh 16:30 确保 baostock_kline_cache.json 已刷当日 bar）。
+    # ETF bars 走 fetch_etf_hist（akshare push2delay，非 cache）。
+    if "trade_journal_daily" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="trade_journal_daily",
+            description="S175 R2：盘后闭环（settle_pending + run_daily floor+breakout + floor MTM）",
+            task_type="trade_journal_daily",
+            cron_expr="45 16 * * 0-4",  # 16:45 盘后（晚 kline_refresh 16:30 +15min）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 trade_journal_daily 已创建（cron 45 16 * * 0-4）")
+
     # §44 60 天复验检查点（提醒任务）：周一 18:00 数 eastmoney_live 日数，达 60 →
     # 写 s066_60day_due.json + WARNING + notify_on_success 推送（通道未配则静默）。
     # 到点由人/会话跑 backfill --weather 查 lift；本任务只提醒不自动验证。

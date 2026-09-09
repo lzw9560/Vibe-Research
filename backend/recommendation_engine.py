@@ -191,3 +191,117 @@ async def get_today_recommendations(limit: int = 20) -> List[StockRecommendation
     # 按基因得分降序
     recs.sort(key=lambda r: r.gene_score, reverse=True)
     return recs[:limit]
+
+
+# ===========================================================================
+# S175 R9 — 多臂推荐（honest_label + 读 PaperPortfolio.equity() sizing，R9↔R10 接线 SH1）
+# ===========================================================================
+# 诚实承认：当前仅 floor 1 臂 actionable，breakout/limitup/trend/gap 返静态 honest_label
+# 卡非动态信号——为 1 actionable 臂建多臂框架是用户拉回的取舍，3/4 槽位是空标签（留插槽
+# 等 conditioning harness）。gene-only legacy（上方）§44 falsified，保留但标证否。
+
+from enum import Enum
+
+
+class ArmHonestLabel(str, Enum):
+    """多臂诚实标签（grill C7：falsified ≠ weak ≠ 待复验）。"""
+    EXTERNALLY_VALIDATED = "externally_validated"  # 外部文献验证（floor 红利低波 9-12% 三重定论，非本系统 §44）
+    SECTION44_FALSIFIED = "§44_falsified"  # §44 证否（breakout selection 无 edge）
+    MOCK_NOT_READY = "mock_not_ready"  # signal 生成器未建（limitup/trend）
+    DEAD_ARM = "dead_arm"  # falsified dead（gap，不推荐）
+
+
+#: floor-heavy ETF 配比（spec §5.4 portfolio overlay deferred，取下限 50%）
+FLOOR_ALLOCATION: float = 0.5
+
+
+@dataclass
+class MultiArmRecommendation:
+    """多臂推荐结果——各臂 honest_label + sizing（floor actionable 读 equity）。"""
+    arm: str
+    honest_label: ArmHonestLabel
+    action_type: str  # "batch_buy" | "paper_track" | "none"
+    code: str | None = None
+    name: str | None = None
+    sizing_suggestion: str | None = None
+    coverage_rate: float | None = None
+    days_tracked: int | None = None
+    validated: bool = False
+    note: str = ""
+
+
+def get_multi_arm_recommendations(
+    paper_portfolio: "object | None" = None,
+    journal: "object | None" = None,
+) -> List[MultiArmRecommendation]:
+    """多臂推荐——各臂 honest_label，floor actionable + 读 PaperPortfolio.equity() sizing。
+
+    R9↔R10 接线（SH1 fix）：floor 仓位 sizing 读 PaperPortfolio.equity()（非空转）。
+    breakout=§44_falsified 非 weak signal 非 underpowered_tracking（grill C7）。
+    gap dead_arm 不推荐（gate）。limitup/trend mock_not_ready。
+    """
+    from engine.paper_portfolio import PaperPortfolio  # noqa: PLC0415
+    from engine.trade_journal import TradeJournal  # noqa: PLC0415
+
+    pp = paper_portfolio or PaperPortfolio()
+    tj = journal or TradeJournal()
+    equity = pp.equity()
+    recs: List[MultiArmRecommendation] = []
+
+    # floor：ETF 512890 批次计划（actionable，externally_validated）+ equity sizing
+    try:
+        from strategies.index_replication_floor import (  # noqa: PLC0415
+            build_position_batches, ETF_CODE,
+        )
+        batches = build_position_batches(one_shot=True)
+        n_batches = max(len(batches), 1)
+        floor_size = equity * FLOOR_ALLOCATION / n_batches
+        recs.append(MultiArmRecommendation(
+            arm="floor", honest_label=ArmHonestLabel.EXTERNALLY_VALIDATED,
+            action_type="batch_buy", code=ETF_CODE, name="红利低波 ETF",
+            sizing_suggestion=f"每批 ≈{floor_size:.0f} CNY（equity {equity:.0f} × {FLOOR_ALLOCATION} / {n_batches} 批）",
+            coverage_rate=1.0, validated=True,
+            note="外部三重定论 9-12%（学术+卖方+指数），非本系统 §44 验证；长线 buy+hold",
+        ))
+    except Exception as e:  # noqa: BLE001
+        recs.append(MultiArmRecommendation(
+            arm="floor", honest_label=ArmHonestLabel.MOCK_NOT_READY,
+            action_type="none", note=f"floor 未就绪: {e}",
+        ))
+
+    # breakout：§44_falsified paper-only（不推荐真金）
+    try:
+        agg = tj.aggregate_by_arm()
+        bo_stats = agg.get("breakout", {})
+        recs.append(MultiArmRecommendation(
+            arm="breakout", honest_label=ArmHonestLabel.SECTION44_FALSIFIED,
+            action_type="paper_track",
+            coverage_rate=bo_stats.get("coverage_rate") if isinstance(bo_stats, dict) else None,
+            days_tracked=bo_stats.get("n_days", 0) if isinstance(bo_stats, dict) else 0,
+            validated=False,
+            note="§44 selection 已证否（S168 12 harness 全 falsified）无 selection edge；"
+                 "盘中 conditioning 未测——paper tracking 非 weak 非 underpowered_tracking",
+        ))
+    except Exception as e:  # noqa: BLE001
+        recs.append(MultiArmRecommendation(
+            arm="breakout", honest_label=ArmHonestLabel.SECTION44_FALSIFIED,
+            action_type="paper_track", note=f"stats 不可得: {e}",
+        ))
+
+    # limitup/trend：mock_not_ready
+    for arm in ("limitup", "trend"):
+        recs.append(MultiArmRecommendation(
+            arm=arm, honest_label=ArmHonestLabel.MOCK_NOT_READY,
+            action_type="none", validated=False,
+            note=f"{arm} signal 生成器未建（mock_entry=10.0 硬编），等 conditioning harness",
+        ))
+
+    # gap：dead_arm（不推荐）
+    recs.append(MultiArmRecommendation(
+        arm="gap", honest_label=ArmHonestLabel.DEAD_ARM,
+        action_type="none", validated=False,
+        note="gap §44 falsified（成本假象 net -0.48% t=-3.79），is_dead_arm=1 不推荐；"
+             "审计走 tools/s44_gap_run_60d.py",
+    ))
+
+    return recs
