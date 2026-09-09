@@ -67,3 +67,48 @@ def test_index_raw_returns_four_indices(monkeypatch):
 def test_parse_gtimg_bad_lines_ignored():
     assert tencent._parse_gtimg("garbage;no_quotes_here;") == {}
     assert tencent._parse_gtimg("") == {}
+
+
+def test_parse_gtimg_five_level_bid_ask(monkeypatch):
+    """五档买卖盘提取（fields 9-28）：buy/sell 各 5 档 {level, price, vol}。
+
+    vol=手×100→股，与 eastmoney bids() 同口径——可替代/并行。
+    """
+    monkeypatch.setattr(tencent, "_TENCENT_CACHE", {})
+    parts = ["0"] * 55
+    parts[1] = "测试股"
+    parts[3] = "10.50"  # price
+    # 买1-5 (price, vol) — vol 单位=手
+    parts[9] = "10.49";  parts[10] = "120"   # 买1: 10.49元, 120手→12000股
+    parts[11] = "10.48"; parts[12] = "80"    # 买2
+    parts[13] = "10.47"; parts[14] = "60"    # 买3
+    parts[15] = "10.46"; parts[16] = "40"    # 买4
+    parts[17] = "10.45"; parts[18] = "20"    # 买5
+    # 卖1-5 (price, vol)
+    parts[19] = "10.51"; parts[20] = "100"   # 卖1
+    parts[21] = "10.52"; parts[22] = "90"    # 卖2
+    parts[23] = "10.53"; parts[24] = "70"    # 卖3
+    parts[25] = "10.54"; parts[26] = "50"    # 卖4
+    parts[27] = "10.55"; parts[28] = "30"   # 卖5
+    raw = 'v_sz002980="' + "~".join(parts) + '";'
+
+    monkeypatch.setattr(tencent, "_fetch_gtimg", lambda codes: raw)
+    out = tencent.fetch_raw(["002980"])
+    q = out["002980"]
+
+    assert len(q["buy"]) == 5
+    assert len(q["sell"]) == 5
+
+    # 买1-5：价格递减，vol=手×100→股
+    assert q["buy"][0] == {"level": 1, "price": 10.49, "vol": 12000.0}
+    assert q["buy"][1] == {"level": 2, "price": 10.48, "vol": 8000.0}
+    assert q["buy"][2] == {"level": 3, "price": 10.47, "vol": 6000.0}
+    assert q["buy"][3] == {"level": 4, "price": 10.46, "vol": 4000.0}
+    assert q["buy"][4] == {"level": 5, "price": 10.45, "vol": 2000.0}
+
+    # 卖1-5：价格递增
+    assert q["sell"][0] == {"level": 1, "price": 10.51, "vol": 10000.0}
+    assert q["sell"][1] == {"level": 2, "price": 10.52, "vol": 9000.0}
+    assert q["sell"][2] == {"level": 3, "price": 10.53, "vol": 7000.0}
+    assert q["sell"][3] == {"level": 4, "price": 10.54, "vol": 5000.0}
+    assert q["sell"][4] == {"level": 5, "price": 10.55, "vol": 3000.0}

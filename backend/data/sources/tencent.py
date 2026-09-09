@@ -5,7 +5,8 @@
 
 公开：
 - ``fetch_raw(codes)``：批量个股实时行情，返**全字段 raw dict**（含
-  ``last_close/open/high/low/vol_ratio/pe_static`` 等）——单一事实源，不丢字段。
+  ``last_close/open/high/low/vol_ratio/pe_static`` 等 + 五档买卖盘
+  ``buy/sell``）——单一事实源，不丢字段。
 - ``index_raw()``：A股大盘指数实时行情。
 
 异构接口：legacy 消费者经 ``astock.tencent_quote`` 拿 raw（全字段）；
@@ -43,6 +44,12 @@ def _fetch_gtimg(prefixed_codes: list[str]) -> str:
 
 
 def _parse_gtimg(data: str) -> dict[str, dict]:
+    """解析 qt.gtimg.cn 响应行 → 全字段 raw dict（L1 + 五档买卖盘）。
+
+    五档（fields 9-28）：buy=买1-5（9-18），sell=卖1-5（19-28）。
+    每档 {level, price, vol}；price=元，vol=手×100→股（与 eastmoney bids() 同口径，
+    可替代/并行高频轮询——tencent 不封 IP 无显式限流，解打板 OFI 3s→1s 瓶颈）。
+    """
     result: dict[str, dict] = {}
     for line in data.strip().split(";"):
         if not line.strip() or "=" not in line or '"' not in line:
@@ -58,6 +65,14 @@ def _parse_gtimg(data: str) -> dict[str, dict]:
                 return float(vals[i]) if vals[i] else 0.0
             except (ValueError, IndexError):
                 return 0.0
+
+        # 五档买卖盘：price_start=9→买1-5，19→卖1-5（price/vol 交替，步长2）
+        def levels(price_start: int) -> list[dict]:
+            return [
+                {"level": i, "price": num(price_start + (i - 1) * 2),
+                 "vol": num(price_start + (i - 1) * 2 + 1) * 100}
+                for i in range(1, 6)
+            ]
 
         result[code] = {
             "name": vals[1],
@@ -79,6 +94,8 @@ def _parse_gtimg(data: str) -> dict[str, dict]:
             "limit_down": num(48),
             "vol_ratio": num(49),
             "pe_static": num(52),
+            "buy": levels(9),
+            "sell": levels(19),
         }
     return result
 
