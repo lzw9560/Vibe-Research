@@ -21,6 +21,7 @@ if str(backend_dir) not in sys.path:
 from config import GENE_SCORES_DB_PATH
 from strategies.kline_returns import fetch_klines, _bs_code, _match_next_bar, simulate_holding
 from strategies.forward_test import _ensure_table
+from data.sources.baostock_src import ensure_login, logout, DependencyMissing
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("s145_sensitivity")
@@ -38,9 +39,9 @@ PARAM_SETS = [
 def main(sample: int = 12) -> int:
     _ensure_table()
     try:
-        import baostock as bs
-    except ImportError:
-        logger.warning("baostock 未安装"); return 1
+        ensure_login()
+    except (ImportError, DependencyMissing):
+        logger.warning("baostock 不可用"); return 1
 
     import sqlite3
     conn = sqlite3.connect(GENE_SCORES_DB_PATH)
@@ -63,10 +64,6 @@ def main(sample: int = 12) -> int:
         conn.close()
     logger.info("采样 %d dates", len(dates))
 
-    lg = bs.login()
-    if getattr(lg, "error_code", "0") != "0":
-        logger.warning("baostock login 失败"); return 1
-
     from datetime import datetime, timedelta
     # 收集所有 (date, code) 的 bars（fetch 一次，多 params 复用）
     bars_cache: dict[tuple, list] = {}
@@ -82,7 +79,7 @@ def main(sample: int = 12) -> int:
                     continue
                 bars_cache[(d, code)] = fetch_klines(bsc, start, end)
     finally:
-        bs.logout()
+        logout()
     logger.info("bars 缓存完成（%d 条），开始多 params 模拟", len(bars_cache))
 
     # 每 params 下算 picks + universe path-winrate + path_lift

@@ -20,6 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
+from data.sources.baostock_src import fetch_daily_bars, ensure_login, logout, DependencyMissing
+
 CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 FIELDS = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
 
@@ -44,37 +46,6 @@ def _last_trading_date() -> str:
         return datetime.now().strftime("%Y-%m-%d")
 
 
-def _fetch_since(bs_code: str, start_date: str, end_date: str, bs) -> list[dict]:
-    """baostock qfq 日K（start..end）。返 bars（全部字段）。空/错返 []。"""
-    try:
-        rs = bs.query_history_k_data_plus(
-            bs_code, FIELDS, start_date=start_date, end_date=end_date, adjustflag="2",
-        )
-    except Exception:
-        return []
-    if rs.error_code != "0":
-        return []
-    bars: list[dict] = []
-    while rs.error_code == "0" and rs.next():
-        d = rs.get_row_data()
-        try:
-            bars.append({
-                "date": d[0],
-                "open": float(d[1]) if d[1] else 0.0,
-                "high": float(d[2]) if d[2] else 0.0,
-                "low": float(d[3]) if d[3] else 0.0,
-                "close": float(d[4]) if d[4] else 0.0,
-                "volume": float(d[5]) if d[5] else 0.0,
-                "amount": float(d[6]) if d[6] else 0.0,
-                "turn": float(d[7]) if d[7] else 0.0,
-                "pctChg": float(d[8]) if d[8] else 0.0,
-                "isST": d[9] if len(d) > 9 and d[9] else "0",
-            })
-        except (ValueError, IndexError):
-            continue
-    return bars
-
-
 def main(max_stocks: int | None = None) -> int:
     # T21 R20：cache 不存在时建空（首次全 A 扩容），不再 return 1
     cache: dict[str, list[dict]] = (
@@ -96,17 +67,9 @@ def main(max_stocks: int | None = None) -> int:
         codes = codes[:max_stocks]
 
     try:
-        import baostock as bs
-    except ImportError:
-        print("[refresh] baostock 未安装")
-        return 1
-
-    def _login():
-        lg = bs.login()
-        return getattr(lg, "error_code", "0") == "0"
-
-    if not _login():
-        print("[refresh] baostock login 失败")
+        ensure_login()
+    except (ImportError, DependencyMissing):
+        print("[refresh] baostock 不可用")
         return 1
 
     updated = 0
@@ -118,11 +81,10 @@ def main(max_stocks: int | None = None) -> int:
     try:
         for i, code in enumerate(codes):
             if i and i % RELOGIN_BATCH == 0:
+                logout()
                 try:
-                    bs.logout()
-                except Exception:
-                    pass
-                if not _login():
+                    ensure_login()
+                except (ImportError, DependencyMissing):
                     print(f"[refresh] re-login 失败 @ {i}, 中止")
                     break
                 print(f"[refresh] re-login @ {i}/{len(codes)} elapsed={time.time()-t0:.0f}s")
@@ -141,12 +103,15 @@ def main(max_stocks: int | None = None) -> int:
             bsc = _bs_code(code)
             if not bsc:
                 continue
-            new_bars = _fetch_since(bsc, start, end_date, bs)
+            new_bars = fetch_daily_bars(bsc, start, end_date)
             if not new_bars:
                 # re-login 重试一次（长会话超时返空）
-                if not _login():
+                logout()
+                try:
+                    ensure_login()
+                except (ImportError, DependencyMissing):
                     continue
-                new_bars = _fetch_since(bsc, start, end_date, bs)
+                new_bars = fetch_daily_bars(bsc, start, end_date)
             if not new_bars:
                 continue
             if existing:
@@ -166,10 +131,7 @@ def main(max_stocks: int | None = None) -> int:
                 print(f"[refresh] {i+1}/{len(codes)} updated={updated} new={new_codes_added} "
                       f"new_bars={new_bars_total} elapsed={time.time()-t0:.0f}s", flush=True)
     finally:
-        try:
-            bs.logout()
-        except Exception:
-            pass
+        logout()
 
     # 原子写：temp → rename
     tmp = CACHE.with_suffix(".json.tmp")

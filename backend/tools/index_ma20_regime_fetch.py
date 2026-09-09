@@ -12,33 +12,19 @@ ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码�
 OUT = ROOT / ".vibe-research" / "index_ma20_regime.json"
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from data.sources.baostock_src import fetch_bars
 
-import baostock as bs
-
-lg = bs.login()
-if lg.error_code != "0":
-    print(f"baostock login failed: {lg.error_msg}", file=sys.stderr)
-    sys.exit(1)
-
-# query full history daily K for sh.000001
-rs = bs.query_history_k_data_plus(
-    "sh.000001",
-    "date,close",
-    start_date="2004-01-04",
-    end_date="2026-09-06",
-    frequency="d",
-    adjustflag="3",  # no adjust for index
+# query full history daily K for sh.000001（P2 DRY: 迁到 baostock_src）
+bars = fetch_bars(
+    "sh.000001", "2004-01-04", "2026-09-06",
+    fields="date,close", adjustflag="3",  # no adjust for index
 )
-if rs.error_code != "0":
-    print(f"query failed: {rs.error_msg}", file=sys.stderr)
-    bs.logout()
+if not bars:
+    print("baostock fetch failed (login? query?)", file=sys.stderr)
     sys.exit(1)
 
-rows = []
-while rs.error_code == "0" and rs.next():
-    rows.append(rs.get_row_data())
-
-bs.logout()
+# validate_or_reject expects list_of_lists [date_str, close_str/float]
+rows = [[b["date"], b["close"]] for b in bars]
 
 # S163 R1: bad data gate — baostock index kline（list_of_lists，date+close）
 rows = validate_or_reject("baostock_index_kline", rows, as_of=datetime.date.today().isoformat())

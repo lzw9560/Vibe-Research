@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from vr_paths import resolve_data_dir
+from data.sources.baostock_src import fetch_stock_industry
 
 # BaoStock 行业分类缓存（5540 条，日级不变，缓存到 .vibe-research）
 _INDUSTRY_CACHE_PATH = Path(resolve_data_dir()) / "baostock_industry.json"  # Path() 防 str 返回
@@ -84,37 +85,12 @@ def load_industry_map(force_refresh: bool = False) -> dict[str, str]:
             pass
 
     # 从 BaoStock 拉取
-    mapping = _fetch_industry_from_baostock()
+    mapping = fetch_stock_industry()
     if mapping:
         _INDUSTRY_CACHE = mapping
         _INDUSTRY_CACHE_TS = now
         _save_industry_cache(mapping, now)
     return mapping or {}
-
-
-def _fetch_industry_from_baostock() -> dict[str, str]:
-    """从 BaoStock 拉取行业分类（5540 条）。"""
-    try:
-        import baostock as bs
-        lg = bs.login()
-        if lg.error_code != "0":
-            return {}
-        rs = bs.query_stock_industry()
-        mapping: dict[str, str] = {}
-        while rs.error_code == "0" and rs.next():
-            row = rs.get_row_data()
-            # row: [updateDate, code(sh.600000), code_name, industry, industryClassification]
-            if len(row) < 4:
-                continue
-            bs_code = row[1]  # sh.600000
-            code = bs_code.split(".")[-1] if "." in bs_code else bs_code
-            industry = row[3]
-            if industry and code:
-                mapping[code] = industry
-        bs.logout()
-        return mapping
-    except Exception:
-        return {}
 
 
 def _save_industry_cache(mapping: dict[str, str], ts: float) -> None:

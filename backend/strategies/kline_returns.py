@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import logging
 
+from data.sources.baostock_src import fetch_daily_bars, ensure_login, logout, DependencyMissing
+
 logger = logging.getLogger(__name__)
 
 # S144 R1：unbuyable（一字板涨停封死）检测口径。
@@ -144,40 +146,10 @@ def simulate_holding_with_confirm(
 def fetch_klines(bs_code: str, start_date: str, end_date: str) -> list[dict]:
     """baostock qfq 日K（含 next_bar，故 start..end 需覆盖 signal_date + 次日）。
 
-    空/错时返 []（re-login 重试一次，BaoStock 长会话超时返空）。需调用方先 bs.login()。
+    P2 DRY: 迁到 baostock_src.fetch_daily_bars（10 字段含 turn）。
+    空/错时返 []。ensure_login 内部处理（不 per-call login）。
     """
-    import baostock as bs
-    fields = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
-    try:
-        rs = bs.query_history_k_data_plus(
-            bs_code, fields, start_date=start_date, end_date=end_date, adjustflag="2",
-        )
-    except Exception:
-        return []
-    if rs.error_code != "0":
-        return []
-    bars: list[dict] = []
-    while rs.error_code == "0" and rs.next():
-        d = rs.get_row_data()
-        try:
-            bars.append({
-                "date": d[0],
-                "open": float(d[1]) if d[1] else 0.0,
-                "high": float(d[2]) if d[2] else 0.0,
-                "low": float(d[3]) if d[3] else 0.0,
-                "close": float(d[4]) if d[4] else 0.0,
-                # ⚠️ S162 R3：engine.is_halted 读 volume/amount 判停牌，
-                # is_unbuyable_next_bar 读 isST 判 ST ±5%——fetch_klines 必须存这些字段，
-                # 否则生产路径（compute_returns_for_codes→simulate_holding）is_halted 恒 False、
-                # ST 检测失效（test 用合成 bar 带这些字段，掩盖了生产 gap）。
-                "volume": float(d[5]) if len(d) > 5 and d[5] else 0.0,
-                "amount": float(d[6]) if len(d) > 6 and d[6] else 0.0,
-                "pctChg": float(d[8]) if d[8] else 0.0,
-                "isST": d[9] if len(d) > 9 and d[9] else "0",  # baostock 返字符串 '0'/'1'，bar_utils 归一化
-            })
-        except (ValueError, IndexError):
-            continue
-    return bars
+    return fetch_daily_bars(bs_code, start_date, end_date)
 
 
 def _match_next_bar(bars: list[dict], signal_date: str) -> tuple[dict | None, dict | None, dict | None]:
@@ -212,28 +184,19 @@ def compute_returns_for_codes(
     """
     from datetime import datetime, timedelta
 
-    try:
-        import baostock as bs
-    except ImportError:
-        logger.warning("[kline_returns] baostock 未安装（prod requirements 有，dev venv 无）→ 无法算 T+1 收益")
-        return {}
-
     if not codes:
         return {}
     try:
-        lg = bs.login()
-        if getattr(lg, "error_code", "0") != "0":
-            logger.warning("[kline_returns] baostock login 失败: %s", getattr(lg, "error_msg", ""))
-            return {}
-    except Exception as e:
-        logger.warning("[kline_returns] baostock login 异常: %s", e)
+        ensure_login()
+    except (ImportError, DependencyMissing) as e:
+        logger.warning("[kline_returns] baostock 不可用: %s", e)
         return {}
 
     # start..end 覆盖 signal_date 前后（含 next_bar）；end 取今日（未来日有 next_bar）
     try:
         d = datetime.strptime(signal_date, "%Y-%m-%d")
     except ValueError:
-        bs.logout()
+        logout()
         return {}
     start = (d - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     end = datetime.now().strftime("%Y-%m-%d")
@@ -290,8 +253,5 @@ def compute_returns_for_codes(
                 "exit_reason": path_reason,
             }
     finally:
-        try:
-            bs.logout()
-        except Exception:
-            pass
+        logout()
     return out

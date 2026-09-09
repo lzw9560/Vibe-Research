@@ -36,6 +36,7 @@ sys.path.insert(0, str(ROOT))
 
 from astock import em_zt_topic_pool, concept_blocks  # noqa: E402
 from market import _emotion  # noqa: E402  私有函数，任务要求；后续可升级公开接口
+from data.sources.baostock_src import fetch_bars  # noqa: E402  P2 DRY: baostock 统一接口
 
 _logger = logging.getLogger(__name__)
 
@@ -532,24 +533,8 @@ def _market_drop_pct(date: str) -> float | None:
     if d in _HS300_PCT_CACHE:
         return _HS300_PCT_CACHE[d]
     try:
-        import baostock as bs
-        lg = bs.login()
-        if lg.error_code != "0":
-            _logger.warning("_market_drop_pct baostock login 失败 %s", lg.error_msg)
-            return None
-        rs = bs.query_history_k_data_plus(
-            "sh.000300", "date,pctChg",
-            start_date=d, end_date=d,
-        )
-        if rs.error_code != "0":
-            _logger.warning("_market_drop_pct baostock 查询失败 %s", rs.error_msg)
-            return None
-        pct: float | None = None
-        while rs.next():
-            row = rs.get_row_data()
-            if row and row[1]:
-                pct = _to_float(row[1])
-                break
+        bars = fetch_bars("sh.000300", d, d, fields="date,pctChg", adjustflag="3")
+        pct: float | None = bars[0]["pctChg"] if bars else None
         _HS300_PCT_CACHE[d] = pct
         return pct
     except Exception as e:
