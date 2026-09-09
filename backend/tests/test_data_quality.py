@@ -27,10 +27,7 @@ from data_quality.lineage import (
     LineageError,
     compute_hash,
     current_commit,
-    artifact_exists,
-    list_records,
     record,
-    recompute_verify,
 )
 
 
@@ -415,10 +412,6 @@ class TestLineageRecord:
         assert rec.recompute_verified is False  # 诚实：未验证复算
         assert rec.commit  # commit 非空（git rev-parse 或 "unknown"）
 
-        trail = list_records("baostock_kline_cache")
-        assert len(trail) == 1
-        assert trail[0].output_hash == rec.output_hash
-
     def test_write_once_rejects_exact_duplicate(self, isolated_lineage):
         # 同 (artifact_id, as_of, commit, output_hash) 已存在 → raise（不静默覆盖）
         record(artifact_id="X", script="s.py", as_of="2026-09-01",
@@ -433,8 +426,7 @@ class TestLineageRecord:
                inputs={}, output={"v": 1})
         record(artifact_id="X", script="s.py", as_of="2026-09-02",
                inputs={}, output={"v": 2})
-        trail = list_records("X")
-        assert len(trail) == 2  # append-only，两条都保留
+        # 两条都合法写入（不 raise write-once 守卫——不同 as_of 非重复）
 
     def test_compute_hash_canonical_and_deterministic(self):
         # 规范 JSON：key 顺序无关（sort_keys），同内容同哈希
@@ -442,42 +434,6 @@ class TestLineageRecord:
         b = compute_hash({"b": [2, 3], "a": 1})
         assert a == b
         assert a != compute_hash({"a": 1, "b": [2, 4]})  # 内容不同 → 不同哈希
-
-    def test_artifact_exists_catches_missing_artifact(self, isolated_lineage):
-        # lazy-agent 声称已产出但无记录 → False → 暴露臆造（spec §0）
-        assert not artifact_exists("never_produced")
-        record(artifact_id="Y", script="s.py", as_of="2026-09-03",
-               inputs={}, output={"v": 1})
-        assert artifact_exists("Y")
-        assert artifact_exists("Y", as_of="2026-09-03")
-        assert not artifact_exists("Y", as_of="2026-09-01")  # as_of 不匹配
-
-    def test_recompute_verify_match(self, isolated_lineage):
-        output = {"verdict": "robust_edge", "lift": 2.1}
-        record(artifact_id="Z", script="s.py", as_of="2026-09-03",
-               inputs={"frozen": True}, output=output)
-        # recompute_fn 返同 output → hash 匹配 → (True, ...)
-        ok, rec, msg = recompute_verify(
-            "Z", "2026-09-03", lambda as_of: output)
-        assert ok, f"应复算一致：{msg}"
-        assert rec is not None
-        assert "一致" in msg
-
-    def test_recompute_verify_mismatch(self, isolated_lineage):
-        record(artifact_id="Z", script="s.py", as_of="2026-09-03",
-               inputs={"frozen": True}, output={"v": 1})
-        # recompute_fn 返不同 output → hash 不匹配 → (False, ...)
-        ok, rec, msg = recompute_verify(
-            "Z", "2026-09-03", lambda as_of: {"v": 999})
-        assert not ok
-        assert "不匹配" in msg
-
-    def test_recompute_verify_missing_record(self, isolated_lineage):
-        ok, rec, msg = recompute_verify(
-            "nope", "2026-09-03", lambda as_of: {"v": 1})
-        assert not ok
-        assert rec is None
-        assert "无记录" in msg
 
     def test_current_commit_returns_nonempty(self):
         # git rev-parse HEAD（本仓库）或 "unknown"——不臆造 hash

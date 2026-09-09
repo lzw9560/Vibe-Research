@@ -8,9 +8,7 @@
 2. query_as_of point-in-time（≤ as_of 取最近；as_of=None 取最新）。
 3. recompute_input content_hash 匹配（复现判据 §2.6b 核心）。
 4. append-only 不可变（同 key 再 put 创建新行，不覆盖旧行）。
-5. ingest_hook 非侵入（VR_PIT_STORE=0 → 原样返回 + 无快照；=1 → 包装 + 存快照；
-   hook 异常绝不拖垮 fetch）。
-6. migration 幂等（run_migrations 连跑两遍 + store 自建 schema 双保险）。
+5. migration 幂等（run_migrations 连跑两遍 + store 自建 schema 双保险）。
 
 所有写入经 tmp db——绝不碰用户真实 .vibe-research/pit_store/pit_store.db。
 """
@@ -25,9 +23,7 @@ import pytest
 from pit_store import (
     SnapshotStore,
     run_migrations,
-    wrap_fetch,
 )
-from pit_store import ingest_hook as ih
 
 
 # ── fixtures ─────────────────────────────────────────────────────────────
@@ -37,18 +33,6 @@ from pit_store import ingest_hook as ih
 def store(tmp_path) -> SnapshotStore:
     """tmp pit_store.db（隔离用户真实库）。"""
     return SnapshotStore(db_path=tmp_path / "pit_store.db")
-
-
-class _FakeResponse:
-    """模拟 requests.Response（含 .content raw bytes）。"""
-
-    def __init__(self, content: bytes):
-        self.content = content
-
-
-def _fake_fetch(url: str, params: dict | None = None) -> _FakeResponse:
-    """假 fetch（无网络，返回固定 Response）。"""
-    return _FakeResponse(b'{"code":"600519","rows":[1,2,3]}')
 
 
 # ── 1. put/get ───────────────────────────────────────────────────────────
@@ -209,97 +193,7 @@ def test_no_update_delete_methods_exposed(store: SnapshotStore):
         assert not hasattr(store, forbidden), f"SnapshotStore 不应有 {forbidden}（append-only）"
 
 
-# ── 5. ingest_hook non-invasive ──────────────────────────────────────────
-
-
-def test_wrap_fetch_disabled_when_env_off(store: SnapshotStore, monkeypatch):
-    """VR_PIT_STORE 未设 → wrap_fetch 原样返回 fetch_fn（零开销，不加 wrapper 层）。"""
-    # Arrange
-    monkeypatch.delenv("VR_PIT_STORE", raising=False)
-    ih.reset_default_store()  # 清单例缓存
-    # Act
-    wrapped = wrap_fetch(_fake_fetch, source="em_get", store=store)
-    # Assert: 原样返回（identity），无 wrapper 层
-    assert wrapped is _fake_fetch
-    # 调用不产生快照
-    r = wrapped("http://x", params={"a": 1})
-    assert r.content == b'{"code":"600519","rows":[1,2,3]}'
-    assert store.count("em_get") == 0
-
-
-def test_wrap_fetch_enabled_stores_snapshot(store: SnapshotStore, monkeypatch):
-    """VR_PIT_STORE=1 → wrap_fetch 包装，fetch 返回后存快照，返回值不变。"""
-    # Arrange
-    monkeypatch.setenv("VR_PIT_STORE", "1")
-    ih.reset_default_store()
-    # Act
-    wrapped = wrap_fetch(
-        _fake_fetch,
-        source="em_get",
-        query_spec_builder=lambda a, k: {"url": a[0], "params": k.get("params")},
-        data_date_builder=lambda a, k: "20260906",
-        store=store,
-    )
-    # Assert: 被包了（非 identity）
-    assert wrapped is not _fake_fetch
-    r = wrapped("http://x", params={"a": 1})
-    # 返回值原样（透明）
-    assert r.content == b'{"code":"600519","rows":[1,2,3]}'
-    # 快照已存
-    assert store.count("em_get") == 1
-    sid = store.latest_snapshot_id("em_get", "20260906")
-    assert sid is not None
-    raw = store.recompute_input(sid)
-    assert raw == b'{"code":"600519","rows":[1,2,3]}'
-    # query_spec 含 url/params（builder 生效）
-    import json
-    row = store.get(sid)
-    spec = json.loads(row["query_spec"])
-    assert spec["url"] == "http://x"
-    assert spec["params"] == {"a": 1}
-
-
-def test_wrap_fetch_hook_failure_never_breaks_fetch(store: SnapshotStore, monkeypatch):
-    """hook 存快照失败（store.put 抛异常）→ fetch 仍正常返回（防封底线：hook 绝不拖垮 fetch）。"""
-    # Arrange
-    monkeypatch.setenv("VR_PIT_STORE", "1")
-    ih.reset_default_store()
-
-    class _BrokenStore:
-        def put(self, **_kwargs):
-            raise RuntimeError("simulated store failure")
-
-    # Act
-    wrapped = wrap_fetch(_fake_fetch, source="em_get", store=_BrokenStore())
-    r = wrapped("http://x")  # 不得 raise
-    # Assert: fetch 返回值正常（hook 异常被吞 + warning）
-    assert r.content == b'{"code":"600519","rows":[1,2,3]}'
-
-
-def test_wrap_fetch_default_spec_when_no_builder(store: SnapshotStore, monkeypatch):
-    """query_spec_builder 缺省 → spec = {args, kwargs}（足够复现查询输入）。"""
-    monkeypatch.setenv("VR_PIT_STORE", "1")
-    ih.reset_default_store()
-    wrapped = wrap_fetch(_fake_fetch, source="em_get", store=store)
-    wrapped("http://x", params={"a": 1})
-    import json
-    sid = store.latest_snapshot_id("em_get", None)
-    assert sid is not None
-    spec = json.loads(store.get(sid)["query_spec"])
-    assert spec["args"][0] == "http://x"
-    assert spec["kwargs"]["params"] == {"a": 1}
-
-
-def test_to_raw_bytes_variants():
-    """_to_raw_bytes 提 raw：Response.content / bytes / str / JSON 序列化。"""
-    assert ih._to_raw_bytes(_FakeResponse(b"raw")) == b"raw"
-    assert ih._to_raw_bytes(b"bytes") == b"bytes"
-    assert ih._to_raw_bytes("text") == b"text"
-    assert ih._to_raw_bytes({"k": 1}) == b'{"k": 1}'
-    assert ih._to_raw_bytes([1, 2]) == b"[1, 2]"
-
-
-# ── 6. migration idempotent + self-create ─────────────────────────────────
+# ── 5. migration idempotent + self-create ─────────────────────────────────
 
 
 def test_run_migrations_idempotent(tmp_path):

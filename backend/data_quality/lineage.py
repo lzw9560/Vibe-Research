@@ -31,7 +31,7 @@ import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from vr_paths import resolve_data_dir
 
@@ -199,78 +199,3 @@ def record(
     with path.open("a", encoding="utf-8") as f:
         f.write(_serialize(rec) + "\n")
     return rec
-
-
-def list_records(artifact_id: str | None = None) -> list[LineageRecord]:
-    """provenance trail —— 全部记录，可按 artifact_id 过滤（时间序 = append 序）。"""
-    recs = _read_all()
-    if artifact_id is None:
-        return recs
-    return [r for r in recs if r.artifact_id == artifact_id]
-
-
-def latest_record(artifact_id: str) -> LineageRecord | None:
-    """某 artifact 最近一条记录（append 序末项）。无 → None。"""
-    recs = list_records(artifact_id)
-    return recs[-1] if recs else None
-
-
-def artifact_exists(artifact_id: str, as_of: str | None = None) -> bool:
-    """artifact 是否已记录（存在性检查 —— 捕 lazy-agent missing-artifact）。
-
-    agent 声称"已产出 X"但无 lineage 记录 → False → 暴露臆造（spec §0）。
-    as_of 给定时进一步核 (artifact_id, as_of) 是否匹配。
-    """
-    recs = list_records(artifact_id)
-    if not recs:
-        return False
-    if as_of is None:
-        return True
-    return any(r.as_of == as_of for r in recs)
-
-
-def recompute_verify(
-    artifact_id: str,
-    as_of: str,
-    recompute_fn: Callable[[str], Any],
-) -> tuple[bool, LineageRecord | None, str]:
-    """复算验证（spec R2 acceptance）：frozen_commit 上 pin as_of 输入 → 重算 output → hash 匹配。
-
-    定位（spec §1）：
-    - 这是**可复现脚手架**的验证步骤——lineage 记录指纹 + as_of 锚点，复算逻辑由调用方提供
-      （recompute_fn：输入 as_of → 产出 output；§44 脚本 / 测试知晓如何从 frozen 输入重算）。
-    - 不声称"已验证复算"除非此函数返 True。匹配 → 标 recompute_verified=True 落新记录（审计迹）。
-    - 对抗 sophisticated 臆造仍靠人 / verifier 读原始输出，不外推（spec §1 合规自查）。
-
-    返回 (ok, record, message)：
-      - record 缺失 → (False, None, "无记录")；
-      - 重算 output hash != 记录 output_hash → (False, record, "hash 不匹配")；
-      - 匹配 → (True, record, "复算一致")。
-    """
-    recs = [r for r in list_records(artifact_id) if r.as_of == as_of]
-    if not recs:
-        return False, None, f"无记录 artifact={artifact_id} as_of={as_of}"
-    rec = recs[-1]
-    try:
-        recomputed = recompute_fn(as_of)
-    except Exception as e:  # 复算失败不崩，诚实标失败（§1.2 不静默吞 → 返 message）
-        return False, rec, f"复算失败：{e}"
-    recomputed_hash = compute_hash(recomputed)
-    if recomputed_hash != rec.output_hash:
-        return False, rec, (
-            f"hash 不匹配：记录 {rec.output_hash[:8]}… vs 复算 {recomputed_hash[:8]}…"
-        )
-    # 匹配 → 追加一条 recompute_verified=True 审计记录（append-only，不覆盖原记录）
-    verified = LineageRecord(
-        artifact_id=artifact_id, script=rec.script, commit=rec.commit,
-        as_of=rec.as_of, inputs_hash=rec.inputs_hash, output_hash=rec.output_hash,
-        produced_at=_now_iso(), recompute_verified=True,
-        note=f"recompute_verify 一致 @ {rec.commit}",
-    )
-    path = _store_path()
-    try:
-        with path.open("a", encoding="utf-8") as f:
-            f.write(_serialize(verified) + "\n")
-    except OSError as e:
-        logger.warning("[lineage] 审计记录写盘失败（不阻断复算结论）：%s", e)
-    return True, rec, "复算一致"
