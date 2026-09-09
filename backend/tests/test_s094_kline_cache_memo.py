@@ -19,12 +19,12 @@ class TestGetKlineCacheMemo(unittest.TestCase):
     """T21 _get_kline_cache 模块级 memo + S094 audit mtime 失效。"""
 
     def setUp(self):
-        from strategies import first_board_filter as fbf
+        from strategies.first_board import data_extract as _de
         from vr_paths import resolve_data_dir
-        self._fbf = fbf
-        # reset memo（防跨测串；memo 是模块级全局）
-        fbf._KLINE_CACHE = None
-        fbf._KLINE_CACHE_MTIME = 0.0
+        self._fbf = _de
+        # reset memo（防跨测串；memo 是模块级全局，_get_kline_cache 用 global 写 data_extract）
+        _de._KLINE_CACHE = None
+        _de._KLINE_CACHE_MTIME = 0.0
         # 删 leftover cache 文件（防跨测/跨 session 串，保每测干净）
         p = resolve_data_dir() / "baostock_kline_cache.json"
         if p.exists():

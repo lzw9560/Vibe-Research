@@ -93,7 +93,8 @@ def test_r5_fbf_fetch_zt_pool_passes_raise_on_failure(monkeypatch):
         captured.update(kw)
         return [_zt_item()]
 
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _spy)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _spy)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _spy)
     fbf.fetch_zt_pool("20260818")
     assert captured.get("raise_on_failure") is True
 
@@ -101,7 +102,8 @@ def test_r5_fbf_fetch_zt_pool_passes_raise_on_failure(monkeypatch):
 def test_r5_fbf_fetch_zt_pool_source_fail_returns_empty(monkeypatch):
     """R5 caller：源断 raise → try/except 兜底 → []（非吞 [] 当合法空）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _em_boom)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _em_boom)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _em_boom)
     result = fbf.fetch_zt_pool("20260818")
     assert result == []
 
@@ -109,7 +111,8 @@ def test_r5_fbf_fetch_zt_pool_source_fail_returns_empty(monkeypatch):
 def test_r5_fbf_fetch_zt_pool_normal_returns_data(monkeypatch):
     """R5 caller：正常 → 返数据（向后兼容）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _em_ok)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _em_ok)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _em_ok)
     result = fbf.fetch_zt_pool("20260818")
     assert len(result) == 1
     assert result[0]["c"] == "600001"
@@ -128,7 +131,7 @@ def test_r4_fbf_extract_sector_passes_raise_on_failure(monkeypatch):
         captured.update(kw)
         return _concept_ok(code)
 
-    monkeypatch.setattr(fbf, "concept_blocks", _spy)
+    monkeypatch.setattr("strategies.first_board.data_extract.concept_blocks", _spy)
     fbf.extract_sector("600001")
     assert captured.get("raise_on_failure") is True
 
@@ -136,7 +139,7 @@ def test_r4_fbf_extract_sector_passes_raise_on_failure(monkeypatch):
 def test_r4_fbf_extract_sector_source_fail_returns_empty(monkeypatch):
     """R4 caller：concept_blocks 源断 raise → try/except → {}（非空 dict 当合法空）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "concept_blocks", _concept_boom)
+    monkeypatch.setattr("strategies.first_board.data_extract.concept_blocks", _concept_boom)
     result = fbf.extract_sector("600001")
     assert result == {}
 
@@ -144,7 +147,7 @@ def test_r4_fbf_extract_sector_source_fail_returns_empty(monkeypatch):
 def test_r4_fbf_extract_sector_normal_returns_data(monkeypatch):
     """R4 caller：正常 → 返板块数据（向后兼容）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "concept_blocks", _concept_ok)
+    monkeypatch.setattr("strategies.first_board.data_extract.concept_blocks", _concept_ok)
     result = fbf.extract_sector("600001")
     assert "boards" in result
     assert result["concept_tags"] == ["白酒"]
@@ -163,7 +166,8 @@ def test_r5_fbf_score_dim1_passes_raise_on_failure(monkeypatch):
         captured.update(kw)
         return [_zt_item()]
 
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _spy)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _spy)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _spy)
     candidate = {"code": "600001", "industry": "半导体"}
     fbf.score_dim1_sector(candidate, "20260818")
     assert captured.get("raise_on_failure") is True
@@ -172,7 +176,8 @@ def test_r5_fbf_score_dim1_passes_raise_on_failure(monkeypatch):
 def test_r5_fbf_score_dim1_source_fail_returns_50(monkeypatch):
     """R5 caller：源断 raise → try/except → 50.0 降级（非吞 [] 算零联动）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _em_boom)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _em_boom)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _em_boom)
     candidate = {"code": "600001", "industry": "半导体"}
     score, raw = fbf.score_dim1_sector(candidate, "20260818")
     assert score == 50.0
@@ -181,7 +186,8 @@ def test_r5_fbf_score_dim1_source_fail_returns_50(monkeypatch):
 def test_r5_fbf_score_dim1_normal_returns_score(monkeypatch):
     """R5 caller：正常 → 返评分（向后兼容）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _em_ok)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _em_ok)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _em_ok)
     candidate = {"code": "600001", "industry": "半导体"}
     score, raw = fbf.score_dim1_sector(candidate, "20260818")
     assert score > 0
@@ -201,7 +207,8 @@ def test_r5_fbf_score_dim_sector_link_passes_raise_on_failure(monkeypatch):
         captured.update(kw)
         return [_zt_item()]
 
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _spy)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _spy)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _spy)
     candidate = {"code": "600001", "industry": "半导体"}
     fbf.score_dim_sector_link(candidate, "20260818")
     assert captured.get("raise_on_failure") is True
@@ -210,7 +217,8 @@ def test_r5_fbf_score_dim_sector_link_passes_raise_on_failure(monkeypatch):
 def test_r5_fbf_score_dim_sector_link_source_fail_returns_neg1(monkeypatch):
     """R5 caller：源断 raise → try/except → -1.0（数据缺失不参与加权）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _em_boom)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _em_boom)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _em_boom)
     candidate = {"code": "600001", "industry": "半导体"}
     score, raw = fbf.score_dim_sector_link(candidate, "20260818")
     assert score == -1.0
@@ -219,7 +227,8 @@ def test_r5_fbf_score_dim_sector_link_source_fail_returns_neg1(monkeypatch):
 def test_r5_fbf_score_dim_sector_link_normal_returns_score(monkeypatch):
     """R5 caller：正常 → 返评分（向后兼容）。"""
     from strategies import first_board_filter as fbf
-    monkeypatch.setattr(fbf, "em_zt_topic_pool", _em_ok)
+    monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", _em_ok)
+    monkeypatch.setattr("strategies.first_board.scoring.em_zt_topic_pool", _em_ok)
     candidate = {"code": "600001", "industry": "半导体"}
     score, raw = fbf.score_dim_sector_link(candidate, "20260818")
     assert score > 0

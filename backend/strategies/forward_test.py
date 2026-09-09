@@ -627,7 +627,7 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
     # 失败/空池 → 空 map 降级，entry_price fallback gene.total_score + "价格代理"（A7）。
     pool_item_map: dict[str, dict] = {}
     try:
-        from strategies.first_board_filter import fetch_zt_pool  # noqa: PLC0415
+        from strategies.first_board.universe import fetch_zt_pool  # noqa: PLC0415
         for p in fetch_zt_pool(signal_date) or []:
             code = str(p.get("c", "") or "").strip()
             if code:

@@ -24,6 +24,7 @@ from candidate_funnel.evaluation import (
     _apply_evaluation_layer,
 )
 import scheduled_tasks as st
+import sqlite3
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +254,7 @@ class _FakeConn2:
 
 class TestEvaluationBacktest:
     def test_not_due_days_accumulating(self, monkeypatch):  # A14 未到期
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn2(10, 50))
+        monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: _FakeConn2(10, 50))
         r = st._execute_evaluation_backtest(None, {})
         assert r["status"] == "not_due"
         assert r["signal_days"] == 10
@@ -262,7 +263,7 @@ class TestEvaluationBacktest:
 
     def test_not_due_n_accumulating(self, monkeypatch):
         # days≥30 但 n<100 → n 积累中（第二档门槛）
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn2(35, 50))
+        monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: _FakeConn2(35, 50))
         r = st._execute_evaluation_backtest(None, {})
         assert r["status"] == "not_due"
         assert r["signal_days"] == 35
@@ -270,7 +271,7 @@ class TestEvaluationBacktest:
 
     def test_first_retrospective_due_writes_checkpoint(self, monkeypatch, tmp_path):  # A14
         # 30≤days<60 + n≥100 → 首次回溯 DUE
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn2(40, 150))
+        monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: _FakeConn2(40, 150))
         monkeypatch.setattr("vr_paths.resolve_data_dir", lambda: str(tmp_path), raising=False)
         r = st._execute_evaluation_backtest(None, {})
         assert r["status"] == "due"
@@ -282,7 +283,7 @@ class TestEvaluationBacktest:
 
     def test_reverify_due(self, monkeypatch, tmp_path):  # A14
         # days≥60 → 复验 DUE
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn2(65, 200))
+        monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: _FakeConn2(65, 200))
         monkeypatch.setattr("vr_paths.resolve_data_dir", lambda: str(tmp_path), raising=False)
         r = st._execute_evaluation_backtest(None, {})
         assert r["status"] == "due"
