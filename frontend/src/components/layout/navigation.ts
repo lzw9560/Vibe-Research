@@ -34,7 +34,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/daily-review", label: "每日复盘" },
       { to: "/intel", label: "全球情报" },
       { to: "/industry", label: "行业研究" },
+      { to: "/sectors", label: "板块中心" },
       { to: "/sector-divergence", label: "板块分化" },
+      { to: "/debate", label: "多空辩论" },
       { to: "/prediction", label: "涨跌预测" },
       { to: "/metrics", label: "指标分析" },
       { to: "/health", label: "系统健康" },
@@ -57,6 +59,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: TrendingUp,
     tabs: [
       { to: "/workflow", label: "工作流" },
+      { to: "/strategy", label: "战法" },
       { to: "/limitup", label: "打板策略" },
       { to: "/limitup/gene", label: "基因筛选" },
       { to: "/limitup/auction", label: "竞价选股" },
@@ -75,6 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: PieChart,
     tabs: [
       { to: "/portfolio", label: "组合" },
+      { to: "/advisory", label: "建议中心" },
       { to: "/journal", label: "交易日志" },
       { to: "/my-reports", label: "我的研报" },
       { to: "/sentiment/weather", label: "情绪气象" },

@@ -287,7 +287,11 @@ def limit_up_pool(date_str: str) -> list[dict]:
     """涨停池（按历史日期，盘后可查）——交叉验证 baostock 派生涨停。
 
     date_str: 'YYYY-MM-DD'。转 Beijing 午夜 ms（hithink ``date_ms`` 契约）。
-    返 [{code, name, lbc?}]（lbc 连板数若 hithink 提供，字段名未实测取多个候选）。
+    返 [{code, name, continue_day_cnt?, seal_money?, max_seal_money?,
+    limit_up_time?, continue_day_text?, limit_up_reason?, is_st?, lbc?}]。
+
+    连板数字段 = ``continue_day_cnt``（hithink 实测，非 limit_times 等旧候选）。
+    ``lbc`` 为 ``continue_day_cnt`` 的向后兼容别名（= 同值）。
     hithink 失败/熔断/Key 缺 → 返 []（不伪装，调用方降级，防封路径仍走 circuit_breaker）。
     """
     from datetime import datetime, timedelta, timezone
@@ -309,10 +313,20 @@ def limit_up_pool(date_str: str) -> list[dict]:
         if not bare:
             continue
         row: dict[str, Any] = {"code": bare, "name": it.get("name", "")}
-        for k in ("limit_times", "continuous", "lianban", "lbc", "limit_up_times"):
-            if k in it:
-                row["lbc"] = it.get(k)
-                break
+        # 连板数 + 打板因子 KG P0（hithink API 返回但 wrapper 前丢弃的 5+ 特征）
+        for f in ("continue_day_cnt", "seal_money", "max_seal_money",
+                  "limit_up_time", "continue_day_text", "limit_up_reason", "is_st"):
+            v = it.get(f)
+            if v is not None:
+                row[f] = v
+        # lbc 向后兼容别名（= continue_day_cnt；旧候选 fallback 防 schema 变更）
+        if row.get("continue_day_cnt") is not None:
+            row["lbc"] = row["continue_day_cnt"]
+        else:
+            for k in ("limit_times", "continuous", "lianban", "lbc", "limit_up_times"):
+                if k in it:
+                    row["lbc"] = it.get(k)
+                    break
         out.append(row)
     return out
 

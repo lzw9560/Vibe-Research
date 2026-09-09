@@ -250,6 +250,82 @@ class TestSpecialData:
             mock_get.assert_not_called()
 
 
+# ── P0：limit_up_pool 打板因子特征解锁 ─────────────────────────────────────────
+
+
+class TestLimitUpPool:
+    """P0 bug fix：wrapper 前 5 候选字段名全不匹配（实际 continue_day_cnt），
+    导致 lbc 恒 None + seal_money/max_seal_money/limit_up_time/
+    continue_day_text/limit_up_reason/is_st 全丢弃（KG 打板因子 P0 解锁项）。"""
+
+    _PAYLOAD = {
+        "item": [
+            {"thscode": "003000.SZ", "name": "楚天龙",
+             "continue_day_cnt": 1, "seal_money": 5.4e8,
+             "max_seal_money": 1.3e9, "limit_up_time": "09:30:00",
+             "continue_day_text": "1天1板", "limit_up_reason": "数字人民币+AI政务",
+             "is_st": False},
+            {"thscode": "600519.SH", "name": "茅台",
+             "continue_day_cnt": 3, "seal_money": 2.1e8,
+             "max_seal_money": 8.5e8, "limit_up_time": "14:55:00",
+             "continue_day_text": "3天3板", "limit_up_reason": "白酒龙头",
+             "is_st": False},
+        ],
+    }
+
+    def test_unlocks_continue_day_cnt_and_lbc_alias(self):
+        """连板数 continue_day_cnt 取到 + lbc 兼容别名同值（wrapper bug 前 lbc 恒 None）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            out = hs.limit_up_pool("2026-09-08")
+        r0 = next(r for r in out if r["code"] == "003000")
+        assert r0["continue_day_cnt"] == 1
+        assert r0["lbc"] == 1  # 向后兼容别名
+        r1 = next(r for r in out if r["code"] == "600519")
+        assert r1["continue_day_cnt"] == 3
+        assert r1["lbc"] == 3
+
+    def test_unlocks_seal_money_fields(self):
+        """封单金额 seal_money + max_seal_money 取到（打板_封单强度比因子）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            out = hs.limit_up_pool("2026-09-08")
+        r = next(r for r in out if r["code"] == "003000")
+        assert r["seal_money"] == 5.4e8
+        assert r["max_seal_money"] == 1.3e9
+
+    def test_unlocks_limit_up_time(self):
+        """封板时间 limit_up_time 取到（打板_封板时间因子）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            out = hs.limit_up_pool("2026-09-08")
+        r = next(r for r in out if r["code"] == "003000")
+        assert r["limit_up_time"] == "09:30:00"
+
+    def test_unlocks_continue_day_text_and_reason(self):
+        """连板文本 continue_day_text + 涨停原因 limit_up_reason 取到。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            out = hs.limit_up_pool("2026-09-08")
+        r = next(r for r in out if r["code"] == "003000")
+        assert r["continue_day_text"] == "1天1板"
+        assert r["limit_up_reason"] == "数字人民币+AI政务"
+
+    def test_unlocks_is_st(self):
+        """is_st ST 标记取到（打板_涨跌停规则因子）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            out = hs.limit_up_pool("2026-09-08")
+        r = next(r for r in out if r["code"] == "003000")
+        assert r["is_st"] is False
+
+    def test_invalid_date_returns_empty(self):
+        """非法日期 → [] 不发请求。"""
+        with patch("data.sources.hithink_src._http_get") as mock_get:
+            assert hs.limit_up_pool("not-a-date") == []
+            mock_get.assert_not_called()
+
+    def test_failure_returns_empty(self):
+        """降级：_http_get None（熔断/离线/Key 缺）→ 返 [] 不抛。"""
+        with patch("data.sources.hithink_src._http_get", return_value=None):
+            assert hs.limit_up_pool("2026-09-08") == []
+
+
 # ── A6：下游零改动（full_valuation + AI 工具）─────────────────────────────────
 
 
