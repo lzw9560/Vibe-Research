@@ -40,7 +40,7 @@ class _MockNS:
 class TestAuctionNotify:
     def test_no_candidates_skips_notify(self, monkeypatch):
         """final=0 → 不发通知（guard）。"""
-        monkeypatch.setattr(st, "_load_final_cards", lambda f: [])
+        monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda f: [])
         mock_ns = _MockNS()
         monkeypatch.setattr(
             "notification.notification_service.NotificationService",
@@ -54,16 +54,15 @@ class TestAuctionNotify:
 
     def test_sends_content_with_gap_pct(self, monkeypatch):
         """有候选 + quote → 发通知，内容含日期/逐只高开低开/§44 标签。"""
-        monkeypatch.setattr(
-            st, "_load_final_cards",
+        monkeypatch.setattr("scheduler.notifications._load_final_cards",
             lambda f: [_mock_card("600519", "贵州茅台"), _mock_card("000001", "平安银行")],
         )
-        monkeypatch.setattr(st, "_fetch_quotes", lambda codes: {
+        monkeypatch.setattr("scheduler.notifications._fetch_quotes", lambda codes: {
             "600519": {"open": 1800.0, "last_close": 1780.0},
             "000001": {"open": 12.0, "last_close": 12.2},
         })
         mock_ns = _MockNS()
-        monkeypatch.setattr(st, "_send_notify", lambda c: mock_ns.send(c) or True)
+        monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: mock_ns.send(c) or True)
 
         result = st.TaskExecutor()._execute_premarket_auction_notify({"date": "2026-08-21"})
         assert result["status"] == "ok"
@@ -78,10 +77,10 @@ class TestAuctionNotify:
 
     def test_notification_failure_does_not_crash(self, monkeypatch):
         """NotificationService 不可用 → notified=False，不崩（增强不阻断）。"""
-        monkeypatch.setattr(st, "_load_final_cards", lambda f: [_mock_card("600519", "X")])
-        monkeypatch.setattr(st, "_fetch_quotes", lambda codes: {})
+        monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda f: [_mock_card("600519", "X")])
+        monkeypatch.setattr("scheduler.notifications._fetch_quotes", lambda codes: {})
         # NS 不可用 → _send_notify 返 False（不崩）
-        monkeypatch.setattr(st, "_send_notify", lambda c: False)
+        monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: False)
 
         result = st.TaskExecutor()._execute_premarket_auction_notify({"date": "2026-08-21"})
         assert result["status"] == "ok"  # 不崩
@@ -93,24 +92,24 @@ class TestAuctionNotify:
 
 class TestOpenNotify:
     def test_no_candidates_skips_notify(self, monkeypatch):
-        monkeypatch.setattr(st, "_load_final_cards", lambda f: [])
+        monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda f: [])
         mock_ns = _MockNS()
-        monkeypatch.setattr(st, "_send_notify", lambda c: mock_ns.send(c) or True)
+        monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: mock_ns.send(c) or True)
         result = st.TaskExecutor()._execute_premarket_open_notify({"date": "2026-08-21"})
         assert result["notified"] is False
         assert len(mock_ns.sent) == 0
 
     def test_sends_content_with_seal_status(self, monkeypatch):
         """有候选 + quote → 内容含现价/涨跌幅/封板状态。"""
-        monkeypatch.setattr(st, "_load_final_cards", lambda f: [
+        monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda f: [
             _mock_card("600519", "贵州茅台"), _mock_card("000001", "封板票"),
         ])
-        monkeypatch.setattr(st, "_fetch_quotes", lambda codes: {
+        monkeypatch.setattr("scheduler.notifications._fetch_quotes", lambda codes: {
             "600519": {"price": 1800.0, "change_pct": 1.15, "limit_up_price": 1958.0},
             "000001": {"price": 13.42, "change_pct": 10.0, "limit_up_price": 13.42},
         })
         mock_ns = _MockNS()
-        monkeypatch.setattr(st, "_send_notify", lambda c: mock_ns.send(c) or True)
+        monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: mock_ns.send(c) or True)
 
         result = st.TaskExecutor()._execute_premarket_open_notify({"date": "2026-08-21"})
         assert result["notified"] is True
@@ -127,23 +126,23 @@ class TestOpenNotify:
 
 class TestT1Review:
     def test_no_candidates_skips_notify(self, monkeypatch):
-        monkeypatch.setattr(st, "_load_final_cards", lambda f: [])
+        monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda f: [])
         mock_ns = _MockNS()
-        monkeypatch.setattr(st, "_send_notify", lambda c: mock_ns.send(c) or True)
+        monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: mock_ns.send(c) or True)
         result = st.TaskExecutor()._execute_premarket_t1_review({"date": "2026-08-21"})
         assert result["notified"] is False
 
     def test_sends_content_with_returns_and_44_note(self, monkeypatch):
         """有候选 + kline → 内容含均值/胜率/逐只 + §44 样本不足标注。"""
-        monkeypatch.setattr(st, "_load_final_cards", lambda f: [
+        monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda f: [
             _mock_card("600519", "贵州茅台"), _mock_card("000001", "平安银行"),
         ])
-        monkeypatch.setattr(st, "_compute_t1_returns", lambda cards, f, t: [
+        monkeypatch.setattr("scheduler.notifications._compute_t1_returns", lambda cards, f, t: [
             {"code": "600519", "name": "贵州茅台", "f_close": 100.0, "t_close": 105.0, "return_pct": 5.0},
             {"code": "000001", "name": "平安银行", "f_close": 10.0, "t_close": 9.5, "return_pct": -5.0},
         ])
         mock_ns = _MockNS()
-        monkeypatch.setattr(st, "_send_notify", lambda c: mock_ns.send(c) or True)
+        monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: mock_ns.send(c) or True)
 
         result = st.TaskExecutor()._execute_premarket_t1_review({"date": "2026-08-21"})
         assert result["notified"] is True
@@ -159,10 +158,10 @@ class TestT1Review:
         """n>=30 → 不标样本不足。"""
         cards = [_mock_card(f"00000{i}", f"票{i}") for i in range(30)]
         returns = [{"code": f"00000{i}", "name": f"票{i}", "f_close": 10.0, "t_close": 10.5, "return_pct": 5.0} for i in range(30)]
-        monkeypatch.setattr(st, "_load_final_cards", lambda f: cards)
-        monkeypatch.setattr(st, "_compute_t1_returns", lambda c, f, t: returns)
+        monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda f: cards)
+        monkeypatch.setattr("scheduler.notifications._compute_t1_returns", lambda c, f, t: returns)
         mock_ns = _MockNS()
-        monkeypatch.setattr(st, "_send_notify", lambda c: mock_ns.send(c) or True)
+        monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: mock_ns.send(c) or True)
 
         st.TaskExecutor()._execute_premarket_t1_review({"date": "2026-08-21"})
         content = mock_ns.sent[0]

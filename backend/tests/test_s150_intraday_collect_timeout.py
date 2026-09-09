@@ -91,7 +91,7 @@ def test_reap_stale_running_marks_failed_and_returns_task_ids(tmp_path, monkeypa
     conn.commit()
     conn.close()
 
-    monkeypatch.setattr(st, "_get_connection", lambda: _open_conn(db_path))
+    monkeypatch.setattr("scheduler.db._get_connection", lambda: _open_conn(db_path))
 
     reaped = st._manager.reap_stale_running(st._REAPER_STALE_SECONDS)
 
@@ -112,7 +112,7 @@ def test_reap_stale_running_marks_failed_and_returns_task_ids(tmp_path, monkeypa
 def test_reap_stale_running_empty_returns_empty(tmp_path, monkeypatch):
     """R2：无 stale run 时返空列表（不误动）。"""
     db_path = _make_file_db(tmp_path)
-    monkeypatch.setattr(st, "_get_connection", lambda: _open_conn(db_path))
+    monkeypatch.setattr("scheduler.db._get_connection", lambda: _open_conn(db_path))
     assert st._manager.reap_stale_running(st._REAPER_STALE_SECONDS) == []
 
 
@@ -131,7 +131,7 @@ def test_reap_stale_runs_discards_running_task_ids(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    monkeypatch.setattr(st, "_get_connection", lambda: _open_conn(db_path))
+    monkeypatch.setattr("scheduler.db._get_connection", lambda: _open_conn(db_path))
 
     sched = st.CronScheduler()
     sched._running_task_ids.add(5)  # task 5 被 stale run 堵 dedup

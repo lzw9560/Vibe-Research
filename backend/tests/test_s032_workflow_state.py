@@ -214,7 +214,7 @@ def test_scheduler_start_stop_on_main_loop(isolated_market_db, monkeypatch):
     """async start 在主循环建 ticker task；stop cancel 生效、无线程。"""
     import scheduled_tasks as st
 
-    monkeypatch.setattr(st, "_TICK_INTERVAL", 0.01)
+    monkeypatch.setattr("scheduler.cron_runner._TICK_INTERVAL", 0.01)
     sched = st.CronScheduler()
 
     async def scenario():
@@ -234,7 +234,7 @@ def test_scheduler_tick_fires_task_on_main_loop(isolated_market_db, monkeypatch)
     import scheduled_tasks as st
     from scheduled_tasks import ScheduledTask
 
-    monkeypatch.setattr(st, "_TICK_INTERVAL", 0.01)
+    monkeypatch.setattr("scheduler.cron_runner._TICK_INTERVAL", 0.01)
     sched = st.CronScheduler()
 
     fired: list[int] = []

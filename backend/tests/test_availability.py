@@ -430,12 +430,12 @@ def test_premarket_t1_review_uses_prev_trading_day_for_f_date(monkeypatch):
     def _fake_load(fd):
         captured["f_date"] = fd
         return [{"code": "600519", "name": "贵州茅台"}]  # 非空 → 不跳过
-    monkeypatch.setattr(st, "_load_final_cards", _fake_load)
+    monkeypatch.setattr("scheduler.notifications._load_final_cards", _fake_load)
     # mock _compute_t1_returns + _build_t1_review_content + _send_notify（避免真实计算/网络）
-    monkeypatch.setattr(st, "_compute_t1_returns",
+    monkeypatch.setattr("scheduler.notifications._compute_t1_returns",
                         lambda cards, f, t: [{"code": "600519", "t1_return_pct": 5.0}])
-    monkeypatch.setattr(st, "_build_t1_review_content", lambda f, t, r: "t1 review content")
-    monkeypatch.setattr(st, "_send_notify", lambda content: True)
+    monkeypatch.setattr("scheduler.notifications._build_t1_review_content", lambda f, t, r: "t1 review content")
+    monkeypatch.setattr("scheduler.notifications._send_notify", lambda content: True)
 
     # Act：空 payload（seed 默认 payload={}），任务内部 f_date = prev_trading_date_str() = F_DATE
     executor = st.TaskExecutor()

@@ -15,6 +15,7 @@ import pytest
 
 import scheduled_tasks as st
 from scheduled_tasks import CronScheduler, ScheduledTask, TaskExecutor, TaskRun
+import sqlite3
 
 
 def _run(coro):
@@ -65,6 +66,9 @@ _EXPECTED_TASK_TYPES = {
     "baostock_5min_freeze",
     # S167 竞价密集采集（auction live only，每 2min，is_auction_time 门控 09:15-09:25）
     "intraday_auction_dense",
+    # 知识图谱每日审查 + 数据同步
+    "daily_kg_audit",
+    "daily_kg_sync",
 }
 
 
@@ -260,7 +264,7 @@ class TestLoopLifecycle:
     def test_loop_completes_fire_and_forget_task(self, isolated_market_db, monkeypatch):
         """生产路径：主循环 ticker 内，_tick spawn 的任务能跑完并落一条终态 run（S032 R6）。"""
         import scheduled_tasks as st
-        monkeypatch.setattr(st, "_TICK_INTERVAL", 0.05)   # 缩短心跳
+        monkeypatch.setattr("scheduler.cron_runner._TICK_INTERVAL", 0.05)   # 缩短心跳
         executor = st.TaskExecutor()
         release = {"go": False}
         calls = {"n": 0}
@@ -373,14 +377,14 @@ class TestS066ValidationCheckpoint:
     """§44 60 天复验检查点 executor（spec §13 ①/§44）。"""
 
     def test_not_due(self, monkeypatch):
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn(31))
+        monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: _FakeConn(31))
         r = st._execute_s066_validation_checkpoint(None, {"threshold": 60})
         assert r["status"] == "not_due"
         assert r["eastmoney_live_days"] == 31
         assert r["target"] == 60
 
     def test_due_writes_checkpoint(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(st.sqlite3, "connect", lambda *a, **k: _FakeConn(65))
+        monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: _FakeConn(65))
         monkeypatch.setattr("vr_paths.resolve_data_dir", lambda: str(tmp_path), raising=False)
         r = st._execute_s066_validation_checkpoint(None, {"threshold": 60})
         assert r["status"] == "due"

@@ -1,0 +1,310 @@
+# -*- coding: utf-8 -*-
+"""TaskExecutor——薄分发类。
+
+26 个 `_execute_*` 方法保留为 bound method（测试 monkeypatch `TaskExecutor._execute_*`
+类属性跨实例生效），body 委托到 8 域文件的模块级函数。dispatch dict 映射
+task_type → `self._execute_xxx`（bound method），patch 类属性后新实例的 dispatch 自动拿 patched 版。
+"""
+from __future__ import annotations
+
+import asyncio
+import inspect
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import Any, Dict
+
+from scheduler.db import _manager, _task_timeout
+from scheduler.models import ScheduledTask, TaskRun
+
+logger = logging.getLogger("vibe-research")
+
+
+class TaskExecutor:
+    """内置任务执行器。"""
+
+    def __init__(self):
+        self._executors = {
+            "daily_data_refresh": self._execute_daily_data_refresh,
+            "daily_review_notify": self._execute_daily_review_notify,
+            "limitup_precompute": self._execute_limitup_precompute,
+            "portfolio_refresh": self._execute_portfolio_refresh,
+            "market_data_sync": self._execute_market_data_sync,
+            "cleanup_old_runs": self._execute_cleanup_old_runs,
+            "daily_backtest_run": self._execute_daily_backtest_run,
+            "sti_post_market": self._execute_sti_post_market,
+            "seal_intraday_collect": self._execute_seal_intraday_collect,
+            "candidate_funnel_precompute": self._execute_candidate_funnel_precompute,
+            "first_board_filter": self._execute_first_board_filter,
+            "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,
+            "evaluation_backtest": self._execute_evaluation_backtest,
+            "forward_test_daily": self._execute_forward_test_daily,
+            "forward_test_t1_settle": self._execute_forward_test_t1_settle,
+            "first_board_t1_review": self._execute_first_board_t1_review,
+            "first_board_quote_probe": self._execute_first_board_quote_probe,
+            "zt_history_snapshot": self._execute_zt_history_snapshot,
+            "derived_precompute": self._execute_derived_precompute,
+            "monthly_vacuum": self._execute_monthly_vacuum,
+            "kline_refresh": self._execute_kline_refresh,
+            "daily_ai_summary": self._execute_daily_ai_summary,
+            "premarket_auction_notify": self._execute_premarket_auction_notify,
+            "premarket_open_notify": self._execute_premarket_open_notify,
+            "premarket_t1_review": self._execute_premarket_t1_review,
+            "daily_kg_audit": self._execute_daily_kg_audit,
+            "daily_kg_sync": self._execute_daily_kg_sync,
+            "st_play_radar": self._execute_st_play_radar,
+            "intraday_microstructure_snapshot": self._execute_intraday_microstructure_snapshot,
+            "intraday_auction_dense": self._execute_intraday_auction_dense,
+            "baostock_5min_freeze": self._execute_baostock_5min_freeze,
+        }
+        # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
+        # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
+        self._thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="scheduler")
+
+    def execute(self, task: ScheduledTask) -> TaskRun:
+        run = TaskRun(task_id=task.id or 0, status="running")
+        run = _manager.add_run(run)
+        started_at = run.started_at
+
+        try:
+            executor = self._executors.get(task.task_type)
+            if executor is None:
+                raise ValueError(f"未知任务类型: {task.task_type}")
+
+            result = executor(task.payload)
+            run.status = "success"
+            run.result = result
+            run.finished_at = datetime.now().isoformat()
+            _manager.update_task_status(task.id or 0, "success", started_at)
+
+            # 成功通知
+            if task.notify_on_success:
+                self._send_notification(task, run, "success")
+
+            return run
+        except Exception as e:
+            logger.exception("[scheduled_task] 任务执行失败: %s", e)
+            run.status = "failed"
+            run.error = str(e)
+            run.finished_at = datetime.now().isoformat()
+            _manager.update_task_status(task.id or 0, "failed", started_at)
+
+            # 失败通知
+            if task.notify_on_failure:
+                self._send_notification(task, run, "failed")
+
+            return run
+        finally:
+            # R2：同一记录就地更新终态，不再二次 add_run（避免每次执行产生两条 run）
+            _manager.update_run(run)
+
+    async def execute_async(self, task: ScheduledTask) -> TaskRun:
+        """协程版执行：落一条 run 记录（开头 add_run + 结尾 update_run）。
+
+        - handler 为协程函数则直接 await，普通函数经 asyncio.to_thread 在线程执行
+        - 未知任务类型 → 落一条 failed run，不抛异常
+        - 成功/失败均 update_run + update_task_status + 通知，全程只一条 run 记录
+        """
+        run = TaskRun(task_id=task.id or 0, status="running")
+        run = _manager.add_run(run)
+        started_at = run.started_at
+
+        handler = self._executors.get(task.task_type)
+        if handler is None:
+            run.status = "failed"
+            run.error = f"未知任务类型: {task.task_type}"
+            run.finished_at = datetime.now().isoformat()
+            _manager.update_run(run)
+            _manager.update_task_status(task.id or 0, "failed", started_at)
+            if task.notify_on_failure:
+                self._send_notification(task, run, "failed")
+            return run
+
+        try:
+            if inspect.iscoroutinefunction(handler):  # py3.16: asyncio.iscoroutinefunction 已移除，用 inspect
+                result = await asyncio.wait_for(handler(task.payload), timeout=_task_timeout(task))
+            else:
+                # S150 R1 + 审查 HIGH1 根治：同步 handler 走调度器独占 _thread_pool
+                #（run_in_executor 替代 asyncio.to_thread），隔离泄漏——调度器线程全挂
+                # 也不影响路由器默认池。wait_for 超时仍 cancel future（底层线程不可取消，
+                # 但独占池爆炸半径限在调度器，不冻 API；HIGH3 重复写库另由 subprocess/async 根治）。
+                result = await asyncio.wait_for(
+                    asyncio.get_running_loop().run_in_executor(self._thread_pool, handler, task.payload),
+                    timeout=_task_timeout(task),
+                )
+            run.status = "success"
+            run.result = result
+            run.finished_at = datetime.now().isoformat()
+            _manager.update_run(run)
+            _manager.update_task_status(task.id or 0, "success", started_at)
+
+            # 成功通知
+            if task.notify_on_success:
+                self._send_notification(task, run, "success")
+
+            return run
+        except Exception as e:
+            logger.exception("[scheduled_task] 任务执行失败: %s", e)
+            run.status = "failed"
+            # S150 R1：TimeoutError 标明确（str(asyncio.TimeoutError) 为空）
+            if isinstance(e, asyncio.TimeoutError):
+                run.error = f"timeout ({_task_timeout(task)}s, S150 R1)"
+            else:
+                run.error = str(e)
+            run.finished_at = datetime.now().isoformat()
+            _manager.update_run(run)
+            _manager.update_task_status(task.id or 0, "failed", started_at)
+
+            # 失败通知
+            if task.notify_on_failure:
+                self._send_notification(task, run, "failed")
+
+            return run
+
+    def _send_notification(self, task: ScheduledTask, run: TaskRun, status: str) -> None:
+        """发送任务执行通知。"""
+        try:
+            from notification.notification_service import get_notification_service
+            service = get_notification_service()
+
+            status_text = "成功" if status == "success" else "失败"
+            title = f"定时任务{status_text}: {task.name}"
+            content = f"任务: {task.name}\n状态: {status_text}\n时间: {run.started_at}"
+            if run.error:
+                content += f"\n错误: {run.error}"
+
+            # 使用通知服务发送（如果可用）
+            if hasattr(service, "send"):
+                try:
+                    service.send(content)
+                except Exception as e:  # L1 修复：不再静默吞异常
+                    logger.warning("定时任务通知发送失败: %s", e)
+        except Exception as e:  # L1 修复：不再静默吞异常
+            logger.warning("定时任务通知构建失败: %s", e)
+
+    # ── 26 个 thin wrapper（委托到域文件模块级函数）──────────────────────────
+    # 保留 bound method 签名 (self, payload) 供测试 monkeypatch 类属性生效。
+
+    def _execute_daily_data_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.data_ops import daily_data_refresh
+        return daily_data_refresh(payload)
+
+    def _execute_daily_review_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.ai_portfolio import daily_review_notify
+        return daily_review_notify(payload)
+
+    def _execute_limitup_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.limitup import limitup_precompute
+        return limitup_precompute(payload)
+
+    def _execute_portfolio_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.ai_portfolio import portfolio_refresh
+        return portfolio_refresh(payload)
+
+    def _execute_market_data_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.data_ops import market_data_sync
+        return market_data_sync(payload)
+
+    def _execute_cleanup_old_runs(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.data_ops import cleanup_old_runs
+        return cleanup_old_runs(payload)
+
+    def _execute_daily_backtest_run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.backtest import daily_backtest_run
+        return daily_backtest_run(payload)
+
+    def _execute_sti_post_market(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.limitup import sti_post_market
+        return sti_post_market(payload)
+
+    def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.intraday import seal_intraday_collect
+        return seal_intraday_collect(payload)
+
+    def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.ai_portfolio import candidate_funnel_precompute
+        return candidate_funnel_precompute(payload)
+
+    def _execute_first_board_filter(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.first_board import first_board_filter
+        return first_board_filter(payload)
+
+    def _execute_s066_validation_checkpoint(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.backtest import s066_validation_checkpoint
+        return s066_validation_checkpoint(payload)
+
+    def _execute_evaluation_backtest(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.backtest import evaluation_backtest
+        return evaluation_backtest(payload)
+
+    def _execute_forward_test_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.backtest import forward_test_daily
+        return forward_test_daily(payload)
+
+    def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.backtest import forward_test_t1_settle
+        return forward_test_t1_settle(payload)
+
+    def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.first_board import first_board_t1_review
+        return first_board_t1_review(payload)
+
+    def _execute_first_board_quote_probe(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.first_board import first_board_quote_probe
+        return first_board_quote_probe(payload)
+
+    def _execute_zt_history_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.limitup import zt_history_snapshot
+        return zt_history_snapshot(payload)
+
+    def _execute_derived_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.limitup import derived_precompute
+        return derived_precompute(payload)
+
+    def _execute_monthly_vacuum(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.data_ops import monthly_vacuum
+        return monthly_vacuum(payload)
+
+    def _execute_kline_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.data_ops import kline_refresh
+        return kline_refresh(payload)
+
+    def _execute_daily_ai_summary(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.ai_portfolio import daily_ai_summary
+        return daily_ai_summary(payload)
+
+    def _execute_premarket_auction_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.premarket import premarket_auction_notify
+        return premarket_auction_notify(payload)
+
+    def _execute_premarket_open_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.premarket import premarket_open_notify
+        return premarket_open_notify(payload)
+
+    def _execute_premarket_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.premarket import premarket_t1_review
+        return premarket_t1_review(payload)
+
+    def _execute_daily_kg_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.kg import daily_kg_audit
+        return daily_kg_audit(payload)
+
+    def _execute_daily_kg_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.kg import daily_kg_sync
+        return daily_kg_sync(payload)
+
+    def _execute_st_play_radar(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.limitup import st_play_radar
+        return st_play_radar(payload)
+
+    def _execute_intraday_microstructure_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.intraday import intraday_microstructure_snapshot
+        return intraday_microstructure_snapshot(payload)
+
+    def _execute_intraday_auction_dense(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.intraday import intraday_auction_dense
+        return intraday_auction_dense(payload)
+
+    def _execute_baostock_5min_freeze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.intraday import baostock_5min_freeze
+        return baostock_5min_freeze(payload)

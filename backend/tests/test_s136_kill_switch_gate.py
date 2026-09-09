@@ -27,10 +27,10 @@ def _final_cards():
 
 def _patch_common(monkeypatch, _final_cards, ks, captured):
     """patch _load_final_cards/_fetch_quotes/_check_premarket_kill_switch/_send_notify。"""
-    monkeypatch.setattr(st, "_load_final_cards", lambda d: _final_cards)
-    monkeypatch.setattr(st, "_fetch_quotes", lambda codes: {})
-    monkeypatch.setattr(st, "_check_premarket_kill_switch", lambda: ks)
-    monkeypatch.setattr(st, "_send_notify",
+    monkeypatch.setattr("scheduler.notifications._load_final_cards", lambda d: _final_cards)
+    monkeypatch.setattr("scheduler.notifications._fetch_quotes", lambda codes: {})
+    monkeypatch.setattr("scheduler.notifications._check_premarket_kill_switch", lambda: ks)
+    monkeypatch.setattr("scheduler.notifications._send_notify",
                         lambda content: (captured.append(content), True)[1])
 
 

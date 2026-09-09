@@ -92,7 +92,7 @@ def test_execute_daily_backtest_run_as_of_path(monkeypatch):
 
     monkeypatch.setattr("backtest_lite.run_backtest_async", fake_lite)
     monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", fake_strat)
-    monkeypatch.setattr(st, "_save_snapshot", lambda *a, **k: None)
+    monkeypatch.setattr("scheduler.snapshots._save_snapshot", lambda *a, **k: None)
 
     executor = st.TaskExecutor()
     result = executor._execute_daily_backtest_run({"lookback_days": 30, "as_of_date": "2026-07-15"})
@@ -116,7 +116,7 @@ def test_execute_daily_backtest_run_default_today(monkeypatch):
 
     monkeypatch.setattr("backtest_lite.run_backtest_async", fake_lite)
     monkeypatch.setattr("strategies.strategy_backtest.run_strategy_backtest", lambda lb, as_of=None: [])
-    monkeypatch.setattr(st, "_save_snapshot", lambda *a, **k: None)
+    monkeypatch.setattr("scheduler.snapshots._save_snapshot", lambda *a, **k: None)
 
     executor = st.TaskExecutor()
     result = executor._execute_daily_backtest_run({"lookback_days": 30})

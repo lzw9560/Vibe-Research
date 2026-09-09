@@ -52,7 +52,7 @@ def test_tick_beijing_tz(cron_scheduler, monkeypatch):
         ScheduledTask(id=1, name="t", task_type="x", cron_expr="* * * * *", enabled=True)
     ])
     captured = []
-    monkeypatch.setattr(st, "cron_match", lambda expr, dt: captured.append(dt) or False)
+    monkeypatch.setattr("scheduler.cron.cron_match", lambda expr, dt: captured.append(dt) or False)
     asyncio.run(cron_scheduler._tick())
     assert captured, "cron_match 应被调用"
     assert captured[0].tzinfo == BEIJING_TZ

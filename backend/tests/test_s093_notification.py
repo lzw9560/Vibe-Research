@@ -80,8 +80,8 @@ class TestCandidateFunnelPrecomputeNotification:
         monkeypatch.setattr(fc_mod, "save_funnel_result", lambda *a, **kw: None)
 
         # mock dual confirmation + strategy map（避免重计算）
-        monkeypatch.setattr(st, "_compute_dual_confirmation", lambda t, fc: 2)
-        monkeypatch.setattr(st, "_compute_strategy_map", lambda t: {"000001": ["首板战法"]})
+        monkeypatch.setattr("scheduler.notifications._compute_dual_confirmation", lambda t, fc: 2)
+        monkeypatch.setattr("scheduler.notifications._compute_strategy_map", lambda t: {"000001": ["首板战法"]})
 
         # mock NotificationService
         mock_ns = _MockNotificationService()
@@ -114,8 +114,8 @@ class TestCandidateFunnelPrecomputeNotification:
         monkeypatch.setattr(funnel_mod, "run_funnel", lambda *a, **kw: funnel_result)
         import candidate_funnel.funnel_cache as fc_mod
         monkeypatch.setattr(fc_mod, "save_funnel_result", lambda *a, **kw: None)
-        monkeypatch.setattr(st, "_compute_dual_confirmation", lambda t, fc: 0)
-        monkeypatch.setattr(st, "_compute_strategy_map", lambda t: {})
+        monkeypatch.setattr("scheduler.notifications._compute_dual_confirmation", lambda t, fc: 0)
+        monkeypatch.setattr("scheduler.notifications._compute_strategy_map", lambda t: {})
 
         class _UnavailableNS:
             def is_available(self):
@@ -149,8 +149,8 @@ class TestCandidateFunnelPrecomputeNotification:
         monkeypatch.setattr(funnel_mod, "run_funnel", lambda *a, **kw: funnel_result)
         import candidate_funnel.funnel_cache as fc_mod
         monkeypatch.setattr(fc_mod, "save_funnel_result", lambda *a, **kw: None)
-        monkeypatch.setattr(st, "_compute_dual_confirmation", lambda t, fc: 0)
-        monkeypatch.setattr(st, "_compute_strategy_map", lambda t: {})
+        monkeypatch.setattr("scheduler.notifications._compute_dual_confirmation", lambda t, fc: 0)
+        monkeypatch.setattr("scheduler.notifications._compute_strategy_map", lambda t: {})
 
         class _BoomNS:
             def is_available(self):
@@ -185,8 +185,8 @@ class TestCandidateFunnelPrecomputeNotification:
         monkeypatch.setattr(funnel_mod, "run_funnel", lambda *a, **kw: funnel_result)
         import candidate_funnel.funnel_cache as fc_mod
         monkeypatch.setattr(fc_mod, "save_funnel_result", lambda *a, **kw: None)
-        monkeypatch.setattr(st, "_compute_dual_confirmation", lambda t, fc: 0)
-        monkeypatch.setattr(st, "_compute_strategy_map", lambda t: {})
+        monkeypatch.setattr("scheduler.notifications._compute_dual_confirmation", lambda t, fc: 0)
+        monkeypatch.setattr("scheduler.notifications._compute_strategy_map", lambda t: {})
 
         mock_ns = _MockNotificationService()
         monkeypatch.setattr(

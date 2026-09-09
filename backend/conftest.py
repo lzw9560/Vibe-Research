@@ -24,12 +24,15 @@ def isolated_market_db(tmp_path, monkeypatch):
     重定向到 pytest 临时目录，隔离真实 backend/data/market_data.db。"""
     import scheduled_tasks as st
     import workflow_state_repo as wsr
+    from scheduler.db import _ensure_tables as _scheduler_ensure_tables
 
     db_path = tmp_path / "market_data.db"
-    monkeypatch.setattr(st, "_DB_PATH", str(db_path))
+    # _get_connection 读 scheduler.db 模块自身的 _DB_PATH global——patch 须指 scheduler.db
+    monkeypatch.setattr("scheduler.db._DB_PATH", str(db_path))
+    monkeypatch.setattr(st, "_DB_PATH", str(db_path))  # shim 引用同步（保引用一致）
     monkeypatch.setattr(wsr, "_DB_PATH", str(db_path))
     # 新库需先建表（模块 import 时的 _ensure_tables 只针对真实路径）
-    st._ensure_tables()
+    _scheduler_ensure_tables()
     wsr._ensure_tables()
     yield str(db_path)
 

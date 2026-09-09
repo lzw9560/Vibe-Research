@@ -45,7 +45,7 @@ def isolated_seal_executor_env(tmp_path, monkeypatch):
     import scheduled_tasks as st
     import workflow_state_repo as wsr
     market_db = tmp_path / "market_data.db"
-    monkeypatch.setattr(st, "_DB_PATH", str(market_db))
+    monkeypatch.setattr("scheduler.db._DB_PATH", str(market_db))
     monkeypatch.setattr(wsr, "_DB_PATH", str(market_db))
     # 新库需建表
     st._ensure_tables()
