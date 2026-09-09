@@ -1,6 +1,6 @@
 # Spec: S130 — 非承重 confirmed_lying 批量修（conc/dt factors + market/sentiment_weather or-0）
 
-> 状态：待实现
+> 状态：已实现（2026-09-01，commit 94ab574）
 > 作者：lzw9560  日期：2026-09-01
 > 关联：S129 critic residual（conc/dt factors-text）+ S127 or-zero sweep 残留（market.py or-0 / sentiment_weather:1174 or-0）。均非承重链 M/LOW，registry 撒谎账本"4 待修"内。本 spec 闭合 3 项；lockup-expiry + concept_blocks + em-zt-topic-pool 下游属 #6 em_get 消费者维度，留 S131（scan 确认后）。
 

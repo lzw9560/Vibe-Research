@@ -1,6 +1,6 @@
 # Spec: S129 — risk 三子维度 provenance 诚实化（critic 漏扫 #1 头条）
 
-> 状态：待实现
+> 状态：已实现（2026-09-01，commit 3acc295）
 > 作者：lzw9560  日期：2026-09-01
 > 关联：S118 scan completeness critic #1 漏扫（`registry.md` S118 节 :304-305）——risk 三子维度（volatility/max_drawdown/liquidity_risk）失败返裸 0.0+warning 但无 data_status，`_merge_data_status` 不含三者 → composite risk 可在 3/8 维度静默归零时仍标 ok+LOW + factors 呈现"风险因素较少"。S128 or-zero 契约未覆盖（trio 是 `except: return 0.0` 无 provenance，非 `or 0` 强制归零，不同轴）。本 spec 闭合。
 

@@ -3018,6 +3018,58 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 daily_kg_sync 已创建（cron 0 16 * * 0-4，16:00 收盘后）")
 
+    # ── P0 active bugs 清理（2026-09-09 项目瘦身）──────────────────────────
+
+    # P0-1：删除 n8n-trigger 重复任务（type=limitup_precompute，cron 1-5=错——
+    # 1-5 在 weekday() 约定下=周二至周六。limitup_precompute 已有正确 seed 0-4，
+    # 此为遗留重复，删除）。
+    for t in _manager.list_tasks():
+        if t.name == "n8n-trigger":
+            _manager.delete_task(t.id)
+            logger.info(
+                "[scheduler] 删除重复任务 n8n-trigger（type=limitup_precompute，"
+                "cron 1-5 错误，limitup_precompute 0-4 已正确 seed）"
+            )
+            break
+
+    # P0-2：每日回测快照 cron 迁移 1-5→0-4（1-5=周二至周六，周日不应跑 backtest）。
+    for t in _manager.list_tasks():
+        if t.name == "每日回测快照" and "1-5" in t.cron_expr:
+            old_cron = t.cron_expr
+            t.cron_expr = t.cron_expr.replace("1-5", "0-4")
+            _manager.update_task(t)
+            logger.info(
+                "[scheduler] 每日回测快照 cron 迁移 %s → %s"
+                "（1-5=周二至周六，修正为 0-4=周一至周五，周日不跑 backtest）",
+                old_cron, t.cron_expr,
+            )
+            break
+
+    # P0-3：disable first_board_quote_probe（S076 临时研究任务——
+    # "收 3-5 个交易日稳定结论后 disable"，已过研究期，探测占用资源，禁用）。
+    for t in _manager.list_tasks():
+        if t.name == "first_board_quote_probe" and t.enabled:
+            t.enabled = False
+            _manager.update_task(t)
+            logger.info(
+                "[scheduler] first_board_quote_probe 已 disable"
+                "（S076 临时研究任务完成，探测占用资源）"
+            )
+            break
+
+    # P0-4：seed daily_kg_audit（知识图谱每日结构审查——断链/孤立/coverage/confidence。
+    # 晚 daily_kg_sync 16:00 +30min，sync 拉数据写文件后 audit 跑结构审查）。
+    if "daily_kg_audit" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="daily_kg_audit",
+            description="知识图谱每日结构审查（断链/孤立/coverage/confidence，晚 daily_kg_sync 16:00 +30min）",
+            task_type="daily_kg_audit",
+            cron_expr="30 16 * * 0-4",  # 16:30 工作日（晚 sync 30min，sync 先拉数据 audit 后审查）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 daily_kg_audit 已创建（cron 30 16 * * 0-4）")
+
 
 async def stop_scheduler() -> None:
     if _scheduler is not None:

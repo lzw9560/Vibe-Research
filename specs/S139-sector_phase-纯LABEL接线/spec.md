@@ -1,6 +1,6 @@
 # Spec: S139 — sector_phase 候选卡纯 LABEL 接线（s066 task 039 闭合）
 
-> 状态：草案(2026-09-01)
+> 状态：已实现（2026-09-01，commit 089b8f3）
 > 作者：lzw9560  日期：2026-09-01
 > 级别：small（DiagnosisCard 加字段 + build_diagnosis_card 接线 + 测试）
 > 关联：s066 task 039（`specs/archive/m3-strategy/S066-.../tasks.md:69` + `spec.md:377`：§5.4 Q2 修饰方向被驳→降级纯 LABEL）

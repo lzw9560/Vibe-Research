@@ -1,6 +1,6 @@
 # Spec: S133 — _emotion date-keyed 缓存重构
 
-> 状态：待实现
+> 状态：已实现（2026-09-01，commit 353e53b）
 > 作者：lzw9560  日期：2026-09-01
 > 级别：medium（1 文件 2 函数改 + 1 简化，~12 直调方验证不改；涉及数据输出走 spec + 合规自查）
 > 关联：S109（§10 留 _emotion date-keyed 重构另立 spec）/ S094（_sentiment date-keyed 范式镜像）/ S128（or-zero 契约）/ S131（market caller wiring）

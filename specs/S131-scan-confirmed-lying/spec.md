@@ -1,6 +1,6 @@
 # Spec: S131 — scan #3/#5/#6 confirmed_lying + lockup-expiry（10+1 项诚实化）
 
-> 状态：待实现
+> 状态：已实现（2026-09-01，commit 94ab574）
 > 作者：lzw9560  日期：2026-09-01
 > 关联：scan workflow `wf_cad164bc-f17`（3 维 finder + per-finding 对抗 verify + critic，16 agent 0 error）确认 10 confirmed_lying（#3 顶层聚合 3 / #5 AI工具 1 / #6 em_get消费者 6）+ 1 actually_honest（strategy_funnel_registry:485 死代码，false positive 抓到）+ 1 uncertain（query_news 未证实，留观察）。本 spec 修 10 confirmed + lockup-expiry（registry:418 非 scan 已知）。critic flag 的 16 个未深扫区域**登记 follow-up，不本 spec**（对齐"别陷验证循环"，需下轮 scan+verify 才确认）。
 

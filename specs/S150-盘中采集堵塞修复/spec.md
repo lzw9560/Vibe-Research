@@ -1,6 +1,6 @@
 # Spec: S150 — 盘中采集 stale-run 堵塞修复
 
-> 状态：待实现
+> 状态：已实现（2026-09-05，commit 095bd2a subprocess 改造落地）
 > 作者：Claude  日期：2026-09-04
 > 关联：S070（intraday 采集管道）、S145（§44 path）、记忆 scheduler-stuck-runs-block-cron
 

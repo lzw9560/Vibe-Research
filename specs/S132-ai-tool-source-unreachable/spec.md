@@ -1,6 +1,6 @@
 # Spec: S132 — query_global_stock + profit_forecast 源断诚实化（S131 R3 范式扩展，advisory AI-tool 级）
 
-> 状态：待实现
+> 状态：已实现（2026-09-01，commit 3c475af）
 > 作者：lzw9560  日期：2026-09-01
 > 关联：S132 verify workflow `wf_8681ebb0-b63`（3 维对抗 verify 16 missed areas + critic）确认 2 confirmed_lying（#5 AI工具 advisory 级）+ 13 actually_honest + 1 uncertain。critic s133_recommendation: **STOP**（承重链 S118-S131 全 honest，剩 2 advisory-display 级 trivial 修，不开 scan 周期）。本 spec 修 2 confirmed（S131 R3 ps_pcf_status 范式扩展）。
 

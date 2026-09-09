@@ -1,6 +1,6 @@
 # Spec: S156 — zt_pool 历史 re-test 封单量+封板时间+秒板（严格更好数据补 §44 缺口）
 
-> 状态：草案
+> 状态：已实现（2026-09-06，commit 0204262）
 > 作者：Claude  日期：2026-09-06
 > 关联：S153（day_paired 方法论已 grill）、S155（net-profit-verify 教训）、[s44-quant-validation-loop]、kline_ta_validation.py、first_plate_h2_lift.py
 

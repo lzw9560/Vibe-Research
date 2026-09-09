@@ -1,6 +1,6 @@
 # Spec 里程碑索引
 
-> 97 个 spec 按里程碑分组归档。已完成的里程碑标 ✅，进行中标 🔄。
+> 160+ 个 spec 按里程碑分组归档。已完成的里程碑标 ✅，进行中标 🔄。
 > 旧 spec 不删——保留作历史决策记录。被替代的 spec 在"备注"列标 → 后继 spec。
 > 归档目录：`specs/archive/mN-xxx/`。活跃 spec 留 `specs/` 根目录。
 
@@ -187,7 +187,139 @@ S097 match 重构后 cards/*.md 卡片跟上 + fa4514e 阈值残局收拾。
 |---|---|---|---|
 | S100 | 战法卡片对齐 match 条件（S097 收尾 + fa4514e 阈值同步） | ✅已实现 | 12 卡片 + docstring + S097§5.2 + registry entry_condition + 一致性测试；fa4514e 测试残局顺手修；2281 passed |
 | S101 | 飞书多点通知（9:25 竞价 / 9:35 开盘 / T+1 复盘） | ✅已实现 | 第1步修 T-1 通知 cron 17:15 + final=0 guard；第2步 3 新 executor + 内容函数 + seed；2295 passed |
-| S102 | 战法卡片历史战绩 | 🟡草案 | S100 延伸；不在 M7 范围，M7 ✅ 指 S100/S101 已完成 |
+| S102 | 战法卡片历史战绩 | ✅已实现 | commit fa29994；S100 延伸 |
+
+---
+
+## M8 诚实化底座（S102-S117）✅ 已完成 2026-08-29 ~ 2026-08-30
+
+hithink 直连+缓存治理+撒谎清扫+裂缝登记+chip-cyq+completeness+storm daemon。
+
+`specs/` 根目录 · 16 specs（S107 已废弃→归档 `specs/archive/`）
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S102 | 战法卡片历史战绩 | ✅已实现 | fa29994 |
+| S103 | 涨停池缓存承重切片 | ✅已实现 | ea01000 |
+| S104 | hithink 结构性缺口唯一源 | ✅已实现 | |
+| S105 | hithink 直连 HTTP 复刻 | ✅已实现 | |
+| S106 | cross_validate 接线 | ✅已实现 | |
+| S107 | 龙虎榜 hithink 集成 | 🗑️废弃 | 调研结论不做→归档 |
+| S108 | 新浪三表孤儿管道接线 | ✅已实现 | |
+| S109 | 缓存治理 Tier1 | ✅已实现 | |
+| S110 | fund_flow 测试断言对齐 | ✅已实现 | |
+| S111 | 真实裂缝登记册 | ✅已实现 | |
+| S112 | Tier2 撒谎诚实化 | ✅已实现 | |
+| S113 | 诚实缺陷 availability 修复 | ✅已实现 | |
+| S114 | chip-cyq 自建走 emget | ✅已实现 | |
+| S115 | completeness-gaps 三修 | ✅已实现 | |
+| S116 | storm-daemon availability | ✅已实现 | |
+| S117 | premarket offbyone | ✅已实现 | |
+
+---
+
+## M9 源诚实化+撒谎清扫+并行化（S119-S139）✅ 已完成 2026-08-31 ~ 2026-09-01
+
+source-em-raise/hithink-rank/tencent-zero/weekend-gate/lying-ledger/or-zero/risk-trio/批量修/scan/ai-tool/emotion-cache/熔断器/延时/premarket-kill/catalyst并行/activity并行/sector_phase。
+
+`specs/` 根目录 · 21 specs
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S119 | source-em-raise honesty | ✅已实现 | |
+| S120 | hithink-rank raise | ✅已实现 | |
+| S121 | tencent-num-zero honesty | ✅已实现 | |
+| S122 | market-emotion weekend gate | ✅已实现 | |
+| S123 | s118 lying-ledger cleanup | ✅已实现 | |
+| S125 | s124 high-lying fix | ✅已实现 | |
+| S126 | frontend-render honesty | ✅已实现 | |
+| S128 | orzero-contract and high fix | ✅已实现 | |
+| S129 | risk-trio provenance | ✅已实现 | 3acc295 |
+| S130 | 非承重 lying 批量修 | ✅已实现 | 94ab574 |
+| S131 | scan confirmed-lying | ✅已实现 | 94ab574 |
+| S132 | ai-tool-source-unreachable | ✅已实现 | 3c475af |
+| S133 | emotion-date-keyed-cache | ✅已实现 | 353e53b |
+| S134 | 新浪源熔断器 | ✅已实现 | |
+| S135 | 延时数据前端诚实消费 | ✅已实现 | |
+| S136 | premarket-kill-switch 开盘后实时核 | ✅已实现 | |
+| S137 | catalyst 并行化 | 草案 | |
+| S138 | activity 并行化 | 草案 | |
+| S139 | sector_phase 纯 LABEL 接线 | ✅已实现 | 089b8f3 |
+
+---
+
+## M10 工作流重脊柱+§44测量+pipeline重设计（S140-S148）✅ 已完成 2026-09-02 ~ 2026-09-03
+
+盘前垂直切片/pipeline节点化/step-state契约/rail复制/§44测量地基/路径胜率门/选股重设计/winrate-rename/第二层过滤。
+
+`specs/` 根目录 · 9 specs
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S140 | 工作流层重脊柱 盘前垂直切片试点 | ✅已实现 | |
+| S141 | FirstBoardPipeline 节点化拆分 | 草案 | 待 S140 落地后实施 |
+| S142 | pipeline step-state 契约 | 草案 | S141 硬前置 |
+| S143 | 盘中盘后 rail 复制 | ✅已实现 | |
+| S144 | §44 测量地基修复 | ✅已实现 | Tier 1 |
+| S145 | §44 路径胜率门 | ✅已实现 | Tier 2 |
+| S146 | 选股 pipeline 重设计 | ✅已实现 | |
+| S147 | strategy-winrate honest rename | ✅已实现 | |
+| S148 | 选股第二层过滤 | ✅已实现 | |
+
+---
+
+## M11 语义吸收+采集修复+评价层+harness（S149-S156）🔄 进行中 2026-09-04 ~ 2026-09-06
+
+vibe-astock语义吸收/采集堵塞修复/漏斗评价层/盘中H2harness/量化模型验证/debate辅助层/vol-surge（废弃）/zt-pool retest。
+
+`specs/` 根目录 · 8 specs（S155 已废弃→归档 `specs/archive/`）
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S149 | vibe-astock 语义吸收 | 审核通过待实施 | Phase 0 审计 ✅ |
+| S150 | 盘中采集堵塞修复 | ✅已实现 | 095bd2a subprocess 改造 |
+| S151 | 漏斗评价层 | ✅已实现 | R1-R5 后端+前端+21 测 |
+| S152 | 盘中 H2 harness | ✅已实现 | verdict: H2 早封板 lift=0.7843 劣于随机 |
+| S153 | 量化模型验证 | 草案 v2 | 4 CRITICAL+2 HIGH 修，待实现 |
+| S154 | debate 辅助层 | 草案→实现中 | |
+| S155 | vol-surge-volatility-profit-verify | 🗑️废弃 | premise 证伪→归档 |
+| S156 | zt-pool seal-time retest | ✅已实现 | 0204262 |
+
+---
+
+## M12 底座重建 v2（S159-S166）🔄 进行中 2026-09-06 ~ 2026-09-07
+
+§44v2应用规约/底座重建/验证框架/反前视引擎/数据质量门/防封backbone/UI契约/Journal+RiskLedger。
+
+`specs/` 根目录 · 8 specs
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S159 | §44 应用规约 v2 | 草案（方向已接受） | evidence 待补 |
+| S160 | 底座重建 | 草案 v2 | 世纪大辩论 10 视角收敛 |
+| S161 | §44v2 验证框架 | 草案 v2 | S160 component 1 |
+| S162 | 反前视引擎三层 | ✅已实现 | da7ba54 |
+| S163 | 数据质量门+轻量血缘 | ✅已实现 | da7ba54 lineage 接线 |
+| S164 | 防封 backbone+secrets-gate | ✅已实现 | da7ba54 CI lint gate |
+| S165 | UI 契约先行 | 草案 v2 | S160 component 5 |
+| S166 | TradeJournal+RiskLedger | 草案 | S160 component 6 |
+
+---
+
+## M13 盘中微结构+批量接线+event edges+长线（S167-S172）🔄 进行中 2026-09-06 ~ 2026-09-08
+
+盘中微结构累积/12harness批量接线/PEAD中线event/摘帽event/长线价值/红利低波指数复制。
+
+`specs/` 根目录 · 6 specs
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S167 | 盘中微结构数据累积 | 🔄进行中 | medium，issue 层单轮 review |
+| S168 | 批量接线 12 harness | 草案 | medium，12 脚本接线 §44v2 verifier |
+| S169 | 中线 event-PEAD | 草案 | medium，15 verdict |
+| S170 | 摘帽 event | 草案 | medium，复用 midline_event_harness |
+| S171 | 长线价值 | 草案 | medium，spec+R3 done |
+| S172 | 红利低波指数复制臂 | 草案 | |
 
 ---
 
