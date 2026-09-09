@@ -34,6 +34,12 @@ CREATE TABLE IF NOT EXISTS verifier_records (
   data_snapshot_id TEXT NOT NULL,
   input_hashes TEXT NOT NULL,       -- JSON: {artifact: sha256[:12]}
   return_series TEXT NOT NULL,     -- JSON: complete list[float]
+                                   -- P4 latent: intent is hash-only (sha256
+                                   -- of series) to reduce row size, but NOT
+                                   -- NULL constraint on 85 existing rows
+                                   -- requires ALTER TABLE migration. Keep full
+                                   -- series for now; migrate when adding a
+                                   -- return_series_hash column + backfill.
   dates TEXT,                      -- JSON: list[str] | null
   params TEXT NOT NULL,            -- JSON: {edge_type, n_trials, cost, ...}
   frozen_commit TEXT,

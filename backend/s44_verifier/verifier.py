@@ -214,7 +214,8 @@ def verify(
     r = r[~np.isnan(r)]
     n = int(r.size)
 
-    trial_cols = _extract_trial_cols(trials_matrix)
+    # P4 slim: trial_cols extraction skipped (only fed DSR/PBO, both stopped).
+    # Function _extract_trial_cols retained for future reactivation.
 
     # ── day-clustered effective n + day-means (computed BEFORE dsr/haircut so
     # they use day-clustered n, NOT pooled per-pick n — §44v1 artifact fix:
@@ -229,18 +230,17 @@ def verify(
         n_effective = None
         days_robust = n
 
-    # day-means for DSR/haircut (§44v2 effective-n basis; None → fall back to r).
-    day_means = _day_means(returns, dates)
-    dsr_returns = day_means if day_means is not None else r
-    dsr_n = len(day_means) if day_means is not None else n
-
-    dsr, dsr_method, min_trl = wiring.compute_dsr(dsr_returns, n_trials, trial_cols)
-    pbo = wiring.compute_pbo(trial_cols)
-
-    # R2: multiple-testing haircut (Harvey & Liu 2015). day-clustered n_obs +
-    # method by-n per spec R6 (BH small-n<60, bonferroni mature>=60). K=1 → 0.
-    haircut_method = "BH" if days_robust < 60 else "bonferroni"
-    haircut = wiring.compute_haircut(dsr_returns, dsr_n, n_comparisons, haircut_method)
+    # P4 slim: DSR/PBO/haircut/MinTRL stopped — zero status impact.
+    # compute_pbo always None without trials_matrix; compute_dsr always
+    # lenient_single_estimate self-flagged never authoritative; compute_haircut
+    # K=1 → always 0.0; MinTRL computed but never drives status. Fields
+    # retained as None to preserve Verdict serialization shape. Framework
+    # intact in wiring.py for future conditioning / 打板趋势复测.
+    dsr: Optional[float] = None
+    dsr_method: _DsrMethod = "N/A"
+    min_trl: Optional[float] = None
+    pbo: Optional[float] = None
+    haircut: Optional[float] = None
 
     # ── R5: window sanity (S159 §5A, enforced per spec line 61) ───────────
     # When window_sanity provided, check edge_type's matching window for
@@ -290,12 +290,11 @@ def verify(
             survivors_by_day, universe_by_day, selection_lift, n_perm, perm_seed,
         )
 
-        # multiple-testing correction: compute both for transparency
-        # (by-n: BH for small n<60, Bonferroni for large n>=60, NEVER K=20)
+        # P4 slim: selection uses Bonferroni only (status reads p_bonf at
+        # the robust_edge gate below). BH (p_bh) not computed for selection.
         bonf_adj = stats_mod.bonferroni_bh([p_perm], n_comparisons, "bonferroni")
-        bh_adj = stats_mod.bonferroni_bh([p_perm], n_comparisons, "BH")
         p_bonf = bonf_adj[0] if bonf_adj else None
-        p_bh = bh_adj[0] if bh_adj else None
+        p_bh = None
 
         # walk-forward OOS (graceful: "insufficient_skipped" if 0 windows).
         # wf_status/wf_mean_lift are walk-forward ONLY — NOT overwritten by
@@ -313,6 +312,11 @@ def verify(
         # holding-period labels. Always runs when dates supplied (alongside
         # walk-forward, not only as fallback). .split() invoked here via
         # _purged_kfold_oos_lifts → wiring.compute_purged_kfold_splits.
+        #
+        # P4 slim: confirmed PurgedKFold is already note-only — pk_status /
+        # pk_mean_lift feed the Verdict.note string, NOT the status logic.
+        # Status driven by selection_lift + permutation_p + day_clustered_t_test
+        # + walk_forward. Kept as complementary OOS signal; no change needed.
         if dates is not None:
             pk_lifts = _purged_kfold_oos_lifts(
                 survivors_by_day, universe_by_day, dates,
@@ -350,13 +354,13 @@ def verify(
             # 多重比较校正（grill #3）：event 边际多 horizon/arm 重复测，p_one_sided
             # 须 Bonferroni/BH 校正（同 selection 分支）。by-n：小 n<60 用 BH，大 n≥60
             # 用 Bonferroni（R6）。K=n_comparisons（arm×horizon 数）。
-            evt_bonf = stats_mod.bonferroni_bh(
-                [t_res.p_one_sided], n_comparisons, "bonferroni",
-            )
+            # P4 slim: event uses BH only (status reads p_bh at the
+            # event_status gate below). Bonferroni (p_bonf) not computed
+            # for event — set None.
             evt_bh = stats_mod.bonferroni_bh(
                 [t_res.p_one_sided], n_comparisons, "BH",
             )
-            p_bonf = evt_bonf[0] if evt_bonf else None
+            p_bonf = None
             p_bh = evt_bh[0] if evt_bh else None
 
             if t_res.day_mean <= 0:

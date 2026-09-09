@@ -37,19 +37,22 @@ def test_verify_returns_immutable_verdict(positive_returns):
 
 
 def test_dsr_lenient_when_no_trials_matrix(positive_returns):
+    """P4 slim: DSR stopped (zero status impact). Field retained as None."""
     v = verify(positive_returns, n_trials=1, trials_matrix=None)
-    assert v.dsr_method == "lenient_single_estimate"
-    assert v.dsr is not None
+    assert v.dsr_method == "N/A"
+    assert v.dsr is None
 
 
 def test_dsr_cross_trial_when_matrix_supplied(positive_returns):
+    """P4 slim: DSR stopped even with trials_matrix (zero status impact)."""
     rng = np.random.default_rng(7)
     matrix = pd.DataFrame({
         "a": rng.normal(0.0005, 0.01, 100),
         "b": rng.normal(0.0008, 0.01, 100),
     })
     v = verify(positive_returns, n_trials=2, trials_matrix=matrix)
-    assert v.dsr_method == "cross_trial_variance"
+    assert v.dsr_method == "N/A"
+    assert v.dsr is None
 
 
 def test_pbo_none_when_single_strategy(positive_returns):
@@ -58,6 +61,8 @@ def test_pbo_none_when_single_strategy(positive_returns):
 
 
 def test_pbo_computed_when_multi_strategy(positive_returns):
+    """P4 slim: PBO stopped (always None without multi-config matrix that
+    §44 single-edge tests never have). Field retained as None."""
     rng = np.random.default_rng(7)
     matrix = pd.DataFrame({
         "a": rng.normal(0.0005, 0.01, 200),
@@ -65,7 +70,7 @@ def test_pbo_computed_when_multi_strategy(positive_returns):
         "c": rng.normal(0.0002, 0.01, 200),
     })
     v = verify(positive_returns, n_trials=3, trials_matrix=matrix)
-    assert v.pbo is not None
+    assert v.pbo is None
 
 
 def test_underpowered_when_days_below_60():
@@ -689,9 +694,10 @@ def test_compute_haircut_none_when_insufficient():
 
 
 def test_verify_populates_haircut_field(positive_returns):
+    """P4 slim: haircut stopped (K=1 → always 0.0, zero status impact).
+    Field retained as None."""
     v = verify(positive_returns, n_trials=10)
-    assert v.haircut is not None
-    assert 0.0 <= v.haircut <= 1.0
+    assert v.haircut is None
 
 
 def test_verify_purged_kfold_fallback_when_walk_forward_insufficient():
@@ -739,15 +745,15 @@ def test_r7_selection_falsified_note_warns_population_edge():
 
 
 def test_dsr_min_trl_wired_when_returns_supplied(positive_returns):
-    """R2: MinTRL wired (spec lists deflated_sharpe DSR/PSR/MinTRL)."""
+    """P4 slim: MinTRL stopped (computed but never drove status). Field
+    retained as None. Framework intact in wiring.py for future use."""
     v = verify(positive_returns, n_trials=1)
-    assert v.min_trl is not None
-    assert v.min_trl > 0
+    assert v.min_trl is None
 
 
 def test_dsr_uses_day_clustered_returns_when_dates_supplied():
-    """§44v2: DSR/MinTRL must use day-clustered returns (n=n_effective), not
-    pooled per-pick. Pooled n inflates DSR (§44v1 artifact)."""
+    """P4 slim: DSR stopped, but day-clustered effective n + days_robust
+    still computed correctly (these drive the R6 underpowered gate)."""
     rng = np.random.default_rng(7)
     dates = [f"2026-09-{d:02d}" for d in range(1, 31)]
     r = rng.normal(0.001, 0.012, 300)
@@ -758,11 +764,9 @@ def test_dsr_uses_day_clustered_returns_when_dates_supplied():
     assert v_without_dates.n_effective is None
     assert v_with_dates.days_robust == 30  # day-clustered
     assert v_without_dates.days_robust == 300  # pooled
-    # DSR with day-means (n=30) differs from pooled (n=300) — proves DSR
-    # consumed day-clustered returns, not pooled (§44v1 artifact fix).
-    # (min_trl is None for both because this seed's day-means Sharpe <= 0
-    #  → observed<=benchmark → inf→None; that's correct, not a bug.)
-    assert v_with_dates.dsr != v_without_dates.dsr
+    # P4: DSR stopped → both None (no longer differs by day-clustering)
+    assert v_with_dates.dsr is None
+    assert v_without_dates.dsr is None
 
 
 # ── MEDIUM #1: permutation p +1 convention (Phipson & Smyth 2010) ────────────
