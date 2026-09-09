@@ -80,6 +80,9 @@ class TestScheduledTasksImports(unittest.TestCase):
             "intraday_microstructure_snapshot",  # 10min 排名+量比快照（hithink+tencent）
             "intraday_auction_dense",            # 竞价密集采集 09:15-09:25 每 2min
             "baostock_5min_freeze",             # 次日冻结涨停股 5min bars（秒板/封板时间派生）
+            # 知识图谱每日审查 + 数据同步
+            "daily_kg_audit",
+            "daily_kg_sync",
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")
