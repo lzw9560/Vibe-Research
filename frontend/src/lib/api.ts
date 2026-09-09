@@ -32,6 +32,7 @@ import type {
   EquityBaseResponse, AddTradeInput, AddTradeResponse, UpdateTradeInput,
   UpdateTradeResponse, DeleteTradeResponse, SaveFeesInput, SaveFeesResponse,
   SaveRulesInput, SaveRulesResponse, SaveEquityBaseResponse,
+  ClosedLoopResponse, DrawdownStatusResponse,
 } from "./journal-contract";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -300,4 +301,9 @@ export const api = {
   riskEquityBase: () => get<EquityBaseResponse>("/risk/equity-base"),
   riskSaveEquityBase: (base: number) =>
     request<SaveEquityBaseResponse>("/risk/equity-base", "POST", { base }),
+  // S173: 闭环 ledger（模拟/纸面臂胜率闭环，与手动真实成交分离）。
+  journalClosedLoop: (limit = 500) =>
+    get<ClosedLoopResponse>(`/journal/closed-loop?limit=${limit}`),
+  journalDrawdownStatus: () =>
+    get<DrawdownStatusResponse>("/journal/drawdown-status"),
 };

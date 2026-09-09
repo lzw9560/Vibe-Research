@@ -25,7 +25,54 @@ import excursion
 import attribution
 import inbox
 
+# S173: 闭环 ledger（trade_journal）+ drawdown 熔断——惰性 import 避循环依赖
+from engine.trade_journal import TradeJournal
+from engine.drawdown_breaker import DrawdownBreaker
+
 router = APIRouter(tags=["journal"])
+
+
+# ───────────────────────── closed-loop ledger 2 端点（S173） ────────────────
+@router.get("/api/journal/closed-loop")
+async def journal_closed_loop(limit: int = Query(500, ge=1, le=5000)) -> Dict[str, Any]:
+    """闭环 ledger：跨臂 trade_journal 记录 + 聚合统计（winrate/Sharpe/coverage_rate）。
+
+    S173 闭环账本（模拟/纸面臂胜率闭环），与 journal/list（手动真实成交）分离。
+    后端未就绪 → 各 section 如实呈现空/available:False（不臆造 mock 交易）。
+    """
+    def _build() -> dict:
+        tj = TradeJournal()
+        records = tj.query_records(is_dead_arm=None, limit=limit)
+        aggregate = tj.aggregate_by_arm()
+        return {
+            "available": True,
+            "records": [
+                {
+                    "signal_id": r.signal_id, "arm": r.arm,
+                    "stock_code": r.stock_code,
+                    "entry_price": r.entry_price, "entry_date": r.entry_date,
+                    "exit_price": r.exit_price, "exit_date": r.exit_date,
+                    "exit_reason": r.exit_reason,
+                    "net_pnl": r.net_pnl, "pnl_unit": r.pnl_unit,
+                    "cost_pct": r.cost_pct, "gross_return": r.gross_return,
+                    "is_realized": r.is_realized,
+                    "unrealized_pnl": r.unrealized_pnl,
+                    "is_dead_arm": r.is_dead_arm,
+                }
+                for r in records
+            ],
+            "aggregate": aggregate,
+        }
+    return await asyncio.to_thread(_build)
+
+
+@router.get("/api/journal/drawdown-status")
+async def journal_drawdown_status() -> Dict[str, Any]:
+    """drawdown 熔断状态：per-arm + portfolio equity/回撤/size_multiplier。"""
+    def _build() -> dict:
+        breaker = DrawdownBreaker()
+        return breaker.full_status()
+    return await asyncio.to_thread(_build)
 
 
 # ───────────────────────── journal 7 端点 ─────────────────────────

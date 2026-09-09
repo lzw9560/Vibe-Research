@@ -11,6 +11,7 @@ import type {
   EquityBaseResponse, AddTradeInput, AddTradeResponse, UpdateTradeInput,
   UpdateTradeResponse, DeleteTradeResponse, SaveFeesInput, SaveFeesResponse,
   SaveRulesInput, SaveRulesResponse, SaveEquityBaseInput, SaveEquityBaseResponse,
+  ClosedLoopResponse, DrawdownStatusResponse,
 } from "@/lib/journal-contract";
 
 // 5min staleTime——journal 数据变更不频繁；改 rules/equity_base 会显式 invalidate 依赖 query。
@@ -141,5 +142,23 @@ export function useSaveEquityBase() {
     mutationFn: (body) => api.riskSaveEquityBase(body.base),
     // equity_base 影响 at-risk（占比分母）+ risk-report（violations 单日亏损占比）——全 invalidate
     onSuccess: () => qc.invalidateQueries({ queryKey: ["journal"] }),
+  });
+}
+
+// ─── S173 闭环 ledger（模拟/纸面臂胜率闭环）───
+export function useClosedLoop(limit = 500, options?: Opts<ClosedLoopResponse>) {
+  return useQuery({
+    queryKey: ["journal", "closed-loop", limit] as const,
+    queryFn: () => api.journalClosedLoop(limit),
+    staleTime: JOURNAL_STALE_MS,
+    ...options,
+  });
+}
+export function useDrawdownStatus(options?: Opts<DrawdownStatusResponse>) {
+  return useQuery({
+    queryKey: ["journal", "drawdown-status"] as const,
+    queryFn: () => api.journalDrawdownStatus(),
+    staleTime: JOURNAL_STALE_MS,
+    ...options,
   });
 }

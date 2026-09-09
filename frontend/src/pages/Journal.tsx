@@ -6,11 +6,13 @@ import { TradeJournalSection } from "@/components/journal/TradeJournalSection";
 import { RiskReportSection } from "@/components/journal/RiskReportSection";
 import { DiagnosticsSection } from "@/components/journal/DiagnosticsSection";
 import { JournalSettings } from "@/components/journal/JournalSettings";
+import { JournalLedger } from "@/components/journal/JournalLedger";
 
-type Tab = "trades" | "risk" | "diag" | "settings";
+type Tab = "trades" | "risk" | "diag" | "settings" | "closedloop";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "trades", label: "交易日志" },
+  { key: "closedloop", label: "闭环" },
   { key: "risk", label: "风险账本" },
   { key: "diag", label: "诊断" },
   { key: "settings", label: "设置" },
@@ -41,6 +43,7 @@ export function Journal() {
       </div>
       <div>
         {tab === "trades" && <TradeJournalSection />}
+        {tab === "closedloop" && <JournalLedger />}
         {tab === "risk" && <RiskReportSection />}
         {tab === "diag" && <DiagnosticsSection />}
         {tab === "settings" && <JournalSettings />}

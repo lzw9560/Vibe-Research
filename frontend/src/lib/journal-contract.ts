@@ -446,3 +446,68 @@ export interface SaveEquityBaseResponse {
   ok: boolean;
   equity_base: number;
 }
+
+// ─────────────── S173 闭环 ledger（模拟/纸面臂胜率闭环）─────────────────
+// trade_journal SQLite 表记录 + 跨臂聚合统计 + drawdown 熔断状态。
+// 与 journal/list（手动真实成交）分离——闭环臂走 accounting 净口径。
+export interface ClosedLoopRecord {
+  signal_id: string;
+  arm: string;
+  stock_code: string;
+  entry_price: number | null;
+  entry_date: string;
+  exit_price: number | null;
+  exit_date: string | null;
+  exit_reason: string | null;
+  net_pnl: number | null;
+  pnl_unit: string;
+  cost_pct: number;
+  gross_return: number | null;
+  is_realized: number;
+  unrealized_pnl: number | null;
+  is_dead_arm: number;
+}
+export interface ArmAggregate {
+  status: string;
+  n_picks: number;
+  n_unbuyable: number;
+  n_days: number;
+  signal_coverage_rate: number;
+  execution_winrate: number | null;
+  execution_winrate_ci: [number, number];
+  total_net_pnl: number;
+  payoff_ratio: number | null;
+  avg_win: number;
+  avg_loss: number;
+  t_stat: number | null;
+  p_one_sided: number | null;
+  p_adjusted_bh?: number | null;
+  day_mean: number | null;
+  day_std: number | null;
+  sharpe: number | null;
+  sharpe_n_days: number;
+  dsr: number | null;
+  dsr_method: string;
+  min_trl: number | null;
+  haircut: number | null;
+  net_excess_mean_cny: number;
+}
+export interface ClosedLoopResponse {
+  available: boolean;
+  records: ClosedLoopRecord[];
+  aggregate: Record<string, ArmAggregate>;
+}
+export interface DrawdownArmStatus {
+  equity: number;
+  peak: number;
+  drawdown_cny: number;
+  drawdown_pct: number;
+  size_multiplier: number;
+  status: string;
+  days_tracked: number;
+}
+export interface DrawdownStatusResponse {
+  per_arm: Record<string, DrawdownArmStatus>;
+  portfolio: DrawdownArmStatus & { is_bear_market: boolean };
+  initial_capital: number;
+}
