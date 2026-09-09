@@ -83,6 +83,9 @@ class TestScheduledTasksImports(unittest.TestCase):
             # 知识图谱每日审查 + 数据同步
             "daily_kg_audit",
             "daily_kg_sync",
+            # S175 模拟盘闭环 + S176 盘中 OFI（pre-existing test debt 顺手补，同 test_task_executor）
+            "trade_journal_daily",
+            "ofi_collect",
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

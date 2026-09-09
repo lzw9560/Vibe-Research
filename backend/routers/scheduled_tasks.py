@@ -19,7 +19,7 @@ router = APIRouter(tags=["scheduled_tasks"])
 def _compute_today_status(task: Any) -> str:
     """根据 last_run_at/last_run_status 推算今日完成状态。
 
-    返回值：running / done / error / pending
+    返回值：running / done / degraded / error / pending
 
     last_run_at 是 naive ISO 字符串（无时区后缀，假设服务器本地时区=北京，GR5 标注）。
     今日北京日期与 last_run 日期同为 naive date 比较。
@@ -39,6 +39,8 @@ def _compute_today_status(task: Any) -> str:
 
     if last_run_date == today_bj and status == "success":
         return "done"
+    if last_run_date == today_bj and status == "degraded":
+        return "degraded"
     if last_run_date == today_bj and status == "failed":
         return "error"
     # last_run_date != today_bj 或 last_run_at 为 None 或解析失败 → pending

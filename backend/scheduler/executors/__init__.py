@@ -20,6 +20,34 @@ from scheduler.models import ScheduledTask, TaskRun
 logger = logging.getLogger("vibe-research")
 
 
+# S177: executor 返回值 → run.status 映射（core-invariant「绝不静默吞掉错误」）
+# degraded 信号不再被埋进 run.result JSON，status 列如实反映（backlog M1）
+_DEGRADED_STATUSES = frozenset({
+    "degraded", "partial", "source_fail", "no_emotion_data",
+    "script_not_found", "baostock_unavailable",
+})
+
+
+def _resolve_run_status(result: Any) -> str:
+    """executor 返回值 → run.status 映射。
+
+    - dict 无 status 字段 / status 未匹配任何类 → success（backward-compat，不破坏 30+ executor）
+    - error / error: * / timeout → failed（核心功能失败，executor 吞了异常返 dict）
+    - degraded / partial / source_fail / no_emotion_data / script_not_found / baostock_unavailable → degraded
+    - ok / due / skipped / not_due / nothing_to_settle / no_dir → success（正常完成或正常跳过，不误杀）
+    """
+    if not isinstance(result, dict):
+        return "success"
+    status = result.get("status")
+    if status is None:
+        return "success"
+    if isinstance(status, str) and (status == "error" or status.startswith("error:") or status == "timeout"):
+        return "failed"
+    if isinstance(status, str) and status in _DEGRADED_STATUSES:
+        return "degraded"
+    return "success"
+
+
 class TaskExecutor:
     """内置任务执行器。"""
 
@@ -74,14 +102,18 @@ class TaskExecutor:
                 raise ValueError(f"未知任务类型: {task.task_type}")
 
             result = executor(task.payload)
-            run.status = "success"
+            run.status = _resolve_run_status(result)
             run.result = result
             run.finished_at = datetime.now().isoformat()
-            _manager.update_task_status(task.id or 0, "success", started_at)
+            _manager.update_task_status(task.id or 0, run.status, started_at)
 
-            # 成功通知
-            if task.notify_on_success:
-                self._send_notification(task, run, "success")
+            # S177 通知：success→notify_on_success；degraded/failed→notify_on_failure（degraded 不再静默吞）
+            if run.status == "success":
+                if task.notify_on_success:
+                    self._send_notification(task, run, "success")
+            else:  # degraded 或 failed（来自 result dict，非异常）
+                if task.notify_on_failure:
+                    self._send_notification(task, run, run.status)
 
             return run
         except Exception as e:
@@ -134,15 +166,19 @@ class TaskExecutor:
                     asyncio.get_running_loop().run_in_executor(self._thread_pool, handler, task.payload),
                     timeout=_task_timeout(task),
                 )
-            run.status = "success"
+            run.status = _resolve_run_status(result)
             run.result = result
             run.finished_at = datetime.now().isoformat()
             _manager.update_run(run)
-            _manager.update_task_status(task.id or 0, "success", started_at)
+            _manager.update_task_status(task.id or 0, run.status, started_at)
 
-            # 成功通知
-            if task.notify_on_success:
-                self._send_notification(task, run, "success")
+            # S177 通知：success→notify_on_success；degraded/failed→notify_on_failure（degraded 不再静默吞）
+            if run.status == "success":
+                if task.notify_on_success:
+                    self._send_notification(task, run, "success")
+            else:  # degraded 或 failed（来自 result dict，非异常）
+                if task.notify_on_failure:
+                    self._send_notification(task, run, run.status)
 
             return run
         except Exception as e:
@@ -169,7 +205,7 @@ class TaskExecutor:
             from notification.notification_service import get_notification_service
             service = get_notification_service()
 
-            status_text = "成功" if status == "success" else "失败"
+            status_text = {"success": "成功", "degraded": "降级", "failed": "失败"}.get(status, "未知")
             title = f"定时任务{status_text}: {task.name}"
             content = f"任务: {task.name}\n状态: {status_text}\n时间: {run.started_at}"
             if run.error:

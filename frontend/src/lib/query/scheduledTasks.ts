@@ -10,7 +10,7 @@ export interface ScheduledTaskStatus {
   cron_expr: string;
   last_run_at: string | null;
   last_run_status: string | null;
-  today_status: "done" | "error" | "running" | "pending";
+  today_status: "done" | "error" | "running" | "pending" | "degraded";
   task_type: string;
   enabled: boolean;
 }

@@ -69,6 +69,10 @@ _EXPECTED_TASK_TYPES = {
     # 知识图谱每日审查 + 数据同步
     "daily_kg_audit",
     "daily_kg_sync",
+    # S175 模拟盘闭环盘后跑（journal_recorder.run_daily 接 scheduler 点火）
+    "trade_journal_daily",
+    # S176 盘中 OFI 五档收集（conditioning 数据收集器）
+    "ofi_collect",
 }
 
 
@@ -534,3 +538,140 @@ class TestForwardTestT1Settle:
         # 够着 non-stuck 旧日 08-20（非 nothing_to_settle；原 bug 返 nothing_to_settle）
         assert r.get("dates_processed"), f"应处理非 stuck 旧日，got {r}"
         assert any(d["signal_date"] == "2026-08-20" for d in r["dates_processed"])
+
+
+# ---------------------------------------------------------------------------
+# S177: _resolve_run_status 纯函数（executor 返回值 → run.status 映射）
+# core-invariant「绝不静默吞掉错误」——degraded/failed 不再被埋成 success
+# ---------------------------------------------------------------------------
+class TestResolveRunStatus:
+    """S177 T1：executor 返回 degraded/failed 不再被静默吞成 success。"""
+
+    def test_degraded_maps_degraded(self):
+        from scheduler.executors import _resolve_run_status
+        assert _resolve_run_status({"status": "degraded", "reason": "X"}) == "degraded"
+
+    def test_degraded_family_maps_degraded(self):
+        from scheduler.executors import _resolve_run_status
+        for s in ("partial", "source_fail", "no_emotion_data", "script_not_found", "baostock_unavailable"):
+            assert _resolve_run_status({"status": s}) == "degraded", f"{s} 应 degraded"
+
+    def test_error_family_maps_failed(self):
+        from scheduler.executors import _resolve_run_status
+        assert _resolve_run_status({"status": "error"}) == "failed"
+        assert _resolve_run_status({"status": "error: boom"}) == "failed"
+        assert _resolve_run_status({"status": "timeout"}) == "failed"
+
+    def test_normal_statuses_map_success(self):
+        from scheduler.executors import _resolve_run_status
+        for s in ("ok", "due", "skipped", "not_due", "nothing_to_settle", "no_dir"):
+            assert _resolve_run_status({"status": s}) == "success", f"{s} 应 success 非 degraded"
+
+    def test_no_status_field_stays_success(self):
+        """backward-compat：无 status 字段 / 非 dict → success（不破坏 30+ executor）。"""
+        from scheduler.executors import _resolve_run_status
+        assert _resolve_run_status({}) == "success"
+        assert _resolve_run_status({"ok": True}) == "success"
+        assert _resolve_run_status({"sync": True}) == "success"
+        assert _resolve_run_status(None) == "success"
+        assert _resolve_run_status("not a dict") == "success"
+
+    def test_skipped_not_misclassified(self):
+        """intraday 非交易时段返 skipped 是正常跳过不算故障，不误杀。"""
+        from scheduler.executors import _resolve_run_status
+        assert _resolve_run_status({"status": "skipped", "reason": "非交易时段"}) == "success"
+
+
+# ---------------------------------------------------------------------------
+# S177: execute/execute_async 读 result status + 通知 + today_status 集成
+# ---------------------------------------------------------------------------
+class TestS177DegradedPropagation:
+    """S177 T5：degraded 全链路冒泡（run.status + last_run_status + 通知 + today_status）。"""
+
+    def test_degraded_result_marks_run_degraded(self, isolated_market_db):
+        """A1: executor 返 degraded dict → run.status=degraded + reason 保留 + last_run_status=degraded。"""
+        executor = TaskExecutor()
+
+        async def degraded_handler(payload):
+            return {"status": "degraded", "reason": "cannot import fetch_daily_bars"}
+
+        executor._executors["test_degraded"] = degraded_handler
+        task = st._manager.create_task(_make_task("test_degraded"))
+        run = _run(executor.execute_async(task))
+
+        assert run.status == "degraded"
+        assert run.result == {"status": "degraded", "reason": "cannot import fetch_daily_bars"}
+        refreshed = st._manager.get_task(task.id)
+        assert refreshed.last_run_status == "degraded"
+
+    def test_degraded_triggers_notify_on_failure(self, isolated_market_db):
+        """A6: degraded + notify_on_failure=True → 通知被调且 status=degraded（文案「降级」）。"""
+        executor = TaskExecutor()
+        calls = []
+
+        async def degraded_handler(payload):
+            return {"status": "degraded", "reason": "baostock down"}
+
+        executor._executors["test_degraded"] = degraded_handler
+        task = st._manager.create_task(ScheduledTask(
+            name="t-degraded-notify", task_type="test_degraded", cron_expr="* * * * *",
+            payload={}, notify_on_success=False, notify_on_failure=True,
+        ))
+        original = executor._send_notification
+        executor._send_notification = lambda t, r, status: (calls.append(status), original(t, r, status))[1]
+        _run(executor.execute_async(task))
+        assert "degraded" in calls, f"degraded 应触发 notify_on_failure，got {calls}"
+
+    def test_no_status_field_stays_success_backward_compat(self, isolated_market_db):
+        """A2: 无 status 字段 → success（不破坏现有 test）。"""
+        executor = TaskExecutor()
+
+        async def ok_handler(payload):
+            return {"ok": True}
+
+        executor._executors["test_ok"] = ok_handler
+        task = st._manager.create_task(_make_task("test_ok"))
+        run = _run(executor.execute_async(task))
+        assert run.status == "success"
+        assert st._manager.get_task(task.id).last_run_status == "success"
+
+    def test_error_from_dict_maps_failed(self, isolated_market_db):
+        """A4: executor 返 {"status":"error: boom"} → run.status=failed（非异常路径）。"""
+        executor = TaskExecutor()
+
+        async def err_handler(payload):
+            return {"status": "error: boom"}
+
+        executor._executors["test_err"] = err_handler
+        task = st._manager.create_task(_make_task("test_err"))
+        run = _run(executor.execute_async(task))
+        assert run.status == "failed"
+        assert st._manager.get_task(task.id).last_run_status == "failed"
+
+    def test_skipped_not_misclassified_in_executor(self, isolated_market_db):
+        """A3: executor 返 skipped（intraday 非交易时段）→ run.status=success 不误杀。"""
+        executor = TaskExecutor()
+
+        async def skip_handler(payload):
+            return {"status": "skipped", "reason": "非交易时段"}
+
+        executor._executors["test_skip"] = skip_handler
+        task = st._manager.create_task(_make_task("test_skip"))
+        run = _run(executor.execute_async(task))
+        assert run.status == "success", "skipped 是正常跳过，不应标 degraded/failed"
+
+    def test_today_status_degraded(self, isolated_market_db):
+        """A5: last_run_status=degraded + 今日 → _compute_today_status 返 degraded。"""
+        from routers.scheduled_tasks import _compute_today_status
+        executor = TaskExecutor()
+
+        async def degraded_handler(payload):
+            return {"status": "degraded"}
+
+        executor._executors["test_degraded"] = degraded_handler
+        task = st._manager.create_task(_make_task("test_degraded"))
+        _run(executor.execute_async(task))
+        refreshed = st._manager.get_task(task.id)
+        assert refreshed.last_run_status == "degraded"
+        today = _compute_today_status(refreshed)
+        assert today == "degraded", f"今日 degraded 应映射 today_status=degraded，got {today}"

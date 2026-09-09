@@ -175,4 +175,6 @@ def test_registry_only_objective_and_research_tools():
         "worldmonitor_query", "query_strategy_card",
         "query_skyrocket", "query_hot_stock", "query_anomaly",
         "query_intraday_features",  # S154 T6.1：debate 辅助层（盘中封单特征，辅助非 edge）
+        # 知识图谱 MCP tools（S150 daily_kg_audit + S167 kg entities/relations 查询，pre-existing test debt 补）
+        "kg_audit", "query_kg_entities", "query_kg_relations",
     }

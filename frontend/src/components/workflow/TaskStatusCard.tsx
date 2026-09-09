@@ -42,6 +42,11 @@ const STATUS_STYLES: Record<
     pill: "bg-[hsl(0_74%_60%/0.12)] text-[hsl(0_74%_60%)]",
     label: "错误",
   },
+  degraded: {
+    node: "border-[hsl(38_92%_50%)] bg-[hsl(38_92%_50%/0.3)]",
+    pill: "bg-[hsl(38_92%_50%/0.12)] text-[hsl(38_92%_50%)]",
+    label: "降级",
+  },
 };
 
 /**
@@ -202,7 +207,9 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
                           ? "运行中"
                           : t.today_status === "done"
                             ? "已完成"
-                            : "错误"}
+                            : t.today_status === "degraded"
+                              ? "降级"
+                              : "错误"}
                     </span>
                     {/* 右：状态徽章 + 载入按钮 */}
                     <div className="flex items-center gap-2">
