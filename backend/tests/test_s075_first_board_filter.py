@@ -411,7 +411,7 @@ class TestScoreCandidate:
         ]
         scores_map = {"001": 80.0, "002": 60.0, "003": 70.0}
         # 新签名 score_candidate(c, date, phase) → patch 匹配 3 参数
-        with patch("strategies.first_board.scoring.score_candidate",
+        with patch("strategies.first_board.pipeline.score_candidate",
                    lambda c, d, p="普通": {"code": c["code"], "name": c["name"],
                                            "scores": {}, "raw_values": {},
                                            "total": scores_map[c["code"]], "rank": 0,

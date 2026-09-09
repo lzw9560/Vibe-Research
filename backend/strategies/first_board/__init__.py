@@ -63,11 +63,11 @@ from strategies.first_board.scoring import (
     score_dim_market_cap,
     score_dim_seal_ratio,
     score_dim_turnover,
+)
+from strategies.first_board.pipeline import (
     _SCORE_DIMS,
     score_candidate,
     rank_candidates,
-)
-from strategies.first_board.pipeline import (
     run_first_board_filter,
     attach_first_board_analysis,
 )

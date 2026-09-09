@@ -20,7 +20,7 @@ class TestRunFirstBoardFilterInjectedPool(unittest.TestCase):
         from strategies.first_board_filter import run_first_board_filter
         injected = [{"c": "600001", "name": "测试股"}]
         with mock.patch("strategies.first_board.universe.fetch_zt_pool") as mock_fetch, \
-             mock.patch("strategies.first_board.scoring.rank_candidates", return_value=[]) as _mock_rank, \
+             mock.patch("strategies.first_board.pipeline.rank_candidates", return_value=[]) as _mock_rank, \
              mock.patch("strategies.first_board.universe.filter_first_board", return_value=[]) as _mock_ffb, \
              mock.patch("vr_paths.is_trading_day", return_value=True):
             result = run_first_board_filter("2026-09-03", pool=injected)
@@ -30,7 +30,7 @@ class TestRunFirstBoardFilterInjectedPool(unittest.TestCase):
     def test_default_fetches_when_no_injection(self):
         from strategies.first_board_filter import run_first_board_filter
         with mock.patch("strategies.first_board.universe.fetch_zt_pool", return_value=[]) as mock_fetch, \
-             mock.patch("strategies.first_board.scoring.rank_candidates", return_value=[]) as _mock_rank, \
+             mock.patch("strategies.first_board.pipeline.rank_candidates", return_value=[]) as _mock_rank, \
              mock.patch("strategies.first_board.universe.filter_first_board", return_value=[]) as _mock_ffb, \
              mock.patch("vr_paths.is_trading_day", return_value=True):
             run_first_board_filter("2026-09-03")
