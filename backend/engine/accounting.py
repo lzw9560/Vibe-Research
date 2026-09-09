@@ -181,6 +181,30 @@ def path_return(
     )
 
 
+def gap_net_return(
+    entry_price: float,
+    exit_price: float,
+    entry_date: str = "",
+    size: float = 100,
+) -> tuple[float, float, float]:
+    """Overnight gap net return (buy T close, sell T+1 open, no stop/take).
+
+    Unlike ``path_return`` (which needs bars + stop/take/max_hold), this is a
+    pure 2-price event capture. Cost from ``_cost_pct`` (5 元 min commission +
+    stamp duty + slippage), scaled to the trade's notional.
+
+    Returns ``(net_return_ratio, cost_pct, gross_return_ratio)``.
+    Ratios are decimal (0.013 = 1.3%); cost_pct is in percentage points
+    (0.75 = 0.75%) — same unit as ``_cost_pct`` and ``PathReturn.cost_pct``.
+    """
+    if entry_price <= 0:
+        return 0.0, 0.0, 0.0
+    gross = exit_price / entry_price - 1.0
+    cost = _cost_pct(entry_price, size, entry_date)
+    net = gross - cost / 100.0
+    return net, cost, gross
+
+
 def path_return_as_dict(
     trades: Trades,
     bars: list,

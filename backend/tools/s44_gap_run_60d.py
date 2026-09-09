@@ -10,10 +10,11 @@ Inputs:
   - .vibe-research/baostock_kline_cache.json  (D+1 opens, 160MB)
   - backend/s44_verifier/  (B's verifier)
 
-Cost: COST=0.0070 (0.70% round-trip) per task spec.
-NOTE: the 14-day baseline.json used cost_pct=0.4 (0.40%, percent units); the
-60-day run uses a MORE conservative 0.70% per the task instruction. The
-comparison is therefore not cost-matched (disclosed in report).
+Cost: real per-trade cost from engine.accounting.gap_net_return (5 元 min
+COMMISSION_MIN_YUAN + STAMP_DUTY_PCT 0.05 + ROUND_TRIP_COST_PCT 0.70),
+scaled to each trade's notional (close_d × 100 shares). P0 fix: replaced
+flat 0.0070 ratio that only covered spread+slippage, missing the 5 元
+minimum commission floor that dominates for low-priced 首板.
 """
 from __future__ import annotations
 
@@ -35,13 +36,19 @@ from s44_verifier.recorder import (  # noqa: E402
     sha256_file,
 )
 from pit_store.store import SnapshotStore  # noqa: E402
+from engine.accounting import gap_net_return  # noqa: E402
 
 VR = ROOT / ".vibe-research"
 UNIVERSE = VR / "first_board_universe_baostock_60d.json"
 KLINE = VR / "baostock_kline_cache.json"
 GENE_DB = VR / "gene_scores.db"
 
-COST = 0.0070  # 0.70% round-trip (task spec; baseline.json used 0.40%)
+# P0 fix: replaced flat COST=0.0070 with real per-trade cost from
+# accounting.gap_net_return (5 元 min commission + stamp duty + slippage,
+# scaled to each trade's notional). The old flat 0.70% only covered
+# spread+slippage, missing the 5 元 minimum commission floor that dominates
+# for low-priced 首板 (e.g. 5 元 stock → commission alone = 2.0% round-trip).
+TRADE_SIZE = 100  # 1 手 = 100 股 (A-share minimum lot, conservative retail)
 FROZEN_COMMIT = "b4e7446"
 # data_snapshot_id computed at runtime (HIGH #2: composite universe+cache hash)
 
@@ -103,17 +110,21 @@ def calendar_next(calendar: list[str], date_str: str) -> str | None:
 
 
 def compute_gap_series(fbs, cache, idx_maps, calendar):
-    """For each (code, D, close) -> gap_return = open(D+1)/close - 1 - COST.
+    """For each (code, D, close) -> gap_net_return(open_next, close, cost).
+
+    P0 fix: cost is now per-trade from accounting.gap_net_return (5 元 min
+    commission + stamp duty + slippage), not a flat 0.70%.
 
     Fixes applied:
     - MEDIUM #3 date adjacency: bars[i+1]['date'] must == calendar_next(D)
     - LOW #9 volume guard: zero-volume bars are suspended (fake returns)
     - HIGH #2 adj-epoch check: cache close at D must match universe close_d
 
-    Returns (returns, dates, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mismatch).
+    Returns (returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mismatch).
     """
     returns: list[float] = []
     dates: list[str] = []
+    costs: list[float] = []
     n_unbuyable = 0
     n_no_code = 0
     n_bad_close = 0
@@ -184,13 +195,16 @@ def compute_gap_series(fbs, cache, idx_maps, calendar):
         if open_next is None or open_next <= 0:
             n_unbuyable += 1
             continue
-        gap = open_next / close_d - 1.0 - COST
+        gap, cost_pct, _gross = gap_net_return(
+            close_d, open_next, entry_date=d, size=TRADE_SIZE,
+        )
         returns.append(gap)
+        costs.append(cost_pct)
         dates.append(d)
-    return returns, dates, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mismatch
+    return returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mismatch
 
 
-def event_verdict(returns, dates, snap_id):
+def event_verdict(returns, dates, snap_id, round_trip_cost: float):
     arr = np.asarray(returns, dtype=float)
     v = verify(
         returns=arr,
@@ -199,7 +213,7 @@ def event_verdict(returns, dates, snap_id):
         dates=dates,
         frozen_commit=FROZEN_COMMIT,
         data_snapshot_id=snap_id,
-        round_trip_cost=COST,
+        round_trip_cost=round_trip_cost,
     )
     return v
 
@@ -286,7 +300,9 @@ def selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id):
             next_td = bars[i + 1]["date"]
         if open_next is None or open_next <= 0:
             continue
-        gap = open_next / close_d - 1.0 - COST
+        gap, _cost_pct, _gross = gap_net_return(
+            close_d, open_next, entry_date=d, size=TRADE_SIZE,
+        )
         gap_map[(code, d)] = gap
         next_td_map[(code, d)] = next_td
 
@@ -375,16 +391,20 @@ def main():
     snap_id = compute_composite_snapshot_id(UNIVERSE, KLINE)
     print(f"[snapshot] composite data_snapshot_id = {snap_id}")
 
-    returns, dates, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(
+    returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(
         fbs, cache, idx_maps, calendar
     )
     arr = np.asarray(returns, dtype=float)
+    costs_arr = np.asarray(costs, dtype=float)
     n = arr.size
+    cost_ratios = costs_arr / 100.0  # percentage points → ratio
+    avg_cost_ratio = float(cost_ratios.mean()) if n else 0.0
+    avg_cost_pct = float(costs_arr.mean()) if n else 0.0
     mean_pct = float(arr.mean()) * 100 if n else 0.0
-    net_mean_pct = mean_pct  # already cost-subtracted
-    gross_mean_pct = float((arr + COST).mean()) * 100 if n else 0.0
+    net_mean_pct = mean_pct  # already cost-subtracted (per-trade)
+    gross_mean_pct = float((arr + cost_ratios).mean()) * 100 if n else 0.0
     win_rate = float((arr > 0).mean()) if n else 0.0
-    gross_win = float(((arr + COST) > 0).mean()) if n else 0.0
+    gross_win = float(((arr + cost_ratios) > 0).mean()) if n else 0.0
     median_pct = float(np.median(arr)) * 100 if n else 0.0
     std_pct = float(arr.std(ddof=1)) * 100 if n > 1 else 0.0
     unique_dates = sorted(set(dates))
@@ -400,8 +420,9 @@ def main():
     print(f"unique dates (days_robust raw) = {days_robust}")
     print(f"date range            = {unique_dates[0] if unique_dates else '-'}"
           f" -> {unique_dates[-1] if unique_dates else '-'}")
+    print(f"avg cost % (real)     = {avg_cost_pct:.4f}  (min={float(costs_arr.min()):.4f} max={float(costs_arr.max()):.4f})")
     print(f"gross mean %          = {gross_mean_pct:.4f}")
-    print(f"net mean % (after {COST*100:.2f}% cost) = {net_mean_pct:.4f}")
+    print(f"net mean % (after real cost) = {net_mean_pct:.4f}")
     print(f"median net %         = {median_pct:.4f}")
     print(f"std %               = {std_pct:.4f}")
     print(f"net win_rate (>0)    = {win_rate:.4f}")
@@ -412,7 +433,7 @@ def main():
         print(f"naive pooled t-stat  = {t_naive:.4f}  (ref 14d baseline t=10.6549)")
 
     print("\n=== EVENT VERDICT (primary: is gap a real edge?) ===")
-    ev = event_verdict(returns, dates, snap_id)
+    ev = event_verdict(returns, dates, snap_id, round_trip_cost=avg_cost_ratio)
     print(f"status               = {ev.status}")
     print(f"edge_type            = {ev.edge_type}")
     print(f"tradeable            = {ev.tradeable}")
@@ -483,14 +504,16 @@ def main():
     gap_baseline = json.dumps({
         "returns": returns,
         "dates": dates,
-        "cost": COST,
+        "costs_pct": costs,
+        "avg_cost_pct": avg_cost_pct,
+        "trade_size": TRADE_SIZE,
         "n_picks": len(returns),
         "frozen_commit": FROZEN_COMMIT,
     }).encode("utf-8")
     gap_sid = store.put(
         source="gap_baseline_60d",
         data_date=None,
-        query_spec={"universe_snapshot_id": uni_sid, "cost": COST, "window_days": 60},
+        query_spec={"universe_snapshot_id": uni_sid, "cost_model": "accounting.gap_net_return", "trade_size": TRADE_SIZE, "window_days": 60},
         raw_bytes=gap_baseline,
         generator_commit=FROZEN_COMMIT,
     )
@@ -524,9 +547,11 @@ def main():
         params={
             "n_trials": 1,
             "edge_type": "event",
-            "cost": COST,
             "dimension_id": "overnight_gap",
-            "round_trip_cost": COST,
+            "cost_model": "accounting.gap_net_return",
+            "avg_cost_pct": avg_cost_pct,
+            "round_trip_cost": avg_cost_ratio,
+            "trade_size": TRADE_SIZE,
             "frozen_commit": FROZEN_COMMIT,
         },
         frozen_commit=FROZEN_COMMIT,
@@ -555,13 +580,14 @@ def main():
         print(f"n_comparisons        = {sv.n_comparisons}")
 
     print("\n=== COMPARISON TO 14-DAY NAIVE BASELINE ===")
-    print("14-day baseline.json (cost 0.40%):")
+    print("14-day baseline.json (flat cost 0.40%):")
     print("  N=899 mean=1.3345% net_mean=0.9345% t=10.6549 p_one_sided=0.0")
     print("  pos_ratio=0.5684 net_pos_ratio=0.5061 (14 days, 2026-07-28..08-14)")
-    print(f"60-day §44v2 (cost {COST*100:.2f}%):")
+    print(f"60-day §44v2 (real cost avg {avg_cost_pct:.4f}%):")
     print(f"  N={n} gross_mean={gross_mean_pct:.4f}% net_mean={net_mean_pct:.4f}%")
     print(f"  net_win_rate={win_rate:.4f} days_robust={ev.days_robust}")
-    print("NOTE: cost not matched (0.70% vs 0.40%); 60d more conservative.")
+    print("NOTE: 14d used flat 0.40%; 60d uses real per-trade cost (5 元 min commission")
+    print("  + stamp duty + slippage). Low-priced 首板 see higher cost (5 元 floor bites).")
     print("NOTE: 14d t=10.65 is NAIVE POOLED (inflates n); 60d uses day-clustered")
     print("  days_robust (honest effective n). Volume guard + date-adjacency applied.")
     print("DONE.")
