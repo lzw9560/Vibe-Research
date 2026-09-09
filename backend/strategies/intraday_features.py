@@ -321,6 +321,53 @@ def compute_all_trajectories(date: str,
     return [t for c in codes if (t := compute_seal_trajectory(date, c, db)) is not None]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# S176 R3 — 封单诚意补全 3 纯函数（复用 compute_trajectory 输入 snapshots）
+# 诚意强=slope>0 ∧ delta_ratio>0 ∧ volatility<0.2 ∧ break=0 ∧ drawdown<0.1（KG 因子 2）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_seal_delta_ratio(snapshots: list[dict[str, Any]]) -> float | None:
+    """净增减比 = (last - first) / first（正=封单增强，负=衰减）。
+
+    诚意强=delta_ratio>0。first=0/None/单点时返 None（防除零）。
+    """
+    amounts = [s.get("seal_amount") for s in snapshots if s.get("seal_amount") is not None]
+    if len(amounts) < 2 or not amounts[0]:
+        return None
+    return (amounts[-1] - amounts[0]) / amounts[0]
+
+
+def compute_seal_volatility(snapshots: list[dict[str, Any]]) -> float | None:
+    """封单波动率 = std / mean（高=演戏忽大忽小，诚意弱）。
+
+    诚意强=volatility<0.2（稳定）。mean=0 或 n<2 时返 None。
+    """
+    amounts = [float(s.get("seal_amount")) for s in snapshots if s.get("seal_amount") is not None]
+    n = len(amounts)
+    if n < 2:
+        return None
+    mean = sum(amounts) / n
+    if not mean:
+        return None
+    var = sum((a - mean) ** 2 for a in amounts) / n
+    return (var ** 0.5) / mean
+
+
+def compute_seal_drawdown(snapshots: list[dict[str, Any]]) -> float | None:
+    """峰值回撤 = (peak - current) / peak（0=无回撤，正=回撤）。
+
+    诚意强=drawdown<0.1。current=最后值。peak=0/空时返 None。
+    """
+    amounts = [s.get("seal_amount") for s in snapshots if s.get("seal_amount") is not None]
+    if not amounts:
+        return None
+    peak = max(amounts)
+    current = amounts[-1]
+    if not peak:
+        return None
+    return (peak - current) / peak
+
+
 if __name__ == "__main__":
     import sys
     d = sys.argv[1] if len(sys.argv) > 1 else "2026-08-14"

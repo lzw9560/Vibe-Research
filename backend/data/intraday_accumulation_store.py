@@ -127,6 +127,25 @@ _INDEX_AUCTION = (
     "CREATE INDEX IF NOT EXISTS idx_auct_date_ts ON intraday_auction_snapshots(date, ts)"
 )
 
+# S176 R4 — OFI 五档快照（独立 store，不喂 trade_journal；conditioning 数据收集器）
+_SCHEMA_OFI = """CREATE TABLE IF NOT EXISTS intraday_ofi_snapshots (
+    date TEXT NOT NULL,             -- YYYY-MM-DD（交易日）
+    ts TEXT NOT NULL,               -- 快照时间戳（分钟级 ISO）
+    code TEXT NOT NULL,             -- 6 位裸 code
+    ofi REAL,                       -- OFI 归一化 ∈ [-1, 1]（S176 R2，跨股可比）
+    ofi_abs REAL,                   -- OFI 绝对值 = Σbuy - Σsell（保留量级）
+    bid_ask_pressure REAL,          -- 盘口买压比 = Σbuy/Σsell（涨停 sell=0 cap 999）
+    buy_vols_json TEXT,             -- 五档买量 [vol1..vol5]（重算用，S088 范式）
+    sell_vols_json TEXT,            -- 五档卖量
+    seal_amount REAL,                -- 封单额（涨停股 sell=0 时 OFI 退化用，KG 因子 3）
+    regime TEXT,                     -- 大盘 regime（strong_trend/weak/bear，conditioning 分层用）
+    snapshot_at TEXT,
+    PRIMARY KEY (date, ts, code)
+)"""
+_INDEX_OFI = (
+    "CREATE INDEX IF NOT EXISTS idx_ofi_date_ts ON intraday_ofi_snapshots(date, ts)"
+)
+
 
 def _get_conn() -> sqlite3.Connection:
     """建库 + 建三表（幂等）+ 返连接。row_factory=Row。"""
@@ -141,6 +160,8 @@ def _get_conn() -> sqlite3.Connection:
     conn.execute(_INDEX_BAOSTOCK)
     conn.execute(_SCHEMA_AUCTION)
     conn.execute(_INDEX_AUCTION)
+    conn.execute(_SCHEMA_OFI)
+    conn.execute(_INDEX_OFI)
     return conn
 
 
@@ -456,6 +477,56 @@ def list_accumulation_dates() -> list[str]:
                ) ORDER BY date"""
         ).fetchall()
         return [r["date"] for r in rows]
+    finally:
+        conn.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# S176 R4 — OFI 五档快照（独立 store，不喂 trade_journal；conditioning 数据收集器）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def save_ofi(
+    date: str, ts: str, code: str,
+    ofi: float | None, ofi_abs: float | None, bid_ask_pressure: float | None,
+    buy_vols_json: str | None, sell_vols_json: str | None,
+    seal_amount: float | None, regime: str | None,
+) -> int:
+    """写单股 OFI 五档快照。幂等：PK(date, ts, code) INSERT OR REPLACE。
+
+    buy_vols_json/sell_vols_json 存原始五档量（重算用，S088 范式）。
+    seal_amount 涨停股用（sell=0 时 OFI 退化，KG 因子 3）。regime conditioning 分层用。
+    """
+    snap_at = datetime.now().isoformat(timespec="seconds")
+    conn = _get_conn()
+    try:
+        with _DB_LOCK:
+            conn.execute(
+                """INSERT OR REPLACE INTO intraday_ofi_snapshots
+                (date, ts, code, ofi, ofi_abs, bid_ask_pressure,
+                 buy_vols_json, sell_vols_json, seal_amount, regime, snapshot_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (date, ts, code, ofi, ofi_abs, bid_ask_pressure,
+                 buy_vols_json, sell_vols_json, seal_amount, regime, snap_at),
+            )
+            conn.commit()
+            return 1
+    finally:
+        conn.close()
+
+
+def load_ofi(start: str, end: str) -> list[dict[str, Any]]:
+    """读 OFI 快照（date ∈ [start, end]），按 date/ts/code 排序。"""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            """SELECT date, ts, code, ofi, ofi_abs, bid_ask_pressure,
+                      buy_vols_json, sell_vols_json, seal_amount, regime, snapshot_at
+               FROM intraday_ofi_snapshots
+               WHERE date >= ? AND date <= ?
+               ORDER BY date, ts, code""",
+            (start, end),
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

@@ -48,6 +48,27 @@ def seal_intraday_collect(payload: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def ofi_collect(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S176 R5 — 盘中 OFI 五档收集（cron `* 9-14 * * 1-5`）。
+
+    payload: {codes: [...], regime: str}（codes 来自 zt_pool/premarket，executor 调方提供；
+    生产 wiring 取 zt_pool 涨停股另接）。tencent fetch_raw（不封 IP 无限流）→
+    collect_ofi_for_codes → save_ofi（intraday_accumulation_store，不喂 trade_journal）。
+    返 {n_codes, n_collected, n_skipped}。
+    """
+    from engine.intraday_ofi_collector import collect_ofi_for_codes  # noqa: PLC0415
+    from vr_paths import last_trading_date_str  # noqa: PLC0415
+
+    codes = payload.get("codes") or []
+    if not codes:
+        return {"n_codes": 0, "n_collected": 0, "n_skipped": 0,
+                "note": "no codes in payload（生产 wiring 取 zt_pool 另接）"}
+    date = last_trading_date_str()
+    ts = _dt.now().strftime("%H:%M")
+    regime = payload.get("regime")
+    return collect_ofi_for_codes(codes, date, ts, regime)
+
+
 def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     """S167 盘中微结构周期快照——每 10min 快照 hithink 排名 + tencent 量比 +
     集合竞价 → 累积 DB。

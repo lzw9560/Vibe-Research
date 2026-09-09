@@ -57,6 +57,7 @@ class TaskExecutor:
             "intraday_auction_dense": self._execute_intraday_auction_dense,
             "baostock_5min_freeze": self._execute_baostock_5min_freeze,
             "trade_journal_daily": self._execute_trade_journal_daily,  # S175 R2 — 模拟盘闭环点火（BREAK-0 fix）
+            "ofi_collect": self._execute_ofi_collect,  # S176 R5 — 盘中 OFI 五档收集（conditioning 数据收集器）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -314,3 +315,8 @@ class TaskExecutor:
         """S175 R2 — 模拟盘闭环盘后跑（journal_recorder.run_daily 接 scheduler 点火）。"""
         from scheduler.executors.journal import trade_journal_daily
         return trade_journal_daily(payload)
+
+    def _execute_ofi_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S176 R5 — 盘中 OFI 五档收集（tencent fetch_raw → collect_ofi → save_ofi）。"""
+        from scheduler.executors.intraday import ofi_collect
+        return ofi_collect(payload)

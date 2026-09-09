@@ -203,6 +203,21 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 trade_journal_daily 已创建（cron 45 16 * * 0-4）")
 
+    # S176 R5：盘中 OFI 五档收集（conditioning 数据收集器，不喂 trade_journal）。
+    # 每 3 分钟盘中跑（9:00-14:59，A股盘中 9:30-11:30+13:00-15:00 近似覆盖）。
+    # tencent fetch_raw（不封 IP 无限流）→ collect_ofi_for_codes → save_ofi。
+    # codes 来自 payload（生产 wiring 取 zt_pool 涨停股另接）。
+    if "ofi_collect" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="ofi_collect",
+            description="S176 R5：盘中 OFI 五档收集（conditioning 数据收集器，独立 store 不喂 trade_journal）",
+            task_type="ofi_collect",
+            cron_expr="*/3 9-14 * * 1-5",  # 每 3 分钟盘中（9:00-14:59）
+            payload={},  # codes 生产 wiring 另接（zt_pool 涨停股）
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 ofi_collect 已创建（cron */3 9-14 * * 1-5）")
+
     # §44 60 天复验检查点（提醒任务）：周一 18:00 数 eastmoney_live 日数，达 60 →
     # 写 s066_60day_due.json + WARNING + notify_on_success 推送（通道未配则静默）。
     # 到点由人/会话跑 backfill --weather 查 lift；本任务只提醒不自动验证。

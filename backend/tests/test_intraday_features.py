@@ -261,3 +261,59 @@ class TestPersist:
             assert note == "60s粒度近似"
         finally:
             conn.close()
+
+
+class TestSealSincerityFunctions:
+    """S176 R3 — 封单诚意补全 3 纯函数（delta_ratio/volatility/drawdown）。
+
+    诚意强=slope>0 ∧ delta_ratio>0 ∧ volatility<0.2 ∧ break=0 ∧ drawdown<0.1（KG 因子 2）。
+    """
+
+    def test_delta_ratio_positive_increase(self):
+        from strategies.intraday_features import compute_seal_delta_ratio
+        snaps = [{"seal_amount": 100}, {"seal_amount": 150}, {"seal_amount": 200}]
+        assert compute_seal_delta_ratio(snaps) == pytest.approx(1.0, abs=0.01)  # (200-100)/100
+
+    def test_delta_ratio_negative_decrease(self):
+        from strategies.intraday_features import compute_seal_delta_ratio
+        snaps = [{"seal_amount": 200}, {"seal_amount": 100}]
+        assert compute_seal_delta_ratio(snaps) == pytest.approx(-0.5, abs=0.01)
+
+    def test_delta_ratio_single_point_or_empty_none(self):
+        from strategies.intraday_features import compute_seal_delta_ratio
+        assert compute_seal_delta_ratio([{"seal_amount": 100}]) is None
+        assert compute_seal_delta_ratio([]) is None
+
+    def test_delta_ratio_first_zero_none(self):
+        from strategies.intraday_features import compute_seal_delta_ratio
+        assert compute_seal_delta_ratio([{"seal_amount": 0}, {"seal_amount": 100}]) is None
+
+    def test_volatility_stable_low(self):
+        from strategies.intraday_features import compute_seal_volatility
+        snaps = [{"seal_amount": 100}, {"seal_amount": 101}, {"seal_amount": 100}]
+        v = compute_seal_volatility(snaps)
+        assert v is not None and v < 0.1  # 稳定，低波动
+
+    def test_volatility_high_theatrical(self):
+        from strategies.intraday_features import compute_seal_volatility
+        snaps = [{"seal_amount": 100}, {"seal_amount": 1000}, {"seal_amount": 50}]
+        v = compute_seal_volatility(snaps)
+        assert v is not None and v > 0.5  # 演戏忽大忽小
+
+    def test_volatility_empty_none(self):
+        from strategies.intraday_features import compute_seal_volatility
+        assert compute_seal_volatility([]) is None
+
+    def test_drawdown_no_retracement(self):
+        from strategies.intraday_features import compute_seal_drawdown
+        snaps = [{"seal_amount": 100}, {"seal_amount": 150}, {"seal_amount": 200}]
+        assert compute_seal_drawdown(snaps) == pytest.approx(0.0, abs=0.01)  # peak=current=200
+
+    def test_drawdown_retracement(self):
+        from strategies.intraday_features import compute_seal_drawdown
+        snaps = [{"seal_amount": 100}, {"seal_amount": 200}, {"seal_amount": 150}]
+        assert compute_seal_drawdown(snaps) == pytest.approx(0.25, abs=0.01)  # (200-150)/200
+
+    def test_drawdown_empty_none(self):
+        from strategies.intraday_features import compute_seal_drawdown
+        assert compute_seal_drawdown([]) is None
