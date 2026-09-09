@@ -595,7 +595,7 @@ def test_run_daily_forward_test_passes_pool_item_map(monkeypatch):
 
     # fetch_zt_pool 返回含 fbt 的涨停池（"c" 字段做 code）
     monkeypatch.setattr(
-        "strategies.first_board_filter.fetch_zt_pool",
+        "strategies.first_board.universe.fetch_zt_pool",
         lambda d: [{"c": "000001", "fbt": 93000, "p": 10.0, "lbc": 2, "n": "X"}],
     )
 
@@ -637,7 +637,7 @@ def test_run_daily_forward_test_degrades_when_fetch_zt_pool_fails(monkeypatch):
 
     def _boom(_d):
         raise RuntimeError("em_get 限流触发")
-    monkeypatch.setattr("strategies.first_board_filter.fetch_zt_pool", _boom)
+    monkeypatch.setattr("strategies.first_board.universe.fetch_zt_pool", _boom)
 
     captured: dict = {}
 
@@ -672,7 +672,7 @@ def test_run_daily_forward_test_filters_none_placeholder_no_crash(monkeypatch):
         last_zt_dates=[], zt_count_250d=3, date="2026-08-18",
     )
     monkeypatch.setattr("limitup_screener.data.load_gene_scores", lambda d: [gene])
-    monkeypatch.setattr("strategies.first_board_filter.fetch_zt_pool", lambda d: [])
+    monkeypatch.setattr("strategies.first_board.universe.fetch_zt_pool", lambda d: [])
 
     # score_candidates 返 "none" 占位（无 code key，模拟全候选被 hard_standards 滤掉）
     def _fake_score(cands, weather, funnel_type, trade_date=None, pool_item_map=None):

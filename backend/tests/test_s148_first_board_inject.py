@@ -19,9 +19,9 @@ class TestRunFirstBoardFilterInjectedPool(unittest.TestCase):
     def test_injected_pool_skips_fetch_zt_pool(self):
         from strategies.first_board_filter import run_first_board_filter
         injected = [{"c": "600001", "name": "测试股"}]
-        with mock.patch("strategies.first_board_filter.fetch_zt_pool") as mock_fetch, \
-             mock.patch("strategies.first_board_filter.rank_candidates", return_value=[]) as _mock_rank, \
-             mock.patch("strategies.first_board_filter.filter_first_board", return_value=[]) as _mock_ffb, \
+        with mock.patch("strategies.first_board.universe.fetch_zt_pool") as mock_fetch, \
+             mock.patch("strategies.first_board.scoring.rank_candidates", return_value=[]) as _mock_rank, \
+             mock.patch("strategies.first_board.universe.filter_first_board", return_value=[]) as _mock_ffb, \
              mock.patch("vr_paths.is_trading_day", return_value=True):
             result = run_first_board_filter("2026-09-03", pool=injected)
         mock_fetch.assert_not_called()  # 注入时不应再自取
@@ -29,9 +29,9 @@ class TestRunFirstBoardFilterInjectedPool(unittest.TestCase):
 
     def test_default_fetches_when_no_injection(self):
         from strategies.first_board_filter import run_first_board_filter
-        with mock.patch("strategies.first_board_filter.fetch_zt_pool", return_value=[]) as mock_fetch, \
-             mock.patch("strategies.first_board_filter.rank_candidates", return_value=[]) as _mock_rank, \
-             mock.patch("strategies.first_board_filter.filter_first_board", return_value=[]) as _mock_ffb, \
+        with mock.patch("strategies.first_board.universe.fetch_zt_pool", return_value=[]) as mock_fetch, \
+             mock.patch("strategies.first_board.scoring.rank_candidates", return_value=[]) as _mock_rank, \
+             mock.patch("strategies.first_board.universe.filter_first_board", return_value=[]) as _mock_ffb, \
              mock.patch("vr_paths.is_trading_day", return_value=True):
             run_first_board_filter("2026-09-03")
         mock_fetch.assert_called_once()  # 未注入 → 自取（向后兼容）
@@ -46,7 +46,7 @@ class TestAttachFirstBoardAnalysis(unittest.TestCase):
         cached = {"scored_candidates": [
             {"code": "600001", "scores": {"seal_time": 80}, "total": 75.0, "market_phase": "普通"}
         ]}
-        with mock.patch("strategies.first_board_filter.load_scores", return_value=cached):
+        with mock.patch("strategies.first_board.persistence.load_scores", return_value=cached):
             attach_first_board_analysis(cards, "2026-09-03")
         self.assertEqual(cards[0]["first_board_analysis"]["total"], 75.0)
         self.assertNotIn("first_board_analysis", cards[1])  # 非首板不加
@@ -54,14 +54,14 @@ class TestAttachFirstBoardAnalysis(unittest.TestCase):
     def test_no_cache_no_change(self):
         from strategies.first_board_filter import attach_first_board_analysis
         cards = [{"code": "600001"}]
-        with mock.patch("strategies.first_board_filter.load_scores", return_value={}):
+        with mock.patch("strategies.first_board.persistence.load_scores", return_value={}):
             attach_first_board_analysis(cards, "2026-09-03")
         self.assertNotIn("first_board_analysis", cards[0])
 
     def test_failure_does_not_crash(self):
         from strategies.first_board_filter import attach_first_board_analysis
         cards = [{"code": "600001"}]
-        with mock.patch("strategies.first_board_filter.load_scores", side_effect=RuntimeError("db")):
+        with mock.patch("strategies.first_board.persistence.load_scores", side_effect=RuntimeError("db")):
             attach_first_board_analysis(cards, "2026-09-03")  # 不崩
         self.assertNotIn("first_board_analysis", cards[0])
 

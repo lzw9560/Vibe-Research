@@ -328,7 +328,7 @@ class TestPreMarketPoolItemMap:
             {"c": "600001", "n": "stock_b", "lbc": 1, "hs": 5.0, "zdp": 9.8, "p": 10.5},
         ]
 
-        with patch("strategies.first_board_filter.fetch_zt_pool", return_value=mock_zt_pool):
+        with patch("strategies.first_board.universe.fetch_zt_pool", return_value=mock_zt_pool):
             with patch("sentiment_context.build_context") as mock_ctx:
                 mock_ctx.return_value = MagicMock(weather_state="晴天", source_date="2026-08-17")
                 # mock 其他依赖避免真实采集

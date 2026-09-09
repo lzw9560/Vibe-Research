@@ -210,7 +210,7 @@ class TestExcludeLayers:
         from strategies.first_board_filter import exclude_layer2_chip_structure
         # mock extract_chip_structure 返历史筹码（turnover_pct 字段名）
         monkeypatch.setattr(
-            "strategies.first_board_filter.extract_chip_structure",
+            "strategies.first_board.data_extract.extract_chip_structure",
             lambda code, date: {"turnover_pct": 35.0, "vol_ratio": 1.0, "amount": 5e8}
         )
 
@@ -234,7 +234,7 @@ class TestExcludeLayers:
         # 001: 20亿(>15亿旧阈值) ; 002: 5亿
         def mock_chip(code, date):
             return {"amount": 20e8 if code == "001" else 5e8, "turnover_pct": 8.0, "vol_ratio": 1.0}
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip)
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure", mock_chip)
 
         fbs = [
             _make_first_board(code="001", amount=20e8),  # 20亿 → 保留（不再硬剔）
@@ -251,7 +251,7 @@ class TestExcludeLayers:
         def mock_chip(code, date):
             return {"vol_ratio": 2.5 if code == "001" else 1.0,
                     "turnover_pct": 8.0, "amount": 5e8}
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip)
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure", mock_chip)
 
         fbs = [
             _make_first_board(code="001"),
@@ -266,7 +266,7 @@ class TestExcludeLayers:
         """extract_chip_structure 取不到（返空 dict）时不误剔（宁可放过不冤杀）。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
         # mock extract_chip_structure 返空（历史数据缺失）
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure",
                             lambda code, date: {})
 
         fbs = [_make_first_board(code="001", amount=1e8)]  # pool amount 1亿，正常
@@ -282,11 +282,11 @@ class TestExcludeLayers:
         from strategies.first_board_filter import exclude_layer3_market_env
         # mock _emotion 返正常情绪（max_boards=3, ladder 非空）
         monkeypatch.setattr(
-            "strategies.first_board_filter._emotion",
+            "strategies.first_board.universe._emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
         # mock _market_drop_pct 返沪深300 跌 2%（历史数据，无未来函数）
-        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct",
+        monkeypatch.setattr("strategies.first_board.exclusions._market_drop_pct",
                             lambda d: -2.0)
 
         fb = _make_first_board(code="001", industry="半导体")
@@ -305,13 +305,13 @@ class TestExcludeLayers:
         """
         from strategies.first_board_filter import exclude_layer3_market_env
         monkeypatch.setattr(
-            "strategies.first_board_filter._emotion",
+            "strategies.first_board.universe._emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
         # mock _market_drop_pct 返涨（非高风险）
-        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct", lambda d: 0.5)
+        monkeypatch.setattr("strategies.first_board.exclusions._market_drop_pct", lambda d: 0.5)
         # mock concept_blocks 返空 → 无题材
-        monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
+        monkeypatch.setattr("strategies.first_board.universe.concept_blocks", lambda c: {})
 
         # 只 1 只半导体，sector_count=1<2，无题材 → 保留（层3不剔除，改评分）
         fb = _make_first_board(code="001", industry="半导体")
@@ -326,13 +326,13 @@ class TestExcludeLayers:
         """同板块涨停<2 但有题材 → 保留（有题材支撑不剔）。"""
         from strategies.first_board_filter import exclude_layer3_market_env
         monkeypatch.setattr(
-            "strategies.first_board_filter._emotion",
+            "strategies.first_board.universe._emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
-        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct", lambda d: 0.5)
+        monkeypatch.setattr("strategies.first_board.exclusions._market_drop_pct", lambda d: 0.5)
         # mock concept_blocks 返有题材
         monkeypatch.setattr(
-            "strategies.first_board_filter.concept_blocks",
+            "strategies.first_board.universe.concept_blocks",
             lambda c: {"boards": [{"name": "芯片"}], "concept_tags": ["芯片"]}
         )
 
@@ -383,14 +383,14 @@ class TestScoreCandidate:
         """总分在 0-100 范围（新评分体系：11 维度，权重分层）。"""
         from strategies.first_board_filter import score_candidate
         # mock 所有维度数据源为缺失 → 核心维度 -1（不参与加权），保留维度 50
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure",
                             lambda code, date: {})
-        monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
+        monkeypatch.setattr("strategies.first_board.universe.concept_blocks", lambda c: {})
         monkeypatch.setattr("astock.ths_limit_up_pool", lambda d: [])
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
         monkeypatch.setattr("astock.announcements", lambda c, limit=10: [])
         monkeypatch.setattr("predict.features.fund_flow.fetch_northbound", lambda c, d=None: None)
-        monkeypatch.setattr("strategies.first_board_filter.em_zt_topic_pool",
+        monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool",
                             lambda *a, **kw: [])
 
         # candidate 无 first_seal/seal_amount/float_cap → 核心 4 维度 -1
@@ -411,7 +411,7 @@ class TestScoreCandidate:
         ]
         scores_map = {"001": 80.0, "002": 60.0, "003": 70.0}
         # 新签名 score_candidate(c, date, phase) → patch 匹配 3 参数
-        with patch("strategies.first_board_filter.score_candidate",
+        with patch("strategies.first_board.scoring.score_candidate",
                    lambda c, d, p="普通": {"code": c["code"], "name": c["name"],
                                            "scores": {}, "raw_values": {},
                                            "total": scores_map[c["code"]], "rank": 0,
@@ -483,7 +483,7 @@ class TestScoreCandidate:
         # 健康：换手8% + 量比1.0 + 成交5亿（mock 历史筹码）
         def mock_chip(code, date):
             return {"turnover_pct": 8.0, "vol_ratio": 1.0, "amount": 5e8}
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip)
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure", mock_chip)
 
         healthy = _make_first_board(code="001", amount=5e8)
         s_healthy, raw_healthy = score_dim4_chip(healthy, "20260818")
@@ -496,7 +496,7 @@ class TestScoreCandidate:
         # 松动：换手30% + 量比2.5 + 成交20亿
         def mock_chip2(code, date):
             return {"turnover_pct": 30.0, "vol_ratio": 2.5, "amount": 20e8}
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure", mock_chip2)
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure", mock_chip2)
 
         loose = _make_first_board(code="002", amount=20e8)
         s_loose, raw_loose = score_dim4_chip(loose, "20260818")
@@ -516,7 +516,7 @@ class TestDataMissingDegradation:
         """extract_chip_structure 取不到（返空 dict）时不误剔（宁可放过不冤杀）。"""
         from strategies.first_board_filter import exclude_layer2_chip_structure
         # mock extract_chip_structure 返空（历史 baostock 缓存缺失）
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure",
                             lambda code, date: {})
 
         # pool amount 1亿（<15亿不剔），筹码缺失 → 跳过换手/量比
@@ -531,13 +531,13 @@ class TestDataMissingDegradation:
         # _emotion 抛异常 → emotion={} → max_boards=None, ladder_broken=True
         def boom(d):
             raise RuntimeError("情绪数据故障")
-        monkeypatch.setattr("strategies.first_board_filter._emotion", boom)
+        monkeypatch.setattr("strategies.first_board.universe._emotion", boom)
         # _market_drop_pct 返 None（baostock 失败内部 try/except 降级返 None，不抛）
-        monkeypatch.setattr("strategies.first_board_filter._market_drop_pct",
+        monkeypatch.setattr("strategies.first_board.exclusions._market_drop_pct",
                             lambda d: None)
         # concept_blocks 返有题材 → 避免孤板剔除，确保走完流程
         monkeypatch.setattr(
-            "strategies.first_board_filter.concept_blocks",
+            "strategies.first_board.universe.concept_blocks",
             lambda c: {"boards": [{"name": "芯片"}], "concept_tags": ["芯片"]}
         )
 
@@ -559,9 +559,9 @@ class TestDataMissingDegradation:
         """
         from strategies.first_board_filter import rank_candidates
         # mock 所有数据源缺失
-        monkeypatch.setattr("strategies.first_board_filter.extract_chip_structure",
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure",
                             lambda code, date: {})
-        monkeypatch.setattr("strategies.first_board_filter.concept_blocks", lambda c: {})
+        monkeypatch.setattr("strategies.first_board.universe.concept_blocks", lambda c: {})
         monkeypatch.setattr("astock.ths_limit_up_pool", lambda d: [])
         # dragon_tiger_board 返空（无龙虎榜记录）→ score_dim2 降级 50
         monkeypatch.setattr("astock.dragon_tiger_board", lambda c: {})
@@ -570,7 +570,7 @@ class TestDataMissingDegradation:
         # em_zt_topic_pool 返空 → score_dim1 涨停池空，same_industry_count=0
         # 但 candidate.industry="半导体"存在 → score_dim1 返 40（非 50）
         # 用 industry=None 的 candidate 让 score_dim1 返 50（无 industry→中性）
-        monkeypatch.setattr("strategies.first_board_filter.em_zt_topic_pool",
+        monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool",
                             lambda *a, **kw: [])
 
         cands = [_make_first_board(code="001", industry=None),
@@ -593,7 +593,7 @@ class TestDataMissingDegradation:
         from strategies import first_board_filter as fbf
 
         # 隔离落盘
-        monkeypatch.setattr(fbf, "_SCORES_DIR", tmp_path)
+        monkeypatch.setattr("strategies.first_board.persistence._SCORES_DIR", tmp_path)
 
         # mock 涨停池：2 只首板 + 1 只连板
         pool = [
@@ -601,24 +601,24 @@ class TestDataMissingDegradation:
             _make_pool_item(code="000002", lbc=1, hybk="半导体"),
             _make_pool_item(code="000003", lbc=2, hybk="半导体"),
         ]
-        monkeypatch.setattr(fbf, "em_zt_topic_pool", lambda *a, **kw: pool)
+        monkeypatch.setattr("strategies.first_board.universe.em_zt_topic_pool", lambda *a, **kw: pool)
 
         # mock extract_chip_structure 返历史筹码（不触发层2剔除）
         def mock_chip(code, date):
             return {"turnover_pct": 8.0, "vol_ratio": 1.0, "amount": 5e8}
-        monkeypatch.setattr(fbf, "extract_chip_structure", mock_chip)
+        monkeypatch.setattr("strategies.first_board.data_extract.extract_chip_structure", mock_chip)
 
         # mock _emotion 正常
         monkeypatch.setattr(
-            fbf, "_emotion",
+            "strategies.first_board.universe._emotion",
             lambda d: {"max_boards": 3, "ladder": [{"boards": 2, "count": 5}]}
         )
         # mock _market_drop_pct 涨（非高风险，历史数据无未来函数）
-        monkeypatch.setattr(fbf, "_market_drop_pct", lambda d: 0.5)
+        monkeypatch.setattr("strategies.first_board.exclusions._market_drop_pct", lambda d: 0.5)
 
         # mock concept_blocks 有题材（避免孤板剔除）
         monkeypatch.setattr(
-            fbf, "concept_blocks",
+            "strategies.first_board.universe.concept_blocks",
             lambda c: {"boards": [{"name": "芯片"}], "concept_tags": ["芯片"]}
         )
 
