@@ -7,6 +7,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from config import default_config
+from utils.safe_convert import safe_float as _safe_float  # P2 DRY: 统一 safe_float
 
 from notification.notification_noise import (
     NotificationNoiseDecision,
@@ -41,26 +42,6 @@ from notification.senders.slack_sender import SlackSender
 from notification.senders.astrbot_sender import AstrbotSender
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_float(value: Any) -> Optional[float]:
-    """Best-effort float conversion; handles `"3.2%"` and `"1,234"` shapes."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-    text = str(value).strip().replace(",", "")
-    if text.endswith("%"):
-        text = text[:-1].strip()
-    if not text:
-        return None
-    try:
-        return float(text)
-    except (TypeError, ValueError):
-        return None
 
 
 if TYPE_CHECKING:
