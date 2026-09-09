@@ -70,6 +70,55 @@ def _is_etf(code: str) -> bool:
     return code.startswith(("51", "15"))
 
 
+def _baostock_etf_hist(code: str) -> list[dict]:
+    """baostock ETF 历史（sh.512890 / sz.159xxx）—— 东财 push2delay 历史端点挂时的备选源。
+
+    baostock 不封 IP（vs 东财 push2delay 连接被拒），支持 ETF/fund 代码 + qfq 前复权。
+    实测 512890 返 09-08/09-09 bar（kline cache stale 缺这两天时可用）。
+    返 [{date, open, high, low, close}]；失败返 []。
+    """
+    try:
+        import baostock as bs  # noqa: PLC0415
+        from datetime import datetime  # noqa: PLC0415
+    except ImportError:
+        _logger.warning("bars_provider: baostock 不可用，ETF %s baostock fallback 跳过", code)
+        return []
+    # code format: 51xxxx → sh.51xxxx, 15xxxx → sz.15xxxx
+    prefix = "sh." if code.startswith("5") else "sz."
+    bs_code = prefix + code
+    try:
+        bs.login()
+        end = datetime.now().strftime("%Y-%m-%d")
+        rs = bs.query_history_k_data_plus(
+            bs_code, "date,open,high,low,close",
+            start_date="2020-01-01", end_date=end,
+            frequency="d", adjustflag="2",  # 2=qfq 前复权
+        )
+        if rs.error_code != "0":
+            _logger.warning("bars_provider: baostock ETF %s query 失败: %s", code, rs.error_msg)
+            return []
+        rows: list[dict] = []
+        while (rs.error_code == "0") and rs.next():
+            d = rs.get_row_data()
+            try:
+                rows.append({
+                    "date": str(d[0]),
+                    "open": float(d[1]), "high": float(d[2]),
+                    "low": float(d[3]), "close": float(d[4]),
+                })
+            except (TypeError, ValueError, IndexError):
+                continue
+        return rows
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("bars_provider: baostock ETF %s 异常: %s", code, e)
+        return []
+    finally:
+        try:
+            bs.logout()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 class KlineCacheBarsProvider:
     """composite bars_provider——journal_recorder 注入的生产 bars 源。
 
@@ -95,24 +144,33 @@ class KlineCacheBarsProvider:
         惰性导入 akshare（重依赖，不挡启动）。取数失败返 []（fetch_etf_hist
         内部已 try/except，此处再防 ImportError）。
 
+        **baostock fallback（S175 live 验证发现东财 push2delay 历史端点 Connection aborted）**：
+        fetch_etf_hist 返空时（东财端点挂/IP 封），fallback baostock（不封 IP，支持 ETF qfq）。
+
         **规范化（spec grill SH6）**：fetch_etf_hist 返 [{date, close, ret}] 无
         'open' 键——Executor T1OpenFill 读 bars[idx+1]['open']（fill_policies.py:78，
         _bar_get 默认返 0.0）→ entry_f=0.0 → 全 unbuyable → floor 拿不到 MTM 记录。
         ETF 净值口径四价相等（无日内波动，open=high=low=close），规范化补 open/high/low。
+        baostock 已含 open/high/low，规范化只补缺失键。
         """
+        raw: list[dict] = []
         try:
             from tools.fetch_etf_tracking import fetch_etf_hist  # noqa: PLC0415
+            raw = fetch_etf_hist(code)
         except ImportError:
-            _logger.warning("bars_provider: fetch_etf_hist 不可用，ETF %s 返空", code)
-            return []
-        raw = fetch_etf_hist(code)
+            _logger.warning("bars_provider: fetch_etf_hist 不可用，ETF %s 走 baostock fallback", code)
+        # 东财 push2delay 历史端点挂 → baostock fallback（不封 IP）
+        if not raw:
+            raw = _baostock_etf_hist(code)
         # 规范化：补 open/high/low = close（ETF 净值口径四价相等），过滤 close 缺失/0 的坏 bar
         out: list[dict] = []
         for b in raw:
             close = b.get("close")
             if not close:
                 continue
-            out.append({**b, "open": close, "high": close, "low": close})
+            if "open" not in b:
+                b = {**b, "open": close, "high": close, "low": close}
+            out.append(b)
         return out
 
     @classmethod

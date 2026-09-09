@@ -71,6 +71,8 @@ class TestDispatch:
         from engine.bars_provider import KlineCacheBarsProvider
         monkeypatch.setattr(
             "tools.fetch_etf_tracking.fetch_etf_hist", lambda code: [])
+        monkeypatch.setattr(
+            "engine.bars_provider._baostock_etf_hist", lambda code: [])  # baostock 也挂
         assert KlineCacheBarsProvider()("512890") == []
 
     def test_missing_cache_file_stock_returns_empty(self, tmp_path):
@@ -88,6 +90,26 @@ class TestDispatch:
         bars = KlineCacheBarsProvider()("510300")
         assert called == ["510300"]
         assert bars[0]["close"] == 0.5
+
+    def test_etf_baostock_fallback_when_fetch_hist_empty(self, tmp_path, monkeypatch):
+        """fetch_etf_hist 返空（东财端点挂）→ baostock fallback（不封 IP，支持 ETF）。"""
+        from engine.bars_provider import KlineCacheBarsProvider
+        monkeypatch.setattr(
+            "tools.fetch_etf_tracking.fetch_etf_hist", lambda code: [])  # 东财挂
+        monkeypatch.setattr(
+            "engine.bars_provider._baostock_etf_hist",
+            lambda code: [{"date": "2026-09-09", "open": 1.20, "high": 1.21, "low": 1.19, "close": 1.21}])
+        bars = KlineCacheBarsProvider()("512890")
+        assert len(bars) == 1
+        assert bars[0]["close"] == 1.21
+        assert bars[0]["open"] == 1.20  # baostock 已含 open/high/low，规范化不覆盖
+
+    def test_etf_both_sources_empty_returns_empty(self, tmp_path, monkeypatch):
+        """fetch_etf_hist + baostock 都空 → []（graceful degrade）。"""
+        from engine.bars_provider import KlineCacheBarsProvider
+        monkeypatch.setattr("tools.fetch_etf_tracking.fetch_etf_hist", lambda code: [])
+        monkeypatch.setattr("engine.bars_provider._baostock_etf_hist", lambda code: [])
+        assert KlineCacheBarsProvider()("512890") == []
 
     def test_etf_normalization_multi_bar_and_filters_bad(self, tmp_path, monkeypatch):
         """多 bar 规范化补 open/high/low + close 缺失/0 的坏 bar 过滤。"""
