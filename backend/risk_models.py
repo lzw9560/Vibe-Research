@@ -129,7 +129,16 @@ async def calculate_base_risk(code: str) -> tuple[float, str]:
 
 
 def calculate_flow_adjustment(capital_flow: dict) -> float:
-    """根据资金流数据计算风险调整值。"""
+    """根据资金流数据计算风险调整值。
+
+    fund-flow-verdict bug1：data_status 非 ok 时返 0.0（不喂 ±20）。跨源降级
+    （sina_fallback 口径差异）/stale（carry-forward 陈旧）/missing（断源）时
+    signal 不可靠，喂 ±20 是有害方向偏差（正净流入→risk 降低→放大追高陷阱）。
+    stale 路径已 signal=0.0（:773），此 gate 扩到 cross_source + missing 全覆盖。
+    """
+    # 非 ok（degraded/missing）→ 不喂 ±20 方向偏差，返 0.0 中性
+    if capital_flow.get("data_status", "ok") != "ok":
+        return 0.0
     signal = capital_flow.get("capital_flow_signal", 0)
     if not isinstance(signal, (int, float)):
         return 0.0
@@ -810,7 +819,15 @@ def _get_realtime_capital_flow(code: str) -> dict:
     large_net = float(latest.get("large_net", 0) or 0)
 
     # 计算信号强度：以近 120 日主力净流入绝对值的最大值归一化到 [-1, +1]
-    max_abs = max((abs(float(h.get("main_net", 0) or 0)) for h in history), default=1.0)
+    # fund-flow-verdict bug2：max_abs 不跨源混算（eastmoney.py:487 docstring 承诺）。
+    # cross_source 时按源分离——用东财行算 max_abs（口径一致归一化），无东财行
+    # （全新浪降级）则用新浪行（单源不混算）。原 max(遍历含 sina 行) 是假承诺。
+    if cross_source:
+        _em_rows = [h for h in history if h.get("source") != "sina_fallback"]
+        max_abs_rows = _em_rows if _em_rows else history
+    else:
+        max_abs_rows = history
+    max_abs = max((abs(float(h.get("main_net", 0) or 0)) for h in max_abs_rows), default=1.0)
     if max_abs <= 0:
         max_abs = 1.0
     signal = max(-1.0, min(1.0, main_net / max_abs))

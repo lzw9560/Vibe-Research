@@ -962,10 +962,41 @@ def test_realtime_capital_flow_cross_source_and_carryforward_both_degraded(isola
 
 
 # ===========================================================================
+# fund-flow-verdict bug1：calculate_flow_adjustment gate data_status
+# ===========================================================================
+
+
+def test_calculate_flow_adjustment_degraded_returns_zero():
+    """bug1：data_status 非 ok（degraded/missing）→ 返 0.0（不喂 ±20 方向偏差）。
+
+    正净流入→负 adjustment→risk 降低→"更安全"是追高陷阱；跨源/陈旧/断源时
+    signal 不可靠，喂 ±20 是有害方向偏差。gate 非 ok 返 0.0。
+    """
+    # degraded（cross_source）
+    cf_degraded = {"capital_flow_signal": 0.8, "data_status": "degraded"}
+    assert risk_models.calculate_flow_adjustment(cf_degraded) == 0.0
+    # missing（断源）
+    cf_missing = {"capital_flow_signal": -0.5, "data_status": "missing"}
+    assert risk_models.calculate_flow_adjustment(cf_missing) == 0.0
+
+
+def test_calculate_flow_adjustment_ok_feeds_signal():
+    """bug1 对照组：data_status='ok' → 正常算 adjustment（正 signal→负 adjustment 降 risk）。
+
+    保留原行为：ok 时 signal 仍喂 ±20（方向偏差是设计层非 bug 层，gate 只阻止
+    不可靠数据喂偏差，不改变 ok 时的 risk 模型逻辑）。
+    """
+    cf_ok_pos = {"capital_flow_signal": 0.5, "data_status": "ok"}
+    assert risk_models.calculate_flow_adjustment(cf_ok_pos) == -10.0
+    cf_ok_neg = {"capital_flow_signal": -0.5, "data_status": "ok"}
+    assert risk_models.calculate_flow_adjustment(cf_ok_neg) == 10.0
+
+
+# ===========================================================================
 # S125 R1：portfolio-price-or-zero-defeats-s121 —— 反吞 None 诚实化 +
 # position_advisor 跳 degraded（承重链闭合）
 # 承重链：portfolio.py:147 `price=model.price or 0.0` 反吞 S121(mappers.py:69)
-# None→0.0 → mv=0/pnl=-100% → position_advisor_v2:618 pnl_pct=-100.0 truthy 直通
+# None→0.0 → mv=0/pnl=-100% → position_advisor advise_holdings pnl_pct=-100.0 truthy 直通
 # → :633 layer3 → :351 `_HARD_STOP_PCT(-5.0)` → false close advisory + 前端伪全亏。
 # 修复：price is None → row degraded+字段 None；totals 任一 degraded 即 degraded；
 # position_advisor 读 data_status=degraded 跳止损层返 hold（不喂伪 -100% 给 layer）。
@@ -978,7 +1009,7 @@ def test_portfolio_price_none_marks_degraded_not_fake_loss(monkeypatch):
     + price/market_value/pnl/pnl_pct=None，非旧 `or 0.0` 造伪 mv=0/pnl=-100%。
 
     旧 portfolio.py:147 `price = model.price or 0.0` 反吞 S121(mappers.py:69) 的 None→0.0
-    → mv=0/pnl=-cv/pnl_pct=-100% → position_advisor_v2:618 `pnl_pct=-100.0 or 0.0` truthy
+    → mv=0/pnl=-cv/pnl_pct=-100% → position_advisor advise_holdings `pnl_pct=-100.0 or 0.0` truthy
     直通 :633 layer3 → :351 `_HARD_STOP_PCT(-5.0)` → false close advisory + 前端伪全亏。
     修复：price is None → row 标 degraded + 字段 None（不 or 0.0 造伪 -100%）。
     """
@@ -1048,7 +1079,7 @@ def test_advise_holdings_degraded_skips_stop_loss_no_false_close(monkeypatch):
     直通）→ :633 layer3 → :351 `pnl_pct<=_HARD_STOP_PCT(-5.0)` → close（伪止损）。
     修复：读 data_status=degraded → 跳 layer1/2/3，返 hold+reason（不基于伪 -100% 触发 close）。
     """
-    from strategies import position_advisor_v2 as adv
+    from strategies import position_advisor as adv
     adv.clear_caches()  # 隔离 winrate/kline 模块级 TTL 缓存
 
     import portfolio as pf

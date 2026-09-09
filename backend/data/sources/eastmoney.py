@@ -532,7 +532,14 @@ def _sina_fund_flow_fallback(code: str, num: int = 120) -> list[dict]:
     接口：MoneyFlow.ssl_qsfx_lscjfb（四档细分齐全：超大/大/中/小单净流入）
     单位：元（与东财一致）
     无需认证；IP 限流建议间隔 ≥0.2s（本函数是 fallback 低频路径，不做额外限流）
+
+    fund-flow-verdict bug3：接线 sina_fund_flow 熔断器（原裸 requests.get 是防封
+    盲区——sina.py:31 已建 sina_kline breaker 但本函数未接线）。OPEN 时 fast-fail
+    返 []（降级路径返空，上游 stock_fund_flow_120d 落回 [] → missing 诚实返空）。
     """
+    breaker = get_breaker("sina_fund_flow")
+    if not breaker.allow_request():
+        return []  # 熔断中 fast-fail（降级路径返空，上游落回 missing 诚实返空）
     import json as _json
 
     prefix = "sh" if code.startswith(("6", "9")) else "sz"
@@ -552,7 +559,9 @@ def _sina_fund_flow_fallback(code: str, num: int = 120) -> list[dict]:
         start, end = text.index("["), text.rindex("]")
         data = _json.loads(text[start:end + 1])
     except Exception:
+        breaker.record_failure()
         return []
+    breaker.record_success()
 
     rows = []
     for item in data:
