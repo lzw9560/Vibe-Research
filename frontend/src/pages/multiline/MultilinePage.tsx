@@ -29,7 +29,7 @@ const COLUMNS: readonly StrategyColumnDef[] = [
     windowLabel: "D+1 开盘 → D+4 path",
     // §44v1 教训：此窗口测 selection 全否，但隔夜 gap（真 edge）未折进——非"整体无 edge"
     windowNote:
-      "§44v1 框架口径。此窗口测 selection 全否，但隔夜 gap（真 edge）未折进——非"整体无 edge"。",
+      `§44v1 框架口径。此窗口测 selection 全否，但隔夜 gap（真 edge）未折进——非"整体无 edge"。`,
     honestLabel:
       "S168 12 harness 全 falsified/exploratory — breakout 证否，打板 selection 无 validated edge，edge 待盘中验证",
     accent: "border-l-red-500/40",
@@ -40,9 +40,9 @@ const COLUMNS: readonly StrategyColumnDef[] = [
     subtitle: "event 层（S169 + S170）",
     windowLabel: "隔夜 gap D收→D+1开 / 摘帽后中线 path",
     windowNote:
-      "gap = robust_edge 60d（t=4.12）待复验 · 摘帽 underpowered",
+      "gap 扣成本 net 负（60d real cost -0.48%，memory gap-edge-net-negative）· 摘帽 underpowered",
     honestLabel:
-      "S169 PEAD gap robust_edge 60d（t=4.12）待复验 · S170 摘帽 5 verdict underpowered",
+      "S169 PEAD gap 扣成本 net 负（60d real cost，同源 gap）· S170 摘帽 5 verdict underpowered",
     accent: "border-l-amber-500/40",
   },
   {
