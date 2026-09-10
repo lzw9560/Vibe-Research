@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { router } from "./router";
+import { CurrentStockProvider } from "./stores/currentStock";
 import "./index.css";
 
 // S013 T11：注入 QueryClientProvider（TanStack Query）——管 server state（缓存/去重/后台刷新），
@@ -23,7 +24,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <CurrentStockProvider>
+          <RouterProvider router={router} />
+        </CurrentStockProvider>
         <Toaster position="bottom-right" theme="dark" richColors closeButton duration={3500} />
       </QueryClientProvider>
     </ErrorBoundary>
