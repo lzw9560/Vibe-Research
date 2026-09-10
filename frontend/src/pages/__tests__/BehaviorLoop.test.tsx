@@ -118,8 +118,8 @@ describe("BehaviorLoop (S050 W0)", () => {
 
   it("disclaimer 呈现（Disclaimer 组件默认文案 + 数据 disclaimer 字段）", () => {
     renderAt();
-    // Disclaimer 组件的固定文案
-    expect(screen.getByText(/不推荐个股/)).toBeInTheDocument();
+    // Disclaimer 组件的固定文案（S010/S017 弱合规降级：删旧"不推荐个股"硬免责墙，改"历史统计特征，市场有风险"轻量提醒）
+    expect(screen.getByText(/历史统计特征，市场有风险/)).toBeInTheDocument();
   });
 
   it("loading → Skeleton（不崩）", () => {
