@@ -1,6 +1,6 @@
 # Spec: S181 — 趋势波段臂（B 臂，替代搁置 ash-mcp）
 
-> 状态：草案
+> 状态：已实现（2026-09-11，骨架 653d83e + TDD b234446 全绿）
 > 作者：lzw9560  日期：2026-09-10
 > 关联：S172-红利低波指数复制臂（A 臂 floor 范式）；S175-模拟盘自洽闭环（多臂框架+PaperPortfolio）；S173-TradeJournal闭环（journal_recorder _process_* 范式）；expert-round-portfolio-overlay（#2 趋势波段臂设计）；expert-round-opensource-practitioner（动量 A 股无效纠偏）；gap-edge-net-negative-after-cost（gap 唯一 edge 破灭，趋势替代短线方向）
 >
