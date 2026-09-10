@@ -38,7 +38,8 @@ export const router = createBrowserRouter([
       { path: "/intel", element: lazyEl(() => import("@/pages/Intel"), "Intel") },
       { path: "/sectors", element: lazyEl(() => import("@/pages/Sectors"), "Sectors") },
       { path: "/sectors/:key", element: lazyEl(() => import("@/pages/SectorDetail"), "SectorDetail") },
-      { path: "/portfolio", element: lazyEl(() => import("@/pages/Portfolio"), "Portfolio") },
+      // S179 Phase 2 R2.4: /portfolio → PortfolioPage（四维 cockpit：持仓+风险+健康+PB-ROE）。旧 Portfolio.tsx 保留 Phase 3 删
+      { path: "/portfolio", element: lazyEl(() => import("@/pages/portfolio/PortfolioPage"), "PortfolioPage") },
       { path: "/stock-data", element: lazyEl(() => import("@/pages/StockData"), "StockData") },
       // S179 Phase 1: 高价值新页（/market 首屏 cockpit + /screener 选股器）
       { path: "/market", element: lazyEl(() => import("@/pages/market/MarketPage"), "MarketPage") },
@@ -56,7 +57,8 @@ export const router = createBrowserRouter([
       { path: "/limitup/seats", element: lazyEl(() => import("@/pages/limitup/SeatEngine"), "SeatEngine") },
       { path: "/limitup/premarket", element: lazyEl(() => import("@/pages/limitup/PremarketSelection"), "PremarketSelection") },
       { path: "/recommendation", element: lazyEl(() => import("@/pages/Recommendation")) },
-      { path: "/advisory", element: lazyEl(() => import("@/pages/Advisory")) },
+      // S179 Phase 2 R2.5: /advisory → AdvisoryPage（三区 cockpit）。旧 Advisory.tsx 保留 Phase 3 删
+      { path: "/advisory", element: lazyEl(() => import("@/pages/advisory/AdvisoryPage"), "AdvisoryPage") },
       { path: "/strategy-signals", element: lazyEl(() => import("@/pages/StrategySignals")) },
       { path: "/backtest", element: lazyEl(() => import("@/pages/Backtest")) },
       { path: "/risk-dashboard", element: lazyEl(() => import("@/pages/RiskDashboard")) },
@@ -96,6 +98,9 @@ export const router = createBrowserRouter([
       { path: "/journal", element: lazyEl(() => import("@/pages/Journal"), "Journal") },
       // S171: 价值因子月度验证看板（低 PE 价值溢价 §44v2 验证，UI 先行 mock，真 verdict 待 long_value_run.py）
       { path: "/value-verdict", element: lazyEl(() => import("@/pages/S171ValueVerdict"), "S171ValueVerdict") },
+      // S179 Phase 2: 盘中+研究新页
+      { path: "/multiline", element: lazyEl(() => import("@/pages/multiline/MultilinePage"), "MultilinePage") },
+      { path: "/review", element: lazyEl(() => import("@/pages/review/ReviewPage"), "ReviewPage") },
     ],
   },
 ]);
