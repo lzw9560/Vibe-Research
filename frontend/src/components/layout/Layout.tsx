@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useDarkMode";
-import { NAV_GROUPS, APP_VERSION, REPO_URL, SUB_TABS } from "./navigation";
+import { NAV_GROUPS, DEFAULT_EXPANDED_GROUP, APP_VERSION, REPO_URL, SUB_TABS } from "./navigation";
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -15,7 +15,7 @@ export function Layout() {
   const toggle = () => setTheme(dark ? "light" : "dark");
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [expandedGroup, setExpandedGroup] = useState<string>("市场总览");
+  const [expandedGroup, setExpandedGroup] = useState<string>(DEFAULT_EXPANDED_GROUP);
 
   useEffect(() => {
     localStorage.setItem("vr-sidebar", collapsed ? "collapsed" : "expanded");
@@ -32,7 +32,7 @@ export function Layout() {
         return group.name;
       }
     }
-    return "市场总览";
+    return DEFAULT_EXPANDED_GROUP;
   };
 
   useEffect(() => {
