@@ -60,6 +60,7 @@ import reflection as reflect_layer
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
 from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
+from routers import intraday_ofi as intraday_ofi_router  # S178：OFI 盘中数据只读看板
 from routers import coach as coach_router  # S064：盯盘教练
 from routers import debate as debate_router  # main：多空辩论 + 反思审计
 from routers import prediction_ledger_router as prediction_ledger_router_mod
@@ -283,6 +284,7 @@ app.include_router(prediction_ledger_router_mod.router)  # S061：预测账本
 app.include_router(kline_history.router)
 app.include_router(advisory.router)
 app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
+app.include_router(intraday_ofi_router.router)  # S178：OFI 盘中数据只读看板
 app.include_router(coach_router.router)  # S064：盯盘教练
 app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
 app.include_router(notes_router.router)  # 投研记录笔记（CRUD + SQLite 落盘）

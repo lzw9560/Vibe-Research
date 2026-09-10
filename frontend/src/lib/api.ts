@@ -2,6 +2,7 @@
 // S013 T6：按域拆分——types(10-866)/scheduled(868-913)/workflow(915-944) 移至 lib/api/，
 // 本文件留 client re-export + downloadReport + api 端点对象。import 路径 @/lib/api 不变（零行为变更）。
 import { ApiError, authHeaders, request, get } from "./api/client";
+import type { OfiResponse } from "@/lib/intraday-ofi-contract";
 import type {
   IndexQuote, MarketOverview, ShortTermEmotion, TurnoverTop, GlobalIndex, GlobalStock, HkCashflow,
   RadarData, PortfolioData, Valuation, ValPercentile, Financials, Announcement, Quote,
@@ -306,4 +307,7 @@ export const api = {
     get<ClosedLoopResponse>(`/journal/closed-loop?limit=${limit}`),
   journalDrawdownStatus: () =>
     get<DrawdownStatusResponse>("/journal/drawdown-status"),
+  // S178: OFI 盘中数据只读看板（read-only，非信号）。
+  intradayOfi: (date: string, code?: string, limit = 2000) =>
+    get<OfiResponse>(`/intraday/ofi?date=${date}${code ? `&code=${code}` : ""}&limit=${limit}`),
 };

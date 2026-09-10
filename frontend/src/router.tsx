@@ -67,6 +67,8 @@ export const router = createBrowserRouter([
       { path: "/workflow/pre-market", element: <Navigate to="/workflow?view=today" replace /> },
       { path: "/behavior-loop", element: lazyEl(() => import("@/pages/BehaviorLoop")) },
       { path: "/workflow/intraday", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },
+      // S178: OFI 盘中数据只读看板（read-only，非信号）
+      { path: "/workflow/intraday/ofi", element: lazyEl(() => import("@/pages/workflow/OfiDashboardPage")) },
       { path: "/workflow/coach", element: lazyEl(() => import("@/pages/workflow/IntradayCoach")) },
       { path: "/workflow/alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },
       { path: "/workflow/post-market", element: <Navigate to="/workflow?view=review" replace /> },
