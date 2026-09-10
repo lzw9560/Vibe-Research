@@ -1,6 +1,6 @@
 # Spec: S182 — PEAD 中线 event edge per-trade real cost 重审
 
-> 状态：草案
+> 状态：已实现（2026-09-10）
 > 作者：lzw9560  日期：2026-09-10
 > 关联：S169（PEAD event edge 首跑 flat cost）、gap 60d/120d/regime 三重复验（扣 real cost net 负）、accounting._cost_pct（5元最低佣金+印花税+滑点）
 

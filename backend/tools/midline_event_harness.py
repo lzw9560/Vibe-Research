@@ -36,8 +36,8 @@ def build_return_series(
     kline_cache: dict,
     calendar: list[str],
     horizon: int,
-    cost_pct: float = 0.0070,
-) -> tuple[list[float], list[str], dict]:
+    cost_pct: float | None = 0.0070,
+) -> tuple[list[float], list[str], dict, list[float]]:
     """构建 event edge return series（decimal 制，扣 cost）。
 
     return = exit_close / entry_open - 1.0 - cost_pct
@@ -52,10 +52,11 @@ def build_return_series(
     """
     if not calendar:
         return [], [], {"n_events": len(events), "n_valid": 0, "n_out_of_range": 0,
-                         "n_no_entry": 0, "n_no_exit": 0, "n_halted": 0}
+                         "n_no_entry": 0, "n_no_exit": 0, "n_halted": 0}, []
     cache_min, cache_max = calendar[0], calendar[-1]
     returns: list[float] = []
     dates: list[str] = []
+    costs: list[float] = []
     n_out_of_range = n_no_entry = n_no_exit = n_halted = 0
 
     for ev in events:
@@ -109,9 +110,17 @@ def build_return_series(
         if exit_close <= 0:
             n_halted += 1
             continue
-        ret = exit_close / entry_open - 1.0 - cost_pct
+        if cost_pct is None:
+            from engine.accounting import _cost_pct  # noqa: PLC0415
+            cp_pp = _cost_pct(entry_open, 100.0, entry_date)
+            cp_dec = cp_pp / 100.0
+        else:
+            cp_dec = cost_pct
+            cp_pp = cost_pct * 100.0
+        ret = exit_close / entry_open - 1.0 - cp_dec
         returns.append(ret)
         dates.append(pub_date)
+        costs.append(cp_pp)
 
     guards = {
         "n_events": len(events),
@@ -121,7 +130,7 @@ def build_return_series(
         "n_no_exit": n_no_exit,
         "n_halted": n_halted,
     }
-    return returns, dates, guards
+    return returns, dates, guards, costs
 
 
 def run_event_verdict(
@@ -131,7 +140,7 @@ def run_event_verdict(
     kline_cache: dict,
     calendar: list[str],
     horizon: int,
-    cost: float = 0.0070,
+    cost: float | None = 0.0070,
     frozen_commit: str,
     n_comparisons: int = 1,
     params: dict | None = None,
@@ -142,16 +151,20 @@ def run_event_verdict(
     edge_type="event" 不传 survivors/universe（避免 category mismatch）。
     verify event 分支 day_clustered_t_test + p_bonf/p_bh（grill #3 多重比较校正）。
     """
-    returns, dates, guards = build_return_series(
+    returns, dates, guards, costs = build_return_series(
         events, kline_cache, calendar, horizon, cost,
     )
+    if cost is None and costs:
+        avg_cost_ratio = sum(costs) / len(costs) / 100.0
+    else:
+        avg_cost_ratio = cost if cost is not None else 0.0070
     return wire_verdict(
         line_id=line_id,
         returns=returns,
         edge_type="event",
         dates=dates,
         frozen_commit=frozen_commit,
-        round_trip_cost=cost,
+        round_trip_cost=avg_cost_ratio,
         n_comparisons=n_comparisons,
         script="tools/midline_event_harness.py",
         params={"horizon": horizon, **guards, **(params or {})},

@@ -31,7 +31,7 @@ from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402
 from tools.midline_event_harness import run_event_verdict  # noqa: E402
 
 HORIZONS = [1, 5, 10, 15, 20]
-COST = 0.0070  # decimal，非 0.70 百分比（与 gap run decimal 制一致）
+COST = None  # S182: per-trade real cost（accounting._cost_pct 5元 min+印花+滑点），非 flat 0.0070
 N_COMPARISONS = 15  # 3 arms × 5 horizons（BH K=15 多重比较校正）
 
 
