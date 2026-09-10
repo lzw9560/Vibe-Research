@@ -8,7 +8,7 @@
 import { Badge } from "@/components/ui/Badge";
 import {
   CandidateScoreTable, StrategyMatchBadge,
-} from "./FirstBoardPipeline";
+} from "./first-board-pipeline/CandidateScoreTable";
 import type { FirstBoardCandidate, FirstBoardCandidatesResponse } from "@/lib/api";
 
 // 8 战法清单（与后端 strategy_funnel_registry 对齐——同 HonestyBanner §44 8 战法）
