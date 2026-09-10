@@ -46,9 +46,9 @@ def test_trade_journal_daily_calls_orchestrator_three_steps(tmp_path, monkeypatc
     mock_recorder.settle_pending_breakout.assert_called_once()
     mock_recorder.run_daily.assert_called_once()
     mock_recorder.update_floor_mtm.assert_called_once()
-    # run_daily 用 arms=['floor','breakout']（DEFAULT_ARMS=2 非 4，grill C4）
+    # run_daily 用 arms=['floor','breakout','trend']（S181 trend 臂进 cron paper_track，2026-09-11 用户决策）
     _, kwargs = mock_recorder.run_daily.call_args
-    assert kwargs.get("arms") == ["floor", "breakout"]
+    assert kwargs.get("arms") == ["floor", "breakout", "trend"]
     # 返结构
     assert "settled_pending" in result
     assert "arms" in result

@@ -39,7 +39,7 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     target_date = payload.get("target_date")  # None → run_daily default prev_trading_date_str
     settled = recorder.settle_pending_breakout()
-    results = recorder.run_daily(target_date=target_date, arms=["floor", "breakout"])
+    results = recorder.run_daily(target_date=target_date, arms=["floor", "breakout", "trend"])
     mtm = recorder.update_floor_mtm(target_date=target_date)
     # S175 R10/R11：PaperPortfolio.equity() 落盘供 R9 推荐 sizing（R9↔R10 接线 SH1 fix）+
     # drawdown_breaker 接生产路径（从 API 层移 executor，overlay stub deferred）。
