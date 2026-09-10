@@ -6,7 +6,7 @@ Culmination of A (baostock backfill) + B (S161 verifier). Answers the user's
 north-star: is the overnight gap a real edge?
 
 Inputs:
-  - .vibe-research/first_board_universe_baostock_60d.json  (A's output, 4076 首板)
+  - .vibe-research/first_board_universe_baostock_120d.json  (A's output, 4076 首板)
   - .vibe-research/baostock_kline_cache.json  (D+1 opens, 160MB)
   - backend/s44_verifier/  (B's verifier)
 
@@ -39,7 +39,7 @@ from pit_store.store import SnapshotStore  # noqa: E402
 from engine.accounting import gap_net_return  # noqa: E402
 
 VR = ROOT / ".vibe-research"
-UNIVERSE = VR / "first_board_universe_baostock_60d.json"
+UNIVERSE = VR / "first_board_universe_baostock_120d.json"
 KLINE = VR / "baostock_kline_cache.json"
 GENE_DB = VR / "gene_scores.db"
 

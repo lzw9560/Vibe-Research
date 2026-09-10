@@ -12,7 +12,7 @@ limit 按板块：ST 5% / 创业科创(300/301/688) 20% / 北交(4xx/8xx/920) 30
 baostock 无 IP 限制（无需防封）。东财用文件 cache（已落盘，无网络）；
 ths 走 data.sources.eastmoney.ths_limit_up_pool（_ths_get 限流 + ths breaker）；
 hithink 走 data.sources.hithink_src.limit_up_pool（circuit_breaker + 有界重试）。
-输出 JSON 落 .vibe-research/first_board_universe_baostock_60d.json。
+输出 JSON 落 .vibe-research/first_board_universe_baostock_120d.json。
 
 用法（backend/ cwd）：
   backend/.venv/bin/python backend/tools/derive_first_board_baostock.py
@@ -35,9 +35,9 @@ BACKEND = REPO / "backend"
 CACHE = DATA / "baostock_kline_cache.json"
 EM_POOL_HIST = DATA / "zt_pool_hist_cache.json"
 EM_HISTORY_DB = DATA / "zt_history.db"
-OUT = DATA / "first_board_universe_baostock_60d.json"
+OUT = DATA / "first_board_universe_baostock_120d.json"
 END_DATE = "2026-09-03"  # 60-day window 末（2026-09-04 仅 149 bars 不完整，排除）
-WINDOW_SIZE = 60
+WINDOW_SIZE = 120
 TOL = 0.005  # 涨停价容差（分）
 PCT_PREFILTER_SLACK = 0.6  # pctChg 粗筛下限 slack（10%板<9.4 排除 …）
 
