@@ -13,9 +13,11 @@ if str(backend_dir) not in sys.path:
 
 @pytest.fixture
 def mock_pp():
-    """Mock PaperPortfolio，equity() 返 100000。"""
+    """Mock PaperPortfolio，equity() 返 100000，final_size floor N/A→1.0 返 arm_size。"""
     pp = MagicMock()
     pp.equity.return_value = 100000.0
+    # S180: final_size(arm, arm_size, lift_multiplier=None) → floor N/A cap=1.0 → 返 arm_size
+    pp.final_size.side_effect = lambda arm, arm_size, lift_multiplier=None: arm_size
     return pp
 
 
