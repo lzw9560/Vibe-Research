@@ -31,10 +31,11 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: "/", element: <Navigate to="/market" replace /> },
-      { path: "/daily-review", element: lazyEl(() => import("@/pages/DailyReview"), "DailyReview") },
-      { path: "/daily-review/emotion", element: lazyEl(() => import("@/pages/DailyReview/pages/EmotionDetail"), "EmotionDetail") },
-      { path: "/daily-review/sectors", element: lazyEl(() => import("@/pages/DailyReview/pages/SectorDetail"), "SectorDetail") },
-      { path: "/daily-review/review", element: lazyEl(() => import("@/pages/DailyReview/pages/ReviewDetail"), "ReviewDetail") },
+      // S179 R3.3: DailyReview 删，功能已迁 /market。旧 URL redirect 保兼容
+      { path: "/daily-review", element: <Navigate to="/market" replace /> },
+      { path: "/daily-review/emotion", element: <Navigate to="/market" replace /> },
+      { path: "/daily-review/sectors", element: <Navigate to="/market" replace /> },
+      { path: "/daily-review/review", element: <Navigate to="/market" replace /> },
       { path: "/intel", element: lazyEl(() => import("@/pages/Intel"), "Intel") },
       { path: "/sectors", element: lazyEl(() => import("@/pages/Sectors"), "Sectors") },
       { path: "/sectors/:key", element: lazyEl(() => import("@/pages/SectorDetail"), "SectorDetail") },
