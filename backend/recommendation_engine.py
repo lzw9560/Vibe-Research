@@ -255,7 +255,9 @@ def get_multi_arm_recommendations(
         )
         batches = build_position_batches(one_shot=True)
         n_batches = max(len(batches), 1)
-        floor_size = equity * FLOOR_ALLOCATION / n_batches
+        # S180 R4: floor_size 读 PaperPortfolio.final_size 含 lift cap（floor N/A→1.0，接口接线）
+        floor_gross = equity * FLOOR_ALLOCATION
+        floor_size = pp.final_size("floor", floor_gross / n_batches)
         recs.append(MultiArmRecommendation(
             arm="floor", honest_label=ArmHonestLabel.EXTERNALLY_VALIDATED,
             action_type="batch_buy", code=ETF_CODE, name="红利低波 ETF",

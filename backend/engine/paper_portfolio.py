@@ -53,13 +53,17 @@ class PaperPortfolio:
         return self._breaker.full_status()
 
     def final_size(
-        self, arm: str, arm_size: float, lift_multiplier: float = 1.0,
+        self, arm: str, arm_size: float, lift_multiplier: float | None = None,
     ) -> float:
         """委托 DrawdownBreaker.final_size（H5 三层乘积 arm×portfolio×lift）。
 
-        lift_multiplier 默认 1.0（§44 lift cap 未接 trade_journal sizing 路径，grill C6）；
-        R3 enforce deferred 后接 lift_to_multiplier 动态算。
+        S180 R3: lift_multiplier 默认 None → 内部调 lift_for_arm(arm) 动态算
+        （用冻结 DIMENSION_LIFT_REGISTRY + lift_to_multiplier，days<60→×0.5）。
+        floor/gap/mock 臂 N/A → 1.0 cap 不作用。
         """
+        if lift_multiplier is None:
+            from candidate_funnel.evaluation import lift_for_arm  # noqa: PLC0415
+            lift_multiplier = lift_for_arm(arm)[0]
         return self._breaker.final_size(arm, arm_size, lift_multiplier)
 
 

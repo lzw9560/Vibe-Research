@@ -189,6 +189,40 @@ def lift_to_multiplier(
     return ("待复验", 1.0)
 
 
+# S180 R3: arm→dimension 映射 + lift_for_arm（用冻结 DIMENSION_LIFT_REGISTRY）
+# r3-enforce R8 搁置（path_lift 没臂读+forward_test 空表），但 R3-R4 sizing 接线独立有用
+# 让 ×0.5 cap 接 sizing 路径（当前默认 1.0 不咬）。前瞻基建，当前空转（breakout paper_track 不 sizing）
+DIM_ARM_MAP: dict[str, list[str] | None] = {
+    "breakout": ["breakout"],  # breakout 维度（days<60 → ×0.5）
+    "floor": None,      # N/A——指数复制非选股，lift 不作用 → 1.0
+    "gap": None,        # dead_arm → 不 sizing
+    "limitup": None,    # dormant mock
+    "trend": None,      # dormant mock
+}
+
+
+def lift_for_arm(arm: str) -> tuple[float, str]:
+    """按臂查对应维度 lift_to_multiplier 结果（用冻结 registry，S180 R3）。
+
+    返 (lift_multiplier, status_note)。N/A 臂（floor/gap/mock）返 (1.0, 'N/A')。
+    多维度取最保守（最低 multiplier）。
+    """
+    dims = DIM_ARM_MAP.get(arm)
+    if not dims:
+        return (1.0, "N/A cap 不作用（floor/gap/mock）")
+    multipliers = []
+    for dim_id in dims:
+        d = DIMENSION_LIFT_REGISTRY.get(dim_id)
+        if d is None:
+            continue
+        _, mult = lift_to_multiplier(d.lift, d.n, days_robust=d.days_robust)
+        multipliers.append((mult, d.dimension_id))
+    if not multipliers:
+        return (1.0, f"维度 {dims} 未在 registry")
+    mult, dim_id = min(multipliers, key=lambda x: x[0])
+    return (mult, f"{dim_id} 最保守")
+
+
 def _apply_evaluation_layer(
     cards: list, genes: dict, activity: dict, eff, date: str,
 ) -> tuple[list, dict]:
