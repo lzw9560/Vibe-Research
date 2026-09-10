@@ -36,6 +36,10 @@ export const NAV_GROUPS: NavGroup[] = [
     name: "交易台",
     icon: LayoutDashboard,
     tabs: [
+      // S179 Phase 1: /market 首屏 cockpit（替代 daily-review+intel+sectors 散布）
+      { to: "/market", label: "市场全景" },
+      // S178: OFI 盘中数据只读看板
+      { to: "/workflow/intraday/ofi", label: "OFI 看板" },
       // §11.3 → /market（daily-review + intel + sectors + sector-divergence + prediction + debate）
       { to: "/daily-review", label: "每日复盘" },
       { to: "/intel", label: "全球情报" },
@@ -51,6 +55,8 @@ export const NAV_GROUPS: NavGroup[] = [
     name: "选股",
     icon: Filter,
     tabs: [
+      // S179 Phase 1: /screener 选股器（filter+preset）
+      { to: "/screener", label: "选股器" },
       // §11.3 → /screener（candidates + value-funnel + limitup 5 子 + stock-data）
       { to: "/candidates", label: "候选池" },
       { to: "/value-funnel", label: "价值漏斗" },
@@ -68,6 +74,8 @@ export const NAV_GROUPS: NavGroup[] = [
     name: "个股",
     icon: TrendingUp,
     tabs: [
+      // S179 Phase 2: /multiline 三列战略总览
+      { to: "/multiline", label: "多策略总览" },
       // §11.3 → /strategy（strategy + backtest + strategy-signals + verifier-records + value-verdict）
       { to: "/strategy", label: "战法" },
       { to: "/backtest", label: "回测" },
@@ -95,6 +103,8 @@ export const NAV_GROUPS: NavGroup[] = [
     name: "复盘",
     icon: BookOpen,
     tabs: [
+      // S179 Phase 2: /review 复盘中心（行为模式+研报管理）
+      { to: "/review", label: "复盘中心" },
       // §11.3 → /review（my-reports + notes）
       // Phase 0 中间态从"投资管理"拆出；Phase 3 合回 /review
       { to: "/my-reports", label: "我的研报" },
