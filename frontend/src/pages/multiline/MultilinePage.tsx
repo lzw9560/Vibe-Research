@@ -40,9 +40,9 @@ const COLUMNS: readonly StrategyColumnDef[] = [
     subtitle: "event 层（S169 + S170）",
     windowLabel: "隔夜 gap D收→D+1开 / 摘帽后中线 path",
     windowNote:
-      "gap 扣成本 net 负（60d real cost -0.48%，memory gap-edge-net-negative）· 摘帽 underpowered",
+      "gap 60d 扣成本 net 负（-0.48% t=-3.79）但单 regime 不足定论，待 120d/250d+regime 分层复验",
     honestLabel:
-      "S169 PEAD gap 扣成本 net 负（60d real cost，同源 gap）· S170 摘帽 5 verdict underpowered",
+      "S169 PEAD gap 60d 扣成本 net 负待复验（单 regime 不足，同源成本偏差待重审）· S170 摘帽 5 verdict underpowered",
     accent: "border-l-amber-500/40",
   },
   {
