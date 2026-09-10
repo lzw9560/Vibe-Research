@@ -94,7 +94,7 @@ describe("StrategyPage (S093 T19)", () => {
   it("渲染返回工作流链接", () => {
     renderPage();
     const backLink = screen.getByText("返回工作流");
-    expect(backLink.closest("a")).toHaveAttribute("href", "/workflow");
+    expect(backLink.closest("a")).toHaveAttribute("href", "/review");
   });
 
   it("渲染战法战绩表——注册表条目全部出现", () => {

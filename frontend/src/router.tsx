@@ -68,17 +68,19 @@ export const router = createBrowserRouter([
       { path: "/sentiment/weather/history", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
       { path: "/sentiment/weather/strategy", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
       { path: "/sentiment/weather/fuse", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
-      { path: "/workflow", element: lazyEl(() => import("@/pages/Workflow")) },
+      { path: "/workflow", element: <Navigate to="/review" replace /> },
       { path: "/workflow/first-board", element: lazyEl(() => import("@/pages/workflow/FirstBoardPage")) },
-      { path: "/workflow/pre-market", element: <Navigate to="/workflow?view=today" replace /> },
+      { path: "/workflow/pre-market", element: lazyEl(() => import("@/pages/workflow/PreMarketBriefing")) },
       { path: "/behavior-loop", element: lazyEl(() => import("@/pages/BehaviorLoop")) },
       { path: "/workflow/intraday", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },
       // S178: OFI 盘中数据只读看板（read-only，非信号）
       { path: "/workflow/intraday/ofi", element: lazyEl(() => import("@/pages/workflow/OfiDashboardPage")) },
       { path: "/workflow/coach", element: lazyEl(() => import("@/pages/workflow/IntradayCoach")) },
       { path: "/workflow/alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },
-      { path: "/workflow/post-market", element: <Navigate to="/workflow?view=review" replace /> },
+      { path: "/workflow/post-market", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },
       { path: "/workflow/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },
+      // S179 R3.2: Workflow 容器解散，3 views 独立路由——selection（前瞻/选股）
+      { path: "/workflow/selection", element: lazyEl(() => import("@/pages/workflow/SelectionStageView"), "SelectionStageView") },
       // S090 战法 tab 404 修复：前向测试 + 阈值配置独立页（EntryCard 链接原指向 404）
       // S093 T20：/strategy 父路由（战法独立页），承接 S3 删的战法战绩折叠区
       { path: "/strategy", element: lazyEl(() => import("@/pages/strategy/StrategyPage")) },

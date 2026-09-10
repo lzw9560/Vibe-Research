@@ -102,7 +102,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
 
       {/* 标的状态 rail（S143，date=triplet.review，跨语境一致性） */}
       <div className="mb-4">
-        <CandidateStateRail date={date} />
+        <CandidateStateRail date={_date} />
       </div>
 
       {/* S092 R3a：过渡窗渐进填充占位横幅。

@@ -48,7 +48,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/prediction", label: "涨跌预测" },
       { to: "/debate", label: "多空辩论" },
       // §11.3 → /intraday（workflow 盘中）
-      { to: "/workflow", label: "工作流" },
+      // §11.3 → /review（workflow 容器解散 R3.2，3 views 独立路由）
+      { to: "/review", label: "复盘" },
     ],
   },
   {
@@ -182,7 +183,6 @@ export const SUB_TABS: Record<string, { key: string; label: string; to?: string 
     { key: "result", label: "回测结果" },
     { key: "winrate", label: "胜率趋势" },
   ],
-  "/workflow": [],  // S087：Workflow 内部 6-tab 自管（T-1/语境/盘前/盘中/盘后/战法），不渲染 Layout sub tab（避免 2 层 tab）
   "/metrics": [
     { key: "overview", label: "指标概览" },
     { key: "trends", label: "趋势分析" },

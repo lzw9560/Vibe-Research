@@ -47,7 +47,7 @@ export default function StrategyPage() {
     <div className="space-y-3 p-4">
       {/* 返回工作流 */}
       <Link
-        to="/workflow"
+        to="/review"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> 返回工作流

@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { usePreMarketBriefing } from "@/lib/query";
+import { usePreMarketBriefing, useDateTriplet } from "@/lib/query";
 import { PipelineFlow } from "@/components/pipeline/PipelineFlow";
 import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
 import { CollapsibleFold } from "@/components/ui/CollapsibleFold";
@@ -21,8 +21,11 @@ import { cn } from "@/lib/utils";
 
 type SubTab = "pipeline" | "breakout";
 
-export function SelectionStageView({ forward, urlDate, today }: { forward: string; urlDate?: string; today?: string }) {
-  const { data: briefing, isLoading: briefingLoading } = usePreMarketBriefing(urlDate ?? forward);
+export function SelectionStageView({ forward, urlDate, today }: { forward?: string; urlDate?: string; today?: string }) {
+  const { data: triplet } = useDateTriplet();
+  const _forward = forward ?? triplet?.forward ?? "";
+  const _today = today ?? triplet?.today ?? "";
+  const { data: briefing, isLoading: briefingLoading } = usePreMarketBriefing(urlDate ?? _forward);
   const { data: advisory } = useQuery({
     queryKey: ["advisory-summary"],  // S094 audit: advisory 是 latest（backend /advisory/summary 不支持 date），非 per-F
     queryFn: () => api.advisorySummary(5),
@@ -36,10 +39,10 @@ export function SelectionStageView({ forward, urlDate, today }: { forward: strin
   return (
     <>
       {/* rail（顶，常驻——标的状态摘要） */}
-      <CandidateStateRail date={today} />
+      <CandidateStateRail date={_today} />
 
       {/* 前置共享区（顶折叠——context，展开按需） */}
-      <PreSharedRegion F={urlDate ?? forward} briefing={briefing} />
+      <PreSharedRegion F={urlDate ?? _forward} briefing={briefing} />
 
       {/* 2 级导航：选股 pipeline | breakout 因子研究（breakout 降级研究，后续继续优化） */}
       <div className="flex gap-1 rounded-lg bg-muted/20 p-1">
@@ -63,9 +66,9 @@ export function SelectionStageView({ forward, urlDate, today }: { forward: strin
 
       {/* S146: 主视图——pipeline（2 列 + ④叉内CV） 或 breakout 研究（PremarketSelectionSection） */}
       {subtab === "pipeline" ? (
-        <PipelineFlow briefing={briefing} F={urlDate ?? forward} funnelLayers={funnelLayers} />
+        <PipelineFlow briefing={briefing} F={urlDate ?? _forward} funnelLayers={funnelLayers} />
       ) : (
-        <BreakoutResearchView forward={forward} />
+        <BreakoutResearchView forward={_forward} />
       )}
 
       {/* 后置共享区（底折叠——选后动作，降级；defaultOpen=false 修本末倒置） */}
