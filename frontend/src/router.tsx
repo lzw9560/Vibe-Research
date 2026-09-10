@@ -30,7 +30,7 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: "/", element: <Navigate to="/daily-review" replace /> },
+      { path: "/", element: <Navigate to="/market" replace /> },
       { path: "/daily-review", element: lazyEl(() => import("@/pages/DailyReview"), "DailyReview") },
       { path: "/daily-review/emotion", element: lazyEl(() => import("@/pages/DailyReview/pages/EmotionDetail"), "EmotionDetail") },
       { path: "/daily-review/sectors", element: lazyEl(() => import("@/pages/DailyReview/pages/SectorDetail"), "SectorDetail") },
@@ -40,7 +40,10 @@ export const router = createBrowserRouter([
       { path: "/sectors/:key", element: lazyEl(() => import("@/pages/SectorDetail"), "SectorDetail") },
       { path: "/portfolio", element: lazyEl(() => import("@/pages/Portfolio"), "Portfolio") },
       { path: "/stock-data", element: lazyEl(() => import("@/pages/StockData"), "StockData") },
-      { path: "/stock/:code", element: lazyEl(() => import("@/pages/StockDeep"), "StockDeep") },
+      // S179 Phase 1: 高价值新页（/market 首屏 cockpit + /screener 选股器）
+      { path: "/market", element: lazyEl(() => import("@/pages/market/MarketPage"), "MarketPage") },
+      { path: "/screener", element: lazyEl(() => import("@/pages/screener/ScreenerPage"), "ScreenerPage") },
+      { path: "/stock/:code", element: lazyEl(() => import("@/pages/stock/StockCockpit"), "StockCockpit") },
       { path: "/watchlist", element: lazyEl(() => import("@/pages/Watchlist"), "Watchlist") },
       { path: "/candidates", element: lazyEl(() => import("@/pages/Candidates"), "Candidates") },
       { path: "/value-funnel", element: lazyEl(() => import("@/pages/ValueFunnel"), "ValueFunnel") },
