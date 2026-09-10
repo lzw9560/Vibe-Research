@@ -1,10 +1,12 @@
-import { useLocation } from "react-router-dom";
-import { RefreshCw, Settings } from "lucide-react";
+import { type ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { RefreshCw, Settings, Cloud, History, Lightbulb, Zap } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { TabBar } from "@/components/ui/TabBar";
 import type { FuseRule, WeatherTimelineItem, WeatherStats, AuctionMetric, SealRiskMetric, FusePardonRecord } from "@/lib/api";
 import {
   useSentimentWeatherLatest,
@@ -23,6 +25,21 @@ import { STITimelineChart } from "@/components/sti/STITimelineChart";
 
 type TabId = "realtime" | "history" | "strategy" | "fuse";
 
+// S179 R3.5: 页内 TabBar 替代 Layout 二级 SUB_TABS（4 子路由切换）
+const SENTIMENT_TABS: { key: TabId; label: string; icon: ReactNode }[] = [
+  { key: "realtime", label: "实时天气", icon: <Cloud className="h-3.5 w-3.5" /> },
+  { key: "history", label: "历史趋势", icon: <History className="h-3.5 w-3.5" /> },
+  { key: "strategy", label: "策略建议", icon: <Lightbulb className="h-3.5 w-3.5" /> },
+  { key: "fuse", label: "熔断规则", icon: <Zap className="h-3.5 w-3.5" /> },
+];
+
+const TAB_ROUTE: Record<TabId, string> = {
+  realtime: "/sentiment/weather",
+  history: "/sentiment/weather/history",
+  strategy: "/sentiment/weather/strategy",
+  fuse: "/sentiment/weather/fuse",
+};
+
 // 5 分钟自动刷新——原 loadData 每 5 分钟 Promise.all 全量重拉，现拆为 7 个 hook
 // 各自 refetchInterval 5min，TanStack 会并行调度，效果与原 Promise.all 等价。
 const REFRESH_MS = 5 * 60 * 1000;
@@ -35,6 +52,11 @@ export default function SentimentWeather() {
     if (location.pathname.includes("/fuse")) return "fuse" as TabId;
     return "realtime" as TabId;
   })();
+
+  const navigate = useNavigate();
+  const switchTab = (k: string): void => {
+    navigate(TAB_ROUTE[k as TabId] ?? "/sentiment/weather");
+  };
 
   // T9：原 useState/useEffect + Promise.all + setInterval → 7 个 TanStack Query hook。
   // hook data 在 v5 下退化为 {}（与 Health.tsx 同源），按 S013 T9 规约就地窄→宽 cast。
@@ -315,6 +337,9 @@ export default function SentimentWeather() {
           </Button>
         </div>
       </div>
+
+      {/* Page-local TabBar (S179 R3.5: 替代 Layout 二级 TabBar) */}
+      <TabBar tabs={SENTIMENT_TABS} activeKey={activeTab} onChange={switchTab} />
 
       {/* Weather Hero */}
       <WeatherHero weather={weather ?? null} onRefresh={handleRefresh} refreshing={refreshing} />
