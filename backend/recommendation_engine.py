@@ -196,18 +196,20 @@ async def get_today_recommendations(limit: int = 20) -> List[StockRecommendation
 # ===========================================================================
 # S175 R9 — 多臂推荐（honest_label + 读 PaperPortfolio.equity() sizing，R9↔R10 接线 SH1）
 # ===========================================================================
-# 诚实承认：当前仅 floor 1 臂 actionable，breakout/limitup/trend/gap 返静态 honest_label
-# 卡非动态信号——为 1 actionable 臂建多臂框架是用户拉回的取舍，3/4 槽位是空标签（留插槽
+# 诚实承认：当前仅 floor 1 臂 actionable（推真金），breakout=§44_falsified / gap=dead_arm /
+# limitup=mock_not_ready / trend=exploratory（signal 骨架建 §44 未验 paper_track 不推真金）。
+# 为 1 actionable 臂建多臂框架是用户拉回的取舍，其余槽位是静态 honest_label（留插槽
 # 等 conditioning harness）。gene-only legacy（上方）§44 falsified，保留但标证否。
 
 from enum import Enum
 
 
 class ArmHonestLabel(str, Enum):
-    """多臂诚实标签（grill C7：falsified ≠ weak ≠ 待复验）。"""
+    """多臂诚实标签（grill C7：falsified ≠ weak ≠ 待复验 ≠ exploratory）。"""
     EXTERNALLY_VALIDATED = "externally_validated"  # 外部文献验证（floor 红利低波 9-12% 三重定论，非本系统 §44）
+    EXPLORATORY = "exploratory"  # signal 建但 §44 未验（trend 骨架，paper tracking 不推真金）
     SECTION44_FALSIFIED = "§44_falsified"  # §44 证否（breakout selection 无 edge）
-    MOCK_NOT_READY = "mock_not_ready"  # signal 生成器未建（limitup/trend）
+    MOCK_NOT_READY = "mock_not_ready"  # signal 生成器未建（limitup）
     DEAD_ARM = "dead_arm"  # falsified dead（gap，不推荐）
 
 
@@ -238,7 +240,7 @@ def get_multi_arm_recommendations(
 
     R9↔R10 接线（SH1 fix）：floor 仓位 sizing 读 PaperPortfolio.equity()（非空转）。
     breakout=§44_falsified 非 weak signal 非 underpowered_tracking（grill C7）。
-    gap dead_arm 不推荐（gate）。limitup/trend mock_not_ready。
+    gap dead_arm 不推荐（gate）。limitup mock_not_ready。trend exploratory（§44 未验 paper_track）。
     """
     from engine.paper_portfolio import PaperPortfolio  # noqa: PLC0415
     from engine.trade_journal import TradeJournal  # noqa: PLC0415
@@ -290,12 +292,31 @@ def get_multi_arm_recommendations(
             action_type="paper_track", note=f"stats 不可得: {e}",
         ))
 
-    # limitup/trend：mock_not_ready
-    for arm in ("limitup", "trend"):
+    # limitup：mock_not_ready（signal 生成器未建）
+    recs.append(MultiArmRecommendation(
+        arm="limitup", honest_label=ArmHonestLabel.MOCK_NOT_READY,
+        action_type="none", validated=False,
+        note="limitup signal 生成器未建（mock_entry=10.0 硬编），等 conditioning harness",
+    ))
+
+    # trend：EXPLORATORY（题材/政策趋势骨架建，§44 未验）paper tracking 不推真金
+    try:
+        agg = tj.aggregate_by_arm()
+        trend_stats = agg.get("trend", {})
         recs.append(MultiArmRecommendation(
-            arm=arm, honest_label=ArmHonestLabel.MOCK_NOT_READY,
-            action_type="none", validated=False,
-            note=f"{arm} signal 生成器未建（mock_entry=10.0 硬编），等 conditioning harness",
+            arm="trend", honest_label=ArmHonestLabel.EXPLORATORY,
+            action_type="paper_track",
+            coverage_rate=trend_stats.get("signal_coverage_rate") if isinstance(trend_stats, dict) else None,
+            days_tracked=trend_stats.get("n_days", 0) if isinstance(trend_stats, dict) else 0,
+            validated=False,
+            note="题材/政策趋势骨架（板块周期+资金流 composite，非动量避§44 falsified）；"
+                 "§44 未验；paper tracking 不推真金；"
+                 "zt 动量/新闻催化剂 S182/S183 deferred",
+        ))
+    except Exception as e:  # noqa: BLE001
+        recs.append(MultiArmRecommendation(
+            arm="trend", honest_label=ArmHonestLabel.EXPLORATORY,
+            action_type="paper_track", note=f"stats 不可得: {e}",
         ))
 
     # gap：dead_arm（不推荐）

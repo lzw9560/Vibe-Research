@@ -56,15 +56,21 @@ class TestMultiArmRecommendation:
         assert gap.honest_label == ArmHonestLabel.DEAD_ARM
         assert gap.action_type == "none"  # 不推荐
 
-    def test_limitup_trend_mock_not_ready(self, tmp_path, monkeypatch, mock_pp):
+    def test_limitup_mock_trend_exploratory(self, tmp_path, monkeypatch, mock_pp):
+        """limitup=mock_not_ready（signal 未建）；trend=exploratory（signal 骨架建 §44 未验 paper_track）。"""
         monkeypatch.setenv("VR_DATA_DIR", str(tmp_path))
         from recommendation_engine import get_multi_arm_recommendations, ArmHonestLabel
         with patch("strategies.index_replication_floor.build_position_batches", return_value=[]):
             recs = get_multi_arm_recommendations(paper_portfolio=mock_pp)
         arms = {r.arm: r for r in recs}
+        # limitup：signal 生成器未建 → mock_not_ready
         assert arms["limitup"].honest_label == ArmHonestLabel.MOCK_NOT_READY
-        assert arms["trend"].honest_label == ArmHonestLabel.MOCK_NOT_READY
         assert arms["limitup"].action_type == "none"
+        # trend：signal 骨架建 §44 未验 → exploratory paper_track
+        assert arms["trend"].honest_label == ArmHonestLabel.EXPLORATORY
+        assert arms["trend"].action_type == "paper_track"
+        assert arms["trend"].validated is False
+        assert "§44" in arms["trend"].note
 
     def test_floor_reads_equity_r10_wiring(self, tmp_path, monkeypatch, mock_pp):
         """R9↔R10 接线（SH1 fix）：floor sizing 读 PaperPortfolio.equity()（非空转）。"""

@@ -4,9 +4,10 @@
 **C1 orchestrator 模式**（非订阅）：journal_recorder 显式调各臂 signal 生成器
 → 构造 Trades → Executor.execute → accounting 算 return → 写 trade_journal。
 调用点：floor 臂在 build_position_batches 之后；breakout 臂在
-select_premarket_candidates 之后。journal_recorder 在 signal 生成器返回后接管。
+select_premarket_candidates 之后；trend 臂在 select_trend_candidates 之后。
+journal_recorder 在 signal 生成器返回后接管。
 
-**C8 Trades 不加字段**：signal_id (UUID) + arm 由 journal_recorder 录入
+**C8 Trades 不加字段**：signal_id (UUID) + arm 由 journal_recorder 彔入
 trade_journal 时赋值（journal_recorder 知道调了哪臂），不灌 Trades dataclass。
 trade_journal 表是 source of truth。
 
@@ -15,7 +16,8 @@ trade_journal 表是 source of truth。
 call path_return → 一次性取完整 PathReturn → 写 journal。
 
 **C2 成本分轨**：可平仓臂走 path_return(apply_cost=True)；gap 走 gap_net_return；
-floor 走 mark-to-market（C3/C6 不走 path_return）。
+floor 走 mark-to-market（C3/C6 不走 path_return）。trend 与 breakout 同属可平仓臂
+（path_return + stop/take/max_hold），仅 TREND_* params 不同。
 
 **H3 单位统一**：pnl_unit 固定 CNY。可平仓臂 net_pnl = return_pct/100 × notional；
 gap 臂 net_pnl = net_ratio × notional；floor 臂 unrealized_pnl = (close-entry)×shares。
@@ -41,12 +43,20 @@ from engine.decision import Trades, FILL_T_PLUS_1_OPEN, FILL_ACCEPTED
 _logger = logging.getLogger(__name__)
 
 #: 默认臂列表（orchestrator 顺序调用）。
-DEFAULT_ARMS: list[str] = ["floor", "breakout"]
+#: trend 臂（S181）接入——select_trend_candidates 已就绪，从 mock 升为可平仓实臂。
+DEFAULT_ARMS: list[str] = ["floor", "breakout", "trend"]
 
 #: breakout 臂 stop/take/max_hold 配置（premarket_selection HONEST_LABEL 制度）。
 BREAKOUT_STOP_PCT: float = -4.0
 BREAKOUT_TAKE_PCT: float = 8.0
 BREAKOUT_MAX_HOLD: int = 3
+
+#: trend swing 臂 stop/take/max_hold 配置（S181）。
+#: 趋势波段比 breakout 持仓更久——更宽 stop（容噪声）/更大 take（追趋势）/更长 max_hold。
+#: 初始值，待 trend_swing_arm spec grill 后校准。
+TREND_STOP_PCT: float = -7.0
+TREND_TAKE_PCT: float = 15.0
+TREND_MAX_HOLD: int = 10
 
 #: 默认 position size（股数，1 手=100 股）。
 DEFAULT_SIZE: float = 100.0
@@ -83,7 +93,7 @@ class JournalRecorder:
     ) -> dict:
         """每日盘后闭环管线（C1 orchestrator 顺序调用，非订阅）。
 
-        arms 默认 ['floor','breakout']；limitup/trend/gap mock。
+        arms 默认 ['floor','breakout','trend']；limitup/gap mock。
         返 {arm: {n_candidates, n_buyable, n_unbuyable, n_realized}}。
         """
         arms = arms or DEFAULT_ARMS
@@ -95,6 +105,7 @@ class JournalRecorder:
 
         # S175 R3：settle_pending 先重算昨日未平 'hold'（path_return T+1 guard 需 T+2+ bars）
         self.settle_pending_breakout()
+        self.settle_pending_trend()
 
         results: dict[str, Any] = {}
         for arm in arms:
@@ -103,9 +114,11 @@ class JournalRecorder:
                     results[arm] = self._process_floor(target_date)
                 elif arm == "breakout":
                     results[arm] = self._process_breakout(target_date)
+                elif arm == "trend":
+                    results[arm] = self._process_trend(target_date)
                 elif arm == "gap":
                     results[arm] = self._process_gap(target_date)
-                elif arm in ("limitup", "trend"):
+                elif arm == "limitup":
                     results[arm] = self._process_mock_arm(arm, target_date)
                 else:
                     results[arm] = {"status": "unknown_arm", "n_candidates": 0}
@@ -191,6 +204,78 @@ class JournalRecorder:
                     "gross_return_pct": pr.gross_return_pct,
                     "optimism_flag": "gap_through_unmodeled",
                     "settled_by": "settle_pending_breakout",
+                    "position_notional": round(position_notional, 2),
+                }),
+                created_at=pos.created_at,  # 保留原 created_at
+            )
+            self._journal.insert(record)  # INSERT OR REPLACE 同 signal_id 幂等
+            n_settled += 1
+        return {"n_pending": len(holds), "n_settled": n_settled}
+
+    # ── S181 settle_pending_trend（仿 settle_pending_breakout，换 TREND_* params）──
+
+    def settle_pending_trend(self) -> dict:
+        """S181 — 重算昨日未平 trend 'hold' 记录（仿 settle_pending_breakout）。
+
+        与 breakout 同属可平仓臂（path_return + stop/take/max_hold），仅 params 不同：
+        TREND_STOP_PCT/TREND_TAKE_PCT/TREND_MAX_HOLD 更宽（趋势波段容噪声/追趋势/持仓更久）。
+
+        逻辑同 settle_pending_breakout：query is_realized=0 arm='trend' exit_reason='hold'
+        → 重算 path_return(TREND_*) → 截断 max_hold 检测 → INSERT OR REPLACE 同 signal_id。
+        """
+        pending = self._journal.query_records(arm="trend", is_realized=0, is_dead_arm=0)
+        holds = [r for r in pending if r.exit_reason == "hold"]
+        n_settled = 0
+        for pos in holds:
+            if pos.entry_price is None:
+                continue
+            bars = self._bars_provider(pos.stock_code)
+            if not bars:
+                continue
+            trades = Trades(
+                code=pos.stock_code,
+                signal_date=pos.entry_date,
+                fill_type=FILL_T_PLUS_1_OPEN,
+                direction="long",
+                size=DEFAULT_SIZE,
+                entry_price=float(pos.entry_price),
+                fill_status=FILL_ACCEPTED,
+            )
+            pr = path_return(
+                trades, bars,
+                stop_pct=TREND_STOP_PCT,
+                take_profit_pct=TREND_TAKE_PCT,
+                max_hold_days=TREND_MAX_HOLD,
+                apply_cost=True,
+            )
+            if pr is None:
+                continue  # 仍 bars 不足，留 hold
+            # 截断检测：max_hold exit 且 bars 不足完整持仓期 → 留 hold（SH5 同 breakout）
+            if pr.exit_reason == "max_hold":
+                signal_idx = _find_signal_idx(bars, pos.entry_date)
+                if signal_idx is not None and signal_idx + 2 + TREND_MAX_HOLD > len(bars):
+                    continue  # 截断 max_hold，留 hold 等更多 bars
+            position_notional = float(pos.entry_price) * DEFAULT_SIZE
+            net_pnl = pr.return_pct / 100.0 * position_notional
+            record = JournalRecord(
+                signal_id=pos.signal_id,  # bypass .create()——复用原 id 做 INSERT OR REPLACE
+                arm="trend", stock_code=pos.stock_code,
+                entry_price=pos.entry_price, entry_date=pos.entry_date,
+                exit_price=pr.exit_price, exit_date=pr.exit_date,
+                exit_reason=pr.exit_reason,
+                net_pnl=round(net_pnl, 2),
+                cost_pct=pr.cost_pct, gross_return=pr.gross_return_pct,
+                is_realized=1,
+                fills_json=json.dumps({
+                    "won": pr.won,
+                    "return_pct": pr.return_pct,
+                    "exit_reason": pr.exit_reason,
+                    "exit_date": pr.exit_date,
+                    "exit_price": pr.exit_price,
+                    "cost_pct": pr.cost_pct,
+                    "gross_return_pct": pr.gross_return_pct,
+                    "optimism_flag": "gap_through_unmodeled",
+                    "settled_by": "settle_pending_trend",
                     "position_notional": round(position_notional, 2),
                 }),
                 created_at=pos.created_at,  # 保留原 created_at
@@ -294,6 +379,123 @@ class JournalRecorder:
                     "optimism_flag": "gap_through_unmodeled",
                     "raw_exit_reason": pr.exit_reason,
                     "position_notional": round(position_notional, 2),
+                }),
+            )
+            self._journal.insert(record)
+            n_realized += 1
+
+        return {
+            "n_candidates": len(candidates),
+            "n_buyable": n_buyable,
+            "n_unbuyable": n_unbuyable,
+            "n_realized": n_realized,
+        }
+
+    # ── trend 臂（可平仓臂，S181，仿 _process_breakout 换 TREND_* params）──────
+
+    def _process_trend(self, target_date: str) -> dict:
+        """trend swing 臂（S181）：select_trend_candidates → Trades → execute → path_return。
+
+        仿 _process_breakout，仅 signal 生成器与 stop/take/max_hold params 不同：
+        1. select_trend_candidates(target_date) → candidates（接口返 list[{code,name}]，
+           防御兼容 dataclass .code 与 dict["code"]——trend_swing_arm 接口未定时兜底）
+        2. 构造 Trades(code, signal_date, fill_type=t1_open, direction=long, size=100)
+           （C8：不带 signal_id/arm）
+        3. Executor.execute(T1OpenFill) → entry fill
+        4. 涨停买不到 → survivorship 过滤 → exit_reason='unbuyable'
+        5. accounting.path_return(TREND_*，apply_cost=True) → PathReturn
+        6. net_pnl = return_pct/100 × position_notional (CNY)
+        7. trade_journal.insert(is_realized=1)
+        """
+        from strategies.trend_swing_arm import select_trend_candidates  # noqa: PLC0415
+
+        candidates = select_trend_candidates(target_date)
+        n_unbuyable = 0
+        n_buyable = 0
+        n_realized = 0
+
+        for cand in candidates:
+            code = self._cand_code(cand)
+            if not code:
+                continue
+            bars = self._bars_provider(code)
+            if not bars:
+                continue
+
+            trades = Trades(
+                code=code,
+                signal_date=target_date,
+                fill_type=FILL_T_PLUS_1_OPEN,
+                direction="long",
+                size=DEFAULT_SIZE,
+            )
+            filled = self._executor.execute(trades, bars, T1OpenFill())
+
+            if not filled.is_accepted():
+                # survivorship 过滤：涨停买不到（A5）
+                record = JournalRecord.create(
+                    arm="trend", stock_code=code,
+                    entry_price=None, entry_date=target_date,
+                    exit_reason="unbuyable", is_realized=1,
+                    fills_json=json.dumps({
+                        "fill_status": filled.fill_status,
+                        "fill_reason": filled.fill_reason,
+                    }),
+                )
+                self._journal.insert(record)
+                n_unbuyable += 1
+                continue
+
+            n_buyable += 1
+            pr = path_return(
+                filled, bars,
+                stop_pct=TREND_STOP_PCT,
+                take_profit_pct=TREND_TAKE_PCT,
+                max_hold_days=TREND_MAX_HOLD,
+                apply_cost=True,
+            )
+            if pr is None:
+                # T+1 guard 或数据不足 → 仍录 entry，标 unrealized
+                record = JournalRecord.create(
+                    arm="trend", stock_code=code,
+                    entry_price=filled.entry_price, entry_date=target_date,
+                    exit_reason="hold", is_realized=0,
+                    fills_json=json.dumps({
+                        "fill_status": filled.fill_status,
+                        "optimism_flag": "path_return_none_t1_guard",
+                    }),
+                )
+                self._journal.insert(record)
+                continue
+
+            position_notional = float(filled.entry_price) * DEFAULT_SIZE
+            net_pnl = pr.return_pct / 100.0 * position_notional
+            gross_pnl = pr.gross_return_pct / 100.0 * position_notional
+
+            record = JournalRecord.create(
+                arm="trend", stock_code=code,
+                entry_price=filled.entry_price, entry_date=target_date,
+                exit_price=pr.exit_price,  # PathReturn.exit_price（T2 三分支均设）
+                exit_date=pr.exit_date, exit_reason=pr.exit_reason,
+                net_pnl=round(net_pnl, 2),
+                cost_pct=pr.cost_pct,
+                gross_return=pr.gross_return_pct,
+                is_realized=1,
+                fills_json=json.dumps({
+                    "won": pr.won,
+                    "return_pct": pr.return_pct,
+                    "exit_reason": pr.exit_reason,
+                    "exit_date": pr.exit_date,
+                    "cost_pct": pr.cost_pct,
+                    "gross_return_pct": pr.gross_return_pct,
+                    "optimism_flag": "gap_through_unmodeled",
+                    "raw_exit_reason": pr.exit_reason,
+                    "position_notional": round(position_notional, 2),
+                    "arm_params": {
+                        "stop_pct": TREND_STOP_PCT,
+                        "take_pct": TREND_TAKE_PCT,
+                        "max_hold": TREND_MAX_HOLD,
+                    },
                 }),
             )
             self._journal.insert(record)
@@ -460,12 +662,13 @@ class JournalRecorder:
             "n_realized": 1,
         }
 
-    # ── mock 臂（limitup/trend paper）────────────────────────────────────
+    # ── mock 臂（limitup paper）─────────────────────────────────────────
 
     def _process_mock_arm(self, arm: str, target_date: str) -> dict:
-        """limitup/trend paper 臂 mock signal 录入（A1：4 臂都能录到 trade_journal）。
+        """limitup paper 臂 mock signal 录入（A1：4 臂都能录到 trade_journal）。
 
         生产接线后调真实 signal 生成器。mock 不臆造 return——标 underpowered。
+        trend 已于 S181 升为实臂（_process_trend），此处仅 limitup 残留 mock。
         """
         record = JournalRecord.create(
             arm=arm, stock_code=f"mock_{arm}",
@@ -486,6 +689,19 @@ class JournalRecorder:
         }
 
     # ── 辅助 ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _cand_code(cand: Any) -> str | None:
+        """从候选对象取 code——兼容 dataclass(.code) 与 dict(["code"])。
+
+        trend_swing_arm.select_trend_candidates 接口未定（上一个 agent 起草中），
+        声明返 list[{code,name}]。breakout 的 PreMarketCandidate 是 dataclass 用 .code；
+        若 trend 返 dict 则走 ["code"]。此处防御兜底，接口定稿后可简化。
+        """
+        code = getattr(cand, "code", None)
+        if code is None and isinstance(cand, dict):
+            code = cand.get("code")
+        return str(code) if code else None
 
     @staticmethod
     def _latest_close(bars: list[dict], target_date: str | None = None) -> float | None:
@@ -522,4 +738,7 @@ __all__ = [
     "BREAKOUT_STOP_PCT",
     "BREAKOUT_TAKE_PCT",
     "BREAKOUT_MAX_HOLD",
+    "TREND_STOP_PCT",
+    "TREND_TAKE_PCT",
+    "TREND_MAX_HOLD",
 ]
