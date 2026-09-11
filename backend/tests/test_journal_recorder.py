@@ -216,7 +216,7 @@ class TestTradesNotModified:
             entry_price=10.0, entry_date="2026-01-15",
             net_pnl=50.0, is_realized=1,
         )
-        assert len(record.signal_id) == 36  # UUID
+        # S183: signal_id 改确定性（arm_date_code，len 26 非 UUID 36）
         assert record.arm == "breakout"
 
 

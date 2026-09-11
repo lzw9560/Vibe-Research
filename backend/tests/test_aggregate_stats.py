@@ -138,7 +138,7 @@ class TestWilsonCI:
 
     def test_wilson_ci_total_zero(self):
         lo, hi = _wilson_ci(0, 0)
-        assert lo == 0.0 and hi == 0.0
+        assert lo == 0.0 and hi == 1.0  # S183: n=0 返 (0,1) 宽带诚实暴露无数据
 
 
 class TestDailyAggregateSharpe:
