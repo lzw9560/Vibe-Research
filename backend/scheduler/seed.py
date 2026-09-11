@@ -29,15 +29,15 @@ def _ensure_seed_tasks() -> None:
     """
     existing = {t.name for t in _manager.list_tasks()}
 
-    # S101 迁移：把偏离的 candidate_funnel_precompute cron 拉回 17:15（一次，幂等）
+    # S184 P1-1 迁移：candidate_funnel_precompute cron 17:15 → 17:25（晚 kline_refresh 17:15 +10min，避免并发读 stale cache）
     for t in _manager.list_tasks():
-        if t.name == "candidate_funnel_precompute" and t.cron_expr != "15 17 * * 0-4":
+        if t.name == "candidate_funnel_precompute" and t.cron_expr != "25 17 * * 0-4":
             old_cron = t.cron_expr
-            t.cron_expr = "15 17 * * 0-4"
+            t.cron_expr = "25 17 * * 0-4"
             _manager.update_task(t)
             logger.info(
-                "[scheduler] candidate_funnel_precompute cron 迁移 %s → 15 17 * * 0-4"
-                "（S101：等 gene_scores 写入完成 + 龙虎榜 16:30 后）",
+                "[scheduler] candidate_funnel_precompute cron 迁移 %s → 25 17 * * 0-4"
+                "（S184 P1-1：晚 kline_refresh 17:15 +10min，避免并发读 stale cache）",
                 old_cron,
             )
 
@@ -171,11 +171,11 @@ def _ensure_seed_tasks() -> None:
             name="candidate_funnel_precompute",
             description="S004 盘后漏斗预计算（预热 _FUNNEL_CACHE，龙虎榜 16:30 后 + 读 derived 预采集）",
             task_type="candidate_funnel_precompute",
-            cron_expr="15 17 * * 0-4",  # 17:15（晚 derived_precompute 17:00 +15min，龙虎榜 16:30 后）
+            cron_expr="25 17 * * 0-4",  # S184 P1-1: 17:25（晚 kline_refresh 17:15 +10min，避免并发读 stale cache）
             payload={},
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 candidate_funnel_precompute 已创建（cron 15 17 * * 0-4）")
+        logger.info("[scheduler] seed 默认任务 candidate_funnel_precompute 已创建（cron 25 17 * * 0-4）")
 
     # S075：盘后首板流筛选——16:15（晚 forward_test_t1_settle 15:50，避抢 DB；
     #   candidate_funnel_precompute 已后移 17:15，与 first_board 不再同刻抢 DB）。
