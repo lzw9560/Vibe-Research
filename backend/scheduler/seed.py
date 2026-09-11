@@ -465,3 +465,15 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 daily_kg_audit 已创建（cron 30 16 * * 0-4）")
+
+    # S185 路径 A：Turso 云同步（可选——VR_TURSO_URL 未设时 sync_all 返纯本地跳过，零降级）
+    if "turso_sync" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="turso_sync",
+            description="S185 Turso 云同步（读本地 SQLite→HTTP POST Turso REST，VR_TURSO_URL 未设跳过）",
+            task_type="turso_sync",
+            cron_expr="0 10 * * 0",  # 周日 10:00（盘后周末同步全周数据）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 turso_sync 已创建（cron 0 10 * * 0，S185 可选）")

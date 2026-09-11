@@ -86,6 +86,7 @@ class TaskExecutor:
             "baostock_5min_freeze": self._execute_baostock_5min_freeze,
             "trade_journal_daily": self._execute_trade_journal_daily,  # S175 R2 — 模拟盘闭环点火（BREAK-0 fix）
             "ofi_collect": self._execute_ofi_collect,  # S176 R5 — 盘中 OFI 五档收集（conditioning 数据收集器）
+            "turso_sync": self._execute_turso_sync,  # S185 路径 A — Turso 云同步（VR_TURSO_URL 未设跳过）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -356,3 +357,8 @@ class TaskExecutor:
         """S176 R5 — 盘中 OFI 五档收集（tencent fetch_raw → collect_ofi → save_ofi）。"""
         from scheduler.executors.intraday import ofi_collect
         return ofi_collect(payload)
+
+    def _execute_turso_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S185 路径 A — Turso 云同步（VR_TURSO_URL 未设→纯本地跳过，零侵入）。"""
+        from data.turso_sync import sync_all
+        return sync_all()
