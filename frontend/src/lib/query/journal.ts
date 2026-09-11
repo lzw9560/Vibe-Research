@@ -11,7 +11,7 @@ import type {
   EquityBaseResponse, AddTradeInput, AddTradeResponse, UpdateTradeInput,
   UpdateTradeResponse, DeleteTradeResponse, SaveFeesInput, SaveFeesResponse,
   SaveRulesInput, SaveRulesResponse, SaveEquityBaseInput, SaveEquityBaseResponse,
-  ClosedLoopResponse, DrawdownStatusResponse,
+  ClosedLoopResponse, DrawdownStatusResponse, JournalWinRateTrendsResponse,
 } from "@/lib/journal-contract";
 
 // 5min staleTime——journal 数据变更不频繁；改 rules/equity_base 会显式 invalidate 依赖 query。
@@ -158,6 +158,15 @@ export function useDrawdownStatus(options?: Opts<DrawdownStatusResponse>) {
   return useQuery({
     queryKey: ["journal", "drawdown-status"] as const,
     queryFn: () => api.journalDrawdownStatus(),
+    staleTime: JOURNAL_STALE_MS,
+    ...options,
+  });
+}
+// S183: 累积胜率曲线（实时聚合 + Wilson 95% CI + 双轴诚实标签）
+export function useJournalWinRateTrends(arm?: string, options?: Opts<JournalWinRateTrendsResponse>) {
+  return useQuery({
+    queryKey: ["journal", "winrate-trends", arm] as const,
+    queryFn: () => api.journalWinRateTrends(arm),
     staleTime: JOURNAL_STALE_MS,
     ...options,
   });

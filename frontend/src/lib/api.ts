@@ -33,7 +33,7 @@ import type {
   EquityBaseResponse, AddTradeInput, AddTradeResponse, UpdateTradeInput,
   UpdateTradeResponse, DeleteTradeResponse, SaveFeesInput, SaveFeesResponse,
   SaveRulesInput, SaveRulesResponse, SaveEquityBaseResponse,
-  ClosedLoopResponse, DrawdownStatusResponse,
+  ClosedLoopResponse, DrawdownStatusResponse, JournalWinRateTrendsResponse,
 } from "./journal-contract";
 import {
   getLimitUpScreenerParams, saveLimitUpScreenerParams, getAuctionParams, saveAuctionParams,
@@ -307,6 +307,9 @@ export const api = {
     get<ClosedLoopResponse>(`/journal/closed-loop?limit=${limit}`),
   journalDrawdownStatus: () =>
     get<DrawdownStatusResponse>("/journal/drawdown-status"),
+  // S183: 累积胜率曲线（实时聚合 + Wilson 95% CI + 双轴诚实标签，与 closed-loop 同源 trade_journal）。
+  journalWinRateTrends: (arm?: string) =>
+    get<JournalWinRateTrendsResponse>(`/journal/winrate-trends${arm ? `?arm=${arm}` : ""}`),
   // S178: OFI 盘中数据只读看板（read-only，非信号）。
   intradayOfi: (date: string, code?: string, limit = 2000) =>
     get<OfiResponse>(`/intraday/ofi?date=${date}${code ? `&code=${code}` : ""}&limit=${limit}`),

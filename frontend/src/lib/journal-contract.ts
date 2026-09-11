@@ -500,6 +500,21 @@ export interface ClosedLoopResponse {
   records: ClosedLoopRecord[];
   aggregate: Record<string, ArmAggregate>;
 }
+// S183：累积胜率曲线时序点（实时聚合 + Wilson 95% CI + 双轴诚实标签）
+export interface JournalWinRateTrendPoint {
+  week_start: string;       // 周一日期（ISO）
+  win_rate: number;         // 0-1 累积胜率
+  ci_low: number;           // Wilson CI 下界 0-1
+  ci_high: number;          // Wilson CI 上界 0-1
+  n_decided: number;        // Wilson CI 分母（排除 unbuyable/NULL/breakeven，与 _compute_arm_stats 一致）
+  n_total: number;          // = n_decided（累积已结算总数）
+  n_days: number;            // 唯一 exit_date 数（双轴标签用）
+  label: "insufficient_sample" | "underpowered" | "robust";
+}
+export interface JournalWinRateTrendsResponse {
+  available: boolean;
+  trends: JournalWinRateTrendPoint[];
+}
 export interface DrawdownArmStatus {
   equity: number;
   peak: number;

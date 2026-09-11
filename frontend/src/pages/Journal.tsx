@@ -7,6 +7,7 @@ import { RiskReportSection } from "@/components/journal/RiskReportSection";
 import { DiagnosticsSection } from "@/components/journal/DiagnosticsSection";
 import { JournalSettings } from "@/components/journal/JournalSettings";
 import { JournalLedger } from "@/components/journal/JournalLedger";
+import { JournalWinRateCurve } from "@/components/journal/JournalWinRateCurve";
 
 type Tab = "trades" | "risk" | "diag" | "settings" | "closedloop";
 
@@ -43,7 +44,12 @@ export function Journal() {
       </div>
       <div>
         {tab === "trades" && <TradeJournalSection />}
-        {tab === "closedloop" && <JournalLedger />}
+        {tab === "closedloop" && (
+          <>
+            <JournalWinRateCurve />
+            <JournalLedger />
+          </>
+        )}
         {tab === "risk" && <RiskReportSection />}
         {tab === "diag" && <DiagnosticsSection />}
         {tab === "settings" && <JournalSettings />}

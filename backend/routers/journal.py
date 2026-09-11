@@ -69,6 +69,21 @@ async def journal_closed_loop(limit: int = Query(500, ge=1, le=5000)) -> Dict[st
     return await asyncio.to_thread(_build)
 
 
+@router.get("/api/journal/winrate-trends")
+async def journal_winrate_trends(arm: str | None = Query(None)) -> Dict[str, Any]:
+    """S183：累积胜率时序曲线——按周分桶实时聚合 + Wilson 95% CI + 双轴诚实标签。
+
+    数据源 trade_journal（is_realized=1 AND is_dead_arm=0 AND net_pnl 非 None 非 0）。
+    空表返 {available:True, trends:[]}，前端显空态占位（需 ≥30 真实成交才有统计意义）。
+    不接入 AI prompt（守个人数据隔离，同 closed-loop）。
+    """
+    def _build() -> dict:
+        tj = TradeJournal()
+        trends = tj.query_winrate_trends(arm=arm)
+        return {"available": True, "trends": trends}
+    return await asyncio.to_thread(_build)
+
+
 @router.get("/api/journal/drawdown-status")
 async def journal_drawdown_status() -> Dict[str, Any]:
     """drawdown 熔断状态：per-arm + portfolio equity/回撤/size_multiplier。"""

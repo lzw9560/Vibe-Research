@@ -60,11 +60,12 @@ ARM_VERDICT: dict[str, str] = {
     "breakout": "§44_falsified",        # S168 12 harness 全 falsified，selection 无 edge
     "gap": "dead_arm",                   # §44 falsified 成本假象 net -0.48% t=-3.79
     "limitup": "mock_not_ready",         # signal 生成器未建，mock_entry=10.0
-    "trend": "mock_not_ready",           # 同
+    "trend": "exploratory",             # S181 已升级实臂（trend_swing_arm 真 generator），§44 未验
 }
 #: dormant 臂（不跑生产/mock 未就绪，无记录）——aggregate 显式加 stub 让 UI 显诚实标签。
 #: gap 不在此（gap 有 is_dead_arm=1 记录，走 RecordRow dead badge，不进 aggregate 防污染存活臂统计）
-DORMANT_ARMS: tuple[str, ...] = ("limitup", "trend")
+#: trend S181 已升级实臂移出 dormant（仍 0 signals 但真 generator 非 mock）
+DORMANT_ARMS: tuple[str, ...] = ("limitup",)
 
 
 @dataclass(frozen=True)
@@ -338,6 +339,73 @@ class TradeJournal:
 
         return result
 
+    def query_winrate_trends(self, arm: str | None = None) -> list[dict]:
+        """S183：累积胜率时序（按周分桶，实时聚合非落盘 snapshot）。
+
+        查 is_realized=1 AND is_dead_arm=0 的 decided trades（net_pnl 非 None 非 0，
+        exit_reason != 'unbuyable'），按 exit_date 周分桶（周一作 week_start），
+        累积胜率 + Wilson CI + 双轴标签（n_decided/n_days）。
+
+        返 [{week_start, win_rate, ci_low, ci_high, n_decided, n_total, n_days, label}]。
+        空表返 []。口径：n_decided=Wilson CI 分母（与 _compute_arm_stats 一致排除 unbuyable/None/breakeven），
+        n_days=唯一 exit_date 数（双轴标签用）。标签 robust 仅统计意义，不触发 sizing 调整（与
+        lift_to_multiplier 脱节，R3 enforce 搁置）。
+        """
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                """SELECT exit_date, net_pnl, exit_reason FROM trade_journal
+                   WHERE is_realized=1 AND is_dead_arm=0
+                     AND net_pnl IS NOT NULL AND net_pnl != 0
+                     AND (exit_reason IS NULL OR exit_reason != 'unbuyable')
+                     AND exit_date IS NOT NULL
+                   ORDER BY exit_date""",
+            ).fetchall()
+        finally:
+            conn.close()
+        if not rows:
+            return []
+
+        from datetime import datetime, timedelta
+
+        def _week_start(d_str: str) -> str:
+            d = datetime.fromisoformat(d_str.split("T")[0])
+            return (d - timedelta(days=d.weekday())).date().isoformat()
+
+        # 累积：按 exit_date 排序，每条入累积池，按 week_start 取该周末累积快照
+        by_week: dict[str, dict] = {}
+        cum_n = 0
+        cum_win = 0
+        cum_days: set[str] = set()
+        for r in rows:
+            ws = _week_start(r["exit_date"])
+            cum_n += 1
+            if float(r["net_pnl"]) > 0:
+                cum_win += 1
+            cum_days.add(r["exit_date"].split("T")[0])
+            by_week[ws] = {"n_decided": cum_n, "n_win": cum_win, "n_days": len(cum_days)}
+
+        result: list[dict] = []
+        for ws, d in sorted(by_week.items()):
+            n_dec = d["n_decided"]
+            n_days = d["n_days"]
+            ci_low, ci_high = _wilson_ci(d["n_win"], n_dec)
+            # 双轴标签：n<30 insufficient / n≥30 且 n_days<60 underpowered / n≥30 且 n_days≥60 robust
+            if n_dec < 30:
+                label = "insufficient_sample"
+            elif n_days < 60:
+                label = "underpowered"
+            else:
+                label = "robust"
+            result.append({
+                "week_start": ws,
+                "win_rate": round(d["n_win"] / n_dec, 4) if n_dec else 0.0,
+                "ci_low": ci_low, "ci_high": ci_high,
+                "n_decided": n_dec, "n_total": n_dec, "n_days": n_days,
+                "label": label,
+            })
+        return result
+
     def _distinct_arms(self) -> list[str]:
         conn = self._conn()
         try:
@@ -384,10 +452,10 @@ def _wilson_ci(wins: int, total: int, z: float = 1.96) -> tuple[float, float]:
     """胜率 Wilson score interval（lower, upper）。
 
     比 normal approximation 更准（小 n 不 collapse to [0,0]）。
-    空/零分母 → (0.0, 0.0)。
+    空/零分母 → (0.0, 1.0)——宽带诚实暴露无数据（非 (0,0) 误导"精确 0%"），S183。
     """
     if total <= 0:
-        return 0.0, 0.0
+        return (0.0, 1.0)
     phat = wins / total
     n = total
     denom = 1 + z * z / n
