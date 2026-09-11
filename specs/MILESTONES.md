@@ -342,6 +342,7 @@ TradeJournal 闭环/模拟盘自洽/OFI 收集器+看板/kline degraded/cockpit 
 | S181 | 趋势波段臂 | ✅已实现 | b234446+653d83e+98555b6 6 测 |
 | S182 | PEAD per-trade real cost | ✅已实现 | 7e49468 |
 | S183 | 模拟盘胜率变化曲线 | ✅已实现 | 实时聚合+Wilson CI+50%基准；后端 7+前端 4+tsc0 |
+| S184 | kline_refresh 性能 | ✅已实现 | grill rethink 方案 0：数据就绪预检+cron 17:15（非限制 universe）；91fd5fd |
 
 ---
 

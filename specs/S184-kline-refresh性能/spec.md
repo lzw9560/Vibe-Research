@@ -1,6 +1,17 @@
-# Spec: S184 — kline_refresh 性能优化（全量 timeout → 限制 universe + 增量）
+# Spec: S184 — kline_refresh 性能优化（全量 timeout → 数据就绪预检 + cron 17:15，grill rethink 方案 0）
 
-> 状态：草案
+> 状态：已实现（2026-09-11，commit 91fd5fd，方案 0 数据就绪预检 + cron 17:15 + 迁移；grill rethink 推翻限制 universe 方案）
+
+## grill rethink（2026-09-11，6 视角 grill verdict=rethink）
+
+spec v1（限制 universe ~200 + 增量）**根因误判**——grill 发现 kline_refresh timeout 真根因不是 universe 太大，而是 baostock 16:30 当日 bar 未就绪（T+1 延迟，memory 明确 17:00 前无当日 bar）→ 全量 query 返空 → 每 code re-login retry（0.25s）→ retry storm（实测 5230×0.252s=1315s ≈ 1320s timeout）。限制 universe 200 后 50s 不 timeout 但 0 bar 写入（数据未就绪），A2 验收仍失败。
+
+方案 0（~7 行，commit 91fd5fd）远优于限制 universe（3 CRITICAL：cache prune 歧义 38 消费者 / select_premarket_candidates 全 A 迭代无 fallback / db.py 遗漏 + §44 工具静默碎裂）：
+1. refresh_kline_cache.py 循环前数据就绪预检（fetch sh.600000 当日 bar，空则 return 0 跳过整轮）
+2. seed.py kline_refresh cron 16:30→17:15 + trade_journal_daily 16:45→17:30 + 迁移逻辑
+3. 全量保留（不 prune，38 消费者零影响）+ timeout 1200s/reaper 1300s 不动（300s << 1200s）
+
+验证：fetch sh.600000 当日 bar=0（盘中未就绪确认 T+1 延迟）+ test_s090 7 passed。17:00+ 后 baostock 更新 + 预检通过 + 全量 300s < 1200s。
 > 作者：Claude（agent）  日期：2026-09-11
 > 关联：S175 bars_provider A 股 baostock fallback（commit 0ac0779，已缓解 cache miss）/ S090 kline_refresh（原 spec，全量 baostock 拉）/ S183 胜率曲线（breakout unbuyable 根因之一）/ memory `etf-daily-source-single-point`（ETF 当日源单点同款数据裂缝）
 
