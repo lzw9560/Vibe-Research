@@ -75,6 +75,11 @@ def kline_refresh(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         from tools.refresh_kline_cache import main as _refresh_kline  # noqa: PLC0415
         ret = _refresh_kline(max_stocks)
+        if ret == 0:
+            # S175/S177：kline 刷盘成功后清 bars_provider 单例 cache，
+            # 防 kline_refresh 16:30 写新 bar 但 cache 仍读旧 → signal_date 不在 bars → 全 unbuyable
+            from engine.bars_provider import KlineCacheBarsProvider  # noqa: PLC0415
+            KlineCacheBarsProvider.reload()
         return {"status": "ok" if ret == 0 else "degraded", "return_code": ret}
     except ImportError as e:  # noqa: BLE001
         logger.warning("[kline_refresh] baostock 未安装: %s", e)

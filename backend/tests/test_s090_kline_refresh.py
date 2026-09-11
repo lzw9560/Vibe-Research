@@ -59,3 +59,35 @@ def test_kline_refresh_registered_in_executors():
     assert "kline_refresh" in te._executors
     assert hasattr(te, "_execute_kline_refresh")
     assert te._executors["kline_refresh"] == te._execute_kline_refresh
+
+
+def test_kline_refresh_reloads_bars_cache_on_success(monkeypatch):
+    """main 返 0（刷盘成功）→ bars_provider 单例 cache 清掉重读。
+
+    S175/S177：防 kline_refresh 16:30 写新 bar 但 _CACHE 仍读旧 → signal_date 不在
+    bars → 全 unbuyable（推荐说买、执行说买不了）。
+    """
+    import scheduled_tasks
+    from engine.bars_provider import KlineCacheBarsProvider
+
+    reloaded: list = []
+    monkeypatch.setattr("tools.refresh_kline_cache.main", lambda mx=None: 0)
+    monkeypatch.setattr(KlineCacheBarsProvider, "reload",
+                        lambda *a, **k: reloaded.append(True))
+    te = scheduled_tasks.TaskExecutor()
+    te._execute_kline_refresh({})
+    assert reloaded == [True], "ret==0 成功后必须清 bars cache"
+
+
+def test_kline_refresh_no_reload_on_degraded(monkeypatch):
+    """main 返非 0（degraded）→ bars cache 不清（防刷新失败丢 cache）。S175/S177。"""
+    import scheduled_tasks
+    from engine.bars_provider import KlineCacheBarsProvider
+
+    reloaded: list = []
+    monkeypatch.setattr("tools.refresh_kline_cache.main", lambda mx=None: 1)
+    monkeypatch.setattr(KlineCacheBarsProvider, "reload",
+                        lambda *a, **k: reloaded.append(True))
+    te = scheduled_tasks.TaskExecutor()
+    te._execute_kline_refresh({})
+    assert reloaded == [], "degraded 时不应清 cache（刷盘失败保留旧 bars）"

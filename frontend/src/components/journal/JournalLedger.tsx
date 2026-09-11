@@ -43,6 +43,7 @@ function verdictLabel(verdict: string | undefined): { text: string; cls: string 
   const map: Record<string, { text: string; cls: string }> = {
     externally_validated: { text: "外部验证", cls: "bg-blue-500/15 text-blue-600" },
     "§44_falsified": { text: "§44证否", cls: "bg-red-500/15 text-red-600" },
+    exploratory: { text: "探索性·未验证", cls: "bg-amber-500/15 text-amber-600" }, // S181 R8: trend 骨架建 §44 未验
     dead_arm: { text: "已证否·dead", cls: "bg-red-500/15 text-red-500" },
     mock_not_ready: { text: "mock·未就绪", cls: "bg-gray-500/15 text-gray-500" },
   };

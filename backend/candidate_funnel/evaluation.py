@@ -143,6 +143,16 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         note="winrate 0.52-0.60 非单调(启动0.563→发酵0.565→高潮0.605→退潮0.569回落); "
              "CI 重叠; label-only(B); 修饰方向单调=False; 无 edge",
     ),
+    # S181 R7：trend 臂进 cron paper_track 后需 ×0.5 provisional cap（EXPLORATORY 未验证）。
+    # days_robust=0/n=0/lift=None → lift_to_multiplier 返 ('探索性', 0.5) 复用 §44v2 R8 逻辑，不新建路径
+    "trend_swing": DimensionValidation(
+        dimension_id="trend_swing", label="趋势波段臂(trend_swing)",
+        lift=None, n=0, days_robust=0,   # 未测 → lift_to_multiplier 探索性 ×0.5
+        validation_status="探索性", weight_multiplier=0.5,
+        source_script="(未测——S181 趋势臂 EXPLORATORY，未跑 §44 验证)",
+        note="trend 臂真 signal generator（板块周期 phase+资金流 composite）已建但 §44 未验证；"
+             "×0.5 provisional cap 防未验证臂全权重跑；60 天 track record 后复验",
+    ),
 }
 
 
@@ -190,14 +200,14 @@ def lift_to_multiplier(
 
 
 # S180 R3: arm→dimension 映射 + lift_for_arm（用冻结 DIMENSION_LIFT_REGISTRY）
-# r3-enforce R8 搁置（path_lift 没臂读+forward_test 空表），但 R3-R4 sizing 接线独立有用
+# r3-enforce R8 搁置（path_lift 没臂读+forward_test 18天<30阈值），但 R3-R4 sizing 接线独立有用
 # 让 ×0.5 cap 接 sizing 路径（当前默认 1.0 不咬）。前瞻基建，当前空转（breakout paper_track 不 sizing）
 DIM_ARM_MAP: dict[str, list[str] | None] = {
     "breakout": ["breakout"],  # breakout 维度（days<60 → ×0.5）
     "floor": None,      # N/A——指数复制非选股，lift 不作用 → 1.0
     "gap": None,        # dead_arm → 不 sizing
     "limitup": None,    # dormant mock
-    "trend": None,      # dormant mock
+    "trend": ["trend_swing"],  # S181 R7：进 cron paper_track，×0.5 provisional cap（EXPLORATORY 未验证）
 }
 
 
@@ -298,10 +308,13 @@ def _apply_evaluation_layer(
                 "lift": d.lift, "n": d.n, "status": d.validation_status,
                 "weight_multiplier": d.weight_multiplier, "note": d.note,
             }
-            for d in DIMENSION_LIFT_REGISTRY.values() if not d.dimension_id.endswith("_ref")
+            for d in DIMENSION_LIFT_REGISTRY.values()
+            if not d.dimension_id.endswith("_ref")
+            and d.dimension_id != "trend_swing"  # S181 R7: arm sizing 维度非选股层 §44 验证
         ],
         "pending_dims": [d.dimension_id for d in DIMENSION_LIFT_REGISTRY.values()
-                         if d.validation_status == "探索性"],
+                         if d.validation_status == "探索性"
+                         and d.dimension_id != "trend_swing"],
         "frozen_commit": FROZEN_COMMIT,
     }
     return cards, evaluation_summary

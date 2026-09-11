@@ -22,6 +22,7 @@ interface MultiArmRec {
 function verdictCls(label: string): string {
   if (label === "externally_validated") return "bg-blue-500/15 text-blue-600";
   if (label === "§44_falsified") return "bg-red-500/15 text-red-600";
+  if (label === "exploratory") return "bg-amber-500/15 text-amber-600"; // S181 R8: trend 探索性·未验证
   if (label === "dead_arm") return "bg-red-500/15 text-red-500";
   if (label === "mock_not_ready") return "bg-gray-500/15 text-gray-500";
   return "bg-gray-500/15 text-gray-500";
@@ -30,6 +31,7 @@ function verdictCls(label: string): string {
 function verdictText(label: string): string {
   if (label === "externally_validated") return "外部验证";
   if (label === "§44_falsified") return "§44证否";
+  if (label === "exploratory") return "探索性·未验证"; // S181 R8: trend 骨架建 §44 未验
   if (label === "dead_arm") return "已证否·dead";
   if (label === "mock_not_ready") return "mock·未就绪";
   return label;

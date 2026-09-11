@@ -32,11 +32,12 @@ import sqlite3
 # ---------------------------------------------------------------------------
 class TestDimensionLiftRegistry:
     def test_registry_has_all_twelve_dimensions(self):
-        # 选股 5 + 盘中 S152 2 + breakout 精细化 S153 2 + 板块/regime 2 + 参照 1 = 12
+        # 选股 5 + 盘中 S152 2 + breakout 精细化 S153 2 + 板块/regime 2 + 参照 1 + arm sizing 1(S181) = 13
         ids = set(DIMENSION_LIFT_REGISTRY.keys())
         assert ids == {"gene_score", "breakout", "turnover", "seal_amount",
                        "path_lift", "first_plate_h2", "late_lock", "vol_surge_ref",
-                       "platform_breakout", "low_absorption", "sector_heat", "sector_phase"}
+                       "platform_breakout", "low_absorption", "sector_heat", "sector_phase",
+                       "trend_swing"}
 
     def test_all_dimensions_have_frozen_commit(self):  # A1
         for dim_id, dim in DIMENSION_LIFT_REGISTRY.items():
