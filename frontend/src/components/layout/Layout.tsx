@@ -5,6 +5,7 @@ import {
   Github,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { useTheme } from "@/hooks/useDarkMode";
 import { NAV_GROUPS, DEFAULT_EXPANDED_GROUP, APP_VERSION, REPO_URL } from "./navigation";
 
@@ -237,6 +238,7 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+      <CommandPalette />
     </div>
   );
 }

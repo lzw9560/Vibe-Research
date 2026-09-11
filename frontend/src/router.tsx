@@ -72,6 +72,8 @@ export const router = createBrowserRouter([
       { path: "/workflow/first-board", element: lazyEl(() => import("@/pages/workflow/FirstBoardPage")) },
       { path: "/workflow/pre-market", element: lazyEl(() => import("@/pages/workflow/PreMarketBriefing")) },
       { path: "/behavior-loop", element: lazyEl(() => import("@/pages/BehaviorLoop")) },
+      // S179 Phase 2: /intraday 盘中 cockpit（SplitLayout 候选+预览+告警+教练，非老 IntradayMonitor）
+      { path: "/intraday", element: lazyEl(() => import("@/pages/intraday/IntradayCockpit"), "IntradayCockpit") },
       { path: "/workflow/intraday", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },
       // S178: OFI 盘中数据只读看板（read-only，非信号）
       { path: "/workflow/intraday/ofi", element: lazyEl(() => import("@/pages/workflow/OfiDashboardPage")) },
