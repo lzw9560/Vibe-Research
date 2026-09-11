@@ -147,22 +147,31 @@ def _parse_daily_returns(df, date_col: str = "日期", close_col: str = "收盘"
     return rows
 
 
-def fetch_etf_hist(code: str = "512890", start: str = "", end: str = "") -> list[dict]:
+def fetch_etf_hist(code: str = "512890", start: str = "", end: str = "", retries: int = 3) -> list[dict]:
     """取 ETF 历史复权净值收益（fund_etf_hist_em adjust='qfq' → [{date, close, ret}]）。
 
     adjust='qfq' 前复权——含分红除权调整，收益序列无跳空（spec §5.4 "ETF 净值收益（复权）"）。
     start/end 格式 YYYYMMDD，空则 akshare 默认（全量）。
+
+    S183 重启验证发现东财 fund_etf_hist_em 端点瞬时不稳（Connection aborted, RemoteDisconnected），
+    加 retries=3 次重试（0.5s 间隔）修瞬时失败。全失败返 []，bars_provider 走 baostock fallback。
     """
+    import time  # noqa: PLC0415
     ak = _ak()
-    try:
-        df = ak.fund_etf_hist_em(symbol=code, period="daily",
-                                 start_date=start or "20200101",
-                                 end_date=end or datetime.now().strftime("%Y%m%d"),
-                                 adjust="qfq")
-    except Exception as e:
-        _LOGGER.warning("fetch_etf_hist(%s) 失败: %s", code, e)
-        return []
-    return _parse_daily_returns(df)
+    last_err: Exception | None = None
+    for attempt in range(retries):
+        try:
+            df = ak.fund_etf_hist_em(symbol=code, period="daily",
+                                     start_date=start or "20200101",
+                                     end_date=end or datetime.now().strftime("%Y%m%d"),
+                                     adjust="qfq")
+            return _parse_daily_returns(df)
+        except Exception as e:
+            last_err = e
+            if attempt < retries - 1:
+                time.sleep(0.5)
+    _LOGGER.warning("fetch_etf_hist(%s) %d 次重试全失败: %s", code, retries, last_err)
+    return []
 
 
 def fetch_index_hist(symbol: str = "930955", start: str = "", end: str = "") -> list[dict]:
