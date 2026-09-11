@@ -359,14 +359,17 @@ class TradeJournal:
         """
         conn = self._conn()
         try:
-            rows = conn.execute(
-                """SELECT exit_date, net_pnl, exit_reason FROM trade_journal
+            sql = """SELECT exit_date, net_pnl, exit_reason FROM trade_journal
                    WHERE is_realized=1 AND is_dead_arm=0
                      AND net_pnl IS NOT NULL AND net_pnl != 0
                      AND (exit_reason IS NULL OR exit_reason != 'unbuyable')
-                     AND exit_date IS NOT NULL
-                   ORDER BY exit_date""",
-            ).fetchall()
+                     AND exit_date IS NOT NULL"""
+            params: list = []
+            if arm:
+                sql += " AND arm = ?"
+                params.append(arm)
+            sql += " ORDER BY exit_date"
+            rows = conn.execute(sql, params).fetchall()
         finally:
             conn.close()
         if not rows:
