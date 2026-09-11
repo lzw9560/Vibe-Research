@@ -116,7 +116,8 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 ### 定时调度（`scheduled_tasks.py`）
 - CronScheduler：每 60s tick，5 段 cron 匹配，daemon 线程。
 - SQLite 持久化（`backend/data/market_data.db`）：`scheduled_tasks` + `scheduled_task_runs`。
-- TaskExecutor 内置 10 种任务：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs` / `derived_precompute`（S084 盘后 derived 异步预采集）/ `monthly_vacuum`（S089 月度 VACUUM+wal_checkpoint）/ `kline_refresh`（S090 baostock kline 日更）/ `daily_ai_summary`（S093 AI 盘后总结 stub，cron 15:30，S094 完整实现）。S093：`candidate_funnel_precompute` success 后调 `NotificationService.send()` 发飞书富内容卡片（前瞻选股结果）。
+- TaskExecutor 内置 10 种任务：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs` / `derived_precompute`（S084 盘后 derived 异步预采集）/ `monthly_vacuum`（S089 月度 VACUUM+wal_checkpoint）/ `kline_refresh`（S090 baostock kline 日更，S184 数据就绪预检 17:00+ 当日 bar + cron 17:15）/ `daily_ai_summary`（S093 AI 盘后总结 stub，cron 15:30，S094 完整实现）。S093：`candidate_funnel_precompute` success 后调 `NotificationService.send()` 发飞书富内容卡片（前瞻选股结果）。
+- S175/S183 模拟盘自洽：`JournalRecorder`（trade_journal.db）多臂（floor ETF/breakout/trend）+ `PaperPortfolio` equity 落盘 + `bars_provider` A 股 baostock fallback（cache miss 实时拉，S184 commit 0ac0779）+ `signal_id` 确定性 `arm_date_code`（重跑幂等，S183 commit c3e7130）+ `_wilson_ci` n=0 返 (0,1) 宽带诚实暴露（S183）+ 回补脚本 `tools/backfill_trade_journal.py`（历史日期 _process_* 快速验证）。
 - `app.py` 启动时 `_st.start_scheduler()`；另 `portfolio.py` 起 `start_scheduler(1800)`（持仓刷新，原 scheduler.py 已删，S031 R12）。
 
 ### 打板工作流状态机（`workflow_state_machine.py`）
