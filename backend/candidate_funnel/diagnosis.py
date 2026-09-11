@@ -26,26 +26,34 @@ from candidate_funnel.eight_standards import check_eight_standards
 # 后续从内存 dict 按 code 取。原 per-code read_bytes+json.loads 52 次 = 7.6GB IO，
 # 每只 13-15s × 52 = 780s 卡死 _collect。
 _KLINE_CACHE: dict | None = None
-_KLINE_CACHE_LOADED: bool = False
+_KLINE_CACHE_MTIME: float = 0.0  # S184 w3pvh9q8f P1: mtime 检测（kline_refresh 写新 bar 后自动失效重读）
 
 
 def _get_kline_cache() -> dict:
-    """惰性加载 baostock_kline_cache.json 到模块级单例（首次调用读盘+解析，后续从内存取）。"""
-    global _KLINE_CACHE, _KLINE_CACHE_LOADED
-    if _KLINE_CACHE_LOADED:
-        return _KLINE_CACHE or {}
-    _KLINE_CACHE_LOADED = True
+    """惰性加载 baostock_kline_cache.json + mtime 检测（kline_refresh 写新 bar 后自动失效重读）。
+
+    w3pvh9q8f grill：原 _KLINE_CACHE_LOADED 永不 reset，17:15 kline_refresh 写新 bar 但
+    diagnosis 仍读旧内存 cache。改 mtime 检测——文件更新自动失效重读。
+    """
+    global _KLINE_CACHE, _KLINE_CACHE_MTIME
     try:
         import json as _json
         from vr_paths import resolve_data_dir as _resolve_data_dir
         _kc = _resolve_data_dir() / "baostock_kline_cache.json"
-        if _kc.exists():
-            _KLINE_CACHE = _json.loads(_kc.read_bytes())
-        else:
-            _KLINE_CACHE = {}
+        if not _kc.exists():
+            return {}
+        try:
+            mtime = _kc.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        if _KLINE_CACHE is not None and mtime == _KLINE_CACHE_MTIME:
+            return _KLINE_CACHE
+        _KLINE_CACHE = _json.loads(_kc.read_bytes())
+        _KLINE_CACHE_MTIME = mtime
+        return _KLINE_CACHE
     except Exception:
-        _KLINE_CACHE = {}
-    return _KLINE_CACHE or {}
+        _KLINE_CACHE = None
+        return {}
 
 
 def assess_activity(ind: IndicatorSet, eff: BaseThreshold) -> ActivityAssessment:
