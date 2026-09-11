@@ -40,6 +40,20 @@ def _ensure_seed_tasks() -> None:
                 "（S101：等 gene_scores 写入完成 + 龙虎榜 16:30 后）",
                 old_cron,
             )
+
+    # S184 迁移：kline_refresh + trade_journal_daily cron 16:30/16:45 → 17:15/17:30
+    # （baostock 17:00+ 当日 bar 更新后，16:30 T+1 延迟未就绪导致 retry storm timeout）
+    for t in _manager.list_tasks():
+        if t.name == "kline_refresh" and t.cron_expr == "30 16 * * 0-4":
+            old_cron = t.cron_expr
+            t.cron_expr = "15 17 * * 0-4"
+            _manager.update_task(t)
+            logger.info("[scheduler] kline_refresh cron 迁移 %s → 15 17 * * 0-4（S184: baostock 17:00+ 更新后）", old_cron)
+        elif t.name == "trade_journal_daily" and t.cron_expr == "45 16 * * 0-4":
+            old_cron = t.cron_expr
+            t.cron_expr = "30 17 * * 0-4"
+            _manager.update_task(t)
+            logger.info("[scheduler] trade_journal_daily cron 迁移 %s → 30 17 * * 0-4（S184: 晚 kline_refresh 17:15）", old_cron)
     if "limitup_precompute" not in existing:
         _manager.create_task(ScheduledTask(
             name="limitup_precompute",
@@ -183,11 +197,11 @@ def _ensure_seed_tasks() -> None:
             name="kline_refresh",
             description="S090 B：盘后 baostock_kline_cache 增量刷新（premarket breakout 数据源日更）",
             task_type="kline_refresh",
-            cron_expr="30 16 * * 0-4",  # 16:30（晚 first_board_filter 16:15 +15min）
+            cron_expr="15 17 * * 0-4",  # S184: 17:15（baostock 17:00+ 当日 bar 更新后，16:30 T+1 延迟未就绪）
             payload={},
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 kline_refresh 已创建（cron 30 16 * * 0-4）")
+        logger.info("[scheduler] seed 默认任务 kline_refresh 已创建（cron 15 17 * * 0-4，S184 baostock 17:00+ 更新后）")
 
     # S175 R2：模拟盘闭环盘后跑（journal_recorder.run_daily 接 scheduler 点火，BREAK-0 fix）。
     # 16:45 盘后（晚 kline_refresh 16:30 确保 baostock_kline_cache.json 已刷当日 bar）。
@@ -197,11 +211,11 @@ def _ensure_seed_tasks() -> None:
             name="trade_journal_daily",
             description="S175 R2：盘后闭环（settle_pending + run_daily floor+breakout + floor MTM）",
             task_type="trade_journal_daily",
-            cron_expr="45 16 * * 0-4",  # 16:45 盘后（晚 kline_refresh 16:30 +15min）
+            cron_expr="30 17 * * 0-4",  # S184: 17:30（晚 kline_refresh 17:15 +15min）
             payload={},
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 trade_journal_daily 已创建（cron 45 16 * * 0-4）")
+        logger.info("[scheduler] seed 默认任务 trade_journal_daily 已创建（cron 30 17 * * 0-4，晚 kline_refresh 17:15）")
 
     # S176 R5：盘中 OFI 五档收集（conditioning 数据收集器，不喂 trade_journal）。
     # 每 3 分钟盘中跑（9:00-14:59，A股盘中 9:30-11:30+13:00-15:00 近似覆盖）。
