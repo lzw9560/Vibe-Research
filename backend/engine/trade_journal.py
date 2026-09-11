@@ -102,10 +102,16 @@ class JournalRecord:
         cls, arm: str, stock_code: str, entry_price: float | None,
         entry_date: str, **kwargs: Any,
     ) -> "JournalRecord":
-        """构造新记录，自动生成 signal_id (UUID) + created_at。"""
+        """构造新记录，signal_id 确定性（arm_entry_date_stock_code）+ created_at。
+
+        S183 审查发现：原 UUID signal_id 导致 _process_* 重跑累积重复（000798/09-08 有 3 条）。
+        改确定性 id 让 INSERT OR REPLACE 覆盖（重跑幂等）。signal_id 可 kwargs 覆盖
+        （settle 用 pos.signal_id 覆盖旧 id；测试可传 mock id）。
+        """
         now = datetime.now().isoformat()
+        signal_id = kwargs.pop("signal_id", None) or f"{arm}_{entry_date}_{stock_code}"
         return cls(
-            signal_id=str(uuid.uuid4()),
+            signal_id=signal_id,
             arm=arm,
             stock_code=stock_code,
             entry_price=entry_price,
