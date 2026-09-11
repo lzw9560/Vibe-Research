@@ -21,6 +21,12 @@ end = date.fromisoformat(end_str)
 bp = KlineCacheBarsProvider()
 rec = JournalRecorder(bars_provider=bp)
 
+# S184 验证发现：真 cache 只到 09-09，path_return max_hold 要 09-10+ bars 但 cache 缺 → hold net_pnl=NULL。
+# mock cache 空，强制 baostock fallback（267 bars 含 09-10+）→ path_return 算 net_pnl → buyable 非 hold。
+import engine.bars_provider as _bp_mod
+_bp_mod._CACHE = {}
+_bp_mod._load_cache = lambda: {}
+
 d = start
 total = 0
 while d <= end:
