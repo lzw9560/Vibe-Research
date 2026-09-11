@@ -70,7 +70,7 @@ def _to_turso_arg(val) -> dict:
     if isinstance(val, int):
         return {"type": "integer", "value": str(val)}
     if isinstance(val, float):
-        return {"type": "real", "value": repr(val)}
+        return {"type": "float", "value": val}  # Turso float value 是 number 非 string
     return {"type": "text", "value": str(val)}
 
 
@@ -157,20 +157,39 @@ def sync_table(local_db: str, table: str, pk: str, batch_size: int = 100) -> dic
 
         synced = 0
         failed = 0
+        http_url = _get_http_url()
+        breaker = _get_breaker()
         for i in range(0, len(rows), batch_size):
             batch = rows[i:i + batch_size]
+            # batch POST：500 行 = 500 INSERT OR REPLACE 一个 v2/pipeline request（7 POST 替代 3354）
+            requests = []
             for row in batch:
                 args = [_to_turso_arg(row[c]) for c in cols]
-                if _post_pipeline(sql, args, table):
-                    synced += 1
-                else:
-                    failed += 1
-                    if failed > 10:
-                        logger.warning("[turso_sync] %s 连续失败 >10，跳过剩余（本地数据不受影响）", table)
-                        break
-            if failed > 10:
-                break
-        logger.info("[turso_sync] %s.%s synced=%d failed=%d/%d", local_db, table, synced, failed, len(rows))
+                requests.append({"type": "execute", "stmt": {"sql": sql, "args": args}})
+            data = json.dumps({"requests": requests}).encode()
+            req = urllib.request.Request(
+                f"{http_url}/v2/pipeline",
+                data=data,
+                headers={"Authorization": f"Bearer {_TURSO_TOKEN}", "Content-Type": "application/json"},
+            )
+            try:
+                resp = urllib.request.urlopen(req, timeout=60)
+                body = json.loads(resp.read().decode())
+                results = body.get("results", [])
+                for r in results:
+                    if r.get("type") == "ok":
+                        synced += 1
+                    else:
+                        failed += 1
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+                logger.warning("[turso_sync] %s batch POST 失败: %s（本地不受影响）", table, e)
+                failed += len(batch)
+                if breaker:
+                    breaker.record_failure()
+                if failed > 50:
+                    logger.warning("[turso_sync] %s 连续失败 >50，跳过剩余", table)
+                    break
+        logger.info("[turso_sync] %s.%s synced=%d failed=%d/%d (batch=%d/POST)", local_db, table, synced, failed, len(rows), batch_size)
         return {"synced": synced, "failed": failed, "table": table, "total": len(rows)}
     except Exception as e:  # noqa: BLE001
         logger.warning("[turso_sync] %s.%s sync 失败: %s（本地数据不受影响）", local_db, table, e)
