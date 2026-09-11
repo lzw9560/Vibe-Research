@@ -153,6 +153,42 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         note="trend 臂真 signal generator（板块周期 phase+资金流 composite）已建但 §44 未验证；"
              "×0.5 provisional cap 防未验证臂全权重跑；60 天 track record 后复验",
     ),
+    # S185 P1-4（wok7j1arm grill）：低波因子入 registry——A 股最硬定论（红利低波 9-12% 三重定论）。
+    # externally_validated（外部文献验证非本系统 §44）。§44 验证窗口用 hold-and-win（非 D+1 path）。
+    "low_volatility": DimensionValidation(
+        dimension_id="low_volatility", label="低波动率(红利低波)",
+        lift=None, n=0, days_robust=0,
+        validation_status="外部验证", weight_multiplier=1.0,  # 三重定论 9-12% 年化
+        source_script="(externally_validated——学术+卖方+指数三重定论，fork 现成非自建)",
+        note="A 股最硬 alpha：红利低波 9-12% 年化三重定论；baostock kline turn 可算 ATR/realized_vol；"
+             "§44 窗口须 hold-and-win 非 D+1 path；fork zlotus/ash-mcp smart-beta capped",
+    ),
+    # S185 P1-4（wok7j1arm grill）：盘中 conditioning 因子入 §44——S176 纯函数已建但不在 registry（逻辑断裂）。
+    # §44 说 edge 在盘中但盘中因子没进 §44 验证。§44 窗口用盘中→D收（intraday conditioning→当日 close）。
+    "ofi_accumulated": DimensionValidation(
+        dimension_id="ofi_accumulated", label="盘中OFI累积(intraday)",
+        lift=None, n=0, days_robust=0,
+        validation_status="探索性", weight_multiplier=0.5,
+        source_script="(未测——S176 ofi_collect cron */3 9-14 累积中，60d live 后复验)",
+        note="OFI 归一化 [-1,1] 累积；compute_ofi 已建（engine/intraday_ofi.py）；"
+             "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+    ),
+    "seal_sincerity": DimensionValidation(
+        dimension_id="seal_sincerity", label="封单诚意(炸板/封单delta)",
+        lift=None, n=0, days_robust=0,
+        validation_status="探索性", weight_multiplier=0.5,
+        source_script="(未测——S176 compute_seal_delta_ratio/volatility/drawdown 已建，60d live 后复验)",
+        note="封单诚意 = Δseal_amount/volatility/drawdown 三合一；compute_seal_delta_ratio 已建；"
+             "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+    ),
+    "bid_ask_pressure": DimensionValidation(
+        dimension_id="bid_ask_pressure", label="买卖盘压力(OFI raw)",
+        lift=None, n=0, days_robust=0,
+        validation_status="探索性", weight_multiplier=0.5,
+        source_script="(未测——S176 compute_bid_ask_pressure 已建，60d live 后复验)",
+        note="bid_ask_pressure = Σbuy/Σsell（涨停 sell=0 → cap 999）；compute_bid_ask_pressure 已建；"
+             "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+    ),
 }
 
 
@@ -208,6 +244,9 @@ DIM_ARM_MAP: dict[str, list[str] | None] = {
     "gap": None,        # dead_arm → 不 sizing
     "limitup": None,    # dormant mock
     "trend": ["trend_swing"],  # S181 R7：进 cron paper_track，×0.5 provisional cap（EXPLORATORY 未验证）
+    # S185 P1-4（wok7j1arm grill）：盘中 conditioning 维度 → breakout 臂；低波 → floor 臂
+    # 盘中因子 ofi/seal_sincerity/bid_ask_pressure 映射到 breakout（盘中 conditioning 非 T-1 选股）
+    "breakout": ["breakout", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure"],
 }
 
 
@@ -311,10 +350,12 @@ def _apply_evaluation_layer(
             for d in DIMENSION_LIFT_REGISTRY.values()
             if not d.dimension_id.endswith("_ref")
             and d.dimension_id != "trend_swing"  # S181 R7: arm sizing 维度非选股层 §44 验证
+            and d.dimension_id not in ("low_volatility", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure")  # S185 P1-4: 盘中/低波非选股层
         ],
         "pending_dims": [d.dimension_id for d in DIMENSION_LIFT_REGISTRY.values()
                          if d.validation_status == "探索性"
-                         and d.dimension_id != "trend_swing"],
+                         and d.dimension_id != "trend_swing"
+                         and d.dimension_id not in ("ofi_accumulated", "seal_sincerity", "bid_ask_pressure")],  # S185 P1-4: 盘中因子非选股层 pending
         "frozen_commit": FROZEN_COMMIT,
     }
     return cards, evaluation_summary
