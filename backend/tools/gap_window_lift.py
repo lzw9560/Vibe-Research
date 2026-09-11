@@ -67,7 +67,7 @@ if len(obs) < 30:
 all_wins = sum(o["win"] for o in obs); wr_all = all_wins/len(obs)
 all_net_mean = statistics.mean(o["net_gap"] for o in obs)
 print(f"obs={len(obs)} days={len(set(o['D'] for o in obs))} | no_score={n_no_score} no_bar={n_no_bar} one_word_D_excluded={n_one_word}")
-print(f"gap (D收→D+1开) all: mean={statistics.mean(o['premium'] for o in obs):.2f}% net_gap(mean,扣{COST}%cost)={all_net_mean:.2f}% net_WR={wr_all*100:.1f}%\n")
+print(f"gap (D收→D+1开) all: mean={statistics.mean(o['premium'] for o in obs):.2f}% net_gap(mean,扣real_cost~{sum(o['real_cost'] for o in obs)/len(obs):.2f}%)={all_net_mean:.2f}% net_WR={wr_all*100:.1f}%\n")
 
 # per-T top-quintile by total_score vs base (gap net lift)
 tw, tn, bw, bn = 0,0,0,0
