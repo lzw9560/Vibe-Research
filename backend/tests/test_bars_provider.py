@@ -75,8 +75,9 @@ class TestDispatch:
             "engine.bars_provider._baostock_etf_hist", lambda code: [])  # baostock 也挂
         assert KlineCacheBarsProvider()("512890") == []
 
-    def test_missing_cache_file_stock_returns_empty(self, tmp_path):
-        """cache 文件不存在 → A股 返 [] 不崩（降级，对齐 first_board_filter 范式）。"""
+    def test_missing_cache_file_stock_returns_empty(self, tmp_path, monkeypatch):
+        """cache miss + baostock fallback fail → A股 返 [] 不崩（降级）。S175 A股 baostock fallback 后 mock baostock fail 测降级。"""
+        monkeypatch.setattr("engine.bars_provider._baostock_a_share_hist", lambda code: [])
         from engine.bars_provider import KlineCacheBarsProvider
         assert KlineCacheBarsProvider()("600519") == []
 
@@ -144,8 +145,9 @@ class TestReload:
         assert len(bars) == 2
         assert bars[1]["close"] == 101.0
 
-    def test_corrupt_cache_degrades_to_empty(self, tmp_path):
-        """cache 损坏（非 JSON）→ 降级返空 dict 不崩。"""
+    def test_corrupt_cache_degrades_to_empty(self, tmp_path, monkeypatch):
+        """cache 损坏（非 JSON）+ baostock fail → 降级返空不崩。S175 A股 baostock fallback 后 mock baostock fail 测降级。"""
+        monkeypatch.setattr("engine.bars_provider._baostock_a_share_hist", lambda code: [])
         from engine.bars_provider import KlineCacheBarsProvider
         (tmp_path / "baostock_kline_cache.json").write_text("not json{")
         KlineCacheBarsProvider.reload()

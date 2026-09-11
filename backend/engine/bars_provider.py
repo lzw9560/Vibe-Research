@@ -119,6 +119,36 @@ def _baostock_etf_hist(code: str) -> list[dict]:
             pass
 
 
+def _baostock_a_share_hist(code: str) -> list[dict]:
+    """baostock A 股日 K（sh.6/sz.0/sz.3）——kline cache miss 时的 fallback。
+
+    baostock 不封 IP，返含 pctChg/isST（is_unbuyable_next_bar 判涨停用）。
+    S183 验证发现 kline_refresh 全量 5540 股 baostock 拉 timeout → cache 缺当日 bar
+    → breakout T1OpenFill no_entry_bar → 80 行全 unbuyable。A 股 cache miss 走此 fallback
+    实时拉候选股（~50-100 股），不依赖全量 cache。返 [{date,open,high,low,close,pctChg,isST,...}]。
+    """
+    try:
+        from data.sources.baostock_src import fetch_daily_bars, ensure_login, DependencyMissing
+        from datetime import datetime, timedelta
+    except ImportError:
+        return []
+    try:
+        ensure_login()
+    except (ImportError, DependencyMissing):
+        _logger.warning("bars_provider: baostock 不可用，A 股 %s fallback 跳过", code)
+        return []
+    prefix = "sh." if code.startswith("6") else "sz."
+    bs_code = prefix + code
+    end = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=400)).strftime("%Y-%m-%d")
+    try:
+        bars = fetch_daily_bars(bs_code, start, end)
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("bars_provider: baostock A 股 %s 拉取失败: %s", code, e)
+        return []
+    return bars or []
+
+
 class KlineCacheBarsProvider:
     """composite bars_provider——journal_recorder 注入的生产 bars 源。
 
@@ -135,7 +165,11 @@ class KlineCacheBarsProvider:
     def __call__(self, code: str) -> list[dict]:
         if _is_etf(code):
             return self._etf_bars(code)
-        return _load_cache().get(code, [])
+        cached = _load_cache().get(code, [])
+        if cached:
+            return cached
+        # S183: A 股 cache miss（kline_refresh 全量拉 timeout 缺当日 bar）→ baostock fallback
+        return _baostock_a_share_hist(code)
 
     @staticmethod
     def _etf_bars(code: str) -> list[dict]:
