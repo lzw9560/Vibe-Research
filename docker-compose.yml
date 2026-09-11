@@ -9,6 +9,9 @@ services:
         required: false
     environment:
       - LIMITUP_PRECOMPUTE=true
+      - VR_DATA_DIR=/app/.vibe-research
+    volumes:
+      - ./.vibe-research:/app/.vibe-research  # 数据持久化（market_data.db + trade_journal.db + baostock cache + gene_scores 等）
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8900/api/health')"]
