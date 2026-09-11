@@ -66,5 +66,30 @@ class PaperPortfolio:
             lift_multiplier = lift_for_arm(arm)[0]
         return self._breaker.final_size(arm, arm_size, lift_multiplier)
 
+    def bayesian_arm_size(self, arm: str, max_size: float = 1.0) -> float:
+        """Beta-Bernoulli 后验驱动 arm_size（wok7j1arm P1）。
+
+        Beta(1,1) 先验 → trade_journal realized wins/losses 更新后验 → arm_size ∝ 下 5% 可信界（保守）。
+        不确定性高→小仓，数据累积→后验收窄→仓位增长。exploratory→validated 数学诚实桥梁。
+        用 scipy.stats（已装），不需 PyMC/Stan。
+        """
+        try:
+            from scipy.stats import beta as beta_dist  # noqa: PLC0415
+        except ImportError:
+            return 0.0
+        trends = self._journal.query_winrate_trends(arm=arm)
+        if not trends:
+            return 0.0
+        last = trends[-1]
+        n_decided = last.get("n_decided", 0)
+        if n_decided < 1:
+            return 0.0
+        n_win = round(last.get("win_rate", 0) * n_decided)
+        n_loss = n_decided - n_win
+        # Beta(1+n_win, 1+n_loss) 后验——下 5% 分位（保守下界）
+        posterior = beta_dist(1 + n_win, 1 + n_loss)
+        lower = float(posterior.ppf(0.05))
+        return round(min(lower, max_size), 4)
+
 
 __all__ = ["PaperPortfolio"]
