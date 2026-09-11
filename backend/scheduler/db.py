@@ -14,13 +14,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from scheduler.models import ScheduledTask, TaskRun
+from vr_paths import resolve_data_dir
 
 logger = logging.getLogger("vibe-research")
 
-_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "data", "market_data.db",
-)
+# S184 统一 DB 到 VR_DATA_DIR（.vibe-research/market_data.db）——避免 scheduler 用
+# backend/data/market_data.db 而其他 DB 在 .vibe-research/ 的歧义（用户要求唯一 db 存储目录，
+# CLAUDE.md §1.2 私有数据隔离）。_get_connection 读模块级 _DB_PATH，conftest monkeypatch 不变。
+_DB_PATH = str(resolve_data_dir() / "market_data.db")
 
 
 def _get_connection() -> sqlite3.Connection:

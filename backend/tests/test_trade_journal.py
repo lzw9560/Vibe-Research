@@ -87,7 +87,7 @@ class TestCRUD:
         )
         sid = tj.insert(record)
         assert sid == record.signal_id
-        assert len(sid) == 36  # UUID format
+        # S183: signal_id 改确定性（arm_date_code，len 26 非 UUID 36）
 
     def test_insert_then_query_roundtrip(self, tj):
         """insert → query 往返一致。"""
@@ -275,7 +275,7 @@ class TestStatsHelpers:
     def test_wilson_ci_empty_input(self):
         """空输入不崩。"""
         lo, hi = _wilson_ci(0, 0)
-        assert lo == 0.0 and hi == 0.0
+        assert lo == 0.0 and hi == 1.0  # S183: n=0 返 (0,1) 宽带诚实暴露无数据
 
     def test_wilson_ci_known_values(self):
         """10 wins / 20 total → CI 含 0.5。"""
@@ -316,13 +316,11 @@ class TestS44VerdictAndDormantStubs:
         # 存活臂带 s44_verdict（诚实标签）
         assert agg["floor"]["s44_verdict"] == "externally_validated"
         assert agg["breakout"]["s44_verdict"] == "§44_falsified"
-        # dormant 臂 stub（limitup/trend 无记录 → 显式 dormant stub）
+        # dormant 臂 stub（limitup 无记录 → 显式 dormant stub；trend S181 升级实臂 exploratory 不 dormant）
         assert "limitup" in agg
         assert agg["limitup"]["s44_verdict"] == "mock_not_ready"
         assert agg["limitup"]["dormant"] is True
         assert agg["limitup"]["n_picks"] == 0
-        assert "trend" in agg
-        assert agg["trend"]["dormant"] is True
 
     def test_gap_dead_arm_not_in_aggregate(self, tmp_path):
         """gap 是 dead_arm（is_dead_arm=1 记录），不进 aggregate（防污染存活臂统计）——非 dormant stub。"""
