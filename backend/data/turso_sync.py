@@ -36,7 +36,7 @@ SYNC_TABLES = [
     {"db": "trade_journal.db", "table": "trade_journal", "pk": "signal_id"},
     {"db": "market_data.db", "table": "scheduled_tasks", "pk": "id"},
     {"db": "zt_history.db", "table": "zt_history", "pk": "date,code"},
-    {"db": "seal_intraday.db", "table": "seal_intraday_snapshots", "pk": "date,code,ts"},  # S185: 盘中数据沉淀（OFI 五档）
+    {"db": "seal_intraday_2026.db", "table": "seal_intraday_snapshots_202609", "pk": "date,code,ts"},  # S185: 盘中数据沉淀（OFI 五档，按月分表）
 ]
 
 
