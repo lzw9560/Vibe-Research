@@ -29,23 +29,42 @@ KLINE_CACHE = ROOT.parent / ".vibe-research" / "baostock_kline_cache.json"
 
 _logger = logging.getLogger(__name__)
 
+# S184 调研（wvaq7kuod）：每次重读 156MB JSON 46s，10 周 52 天=40min 纯 IO。模块级缓存 + mtime 检测
+# （kline_refresh 写新 bar 后 mtime 变，自动失效重读）。首次 46s 后续 0ms。
+_KLINE_CACHE: dict[str, list[dict]] | None = None
+_KLINE_CACHE_MTIME: float = 0.0
+
 
 def _load_kline_cache() -> dict[str, list[dict]]:
     """读 baostock_kline_cache.json，缺失/损坏返空 dict（降级不崩，对齐 first_board_filter 范式）。
+
+    模块级缓存（S184 调研 wvaq7kuod）：首次 json.loads 46s，后续 mtime 未变直接返缓存 0ms。
+    kline_refresh 写新 bar 后文件 mtime 变，自动失效重读。
 
     baostock 未装或首次运行时缓存文件不存在，裸读会抛 FileNotFoundError 冒泡至 endpoint
     返 500（违 S069"dev 无 baostock 降级不崩"契约）。此处 exists()+try 守卫，返 {} 使调用方
     降级为空候选列表而非崩。返 {} 诚实（不臆造 kline），与 first_board_filter.py
     ``_get_kline_cache`` / first_board_premium_baseline.py exists()+try 同范式（S113 R2）。
     """
+    global _KLINE_CACHE, _KLINE_CACHE_MTIME
     if not KLINE_CACHE.exists():
         _logger.warning(
             "baostock kline cache 缺失（未装/首次运行）path=%s，盘前选股降级返空候选", KLINE_CACHE
         )
         return {}
+    # mtime 检测——cache 文件更新（kline_refresh 写新 bar）自动失效重读
     try:
-        return json.loads(KLINE_CACHE.read_bytes())
+        mtime = KLINE_CACHE.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    if _KLINE_CACHE is not None and mtime == _KLINE_CACHE_MTIME:
+        return _KLINE_CACHE
+    try:
+        _KLINE_CACHE = json.loads(KLINE_CACHE.read_bytes())
+        _KLINE_CACHE_MTIME = mtime
+        return _KLINE_CACHE
     except Exception as e:  # noqa: BLE001
+        _KLINE_CACHE = None
         _logger.warning("baostock kline cache 读取失败，降级返空候选: %s", e)
         return {}
 
