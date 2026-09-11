@@ -332,7 +332,7 @@ TradeJournal 闭环/模拟盘自洽/OFI 收集器+看板/kline degraded/cockpit 
 | 编号 | 一句话 | 状态 | 备注 |
 |---|---|---|---|
 | S173 | TradeJournal 闭环 | ✅已实现 | fa25be8+84a5c2d 4 模块 55 测 |
-| S174 | godmodule 拆分 | 草案 | |
+| S174 | godmodule 拆分 | ✅已实现 | P2/P3 拆分 5 commit |
 | S175 | 模拟盘自洽闭环 | ✅已实现 | P0+P1+P2 128 tests+tsc0 |
 | S176 | 盘中 OFI 数据收集器 | ✅已实现 | 35 tests+188 全量 |
 | S177 | kline-refresh degraded | ✅已实现 | 32 tests+全量 3200 passed |

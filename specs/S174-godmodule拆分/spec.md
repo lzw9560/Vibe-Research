@@ -1,6 +1,6 @@
 # Spec: S174 — 3 god-module 拆分（scheduled_tasks / first_board_filter / strategy_funnel_registry）
 
-> 状态：草案
+> 状态：已实现（P2/P3 拆分 done，5 commit 1a9088f+a4870f5+6fa074b+1a7d83f+f54041b）
 > 作者：Claude（agent）  日期：2026-09-09
 > 关联：memory `project-slim-audit-2026-09-09` P6 / `coding-style.md` 800 行上限 / S141 FirstBoardPipeline 节点化拆分（前序，已实现）
 
