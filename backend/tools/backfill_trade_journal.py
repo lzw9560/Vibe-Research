@@ -13,7 +13,7 @@ from engine.bars_provider import KlineCacheBarsProvider
 from vr_paths import is_trading_day
 from datetime import date, timedelta
 
-start_str = sys.argv[1] if len(sys.argv) > 1 else "2026-09-01"
+start_str = sys.argv[1] if len(sys.argv) > 1 else "2026-07-01"
 end_str = sys.argv[2] if len(sys.argv) > 2 else "2026-09-10"
 start = date.fromisoformat(start_str)
 end = date.fromisoformat(end_str)
@@ -21,11 +21,10 @@ end = date.fromisoformat(end_str)
 bp = KlineCacheBarsProvider()
 rec = JournalRecorder(bars_provider=bp)
 
-# S184 验证发现：真 cache 只到 09-09，path_return max_hold 要 09-10+ bars 但 cache 缺 → hold net_pnl=NULL。
-# mock cache 空，强制 baostock fallback（267 bars 含 09-10+）→ path_return 算 net_pnl → buyable 非 hold。
-import engine.bars_provider as _bp_mod
-_bp_mod._CACHE = {}
-_bp_mod._load_cache = lambda: {}
+# S184 调研 wvaq7kuod：删 mock cache 空——bars_provider.__call__ 已有自动 baostock fallback
+# （cache miss → _baostock_a_share_hist）。历史日期 07-01~09-09 用真 cache（有 bars），09-10+ cache miss → baostock。
+# premarket_selection._load_kline_cache 已加模块级缓存（7a74906），10 周 52 天从 40min→3min。
+# 最后 2-3 天可能 hold（cache 缺 09-10+），settle_pending_breakout 后续补（kline_refresh 17:15 更新 cache 后重跑）。
 
 d = start
 total = 0
