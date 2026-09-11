@@ -29,7 +29,8 @@ from workflow_state_machine import WorkflowStateMachine, WorkflowStatus
 
 logger = logging.getLogger("vibe-research")
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "market_data.db")
+from vr_paths import resolve_data_dir  # S184 统一 DB 到 .vibe-research/
+_DB_PATH = str(resolve_data_dir() / "market_data.db")
 
 
 # ============================================================================

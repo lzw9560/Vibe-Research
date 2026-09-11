@@ -16,7 +16,8 @@ from typing import Any, Callable, Dict, Tuple
 from fastapi import HTTPException
 
 # ============ Database ===========
-_DB_PATH: str = os.path.join(os.path.dirname(__file__), "..", "data", "market_data.db")
+from vr_paths import resolve_data_dir  # S184 统一 DB 到 .vibe-research/
+_DB_PATH: str = str(resolve_data_dir() / "market_data.db")
 _DB_LOCK: threading.Lock = threading.Lock()
 
 
