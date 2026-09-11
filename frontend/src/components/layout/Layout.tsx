@@ -50,7 +50,7 @@ export function Layout() {
       )}>
         {/* Brand */}
         <div className={cn("border-b border-border/50", collapsed ? "flex justify-center p-3" : "p-4")}>
-          <Link to="/daily-review" className={cn("flex items-center", collapsed ? "justify-center" : "gap-2")}>
+          <Link to="/market" className={cn("flex items-center", collapsed ? "justify-center" : "gap-2")}>
             <LineChart className="h-6 w-6 shrink-0 text-primary text-glow" />
             {!collapsed && (
               <span className="text-lg font-extrabold tracking-tight">
@@ -167,7 +167,7 @@ export function Layout() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <Link to="/daily-review" className="flex items-center gap-2">
+          <Link to="/market" className="flex items-center gap-2">
             <LineChart className="h-5 w-5 text-primary text-glow" />
             <span className="text-base font-extrabold tracking-tight">
               Vibe-<span className="text-primary">Research</span>
@@ -186,7 +186,7 @@ export function Layout() {
             <div className="fixed inset-y-0 left-0 z-50 w-64 glass md:hidden">
               <div className="flex h-full flex-col">
                 <div className="border-b border-border/50 p-4">
-                  <Link to="/daily-review" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
+                  <Link to="/market" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
                     <LineChart className="h-6 w-6 text-primary" />
                     <span className="font-extrabold">Vibe-Research</span>
                   </Link>
