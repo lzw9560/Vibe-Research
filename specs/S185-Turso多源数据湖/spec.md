@@ -1,6 +1,45 @@
 # Spec: S185 — Turso 多源全量交易数据湖（盘中沉淀 + 提前积累）
 
-> 状态：草案
+> 状态：草案 v2（grill 6 视角 rethink + 用户"分开设计"——数据湖只读 vs 生产本地 SQLite 分开）
+
+## grill rethink（2026-09-11，6 视角 verdict=revise）
+
+### 3 CRITICAL
+1. **§5.1 臆造 API**——`libsql_client.connect(file:...?libsql://...?replicaMode=embedded)` 不存在。真实 API 是 `import libsql; libsql.connect(local, sync_url=url, auth_token=token, sync_interval=5, offline=False)`（模块名 libsql 非 libsql_client，kwarg 非 URL query，replicaMode 不存在）。
+2. **无降级设计**——Turso 未注册/挂了/GFW 断时全量数据收集（R3-R7）一起挂。项目已有 DependencyMissing + circuit_breaker + data_status 范式可复用。
+3. **baostock 单 socket 不可并发**——单 TCP socket singleton + recv(8192) 无 timeout，asyncio.to_thread 并发 = 响应交错损坏。serial-only。
+
+### 7 表 5 重复（复用现有非重建）
+- `ofi_snapshots`——复用现有 `intraday_ofi_snapshots(date,ts,code,ofi,ofi_abs,bid_ask_pressure,buy_vols_json,sell_vols_json,seal_amount,regime,snapshot_at)`，spec 的 bid1-5/ask1-5/seal_sincerity 是**错列名**
+- `kline_5min`——复用 `baostock_5min_freeze(date,code,bars_json,bar_count)` JSON blob 模式
+- `zt_pool`——PK 改回 `(date,code)` + source 非键（匹配 zt_history_store 现有 DELETE+INSERT 单源去重）
+- `hithink_snapshots`——改结构化列（endpoint,code,datetime,price,pe_ttm,pb_mrq,...）非 raw JSON（绕过 S163 质量门）
+
+### 9GB 全量撞墙（砍 scope 5-10×）
+- OFI 全市场 4GB/DAY（9GB 2.5 天撞墙）→ 限涨停池 ~20-50 股（非 5226）
+- kline_5min 5226×48×250=6.27GB/yr → 限涨停池 ~50-100 股 + 历史 1-2 年
+- 日K 0.5GB/5yr → 可全量
+
+### 推荐方案（KISS 路径 A 首选）
+**路径 A**：零 libsql 依赖——stdlib sqlite3 本地写入零改动 + cron `turso_sync` 用 HTTP REST 推 Turso（天然降级，Turso 挂本地照跑）
+**路径 B**（备选）：libsql-experimental（Rust binding，真支持 embedded replica）+ get_conn() 适配器（try libsql except sqlite3）+ extras_require={'turso':[...]}（可选依赖，非 base requirements）
+
+### 分开设计（用户要求）
+- **生产 DB**（.vibe-research/ 本地 SQLite）：trade_journal/market_data/gene_scores/winrate 等，实时写入，私有不入云
+- **数据湖**（Turso 多源只读）：baostock kline/5min + tencent 五档 + hithink 快照 + 涨停池 + 三表，全量拉取只读沉淀，供后期测试（回测/§44）+ 开发（调试盘中策略）
+- 物理分离——数据湖不混生产 DB，独立只读数据源
+
+### 降级三态
+1. 纯本地（VR_TURSO_URL 未设）→ sqlite3.connect(local) 当前模式
+2. embedded replica connected → 本地读写 + 后台 sync Turso
+3. 云同步失败降本地 → circuit_breaker('turso') 包 sync，OPEN 跳过不阻塞写入 + stale 标注（last_synced_at + data_status=ok/stale/degraded）
+
+### 异步设计（轻量 asyncio 非 arq）
+- 跨源并发 asyncio.gather(to_thread(baostock_serial), to_thread(tencent_batched), to_thread(hithink_throttled))
+- baostock serial-only（单 socket）+ tencent 分批 50-500/batch（不封 IP 10-20 并发）+ hithink 如需限流从零 Semaphore（spec 臆造 Semaphore=2 代码库零命中）
+- tenacity network_retry 只用于无内置 retry 的源（baostock/tencent），hithink/em_get 跳过（已有内置 retry，3×3=9 叠加爆炸）
+- 断点续传 per-batch checkpoint（每 100 股 commit + done set，crash 跳过）
+- dual-write 过渡期（DUAL_WRITE=true 同时写旧+Turso，2 周对比后切单）
 > 作者：Claude  日期：2026-09-11
 > 关联：S184 kline_refresh 方案 0 / S176 OFI 收集器 / S163 数据质量门 / wc98ebhlh 云资源调研（Turso 9GB）/ w3pvh9q8f 数据基建 grill / memory prefer-historical-data-over-wait / memory data-source-capabilities
 
