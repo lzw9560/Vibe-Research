@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码�
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
+from engine.accounting import _cost_pct  # noqa: E402  # S184 wok7j1arm P0: gap 真实成本
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 PREMIUM = ROOT / ".vibe-research" / "first_board_premium_baseline.json"
@@ -53,8 +54,11 @@ for s in samples:
     d_idx = next((i for i,b in enumerate(bars) if str(b["date"])[:10] == D), None)
     if d_idx is None: n_no_bar += 1; continue
     if is_one_word_d(bars[d_idx]): n_one_word += 1; continue  # D 日一字板封死不可买
-    net_gap = premium - COST
-    obs.append({"D": D, "code": code, "premium": premium, "net_gap": net_gap,
+    # S184 wok7j1arm P0: 接线 accounting._cost_pct 替代 flat COST（假阳性修复——gap "validated" 真实成本 net 负）
+    close_d = bars[d_idx].get("close") or 0
+    real_cost = _cost_pct(close_d, 100.0, D) if close_d > 0 else COST  # 100 股默认，按 close notional 算真实成本
+    net_gap = premium - real_cost
+    obs.append({"D": D, "code": code, "premium": premium, "net_gap": net_gap, "real_cost": real_cost,
                 "win": 1 if net_gap > 0 else 0, "score": float(score),
                 "zt_count": s.get("zt_count")})
 
@@ -114,10 +118,10 @@ if _surv_by_day:
             survivors_by_day=dict(_surv_by_day),
             universe_by_day=dict(_univ_by_day),
             n_comparisons=1,
-            round_trip_cost=COST,
+            round_trip_cost=round(sum(o["real_cost"] for o in obs) / len(obs), 4) if obs else COST,
             script="tools/gap_window_lift.py",
             params={
-                "arm": "top", "cost_pct": COST, "quintile": "top_1/5",
+                "arm": "top", "cost_pct": round(sum(o["real_cost"] for o in obs) / len(obs), 4) if obs else COST, "quintile": "top_1/5",
                 "min_day_size": 10, "one_word_excluded": True,
                 "tol": TOL,
             },
