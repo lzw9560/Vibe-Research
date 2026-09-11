@@ -1,6 +1,6 @@
 # Spec: S175 — 模拟盘自洽闭环（Paper Trading Unified Loop）
 
-> 状态：实现中（P0+P1(T7/T8/T9-partial)+P2(T10/T11) done，128 tests green + tsc0；spec grill 2 CRITICAL+7 HIGH 全落代码；T9 deferred: RecordRow mock/dormant stub/s44_verdict contract；spec grill 7 视角 + 主 agent fresh grep/Read 核证据，2 CRITICAL+7 HIGH+MEDIUM+LOW 全修）
+> 状态：已实现（2026-09-09，P0+P1+P2 done 128 tests+tsc0；spec grill 2 CRITICAL+7 HIGH 全落代码；2026-09-11 trend 进 cron paper_track commit 98555b6）
 > 作者：lzw9560  日期：2026-09-09
 > 关联：S173-TradeJournal闭环（journal_recorder 已建，本 spec 接线生产）/ S172-红利低波指数复制臂（floor 臂 ETF 512890）/ S161-§44v2验证框架（verifier 复用）/ S166-TradeJournal+RiskLedger（journal.py 手动账本，跟单走它）/ S174-godmodule拆分（scheduler 包 P6 拆完）
 > 分级：large —— 整体自洽系统接线 + 多臂推荐 + 虚拟账户 + 跟单；P0 core ~200-210 行（grill C8+spec grill 核证据后如实估，非"30 行"非"150 行"）

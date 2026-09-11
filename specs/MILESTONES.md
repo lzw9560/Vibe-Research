@@ -315,11 +315,11 @@ vibe-astock语义吸收/采集堵塞修复/漏斗评价层/盘中H2harness/量�
 | 编号 | 一句话 | 状态 | 备注 |
 |---|---|---|---|
 | S167 | 盘中微结构数据累积 | 🔄进行中 | medium，issue 层单轮 review |
-| S168 | 批量接线 12 harness | 草案 | medium，12 脚本接线 §44v2 verifier |
-| S169 | 中线 event-PEAD | 草案 | medium，15 verdict |
+| S168 | 批量接线 12 harness | ✅已实现 | ebecbec 12 harness §44v2 verifier 全 selection |
+| S169 | 中线 event-PEAD | ✅已实现 | 8ae588a 15 verdict 短 falsified |
 | S170 | 摘帽 event | 草案 | medium，复用 midline_event_harness |
-| S171 | 长线价值 | 草案 | medium，spec+R3 done |
-| S172 | 红利低波指数复制臂 | 草案 | |
+| S171 | 长线价值 | ✅已实现 | f67ebf5 spec+R3 done（R2 方向转实用不做） |
+| S172 | 红利低波指数复制臂 | ✅已实现 | 2026-09-09 floor ETF 512890 |
 
 ---
 

@@ -1,6 +1,6 @@
 # Spec: S173 — Trade Journal 闭环（跨臂胜率全链路）
 
-> 状态：草案 v2（grill 8 CRITICAL + 9 HIGH 已修）
+> 状态：已实现（2026-09-09，fa25be8+84a5c2d，4 模块 trade_journal+journal_recorder+drawdown_breaker+ledger 55 测；grill 8 CRITICAL+9 HIGH 全修）
 > 作者：lzw9560  日期：2026-09-08
 > 关联：S166-TradeJournal+RiskLedger（journal.py 手动账本，本 spec 不重复造）/ S162-反前视引擎三层（accounting.py + executor + fill_policies）/ S172-红利低波指数复制臂（A 臂 floor）/ S159-§44应用规约v2（lift_to_multiplier 待接线）/ S171-长线价值
 > 分级：large —— 跨 4 臂统一闭环 + drawdown 熔断 + 前端归因，feature 分支 + grill + 验收

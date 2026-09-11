@@ -1,6 +1,6 @@
 # Spec: S168 — 12 个 RAW harness 批量接线 §44v2 verifier
 
-> 状态：草案 | 日期：2026-09-07 | 分级：medium（helper + 12 脚本接线 + 测试）issue 层单轮 review | 关联：S161/S163/S160/S165/multiline-strategy-direction
+> 状态：已实现（2026-09-07 ebecbec，12 harness §44v2 verifier 全 selection gap_window 端到端） | 日期：2026-09-07 | 分级：medium | 关联：S161/S163/S160/S165/multiline-strategy-direction
 
 ## 0. 问题/目标
 

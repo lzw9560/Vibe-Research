@@ -1,6 +1,6 @@
 # Spec: S169 — PEAD 中线 event edge 验证（选股层死路转 event edge 第一类）
 
-> 状态：草案 | 日期：2026-09-08 | 分级：medium（2 新文件 + 1 注释 + 测试）issue 层单轮 review | 关联：S161/S168/S159/multiline-strategy-direction
+> 状态：已实现（2026-09-08 8ae588a，15 verdict 短 falsified A 股 drift 负 vs 美国正） | 日期：2026-09-08 | 分级：medium | 关联：S161/S168/S159/multiline-strategy-direction
 
 ## 1. 问题/目标
 

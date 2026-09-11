@@ -1,6 +1,6 @@
 # S179 · Trade Desk Cockpit（页面架构重设计）
 
-**状态**：草案（spec 定稿，待 plan → tasks → 实现）
+**状态**：已实现（2026-09-10，Phase 0-3 全 done 净删-3000 行，5 commit d8adf4b+56dbf92+336a972+134bd89+4198eda）
 **分级**：large（feature 分支 + grill + 分期迁移）
 **创建**：2026-09-10
 **关联**：[[page-architecture-redesign-2026-09-09]]（w3uzkmy39 verdict，12 agent 调研+专家+synthesis）· [[buy-what-when-buy-when-sell-three-questions]]（新页服务三问）· [[selection-candidate-pool-intraday-paradigm]]（选股=候选池+盘中=信号）· [[multi-strategy-toolbox-evolution]]（多策略对接）· [[ui-first-implementation-order]]（UI 先行）· S172（ETF floor）· S173（Trade Journal）· S175（Paper Trading）· S176（OFI collector）
