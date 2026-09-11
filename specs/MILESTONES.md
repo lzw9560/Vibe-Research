@@ -323,6 +323,28 @@ vibe-astock语义吸收/采集堵塞修复/漏斗评价层/盘中H2harness/量�
 
 ---
 
+## M14 模拟盘自洽闭环+多臂+胜率曲线（S173-S183）🔄 进行中 2026-09-09 ~ 2026-09-11
+
+TradeJournal 闭环/模拟盘自洽/OFI 收集器+看板/kline degraded/cockpit 清理/r3 sizing/趋势臂/PEAD cost/胜率曲线。
+
+`specs/` 根目录 · 11 specs
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S173 | TradeJournal 闭环 | ✅已实现 | fa25be8+84a5c2d 4 模块 55 测 |
+| S174 | godmodule 拆分 | 草案 | |
+| S175 | 模拟盘自洽闭环 | ✅已实现 | P0+P1+P2 128 tests+tsc0 |
+| S176 | 盘中 OFI 数据收集器 | ✅已实现 | 35 tests+188 全量 |
+| S177 | kline-refresh degraded | ✅已实现 | 32 tests+全量 3200 passed |
+| S178 | OFI 盘中数据看板 | ✅已实现 | 7 tests+tsc0 |
+| S179 | trade-desk cockpit | ✅已实现 | Phase 0-3 清理净删-3000 行 |
+| S180 | r3 sizing 接线 | ✅已实现 | 79827ef + 58 tests |
+| S181 | 趋势波段臂 | ✅已实现 | b234446+653d83e+98555b6 6 测 |
+| S182 | PEAD per-trade real cost | ✅已实现 | 7e49468 |
+| S183 | 模拟盘胜率变化曲线 | ✅已实现 | 实时聚合+Wilson CI+50%基准；后端 7+前端 4+tsc0 |
+
+---
+
 ## 归档规则
 
 - spec 完成验收后自动归档到对应里程碑目录

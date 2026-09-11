@@ -1,12 +1,12 @@
 # S180 — r3 sizing 接线（R3-R4，用冻结值，不依赖 enforce 自动复验）
 
-> 状态：实现中（2026-09-10）
+> 状态：已实现（2026-09-10，commit 79827ef + 58 tests pass；P0-2 trend_swing 维度 2026-09-11 补 evaluation.py lift_for_arm(trend)=0.5）
 > 关联：r3-enforce deferred（专家建议 R3-R6 sizing 接线先做，R8 enforce 等数据）/ S159 §44v2 / S175 PaperPortfolio
 > 分级：medium（3 文件改 + 测试，不碰 R2 underpowered gate 三重 cap 源）
 
 ## 1. 问题/目标
 
-r3-enforce 搁置（专家 CRITICAL：path_lift 没臂读 + forward_test 空表 + 三重 cap ×0.125 未承认）。但 **R3-R6 sizing 接线**（lift_to_multiplier 接 final_size）独立有用——让 ×0.5 cap 接 sizing 路径（当前默认 1.0 不咬）。用冻结 DIMENSION_LIFT_REGISTRY（DB 空降级冻结，R5-R6 DB 缓）。
+r3-enforce 搁置（专家 CRITICAL：path_lift 没臂读 + forward_test 18天<30阈值 + 三重 cap ×0.125 未承认）。但 **R3-R6 sizing 接线**（lift_to_multiplier 接 final_size）独立有用——让 ×0.5 cap 接 sizing 路径（当前默认 1.0 不咬）。用冻结 DIMENSION_LIFT_REGISTRY（DB 空降级冻结，R5-R6 DB 缓）。
 
 north-star 胜率诚实前置：接口通，breakout 臂若上仓 ×0.5 cap 真咬（days<60）。当前空转（breakout paper_track 不 sizing，floor N/A cap=1.0）但接口接线，前瞻基建。
 
