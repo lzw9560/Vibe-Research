@@ -1,4 +1,4 @@
-"""S185 路径 A KISS：Turso 云同步工具——读本地 SQLite 表 → HTTP POST Turso REST API。
+"""S185 路径 A KISS：Turso 云同步工具——读本地 SQLite 表 → HTTP POST Turso v2/pipeline REST API。
 
 设计（grill rethink 后）：
 - VR_TURSO_URL 未设→纯本地模式（跳过 sync，当前生产不破坏）
@@ -6,6 +6,12 @@
 - 不改现有 store（零侵入——所有 store 继续用 stdlib sqlite3）
 - stdlib urllib 无新依赖（零 libsql）
 - 数据湖只读沉淀（生产 DB 本地实时写 vs 数据湖 Turso 只读，物理分离）
+
+Turso v2/pipeline API（实测确认 2026-09-11）：
+- POST https://<db>.turso.io/v2/pipeline
+- Authorization: Bearer <token>
+- Body: {"requests": [{"type":"execute","stmt":{"sql":"INSERT OR REPLACE INTO ... VALUES (?,...)","args":[{"type":"text","value":"..."},...]}}]}
+- typed args: text/integer/real/null/blob
 
 用法（scheduler cron turso_sync）：
     from data.turso_sync import sync_all
@@ -15,8 +21,8 @@ import os
 import sqlite3
 import json
 import urllib.request
+import urllib.error
 import logging
-from pathlib import Path
 from vr_paths import resolve_data_dir
 
 logger = logging.getLogger("vibe-research")
@@ -30,14 +36,18 @@ SYNC_TABLES = [
     {"db": "trade_journal.db", "table": "trade_journal", "pk": "signal_id"},
     {"db": "market_data.db", "table": "scheduled_tasks", "pk": "id"},
     {"db": "zt_history.db", "table": "zt_history", "pk": "date,code"},
-    # S185 grill 砍 scope：OFI/5min 限涨停池子集（非全市场 4GB/天撞墙）
-    # {"db": "seal_intraday_2026.db", "table": "seal_intraday", "pk": "date,code,ts"},
 ]
 
 
 def is_configured() -> bool:
     """VR_TURSO_URL/TOKEN 是否配置（未配置=纯本地模式）。"""
     return bool(_TURSO_URL and _TURSO_TOKEN)
+
+
+def _get_http_url() -> str:
+    """libsql:// → https:// for HTTP REST API."""
+    url = _TURSO_URL or ""
+    return url.replace("libsql://", "https://").replace("http://", "https://")
 
 
 def _get_breaker():
@@ -51,8 +61,71 @@ def _get_breaker():
         return None
 
 
-def sync_table(local_db: str, table: str, pk: str, batch_size: int = 500) -> dict:
-    """读本地 SQLite 表 → HTTP POST Turso REST API（batch INSERT OR REPLACE）。
+def _to_turso_arg(val) -> dict:
+    """Python value → Turso typed arg（v2/pipeline args 格式）。"""
+    if val is None:
+        return {"type": "null"}
+    if isinstance(val, bool):
+        return {"type": "integer", "value": "1" if val else "0"}
+    if isinstance(val, int):
+        return {"type": "integer", "value": str(val)}
+    if isinstance(val, float):
+        return {"type": "real", "value": repr(val)}
+    return {"type": "text", "value": str(val)}
+
+
+def _post_pipeline(sql: str, args: list, table: str) -> bool:
+    """HTTP POST Turso v2/pipeline 执行单条 SQL。返 True 成功 / False 失败（降级）。"""
+    breaker = _get_breaker()
+    if breaker and hasattr(breaker, "is_open") and breaker.is_open():
+        return False
+
+    http_url = _get_http_url()
+    data = json.dumps({"requests": [{"type": "execute", "stmt": {"sql": sql, "args": args}}]}).encode()
+    req = urllib.request.Request(
+        f"{http_url}/v2/pipeline",
+        data=data,
+        headers={"Authorization": f"Bearer {_TURSO_TOKEN}", "Content-Type": "application/json"},
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+        body = json.loads(resp.read().decode())
+        ok = body.get("results", [{}])[0].get("type") == "ok"
+        if not ok and breaker:
+            breaker.record_failure()
+        return ok
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+        logger.warning("[turso_sync] %s HTTP POST 失败: %s（本地数据不受影响）", table, e)
+        if breaker:
+            breaker.record_failure()
+        return False
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[turso_sync] %s 异常: %s", table, e)
+        if breaker:
+            breaker.record_failure()
+        return False
+
+
+def _ensure_turso_table(local_db: str, table: str) -> bool:
+    """从本地 DB 提取 schema + CREATE TABLE IF NOT EXISTS in Turso（schema migration）。"""
+    db_path = _DATA_DIR / local_db
+    if not db_path.exists():
+        return False
+    conn = sqlite3.connect(str(db_path))
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if not row or not row[0]:
+            return False
+        schema_sql = row[0].replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
+        return _post_pipeline(schema_sql, [], table)
+    finally:
+        conn.close()
+
+
+def sync_table(local_db: str, table: str, pk: str, batch_size: int = 100) -> dict:
+    """读本地 SQLite 表 → HTTP POST Turso v2/pipeline（batch INSERT OR REPLACE）。
 
     VR_TURSO_URL 未设→返 {skipped: True}。Turso 挂→breaker OPEN 跳过。
     """
@@ -67,30 +140,40 @@ def sync_table(local_db: str, table: str, pk: str, batch_size: int = 500) -> dic
     if not db_path.exists():
         return {"skipped": True, "reason": f"{local_db} 不存在"}
 
+    # CREATE TABLE IF NOT EXISTS in Turso（从本地 schema 提取，自动 migration）
+    if not _ensure_turso_table(local_db, table):
+        return {"error": f"CREATE {table} in Turso 失败", "table": table}
+
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(f"SELECT * FROM {table}").fetchall()
         if not rows:
             return {"synced": 0, "table": table}
-        cols = rows[0].keys()
+        cols = list(rows[0].keys())
+        col_list = ",".join(cols)
+        placeholders = ",".join(["?" for _ in cols])
+        sql = f"INSERT OR REPLACE INTO {table} ({col_list}) VALUES ({placeholders})"
+
         synced = 0
+        failed = 0
         for i in range(0, len(rows), batch_size):
             batch = rows[i:i + batch_size]
-            # 构造 INSERT OR REPLACE SQL batch
-            placeholders = ",".join(["?" for _ in cols])
-            col_list = ",".join(cols)
-            sql = f"INSERT OR REPLACE INTO {table} ({col_list}) VALUES ({placeholders})"
-            # TODO S185: HTTP POST Turso REST pipeline API（用户注册 Turso 后填具体 endpoint）
-            # POST https://<db>.turso.io/v2/pipeline
-            # {"requests": [{"type": "execute", "stmt": {"sql": sql, "args": [row_values]}}]}
-            synced += len(batch)
-        logger.info("[turso_sync] %s.%s synced=%d/%d", local_db, table, synced, len(rows))
-        return {"synced": synced, "table": table, "total": len(rows)}
-    except Exception as e:
+            for row in batch:
+                args = [_to_turso_arg(row[c]) for c in cols]
+                if _post_pipeline(sql, args, table):
+                    synced += 1
+                else:
+                    failed += 1
+                    if failed > 10:
+                        logger.warning("[turso_sync] %s 连续失败 >10，跳过剩余（本地数据不受影响）", table)
+                        break
+            if failed > 10:
+                break
+        logger.info("[turso_sync] %s.%s synced=%d failed=%d/%d", local_db, table, synced, failed, len(rows))
+        return {"synced": synced, "failed": failed, "table": table, "total": len(rows)}
+    except Exception as e:  # noqa: BLE001
         logger.warning("[turso_sync] %s.%s sync 失败: %s（本地数据不受影响）", local_db, table, e)
-        if breaker:
-            breaker.record_failure()
         return {"error": str(e), "table": table}
     finally:
         conn.close()
@@ -106,8 +189,9 @@ def sync_all() -> dict:
     for t in SYNC_TABLES:
         results[f"{t['db']}.{t['table']}"] = sync_table(t["db"], t["table"], t["pk"])
     total_synced = sum(r.get("synced", 0) for r in results.values())
-    logger.info("[turso_sync] sync_all done: %d rows synced", total_synced)
-    return {"synced_total": total_synced, "tables": results}
+    total_failed = sum(r.get("failed", 0) for r in results.values())
+    logger.info("[turso_sync] sync_all done: %d rows synced, %d failed", total_synced, total_failed)
+    return {"synced_total": total_synced, "failed_total": total_failed, "tables": results}
 
 
 def health_status() -> dict:
