@@ -41,6 +41,7 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS zt_history (
     ltsz REAL,                   -- 流通市值
     fundamt REAL,                -- 成交额
     hybk TEXT,                   -- 行业
+    source TEXT DEFAULT 'em',    -- 数据来源（em/ths/hithink fallback 链，S184 w3pvh9q8f P0-2）
     snapshot_at TEXT,            -- 采集时间戳
     is_final INTEGER DEFAULT 0,  -- 1=终盘稳定版（采集时间>=17:15）；每日唯一行级标记
     PRIMARY KEY (date, code)     -- 幂等：同日同 code 重写覆盖
@@ -59,6 +60,14 @@ def _ensure_final_column(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
+def _ensure_source_column(conn: sqlite3.Connection) -> None:
+    """S184 P0-2：幂等加 source 列（em/ths/hithink fallback 链标注来源）。"""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(zt_history)")}
+    if "source" not in cols:
+        conn.execute("ALTER TABLE zt_history ADD COLUMN source TEXT DEFAULT 'em'")
+        conn.commit()
+
+
 def _get_conn() -> sqlite3.Connection:
     """建库 + 建表（幂等）+ 返连接。row_factory=Row。"""
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +76,7 @@ def _get_conn() -> sqlite3.Connection:
     conn.execute(_SCHEMA)
     conn.execute(_INDEX)
     _ensure_final_column(conn)
+    _ensure_source_column(conn)
     return conn
 
 
@@ -139,15 +149,41 @@ def snapshot_zt_pool(
         d_iso = last_trading_date_str()
     d_compact = d_iso.replace("-", "")
 
+    source = "predefined"  # pool 预填
     if pool is None:
         import astock
+        # S184 P0-2: em→ths→hithink fallback 链（w3pvh9q8f 数据丢失修复——em ~14 天 rolling 不可回补）
         try:
             pool = astock.em_zt_topic_pool("getTopicZTPool", d_compact, "fbt:asc") or []
+            source = "em"
         except Exception as e:  # noqa: BLE001
-            _logger.warning("snapshot_zt_pool em_zt_topic_pool 失败 date=%s err=%s", d_iso, e)
-            return 0
+            _logger.warning("snapshot_zt_pool em 失败 date=%s err=%s，降级 ths", d_iso, e)
+            pool = []
+        if not pool:
+            # 2. ths（~380 天可回补）
+            try:
+                ths = astock.ths_limit_up_pool(d_compact) if hasattr(astock, "ths_limit_up_pool") else []
+                if ths:
+                    pool = [{"c": t.get("code", ""), "n": t.get("name", ""),
+                             "lbc": 1 if str(t.get("high_days")) == "首板" else _to_int(t.get("high_days"))}
+                            for t in ths]
+                    source = "ths"
+            except Exception as e:  # noqa: BLE001
+                _logger.warning("snapshot_zt_pool ths 失败 date=%s err=%s，降级 hithink", d_iso, e)
+        if not pool:
+            # 3. hithink（可回溯 2024-06）
+            try:
+                from data.sources.hithink_src import limit_up_pool  # noqa: PLC0415
+                hkp = limit_up_pool(d_iso)
+                if hkp:
+                    pool = [{"c": h.get("code", ""), "n": h.get("name", ""),
+                             "lbc": _to_int(h.get("lbc") or h.get("continue_day_cnt"))}
+                            for h in hkp]
+                    source = "hithink"
+            except Exception as e:  # noqa: BLE001
+                _logger.warning("snapshot_zt_pool hithink 失败 date=%s err=%s", d_iso, e)
     if not pool:
-        _logger.info("snapshot_zt_pool date=%s 涨停池空，跳过", d_iso)
+        _logger.info("snapshot_zt_pool date=%s 涨停池空（em/ths/hithink 全失败），跳过", d_iso)
         return 0
 
     snap_at = datetime.now().isoformat(timespec="seconds")
@@ -164,7 +200,7 @@ def snapshot_zt_pool(
             "fbt": _to_float(it.get("fbt")), "fund": _to_float(it.get("fund")),
             "zje": _to_float(it.get("zje")), "p": _to_float(it.get("p")),
             "ltsz": _to_float(it.get("ltsz")), "fundamt": _to_float(it.get("fundamt")),
-            "hybk": it.get("hybk"), "snapshot_at": snap_at,
+            "hybk": it.get("hybk"), "source": source, "snapshot_at": snap_at,
         })
     if not rows:
         return 0
@@ -184,9 +220,9 @@ def snapshot_zt_pool(
             cur = conn.executemany(
                 """INSERT INTO zt_history
                 (date, code, name, lbc, zbc, fbt, fund, zje, p, ltsz, fundamt, hybk,
-                 snapshot_at, is_final)
+                 source, snapshot_at, is_final)
                 VALUES (:date, :code, :name, :lbc, :zbc, :fbt, :fund, :zje, :p,
-                        :ltsz, :fundamt, :hybk, :snapshot_at, :is_final)""",
+                        :ltsz, :fundamt, :hybk, :source, :snapshot_at, :is_final)""",
                 [{**r, "is_final": 1 if is_final else 0} for r in rows],
             )
             conn.commit()
