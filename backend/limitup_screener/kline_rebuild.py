@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -34,6 +35,9 @@ logger = logging.getLogger(__name__)
 _MISSING_FACTORS = ["封板率", "炸板后溢价"]
 _TOLERANCE = 0.015  # 涨停价判定容差（1.5 分钱，覆盖四舍五入 + tick size 差异）
 _CONCURRENCY = 20  # K 线获取并发度（mootdx 不限流，TickFlow 10/min 由其 SDK 自限）
+# S187：baostock 进程级 session 非线程安全（20 并发线程抢全局 session 互踩返空），
+# rebuild_date _CONCURRENCY=20 并发调 _get_kline_bars 时须串行 baostock 段。
+_BAOSTOCK_LOCK = threading.Lock()
 
 
 def is_limit_up(close: float, prev_close: float, code: str, tolerance: float = _TOLERANCE) -> bool:
@@ -114,8 +118,46 @@ def build_ztpool_items_from_klines(
     return history, today_item
 
 
+def _baostock_bars_to_bars(code: str, end_date: str) -> list:
+    """S187: baostock A 股日 K fallback（mootdx/TickFlow 全空时，历史日期主用此路）。
+
+    baostock 不封 IP、有数年日 K 历史 + pctChg。返 SimpleNamespace Bar 列表（升序，<= end_date），
+    透明兼容 build_ztpool_items_from_klines 的 .date/.close/.open/.code 访问。
+    """
+    try:
+        from engine.bars_provider import _baostock_a_share_hist  # noqa: PLC0415
+    except ImportError:
+        return []
+    # baostock session 非线程安全，串行访问（rebuild_date 并发 20 线程会互踩）
+    with _BAOSTOCK_LOCK:
+        raw = _baostock_a_share_hist(code)
+    if not raw:
+        return []
+    from types import SimpleNamespace  # noqa: PLC0415
+    bars: list = []
+    for d in raw:
+        try:
+            dt = str(d.get("date", ""))[:10]
+            if not dt or dt > end_date:
+                continue
+            bars.append(SimpleNamespace(
+                date=dt,
+                open=float(d.get("open", 0) or 0),
+                high=float(d.get("high", 0) or 0),
+                low=float(d.get("low", 0) or 0),
+                close=float(d.get("close", 0) or 0),
+                code=code,
+            ))
+        except (TypeError, ValueError):
+            continue
+    return bars
+
+
 def _get_kline_bars(code: str, end_date: str, lookback_days: int = LOOKBACK_DAYS) -> list:
-    """取某 code 的日 K 线。mootdx 为主，TickFlow 兜底。返回 bars 列表（升序，<= end_date）。"""
+    """取某 code 的日 K 线。mootdx 为主，TickFlow 兜底，baostock 终端 fallback（S187）。
+
+    返回 bars 列表（升序，<= end_date）。mootdx 挂/TickFlow 空时走 baostock——历史日期回补主用此路。
+    """
     # 主源：mootdx
     try:
         raw = astock.kline(code, category=4, offset=lookback_days + 20)
@@ -135,6 +177,11 @@ def _get_kline_bars(code: str, end_date: str, lookback_days: int = LOOKBACK_DAYS
             return result
     except Exception:
         pass
+
+    # S187 终端 fallback：baostock（mootdx/TickFlow 全空，历史日期必需）
+    bars = _baostock_bars_to_bars(code, end_date)
+    if bars:
+        return bars
 
     return []
 
