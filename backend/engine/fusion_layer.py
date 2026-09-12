@@ -61,3 +61,28 @@ def fusion_layer(
         "top_similar_cases": fs1_results,
         "signal_weights": fs2_weights,
     }
+
+
+def build_fusion_context(fusion_output: dict) -> str:
+    """把 fusion_layer 输出 dict 转成 system prompt 用的文本块（T4.2 注入 chat.run_chat）。
+
+    喂 AI 综合研判：regime/方向/置信度 + 信号权重 + top 相似历史 case（FS1 检索，不过§44 定性参考）。
+    """
+    regime = fusion_output.get("regime", "未知")
+    direction = fusion_output.get("direction", "中性")
+    confidence = float(fusion_output.get("confidence", 0.0))
+    top_cases = fusion_output.get("top_similar_cases") or []
+    weights = fusion_output.get("signal_weights") or {}
+
+    lines = [
+        f"【信号融合研判】regime={regime} 方向={direction} 置信度={confidence:.2f}",
+        "信号权重: " + (", ".join(f"{k}={v:.2f}" for k, v in weights.items()) or "（无）"),
+    ]
+    if top_cases:
+        lines.append("历史相似 case（FS1 检索，不过§44，定性参考）:")
+        for i, c in enumerate(top_cases[:3], 1):
+            sim = float(c.get("similarity", 0.0))
+            outcome = c.get("outcome", "?")
+            stock = (c.get("case") or {}).get("stock", "?")
+            lines.append(f"  {i}. {stock} 相似度={sim:.2f} 结果={outcome}")
+    return "\n".join(lines)

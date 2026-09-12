@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from engine.fusion_layer import fusion_layer
+from engine.fusion_layer import build_fusion_context, fusion_layer
 
 
 def _sig(name, value, confidence=0.5):
@@ -71,3 +71,36 @@ class TestFusionLayer:
         """输出含 spec §3 R4 要求的 5 字段。"""
         out = fusion_layer([_sig("gap", "趋势启动", 0.7)], [], {"gap": 0.5})
         assert set(out.keys()) == {"regime", "direction", "confidence", "top_similar_cases", "signal_weights"}
+
+
+class TestBuildFusionContext:
+    def test_includes_regime_direction_confidence(self):
+        """文本块含 regime/方向/置信度（喂 AI system prompt 用）。"""
+        out = fusion_layer([_sig("gap", "趋势启动", 0.7)], [], {"gap": 0.5})
+        ctx = build_fusion_context(out)
+        assert "趋势启动" in ctx
+        assert "向上" in ctx
+        assert "0.70" in ctx or "0.7" in ctx  # confidence
+
+    def test_includes_signal_weights(self):
+        """文本块含信号权重。"""
+        out = fusion_layer([_sig("gap", "趋势启动", 0.7)], [], {"gap": 0.5, "breakout": 0.3})
+        ctx = build_fusion_context(out)
+        assert "gap" in ctx and "breakout" in ctx
+
+    def test_includes_top_similar_cases(self):
+        """文本块含 top 相似 case（FS1 检索，不过§44 定性参考）。"""
+        fs1 = [{"case": {"stock": "000001"}, "similarity": 0.9, "outcome": "hit"},
+               {"case": {"stock": "600519"}, "similarity": 0.8, "outcome": "miss"}]
+        out = fusion_layer([_sig("gap", "趋势启动", 0.7)], fs1, {"gap": 0.5})
+        ctx = build_fusion_context(out)
+        assert "000001" in ctx
+        assert "hit" in ctx
+        assert "不过" in ctx or "定性" in ctx  # 标 FS1 不过 §44 caveat
+
+    def test_empty_fusion_output_safe(self):
+        """空融合输出 → 不崩，返基础文本。"""
+        ctx = build_fusion_context({"regime": "未知", "direction": "中性", "confidence": 0.0,
+                                    "top_similar_cases": [], "signal_weights": {}})
+        assert "未知" in ctx
+        assert "0.00" in ctx or "0.0" in ctx

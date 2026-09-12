@@ -274,7 +274,7 @@ def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
     raise last_err or RuntimeError("无可用 LLM 配置（主+备 baseURL/apiKey/model 缺失）")
 
 
-def run_chat(cfg: dict, user_messages: list, context: str = "") -> dict:
+def run_chat(cfg: dict, user_messages: list, context: str = "", fusion_output: dict | None = None) -> dict:
     """跑一轮完整对话（含 function calling 循环）。
 
     cfg: {baseURL, apiKey, model}
@@ -283,6 +283,11 @@ def run_chat(cfg: dict, user_messages: list, context: str = "") -> dict:
     """
     # Agnes 等不支持 function calling 的模型：用精简 prompt，跳过工具调用
     no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
+    # S194 T4.2：注入融合研判到 context（fusion_output 由调用方算——飞书 bot 问股时跑信号适配器+检索+权重+融合）
+    if fusion_output:
+        from engine.fusion_layer import build_fusion_context  # noqa: PLC0415
+        fusion_ctx = build_fusion_context(fusion_output)
+        context = f"{context}\n\n{fusion_ctx}" if context else fusion_ctx
     sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
     messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(user_messages)

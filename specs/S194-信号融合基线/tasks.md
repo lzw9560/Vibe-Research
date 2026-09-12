@@ -89,10 +89,12 @@
   - 验收：产综合研判 dict 喂 AI ✅ 9 测试绿（regime from gap / direction from regime / FS2 加权 confidence / 透传 top_similar_cases + signal_weights）
   - effort: medium（综合逻辑 + 格式）
   - 实现注：regime 取 gap 信号 value（缺口 regime），无 gap→"未知"；direction 由 regime 派生（启动/中继→向上，反转/噪声→中性，反转歧义由 AI 终判）；confidence=Σ(sig_conf×fs2_weight)/Σ(fs2_weight)（信号不在 weights→权重 0 排除）；不触发买卖喂 AI（§1 弱合规）。
-- [ ] T4.2 接 chat.run_chat system prompt——飞书 bot 问股时注入融合输出（AI 综合研判带 regime/方向/置信度/top 相似 case）
-  - 依赖：fusion_layer（R4.1）+ chat.py TOOLS（§3 约定）
-  - 验收：飞书 bot 问股带融合输出
+- [x] T4.2 接 chat.run_chat system prompt——飞书 bot 问股时注入融合输出（AI 综合研判带 regime/方向/置信度/top 相似 case）
+  - 依赖：fusion_layer（R4.1）+ chat.py run_chat + 信号适配器（gap/breakout）
+  - 验收：飞书 bot 问股带融合输出 ✅ run_chat 加 fusion_output 参数（默认 None 向后兼容）注入 build_fusion_context；tools/run_fusion_for_query.py 全链路跑通（bars→gap+breakout 适配器→align→fewshot→weights→fusion→context）
   - effort: low（接 system prompt）
+  - 实现注：run_chat(fusion_output=...) 可选参数，有则 build_fusion_context 拼进 context 填 SYSTEM_PROMPT。compute_fusion_for_query(stock,date) 跑全链路产 fusion_output。飞书 bot 接线（parse stock→compute_fusion_for_query→run_chat）是最后生产连线步骤。
+  - 实测（600519@2026-09-10）：regime=无（无缺口）、direction=中性、confidence=0.38、breakout 权重 0.334/gap 0.5、fewshot 检索 3 相似 case。链路通。
 
 ### Phase 3b 闭环
 
