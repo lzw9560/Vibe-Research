@@ -87,6 +87,39 @@ class JournalRecorder:
         self._executor = executor or Executor()
         self._bars_provider = bars_provider or (lambda _code: [])
 
+    def record_t0_fill(
+        self, signal_id: str, fill_type: str, price: float, ts: str,
+        size: int = 100, date: str = "",
+    ) -> dict:
+        """S189 T3 · 记 T+0 fill 到 trade_journal.fills_json（同日买/卖 pair）。
+
+        fill_type: 'buy'（买压升→买 100 股可卖旧仓）/ 'sell'（买压降→卖 100 回补）。
+        fills_json 追加 t0_fills list[{type, price, ts, size, date}]。
+        返 {signal_id, fill_type, n_t0_fills}。
+        """
+        import json  # noqa: PLC0415
+        from engine.trade_journal import TradeJournal  # noqa: PLC0415
+        journal = self._journal if isinstance(self._journal, TradeJournal) else TradeJournal()
+        conn = journal._conn()  # type: ignore[attr-defined]
+        try:
+            row = conn.execute(
+                "SELECT fills_json FROM trade_journal WHERE signal_id=?", (signal_id,)
+            ).fetchone()
+            if not row:
+                return {"error": f"signal_id {signal_id} 不存在"}
+            fills = json.loads(row["fills_json"]) if row["fills_json"] else {}
+            t0_list = fills.get("t0_fills", [])
+            t0_list.append({"type": fill_type, "price": price, "ts": ts, "size": size, "date": date})
+            fills["t0_fills"] = t0_list
+            conn.execute(
+                "UPDATE trade_journal SET fills_json=? WHERE signal_id=?",
+                (json.dumps(fills, ensure_ascii=False), signal_id),
+            )
+            conn.commit()
+            return {"signal_id": signal_id, "fill_type": fill_type, "n_t0_fills": len(t0_list)}
+        finally:
+            conn.close()
+
     def run_daily(
         self, target_date: str | None = None,
         arms: list[str] | None = None,
