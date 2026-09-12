@@ -28,7 +28,7 @@ FIELDS = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
 # 每 RELOGIN_BATCH 股 re-login 一次（BaoStock 长会话超时返空）
 RELOGIN_BATCH = 150
 # T21 R20：新股全量拉取起点（扩容到非涨停股时，cache 无此 code 的从此日起拉）
-FULL_START = "2025-12-25"
+FULL_START = "2025-10-13"  # S188 扩到 250 天回溯（gap 250 复验用，2026-09-12 改）
 
 
 def _bs_code(code: str) -> str:
