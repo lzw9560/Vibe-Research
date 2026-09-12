@@ -32,9 +32,9 @@
 | FE-1 | risk 风险看板路由挂载 | RiskDashboard.tsx 组件已写但 router.tsx 无 /risk 路由（S179 清理漏挂） | ✅ done（033a7b7）| router.tsx 加 /risk + navigation 加'风险看板'tab |
 | FE-2 | S193/S196 chat.TOOLS 接线 | classify_gap + ta_signals(MACD/RSI) 已实现但没进 chat.TOOLS（AI 研判查不了缺口/MACD/RSI regime） | ✅ done（110e543）| ai/tools/ta_tools.py 3 工具 @register_tool（query_gap_regime/query_macd_divergence/query_rsi），自动同步 chat.TOOLS+MCP，TOOLS 16→19 |
 | FE-3 | chat 网页对话入口 | /api/chat 后端有但前端无 chat 页（当前走飞书 bot） | ✅ done（ChatPage） | ChatPage 调 chatStream 流式 + markdown 渲染 + 清空/abort；router /chat + nav 系统组 |
-| FE-4 | bidding 集合竞价监控页 | bidding router（/api/auction/monitor+watchlist）有，前端无独立页 | ⏳ 待建 | 前端加 BiddingPage（盘前竞价监控） |
+| FE-4 | bidding 集合竞价监控页 | bidding router（/api/auction/monitor+watchlist）有，前端无独立页 | ✅ done（BiddingPage） | BiddingPage 调 api.auctionMonitor()+auctionWatchlist() + 表格 + 刷新/自动刷新；router /bidding + nav 选股组 |
 | FE-5 | topology 拓扑图独立页 | topology router + GraphView 组件有，无独立页路由 | ✅ done（e1cbceb）| router.tsx 加 /topology → Topology 页（named export，date? 可选）+ nav'拓扑图'tab |
-| FE-6 | S194 fusion_layer 前端 | 辅助层未实现（按升级路径前向测试） | ⏳ 待实现 | S194 实现后接 chat SYSTEM_PROMPT + 前端融合研判展示 |
+| FE-6 | S194 fusion_layer 前端 | 辅助层未实现（按升级路径前向测试） | ✅ done（FusionPage） | routers/fusion.py GET /api/fusion/{code} + FusionPage 展示 regime/方向/置信度/权重/相似 case + context 文本块；router /fusion + nav 个股组 |
 
 ## 已落地（参考）
 
