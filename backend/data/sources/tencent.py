@@ -20,6 +20,7 @@ import time
 import urllib.request
 
 from ._common import UA
+from scheduler.retry import network_retry  # S188 RB-4：tencent fetch_raw 瞬态失败 retry（3 次 + 指数 backoff）
 
 # S067 P0-2：tencent_quote 日内缓存——get_portfolio 每次走网络，行情日内变化小。
 # 模块级 dict[(frozenset_codes, ), (result, ts)]，TTL=60s（盘中行情分钟级变化，短 TTL 保时效）。
@@ -36,6 +37,7 @@ def get_prefix(code: str) -> str:
     return "sz"
 
 
+@network_retry
 def _fetch_gtimg(prefixed_codes: list[str]) -> str:
     url = "https://qt.gtimg.cn/q=" + ",".join(prefixed_codes)
     req = urllib.request.Request(url, headers={"User-Agent": UA})
