@@ -7,12 +7,13 @@
 
 ### R1 · signal_align 信号对齐层
 
-- [ ] T1.1 `engine/signal_align.py` 新建——纯函数 `align_signals(signals: list[dict], target_date: str) -> list[dict]`，把异质信号（缺口日级 + OFI 盘中 + 资金流 + 选股 T-1）锚到 D 日统一时间戳，标准化 `{signal_name, value, confidence, timestamp, source}` 格式
+- [x] T1.1 `engine/signal_align.py` 新建——纯函数 `align_signals(signals: list[dict], target_date: str) -> list[dict]`，把异质信号（缺口日级 + OFI 盘中 + 资金流 + 选股 T-1）锚到 D 日统一时间戳，标准化 `{signal_name, value, confidence, timestamp, source}` 格式
   - 依赖：S193 classify_gap + S176 OFI + breakout 选股 + stock_fund_flow + S181 趋势臂（信号源已存在）
-  - 验收：4+ 信号对齐到 D 日，时间戳统一，格式标准化
+  - 验收：4+ 信号对齐到 D 日，时间戳统一，格式标准化 ✅ 13 测试绿（test_mixed_time_scales_all_anchored_to_d 验 5 信号锚 D）
   - effort: medium（时间尺度对齐逻辑 + 标准化）
-- [ ] T1.2 单测 `tests/test_signal_align.py`——异质信号对齐 case（日级/盘中/T-1 混合）+ 边界（缺信号/时间戳错）
-  - 验收：对齐逻辑正确 + 边界不炸
+  - 实现注：统一锚定 timestamp=target_date（日级/盘中/T-1 全锚 D）；value=None 跳过不臆造；per-source 适配器（gap→regime / ofi row→ofi / breakout→score 等）留调用方/后续 adapter，本函数不耦合具体源（YAGNI）
+- [x] T1.2 单测 `tests/test_signal_align.py`——异质信号对齐 case（日级/盘中/T-1 混合）+ 边界（缺信号/时间戳错）
+  - 验收：对齐逻辑正确 + 边界不炸 ✅ 13 测试（3 类：TestAlignTimestamps 4 / TestStandardizeFormat 3 / TestEdgeCases 6）
   - effort: low
 
 ### R3 · bayesian_signal_weight FS2 贝叶斯权重
