@@ -67,6 +67,7 @@ from routers import prediction_ledger_router as prediction_ledger_router_mod
 from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
 from routers import notes as notes_router  # 投研记录笔记（后端 SQLite 落盘，全局可见）
 from routers import feishu_bot as feishu_bot_router  # 飞书 Bot 双向对话（事件回调 + KG 工具）
+from routers import fusion as fusion_router  # S194 FE-6：融合研判查询（/api/fusion/{code}）
 from routers import wechat_bot as wechat_bot_router  # 微信 Bot 双向对话（企业微信回调 + KG 工具）
 from routers import verifier as verifier_router  # S165：§44 验证卡 + 实验记录（contract-first UI 接线）
 from routers import journal as journal_router  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger，fresh-impl）
@@ -271,6 +272,7 @@ app.include_router(feishu_bot_router.router)  # 飞书 Bot 双向对话（事件
 app.include_router(wechat_bot_router.router)  # 微信 Bot 双向对话（企业微信回调 + KG 工具）
 app.include_router(backtest.router)
 app.include_router(bidding.router)
+app.include_router(fusion_router.router)  # S194 FE-6：融合研判查询
 app.include_router(strategy_router.router)
 app.include_router(premarket_router.router)  # S071：盘前选股
 app.include_router(sector_divergence.router)

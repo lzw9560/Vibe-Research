@@ -54,6 +54,7 @@ export const router = createBrowserRouter([
       // 个股域
       { path: "/stock/:code", element: lazyEl(() => import("@/pages/stock/StockCockpit"), "StockCockpit") },
       { path: "/stock-data", element: lazyEl(() => import("@/pages/StockData"), "StockData") },
+      { path: "/fusion", element: lazyEl(() => import("@/pages/FusionPage")) },  // FE-6: S194 融合研判展示（输股票代码查 regime/方向/置信度/相似 case）
 
       // 模拟盘域
       { path: "/journal", element: lazyEl(() => import("@/pages/Journal"), "Journal") },

@@ -57,6 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { to: "/multiline", label: "多策略总览" },
       { to: "/strategy", label: "策略验证" },
+      { to: "/fusion", label: "融合研判" },
     ],
   },
   {
