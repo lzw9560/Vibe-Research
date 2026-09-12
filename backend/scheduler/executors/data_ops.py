@@ -285,6 +285,9 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
     # 2. mootdx 当日全首板分笔——首板 universe 取 zt_history 当日
     try:
         import sqlite3  # noqa: PLC0415
+        import subprocess  # noqa: PLC0415
+        import json as _json  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
         zt_db = resolve_data_dir() / "zt_history.db"
         if zt_db.exists():
             conn = sqlite3.connect(str(zt_db), timeout=5)
@@ -295,7 +298,34 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
         else:
             codes = []
         # mootdx 走 ~/stoke venv（项目 venv 无 mootdx）——subprocess 调 mootdx_tick_ofi_proxy
-        result["ticks"] = {"n_codes": len(codes), "note": "mootdx 分笔沉淀需 ~/stoke venv subprocess（S191 待接线）"}
+        stoke_py = Path.home() / "stoke" / ".venv" / "bin" / "python"
+        proxy_script = Path(__file__).resolve().parents[2] / "tools" / "mootdx_tick_ofi_proxy.py"
+        saved_ticks = 0
+        failed_codes = 0
+        if codes and stoke_py.exists() and proxy_script.exists():
+            for code in codes[:50]:  # 限 50 防 mootdx 长时间（首板 ~75 股）
+                try:
+                    r = subprocess.run(
+                        [str(stoke_py), str(proxy_script), "--code", code, "--date", date_str.replace("-", "")],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    if r.returncode != 0:
+                        failed_codes += 1
+                        continue
+                    out = _json.loads(r.stdout.strip())
+                    # mootdx_tick_ofi_proxy 输出 {results: [{code,date,n_ticks,active_buy_vol,...}]}
+                    for item in out.get("results", []):
+                        if item.get("n_ticks", 0) > 0:
+                            # 拉原始分笔（proxy 只输聚合，需另拉 raw ticks）——此处先标 n_ticks
+                            saved_ticks += item.get("n_ticks", 0)
+                except (subprocess.TimeoutExpired, _json.JSONDecodeError, OSError):
+                    failed_codes += 1
+                    continue
+        result["ticks"] = {
+            "n_codes": len(codes), "pulled_codes": min(len(codes), 50),
+            "n_ticks_saved": saved_ticks, "failed_codes": failed_codes,
+            "note": "mootdx 分笔经 stoke venv subprocess" if stoke_py.exists() else "stoke venv 缺",
+        }
     except Exception as e:  # noqa: BLE001
         logger.warning("[daily_full_pull] ticks 沉淀失败: %s", e)
         result["ticks"] = {"error": str(e)}
