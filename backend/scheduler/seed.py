@@ -54,6 +54,18 @@ def _ensure_seed_tasks() -> None:
             t.cron_expr = "30 17 * * 0-4"
             _manager.update_task(t)
             logger.info("[scheduler] trade_journal_daily cron 迁移 %s → 30 17 * * 0-4（S184: 晚 kline_refresh 17:15）", old_cron)
+
+    # S190 R5：盘后链 depends_on 硬门控（上游今日未 success/degraded 则跳过，防下游吃陈旧数据）
+    # 当前靠 cron 时序错开（17:15→17:25→17:30）脆，加硬门控兜底
+    for t in _manager.list_tasks():
+        if t.name == "candidate_funnel_precompute" and not t.depends_on:
+            t.depends_on = "kline_refresh"
+            _manager.update_task(t)
+            logger.info("[scheduler] candidate_funnel_precompute 声明 depends_on=kline_refresh（S190 R5）")
+        elif t.name == "trade_journal_daily" and not t.depends_on:
+            t.depends_on = "candidate_funnel_precompute,kline_refresh"
+            _manager.update_task(t)
+            logger.info("[scheduler] trade_journal_daily 声明 depends_on=candidate_funnel_precompute,kline_refresh（S190 R5）")
     if "limitup_precompute" not in existing:
         _manager.create_task(ScheduledTask(
             name="limitup_precompute",
