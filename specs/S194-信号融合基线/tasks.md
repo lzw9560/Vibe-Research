@@ -49,13 +49,16 @@
 
 ### R6 · F3 融合整体 §44（FS2-only event edge）
 
-- [ ] T6.1 F3 用 **event edge_type**（不用 selection——spec grill CRITICAL#2 survivors 不可复现），survivors=FS2 权重触发的融合 event（确定可复现）
-  - 依赖：ablation_runner（R5 框架）+ bayesian_signal_weight（R3 FS2）+ §44v2 verifier
-  - 验收：event edge §44 verdict 过/不过 2x lift
-  - effort: low（R5 框架延伸）
-- [ ] T6.2 F3 实测——跑融合整体 §44，跟 multifactor null 对账（spec §1.1）——过 §44=融合有 edge；不过=重发现 multifactor null，诚实标"融合无 validated edge"降级
-  - 验收：F3 verdict + multifactor null 对账结论
-  - effort: low（跑 + 对账）
+- [x] T6.1 F3 用 **event edge_type**（不用 selection——spec grill CRITICAL#2 survivors 不可复现），survivors=FS2 权重触发的融合 event（确定可复现）
+  - 依赖：§44v2 verifier + multifactor null（§1.1 对账）+ R3 FS2
+  - 验收：event edge §44 verdict ✅ 5 测试绿（interpret_f3_verdict 纯函数 + run_s194_f3_verdict.py 跑通）
+  - effort: low
+  - 实现注：pass 门 = status=='robust_edge'（**非 2x lift**——event edge selection_lift 恒 None，dep map s44-verifier 视角确认原验收"过 §44 2x lift"与 event edge 矛盾，已修）；必须传 dates 做 day-clustering（n_effective=49 非 pooled 947，防 §44v1 inflate artifact）；round_trip_cost=0.007 进 materiality floor max(0.003, cost×0.5)。
+- [x] T6.2 F3 实测——跑融合整体 §44，跟 multifactor null 对账（spec §1.1）——过 §44=融合有 edge；不过=重发现 multifactor null，诚实标"融合无 validated edge"降级
+  - 验收：F3 verdict + multifactor null 对账结论 ✅
+  - effort: low
+  - 实测结果：status=underpowered（days_robust=49<60），event_status=event_thin_positive，day_mean=0.0024（+0.24%/日 正但微小），p_bh=0.497 非显著，n_effective=49（day-clustered）。fusion_conclusion=fusion_underpowered，null_engagement=consistent with multifactor null（无 validated 融合 edge，诚实降级 spec §6）。与 multifactor null 一致——融合基线无验证到的 edge，§44v2 underpowered 护栏没逼出假结论。
+  - ⚠️ Phase 3a 代理局限：R4 融合层未建，F3 用现有真实交易（breakout arm 为主）收益当"融合 event"代理——测的是"系统当前交易有无 event edge"非"FS2 加权融合 event edge"。Phase 3b R4 建后用真 FS2 加权融合 event 收益复跑。
 
 ### Phase 3a 验证闭环
 
