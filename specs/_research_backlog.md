@@ -29,6 +29,12 @@
 | RB-10a | daily_full_pull news 源容错（cls_telegraph 404 不炸） | akshare stock_info_global_cls 接口 404 废弃（重试10次515s）；修 180s+2retry+容错（commit aa605dd）让 cls_telegraph 返空list 不阻塞 daily_full_pull | ✅ 容错 done | 不再炸，news 表仍空（接口404） |
 | RB-10b | daily_full_pull news 源换源 | akshare 财联社电报接口 404 废弃，换数据源（同花顺电报/东财快讯/stoke 替代接口）或等 akshare 修 | ⏳ 待查换源 | 查 stoke/akshare 替代电报接口，或接同花顺 cls |
 | RB-11 | daily_full_pull ticks raw 沉淀修复 | mootdx_tick_ofi_proxy 只输聚合 n_ticks 不输 raw ticks，save_ticks 从未被调→ticks_YYYYMM.db 从不存在 | ⏳ 待改 proxy | 改 proxy 输出 raw ticks 或 daily_full_pull 直接调 mootdx 拉原始分笔（经 stoke venv subprocess）→ save_ticks 落 datalake |
+| FE-1 | risk 风险看板路由挂载 | RiskDashboard.tsx 组件已写但 router.tsx 无 /risk 路由（S179 清理漏挂） | ⏳ 1 行路由 | router.tsx 加 /risk → RiskDashboard（组件已写最快闭环） |
+| FE-2 | S193/S196 chat.TOOLS 接线 | classify_gap + ta_signals(MACD/RSI) 已实现但没进 chat.TOOLS（AI 研判查不了缺口/MACD/RSI regime） | ⏳ R2 待做 | chat.py TOOLS 加 query_gap_regime/query_macd_divergence/query_rsi + _exec_tool 分支（§3 自动同步 MCP） |
+| FE-3 | chat 网页对话入口 | /api/chat 后端有但前端无 chat 页（当前走飞书 bot） | ⏳ 待建 | 前端加 ChatPage（不依赖飞书也能对话） |
+| FE-4 | bidding 集合竞价监控页 | bidding router（/api/auction/monitor+watchlist）有，前端无独立页 | ⏳ 待建 | 前端加 BiddingPage（盘前竞价监控） |
+| FE-5 | topology 拓扑图独立页 | topology router + GraphView 组件有，无独立页路由 | ⏳ 待建 | router.tsx 加 /topology → GraphView（组件在加路由） |
+| FE-6 | S194 fusion_layer 前端 | 辅助层未实现（按升级路径前向测试） | ⏳ 待实现 | S194 实现后接 chat SYSTEM_PROMPT + 前端融合研判展示 |
 
 ## 已落地（参考）
 
