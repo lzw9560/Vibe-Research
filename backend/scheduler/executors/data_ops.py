@@ -270,10 +270,40 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # 1. stoke 沉淀（研报/新闻/强势涨停/PE-PB）—— stoke 走 ~/stoke venv subprocess，失败降级不阻塞
     try:
-        from data.sources.stoke_src import strong_stocks, cls_telegraph, index_pe, market_pb  # noqa: PLC0415
+        from data.sources.stoke_src import strong_stocks, cls_telegraph, index_pe, market_pb, research_report  # noqa: PLC0415
         strong = strong_stocks() or []
-        telegraph = cls_telegraph()
-        telegraph_list = telegraph if isinstance(telegraph, list) else []
+        # 研报（research_reports 表）——research_report(code) 是单股接口，需遍历首板 codes
+        # 之前 items 漏 "reports" key 致研报从未拉取（subagent B 实测 9-11 research_reports 0 行）
+        import sqlite3 as _sql  # noqa: PLC0415
+        zt_db = resolve_data_dir() / "zt_history.db"
+        report_codes = []
+        if zt_db.exists():
+            try:
+                _c = _sql.connect(str(zt_db), timeout=5)
+                report_codes = [r[0] for r in _c.execute(
+                    "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
+                ).fetchall()][:30]  # 限 30 股研报（防 stoke subprocess 长时间）
+                _c.close()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[daily_full_pull] zt_history 取 codes 失败: %s", e)
+        reports_list = []
+        for code in report_codes:
+            try:
+                rs = research_report(code) or []
+                if isinstance(rs, list):
+                    for r in rs:
+                        if isinstance(r, dict):
+                            r.setdefault("code", code)
+                        reports_list.append(r)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[daily_full_pull] research_report(%s) 失败: %s", code, e)
+        # 财联社电报（news 表）——之前 cls_telegraph 失败被 nested except 静默吞，改 logger.warning 暴露原因
+        try:
+            telegraph = cls_telegraph()
+            telegraph_list = telegraph if isinstance(telegraph, list) else []
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[daily_full_pull] cls_telegraph 拉取失败: %s", e)
+            telegraph_list = []
         # PE-PB（指数 PE + 全市场 PB）—— stoke 拉取存 pe_pb 表
         pe_rows = []
         try:
@@ -281,19 +311,19 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
             for p in pe_data if isinstance(pe_data, list) else []:
                 if isinstance(p, dict):
                     pe_rows.append({"name": "上证50", "pe": p.get("pe"), "pb": None})
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[daily_full_pull] index_pe 拉取失败: %s", e)
         try:
             pb_data = market_pb() or []
             for p in pb_data if isinstance(pb_data, list) else []:
                 if isinstance(p, dict):
                     pe_rows.append({"name": "全市场", "pe": None, "pb": p.get("pb")})
-        except Exception:  # noqa: BLE001
-            pass
-        items = {"strong": strong, "news": telegraph_list, "pe_pb": pe_rows}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[daily_full_pull] market_pb 拉取失败: %s", e)
+        items = {"strong": strong, "reports": reports_list, "news": telegraph_list, "pe_pb": pe_rows}
         r = save_stoke_data(date_str, items)
         result["stoke"] = {"saved": r.get("saved", 0), "n_strong": len(strong),
-                           "n_telegraph": len(telegraph_list), "n_pe_pb": len(pe_rows)}
+                           "n_reports": len(reports_list), "n_telegraph": len(telegraph_list), "n_pe_pb": len(pe_rows)}
     except Exception as e:  # noqa: BLE001
         logger.warning("[daily_full_pull] stoke 沉淀失败: %s", e)
         result["stoke"] = {"error": str(e)}
