@@ -74,28 +74,37 @@ def _fetch_raw_ticks(code: str, date_compact: str) -> list[dict]:
     return df_all.to_dict(orient="records")
 
 
-def _ofi_proxy_minute_series(ticks: list[dict]) -> list[float]:
-    """从分笔算分钟级 OFI proxy（主动买卖方向，按分钟聚合）。
+def _ofi_proxy_minute_series(ticks: list[dict]) -> list[tuple[str, float, float]]:
+    """从分笔算分钟级 OFI proxy + 分钟成交均价。
 
-    每分钟 active_buy_vol - active_sell_vol 归一化 → 分钟 OFI 序列。
+    每分钟 active_buy_vol - active_sell_vol 归一化 → 分钟 OFI + 该分钟 vwap（成交额/量）。
+    返 [(mm, ofi, vwap), ...] 按时间排序。供 ofi_turn_points 拐点 + 取拐点实际价。
     """
     from collections import defaultdict  # noqa: PLC0415
     min_buy: dict[str, float] = defaultdict(float)
     min_sell: dict[str, float] = defaultdict(float)
+    min_amount: dict[str, float] = defaultdict(float)
+    min_vol: dict[str, float] = defaultdict(float)
     for t in ticks:
         mm = str(t.get("time", ""))[:5]  # HH:MM
         vol = int(t.get("vol", 0))
+        price = float(t.get("price", 0) or 0)
         bs = int(t.get("buyorsell", 0))
         if bs == 1:
             min_buy[mm] += vol
         elif bs == 2:
             min_sell[mm] += vol
+        min_amount[mm] += price * vol
+        min_vol[mm] += vol
     minutes = sorted(set(list(min_buy.keys()) + list(min_sell.keys())))
     series = []
     for mm in minutes:
         b, s = min_buy.get(mm, 0), min_sell.get(mm, 0)
         total = b + s
-        series.append((b - s) / total if total > 0 else 0.0)
+        ofi = (b - s) / total if total > 0 else 0.0
+        v = min_vol.get(mm, 0)
+        vwap = min_amount.get(mm, 0) / v if v > 0 else 0.0
+        series.append((mm, ofi, vwap))
     return series
 
 
@@ -120,28 +129,38 @@ def simulate_t0(trade: dict, max_t0_per_day: int = 2) -> dict:
     if len(ofi_series) < 2:
         return {"signal_id": trade["signal_id"], "note": "OFI 序列不足"}
 
-    turn_points = ofi_turn_points(ofi_series)
-    # 限 max_t0_per_day 次 T+0（卖+买 pair 算 1 次）
+    # ofi_series 是 [(mm, ofi, vwap), ...]——取 ofi 值做拐点检测
+    ofi_vals = [x[1] for x in ofi_series]
+    turn_points = ofi_turn_points(ofi_vals)
     sell_pts = turn_points["sell_points"][:max_t0_per_day]
     buy_pts = turn_points["buy_points"][:max_t0_per_day]
 
-    # 简化 T+0 PnL：每次 pair 在拐点价位卖/买，假设 0.1% 波动收益（保守估算）
-    t0_notional = entry_price * 100
+    # T+0 PnL：卖拐点价（高抛）vs 后续买拐点价（低吸），每 pair (卖-买) × 100
+    # 配对：第 i 个卖拐点配第 i 个买拐点（卖后买回补）
     t0_cost_pct = t0_cost(entry_price, 100, entry_date)
-    # 每次 T+0 估算收益：拐点后 0.1% 反向波动 × notional - t0_cost
     t0_pnl_pct = 0.0
-    n_t0 = 0
-    for _ in sell_pts:
-        t0_pnl_pct += 0.1 - t0_cost_pct  # 卖出后回补 0.1% 波动
-        n_t0 += 1
-    for _ in buy_pts:
-        t0_pnl_pct += 0.1 - t0_cost_pct
-        n_t0 += 1
+    n_pairs = 0
+    for i in range(min(len(sell_pts), len(buy_pts))):
+        sell_idx = sell_pts[i]
+        # 找 sell_idx 之后的第一个 buy 点
+        buy_idx = next((b for b in buy_pts if b > sell_idx), None)
+        if buy_idx is None:
+            continue
+        sell_price = ofi_series[sell_idx][2]  # 卖拐点分钟 vwap
+        buy_price = ofi_series[buy_idx][2]    # 买拐点分钟 vwap
+        if sell_price <= 0 or buy_price <= 0:
+            continue
+        # T+0 pair：卖 100 股@sell_price 买回 100 股@buy_price，收益 = (卖-买)×100 - 成本
+        pair_pnl_pct = (sell_price - buy_price) / buy_price * 100 - t0_cost_pct
+        t0_pnl_pct += pair_pnl_pct
+        n_pairs += 1
+
     return {
         "signal_id": trade["signal_id"],
         "code": code,
-        "n_minutes": len(ofi_series),
-        "n_t0_opportunities": n_t0,
+        "n_minutes": len(ofi_vals),
+        "n_t0_opportunities": len(sell_pts) + len(buy_pts),
+        "n_t0_pairs": n_pairs,
         "t0_pnl_pct": round(t0_pnl_pct, 3),
         "t0_cost_pct": round(t0_cost_pct, 3),
         "sell_points": len(sell_pts),
