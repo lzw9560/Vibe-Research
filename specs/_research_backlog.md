@@ -16,6 +16,7 @@
 | S193 | 缺口理论集成 | 缺口作 regime/变盘判断信号（不直接触发买卖，grill Q10-Q11 定）；classify_gap 纯函数 + chat.TOOLS 注入 AI 研判 + 关注推送 + 候选池注入；不验单信号 §44，验 S194 融合消融 | ✅ spec 草案落 | Phase 2：纯函数 + chat.TOOLS + 分类准确率 sanity |
 | S194 | 信号融合基线 | 方法论修正（单信号§44不过≠融合无edge，Q13-Q14 grill）；few-shot检索+贝叶斯权重融合；F1消融验增量+F3融合整体§44；先 few-shot 后期数据够上 ML | ✅ spec 草案落 | Phase 3：信号对齐+few-shot引擎+贝叶斯权重+消融验证（依赖 S193） |
 | S195 | 缺口理论入知识图谱 | 缺口四类+regime映射+判定规则入 Obsidian 投研图谱（认知层先于代码） | ✅ spec 草案落 | Phase 1：纯文档图谱实体（最快） |
+| S196 | 技术分析信号源扩展（MACD背离+RSI超买超卖） | P0双子作regime信号不买卖+强互补缺口+数据够(baostock日K)+A股有据；岛形反转进S193扩展不独立 | ✅ 调研落 memory | S193 之后候选：classify_macd_divergence/classify_rsi 进 chat.TOOLS（类比 classify_gap） |
 | RB-1 | scheduler-research（换框架/服务解耦） | **保持自实现+补强**（进程死非框架问题→healthchecks.io 解；Redis 对个人 Mac 过重 YAGNI；APScheduler 唯一增量 misfire 不痛；3 痛点自建~150 行零依赖） | ✅ S190 spec 落定论 + R3-R5 全落地 | R3 healthcheck seed ✅/R4 retry 接线 ✅/R5 depends_on ✅ 全 done |
 | RB-2 | cloud-resources healthchecks.io | 免费外部心跳防 cron 静默死 | ✅ 全落地（executor+seed cron id=32 `0 * * * *` + URL 写 backend/.env + 后端重启 + ping 200 OK 验证） | done；hourly cron 自动 ping，进程死→healthchecks.io 邮件告警 |
 | RB-3 | data-infrastructure 全量拉取 | 每日盘后全量拉各源当日数据（stoke 研报/新闻/归因 + mootdx 分笔）沉淀 datalake + 回放引擎 | ✅ 已实现（`data/datalake/replay.py` 75行 + `daily_full_pull` executor 拉 stoke+ticks + cron id=34） | datalake 已有 9-12 stoke 数据；回放引擎可调 `replay_day(date, codes)` |
