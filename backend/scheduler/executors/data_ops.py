@@ -343,34 +343,35 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
             conn.close()
         else:
             codes = []
-        # mootdx 走 ~/stoke venv（项目 venv 无 mootdx）——subprocess 调 mootdx_tick_ofi_proxy
+        # mootdx 走 ~/stoke venv（项目 venv 无 mootdx）——subprocess 调 mootdx_tick_ofi_proxy --save-datalake
+        # proxy 内部遍历 codes 拉 raw ticks 直接落 datalake/ticks_YYYYMM.db（不经 stdout 大 JSON）
         stoke_py = Path.home() / "stoke" / ".venv" / "bin" / "python"
         proxy_script = Path(__file__).resolve().parents[2] / "tools" / "mootdx_tick_ofi_proxy.py"
-        saved_ticks = 0
+        saved_codes = 0
         failed_codes = 0
-        if codes and stoke_py.exists() and proxy_script.exists():
-            for code in codes[:50]:  # 限 50 防 mootdx 长时间（首板 ~75 股）
-                try:
-                    r = subprocess.run(
-                        [str(stoke_py), str(proxy_script), "--code", code, "--date", date_str.replace("-", "")],
-                        capture_output=True, text=True, timeout=30,
-                    )
-                    if r.returncode != 0:
-                        failed_codes += 1
-                        continue
-                    out = _json.loads(r.stdout.strip())
-                    # mootdx_tick_ofi_proxy 输出 {results: [{code,date,n_ticks,active_buy_vol,...}]}
-                    for item in out.get("results", []):
-                        if item.get("n_ticks", 0) > 0:
-                            # 拉原始分笔（proxy 只输聚合，需另拉 raw ticks）——此处先标 n_ticks
-                            saved_ticks += item.get("n_ticks", 0)
-                except (subprocess.TimeoutExpired, _json.JSONDecodeError, OSError):
-                    failed_codes += 1
-                    continue
+        target_codes = codes[:50]  # 限 50 防 mootdx 长时间（首板 ~75 股）
+        if target_codes and stoke_py.exists() and proxy_script.exists():
+            try:
+                # 单次 subprocess 多 codes + --save-datalake（proxy 内部遍历+落盘，比每股一次省 50x 开销）
+                r = subprocess.run(
+                    [str(stoke_py), str(proxy_script), "--codes", ",".join(target_codes),
+                     "--date", date_str.replace("-", ""), "--save-datalake"],
+                    capture_output=True, text=True, timeout=300,  # 50 股 × mootdx 拉 tick，给 5 分钟
+                )
+                if r.returncode == 0:
+                    out = _json.loads(r.stdout.strip() or "{}")
+                    saved_codes = out.get("saved_codes_dates", 0)
+                else:
+                    failed_codes = len(target_codes)
+                    logger.warning("[daily_full_pull] ticks proxy 失败 rc=%s stderr=%s",
+                                   r.returncode, (r.stderr or "")[:200])
+            except (subprocess.TimeoutExpired, _json.JSONDecodeError, OSError) as e:
+                failed_codes = len(target_codes)
+                logger.warning("[daily_full_pull] ticks subprocess 异常: %s", e)
         result["ticks"] = {
-            "n_codes": len(codes), "pulled_codes": min(len(codes), 50),
-            "n_ticks_saved": saved_ticks, "failed_codes": failed_codes,
-            "note": "mootdx 分笔经 stoke venv subprocess" if stoke_py.exists() else "stoke venv 缺",
+            "n_codes": len(codes), "pulled_codes": len(target_codes),
+            "saved_codes_dates": saved_codes, "failed_codes": failed_codes,
+            "note": "mootdx raw ticks 经 stoke venv subprocess --save-datalake 落 datalake" if stoke_py.exists() else "stoke venv 缺",
         }
     except Exception as e:  # noqa: BLE001
         logger.warning("[daily_full_pull] ticks 沉淀失败: %s", e)

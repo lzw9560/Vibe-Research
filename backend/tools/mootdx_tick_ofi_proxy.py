@@ -42,12 +42,13 @@ def _trading_days(start: str, end: str) -> list[str]:
     return out
 
 
-def fetch_tick_ofi(code: str, date: str, page_size: int = 2000, max_pages: int = 20) -> dict | None:
+def fetch_tick_ofi(code: str, date: str, page_size: int = 2000, max_pages: int = 20, return_raw: bool = False) -> dict | None:
     """拉某 code 某 date 全日分笔 → 算主动买卖 OFI proxy。
 
     mootdx transactions 分页：start=0,offset=2000 → 下一页 start+=offset。
     buyorsell: 1=主动买, 2=主动卖, 0=中性, 5/8=其他（不计入主动买卖）。
     返 {code, date, n_ticks, active_buy_vol, active_sell_vol, ofi_proxy, buy_sell_ratio}。
+    return_raw=True 额外含 raw_ticks=[{time,price,vol,buyorsell,volume}]（供 save_ticks 落 datalake）。
     """
     try:
         from mootdx.quotes import Quotes  # noqa: PLC0415
@@ -75,7 +76,7 @@ def fetch_tick_ofi(code: str, date: str, page_size: int = 2000, max_pages: int =
     active_sell = int(df_all[df_all["buyorsell"] == 2]["vol"].sum())
     total = active_buy + active_sell
     ofi_proxy = (active_buy - active_sell) / total if total > 0 else 0.0
-    return {
+    result = {
         "code": code,
         "date": date,
         "n_ticks": len(df_all),
@@ -84,6 +85,11 @@ def fetch_tick_ofi(code: str, date: str, page_size: int = 2000, max_pages: int =
         "ofi_proxy": round(ofi_proxy, 4),
         "buy_sell_ratio": round(active_buy / active_sell, 3) if active_sell > 0 else None,
     }
+    if return_raw:
+        # raw ticks 供 save_ticks 落 datalake（不经 stdout 大 JSON，避免 subprocess 传大 payload）
+        df_all["volume"] = (df_all["price"].astype(float) * df_all["vol"].astype(int)).round(2)
+        result["raw_ticks"] = df_all[["time", "price", "vol", "buyorsell", "volume"]].to_dict(orient="records")
+    return result
 
 
 def fetch_range(codes: list[str], start: str, end: str) -> dict:
@@ -120,6 +126,7 @@ def main() -> None:
     p.add_argument("--start", default=None, help="起始日 YYYYMMDD")
     p.add_argument("--end", default=None, help="结束日 YYYYMMDD")
     p.add_argument("--output", default=None, help="落盘 JSON 路径")
+    p.add_argument("--save-datalake", action="store_true", help="直接拉 raw ticks 落 datalake/ticks_YYYYMM.db（不经 stdout，供 daily_full_pull 用）")
     args = p.parse_args()
 
     codes = []
@@ -136,6 +143,26 @@ def main() -> None:
         start, end = args.start, args.end
     else:
         p.error("需 --date 或 --start/--end")
+
+    # --save-datalake：拉 raw ticks 直接落 datalake（不经 stdout 大 JSON）
+    if args.save_datalake:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from data.datalake.store import save_ticks  # noqa: PLC0415
+        from vr_paths import resolve_data_dir  # noqa: PLC0415
+        days = _trading_days(start, end)
+        saved = 0
+        for code in codes:
+            for d_compact in days:
+                r = fetch_tick_ofi(code, d_compact, return_raw=True)
+                if "raw_ticks" in r and r["raw_ticks"]:
+                    d_iso = f"{d_compact[:4]}-{d_compact[4:6]}-{d_compact[6:8]}"
+                    save_ticks(d_iso, code, r["raw_ticks"])
+                    saved += 1
+                    print(f"[{code} {d_compact}] saved {len(r['raw_ticks'])} ticks to datalake", file=sys.stderr)
+                else:
+                    print(f"[{code} {d_compact}] {r.get('note') or r.get('error', '无 raw ticks')}", file=sys.stderr)
+        print(json.dumps({"saved_codes_dates": saved}, ensure_ascii=False))
+        return
 
     result = fetch_range(codes, start, end)
     print(json.dumps(result, indent=2, ensure_ascii=False))
