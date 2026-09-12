@@ -64,6 +64,7 @@ export const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { to: "/journal", label: "交易日志" },
       { to: "/portfolio", label: "组合" },
+      { to: "/risk", label: "风险看板" },
       { to: "/advisory", label: "建议中心" },
     ],
   },

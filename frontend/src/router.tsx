@@ -57,6 +57,7 @@ export const router = createBrowserRouter([
       // 模拟盘域
       { path: "/journal", element: lazyEl(() => import("@/pages/Journal"), "Journal") },
       { path: "/portfolio", element: lazyEl(() => import("@/pages/portfolio/PortfolioPage"), "PortfolioPage") },
+      { path: "/risk", element: lazyEl(() => import("@/pages/RiskDashboard")) },  // FE-1: RiskDashboard 组件已写，S179 清理漏挂，补回独立路由
       { path: "/advisory", element: lazyEl(() => import("@/pages/advisory/AdvisoryPage"), "AdvisoryPage") },
       { path: "/multiline", element: lazyEl(() => import("@/pages/multiline/MultilinePage"), "MultilinePage") },
 
