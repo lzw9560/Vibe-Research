@@ -73,6 +73,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: BookOpen,
     tabs: [
       { to: "/review", label: "复盘中心" },
+      { to: "/topology", label: "拓扑图" },
       { to: "/industry", label: "行业研究" },
     ],
   },

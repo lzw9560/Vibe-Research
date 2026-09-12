@@ -64,6 +64,7 @@ export const router = createBrowserRouter([
       // 复盘策略域
       { path: "/review", element: lazyEl(() => import("@/pages/review/ReviewPage"), "ReviewPage") },
       { path: "/strategy", element: lazyEl(() => import("@/pages/strategy/StrategyPage")) },
+      { path: "/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },  // FE-5: 拓扑图独立页（组件在 workflow/，旧 /workflow/topology redirect 到 /review，补独立 /topology）
 
       // 系统域
       { path: "/settings", element: lazyEl(() => import("@/pages/Settings"), "Settings") },
