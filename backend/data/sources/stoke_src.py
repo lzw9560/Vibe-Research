@@ -35,22 +35,30 @@ s = Stoke()
 """
 
 
-def _run_stoke(body: str) -> Any:
-    """跑 stoke venv 子进程，返 JSON 解码结果。stoke 不可用返 {error}。"""
+def _run_stoke(body: str, timeout: int = 60, retries: int = 0) -> Any:
+    """跑 stoke venv 子进程，返 JSON 解码结果。stoke 不可用返 {error}。
+
+    timeout/retries 可调（cls_telegraph akshare 财联社接口慢，用更长 timeout + retry）。
+    """
     if not STOKE_PYTHON.exists():
         return {"error": f"stoke venv 不存在（{STOKE_PYTHON}），先 cd ~/stoke && uv sync"}
     script = _STOKE_SCRIPT.format(home=str(STOKE_HOME), body=body)
-    try:
-        r = subprocess.run(
-            [str(STOKE_PYTHON), "-c", script],
-            capture_output=True, text=True, timeout=60,
-        )
-        if r.returncode != 0:
-            return {"error": f"stoke 子进程失败: {r.stderr[:300]}"}
-        out = r.stdout.strip()
-        return json.loads(out) if out else {"error": "stoke 返空"}
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as e:
-        return {"error": f"stoke 调用异常: {e}"}
+    last_err: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            r = subprocess.run(
+                [str(STOKE_PYTHON), "-c", script],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            if r.returncode != 0:
+                last_err = RuntimeError(f"stoke 子进程失败: {r.stderr[:300]}")
+                continue
+            out = r.stdout.strip()
+            return json.loads(out) if out else {"error": "stoke 返空"}
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as e:
+            last_err = e
+            continue
+    return {"error": f"stoke 调用异常（{attempt + 1} 次重试后）: {last_err}"}
 
 
 def research_report(code: str) -> list[dict]:
@@ -71,11 +79,19 @@ print(df.to_json(orient="records", force_ascii=False))
 
 
 def cls_telegraph() -> list[dict]:
-    """财联社电报（分钟级，akshare）。返 [{标题, 内容, 时间}]。"""
-    return _run_stoke("""
-df = s.get_cls_telegraph() if hasattr(s, "get_cls_telegraph") else s.akshare.get_cls_telegraph()
+    """财联社电报（分钟级，akshare）。返 [{标题, 内容, 时间}]。
+
+    akshare stock_info_global_cls 接口慢/偶挂（实测 >60s），用 180s timeout + 2 次重试。
+    失败返空 list（容错——daily_full_pull 沉淀不要求全量，news 空不阻塞其他源）。
+    """
+    r = _run_stoke("""
+df = s.akshare.get_cls_telegraph()
 print(df.to_json(orient="records", force_ascii=False))
-""")
+""", timeout=180, retries=2)
+    if isinstance(r, list):
+        return r
+    # r 是 {error} dict —— 失败容错返空 list（daily_full_pull 会 logger.warning 暴露原因）
+    return []
 
 
 def strong_stocks(date: str | None = None) -> list[dict]:
