@@ -44,6 +44,7 @@
   - 验收：信号增量排序 + underpowered 标注 ✅ v2 实测跑通（reconstruct_s194_signals.py 重建 1048 case 的 breakout+gap 信号值，run_s194_ablation.py 跑融合分消融）
   - effort: low
   - 实测结果（v2）：融合分 IC≈0.033（无 edge）；breakout 权重有害（delta_ic=-0.03，移除后 IC 升 0.033→0.064，verdict=exploratory_harmful）；gap 权重略正（delta_ic=+0.013，p=0.23 非显著，verdict=exploratory）；两信号均 underpowered（n_days=52<60）不判。breakout 胜率 33.4%（316 赢/631 输）本就是 §44 证否弱信号，权重低(0.334)加进融合分等于加噪声——结果合理。
+  - 扩数据复跑（backfill 4-6 月 → 2352 case, 109 exit 日, robust tier）：verdict 从 underpowered → **no_contribution**——breakout delta_ic=-0.008（p=0.68 非显著）、gap delta_ic=+0.008（p=0.33 非显著），两信号 FS2 权重均无显著增量贡献。**FS2 融合权重无 edge**，跟 multifactor null 一致。补数据把 underpowered 解了，结论不变（无 edge）。
   - ⚠️ 局限：只测了 breakout+gap 2 信号（ofi 历史逐笔无法回补；fund_flow 网络限流本轮跳）；FS2 权重用全量 reliability 算（lookahead），但 underpowered verdict 不受影响；要严格 OOS 须 per-fold reliability_fn 重算权重（后续按需）。
   - 数据真相：dep-map agent 之前说"DB 空"是查错文件——.vibe-research/trade_journal.db 有 1092 行（breakout 1040+floor 52），本机就能跑。
 
@@ -58,6 +59,7 @@
   - 验收：F3 verdict + multifactor null 对账结论 ✅
   - effort: low
   - 实测结果：status=underpowered（days_robust=49<60），event_status=event_thin_positive，day_mean=0.0024（+0.24%/日 正但微小），p_bh=0.497 非显著，n_effective=49（day-clustered）。fusion_conclusion=fusion_underpowered，null_engagement=consistent with multifactor null（无 validated 融合 edge，诚实降级 spec §6）。与 multifactor null 一致——融合基线无验证到的 edge，§44v2 underpowered 护栏没逼出假结论。
+  - 扩数据复跑（2107 case, 108 日, robust）：F3 从 underpowered → **robust_edge**——breakout arm 交易 day_mean=+0.36%/笔**净**（扣 0.2% A 股成本后），p_bh=0.041 显著，event_robust。但这是**既有 breakout arm 的交易盈利**（-4/+8 止盈止损 + 41% 胜率 > 39.2% 净 break-even），**不是 FS2 融合的 edge**（R5 no_contribution 一致）。⚠️ 成本修正：原 0.7% 错（A 股实际 0.2%=佣金 0.05%+印花 0.05%+滑点 0.1%）；verify 的 round_trip_cost 只进 materiality floor 不真减，故改传净收益（毛-0.2%）+ round_trip_cost=0。⚠️ F3 仍是 Phase 3a 代理（R4 融合层未建，用 breakout arm 交易收益代理"融合 event"），"contradicts multifactor null"标签对代理不准——breakout arm 交易盈利 ≠ multifactor null（因子预测）推翻，两者测不同东西。
   - ⚠️ Phase 3a 代理局限：R4 融合层未建，F3 用现有真实交易（breakout arm 为主）收益当"融合 event"代理——测的是"系统当前交易有无 event edge"非"FS2 加权融合 event edge"。Phase 3b R4 建后用真 FS2 加权融合 event 收益复跑。
 
 ### Phase 3a 验证闭环

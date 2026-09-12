@@ -22,23 +22,26 @@ from s44_verifier import verify  # noqa: E402
 from engine.trade_journal import TradeJournal  # noqa: E402
 from tools.f3_verdict import interpret_f3_verdict  # noqa: E402
 
-ROUND_TRIP_COST = 0.007  # 0.7% 往返成本（A 股印花+佣金+滑点近似）
+# A 股 round-trip 成本（佣金 0.025%×2 + 印花 0.05% + 滑点 ~0.1% ≈ 0.2%）——非 0.7%（那是美股/过度假设）
+A_SHARE_ROUND_TRIP_COST = 0.002
 
 
 def main() -> None:
     tj = TradeJournal()
     cases = tj.query_records(is_realized=1, is_dead_arm=0, limit=10000)
 
+    # 净收益（毛 gross_return 是百分数如 4.0=4%，÷100 转分数再减成本）——verify 的 round_trip_cost
+    # 只进 materiality floor 不真减，故这里预减成本传 net returns + round_trip_cost=0
     returns: list[float] = []
     dates: list[str] = []
     for rec in cases:
         gr = rec.gross_return
         if gr is None:
             continue
-        returns.append(float(gr))
+        returns.append(float(gr) / 100.0 - A_SHARE_ROUND_TRIP_COST)
         dates.append(rec.entry_date)
 
-    print(f"# F3 event edge: {len(returns)} 条融合 event（realized 交易 gross_return）, {len(set(dates))} 唯一日", file=sys.stderr)
+    print(f"# F3 event edge: {len(returns)} 条融合 event（net 收益，毛-{A_SHARE_ROUND_TRIP_COST*100}% 成本）, {len(set(dates))} 唯一日", file=sys.stderr)
     if len(returns) < 30:
         print(f"# 样本不足（{len(returns)}<30），无法跑 §44", file=sys.stderr)
         return
@@ -48,7 +51,7 @@ def main() -> None:
         n_trials=1,
         edge_type="event",
         dates=dates,
-        round_trip_cost=ROUND_TRIP_COST,
+        round_trip_cost=0.0,  # 成本已预减进 returns
         frozen_commit="S194-F3-dev",
         n_comparisons=1,
     )
@@ -67,7 +70,7 @@ def main() -> None:
     print(f"  status: {v.status}  event_status: {getattr(v, 'event_status', None)}")
     print(f"  day_mean: {day_mean}  days_robust: {v.days_robust}  p_bh: {getattr(v, 'p_bh', None)}")
     print(f"  n: {v.n}  n_effective(day-clustered): {getattr(v, 'n_effective', None)}")
-    print(f"  round_trip_cost: {ROUND_TRIP_COST}（进 materiality floor max(0.003, cost×0.5)）")
+    print(f"  round_trip_cost: {A_SHARE_ROUND_TRIP_COST*100}%（A 股真实，已预减进 returns；verify floor=0.003）")
     print(f"\n  fusion_conclusion: {interp['fusion_conclusion']}")
     print(f"  null_engagement: {interp['null_engagement']}")
 
