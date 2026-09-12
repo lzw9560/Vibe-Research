@@ -177,4 +177,6 @@ def test_registry_only_objective_and_research_tools():
         "query_intraday_features",  # S154 T6.1：debate 辅助层（盘中封单特征，辅助非 edge）
         # 知识图谱 MCP tools（S150 daily_kg_audit + S167 kg entities/relations 查询，pre-existing test debt 补）
         "kg_audit", "query_kg_entities", "query_kg_relations",
+        # S193/S196 技术分析 regime 工具（FE-2：缺口/MACD背离/RSI，客观 regime 返回，喂 AI 综合研判不越权）
+        "query_gap_regime", "query_macd_divergence", "query_rsi",
     }

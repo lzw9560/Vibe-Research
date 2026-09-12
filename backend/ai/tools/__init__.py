@@ -12,6 +12,7 @@ from . import stock_tools  # noqa: F401 — 触发 @register_tool 注册
 from . import worldmonitor_tools  # noqa: F401 — 触发 @register_tool 注册
 from . import strategy_tools  # noqa: F401 — S058：query_strategy_card 注册
 from . import kg_tools  # noqa: F401 — 知识图谱查询工具（query_kg_entities 等）
+from . import ta_tools  # noqa: F401 — S193/S196：query_gap_regime/query_macd_divergence/query_rsi 注册（FE-2）
 
 __all__ = [
     "registry",
@@ -19,4 +20,5 @@ __all__ = [
     "worldmonitor_tools",
     "strategy_tools",
     "kg_tools",
+    "ta_tools",
 ]
