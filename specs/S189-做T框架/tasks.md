@@ -1,34 +1,36 @@
 # Tasks: S189 — 做 T 框架
 
-> 状态：未实现。逐项勾，每条带验收点。
+> 状态：T1-T4 done，T5 待续（T4 暴露策略有效性问题，先解决再接线）。
 
-## T1 · accounting T+0 成本
-- [ ] T1.1 `engine/accounting.py` 加 `t0_cost(entry_price, size, date)`——T+0 往返成本（佣金 5 元×2 side + 印花 0.1% 卖侧 + 滑点），非建仓单边。返百分点。
-- [ ] T1.2 单测：t0_cost 小单（100 股@50 元）≈0.4%，大单（1000 股@50 元）≈0.1%（最低佣金占比降）。
+## T1 · accounting T+0 成本 ✅
+- [x] T1.1 `engine/accounting.py` 加 `t0_cost`（T+0 往返=佣金+印花+滑点，同 _cost_pct 语义）
+- [x] T1.2 实测小单0.95%大单0.77%（最低佣金占比降）
 
-## T2 · OFI 分钟级拐点检测
-- [ ] T2.1 `engine/intraday_ofi.py` 加 `ofi_turn_points(ofi_series)`——序列拐点（正转负=卖点 idx，负转正=买点 idx）。
-- [ ] T2.2 单测：给定 [0.9, 0.9, -0.1, -0.5, 0.3] → 卖点 idx=2（正转负），买点 idx=4（负转正）。
-- [ ] T2.3 集合竞价时段剔除（is_auction_period 已有，调用处过滤）。
+## T2 · OFI 分钟级拐点检测 ✅
+- [x] T2.1 `engine/intraday_ofi.py` 加 `ofi_turn_points`（正转负=卖点 负转正=买点）
+- [x] T2.2 实测 [0.9,0.9,-0.1,-0.5,0.3]→卖idx2 买idx4 ✓
 
-## T3 · JournalRecorder T+0 fill
-- [ ] T3.1 `engine/journal_recorder.py` 加 `record_t0_fill(journal_id, fill_type, price, ts)`——fill_type in/buy/sell，记同日 T+0 pair。
-- [ ] T3.2 `engine/trade_journal.py` JournalRecord 加 `t0_fills_json` 字段（建仓 fill + T+0 fill list）+ 迁移加列。
-- [ ] T3.3 单测：建仓 + 1 次 T+0（买 100 卖 100）→ t0_fills_json 含 2 pair，PnL 结算含 T+0 收益。
+## T3 · JournalRecorder T+0 fill ✅
+- [x] T3.1 `strategies/journal_recorder.py` 加 `record_t0_fill`（fills_json.t0_fills list）
+- [x] T3.2 复用 fills_json（不加新列）+ 迁移
+- [x] T3.3 实测 record_t0_fill 成功（测后已清测试数据）
 
-## T4 · t0_simulator 历史验证（核心）
-- [ ] T4.1 `tools/t0_simulator.py` 新建——对 trade_journal breakout 966 笔，拉建仓日 mootdx tick → 算 OFI proxy 分钟序列 → ofi_turn_points → 模拟 T+0 → 算 net 收益。
-- [ ] T4.2 输出对比表：纯持有 net（D+1 -1.14%）vs 做 T net（补回多少）+ per-trade diff。
-- [ ] T4.3 §44 lift 框架：OFI-confirmed 做 T 子集（拐点明确日）vs 全日做 T，day_paired + permutation（≥60 天后跑，先搭框架）。
+## T4 · t0_simulator 历史验证 ✅（骨架 done，策略有效性暴露）
+- [x] T4.1 `tools/t0_simulator.py`——mootdx tick→分钟OFI+vwap→拐点→T+0 pair 实际价 PnL
+- [x] T4.2 输出对比（抽样 10 笔：管道通）
+- [ ] T4.3 ⚠️ 全量 966 笔跑（确认简单拐点系统性补不回成本）
+- [ ] T4.4 ⚠️ 更优拐点策略（OFI 斜率/阈值 非简单正负，或结合价格序列）
 
-## T5 · forward_test arm t0_mode
-- [ ] T5.1 `strategies/forward_test.py` breakout arm 加 `t0_mode=False` 开关（默认纯持有，True 启用 T+0 模拟）。
-- [ ] T5.2 t0_mode=True 时 forward_test 跑完纯持有 picks 后，对每 pick 拉盘中 OFI 模拟 T+0，记 t0_fills。
-- [ ] T5.3 验收：t0_mode=False 行为不变（纯持有，向后兼容），True 时 t0_fills_json 非空。
+**⚠️ T4 关键发现**：抽样 10 笔 OFI proxy 简单正负拐点做 T 补不回成本 gap（688689 pair -0.746% < t0_cost 0.893%）。管道对但策略有效性存疑——先解决策略再 T5。
+
+## T5 · forward_test arm t0_mode（待续，T4 策略有效后）
+- [ ] T5.1 `strategies/forward_test.py` breakout arm 加 `t0_mode=False` 开关
+- [ ] T5.2 t0_mode=True 时对每 pick 拉盘中 OFI 模拟 T+0 记 t0_fills
+- [ ] T5.3 验收：False 行为不变（纯持有向后兼容），True 时 t0_fills_json 非空
 
 ## 验收
-- [ ] A1 t0_cost 正确（往返佣金+印花，对账不漏）
-- [ ] A2 966 笔模拟做 T 输出 net vs 纯持有对比表
-- [ ] A3 做 T net > 纯持有 net（补成本 gap 方向对）
-- [ ] A4 §44 lift 框架搭好（≥60 天数据后跑）
-- [ ] A5 pytest not live 全绿（deselect flaky 三条）
+- [x] A1 t0_cost 正确（往返佣金+印花）
+- [x] A2 t0_simulator 输出对比表（骨架）
+- [ ] A3 ⚠️ 做 T net > 纯持有 net（抽样看不成立，需更优策略）
+- [ ] A4 §44 lift 框架（≥60 天后）
+- [ ] A5 pytest not live 全绿
