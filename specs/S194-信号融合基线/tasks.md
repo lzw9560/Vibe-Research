@@ -32,16 +32,18 @@
 
 ### R5 · ablation_runner F1 消融（只 FS2，复用 multifactor OOS 框架）
 
-- [ ] T5.1 `tools/ablation_runner.py` 新建——F1 消融跑（含某信号 FS2 权重 vs 不含），**复用 multifactor_combo_validation.py 的 walk-forward CV + Bonferroni + anti-feature-selection OOS 框架**（继承，非重造，spec grill MEDIUM#6 DRY）
+- [x] T5.1 `tools/ablation_runner.py` 新建——F1 消融跑（含某信号 FS2 权重 vs 不含），**复用 multifactor_combo_validation.py 的 walk-forward CV + Bonferroni + anti-feature-selection OOS 框架**（继承，非重造，spec grill MEDIUM#6 DRY）
   - 依赖：bayesian_signal_weight（R3 FS2 权重作 feature 输入）+ multifactor_combo_validation.py（OOS 框架）+ §44v2 verifier
-  - 验收：每信号（缺口/OFL/选股/资金流）跑出增量贡献
+  - 验收：每信号（缺口/OFL/选股/资金流）跑出增量贡献 ✅ 11 测试绿（build_ablation_matrix + run_signal_ablation + ablation_verdict 纯逻辑，walk_forward_fn 注入可 mock）
   - effort: medium-high（复用框架 + FS2 权重作 feature 接入）
-- [ ] T5.2 统计功效约束——给最小可检测效应量 + 功效门槛（spec grill HIGH#4）；**underpowered 标"探索性不判冗余"**（per §159 §44v2 应用规约"小 n 短窗标 underpowered 不判劣于随机"）
-  - 验收：功效分析 + underpowered caveat 标注
+  - 实现注：feature[case,signal]=信号值×FS2权重 per-case（权重单独无方差模型学不到）；walk_forward_fn 注入（组合非 OOP 继承，per dep map）；build_ablation_matrix 接重建后的 cases_signal_values + fs2_weights，不耦合信号源（T5.3 接重建管线）
+- [x] T5.2 统计功效约束——给最小可检测效应量 + 功效门槛（spec grill HIGH#4）；**underpowered 标"探索性不判冗余"**（per §159 §44v2 应用规约"小 n 短窗标 underpowered 不判劣于随机"）
+  - 验收：功效分析 + underpowered caveat 标注 ✅ ablation_verdict 套 reliability_tier（n<30 insufficient / n_days<60 underpowered → "exploratory" 不判冗余 + caveat 标注；robust → contributes/redundant/no_contribution by delta_ic+pval）
   - effort: low（分析 + 文档）
 - [ ] T5.3 F1 消融实测——跑 4 信号（缺口/OFL/选股/资金流）增量贡献排序
   - 验收：4 信号增量排序 + underpowered 标注
   - effort: low（跑现有框架）
+  - ⏳ 数据阻塞：需生产 trade_journal.db（1092 case）+ per-case 信号值重建（重跑 4 信号生成器），本机 DB 空（dep map 确认两份 DB size 0）→ 延后到能访问生产 DB 时跑
 
 ### R6 · F3 融合整体 §44（FS2-only event edge）
 
