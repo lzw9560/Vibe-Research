@@ -18,15 +18,16 @@
 
 ### R3 · bayesian_signal_weight FS2 贝叶斯权重
 
-- [ ] T3.1 `engine/bayesian_signal_weight.py` 新建——`BayesianSignalWeight` 类，每信号 Beta-Bernoulli 先验（历史 reliability）→ 后验更新权重，延伸 S180 bayesian_arm_size 的 Beta-Bernoulli 模式
+- [x] T3.1 `engine/bayesian_signal_weight.py` 新建——`BayesianSignalWeight` 类，每信号 Beta-Bernoulli 先验（历史 reliability）→ 后验更新权重，延伸 S180 bayesian_arm_size 的 Beta-Bernoulli 模式
   - 依赖：S180 bayesian_arm_size（复用 Beta-Bernoulli 模式）+ signal_align 对齐后信号 + trade_journal 历史 reliability 数据
-  - 验收：给每信号产 `{signal: weight}` 后验权重，少样本下先验主导
+  - 验收：给每信号产 `{signal: weight}` 后验权重，少样本下先验主导 ✅ 19 测试绿（weights 批量产 {signal:weight}，Beta(1,1)+0 数据→0.5 先验主导）
   - effort: medium（Beta-Bernoulli 后验 + 历史可靠性数据接入）
-- [ ] T3.2 先验设定——信号权重先验靠专家判断（缺口/OFL/选股/资金流/趋势 各初始可靠性）+ 标"先验驱动非数据驱动"（spec §6 风险）
-  - 验收：5 信号先验值 + caveat 标注
+  - 实现注：后验**均值**闭式 `(α+s)/(α+β+s+f)` 无 scipy（bayesian_arm_size 的 ppf(0.05) 用于保守仓位 sizing，权重用均值语义不同）；per-signal 先验 dict + weight/weights 方法；reliability_tier 复刻 §44v2 分级（n<30 insufficient / n_days<60 underpowered / ≥60 robust）
+- [x] T3.2 先验设定——信号权重先验靠专家判断（缺口/OFL/选股/资金流/趋势 各初始可靠性）+ 标"先验驱动非数据驱动"（spec §6 风险）
+  - 验收：5 信号先验值 + caveat 标注 ✅ DEFAULT_SIGNAL_PRIORS 5 信号全 Beta(1,1) 无信息（诚实基线不预置未证实 edge），docstring 标先验驱动 + ofi/fund_flow 无 arm 历史长期靠先验
   - effort: low（设定值 + 文档）
-- [ ] T3.3 单测 `tests/test_bayesian_signal_weight.py`——Beta-Bernoulli 后验更新 case（先验+数据→权重）+ 边界（零数据/全对/全错）
-  - 验收：后验收敛正确 + 边界不炸
+- [x] T3.3 单测 `tests/test_bayesian_signal_weight.py`——Beta-Bernoulli 后验更新 case（先验+数据→权重）+ 边界（零数据/全对/全错）
+  - 验收：后验收敛正确 + 边界不炸 ✅ 19 测试（3 类：TestBetaBernoulliWeight 8 含先验拉扯/保守先验/数据压过先验 + TestReliabilityTier 6 含边界 + TestBayesianSignalWeight 5 含 per-signal/default/批量/空）
   - effort: low
 
 ### R5 · ablation_runner F1 消融（只 FS2，复用 multifactor OOS 框架）
