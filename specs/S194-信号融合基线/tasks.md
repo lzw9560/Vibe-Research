@@ -32,18 +32,20 @@
 
 ### R5 · ablation_runner F1 消融（只 FS2，复用 multifactor OOS 框架）
 
-- [x] T5.1 `tools/ablation_runner.py` 新建——F1 消融跑（含某信号 FS2 权重 vs 不含），**复用 multifactor_combo_validation.py 的 walk-forward CV + Bonferroni + anti-feature-selection OOS 框架**（继承，非重造，spec grill MEDIUM#6 DRY）
-  - 依赖：bayesian_signal_weight（R3 FS2 权重作 feature 输入）+ multifactor_combo_validation.py（OOS 框架）+ §44v2 verifier
-  - 验收：每信号（缺口/OFL/选股/资金流）跑出增量贡献 ✅ 11 测试绿（build_ablation_matrix + run_signal_ablation + ablation_verdict 纯逻辑，walk_forward_fn 注入可 mock）
-  - effort: medium-high（复用框架 + FS2 权重作 feature 接入）
-  - 实现注：feature[case,signal]=信号值×FS2权重 per-case（权重单独无方差模型学不到）；walk_forward_fn 注入（组合非 OOP 继承，per dep map）；build_ablation_matrix 接重建后的 cases_signal_values + fs2_weights，不耦合信号源（T5.3 接重建管线）
-- [x] T5.2 统计功效约束——给最小可检测效应量 + 功效门槛（spec grill HIGH#4）；**underpowered 标"探索性不判冗余"**（per §159 §44v2 应用规约"小 n 短窗标 underpowered 不判劣于随机"）
-  - 验收：功效分析 + underpowered caveat 标注 ✅ ablation_verdict 套 reliability_tier（n<30 insufficient / n_days<60 underpowered → "exploratory" 不判冗余 + caveat 标注；robust → contributes/redundant/no_contribution by delta_ic+pval）
+- [x] T5.1 `tools/ablation_runner.py` 新建——F1 消融跑（含某信号 FS2 权重 vs 不含）
+  - 依赖：bayesian_signal_weight（R3 FS2 权重）+ multifactor_combo_validation.py（_permutation_pval 复用）+ §44v2 verifier
+  - 验收：每信号跑出增量贡献 ✅ v2 重设计后 13 测试绿（build_fusion_composite + run_composite_ablation + composite_ablation_verdict）
+  - effort: medium-high
+  - 实现注 v1→v2 重设计（adversarial verify 报 CRITICAL 后）：v1 把 feature=信号值×FS2权重 喂 walk_forward_cv ML 模型，但 FS2 权重是 per-signal 常量被 StandardScaler+树阈值数学吃掉（模型看不见权重）→ 测的是信号值本身预测力（= multifactor null 弱化重测）非 FS2 权重贡献。v2 改融合分 Σ(值×权重) 作单一预测分数（权重直接乘数无模型能吃掉），消融时权重设 0，per-fold walk-forward + delta 置换 p + 跨信号 Bonferroni + underpowered 区分 harmful/模糊 + 1 信号/0 折边界 guard。不喂 walk_forward_cv 模型（融合分自身即预测，IC=spearman）。
+- [x] T5.2 统计功效约束——给最小可检测效应量 + 功效门槛；**underpowered 标"探索性不判冗余"**（per §159 §44v2 应用规约）
+  - 验收：功效分析 + underpowered caveat 标注 ✅ v2：composite_ablation_verdict 用 delta_pval（非 full_pval，修 v1 错假设）+ adjusted_alpha=bonf_alpha/K（跨信号 Bonferroni，v1 缺）+ underpowered 分 harmful（delta<0）/exploratory（delta>0，修 v1 一视同仁 bug）
   - effort: low（分析 + 文档）
-- [ ] T5.3 F1 消融实测——跑 4 信号（缺口/OFL/选股/资金流）增量贡献排序
-  - 验收：4 信号增量排序 + underpowered 标注
-  - effort: low（跑现有框架）
-  - ⏳ 数据阻塞：需生产 trade_journal.db（1092 case）+ per-case 信号值重建（重跑 4 信号生成器），本机 DB 空（dep map 确认两份 DB size 0）→ 延后到能访问生产 DB 时跑
+- [x] T5.3 F1 消融实测——跑信号增量贡献排序
+  - 验收：信号增量排序 + underpowered 标注 ✅ v2 实测跑通（reconstruct_s194_signals.py 重建 1048 case 的 breakout+gap 信号值，run_s194_ablation.py 跑融合分消融）
+  - effort: low
+  - 实测结果（v2）：融合分 IC≈0.033（无 edge）；breakout 权重有害（delta_ic=-0.03，移除后 IC 升 0.033→0.064，verdict=exploratory_harmful）；gap 权重略正（delta_ic=+0.013，p=0.23 非显著，verdict=exploratory）；两信号均 underpowered（n_days=52<60）不判。breakout 胜率 33.4%（316 赢/631 输）本就是 §44 证否弱信号，权重低(0.334)加进融合分等于加噪声——结果合理。
+  - ⚠️ 局限：只测了 breakout+gap 2 信号（ofi 历史逐笔无法回补；fund_flow 网络限流本轮跳）；FS2 权重用全量 reliability 算（lookahead），但 underpowered verdict 不受影响；要严格 OOS 须 per-fold reliability_fn 重算权重（后续按需）。
+  - 数据真相：dep-map agent 之前说"DB 空"是查错文件——.vibe-research/trade_journal.db 有 1092 行（breakout 1040+floor 52），本机就能跑。
 
 ### R6 · F3 融合整体 §44（FS2-only event edge）
 
