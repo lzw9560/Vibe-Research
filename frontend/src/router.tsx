@@ -68,6 +68,7 @@ export const router = createBrowserRouter([
 
       // 系统域
       { path: "/settings", element: lazyEl(() => import("@/pages/Settings"), "Settings") },
+      { path: "/chat", element: lazyEl(() => import("@/pages/ChatPage")) },  // FE-3: AI 对话网页入口（不依赖飞书 bot，调 /api/chat 流式）
       { path: "/scheduled-tasks", element: lazyEl(() => import("@/pages/ScheduledTasks"), "ScheduledTasks") },
       { path: "/health", element: lazyEl(() => import("@/pages/Health"), "HealthPage") },
       { path: "/metrics", element: lazyEl(() => import("@/pages/Metrics"), "Metrics") },

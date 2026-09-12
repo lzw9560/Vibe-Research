@@ -82,6 +82,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Settings,
     tabs: [
       { to: "/settings", label: "设置" },
+      { to: "/chat", label: "AI 对话" },
       { to: "/scheduled-tasks", label: "定时任务" },
       { to: "/health", label: "系统健康" },
       { to: "/metrics", label: "指标分析" },
