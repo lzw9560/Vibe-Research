@@ -79,15 +79,19 @@ print(df.to_json(orient="records", force_ascii=False))
 
 
 def cls_telegraph() -> list[dict]:
-    """财联社电报（分钟级，akshare）。返 [{标题, 内容, 时间}]。
+    """全球电报/快讯（分钟级）。返 [{标题, 内容, 时间}]。
 
-    akshare stock_info_global_cls 接口慢/偶挂（实测 >60s），用 180s timeout + 2 次重试。
-    失败返空 list（容错——daily_full_pull 沉淀不要求全量，news 空不阻塞其他源）。
+    RB-10b（2026-09-13）：akshare 财联社 stock_info_global_cls 接口 404 废弃 → 换东财快讯
+    stock_info_global_em（200 条，最全；同花顺 ths 20 条/新浪 sina 20 条作备选）。
+    akshare-direct（非 em_get 限流通道），但 daily_full_pull 单日单次调用低频，IP 封风险极低
+    （同原 cls_telegraph 的 akshare-direct 风险）。要严格 em_get 通道后续按需加 astock.em_telegraph。
     """
     r = _run_stoke("""
-df = s.akshare.get_cls_telegraph()
+import akshare as ak
+df = ak.stock_info_global_em()
+df = df[["标题", "摘要", "发布时间"]].rename(columns={"摘要": "内容", "发布时间": "时间"})
 print(df.to_json(orient="records", force_ascii=False))
-""", timeout=180, retries=2)
+""", timeout=60, retries=1)
     if isinstance(r, list):
         return r
     # r 是 {error} dict —— 失败容错返空 list（daily_full_pull 会 logger.warning 暴露原因）
