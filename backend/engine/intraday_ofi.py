@@ -121,6 +121,28 @@ def compute_multi_level_ofi(
     return per_level, total
 
 
+def ofi_turn_points(ofi_series: list[float]) -> dict[str, list[int]]:
+    """S189 · OFI 序列拐点检测（T+0 触发用）。
+
+    正转负 = 卖点 idx（买压消退），负转正 = 买点 idx（买压回升）。
+    返 {"sell_points": [idx...], "buy_points": [idx...]}。
+    零值视为正（≥0），避免噪声抖动。空/单元素返 {[], []}。
+    """
+    if len(ofi_series) < 2:
+        return {"sell_points": [], "buy_points": []}
+    sell_points: list[int] = []
+    buy_points: list[int] = []
+    for i in range(1, len(ofi_series)):
+        prev, curr = ofi_series[i - 1], ofi_series[i]
+        prev_pos = prev >= 0
+        curr_pos = curr >= 0
+        if prev_pos and not curr_pos:
+            sell_points.append(i)  # 正转负
+        elif not prev_pos and curr_pos:
+            buy_points.append(i)  # 负转正
+    return {"sell_points": sell_points, "buy_points": buy_points}
+
+
 def is_auction_period(ts: str) -> bool:
     """集合竞价时段剔除（09:15-09:25 / 14:57-15:00）——撮合机制不同，OFI 公式不适用。
 
@@ -135,5 +157,5 @@ def is_auction_period(ts: str) -> bool:
 
 __all__ = [
     "compute_ofi", "compute_ofi_abs", "compute_bid_ask_pressure", "PRESSURE_CAP",
-    "compute_multi_level_ofi", "is_auction_period",
+    "compute_multi_level_ofi", "is_auction_period", "ofi_turn_points",
 ]

@@ -83,6 +83,16 @@ def _cost_pct(entry_price: float, size: float, entry_date: str = "") -> float:
     return ROUND_TRIP_COST_PCT + stamp + commission_pct
 
 
+def t0_cost(entry_price: float, size: float, date: str = "") -> float:
+    """S189 · T+0 当日往返成本（百分点 of notional）。
+
+    持底仓后当日买+卖往返（T+0）：佣金（5 元×2 side）+ 印花（卖侧 0.1%）+ 滑点。
+    与 _cost_pct 同公式（都是买+卖 round-trip），语义别名——T+0 当日无隔夜，
+    但成本结构同（佣金+印花+滑点）。
+    """
+    return _cost_pct(entry_price, size, date)
+
+
 def _find_signal_idx(bars: list, signal_date: str) -> int | None:
     """在 bars 中找 signal_date 的 idx（date 字段前 10 字符匹配）。"""
     return next(
