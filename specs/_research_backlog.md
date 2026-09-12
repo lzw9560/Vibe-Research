@@ -12,11 +12,11 @@
 
 | 编号 | 调研 | 定论 | 状态 | 下一步 |
 |---|---|---|---|---|
-| RB-1 | scheduler-research（换框架/服务解耦） | 调研过，定论未记 | ❌ 没 spec 没 memory | 补 memory 记定论 → 评估换 APScheduler/arq/dramatiq vs 自实现 → spec |
-| RB-2 | cloud-resources healthchecks.io | 免费外部心跳防 cron 静默死 | ❌ 没接 | spec + 接 healthchecks.io ping + GitHub Actions 定时 pytest |
-| RB-3 | data-infrastructure 全量拉取 | 每日全量拉不同源交易数据作基建 | ⚠️ 部分（S185 sync 4 表，非全量拉） | spec 扩展：每日全量拉 trade_journal/seal_intraday/baostock kline |
-| RB-4 | w8e2forp7 任务级重试接线 | tenacity network_retry 装饰器已写（commit 2282503）零调用方 | ⚠️ 装饰器落地未接线 | 评估接线到 kline_refresh/ofi_collect/turso_sync（头脑风暴毙过，但装饰器闲置是浪费） |
-| RB-5 | 盘后链依赖门控 | depends_on + blocked + 迟到追赶治静默陈旧数据 | ❌ 没 spec | spec（P1-3 痛点验证方向活，grill 毙的是方案实现细节） |
+| RB-1 | scheduler-research（换框架/服务解耦） | **保持自实现+补强**（进程死非框架问题→healthchecks.io 解；Redis 对个人 Mac 过重 YAGNI；APScheduler 唯一增量 misfire 不痛；3 痛点自建~150 行零依赖） | ✅ 已落 spec S190（定论+补强方案 R3-R5） | 实现 S190 R3-R5（healthcheck seed / retry 接线 / depends_on 门控） |
+| RB-2 | cloud-resources healthchecks.io | 免费外部心跳防 cron 静默死 | ⚠️ executor 已建（S188 data_ops.healthcheck_ping），未 seed | S190 R3 seed healthcheck_ping cron `0 * * * *`（~10 行） |
+| RB-3 | data-infrastructure 全量拉取 | 每日盘后全量拉各源当日数据（stoke 研报/新闻/归因 + mootdx 分笔）沉淀 datalake + 回放引擎 | ✅ 已落 spec S191（草案） | plan→tasks→实现 daily_full_pull + datalake/replay.py |
+| RB-4 | w8e2forp7 任务级重试接线 | tenacity network_retry 装饰器已写（commit 2282503）零调用方 | ⚠️ 装饰器落地未接线 | S190 R4 接线到 kline_refresh/ofi_collect（~15 行 @network_retry） |
+| RB-5 | 盘后链依赖门控 | depends_on + blocked + 迟到追赶治静默陈旧数据 | ⚠️ S190 R5 落 spec（字段+迁移+_tick 门控） | 实现 S190 R5（models 加 depends_on + db 迁移 + seed 盘后链 depends_on） |
 | RB-6 | gap 250 天跨 regime 复验 | 60+120 天 net 负，250 天定论性复验 | 🔄 进行中（172 天先跑，cache 不够 250） | 扩 baostock cache 回溯到 250 天 → 跑 gap 250 |
 | RB-7 | breakout 1.72x 标记清理 | memory 6 处已改 naive 1.36x，可能残留 | ⚠️ 部分 | grep 残留 1.72x/PnL 0.486/0.523 标记 → 清理 |
 | RB-8 | r3-enforce 接线 | 等 forward_test 到 30 天（~9-25）触发评估 | ❌ 等 30 天 | forward_test 监控 endpoint 已落（S188 P0 #3），到 30 天评估 |
