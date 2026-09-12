@@ -70,6 +70,7 @@ frontend/e2e/screenshots/
 
 # 项目内私有数据根（API key/持仓/研报，绝不进 git）
 .vibe-research/
+.codegraph/
 
 # ── 覆盖率 / ML 训练产物 / 前端构建缓存（垃圾产物，不进仓库） ──
 .coverage
@@ -80,3 +81,13 @@ frontend/.vite/
 frontend/data/
 
 vendor/
+
+# ── 知识图谱建设产物（09-06~08 批次；脚本可重跑生成，不入 git） ─────
+# knowledge/ 是阶段0 骨架副本，canonical vault 在 ~/Documents/Obsidian Vault（私有仓 lzw9560/knowledge）
+knowledge/
+# 脚本生成的报告快照（重跑脚本即再生，docs/ 仅存脚本不存快照）
+docs/graph-analysis.json
+docs/graph-analysis-report.md
+docs/timeline-report.md
+docs/real-data-sync-report.md
+docs/stock-business-fill-report.md

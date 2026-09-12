@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S171 价值因子验证看板</title>
+<style>
+:root{
+  --page:#0d0d0d;--surface:#1a1a19;--surface-2:#232322;
+  --ink:#ffffff;--ink-2:#c3c2b7;--ink-3:#898781;
+  --line:#2c2c2a;--border:rgba(255,255,255,.10);--border-2:rgba(255,255,255,.18);
+  --good:#0ca30c;--warn:#fab219;--crit:#d03b3b;--neutral:#898781;
+  --blue:#3987e5;--orange:#d95926;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--page);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;padding:20px;max-width:1080px;margin:0 auto}
+.tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px}
+.card-h{font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;justify-content:space-between}
+.card-h .h-left{display:flex;align-items:center;gap:8px}
+.muted{color:var(--ink-3)}.ink2{color:var(--ink-2)}
+small{font-size:11px}
+
+/* status pills: dataviz rule, status color + label, never color alone */
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;line-height:1.6;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.pill-good{background:rgba(12,163,12,.15);color:var(--good)}
+.pill-warn{background:rgba(250,178,25,.15);color:var(--warn)}
+.pill-crit{background:rgba(208,59,59,.15);color:var(--crit)}
+.pill-neutral{background:rgba(137,135,129,.15);color:var(--neutral)}
+.pill-edge{background:rgba(57,135,229,.12);color:var(--blue);font-size:10px;padding:1px 6px}
+.pill-edge::before{display:none}
+.pill-edge-sel{background:rgba(217,89,38,.12);color:var(--orange);font-size:10px;padding:1px 6px}
+.pill-edge-sel::before{display:none}
+.pill-fixed{background:rgba(12,163,12,.08);color:var(--good);font-size:10px;padding:1px 6px}
+.pill-fixed::before{display:none}
+
+/* gate dots */
+.gate-dots{display:inline-flex;gap:5px;align-items:center}
+.gd{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ink-3);background:transparent;transition:all .2s}
+.gd.pass{background:var(--good);border-color:var(--good)}
+.gd.fail{background:var(--crit);border-color:var(--crit)}
+
+/* header */
+.header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.header h1{font-size:18px;font-weight:600}
+.header .sub{font-size:12px;color:var(--ink-3);margin-top:2px}
+.header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* warning banner */
+.banner{border-radius:8px;padding:12px 16px;margin-bottom:14px;border:1px solid}
+.banner-warn{background:rgba(250,178,25,.06);border-color:rgba(250,178,25,.25)}
+.banner-warn .b-title{color:var(--warn);font-weight:600;font-size:13px;margin-bottom:6px}
+.banner ul{list-style:none}
+.banner li{font-size:12px;color:var(--ink-2);padding:2px 0;padding-left:16px;position:relative}
+.banner li::before{content:"";position:absolute;left:4px;top:9px;width:4px;height:4px;border-radius:50%;background:var(--warn)}
+
+/* co-primary grid */
+.co-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.co-card{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:14px;cursor:pointer;transition:border-color .2s}
+.co-card:hover{border-color:var(--border-2)}
+.co-card.expanded{border-color:var(--border-2)}
+.co-num{font-size:20px;font-weight:700;color:var(--ink-3);margin-bottom:4px}
+.co-title{font-size:13px;font-weight:600;margin-bottom:10px}
+.co-title .et{margin-left:6px}
+.metric-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+.metric-row .label{color:var(--ink-3)}
+.metric-row .val{color:var(--ink)}
+.drill-btn{margin-top:8px;font-size:11px;color:var(--blue);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.drill-btn .arrow{transition:transform .2s;display:inline-block}
+.drill-btn.open .arrow{transform:rotate(90deg)}
+
+/* drill-down comparison */
+.drill-down{overflow:hidden;max-height:0;transition:max-height .3s ease}
+.drill-down.open{max-height:500px;margin-top:12px}
+.cmp-tbl{width:100%;font-size:12px;border-collapse:collapse}
+.cmp-tbl th{text-align:left;font-weight:400;color:var(--ink-3);padding:6px 8px;border-bottom:1px solid var(--border);font-size:11px}
+.cmp-tbl td{padding:6px 8px;border-bottom:1px solid var(--line)}
+.cmp-tbl .num{text-align:right}
+
+/* cross-validation gate bar */
+.gate-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;margin-top:12px;font-size:12px}
+.gate-bar.pass{background:rgba(12,163,12,.08);color:var(--good)}
+.gate-bar.fail{background:rgba(208,59,59,.08);color:var(--crit)}
+
+/* sensitivity toggle */
+.toggle-group{display:inline-flex;border:1px solid var(--border-2);border-radius:8px;overflow:hidden}
+.toggle-btn{padding:8px 18px;font-size:12px;font-weight:500;border:none;background:transparent;color:var(--ink-2);cursor:pointer;transition:all .15s}
+.toggle-btn.active{background:var(--blue);color:#fff}
+.toggle-btn:not(.active):hover{background:rgba(255,255,255,.05)}
+.flip-indicator{margin-top:12px;padding:10px;border-radius:6px;font-size:12px}
+.flip-indicator.flipped{background:rgba(208,59,59,.08);border:1px solid rgba(208,59,59,.2);color:var(--crit)}
+.flip-indicator.stable{background:rgba(12,163,12,.08);border:1px solid rgba(12,163,12,.2);color:var(--good)}
+
+/* gate rows */
+.gate-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;transition:background .15s}
+.gate-row:last-child{border-bottom:none}
+.gate-row:hover{background:rgba(255,255,255,.02)}
+.gate-row .g-left{display:flex;align-items:center;gap:8px}
+.gate-row .g-name{font-size:13px;font-weight:500}
+.gate-row .g-desc{font-size:11px;color:var(--ink-3);margin-left:4px}
+.gate-row .g-right{display:flex;align-items:center;gap:8px}
+.gate-detail{overflow:hidden;max-height:0;transition:max-height .25s ease;font-size:12px;color:var(--ink-2);padding-left:20px}
+.gate-detail.open{max-height:200px;padding:8px 0 8px 20px}
+
+/* coverage */
+.cov-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cov-stat{text-align:center;padding:12px;background:var(--surface-2);border-radius:6px;position:relative}
+.cov-stat .cov-label{font-size:11px;color:var(--ink-3);margin-bottom:4px}
+.cov-stat .cov-val{font-size:24px;font-weight:700}
+.cov-stat .cov-sub{font-size:11px;color:var(--ink-3);margin-top:2px}
+.cov-tooltip{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:6px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:6px;padding:10px;width:220px;font-size:11px;z-index:10;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.cov-stat:hover .cov-tooltip{opacity:1}
+.cov-tooltip .tt-row{display:flex;justify-content:space-between;padding:2px 0}
+
+/* st note */
+.st-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.st-col{padding:12px;border-radius:6px;font-size:12px}
+.st-col.verify{background:rgba(57,135,229,.06);border:1px solid rgba(57,135,229,.2)}
+.st-col.capture{background:rgba(217,89,38,.06);border:1px solid rgba(217,89,38,.2)}
+.st-col .st-h{font-weight:600;margin-bottom:4px;font-size:12px}
+.st-col.verify .st-h{color:var(--blue)}
+.st-col.capture .st-h{color:var(--orange)}
+
+/* accordion */
+.acc-item{border-bottom:1px solid var(--line)}
+.acc-item:last-child{border-bottom:none}
+.acc-head{display:flex;align-items:center;justify-content:space-between;padding:10px 0;cursor:pointer;font-size:12px}
+.acc-head .a-left{display:flex;align-items:center;gap:8px}
+.acc-head .a-id{color:var(--ink-3);font-size:10px;width:22px}
+.acc-head .a-name{font-weight:500}
+.acc-head .a-arrow{color:var(--ink-3);transition:transform .2s;display:inline-block;font-size:10px}
+.acc-head.open .a-arrow{transform:rotate(90deg)}
+.acc-body{overflow:hidden;max-height:0;transition:max-height .2s ease;font-size:12px;color:var(--ink-2)}
+.acc-body.open{max-height:180px;padding:0 0 10px 30px}
+.acc-body .ab-row{padding:2px 0}
+.acc-body .ab-label{color:var(--ink-3);display:inline}
+
+/* reproduce panel */
+.repro-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.repro-overlay.open{opacity:1;pointer-events:auto}
+.repro-panel{position:fixed;top:0;right:0;width:420px;max-width:90vw;height:100vh;background:var(--surface);border-left:1px solid var(--border-2);transform:translateX(100%);transition:transform .25s ease;z-index:50;overflow-y:auto;padding:20px}
+.repro-panel.open{transform:translateX(0)}
+.repro-close{position:absolute;top:16px;right:16px;font-size:18px;color:var(--ink-3);cursor:pointer;background:none;border:none}
+.repro-panel h2{font-size:15px;font-weight:600;margin-bottom:14px;padding-right:24px}
+.repro-section{margin-bottom:16px}
+.repro-section .rs-title{font-size:11px;color:var(--ink-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.repro-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--line)}
+.repro-row .label{color:var(--ink-3)}
+.repro-match{padding:10px;border-radius:6px;background:rgba(12,163,12,.08);border:1px solid rgba(12,163,12,.2);font-size:12px;color:var(--good);margin-top:8px}
+
+/* responsive */
+@media(max-width:680px){
+  .co-grid,.cov-grid,.st-grid{grid-template-columns:1fr}
+  body{padding:12px}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <h1>S171 价值因子验证</h1>
+    <div class="sub">低 PE 月度 rebalance / 2016-2026 / baostock 全 A / §44v2 双 co-PRIMARY</div>
+  </div>
+  <div class="header-right">
+    <div class="gate-dots" title="三 gate: 互验 / sensitivity / 覆盖率">
+      <span class="gd pass" title="互验 gate: 一致"></span>
+      <span class="gd fail" title="sensitivity gate: 不一致"></span>
+      <span class="gd pass" title="覆盖率 gate: 严格 61.4% >= 50%"></span>
+    </div>
+    <span class="pill pill-neutral" id="overall-status">exploratory 探索性</span>
+    <button id="repro-btn" style="padding:6px 14px;border:1px solid var(--border-2);border-radius:6px;background:transparent;color:var(--ink-2);font-size:12px;cursor:pointer">复现 verdict</button>
+  </div>
+</div>
+
+<!-- NON-EXTRAPOLATION BANNER -->
+<div class="banner banner-warn">
+  <div class="b-title">不可外推警示（读 verdict 前必看）</div>
+  <ul>
+    <li><b>1m 月频 proxy</b>：primary 测试是 1 月持有，非 canonical 长线（数月-数年）。月频 verdict 不可外推为"长线 value premium 有/无 edge"</li>
+    <li><b>period-specific</b>：样本 2018-2026 偏 growth-favorable（2019-2021 A 股成长 rally）。falsified 是这段周期的结论，非全周期证否</li>
+    <li><b>联合测试不能解归因</b>：S168（涨停 / 3 天）到 S171（全 A / 1 月）同时改了窗口+股票池。若 S171 发现 edge，无法归因于窗口还是股票池</li>
+    <li><b>co-PRIMARY ① long-short 不可直接交易</b>：A 股融券受限，Q1-Q5 spread 是 beta 中性测量非可执行策略。long-only ② 才可实现</li>
+  </ul>
+</div>
+
+<!-- CO-PRIMARY SECTION -->
+<div class="card">
+  <div class="card-h">
+    <span class="h-left">co-PRIMARY 互验</span>
+    <span class="muted" style="font-size:11px;font-weight:400">① 管 mean（无 winrate 偏），② 管 OOS（补 ① 跳的 OOS 缺口）</span>
+  </div>
+
+  <div class="co-grid">
+    <!-- PRIMARY ① event -->
+    <div class="co-card" id="co-1" onclick="toggleDrill('co-drill')">
+      <div class="co-num">①</div>
+      <div class="co-title">Q1-Q5 long-short spread<span class="pill pill-edge et">event</span></div>
+      <div class="metric-row"><span class="label">mean (gross)</span><span class="val tnum" id="p1-mean">+0.282%/mo</span></div>
+      <div class="metric-row"><span class="label">net (扣成本后)</span><span class="val tnum" id="p1-net">+0.131%/mo</span></div>
+      <div class="metric-row"><span class="label">t-stat (day-clustered)</span><span class="val tnum" id="p1-t">1.34</span></div>
+      <div class="metric-row"><span class="label">p (Bonferroni K=4)</span><span class="val tnum" id="p1-p">0.364</span></div>
+      <div class="metric-row"><span class="label">n_event</span><span class="val tnum">96</span></div>
+      <div class="metric-row"><span class="label">base_rate</span><span class="val tnum">0.487</span></div>
+      <div class="metric-row"><span class="label">event_status</span><span id="p1-status"></span></div>
+      <div style="margin-top:6px"><span class="pill pill-crit" style="font-size:10px">long-short 不可直接交易</span></div>
+      <div class="drill-btn" id="drill-btn-1"><span class="arrow">▸</span> 展开 ①② 对比</div>
+    </div>
+
+    <!-- PRIMARY ② selection -->
+    <div class="co-card" id="co-2" onclick="toggleDrill('co-drill')">
+      <div class="co-num">②</div>
+      <div class="co-title">Q1 excess over universe<span class="pill pill-edge-sel et">selection</span></div>
+      <div class="metric-row"><span class="label">lift</span><span class="val tnum" id="p2-lift">1.184</span></div>
+      <div class="metric-row"><span class="label">CI [low, high]</span><span class="val tnum" id="p2-ci">[0.972, 1.421]</span></div>
+      <div class="metric-row"><span class="label">n / n_effective</span><span class="val tnum">96 / 87</span></div>
+      <div class="metric-row"><span class="label">days_robust</span><span class="val tnum">96</span></div>
+      <div class="metric-row"><span class="label">PurgedKFold OOS lift</span><span class="val tnum">1.02</span></div>
+      <div class="metric-row"><span class="label">walk-forward OOS</span><span class="val tnum">0.97 (2 窗)</span></div>
+      <div class="metric-row"><span class="label">status</span><span id="p2-status"></span></div>
+      <div style="margin-top:6px"><span class="pill pill-good" style="font-size:10px">long-only 可实现</span></div>
+      <div class="drill-btn" id="drill-btn-2"><span class="arrow">▸</span> 展开 ①② 对比</div>
+    </div>
+  </div>
+
+  <!-- drill-down comparison -->
+  <div class="drill-down" id="co-drill">
+    <table class="cmp-tbl">
+      <thead><tr><th>指标</th><th>① event (mean t-test)</th><th>② selection (winrate lift)</th><th>方向</th></tr></thead>
+      <tbody>
+        <tr><td>统计方法</td><td>mean spread t-test</td><td>winrate lift vs 零分布</td><td class="num">不同方法</td></tr>
+        <tr><td>核心值</td><td class="num">mean +0.282%/mo</td><td class="num">lift 1.184</td><td class="num">同向（弱正）</td></tr>
+        <tr><td>显著性</td><td class="num">t=1.34, p=0.364</td><td class="num">CI 含 1.0</td><td class="num">都不显著</td></tr>
+        <tr><td>OOS</td><td class="num">无（event 不传 survivors）</td><td class="num">PurgedKFold 1.02</td><td class="num">② 补 ① 缺口</td></tr>
+        <tr><td>可交易</td><td class="num">不可（long-short）</td><td class="num">可（long-only）</td><td class="num">② 才可实现</td></tr>
+        <tr><td>winrate 偏</td><td class="num">无（用 mean）</td><td class="num">有（结构性 ~1.0-1.2）</td><td class="num">① 兜底 ②</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- cross-validation gate -->
+  <div class="gate-bar pass" id="cross-val-bar">
+    <span class="gd pass"></span>
+    <b>互验 gate: 一致</b> / ①② 都指向"无 robust edge"方向（① thin_positive, ② not_validated） / 不矛盾, 但都弱 / verdict 降级非 robust
+  </div>
+</div>
+
+<!-- SENSITIVITY SECTION -->
+<div class="card">
+  <div class="card-h"><span class="h-left">退市 sensitivity 两档对比</span><span class="muted" style="font-size:11px;font-weight:400">退市 return 假设: -0.5（温和）vs -1.0（保守 worst-case）</span></div>
+
+  <div class="toggle-group">
+    <button class="toggle-btn active" data-tier="0.5" onclick="switchTier(0.5)">-0.5 温和</button>
+    <button class="toggle-btn" data-tier="1.0" onclick="switchTier(1.0)">-1.0 保守</button>
+  </div>
+
+  <div class="flip-indicator flipped" id="flip-ind">
+    <b>verdict 翻转!</b> 退市假设从 -0.5 切到 -1.0 时, ① event_status 从 event_thin_positive 翻成 event_falsified, ② 从 not_validated 翻成 falsified / sensitivity gate FAIL / verdict 降级 exploratory / 结论依赖退市假设, 不可信为 robust
+  </div>
+
+  <div style="margin-top:10px;font-size:12px;color:var(--ink-2)">
+    <div class="metric-row"><span class="label">① lift 差值 (-0.5 vs -1.0)</span><span class="val tnum">0.197</span></div>
+    <div class="metric-row"><span class="label">② lift 差值 (-0.5 vs -1.0)</span><span class="val tnum">0.241</span></div>
+    <div class="metric-row"><span class="label">退市股数 / 0-bars 不可恢复</span><span class="val tnum">337 / 42 (12.5%)</span></div>
+    <div class="metric-row"><span class="label">方向</span><span class="val">0-bars 退市股 = value trap, 缺失 = 高估 value premium</span></div>
+  </div>
+</div>
+
+<!-- THREE GATE SUMMARY -->
+<div class="card">
+  <div class="card-h"><span class="h-left">三 gate 汇总（全过才 robust）</span><span class="pill pill-neutral" style="font-size:10px">未全过 / exploratory</span></div>
+
+  <div class="gate-row" onclick="toggleGate('gate-1')">
+    <div class="g-left">
+      <span class="gd pass"></span>
+      <span class="g-name">互验 gate</span>
+      <span class="g-desc">co-PRIMARY ①② 方向一致</span>
+    </div>
+    <div class="g-right"><span class="pill pill-good" style="font-size:10px">PASS</span><span class="a-arrow" style="color:var(--ink-3);font-size:10px">▸</span></div>
+    <div class="gate-detail" id="gate-1">
+      ① event_status = event_thin_positive, ② status = not_validated / 两者都指向"无 robust edge"方向 / 不矛盾 / gate 通过 / 但两者都弱, verdict 非 robust
+    </div>
+  </div>
+
+  <div class="gate-row" onclick="toggleGate('gate-2')">
+    <div class="g-left">
+      <span class="gd fail"></span>
+      <span class="g-name">sensitivity 一致性 gate</span>
+      <span class="g-desc">退市 -0.5/-1.0 verdict 一致</span>
+    </div>
+    <div class="g-right"><span class="pill pill-crit" style="font-size:10px">FAIL</span><span class="a-arrow" style="color:var(--ink-3);font-size:10px">▸</span></div>
+    <div class="gate-detail" id="gate-2">
+      -0.5 档: ① thin_positive + ② not_validated = exploratory / -1.0 档: ① falsified + ② falsified = falsified / 两档 verdict 不一致 / 结论依赖退市 return 假设 / 降级 exploratory 标"依赖退市假设, 不可信为 robust"
+    </div>
+  </div>
+
+  <div class="gate-row" onclick="toggleGate('gate-3')">
+    <div class="g-left">
+      <span class="gd pass"></span>
+      <span class="g-name">严格覆盖率 gate</span>
+      <span class="g-desc">退市覆盖率 >= 50%</span>
+    </div>
+    <div class="g-right"><span class="pill pill-good" style="font-size:10px">PASS</span><span class="a-arrow" style="color:var(--ink-3);font-size:10px">▸</span></div>
+    <div class="gate-detail" id="gate-3">
+      严格覆盖率 61.4%（ipoDate..outDate 完整活跃期覆盖 >= 80% 的退市股占比）/ >= 50% 门槛 / gate 通过 / 但 <100% = 残留 survivorship bias（方向: 高估 value premium）/ 0-bars 退市股 42 个计入分母（算 0% 覆盖, 非静默排除）
+    </div>
+  </div>
+</div>
+
+<!-- COVERAGE CARD -->
+<div class="card">
+  <div class="card-h"><span class="h-left">退市覆盖率（双数）</span><span class="muted" style="font-size:11px;font-weight:400">hover 查看分项</span></div>
+  <div class="cov-grid">
+    <div class="cov-stat">
+      <div class="cov-label">宽松覆盖率</div>
+      <div class="cov-val tnum" style="color:var(--good)">87.2%</div>
+      <div class="cov-sub">返 >0 bars 退市股占比</div>
+      <div class="cov-tooltip">
+        <div style="font-weight:600;margin-bottom:4px">宽松口径</div>
+        <div class="tt-row"><span class="muted">退市股总数</span><span class="tnum">337</span></div>
+        <div class="tt-row"><span class="muted">返 >0 bars</span><span class="tnum">294</span></div>
+        <div class="tt-row"><span class="muted">0-bars 不可恢复</span><span class="tnum">42</span></div>
+        <div class="tt-row"><span class="muted">0-bars 占比</span><span class="tnum" style="color:var(--warn)">12.5%</span></div>
+      </div>
+    </div>
+    <div class="cov-stat">
+      <div class="cov-label">严格覆盖率</div>
+      <div class="cov-val tnum" style="color:var(--warn)">61.4%</div>
+      <div class="cov-sub">ipoDate..outDate >=80% 覆盖</div>
+      <div class="cov-tooltip">
+        <div style="font-weight:600;margin-bottom:4px">严格口径</div>
+        <div class="tt-row"><span class="muted">完整活跃期覆盖</span><span class="tnum">207</span></div>
+        <div class="tt-row"><span class="muted">部分覆盖</span><span class="tnum">87</span></div>
+        <div class="tt-row"><span class="muted">0-bars 完全缺失</span><span class="tnum">42</span></div>
+        <div class="tt-row"><span class="muted">严格门槛</span><span class="tnum">>=50% PASS</span></div>
+        <div class="tt-row"><span class="muted">bias 方向</span><span style="color:var(--crit)">高估 value</span></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:10px;font-size:11px;color:var(--ink-3)">
+    baostock 覆盖多数退市股活跃期 kline（实测 sz.000033 = 364 bars）但非全部（sz.000405 = 0 bars）/ <100% 严格覆盖 = 残留 survivorship bias, 方向 = 高估 value premium（0-bars 退市股 = value trap 尾部, 缺失 = Q1 收益虚高）
+  </div>
+</div>
+
+<!-- ST LAYER NOTE -->
+<div class="card">
+  <div class="card-h"><span class="h-left">*ST 两层分离</span></div>
+  <div class="st-grid">
+    <div class="st-col verify">
+      <div class="st-h">验证层：保留 *ST</div>
+      *ST/即将退市股不剔 / 保"不剔除退市"一致性 / *ST 是退市前奏, 剔 *ST = 删 value trap 尾部 = 美化 value = 假 edge
+    </div>
+    <div class="st-col capture">
+      <div class="st-h">capture 层：规避 *ST</div>
+      实盘不买 *ST / 涨跌停 +/-5% + 流动性差 + 退市风险 / 验证含 *ST 尾部保守, capture 须 *ST filter / 剔 *ST 后仍有 edge 才是真可交易 edge
+    </div>
+  </div>
+</div>
+
+<!-- BUG FIX ACCORDION -->
+<div class="card">
+  <div class="card-h"><span class="h-left">9 bug fix 诚实标注</span><span class="muted" style="font-size:11px;font-weight:400">管道修复清单, 点击展开</span></div>
+  <div id="acc-container"></div>
+</div>
+
+<!-- REPRODUCE PANEL -->
+<div class="repro-overlay" id="repro-overlay" onclick="closeRepro()"></div>
+<div class="repro-panel" id="repro-panel">
+  <button class="repro-close" onclick="closeRepro()">x</button>
+  <h2>复现 verdict</h2>
+  <div class="repro-section">
+    <div class="rs-title">实验记录</div>
+    <div class="repro-row"><span class="label">recorder_id</span><span class="tnum">s171_long_value_run_20260908</span></div>
+    <div class="repro-row"><span class="label">timestamp</span><span class="tnum">2026-09-08T14:32:11Z</span></div>
+    <div class="repro-row"><span class="label">data_snapshot_id</span><span class="tnum">pit_bundle_20260903</span></div>
+    <div class="repro-row"><span class="label">input_snapshot_hash</span><span class="tnum" style="font-size:10px">a3f7c1...e9b2</span></div>
+    <div class="repro-row"><span class="label">frozen_commit</span><span class="tnum" style="font-size:10px">822db17</span></div>
+  </div>
+  <div class="repro-section">
+    <div class="rs-title">params（影响 status 的参数）</div>
+    <div class="repro-row"><span class="label">event_materiality_floor</span><span class="tnum" style="color:var(--warn)">0.001（月频校准）</span></div>
+    <div class="repro-row"><span class="label">round_trip_cost</span><span class="tnum">0.0025</span></div>
+    <div class="repro-row"><span class="label">walk_train / walk_test</span><span class="tnum">36 / 12</span></div>
+    <div class="repro-row"><span class="label">step</span><span class="tnum">12（月步长）</span></div>
+    <div class="repro-row"><span class="label">delisting_return（当前档）</span><span class="tnum" id="repro-delisting">-0.5</span></div>
+    <div class="repro-row"><span class="label">n_comparisons (Family A)</span><span class="tnum">4</span></div>
+  </div>
+  <div class="repro-section">
+    <div class="rs-title">verdict</div>
+    <div class="repro-row"><span class="label">status</span><span id="repro-status">exploratory</span></div>
+    <div class="repro-row"><span class="label">edge_type (co-PRIMARY ①)</span><span class="tnum">event</span></div>
+    <div class="repro-row"><span class="label">edge_type (co-PRIMARY ②)</span><span class="tnum">selection</span></div>
+    <div class="repro-row"><span class="label">days_robust</span><span class="tnum">96</span></div>
+  </div>
+  <div class="repro-match">
+    reproduce_verdict 重算: status 一致 / input hash 匹配 / params 完整（含 event_materiality_floor=0.001, 非 verify 默认 0.003）/ 复现通过
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:var(--ink-3)">
+    event_materiality_floor 是唯一直接影响 status 的参数（verifier.py:370-374）/ 不存入 Recorder params 则 reproduce 用 verify 默认 0.003 非 harness 0.001, status 会翻转
+  </div>
+</div>
+
+<script>
+// === mock data ===
+const tiers = {
+  0.5: {
+    p1:{mean:'+0.282%/mo',net:'+0.131%/mo',t:'1.34',p:'0.364',status:'event_thin_positive',pill:'pill-warn',label:'thin positive'},
+    p2:{lift:'1.184',ci:'[0.972, 1.421]',status:'not_validated',pill:'pill-neutral',label:'弱信号非欠样本'},
+    overall:{pill:'pill-neutral',label:'exploratory 探索性'},
+    crossVal:'pass',
+    flipText:'<b>verdict 翻转!</b> 退市假设从 -0.5 切到 -1.0 时, ① event_status 从 event_thin_positive 翻成 event_falsified, ② 从 not_validated 翻成 falsified / sensitivity gate FAIL / verdict 降级 exploratory / 结论依赖退市假设, 不可信为 robust',
+    flipClass:'flipped'
+  },
+  1.0: {
+    p1:{mean:'+0.085%/mo',net:'-0.066%/mo',t:'0.41',p:'0.681',status:'event_falsified',pill:'pill-crit',label:'证否'},
+    p2:{lift:'0.943',ci:'[0.761, 1.180]',status:'falsified',pill:'pill-crit',label:'证否（劣于随机）'},
+    overall:{pill:'pill-crit',label:'falsified 证否'},
+    crossVal:'pass',
+    flipText:'<b>当前: -1.0 保守档</b> / 退市 -100% worst-case / ① mean 翻负（+0.085% gross, -0.066% net）/ t=0.41, p=0.681 / event_falsified / ② lift 0.943 < 1.0 = 劣于随机 / 切回 -0.5 看温和档对比',
+    flipClass:'flipped'
+  }
+};
+
+let currentTier = 0.5;
+
+function switchTier(t) {
+  currentTier = t;
+  const d = tiers[t];
+  // toggle buttons
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.tier) === t));
+  // update PRIMARY 1
+  document.getElementById('p1-mean').textContent = d.p1.mean;
+  document.getElementById('p1-net').textContent = d.p1.net;
+  document.getElementById('p1-t').textContent = d.p1.t;
+  document.getElementById('p1-p').textContent = d.p1.p;
+  document.getElementById('p1-status').innerHTML = '<span class="pill '+d.p1.pill+'" style="font-size:10px">'+d.p1.label+'</span>';
+  // update PRIMARY 2
+  document.getElementById('p2-lift').textContent = d.p2.lift;
+  document.getElementById('p2-ci').textContent = d.p2.ci;
+  document.getElementById('p2-status').innerHTML = '<span class="pill '+d.p2.pill+'" style="font-size:10px">'+d.p2.label+'</span>';
+  // overall status
+  document.getElementById('overall-status').className = 'pill '+d.overall.pill;
+  document.getElementById('overall-status').textContent = d.overall.label;
+  // flip indicator
+  const fi = document.getElementById('flip-ind');
+  fi.className = 'flip-indicator '+d.flipClass;
+  fi.innerHTML = d.flipText;
+  // reproduce panel delisting
+  document.getElementById('repro-delisting').textContent = '-'+t.toFixed(1);
+  document.getElementById('repro-status').textContent = d.overall.label.split(' ')[0];
+}
+
+// init
+switchTier(0.5);
+
+// === drill-down ===
+function toggleDrill(id) {
+  const el = document.getElementById(id);
+  const isOpen = el.classList.toggle('open');
+  document.querySelectorAll('.co-card').forEach(c => c.classList.toggle('expanded', isOpen));
+  document.querySelectorAll('.drill-btn').forEach(b => {
+    b.classList.toggle('open', isOpen);
+    b.querySelector('.arrow').textContent = isOpen ? '▾' : '▸';
+  });
+}
+
+// === gate detail ===
+function toggleGate(id) {
+  const el = document.getElementById(id);
+  const isOpen = el.classList.toggle('open');
+  const row = el.closest('.gate-row');
+  row.querySelector('.a-arrow').textContent = isOpen ? '▾' : '▸';
+}
+
+// === accordion ===
+const bugs = [
+  {id:1, name:'前复权 PE 致命 bug', status:'fixed', fix:'PE 改用 adjustflag=3 不复权 close 算（return 仍用 adjustflag=2 前复权 total return）/ 送转多的成长股不再误入 Q1 value'},
+  {id:2, name:'query_all_stock PIT 未验', status:'fixed', fix:'抽查 >=3 历史月末 query_all_stock(D) 含退市股 / fallback stock_basic outDate+ipoDate 重建 ipoDate<=D AND (outDate>D OR outDate="")'},
+  {id:3, name:'outDate="" 二义', status:'fixed', fix:'outDate="" 且 kline 最后 bar 远早于 now（>6 月无新 bar）= 标"疑似漏标退市"不入 universe / 交叉验 akshare stock_info_sh/sz_delist'},
+  {id:4, name:'0-bars 不可恢复 bias', status:'fixed', fix:'0-bars 退市股计入分母（算 0% 覆盖）非静默排除 / >5% 标"不可恢复 survivorship bias" 降级 / 方向 = 高估 value premium'},
+  {id:5, name:'BH m=1 latent', status:'fixed', fix:'SECONDARY K=1 时 p_bh = p（moot）/ 若扩 K=2 须 harness 层 enforce p_bonf<0.05 / stats.py BH per-call m=1 仍返零校正, reproduce 不一致'},
+  {id:6, name:'event_materiality_floor 月频 0.001', status:'fixed', fix:'月频校准 0.001（0.1%/mo = 1.2%/年匹配 A 股 value premium 量级）/ 默认 0.003 是日频, 对月频 value 恒 event_thin_positive 非 robust_edge / 须存入 Recorder params 才能 reproduce'},
+  {id:7, name:'pubDate<D 严格小于', status:'fixed', fix:'compute_pe 的 <= 改为 <（pubDate 严格小于 D）/ A 股年报盘后披露, <= 允许同日 = 用盘后信息配盘前价 = lookahead, ~25% 月受影响'},
+  {id:8, name:'sort tie-breaking', status:'fixed', fix:'get_pit_profit_row 加次级排序键 (pubDate, quarter_key) 降序 / quarter_key parse 为 (year, quarter_num) 元组降序（非字符串排序）/ 防 Q4 排 Q1 前取错 epsTTM'},
+  {id:9, name:'停牌 stale close', status:'fixed', fix:'universe_by_month 过滤 D 日停牌股（kline(D) volume==0 或无 D 日 bar）/ 停牌 close = stale 最后成交价, PE quintile 错配 / *ST/退市前停牌频繁, 与 Q1 value 高度重叠'},
+];
+
+const accC = document.getElementById('acc-container');
+bugs.forEach(b => {
+  const item = document.createElement('div');
+  item.className = 'acc-item';
+  item.innerHTML = '<div class="acc-head" onclick="this.classList.toggle(\'open\');this.nextElementSibling.classList.toggle(\'open\')">'+
+    '<div class="a-left"><span class="a-id">'+b.id+'</span><span class="a-name">'+b.name+'</span></div>'+
+    '<div style="display:flex;align-items:center;gap:8px"><span class="pill pill-fixed">fixed</span><span class="a-arrow">▸</span></div></div>'+
+    '<div class="acc-body"><div class="ab-row"><span class="ab-label">修复: </span>'+b.fix+'</div></div>';
+  accC.appendChild(item);
+});
+
+// === reproduce panel ===
+document.getElementById('repro-btn').onclick = () => {
+  document.getElementById('repro-overlay').classList.add('open');
+  document.getElementById('repro-panel').classList.add('open');
+};
+function closeRepro() {
+  document.getElementById('repro-overlay').classList.remove('open');
+  document.getElementById('repro-panel').classList.remove('open');
+}
+</script>
+
+</body>
+</html>

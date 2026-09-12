@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "0.0.0.0",
       port: 5899,
+      strictPort: true, // 5899 被占就报错而非静默 +1 到 5900（旧 dev server 占端口时强制 kill 重启）
       allowedHosts: ["research.myassi.eu.cc"],
       proxy: {
         "/api": { target: apiTarget, changeOrigin: true },
