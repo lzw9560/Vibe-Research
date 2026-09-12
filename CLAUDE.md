@@ -141,6 +141,17 @@
 - 不确定的地方标注并实测，不臆测。
 - **并行会话 worktree 隔离**（2026-09-05 加入项目实践）：当多个会话/agent 并发改同仓库时（如 opencode + Claude 并行），用 `git worktree add ../Vibe-Research-<branch> <branch>` 创独立 worktree 隔离工作，不切主 worktree 分支（避免干扰其他会话）。worktree commit 后 `git worktree remove` 清理。数据目录 `.vibe-research/` 不 in git——worktree 须 `ln -sf <主仓库>/.vibe-research .vibe-research` 链接（test/数据可得）。commit 前必 `git branch --show-current` 确认分支（并发会话可能切分支，误 commit 到他人 feature 分支）。显式 `git add <具体文件>` 绝不 `add -A`（避打包他人改动）。
 - **工具实践：用已装的 MCP + skill，别让它们闲着**（2026-09-06 加入项目实践）：会话开头查可用 MCP 工具（`mcp__*` deferred tools / ToolSearch 关键名），发现断连的（如 codebase-memory "Connection closed"）提示重启 CC。代码结构查询优先 `codegraph` CLI（`codegraph init` 建图 → `codegraph explore/node/query` 代替 grep，减 tool calls；MCP `mcp__codegraph__*` 须重启 CC 才连，CLI 即时可跑）+ 一次性多格式图谱用 `graphify` skill；库文档用 `context7` MCP；web 调研用 `firecrawl`；GH 操作用 `github` MCP（clone 走 gh-proxy 镜像，[[github-clone-needs-mirror-2026-08-07]]）；架构图用 `archify` skill；对抗审查用 `grill-me`/`grilling` skill；§44 统计 DSR/PBO/purged-kfold/haircut 用 `skill-backtest-overfit`（vendor + ~/.claude/skills/）；多 TUI 编排若 codex 修好可用 OMC omc-teams。优秀工具用顺了固化进本节 + memory，不一次性。
+- **提效 skill 形成习惯**（2026-09-12 加入项目实践，[[skills-efficiency-practice-2026-09-12]]）：用户质问"装了为啥不用"——根本原因是会话开头没强制 skill 盘点，靠惯性 grep+read+文件 memory。以下 8 条形成习惯：
+  1. **会话开头**：`handoff` 恢复上次未答问题 + `using-superpowers` 找 skill（不手读 MEMORY.md + git log）
+  2. **代码结构查询**：`codegraph explore "模块"` 一次出符号+调用方+blast radius（不 grep+read，省几十 tool call）
+  3. **碰 bug/test fail**：`systematic-debugging` 流程先系统定位（不直接改）
+  4. **commit 前**：`verification-before-completion` 跑验证命令确认（不直接 commit，evidence before assertions）
+  5. **新功能实现**：`test-driven-development` 先写测试再实现（S194 实现走 TDD）
+  6. **非平凡任务前**：`capability-evolver` recall 相似任务怎么做 + 后记录（让未来会话学）
+  7. **周报/复盘**：`recap` 汇总最近会话（不手写 changelog）
+  8. **查历史决策**：`recall`/`commit-context`（不 git log + grep memory 文件）
+  会话开头第一动作 = handoff + using-superpowers，不跳过。`agentmemory` MCP（混合检索 BM25+vector+graph）先试 recall，不急着全迁文件 memory（项目已有 corrections.jsonl + learned-rules.md 自进化协议，重叠先并存）。
+  **⚠️ 提效但不降质量**：提效 skill 用在加速（查结构/恢复上下文/汇总），质量护栏（debug/verify/TDD/grill）是底线不能省——codegraph 查结构后改代码仍 Read 确认；handoff 恢复上下文后关键决策仍核证据；recap 汇总后关键改动仍人工核。数据输出/交易信号/§44 验证/承重代码/方法论 spec 这些场景提效 skill 不替代严谨（仍 spec→plan→tasks→TDD+grill+verification 全套）。提效是省重复劳动，不是省严谨。
 - **用人话沟通**（2026-09-06 加入项目实践）：提问/选项/回复用人话直白说，别堆术语一锅端（enum/lift/Bonferroni/not_validated/dsr_method 这类），术语最多括号注一次。AskUserQuestion 选项描述用人话（"弱信号"非"not_validated 第 5 值 enum"）。状态标签客观反映真实情况有什么加什么，决策（降权/不交易）是下游层不混。[[feedback-style-plain-chinese]]
 - **秘密（API key 等）走 .env env 变量**（2026-09-06 加入项目实践，用户定"以后都这么用"）：hithink key / 任何 API key 永远用 .env 配的值（项目 load_dotenv 载入 os.environ，source 读 `os.environ['HITHINK_FINANCE_API_KEY']` 等），**不在对话贴 key 值**（hithink sk-fuyaro- 这么泄漏的，[[hithink-apikey-泄漏待轮换]] 待轮换）；主 agent 不读 .env（core-invariant），子 agent 用项目 source 读 env 变量。
 - **提示词知识库 + 自动路由**（2026-09-08 加入项目实践）：3 个提示词（需求澄清 / AI 顾问团 5 顾问+主席 / 防讨好）Claude 内部 DRY 复用已有 skill，不重复造——需求澄清走 `brainstorming` skill + 全局「写代码前决策框架」（问而不猜/先搜后写）；AI 顾问团走 `grill-me`/`grilling` skill（≥6 视角 refute-default，比 5 顾问更狠，§44/方法论 spec 必起，见自动复盘 2026-09-05）；防讨好走全局「核心六条」（独立判断/直接反对/不迎合，已强制）。**路由规则**：Claude 内部默认用已有 skill，不读 templates；跨工具（豆包/ChatGPT/Codex 读不了 skill）要粘贴原文、或用户指名某形态时，读 `~/.claude/skills/prompt-library/templates/` 对应原文按其结构执行。项目接入：写 spec 前 brainstorming 澄清 → spec 草稿 grill workflow（6-lens 对抗）→ 全程核心六条——3 提示词已是 SDD（§0）内嵌行为，库主价值是跨工具备份。[[prompt-library-skill-installed]]
