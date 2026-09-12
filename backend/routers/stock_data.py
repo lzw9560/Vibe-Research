@@ -128,6 +128,37 @@ def valuation(code: str = Query(...)) -> Dict[str, Any]:
         raise HTTPException(502, f"估值计算异常：{e}") from e
 
 
+@router.get("/api/valuation/market")
+def market_valuation(date: str = Query(None)) -> Dict[str, Any]:
+    """S191 · 市场层估值历史（指数 PE + 全市场 PB）从 datalake/stoke 读。
+
+    stoke（daily_full_pull 沉淀）的 index_pe/market_pb 历史。date=None=最近交易日。
+    返 {data: [{date, name, pe, pb}, ...]}。
+    """
+    import sqlite3  # noqa: PLC0415
+    from data.datalake.store import month_db  # noqa: PLC0415
+    from vr_paths import last_trading_date_str  # noqa: PLC0415
+    from datetime import datetime as _dt  # noqa: PLC0415
+
+    d = date or last_trading_date_str()
+    try:
+        dt = _dt.strptime(d, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, f"date 格式 YYYY-MM-DD: {d}")
+    db = month_db("stoke", dt)
+    if not db.exists():
+        return {"data": [], "note": "datalake/stoke 库未建（daily_full_pull 未跑或 stoke 未配）"}
+    conn = sqlite3.connect(str(db), timeout=5)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT date, name, pe, pb, snapshot_at FROM pe_pb WHERE date=? ORDER BY name", (d,)
+        ).fetchall()
+        return {"data": [dict(r) for r in rows], "date": d}
+    finally:
+        conn.close()
+
+
 @router.get("/api/reports")
 def reports(code: str = Query(...), pages: int = Query(2, ge=1, le=5)) -> Dict[str, Any]:
     """个股研报列表（东财，含 PDF 链接）。仅需 requests。"""

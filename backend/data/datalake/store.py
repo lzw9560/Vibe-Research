@@ -105,6 +105,12 @@ def save_stoke_data(date_str: str, items: dict[str, list[dict]]) -> dict:
                  s.get("所属行业", s.get("industry", "")), now),
             )
             saved += 1
+        for p in items.get("pe_pb", []):
+            conn.execute(
+                "INSERT OR REPLACE INTO pe_pb (date, name, pe, pb, snapshot_at) VALUES (?,?,?,?,?)",
+                (date_str, p.get("name", ""), p.get("pe"), p.get("pb"), now),
+            )
+            saved += 1
         conn.commit()
     finally:
         conn.close()

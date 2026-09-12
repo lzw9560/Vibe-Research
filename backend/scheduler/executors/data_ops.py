@@ -268,16 +268,32 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
     date_str = last_trading_date_str()
     result: Dict[str, Any] = {"date": date_str, "stoke": {}, "ticks": {}}
 
-    # 1. stoke 沉淀（研报/新闻/强势涨停）—— stoke 走 ~/stoke venv subprocess，失败降级不阻塞
+    # 1. stoke 沉淀（研报/新闻/强势涨停/PE-PB）—— stoke 走 ~/stoke venv subprocess，失败降级不阻塞
     try:
-        from data.sources.stoke_src import strong_stocks, cls_telegraph  # noqa: PLC0415
+        from data.sources.stoke_src import strong_stocks, cls_telegraph, index_pe, market_pb  # noqa: PLC0415
         strong = strong_stocks() or []
         telegraph = cls_telegraph()
-        # telegraph 返 list 才用，dict（error）跳过
         telegraph_list = telegraph if isinstance(telegraph, list) else []
-        items = {"strong": strong, "news": telegraph_list}
+        # PE-PB（指数 PE + 全市场 PB）—— stoke 拉取存 pe_pb 表
+        pe_rows = []
+        try:
+            pe_data = index_pe("上证50") or []
+            for p in pe_data if isinstance(pe_data, list) else []:
+                if isinstance(p, dict):
+                    pe_rows.append({"name": "上证50", "pe": p.get("pe"), "pb": None})
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            pb_data = market_pb() or []
+            for p in pb_data if isinstance(pb_data, list) else []:
+                if isinstance(p, dict):
+                    pe_rows.append({"name": "全市场", "pe": None, "pb": p.get("pb")})
+        except Exception:  # noqa: BLE001
+            pass
+        items = {"strong": strong, "news": telegraph_list, "pe_pb": pe_rows}
         r = save_stoke_data(date_str, items)
-        result["stoke"] = {"saved": r.get("saved", 0), "n_strong": len(strong), "n_telegraph": len(telegraph_list)}
+        result["stoke"] = {"saved": r.get("saved", 0), "n_strong": len(strong),
+                           "n_telegraph": len(telegraph_list), "n_pe_pb": len(pe_rows)}
     except Exception as e:  # noqa: BLE001
         logger.warning("[daily_full_pull] stoke 沉淀失败: %s", e)
         result["stoke"] = {"error": str(e)}
