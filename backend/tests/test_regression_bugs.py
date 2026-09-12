@@ -88,6 +88,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "ofi_collect",
             "turso_sync",  # S185
             "healthcheck_ping",  # S188 RB-2
+            "weekly_brainstorm_remind",  # S188 RB-9
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

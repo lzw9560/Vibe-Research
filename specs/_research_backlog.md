@@ -20,7 +20,7 @@
 | RB-6 | gap 250 天跨 regime 复验 | 60+120 天 net 负，250 天定论性复验 | 🔄 进行中（172 天先跑，cache 不够 250） | 扩 baostock cache 回溯到 250 天 → 跑 gap 250 |
 | RB-7 | breakout 1.72x 标记清理 | memory 6 处已改 naive 1.36x，可能残留 | ⚠️ 部分 | grep 残留 1.72x/PnL 0.486/0.523 标记 → 清理 |
 | RB-8 | r3-enforce 接线 | 等 forward_test 到 30 天（~9-25）触发评估 | ❌ 等 30 天 | forward_test 监控 endpoint 已落（S188 P0 #3），到 30 天评估 |
-| RB-9 | 每周全局优化头脑风暴 cron 触发器 | 每周一次自动触发 | ❌ 没接 cron | 手动触发为主，cron 触发器待接 |
+| RB-9 | 每周全局优化头脑风暴 cron 触发器 | 每周一次自动触发 | ✅ executor+seed cron（周一9:00飞书+待办，backend跑不了workflow用户手动触发） | 已接通 |
 
 ## 已落地（参考）
 

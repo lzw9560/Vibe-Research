@@ -206,3 +206,47 @@ def healthcheck_ping(payload: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning("[healthcheck_ping] ping 失败: %s（本地不受影响，仅外部告警断）", e)
         return {"pinged": False, "error": str(e)}
 
+
+def weekly_brainstorm_remind(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S188 RB-9 · 每周全局优化头脑风暴提醒（cron 触发，飞书通知 + memory 待办标记）。
+
+    backend 跑不了 Claude Code workflow，故本 executor 只发飞书提醒 + 写待办文件，
+    用户看到手动触发头脑风暴 workflow（/workflows 或对话触发）。
+
+    memory `weekly-optimization-brainstorm-2026-09-11`：每周一次多领域专家
+    brainstorm+grill，基于数据+交易沉淀，落待办。
+    """
+    from datetime import datetime as _dt  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    from vr_paths import resolve_data_dir  # noqa: PLC0415
+
+    today = _dt.now().strftime("%Y-%m-%d")
+    # 飞书通知
+    notif_ok = False
+    try:
+        from notification.notification_service import get_notification_service  # noqa: PLC0415
+        service = get_notification_service()
+        msg = (
+            f"📅 每周全局优化头脑风暴提醒（{today}）\n"
+            "基于本周数据+交易沉淀，触发头脑风暴 workflow：\n"
+            "- 8 领域专家提进阶方案\n"
+            "- 3 视角对抗 grill（存疑讨论不自动毙，S190 R4 grill-doubt memory）\n"
+            "- 综合 rank P0/P1/P2 待办\n"
+            "手动触发：/workflows 或对话说'触发每周头脑风暴'"
+        )
+        if hasattr(service, "send"):
+            service.send(msg)
+            notif_ok = True
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[weekly_brainstorm_remind] 飞书通知失败: %s", e)
+
+    # 写待办标记文件（Claude Code 下次会话检测到就提醒）
+    backlog = resolve_data_dir() / "weekly_brainstorm_pending.txt"
+    try:
+        backlog.write_text(f"pending: {today} 周头脑风暴待触发\n", encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[weekly_brainstorm_remind] 写待办标记失败: %s", e)
+
+    return {"reminded": True, "date": today, "notif_sent": notif_ok}
+
+

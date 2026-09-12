@@ -88,6 +88,7 @@ class TaskExecutor:
             "ofi_collect": self._execute_ofi_collect,  # S176 R5 — 盘中 OFI 五档收集（conditioning 数据收集器）
             "turso_sync": self._execute_turso_sync,  # S185 路径 A — Turso 云同步（VR_TURSO_URL 未设跳过）
             "healthcheck_ping": self._execute_healthcheck_ping,  # S188 RB-2 — 外部心跳防 cron 静默死（VR_HEALTHCHECKS_URL 未设跳过）
+            "weekly_brainstorm_remind": self._execute_weekly_brainstorm_remind,  # S188 RB-9 — 每周头脑风暴提醒（飞书+待办）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -368,3 +369,8 @@ class TaskExecutor:
         """S188 RB-2 — 外部心跳（VR_HEALTHCHECKS_URL 未设→纯本地跳过）。"""
         from scheduler.executors.data_ops import healthcheck_ping
         return healthcheck_ping(payload)
+
+    def _execute_weekly_brainstorm_remind(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S188 RB-9 — 每周头脑风暴提醒（飞书+待办标记）。"""
+        from scheduler.executors.data_ops import weekly_brainstorm_remind
+        return weekly_brainstorm_remind(payload)

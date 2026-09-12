@@ -502,3 +502,15 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 healthcheck_ping 已创建（cron 0 * * * *，S188 RB-2 可选）")
+
+    # S188 RB-9：每周全局优化头脑风暴提醒（每周一 9:00，飞书+待办标记，用户手动触发 workflow）
+    if "weekly_brainstorm_remind" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="weekly_brainstorm_remind",
+            description="S188 RB-9 每周头脑风暴提醒（周一 9:00 飞书通知+待办标记，backend 跑不了 workflow 用户手动触发）",
+            task_type="weekly_brainstorm_remind",
+            cron_expr="0 9 * * 1",  # 每周一 9:00
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 weekly_brainstorm_remind 已创建（cron 0 9 * * 1，S188 RB-9）")

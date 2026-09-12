@@ -77,6 +77,8 @@ _EXPECTED_TASK_TYPES = {
     "turso_sync",
     # S188 RB-2 外部心跳（VR_HEALTHCHECKS_URL 未设跳过）
     "healthcheck_ping",
+    # S188 RB-9 每周头脑风暴提醒（周一 9:00 飞书+待办）
+    "weekly_brainstorm_remind",
 }
 
 
