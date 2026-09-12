@@ -47,6 +47,7 @@ export const router = createBrowserRouter([
       // 选股域
       { path: "/screener", element: lazyEl(() => import("@/pages/screener/ScreenerPage"), "ScreenerPage") },
       { path: "/watchlist", element: lazyEl(() => import("@/pages/Watchlist"), "Watchlist") },
+      { path: "/bidding", element: lazyEl(() => import("@/pages/BiddingPage")) },  // FE-4: 集合竞价监控页（/api/auction/monitor+watchlist 前端独立页）
       { path: "/limitup", element: lazyEl(() => import("@/pages/LimitUpStrategy"), "LimitUpStrategy") },
       { path: "/limitup/premarket", element: lazyEl(() => import("@/pages/limitup/PremarketSelection"), "PremarketSelection") },
 

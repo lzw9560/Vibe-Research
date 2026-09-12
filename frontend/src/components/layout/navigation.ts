@@ -45,6 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Filter,
     tabs: [
       { to: "/screener", label: "选股器" },
+      { to: "/bidding", label: "竞价监控" },
       { to: "/limitup", label: "打板策略" },
       { to: "/limitup/premarket", label: "盘前选股" },
       { to: "/watchlist", label: "自选股" },
