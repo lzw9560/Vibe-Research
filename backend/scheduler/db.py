@@ -47,6 +47,7 @@ def _ensure_tables() -> None:
                 enabled INTEGER DEFAULT 1,
                 notify_on_success INTEGER DEFAULT 0,
                 notify_on_failure INTEGER DEFAULT 1,
+                depends_on TEXT,  -- S190 R5：逗号分隔 task_type，今日上游未 success/degraded 则跳过
                 last_run_at TEXT,
                 last_run_status TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -85,6 +86,12 @@ def _ensure_tables() -> None:
         """)
         # R3：WAL 模式（DB 级持久）——读不阻塞写，并发写不再 database is locked
         conn.execute("PRAGMA journal_mode=WAL")
+        # S190 R5 迁移：旧库无 depends_on 列时加（CREATE TABLE 已含对新库生效）
+        try:
+            conn.execute("ALTER TABLE scheduled_tasks ADD COLUMN depends_on TEXT")
+            logger.info("[scheduler] 迁移：scheduled_tasks 加 depends_on 列")
+        except sqlite3.OperationalError:
+            pass  # 列已存在（Duplicate column）——幂等
         conn.commit()
     finally:
         conn.close()
@@ -117,8 +124,8 @@ class ScheduledTaskManager:
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO scheduled_tasks (name, description, task_type, cron_expr, payload, enabled, notify_on_success, notify_on_failure)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO scheduled_tasks (name, description, task_type, cron_expr, payload, enabled, notify_on_success, notify_on_failure, depends_on)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task.name,
@@ -129,6 +136,7 @@ class ScheduledTaskManager:
                     1 if task.enabled else 0,
                     1 if task.notify_on_success else 0,
                     1 if task.notify_on_failure else 0,
+                    task.depends_on,
                 ),
             )
             conn.commit()
@@ -146,7 +154,7 @@ class ScheduledTaskManager:
                 """
                 UPDATE scheduled_tasks SET
                     name = ?, description = ?, task_type = ?, cron_expr = ?, payload = ?,
-                    enabled = ?, notify_on_success = ?, notify_on_failure = ?,
+                    enabled = ?, notify_on_success = ?, notify_on_failure = ?, depends_on = ?,
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -159,6 +167,7 @@ class ScheduledTaskManager:
                     1 if task.enabled else 0,
                     1 if task.notify_on_success else 0,
                     1 if task.notify_on_failure else 0,
+                    task.depends_on,
                     datetime.now().isoformat(),
                     task.id,
                 ),
@@ -295,6 +304,26 @@ class ScheduledTaskManager:
         finally:
             conn.close()
 
+    def dependency_satisfied(self, task_type: str, today: str) -> bool:
+        """S190 R5：task_type 今日有无 status IN (success/degraded) 的 run（depends_on 门控）。
+
+        today = YYYY-MM-DD（北京交易日）。查 scheduled_task_runs JOIN scheduled_tasks
+        ON task_type 匹配 + started_at 前缀 today + status 成功/降级。
+        """
+        conn = _get_connection()
+        try:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) FROM scheduled_task_runs r
+                JOIN scheduled_tasks t ON r.task_id = t.id
+                WHERE t.task_type = ? AND r.started_at LIKE ? AND r.status IN ('success', 'degraded')
+                """,
+                (task_type, today + "%"),
+            ).fetchone()
+            return (row[0] if row else 0) > 0
+        finally:
+            conn.close()
+
     def _row_to_task(self, row: sqlite3.Row) -> ScheduledTask:
         return ScheduledTask(
             id=row["id"],
@@ -306,6 +335,7 @@ class ScheduledTaskManager:
             enabled=bool(row["enabled"]),
             notify_on_success=bool(row["notify_on_success"]),
             notify_on_failure=bool(row["notify_on_failure"]),
+            depends_on=row["depends_on"] if "depends_on" in row.keys() else None,  # S190 R5
             last_run_at=row["last_run_at"],
             last_run_status=row["last_run_status"],
             created_at=row["created_at"],

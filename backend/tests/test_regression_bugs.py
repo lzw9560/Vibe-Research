@@ -86,6 +86,8 @@ class TestScheduledTasksImports(unittest.TestCase):
             # S175 模拟盘闭环 + S176 盘中 OFI（pre-existing test debt 顺手补，同 test_task_executor）
             "trade_journal_daily",
             "ofi_collect",
+            "turso_sync",  # S185
+            "healthcheck_ping",  # S188 RB-2
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

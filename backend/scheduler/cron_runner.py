@@ -107,8 +107,26 @@ class CronScheduler:
             self._running_task_ids.discard(task.id)
 
     def _should_run(self, task: ScheduledTask, now: datetime) -> bool:
-        """cron 匹配：委托模块级纯函数 cron_match。"""
-        return _cron.cron_match(task.cron_expr, now)
+        """cron 匹配 + S190 R5 depends_on 门控。
+
+        depends_on（逗号分隔 task_type）：今日上游 task_type 须有 status IN
+        (success/degraded) 的 run，否则跳过（防下游先于上游跑吃陈旧数据）。
+        """
+        if not _cron.cron_match(task.cron_expr, now):
+            return False
+        # S190 R5：depends_on 门控
+        if task.depends_on:
+            from vr_paths import last_trading_date_str  # noqa: PLC0415
+            today = last_trading_date_str()
+            deps = [d.strip() for d in task.depends_on.split(",") if d.strip()]
+            for dep_type in deps:
+                if not _manager.dependency_satisfied(dep_type, today):
+                    logger.info(
+                        "[scheduler] %s 跳过：依赖 %s 今日未 success/degraded",
+                        task.name, dep_type,
+                    )
+                    return False
+        return True
 
     def _reap_stale_runs(self) -> None:
         """S150 R2：reap stale running run → discard _running_task_ids（去堵 dedup）。

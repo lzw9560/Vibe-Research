@@ -19,6 +19,7 @@ class ScheduledTask:
     enabled: bool = True
     notify_on_success: bool = False
     notify_on_failure: bool = True
+    depends_on: Optional[str] = None  # S190 R5：逗号分隔 task_type，今日上游未 success/degraded 则 _tick 跳过（盘后链依赖门控）
     last_run_at: Optional[str] = None
     last_run_status: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())

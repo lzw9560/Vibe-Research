@@ -73,6 +73,10 @@ _EXPECTED_TASK_TYPES = {
     "trade_journal_daily",
     # S176 盘中 OFI 五档收集（conditioning 数据收集器）
     "ofi_collect",
+    # S185 Turso 云同步（VR_TURSO_URL 未设跳过）
+    "turso_sync",
+    # S188 RB-2 外部心跳（VR_HEALTHCHECKS_URL 未设跳过）
+    "healthcheck_ping",
 }
 
 
