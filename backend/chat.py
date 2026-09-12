@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import os
 import socket
 from urllib.parse import urlparse
 
 import requests
 import urllib3
+
+logger = logging.getLogger(__name__)
 
 # 内网自签证书（阿里百炼走 Tailscale 内网 HTTPS）经全局代理拦截后验证书失败，
 # 默认关闭 LLM 请求的 SSL 验证；公网部署可设 VR_LLM_VERIFY_SSL=true 强制校验。
