@@ -70,23 +70,25 @@
 
 ### R2 · fewshot_retriever FS1 检索（不过 §44）
 
-- [ ] T2.1 `engine/fewshot_retriever.py` 新建——`FewshotRetriever` 类，检索历史相似 case（trade_journal 1092 case 起点），相似度先 cos/Jaccard
-  - 依赖：signal_align（R1 对齐后信号）+ trade_journal 1092 case（实测 rows）
-  - 验收：当前信号组合 → top-K 相似历史 case
+- [x] T2.1 `engine/fewshot_retriever.py` 新建——`FewshotRetriever` 类，检索历史相似 case（trade_journal 1092 case 起点），相似度先 cos/Jaccard
+  - 依赖：signal_align（R1 对齐后信号）+ reconstruct_s194_signals.py 重建的 case 信号值
+  - 验收：当前信号组合 → top-K 相似历史 case ✅ 13 测试绿（cosine_sim + encode_case + retrieve + FewshotRetriever 类）
   - effort: medium（检索 + 相似度度量）
-- [ ] T2.2 标 **FS1 不过 §44 caveat**（spec grill HIGH#3——非确定 + 全库 lookahead 泄漏），价值靠 AI 研判 + 用户反馈定性
-  - 验收：caveat 标注 + 不过 §44 gate
+  - 实现注：case 库用 reconstruct_s194_signals.py 重建的 breakout_score + gap_regime_encoded 作特征；query 当天对齐信号；cosine 相似度 top-K；outcome 按 net_pnl 符号分类 hit/miss/neutral 喂 AI。
+- [x] T2.2 标 **FS1 不过 §44 caveat**（spec grill HIGH#3——非确定 + 全库 lookahead 泄漏），价值靠 AI 研判 + 用户反馈定性
+  - 验收：caveat 标注 + 不过 §44 gate ✅ 模块 docstring 明标 FS1 不过 §44（非确定 AI + 全库 lookahead，§44v2 verifier 套不上），不参与 F1 消融 §44 验证
   - effort: low（文档）
-- [ ] T2.3 单测 `tests/test_fewshot_retriever.py`——检索 top-K case + 相似度边界
-  - 验收：检索正确 + 边界
+- [x] T2.3 单测 `tests/test_fewshot_retriever.py`——检索 top-K case + 相似度边界
+  - 验收：检索正确 + 边界 ✅ 13 测试（TestCosineSim 4 + TestEncodeCase 3 + TestRetrieve 4 + TestFewshotRetriever 2）
   - effort: low
 
 ### R4 · fusion_layer 融合层
 
-- [ ] T4.1 `engine/fusion_layer.py` 新建——`fusion_layer(signals_aligned, fs1_results, fs2_weights) -> {regime, direction, confidence, top_similar_cases, signal_weights}`，综合 FS1 检索结果 + FS2 权重 → 研判产出喂 AI
+- [x] T4.1 `engine/fusion_layer.py` 新建——`fusion_layer(signals_aligned, fs1_results, fs2_weights) -> {regime, direction, confidence, top_similar_cases, signal_weights}`，综合 FS1 检索结果 + FS2 权重 → 研判产出喂 AI
   - 依赖：signal_align（R1）+ fewshot_retriever（R2 FS1）+ bayesian_signal_weight（R3 FS2）
-  - 验收：产综合研判 dict 喂 AI
+  - 验收：产综合研判 dict 喂 AI ✅ 9 测试绿（regime from gap / direction from regime / FS2 加权 confidence / 透传 top_similar_cases + signal_weights）
   - effort: medium（综合逻辑 + 格式）
+  - 实现注：regime 取 gap 信号 value（缺口 regime），无 gap→"未知"；direction 由 regime 派生（启动/中继→向上，反转/噪声→中性，反转歧义由 AI 终判）；confidence=Σ(sig_conf×fs2_weight)/Σ(fs2_weight)（信号不在 weights→权重 0 排除）；不触发买卖喂 AI（§1 弱合规）。
 - [ ] T4.2 接 chat.run_chat system prompt——飞书 bot 问股时注入融合输出（AI 综合研判带 regime/方向/置信度/top 相似 case）
   - 依赖：fusion_layer（R4.1）+ chat.py TOOLS（§3 约定）
   - 验收：飞书 bot 问股带融合输出
