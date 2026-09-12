@@ -26,7 +26,8 @@
 | RB-7 | breakout 1.72x 标记清理 | 6 处已改 naive 1.36x | ✅ 已清理（残留是诚实注释非误用） | done |
 | RB-8 | r3-enforce 接线 | 等 forward_test 到 30 天（~9-25）触发评估 | ⏳ 等 30 天 | forward_test 监控 endpoint 已落（S188 P0 #3），到 30 天评估 |
 | RB-9 | 每周全局优化头脑风暴 cron 触发器 | 每周一次自动触发 | ✅ executor+seed cron 周一9:00 飞书+待办（commit fc836e0） | backend 跑不了 workflow，用户手动触发 |
-| RB-10 | daily_full_pull news 源修复（cls_telegraph 404） | **真根因（subagent 二次实测）**：akshare `stock_info_global_cls` 接口 404 废弃（重试10次515s抛 APIError），非超时。修法（180s+2retry+容错，commit aa605dd）让 cls_telegraph 返空 list 不阻塞 daily_full_pull，但 news 表仍空 | ⏳ **换源待办** | 换财联社电报源（同花顺/东财电报）或等 akshare 修接口；当前容错不炸 |
+| RB-10a | daily_full_pull news 源容错（cls_telegraph 404 不炸） | akshare stock_info_global_cls 接口 404 废弃（重试10次515s）；修 180s+2retry+容错（commit aa605dd）让 cls_telegraph 返空list 不阻塞 daily_full_pull | ✅ 容错 done | 不再炸，news 表仍空（接口404） |
+| RB-10b | daily_full_pull news 源换源 | akshare 财联社电报接口 404 废弃，换数据源（同花顺电报/东财快讯/stoke 替代接口）或等 akshare 修 | ⏳ 待查换源 | 查 stoke/akshare 替代电报接口，或接同花顺 cls |
 | RB-11 | daily_full_pull ticks raw 沉淀修复 | mootdx_tick_ofi_proxy 只输聚合 n_ticks 不输 raw ticks，save_ticks 从未被调→ticks_YYYYMM.db 从不存在 | ⏳ 待改 proxy | 改 proxy 输出 raw ticks 或 daily_full_pull 直接调 mootdx 拉原始分笔（经 stoke venv subprocess）→ save_ticks 落 datalake |
 
 ## 已落地（参考）
