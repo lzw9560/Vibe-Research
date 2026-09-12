@@ -477,3 +477,16 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 turso_sync 已创建（cron 0 10 * * 0，S185 可选）")
+
+    # S188 RB-2：healthchecks.io 外部心跳（可选——VR_HEALTHCHECKS_URL 未设时跳过，零降级）
+    # 防 CronScheduler 进程死→全 cron 静默停；ping 停→healthchecks.io 邮件告警
+    if "healthcheck_ping" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="healthcheck_ping",
+            description="S188 RB-2 外部心跳（每小时 ping healthchecks.io，进程死→ping 停→邮件告警，VR_HEALTHCHECKS_URL 未设跳过）",
+            task_type="healthcheck_ping",
+            cron_expr="0 * * * *",  # 每小时整点
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 healthcheck_ping 已创建（cron 0 * * * *，S188 RB-2 可选）")

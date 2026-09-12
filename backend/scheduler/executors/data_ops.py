@@ -174,3 +174,35 @@ def monthly_vacuum(payload: Dict[str, Any]) -> Dict[str, Any]:
         "errors": errors,
         "status": "ok" if not errors else "partial",
     }
+
+
+def healthcheck_ping(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S188 RB-2 · 外部心跳（healthchecks.io）防 cron 静默死。
+
+    CronScheduler 是 FastAPI lifespan 内的 async while+ticker——进程死→ticker 死→
+    全 cron 静默停，无任何外部告警（macOS 睡死是自托管个人工具最高频可靠性风险）。
+    本 executor 每小时出站 ping healthchecks.io（免费层 20 checks）；ping 停 →
+    healthchecks.io 邮件告警（零成本外部告警，出站不进站，不依赖 Cloudflare Tunnel）。
+
+    配置：VR_HEALTHCHECKS_URL env 变量（healthchecks.io check ping URL，
+    如 https://hc-ping.com/<uuid>）。未设 → 跳过（纯本地模式，同 Turso 范式）。
+
+    payload 可选：``url`` 覆盖 env（测试用）。
+    """
+    import os  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+    import urllib.error  # noqa: PLC0415
+
+    url = payload.get("url") or os.getenv("VR_HEALTHCHECKS_URL")
+    if not url:
+        return {"skipped": True, "reason": "VR_HEALTHCHECKS_URL 未设，纯本地模式（无外部心跳）"}
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            ok = resp.status == 200
+        logger.info("[healthcheck_ping] ping OK status=%s", resp.status)
+        return {"pinged": True, "status": resp.status, "ok": ok}
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        logger.warning("[healthcheck_ping] ping 失败: %s（本地不受影响，仅外部告警断）", e)
+        return {"pinged": False, "error": str(e)}
+
