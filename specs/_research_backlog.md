@@ -12,15 +12,15 @@
 
 | 编号 | 调研 | 定论 | 状态 | 下一步 |
 |---|---|---|---|---|
-| RB-1 | scheduler-research（换框架/服务解耦） | **保持自实现+补强**（进程死非框架问题→healthchecks.io 解；Redis 对个人 Mac 过重 YAGNI；APScheduler 唯一增量 misfire 不痛；3 痛点自建~150 行零依赖） | ✅ 已落 spec S190（定论+补强方案 R3-R5） | 实现 S190 R3-R5（healthcheck seed / retry 接线 / depends_on 门控） |
-| RB-2 | cloud-resources healthchecks.io | 免费外部心跳防 cron 静默死 | ⚠️ executor 已建（S188 data_ops.healthcheck_ping），未 seed | S190 R3 seed healthcheck_ping cron `0 * * * *`（~10 行） |
+| RB-1 | scheduler-research（换框架/服务解耦） | **保持自实现+补强**（进程死非框架问题→healthchecks.io 解；Redis 对个人 Mac 过重 YAGNI；APScheduler 唯一增量 misfire 不痛；3 痛点自建~150 行零依赖） | ✅ S190 spec 落定论 + R3-R5 全落地 | R3 healthcheck seed ✅/R4 retry 接线 ✅/R5 depends_on ✅ 全 done |
+| RB-2 | cloud-resources healthchecks.io | 免费外部心跳防 cron 静默死 | ✅ executor+seed cron `0 * * * *` | 用户待去 healthchecks.io 注册 URL 写 .env（VR_HEALTHCHECKS_URL） |
 | RB-3 | data-infrastructure 全量拉取 | 每日盘后全量拉各源当日数据（stoke 研报/新闻/归因 + mootdx 分笔）沉淀 datalake + 回放引擎 | ✅ 已落 spec S191（草案） | plan→tasks→实现 daily_full_pull + datalake/replay.py |
-| RB-4 | w8e2forp7 任务级重试接线 | tenacity network_retry 装饰器已写（commit 2282503）零调用方 | ⚠️ 装饰器落地未接线 | S190 R4 接线到 kline_refresh/ofi_collect（~15 行 @network_retry） |
-| RB-5 | 盘后链依赖门控 | depends_on + blocked + 迟到追赶治静默陈旧数据 | ⚠️ S190 R5 落 spec（字段+迁移+_tick 门控） | 实现 S190 R5（models 加 depends_on + db 迁移 + seed 盘后链 depends_on） |
-| RB-6 | gap 250 天跨 regime 复验 | 60+120 天 net 负，250 天定论性复验 | 🔄 进行中（172 天先跑，cache 不够 250） | 扩 baostock cache 回溯到 250 天 → 跑 gap 250 |
-| RB-7 | breakout 1.72x 标记清理 | memory 6 处已改 naive 1.36x，可能残留 | ⚠️ 部分 | grep 残留 1.72x/PnL 0.486/0.523 标记 → 清理 |
-| RB-8 | r3-enforce 接线 | 等 forward_test 到 30 天（~9-25）触发评估 | ❌ 等 30 天 | forward_test 监控 endpoint 已落（S188 P0 #3），到 30 天评估 |
-| RB-9 | 每周全局优化头脑风暴 cron 触发器 | 每周一次自动触发 | ✅ executor+seed cron（周一9:00飞书+待办，backend跑不了workflow用户手动触发） | 已接通 |
+| RB-4 | w8e2forp7 任务级重试接线 | tenacity network_retry 装饰器零调用方→接线 tencent | ✅ tencent _fetch_gtimg 接 @network_retry（commit c0b89ce） | baostock fetch_* except Exception 吞异常接不上（价值有限），tencent 首个接通 |
+| RB-5 | 盘后链依赖门控 | depends_on + 门控治静默陈旧数据 | ✅ 完全收尾（字段+迁移+_should_run 门控+dependency_satisfied+seed 声明） | kline_refresh(根)→funnel→journal 硬门控，cron 时序+门控双保险 |
+| RB-6 | gap 250 天跨 regime 复验 | 172 天 net≈0 全 regime 负，250 增量价值小 | ✅ 172 够主线结论 | 250 不值得全量重拉（refresh 增量不回溯历史） |
+| RB-7 | breakout 1.72x 标记清理 | 6 处已改 naive 1.36x | ✅ 已清理（残留是诚实注释非误用） | done |
+| RB-8 | r3-enforce 接线 | 等 forward_test 到 30 天（~9-25）触发评估 | ⏳ 等 30 天 | forward_test 监控 endpoint 已落（S188 P0 #3），到 30 天评估 |
+| RB-9 | 每周全局优化头脑风暴 cron 触发器 | 每周一次自动触发 | ✅ executor+seed cron 周一9:00 飞书+待办（commit fc836e0） | backend 跑不了 workflow，用户手动触发 |
 
 ## 已落地（参考）
 
