@@ -262,10 +262,12 @@ def _build_kg_context(text: str) -> str:
     if not text:
         return ""
 
-    # 1. 含 6 位股票代码 → 查该股的图谱关联
+    # 1. 含 6 位股票代码 → 查该股的图谱关联 + S194 融合研判
     code_match = re.search(r"(\d{6})", text)
     if code_match:
         code = code_match.group(1)
+        parts: list[str] = []
+        # 知识图谱关联
         try:
             result = exec_tool("query_kg_relations", {
                 "entity_code": code, "entity_type": "stock",
@@ -281,9 +283,20 @@ def _build_kg_context(text: str) -> str:
                     lines.append(f"  - {target}" + (f"（{link}）" if link else ""))
                 if len(relations) > 15:
                     lines.append(f"  …共 {total} 条，仅列前 15")
-                return "\n".join(lines)
+                parts.append("\n".join(lines))
         except Exception as e:  # noqa: BLE001 — 预查失败降级，不阻断 LLM
             logger.warning("KG context 预查（relations %s）失败: %s", code, e)
+        # S194 信号融合研判（regime/方向/置信度/top 相似 case）——喂 AI 综合判断
+        try:
+            from engine.fusion_pipeline import compute_fusion_for_query  # noqa: PLC0415
+            from engine.fusion_layer import build_fusion_context  # noqa: PLC0415
+            fusion_out = compute_fusion_for_query(code)
+            if fusion_out.get("confidence", 0.0) > 0 or fusion_out.get("regime") != "未知":
+                parts.append(build_fusion_context(fusion_out))
+        except Exception as e:  # noqa: BLE001 — 融合计算失败降级，不阻断 LLM
+            logger.warning("S194 融合 context（%s）失败: %s", code, e)
+        if parts:
+            return "\n\n".join(parts)
 
     # 2. 含「XX 行业」→ 查该行业的股票列表
     industry_match = re.search(r"([\u4e00-\u9fa5]{2,6}|[A-Za-z]{2,20})行业", text)
