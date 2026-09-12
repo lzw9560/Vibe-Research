@@ -166,13 +166,23 @@ def _get_env_llm_config() -> dict:
     """从环境变量读 LLM 兜底配置（前端未传字段时补全）。
 
     读 VR_LLM_BASE_URL / VR_LLM_API_KEY / VR_LLM_MODEL，缺省返回空串。
+    若设了 VR_LLM_BACKUP_*，附 backup_cfgs 列表——_call_llm 主端点连接失败时
+    自动切备（主端点 Tailscale relay 抖时备 LAN/另一 Tailscale 兜底）。
     仅返回配置，不输出建议/标的/预测（合规）。不向非鉴权接口暴露敏感值。
     """
-    return {
+    cfg = {
         "baseURL": os.getenv("VR_LLM_BASE_URL", ""),
         "apiKey": os.getenv("VR_LLM_API_KEY", ""),
         "model": os.getenv("VR_LLM_MODEL", ""),
     }
+    backup = {
+        "baseURL": os.getenv("VR_LLM_BACKUP_BASE_URL", ""),
+        "apiKey": os.getenv("VR_LLM_BACKUP_API_KEY", ""),
+        "model": os.getenv("VR_LLM_BACKUP_MODEL", ""),
+    }
+    if backup["baseURL"] and backup["apiKey"] and backup["model"]:
+        cfg["backup_cfgs"] = [backup]
+    return cfg
 
 
 def _ip_blocked(host: str) -> bool:
@@ -218,7 +228,7 @@ def _check_base_url(url: str) -> None:
                 raise RuntimeError("Base URL 解析到了不允许的内网地址")
 
 
-def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
+def _call_llm_once(cfg: dict, messages: list, use_tools: bool) -> dict:
     _check_base_url(cfg.get("baseURL", ""))
     base = cfg["baseURL"].rstrip("/")
     if not base.endswith(("/v1", "/v3", "/api/v3", "/v4")):
@@ -238,6 +248,27 @@ def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
     if r.status_code != 200:
         raise RuntimeError(f"模型接口 HTTP {r.status_code}: {r.text[:300]}")
     return r.json()
+
+
+def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
+    """调 LLM，主 cfg 失败时自动切 backup_cfgs（S189 并行 failover）。
+
+    连接类错（ConnectionError/Timeout/RemoteDisconnected）+ 非 200（含 5xx/4xx）
+    → 试下一个 cfg；全失败抛最后一个错。主端点 Tailscale relay 抖时备 LAN/另一 Tailscale 兜底。
+    """
+    import requests as _req  # noqa: PLC0415
+    cfgs = [cfg] + (cfg.get("backup_cfgs") or [])
+    last_err: Exception | None = None
+    for c in cfgs:
+        if not c.get("baseURL") or not c.get("apiKey") or not c.get("model"):
+            continue
+        try:
+            return _call_llm_once(c, messages, use_tools)
+        except (_req.exceptions.ConnectionError, _req.exceptions.Timeout, RuntimeError) as e:
+            logger.warning("LLM 端点 %s 失败，尝试下一个: %s", c.get("baseURL"), repr(e)[:140])
+            last_err = e
+            continue
+    raise last_err or RuntimeError("无可用 LLM 配置（主+备 baseURL/apiKey/model 缺失）")
 
 
 def run_chat(cfg: dict, user_messages: list, context: str = "") -> dict:

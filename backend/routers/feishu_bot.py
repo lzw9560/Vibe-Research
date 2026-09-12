@@ -19,7 +19,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Request
 
 import chat
-from config import AssistantDefaultConfig as Config
+from config import AssistantDefaultConfig as Config, load_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["feishu_bot"])
@@ -376,7 +376,19 @@ async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
     try:
         from notification.senders.feishu_sender import FeishuSender
 
-        config = Config()
+        config = load_config()  # 读 env（FEISHU_APP_ID 等）；Config() 只 dataclass 默认值不读 env
+        # 回复走 BOT app（FEISHU_BOT_APP_ID）——事件回调配在 BOT app 上，
+        # 回复必须用同一 app 才能达（跨 app 发不过去）。未配 BOT 凭据则降级用通知 app。
+        import os as _os
+        _bid = _os.getenv("FEISHU_BOT_APP_ID", "")
+        _bsec = _os.getenv("FEISHU_BOT_APP_SECRET", "")
+        if _bid and _bsec:
+            config.feishu_app_id = _bid
+            config.feishu_app_secret = _bsec
+            if _os.getenv("FEISHU_BOT_CHAT_ID"):
+                config.feishu_chat_id = _os.getenv("FEISHU_BOT_CHAT_ID")
+            config.feishu_webhook_url = ""  # 清空通知 webhook，强制走 BOT app 的 App Bot API
+            config.feishu_prefer_app_bot = True  # 强制 App Bot（否则回退到通知 app webhook）
         # 事件带来 chat_id 时覆盖实例默认（P2P / 群聊通用）
         event_chat_id = msg.get("chat_id") or ""
         if event_chat_id:
