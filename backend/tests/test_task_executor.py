@@ -79,6 +79,7 @@ _EXPECTED_TASK_TYPES = {
     "healthcheck_ping",
     # S188 RB-9 每周头脑风暴提醒（周一 9:00 飞书+待办）
     "weekly_brainstorm_remind",
+    "daily_full_pull",  # S191
 }
 
 

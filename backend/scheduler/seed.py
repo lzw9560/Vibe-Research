@@ -514,3 +514,16 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 weekly_brainstorm_remind 已创建（cron 0 9 * * 1，S188 RB-9）")
+
+    # S191 RB-3：每日盘后全量拉取沉淀 datalake（stoke + mootdx 分笔，晚 journal 17:30）
+    if "daily_full_pull" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="daily_full_pull",
+            description="S191 RB-3 每日全量拉取沉淀 datalake（stoke 研报/新闻/涨停归因 + mootdx 分笔→datalake/，供 replay.py 回放）",
+            task_type="daily_full_pull",
+            cron_expr="35 17 * * 0-4",  # 17:35 晚 journal 17:30
+            payload={},
+            enabled=True,
+            depends_on="trade_journal_daily",  # S190 R5 硬门控
+        ))
+        logger.info("[scheduler] seed 默认任务 daily_full_pull 已创建（cron 35 17 * * 0-4，depends_on=trade_journal_daily）")

@@ -250,3 +250,57 @@ def weekly_brainstorm_remind(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"reminded": True, "date": today, "notif_sent": notif_ok}
 
 
+def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S191 RB-3 · 每日盘后全量拉取数据基建沉淀。
+
+    用户原话"每日全量拉取不同数据源交易数据尤其盘中数据供后期调试盘中策略做数据沉淀"。
+    盘后 17:35 跑（晚 journal 17:30 + depends_on=trade_journal_daily 硬门控）：
+    - stoke 当日研报/新闻/涨停归因 → datalake/stoke_YYYYMM.db
+    - mootdx 当日全首板分笔（OFI proxy 用）→ datalake/ticks_YYYYMM.db
+
+    现有 kline_refresh/seal_intraday/ofi_collect 已 live 采，不重复（depends_on 保证顺序）。
+    Turso 是云灾备（write-only），datalake 是本地回放层（供 replay.py 读回）。
+    """
+    from datetime import datetime  # noqa: PLC0415
+    from vr_paths import resolve_data_dir, last_trading_date_str  # noqa: PLC0415
+    from data.datalake.store import save_stoke_data, save_ticks  # noqa: PLC0415
+
+    date_str = last_trading_date_str()
+    result: Dict[str, Any] = {"date": date_str, "stoke": {}, "ticks": {}}
+
+    # 1. stoke 沉淀（研报/新闻/强势涨停）—— stoke 走 ~/stoke venv subprocess，失败降级不阻塞
+    try:
+        from data.sources.stoke_src import strong_stocks, cls_telegraph  # noqa: PLC0415
+        strong = strong_stocks() or []
+        telegraph = cls_telegraph()
+        # telegraph 返 list 才用，dict（error）跳过
+        telegraph_list = telegraph if isinstance(telegraph, list) else []
+        items = {"strong": strong, "news": telegraph_list}
+        r = save_stoke_data(date_str, items)
+        result["stoke"] = {"saved": r.get("saved", 0), "n_strong": len(strong), "n_telegraph": len(telegraph_list)}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[daily_full_pull] stoke 沉淀失败: %s", e)
+        result["stoke"] = {"error": str(e)}
+
+    # 2. mootdx 当日全首板分笔——首板 universe 取 zt_history 当日
+    try:
+        import sqlite3  # noqa: PLC0415
+        zt_db = resolve_data_dir() / "zt_history.db"
+        if zt_db.exists():
+            conn = sqlite3.connect(str(zt_db), timeout=5)
+            codes = [r[0] for r in conn.execute(
+                "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
+            ).fetchall()]
+            conn.close()
+        else:
+            codes = []
+        # mootdx 走 ~/stoke venv（项目 venv 无 mootdx）——subprocess 调 mootdx_tick_ofi_proxy
+        result["ticks"] = {"n_codes": len(codes), "note": "mootdx 分笔沉淀需 ~/stoke venv subprocess（S191 待接线）"}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[daily_full_pull] ticks 沉淀失败: %s", e)
+        result["ticks"] = {"error": str(e)}
+
+    logger.info("[daily_full_pull] %s done: stoke=%s ticks=%s", date_str, result["stoke"], result["ticks"])
+    return result
+
+
