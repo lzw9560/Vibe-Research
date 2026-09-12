@@ -39,7 +39,7 @@ from pit_store.store import SnapshotStore  # noqa: E402
 from engine.accounting import gap_net_return  # noqa: E402
 
 VR = ROOT / ".vibe-research"
-UNIVERSE = VR / "first_board_universe_baostock_120d.json"
+UNIVERSE = VR / "first_board_universe_baostock_172d.json"
 KLINE = VR / "baostock_kline_cache.json"
 GENE_DB = VR / "gene_scores.db"
 

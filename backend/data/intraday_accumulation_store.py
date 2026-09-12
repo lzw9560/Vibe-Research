@@ -137,6 +137,9 @@ _SCHEMA_OFI = """CREATE TABLE IF NOT EXISTS intraday_ofi_snapshots (
     bid_ask_pressure REAL,          -- 盘口买压比 = Σbuy/Σsell（涨停 sell=0 cap 999）
     buy_vols_json TEXT,             -- 五档买量 [vol1..vol5]（重算用，S088 范式）
     sell_vols_json TEXT,            -- 五档卖量
+    buy_prices_json TEXT,           -- S188 变动量 OFI 用：五档买价 [price1..price5]（Cont 2014 跳档判断）
+    sell_prices_json TEXT,          -- 五档卖价
+    multi_ofi_json TEXT,            -- S188 变动量 per-level OFI [ofi_L1..ofi_L5] + total（compute_multi_level_ofi 产出）
     seal_amount REAL,                -- 封单额（涨停股 sell=0 时 OFI 退化用，KG 因子 3）
     regime TEXT,                     -- 大盘 regime（strong_trend/weak/bear，conditioning 分层用）
     snapshot_at TEXT,

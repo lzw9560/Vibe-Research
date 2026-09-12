@@ -48,25 +48,67 @@ def seal_intraday_collect(payload: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def _load_intraday_ranking_codes(limit: int = 50) -> list[str]:
+    """S188 B：从 intraday_ranking_snapshots 读今日飙升/热门/异常股 codes（ofi_collect 默认源）。
+
+    intraday_microstructure_snapshot cron 每 10min 采的 skyrocket/hot_stock/anomaly
+    排名表（已含真实卖盘的非涨停异动股，OFI 有信息量，非 zt_pool 涨停股 sell=0 退化）。
+    优先 skyrocket + hot_stock（异动最猛），不足补 anomaly，去重限 ~limit 只（tencent 批量上限）。
+    """
+    import sqlite3  # noqa: PLC0415
+    from vr_paths import resolve_data_dir, last_trading_date_str  # noqa: PLC0415
+    db = resolve_data_dir() / "intraday_accumulation" / "intraday_microstructure.db"
+    if not db.exists():
+        return []
+    today = last_trading_date_str()
+    conn = sqlite3.connect(str(db), timeout=5)
+    try:
+        codes: list[str] = []
+        for source in ("skyrocket", "hot_stock", "anomaly"):
+            rows = conn.execute(
+                "SELECT DISTINCT code FROM intraday_ranking_snapshots WHERE date=? AND source=? "
+                "AND code IS NOT NULL AND length(code)=6 ORDER BY rank ASC NULLS LAST",
+                (today, source),
+            ).fetchall()
+            for r in rows:
+                c = str(r[0]).strip()
+                if c and c not in codes:
+                    codes.append(c)
+                if len(codes) >= limit:
+                    break
+            if len(codes) >= limit:
+                break
+        return codes[:limit]
+    finally:
+        conn.close()
+
+
 def ofi_collect(payload: Dict[str, Any]) -> Dict[str, Any]:
     """S176 R5 — 盘中 OFI 五档收集（cron `* 9-14 * * 1-5`）。
 
-    payload: {codes: [...], regime: str}（codes 来自 zt_pool/premarket，executor 调方提供；
-    生产 wiring 取 zt_pool 涨停股另接）。tencent fetch_raw（不封 IP 无限流）→
-    collect_ofi_for_codes → save_ofi（intraday_accumulation_store，不喂 trade_journal）。
-    返 {n_codes, n_collected, n_skipped}。
+    payload: {codes: [...], regime: str}（显式传 codes 用之）。
+    codes 空（默认）→ 从 intraday_ranking_snapshots 读今日飙升/热门/异常股 ~50 只
+    （S188 B：非涨停候选股有真实卖盘，OFI 有信息量；非 zt_pool 涨停股 sell=0 退化）。
+    tencent fetch_raw（不封 IP 无限流）→ collect_ofi_for_codes → save_ofi
+    （intraday_accumulation_store，不喂 trade_journal）。返 {n_codes, n_collected, n_skipped}。
     """
     from engine.intraday_ofi_collector import collect_ofi_for_codes  # noqa: PLC0415
     from vr_paths import last_trading_date_str  # noqa: PLC0415
 
     codes = payload.get("codes") or []
+    source_note = "payload"
+    if not codes:
+        codes = _load_intraday_ranking_codes(limit=50)
+        source_note = "intraday_ranking_snapshots（今日飙升/热门/异常）" if codes else "无候选 codes"
     if not codes:
         return {"n_codes": 0, "n_collected": 0, "n_skipped": 0,
-                "note": "no codes in payload（生产 wiring 取 zt_pool 另接）"}
+                "note": f"no codes（{source_note}）"}
     date = last_trading_date_str()
     ts = _dt.now().strftime("%H:%M")
     regime = payload.get("regime")
-    return collect_ofi_for_codes(codes, date, ts, regime)
+    result = collect_ofi_for_codes(codes, date, ts, regime)
+    result["codes_source"] = source_note
+    return result
 
 
 def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:

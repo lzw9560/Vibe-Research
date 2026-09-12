@@ -110,6 +110,71 @@ async def list_task_types() -> Dict[str, List[str]]:
     return {"data": list(st.TaskExecutor()._executors.keys())}
 
 
+@router.get("/api/scheduled-tasks/forward-test-monitor")
+async def forward_test_monitor() -> Dict[str, Any]:
+    """S188 P0 #3 · forward_test 30 天倒计时监控。
+
+    r3-enforce 需 30 天阈值，backfill 被 seal_time 墙挡死（[[p1-3-forward-test-zero-picks-root-cause-2026-09-11]]），
+    live 积累是唯一路径。监控：天数 + 最近断跑 + 30 天倒计时 + cron 最近 run 状态。
+    """
+    import sqlite3  # noqa: PLC0415
+    from vr_paths import resolve_data_dir, last_trading_date_str  # noqa: PLC0415
+    from datetime import datetime as _dt, timedelta as _td  # noqa: PLC0415
+
+    gs = resolve_data_dir() / "gene_scores.db"
+    n_days = n_picks = 0
+    date_range = (None, None)
+    missing_recent: list[str] = []
+    if gs.exists():
+        c = sqlite3.connect(str(gs), timeout=5)
+        try:
+            n_days = c.execute("SELECT COUNT(DISTINCT signal_date) FROM forward_test_records").fetchone()[0] or 0
+            n_picks = c.execute("SELECT COUNT(*) FROM forward_test_records").fetchone()[0] or 0
+            dr = c.execute("SELECT MIN(signal_date), MAX(signal_date) FROM forward_test_records").fetchone()
+            date_range = (dr[0], dr[1])
+            today = last_trading_date_str()
+            d = _dt.strptime(today, "%Y-%m-%d")
+            for back in range(0, 14):
+                ds = (d - _td(days=back)).strftime("%Y-%m-%d")
+                if (d - _td(days=back)).weekday() >= 5:
+                    continue
+                cnt = c.execute("SELECT COUNT(*) FROM forward_test_records WHERE signal_date=?", (ds,)).fetchone()[0]
+                if cnt == 0 and ds >= (dr[0] or today):
+                    missing_recent.append(ds)
+        finally:
+            c.close()
+
+    md = resolve_data_dir() / "market_data.db"
+    cron_recent: list[dict] = []
+    cron_task_id = None
+    if md.exists():
+        cm = sqlite3.connect(str(md), timeout=5)
+        try:
+            row = cm.execute("SELECT id FROM scheduled_tasks WHERE task_type LIKE '%forward%' LIMIT 1").fetchone()
+            if row:
+                cron_task_id = row[0]
+                cols = [x[1] for x in cm.execute("PRAGMA table_info(scheduled_task_runs)").fetchall()]
+                rs = cm.execute("SELECT * FROM scheduled_task_runs WHERE task_id=? ORDER BY started_at DESC LIMIT 5", (cron_task_id,)).fetchall()
+                cron_recent = [dict(zip(cols, r)) for r in rs]
+        finally:
+            cm.close()
+
+    target = 30
+    remaining = max(0, target - n_days)
+    return {
+        "current_days": n_days,
+        "target_days": target,
+        "remaining_days": remaining,
+        "progress_pct": round(n_days / target * 100, 1) if target else 0,
+        "total_picks": n_picks,
+        "date_range": {"start": date_range[0], "end": date_range[1]},
+        "missing_recent_trading_days": missing_recent,
+        "note": "live 积累中（seal_time 墙挡历史回补）" if n_days < target else "已达 30 天阈值，可触发 r3-enforce 评估",
+        "cron_task_id": cron_task_id,
+        "cron_recent_runs": cron_recent,
+    }
+
+
 @router.get("/api/scheduled-tasks/{task_id}")
 async def get_scheduled_task(task_id: int) -> Dict[str, Any]:
     """Get a single scheduled task."""

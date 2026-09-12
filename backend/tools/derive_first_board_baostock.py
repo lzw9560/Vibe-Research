@@ -35,9 +35,9 @@ BACKEND = REPO / "backend"
 CACHE = DATA / "baostock_kline_cache.json"
 EM_POOL_HIST = DATA / "zt_pool_hist_cache.json"
 EM_HISTORY_DB = DATA / "zt_history.db"
-OUT = DATA / "first_board_universe_baostock_120d.json"
-END_DATE = "2026-09-03"  # 60-day window 末（2026-09-04 仅 149 bars 不完整，排除）
-WINDOW_SIZE = 120
+OUT = DATA / "first_board_universe_baostock_172d.json"
+END_DATE = "2026-09-09"  # cache 末尾（172 天覆盖 2025-12-25 ~ 2026-09-09）
+WINDOW_SIZE = 172  # S188 主线 gap 复验：cache 当前覆盖 172 天（<250 理想，比 60/120 多，先跑）
 TOL = 0.005  # 涨停价容差（分）
 PCT_PREFILTER_SLACK = 0.6  # pctChg 粗筛下限 slack（10%板<9.4 排除 …）
 
