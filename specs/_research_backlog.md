@@ -13,7 +13,7 @@
 | 编号 | 调研 | 定论 | 状态 | 下一步 |
 |---|---|---|---|---|
 | RB-1 | scheduler-research（换框架/服务解耦） | **保持自实现+补强**（进程死非框架问题→healthchecks.io 解；Redis 对个人 Mac 过重 YAGNI；APScheduler 唯一增量 misfire 不痛；3 痛点自建~150 行零依赖） | ✅ S190 spec 落定论 + R3-R5 全落地 | R3 healthcheck seed ✅/R4 retry 接线 ✅/R5 depends_on ✅ 全 done |
-| RB-2 | cloud-resources healthchecks.io | 免费外部心跳防 cron 静默死 | ✅ executor+seed cron `0 * * * *` | 用户待去 healthchecks.io 注册 URL 写 .env（VR_HEALTHCHECKS_URL） |
+| RB-2 | cloud-resources healthchecks.io | 免费外部心跳防 cron 静默死 | ✅ 全落地（executor+seed cron id=32 `0 * * * *` + URL 写 backend/.env + 后端重启 + ping 200 OK 验证） | done；hourly cron 自动 ping，进程死→healthchecks.io 邮件告警 |
 | RB-3 | data-infrastructure 全量拉取 | 每日盘后全量拉各源当日数据（stoke 研报/新闻/归因 + mootdx 分笔）沉淀 datalake + 回放引擎 | ✅ 已落 spec S191（草案） | plan→tasks→实现 daily_full_pull + datalake/replay.py |
 | RB-4 | w8e2forp7 任务级重试接线 | tenacity network_retry 装饰器零调用方→接线 tencent | ✅ tencent _fetch_gtimg 接 @network_retry（commit c0b89ce） | baostock fetch_* except Exception 吞异常接不上（价值有限），tencent 首个接通 |
 | RB-5 | 盘后链依赖门控 | depends_on + 门控治静默陈旧数据 | ✅ 完全收尾（字段+迁移+_should_run 门控+dependency_satisfied+seed 声明） | kline_refresh(根)→funnel→journal 硬门控，cron 时序+门控双保险 |

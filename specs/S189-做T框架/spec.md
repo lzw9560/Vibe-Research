@@ -1,6 +1,6 @@
 # Spec: S189 — 做 T 框架（持仓 + 盘中 T+0 磨成本）
 
-> 状态：草案
+> 状态：T1-T4 done（T4 经 6 视角 grill 修订）；T5 不接（无 validated edge，price 弱正在噪声内）
 > 作者：Claude  日期：2026-09-12
 > 关联：[[../S187-历史因子baostock回溯/spec.md]]（breakout 0 picks 调查）、[[../S188-breakout多窗口holding-return/spec.md]]、P1-3、做 T 框架（用户 2026-09-12 提出）
 

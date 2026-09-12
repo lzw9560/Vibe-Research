@@ -35,6 +35,12 @@ STAMP_DUTY_PCT_PRE_2023_08_28: float = 0.10
 STAMP_DUTY_HALVING_DATE: str = "2023-08-28"
 #: 最低佣金（per side，元——A 股散户最低 5 元/笔）。
 COMMISSION_MIN_YUAN: float = 5.0
+#: 散户佣金费率（百分点 of notional/side，万 2.5=0.025）。notional×rate 超 5 元最低后按费率（修原只 5 元最低低估中大单）。
+COMMISSION_RATE_PCT: float = 0.025
+#: T+0 VWAP→execution 往返 shortfall（百分点，市场冲击 + 半价差×2）。
+#: T+0 成交价已是分钟 VWAP（市场均价），不需 breakout 的 0.70% 理论价桥接——真实 shortfall
+#: 对流动 A 股约 0.05-0.20%，取 0.10% 保守。S189 grill 修订（原 t0_cost 直接 return _cost_pct 0.70% 高估 T+0 成本 ~5x）。
+T0_SLIPPAGE_PCT: float = 0.10
 
 
 @dataclass(frozen=True)
@@ -86,11 +92,17 @@ def _cost_pct(entry_price: float, size: float, entry_date: str = "") -> float:
 def t0_cost(entry_price: float, size: float, date: str = "") -> float:
     """S189 · T+0 当日往返成本（百分点 of notional）。
 
-    持底仓后当日买+卖往返（T+0）：佣金（5 元×2 side）+ 印花（卖侧 0.1%）+ 滑点。
-    与 _cost_pct 同公式（都是买+卖 round-trip），语义别名——T+0 当日无隔夜，
-    但成本结构同（佣金+印花+滑点）。
+    S189 grill 修订：T+0 成交价是分钟 VWAP（市场均价），不需 breakout 的 0.70% 理论价桥接。
+    = T0_SLIPPAGE_PCT(0.10% VWAP→execution shortfall) + 印花(0.05%) + 佣金(max(notional×0.025%, 5元)×2)。
+    佣金用 max(费率, 最低)——中大单按费率（修原只有 5 元最低低估大单 bug）。
     """
-    return _cost_pct(entry_price, size, date)
+    notional = entry_price * size
+    stamp = _stamp_duty_for_date(date)
+    if notional <= 0:
+        return T0_SLIPPAGE_PCT + stamp + COMMISSION_RATE_PCT
+    commission_yuan = max(notional * COMMISSION_RATE_PCT / 100, COMMISSION_MIN_YUAN) * 2
+    commission_pct = commission_yuan / notional * 100
+    return T0_SLIPPAGE_PCT + stamp + commission_pct
 
 
 def _find_signal_idx(bars: list, signal_date: str) -> int | None:
