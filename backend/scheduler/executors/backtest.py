@@ -157,8 +157,13 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
     # 到期：判阶段 + 写 checkpoint + WARNING + 返操作指引
     phase = "first_retrospective" if days < reverify_threshold else "reverify"
     if phase == "first_retrospective":
+        # S197 R1（对抗审 wrs3bqhis CRITICAL）：原 --baostock flag 不存在（main:769 只认
+        # --baostock-history），fallthrough 到 run_layer_lift(days=120)→days_robust≥60 绕过
+        # 30 日 provisional cap ×0.5。fix typo → --baostock-history（run_layer_lift_baostock）。
+        # 但 baostock 源 days_robust≥60 仍绕 30 日 cap——first_retrospective 源设计
+        # （baostock vs forward_test_records days=30 让 cap 真咬）待 S197 R1 定稿（spec v2 已记）。
         action = (
-            "cd backend && .venv/bin/python tools/first_board_layer_lift.py --baostock "
+            "cd backend && .venv/bin/python tools/first_board_layer_lift.py --baostock-history "
             "→ 跑 per-dimension day_paired_lift（非池化防 4.686x→1.723x 假象）写 "
             "evaluation_lifts.db → DIMENSION_LIFT_REGISTRY 升级 DB-backed 动态读（spec S151 R3）"
         )
