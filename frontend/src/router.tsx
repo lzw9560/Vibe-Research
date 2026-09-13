@@ -1,7 +1,7 @@
 // S013 T10：全量懒加载。每页 React.lazy + Suspense 包裹，Vite code-split 出独立 chunk，
 // 首包只含 Layout + 当前路由。fallback 为轻量加载占位，避免空白闪烁。
 // S186 Phase 2: 旧路由 redirect 到 6 域 19 内容路由（保留组件不删，Phase 3 才删）
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, Link } from "react-router-dom";
 import { lazy, Suspense, type ComponentType } from "react";
 import { Layout } from "@/components/layout/Layout";
 
@@ -30,6 +30,17 @@ function lazyEl<T extends ComponentType<any>>(
 /** S186 Phase 2: redirect 旧路由到新 6 域（保兼容，Phase 3 才删旧组件） */
 function redirect(to: string) {
   return <Navigate to={to} replace />;
+}
+
+/** 404 catch-all（路由深度分析修复：未知路由不空白，提示+回首页） */
+function NotFound() {
+  return (
+    <div className="flex h-[60vh] flex-col items-center justify-center gap-2 text-center">
+      <div className="text-2xl font-semibold text-gray-700">404 · 页面不存在 Not Found</div>
+      <div className="text-sm text-gray-500">路由已迁移或不存在，回首页继续</div>
+      <Link to="/market" className="text-blue-600 underline">回首页 /market</Link>
+    </div>
+  );
 }
 
 export const router = createBrowserRouter([
@@ -103,7 +114,7 @@ export const router = createBrowserRouter([
       // 建议散页 → /advisory
       { path: "/recommendation", element: redirect("/advisory") },
       // 风险 → /portfolio
-      { path: "/risk-dashboard", element: redirect("/portfolio") },
+      { path: "/risk-dashboard", element: redirect("/risk") },  // 路由修复: →/risk(风险看板独立页 S179) 非 /portfolio(lossy)
       // 策略散页 → /strategy
       { path: "/strategy-signals", element: redirect("/strategy") },
       { path: "/backtest", element: redirect("/strategy") },
@@ -116,7 +127,7 @@ export const router = createBrowserRouter([
       { path: "/workflow/coach", element: redirect("/intraday") },
       { path: "/workflow/alerts", element: redirect("/intraday") },
       { path: "/workflow/post-market", element: redirect("/review") },
-      { path: "/workflow/topology", element: redirect("/review") },
+      { path: "/workflow/topology", element: redirect("/topology") },  // 路由修复: →/topology(独立拓扑页) 非 /review(lossy)
       { path: "/workflow/first-board", element: redirect("/screener") },
       { path: "/workflow/pre-market", element: redirect("/screener") },
       { path: "/workflow/selection", element: redirect("/screener") },
@@ -129,6 +140,8 @@ export const router = createBrowserRouter([
       // strategy 子路由 → /strategy
       { path: "/strategy/funnel/forward-test", element: redirect("/strategy") },
       { path: "/strategy/funnel/config", element: redirect("/strategy") },
+      // 404 catch-all（路由修复：未知路由不空白，兜底到 NotFound 提示页）
+      { path: "*", element: <NotFound /> },
     ],
   },
 ]);
