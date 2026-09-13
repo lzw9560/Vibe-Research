@@ -44,12 +44,25 @@ def _save_cache(cache: dict) -> None:
     os.replace(tmp, CACHE_PATH)
 
 
+def _load_priority_codes() -> list[str] | None:
+    """优先 code 列表（龙头/热门/有投资价值：trade_journal 已交易+watchlist 自选）。
+    冷门/缺关注不管。无文件返 None（回退全量 cache keys）。"""
+    p = _DATA_DIR / "backfill_priority_codes.json"
+    if p.exists():
+        codes = json.loads(p.read_text(encoding="utf-8"))
+        return codes or None
+    return None
+
+
 def backfill(limit: int = 0) -> None:
     import baostock as bs  # noqa: PLC0415
     bs.login()
     cache = _load_cache()
-    codes = list(cache.keys())
+    codes = _load_priority_codes() or list(cache.keys())
     prog = _load_progress()
+    # code 列表变了（priority vs 全量）→ 重置 progress
+    if prog.get("mode") != ("priority" if _load_priority_codes() else "full"):
+        prog = {"last_idx": 0, "mode": "priority" if _load_priority_codes() else "full"}
     start_idx = prog.get("last_idx", 0)
     print(f"# backfill: {len(codes)} 股, idx {start_idx} 起, {START}~{END}", file=sys.stderr)
     n_done = 0
