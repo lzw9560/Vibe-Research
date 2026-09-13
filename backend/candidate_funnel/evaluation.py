@@ -257,13 +257,17 @@ def lift_for_arm(arm: str) -> tuple[float, str]:
 
     返 (lift_multiplier, status_note)。N/A 臂（floor/gap/mock）返 (1.0, 'N/A')。
     多维度取最保守（最低 multiplier）。
+
+    §44v2 P0：override 优先（get_effective_dimension）——30/60 天 revalidation 写回后
+    升降级即时生效，fallback frozen baseline（b1aba21）。
     """
+    from candidate_funnel.lift_override import get_effective_dimension
     dims = DIM_ARM_MAP.get(arm)
     if not dims:
         return (1.0, "N/A cap 不作用（floor/gap/mock）")
     multipliers = []
     for dim_id in dims:
-        d = DIMENSION_LIFT_REGISTRY.get(dim_id)
+        d = get_effective_dimension(dim_id)
         if d is None:
             continue
         _, mult = lift_to_multiplier(d.lift, d.n, days_robust=d.days_robust)
@@ -286,12 +290,14 @@ def _apply_evaluation_layer(
 
     R8 接线生产：turnover/gene 用 lift_to_multiplier(lift, n, days_robust=dim.days_robust)
     替代直读 frozen weight_multiplier（CLAUDE.md §1.2 P0）。days_robust<60 → provisional cap ×0.5。
+    §44v2 P0：override 优先（get_effective_dimension）——revalidation 写回即时生效，fallback frozen。
 
     返 (mutated_cards, evaluation_summary)。函数签名遵循 _filter_tradability 范式，
     复用 attach_first_board_analysis post-hoc card-mutation 模式（不改 build_diagnosis_card 参数）。
     """
-    turnover_dim = DIMENSION_LIFT_REGISTRY.get("turnover")
-    gene_dim = DIMENSION_LIFT_REGISTRY.get("gene_score")
+    from candidate_funnel.lift_override import get_effective_dimension
+    turnover_dim = get_effective_dimension("turnover")
+    gene_dim = get_effective_dimension("gene_score")
 
     for card in cards:
         code = getattr(card, "code", None) or ""

@@ -63,11 +63,12 @@ def compute_strategy_score(
         "factor_freq_score", "factor_premium",
     }
     try:
-        from candidate_funnel.evaluation import DIMENSION_LIFT_REGISTRY, lift_to_multiplier
-        _gene_dim = DIMENSION_LIFT_REGISTRY["gene_score"]
+        from candidate_funnel.evaluation import lift_to_multiplier
+        from candidate_funnel.lift_override import get_effective_dimension
+        _gene_dim = get_effective_dimension("gene_score")
         gene_multiplier = lift_to_multiplier(
             _gene_dim.lift, _gene_dim.n, days_robust=_gene_dim.days_robust,
-        )[1]  # days=38<60 → ×0.5 provisional cap（替代直读 frozen weight_multiplier）
+        )[1]  # §44v2 P0：override 优先（revalidation 写回生效），fallback frozen days=38<60 → ×0.5
     except Exception:  # noqa: BLE001 — import 失败降级默认（gene rho≈0, days<60 → ×0.5 provisional）
         gene_multiplier = 0.5
     total = 0.0

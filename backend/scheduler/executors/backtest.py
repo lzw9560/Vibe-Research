@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 from scheduler.snapshots import _save_snapshot
+# §44v2 P0：apply_revalidation 模块级 import（monkeypatch 友好；lift_override→evaluation 无循环）
+from candidate_funnel.lift_override import apply_revalidation
 
 logger = logging.getLogger("vibe-research")
 
@@ -113,14 +115,17 @@ def s066_validation_checkpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S151 R3：评价层回溯检查点（提醒任务，复用 s066_validation_checkpoint 范式）。
+    """S151 R3：评价层回溯检查点（§44v2 P0 闭环——到点自动写回，非 reminder-only）。
 
     数 forward_test_records 信号日 + buyable picks；两档门槛：
-    - 30 日 + n≥100 → 首次回溯 DUE（跑 per-dimension day_paired_lift 非池化，
-      写 VR_DATA_DIR/evaluation_lifts.db，DIMENSION_LIFT_REGISTRY 升级 DB-backed 动态读）
-    - 60 日 → 复验 DUE（重跑 lift + 判升级/降级：lift≥2+CI不重叠→validated×1.0；
-      lift<1 robust→劣于随机×0.1）
-    到点只提醒不自动验证（同 s066）——由人/会话跑 harness。未到期返 not_due + 进度（静默）。
+    - 30 日 + n≥100 → 首次回溯 DUE（apply_revalidation 算 per-dimension day_paired_lift，
+      写 evaluation_lifts.db dimension_lift_overrides；reader override 优先 fallback frozen）
+    - 60 日 → 复验 DUE（重跑 lift + 经 lift_to_multiplier 升降级：lift≥2+days≥60+CI不重叠→
+      validated×1.0；lift<1+days≥60+robust→劣于随机×0.1；days<60→待复验×0.5 规约④ cap）
+
+    自动写回 best-effort：compute 不可用/返空（baostock down 等）→ 降级 reminder（status due
+    + action 命令串指引人跑），不崩 scheduled task。未到期返 not_due + 进度（静默）。
+    不改 frozen DIMENSION_LIFT_REGISTRY（FROZEN_COMMIT b1aba21 read-only）——override 躺新表。
     """
     from config import GENE_SCORES_DB_PATH
     from vr_paths import resolve_data_dir
@@ -154,14 +159,21 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "min_n": min_n,
                 "note": f"日数 {days}≥{first_threshold} 达首档但 n={n}/{min_n} 不足，picks 积累中"}
 
-    # 到期：判阶段 + 写 checkpoint + WARNING + 返操作指引
+    # 到期：判阶段 + 自动写回 + checkpoint + WARNING + 操作指引（fallback）
+    # §44v2 P0（S159 R4 回溯主场）：不再 reminder-only——到点调 apply_revalidation
+    # 自动写回 dimension_lift_overrides（不改 frozen dict）。compute 不可用/返空 → reminder fallback。
     phase = "first_retrospective" if days < reverify_threshold else "reverify"
+    written_back: list = []
+    write_errors: list = []
+    try:
+        wb = apply_revalidation(phase)
+        written_back = wb.get("written", [])
+        write_errors = wb.get("errors", [])
+    except Exception as e:  # noqa: BLE001 — 写回崩不阻断 scheduled task，降级 reminder
+        logger.warning("[evaluation_backtest] 自动写回失败，降级 reminder: %s", e)
+
+    # fallback 操作指引（compute 不可用或部分维度未接线时仍指引人跑）
     if phase == "first_retrospective":
-        # S197 R1（对抗审 wrs3bqhis CRITICAL）：原 --baostock flag 不存在（main:769 只认
-        # --baostock-history），fallthrough 到 run_layer_lift(days=120)→days_robust≥60 绕过
-        # 30 日 provisional cap ×0.5。fix typo → --baostock-history（run_layer_lift_baostock）。
-        # 但 baostock 源 days_robust≥60 仍绕 30 日 cap——first_retrospective 源设计
-        # （baostock vs forward_test_records days=30 让 cap 真咬）待 S197 R1 定稿（spec v2 已记）。
         action = (
             "cd backend && .venv/bin/python tools/first_board_layer_lift.py --baostock-history "
             "→ 跑 per-dimension day_paired_lift（非池化防 4.686x→1.723x 假象）写 "
@@ -176,15 +188,22 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
     ckpt = {"status": "due", "phase": phase, "signal_days": days, "picks_n": n,
             "first_threshold": first_threshold, "reverify_threshold": reverify_threshold,
             "min_n": min_n, "action": action,
+            "written_back": written_back,  # 自动写回的维度（§44v2 P0）
+            "write_errors": write_errors,
             "checked_at": datetime.now().isoformat()}
     try:
         ckpt_path = Path(resolve_data_dir()) / "s151_evaluation_backtest_due.json"
         ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
-    logger.warning(
-        "[evaluation_backtest] S151 回溯 DUE（%s）：signal_days=%d picks_n=%d → %s",
-        phase, days, n, action)
+    if written_back:
+        logger.warning(
+            "[evaluation_backtest] S151 回溯 DUE（%s）自动写回 %d 维度：%s；signal_days=%d picks_n=%d",
+            phase, len(written_back), written_back, days, n)
+    else:
+        logger.warning(
+            "[evaluation_backtest] S151 回溯 DUE（%s）自动写回空（compute 不可用）→ reminder：%s",
+            phase, action)
     return ckpt
 
 
