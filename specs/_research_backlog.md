@@ -13,7 +13,7 @@
 | 编号 | 调研 | 定论 | 状态 | 下一步 |
 |---|---|---|---|---|
 | S192 | 实盘交易通道评估（QMT/miniQMT + 替代） | 当前不开户（breakout net-1.14%/T+0 无 edge/选股证否）；先用同花顺 SuperMind 免费回测验证；有 edge 后国金 10 万开户 + miniQMT + Windows 网关 + xqshare 代理 | ✅ spec 落定论 + memory | 第一步：SuperMind 回测验证策略（当前）；第二步：有 edge 后启动开户+对接 |
-| S193 | 缺口理论集成 | 缺口作 regime/变盘判断信号（不直接触发买卖，grill Q10-Q11 定）；classify_gap 纯函数 + chat.TOOLS 注入 AI 研判 + 关注推送 + 候选池注入；不验单信号 §44，验 S194 融合消融 | ⏳ R1/R2/R5 done，R3/R4 待 | R1 classify_gap✅(gap_classifier.py) + R2 chat.TOOLS✅(FE-2) + R5 sanity✅(突破/持续+8-10%预测力·衰竭负信息-1.9%，6视角对抗审查中)；R3 候选池注入/R4 watchlist 推送待 |
+| S193 | 缺口理论集成 | 缺口作 regime/变盘判断信号（不直接触发买卖，grill Q10-Q11 定）；classify_gap 纯函数 + chat.TOOLS 注入 AI 研判 + 关注推送 + 候选池注入；不验单信号 §44，验 S194 融合消融 | ⏳ R1/R2/R5 done，R3/R4 待 | R1 classify_gap✅(gap_classifier.py) + R2 chat.TOOLS✅(FE-2) + R5 sanity✅(v2对抗审wn80mbbm6后:衰竭极性倒置正信号continuation+11.8%全表唯一无前视非负信息,regime标签反转疑误;突破/持续方向预测力但3日前视膨胀+5/10日部分污染+regime依赖1月失效,止于调研候选;3重缺陷修正:前视上界/普通only基线/sigma z;不阻断集成R5=sanity非gate;图谱gap-theory已更新衰竭条目)；R3 候选池注入/R4 watchlist 推送待 |
 | S194 | 信号融合基线 | 方法论修正（单信号§44不过≠融合无edge，Q13-Q14 grill）；few-shot检索+贝叶斯权重融合；F1消融验增量+F3融合整体§44；先 few-shot 后期数据够上 ML | ✅ spec 草案落 | Phase 3：信号对齐+few-shot引擎+贝叶斯权重+消融验证（依赖 S193） |
 | S195 | 缺口理论入知识图谱 | 缺口四类+regime映射+判定规则入 Obsidian 投研图谱（认知层先于代码） | ✅ done（2026-09-13） | gap-theory.md 四构件实体落地（定义/四类量化/regime映射/关系/逻辑规则/动作/参数）+MOC「📐技术分析理论」段引用+S193 spec 互引 |
 | S196 | 技术分析信号源扩展（MACD背离+RSI超买超卖） | P0双子作regime信号不买卖+强互补缺口+数据够(baostock日K)+A股有据；岛形反转进S193扩展不独立 | ✅ 调研落 memory | S193 之后候选：classify_macd_divergence/classify_rsi 进 chat.TOOLS（类比 classify_gap） |
