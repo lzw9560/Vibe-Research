@@ -2,17 +2,17 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Vibe-Research A股量化投研体系架构",
+    "title": "Vibe-Research A股量化投研体系架构 Architecture",
     "locale": "zh-CN",
     "quality_profile": "showcase",
     "viewBox": [
       1280,
-      620
+      660
     ],
     "views": [
       {
         "id": "main-pipeline",
-        "label": "主路径：数据→策略→验证→执行",
+        "label": "主路径 Main pipeline：数据→策略→验证→执行",
         "focus": [
           "ashare_market",
           "astock",
@@ -21,27 +21,27 @@
           "scheduled_tasks",
           "trade_journal"
         ],
-        "note": "数据采集到模拟盘的主流程"
+        "note": "数据采集到模拟盘的主流程 Data→Strategy→Verify→Exec"
       },
       {
         "id": "cognitive-loop",
-        "label": "认知闭环：LLM→图谱→策略",
+        "label": "认知闭环 Cognitive loop：LLM→图谱→策略",
         "focus": [
           "m7_llm_agent",
           "knowledge_graph",
           "strategies"
         ],
-        "note": "M7 LLM 公告解析注入图谱，认知反哺策略"
+        "note": "M7 LLM 公告解析注入图谱，认知反哺策略 LLM→Graph→Strategy"
       },
       {
         "id": "monitor-push",
-        "label": "监控推送闭环",
+        "label": "监控推送闭环 Monitor-push loop",
         "focus": [
           "price_monitor",
           "feishu_bot",
           "scheduled_tasks"
         ],
-        "note": "价格预警+缺口变盘→飞书推送"
+        "note": "价格预警+缺口变盘→飞书推送 Price alert+Gap→Feishu"
       }
     ]
   },
@@ -49,96 +49,103 @@
     {
       "id": "ashare_market",
       "type": "external",
-      "label": "A股市场 market",
+      "label": "A股市场",
+      "sublabel": "A-share market",
       "pos": [
         40,
         300
       ],
       "size": [
         160,
-        60
+        74
       ]
     },
     {
       "id": "astock",
       "type": "backend",
-      "label": "数据层 DataHub",
+      "label": "数据层",
+      "sublabel": "DataHub",
       "pos": [
         250,
         300
       ],
       "size": [
         160,
-        64
+        74
       ],
       "tag": "M1 VPIN 原料"
     },
     {
       "id": "strategies",
       "type": "backend",
-      "label": "策略层 Strategies",
+      "label": "策略层",
+      "sublabel": "Strategies",
       "pos": [
         470,
         300
       ],
       "size": [
         160,
-        64
+        74
       ],
       "tag": "M2 预期差"
     },
     {
       "id": "s44_verifier",
       "type": "backend",
-      "label": "评价层 §44v2",
+      "label": "评价层",
+      "sublabel": "§44v2 Verifier",
       "pos": [
         690,
         300
       ],
       "size": [
         170,
-        64
+        74
       ],
       "tag": "防过拟合"
     },
     {
       "id": "scheduled_tasks",
       "type": "backend",
-      "label": "执行层 Scheduler",
+      "label": "执行层",
+      "sublabel": "Scheduler",
       "pos": [
         920,
         300
       ],
       "size": [
         160,
-        64
+        74
       ],
       "tag": "M3 CentralRouter"
     },
     {
       "id": "trade_journal",
       "type": "database",
-      "label": "模拟盘 Paper trade",
+      "label": "模拟盘",
+      "sublabel": "Paper trade",
       "pos": [
         920,
-        160
+        150
       ],
       "size": [
         160,
-        60
+        74
       ]
     },
     {
       "id": "price_monitor",
       "type": "backend",
-      "label": "价格预警 S206",
+      "label": "价格预警",
+      "sublabel": "S206 Price alert",
       "pos": [
         920,
         450
       ],
       "size": [
         160,
-        64
+        74
       ],
       "tag": "盘中 */5 9-14"
     },
@@ -146,40 +153,43 @@
       "id": "feishu_bot",
       "type": "external",
       "label": "飞书 Bot",
+      "sublabel": "Feishu bot",
       "pos": [
         1140,
         450
       ],
       "size": [
         120,
-        60
+        74
       ]
     },
     {
       "id": "m7_llm_agent",
       "type": "backend",
       "label": "M7 LLM 智能体",
+      "sublabel": "LLM agent",
       "pos": [
         470,
-        160
+        150
       ],
       "size": [
         160,
-        64
+        74
       ],
       "tag": "图谱注入"
     },
     {
       "id": "knowledge_graph",
       "type": "database",
-      "label": "认知层 知识图谱",
+      "label": "认知层",
+      "sublabel": "Knowledge graph",
       "pos": [
         690,
-        160
+        150
       ],
       "size": [
         170,
-        64
+        74
       ],
       "tag": "M4 断路器+M5 排雷"
     }
@@ -187,7 +197,7 @@
   "boundaries": [
     {
       "kind": "region",
-      "label": "量化大脑（Vibe-Research backend）",
+      "label": "量化大脑 Quant brain（backend）",
       "wraps": [
         "astock",
         "strategies",
@@ -200,7 +210,7 @@
     },
     {
       "kind": "security-group",
-      "label": "认知层（知识图谱）",
+      "label": "认知层 Knowledge graph",
       "wraps": [
         "knowledge_graph"
       ]
@@ -219,7 +229,7 @@
       "id": "data-to-strategy",
       "from": "astock",
       "to": "strategies",
-      "label": "数据→策略"
+      "label": "数据 data"
     },
     {
       "id": "strategy-to-verify",
@@ -278,29 +288,29 @@
   "cards": [
     {
       "dot": "cyan",
-      "title": "数据层",
+      "title": "数据层 Data layer",
       "items": [
-        "astock em_get 三合一防封（限流+熔断+代理）",
-        "baostock cache 5230 股 backfill 2018 后 8 年",
-        "M1 VPIN 订单流毒性原料"
+        "astock em_get 三合一防封（限流+熔断+代理）rate-limit+circuit-breaker+proxy",
+        "baostock cache 5230 股 backfill 2018 后 8 年 8-yr backfill",
+        "M1 VPIN 订单流毒性原料 order-flow toxicity"
       ]
     },
     {
       "dot": "emerald",
-      "title": "策略+评价",
+      "title": "策略+评价 Strategy+Verify",
       "items": [
-        "12 战法卡+七态打板状态机+fusion 信号融合",
+        "12 战法卡+七态打板状态机+fusion 信号融合 12 cards+7-state+fusion",
         "§44v2 day_clustered+permutation+Bonferroni+walk_forward",
-        "M2 预期差+M3 CentralRouter+M4 断路器"
+        "M2 预期差+M3 CentralRouter+M4 断路器 expectation-gap+router+breaker"
       ]
     },
     {
       "dot": "violet",
-      "title": "认知+推送",
+      "title": "认知+推送 Cognition+Push",
       "items": [
-        "知识图谱 21 实体 2523+quantitative-system 12 子目录",
-        "M7 LLM 公告→JSON→图谱 inbox+active→reference 自动",
-        "飞书 bot 价格预警+缺口变盘推送"
+        "知识图谱 21 实体 2523+quantitative-system 12 子目录 21 entities+12 subdirs",
+        "M7 LLM 公告→JSON→图谱 inbox+active→reference 自动 auto-promote",
+        "飞书 bot 价格预警+缺口变盘推送 Feishu price+gap push"
       ]
     }
   ]
