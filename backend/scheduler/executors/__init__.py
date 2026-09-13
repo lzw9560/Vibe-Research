@@ -66,6 +66,7 @@ class TaskExecutor:
             "first_board_filter": self._execute_first_board_filter,
             "s066_validation_checkpoint": self._execute_s066_validation_checkpoint,
             "evaluation_backtest": self._execute_evaluation_backtest,
+            "scan_watchlist_gaps": self._execute_scan_watchlist_gaps,
             "forward_test_daily": self._execute_forward_test_daily,
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,
             "first_board_t1_review": self._execute_first_board_t1_review,
@@ -278,6 +279,10 @@ class TaskExecutor:
     def _execute_evaluation_backtest(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import evaluation_backtest
         return evaluation_backtest(payload)
+
+    def _execute_scan_watchlist_gaps(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.gap_scan import scan_watchlist_gaps
+        return scan_watchlist_gaps(payload)
 
     def _execute_forward_test_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import forward_test_daily

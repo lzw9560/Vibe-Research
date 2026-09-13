@@ -274,6 +274,20 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 evaluation_backtest 已创建（cron 5 18 * * 1，S151 回溯提醒）")
 
+    # S193 R4：盘后扫 watchlist 缺口变盘（突破+衰竭）→ 飞书推送。17:30（kline_refresh 17:15 写当日 bar 后）。
+    # 推送阈值 R5 v3 后定性：突破（趋势启动）+衰竭（continuation 正信号，label 疑误实际延续）；持续/普通不推。
+    if "scan_watchlist_gaps" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="scan_watchlist_gaps",
+            description="S193 R4：盘后扫 watchlist 缺口变盘（突破+衰竭）→ 飞书推送",
+            task_type="scan_watchlist_gaps",
+            cron_expr="30 17 * * 0-4",  # 17:30 盘后（kline_refresh 17:15 后，当日 bar 在 cache）
+            payload={},
+            enabled=True,
+            notify_on_success=False,  # gap_scan 自身调 NotificationService.send 推飞书，不再 task notify
+        ))
+        logger.info("[scheduler] seed 默认任务 scan_watchlist_gaps 已创建（cron 30 17 * * 0-4，S193 R4 缺口变盘推送）")
+
     # S069 R1：每日 post-market 记当日 forward_test picks + universe（晚 limitup_precompute 15min）。
     # weather 用 build_context（完整架构）；T+1 收益由 R2 次日回填（待接）。
     if "forward_test_daily" not in existing:
