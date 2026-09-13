@@ -72,6 +72,7 @@ export const router = createBrowserRouter([
       { path: "/settings", element: lazyEl(() => import("@/pages/Settings"), "Settings") },
       { path: "/chat", element: lazyEl(() => import("@/pages/ChatPage")) },  // FE-3: AI 对话网页入口（不依赖飞书 bot，调 /api/chat 流式）
       { path: "/scheduled-tasks", element: lazyEl(() => import("@/pages/ScheduledTasks"), "ScheduledTasks") },
+      { path: "/pipeline", element: lazyEl(() => import("@/pages/PipelinePage"), "PipelinePage") },  // FE-S206: 流程管线 N8N 风格节点图（9步流程+34 task 状态+子工作流展开+run 日志 Drawer）
       { path: "/health", element: lazyEl(() => import("@/pages/Health"), "HealthPage") },
       { path: "/metrics", element: lazyEl(() => import("@/pages/Metrics"), "Metrics") },
       { path: "/industry", element: lazyEl(() => import("@/pages/Industry"), "Industry") },
