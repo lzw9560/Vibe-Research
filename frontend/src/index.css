@@ -182,7 +182,7 @@
     background-image: linear-gradient(162deg, var(--glass-fill-top), var(--glass-fill-bot));
     border: 1px solid var(--glass-stroke);
     border-radius: var(--radius);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 var(--glass-hi);
+    box-shadow: 0 12px 30px rgba(8, 10, 16, 0.45), inset 0 1px 0 var(--glass-hi);  /* tint 蓝黑底色非纯黑(skill: tint shadow 配底) */
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
   }
@@ -196,6 +196,12 @@
     width: 240px; height: 240px;
     background: radial-gradient(circle, hsl(var(--primary) / 0.16), transparent 70%);
     pointer-events: none;
+  }
+
+  /* 辅信息层（GlassCard tier="sub"）——无卡边/无大阴影,subtle bg 区别主/次卡,内联辅信息用 */
+  .glass-sub {
+    background: hsl(var(--muted) / 0.35);
+    border-radius: calc(var(--radius) - 4px);
   }
 
   /* 暖橙光文字 */
