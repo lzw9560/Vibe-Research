@@ -99,11 +99,11 @@ export const router = createBrowserRouter([
       { path: "/intel", element: redirect("/market") },
       { path: "/sectors", element: redirect("/market") },
       { path: "/sector-divergence", element: redirect("/market") },
-      { path: "/prediction", element: redirect("/market") },
+      { path: "/prediction", element: lazyEl(() => import("@/pages/Prediction"), "Prediction") },  // 恢复前瞻页 S017 短线预测工作台（原 redirect /market 致页面孤儿，用户看不到）
       { path: "/debate", element: redirect("/market") },
       // 选股散页 → /screener
       { path: "/candidates", element: redirect("/screener") },
-      { path: "/value-funnel", element: redirect("/screener") },
+      { path: "/value-funnel", element: lazyEl(() => import("@/pages/ValueFunnel"), "ValueFunnel") },  // 恢复选股漏斗页 S005 中长线价值漏斗（原 redirect /screener 致页面孤儿，用户看不到）
       { path: "/limitup/gene", element: redirect("/limitup") },
       { path: "/limitup/auction", element: redirect("/limitup") },
       { path: "/limitup/seats", element: redirect("/limitup") },

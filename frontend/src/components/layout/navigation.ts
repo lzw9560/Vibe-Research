@@ -35,6 +35,7 @@ export const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { to: "/market", label: "市场全景" },
       { to: "/intraday", label: "盘中 cockpit" },
+      { to: "/prediction", label: "前瞻" },
       { to: "/workflow/intraday/ofi", label: "资金流看板" },
       { to: "/sentiment/weather", label: "情绪气象" },
       { to: "/sectors/:key", label: "板块" },
@@ -45,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Filter,
     tabs: [
       { to: "/screener", label: "选股器" },
+      { to: "/value-funnel", label: "选股漏斗" },
       { to: "/bidding", label: "竞价监控" },
       { to: "/limitup", label: "打板策略" },
       { to: "/limitup/premarket", label: "盘前选股" },
