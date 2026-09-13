@@ -128,6 +128,37 @@
 - **M4/M5/M3 防线**：断路器（相关性>0.85 冻结切现金）+ 财报季排雷（1/4/8 月拉黑）+ CentralRouter 内部撮合（防多频次内耗）
 - **forward_test 30/60 天 R3 enforce**（S197）：live OOS 积累（backfill 无效=真 blocker）→ 两门 safeguard（enforce=跑+写+报 pending，promote=人 review 后 apply）→ 防自动改生产权重破坏
 
+## 6.8 verdict 修订（quant-system-brainstorm ww1bqpg70 synthesizer，7 处）
+
+方向正确但低估 Vibe-Research 已有能力 + 3 结构性缺陷，7 修订：
+1. **不引入 backtrader**——复用现有 engine/{executor,accounting,fill_policies}.py（已建模 T+1 offset≥1/cost 0.70%/涨跌停 board-aware/一字板 unbuyable），引入双轨维护 + backtrader 默认 fill 无封板成交概率
+2. **不换 akshare/tushare**——em_get 三合一防封（限流 0.3s+熔断器双组+代理探测）比爬虫强，只加统一 get_kline(code,start,end,freq) 接口（bars_provider 雏形）+ hithink DuckDB 作批量回测源
+3. **不降级 t 检验**——§44v2（day_clustered+permutation+Bonferroni K≤8+walk_forward+DSR/PBO/haircut）比 IC/IR+t 检验强一个量级，ADD IC/IR+分层回测（5/10 组单调+Newey-West HAC）作互补非替代
+4. **补第四频次桶**（打板 T+1 涨停事件）——用户三桶缺，12 战法卡+七态状态机+1092 case，二元稀疏事件用 §44v2 event lift 非 IC/IR 横截面，频次隔离不可混测
+5. **先修已确认 CRITICAL bug**：gap_classifier 前视（_is_filled D+1..D+3）+ cost 口径 0.70% vs 0.2% 不一致（撞"判断须可复现"底线）+ ST 按 code 检测失效（limitup_strategy:48）+ industry_normalized stub（recommendation_engine:156）+ 北交 30% 缺失
+6. **backfill 2018 再上 OOS**——当前 KlineCache 174 日缺口 >90%，walk_forward 仅 2-3 窗口统计功效极低
+7. **建 quantitative-system/ 子区**（11 新实体+22 关系+17 logic 规则+4 动作），quant_signal 双链回指现有 strategies/gap-theory 非重建
+
+## 6.9 优先 spec（verdict 11 条，按优先级）
+
+| spec | 优先级 | 内容 |
+|---|---|---|
+| S-gap-classifier-lookahead-fix | CRITICAL | _is_filled 前视修复（标签训练可用未来，实盘信号只用 T 及之前 bar 重算）独立 spec |
+| S-cost-caliber-unification | CRITICAL | accounting 0.70% vs S194 0.2% 口径统一（slippage 0.60% vs 0.10% 差 6x，§44 net verdict 前强制校验一致）|
+| S-get-kline-unified-interface | HIGH | 统一 get_kline(code,start,end,freq)（取数散落 astock/bars_provider/kline_history/baostock 5+处）|
+| S-IC-IR-evaluation-layer | HIGH | compute_ic(Spearman+Newey-West HAC lag=3)+compute_ir+月度 IC+分层回测（5/10 组 Jonckheere-Terpstra）|
+| S-industry-neutralization | HIGH | recommendation_engine:156 stub→真 demean+residualize（skill-factor-orthogonalize）|
+| S-historical-backfill-2018 | HIGH | baostock 回补到 2018-01-01 支撑 OOS（当前 174 日缺口 >90%，验收交易日≥1500）|
+| S-st-detection-fix | MEDIUM | limitup_strategy:48 ST 按 code 恒 False（ST 在 name）+北交 832/920=30%+新股前 5 日|
+| S-direction-aware-gap-encode | MEDIUM | = S199（GAP_REGIME_ENCODE 方向感知）|
+| S-quantitative-system-graph-entry | MEDIUM | = S200（11 实体+22 关系+17 规则+4 动作）|
+| S-cross-freq-signal-align | MEDIUM | = S194 R1（signal_align 跨频次对齐层）|
+| S-lift-to-multiplier-reactivation | P0 TODO | = S197/RB-8（替代读冻结值+days<60 cap+R3 enforce）|
+
+## 6.10 graph_landing（investing/quantitative-system/ 子区，12 子目录）
+
+factors/(alpha_factor) / signals/(quant_signal 枢纽类，[[]]双链回指 strategies/gap-theory) / backtests/(backtest_result) / frequencies/(trade_freq 四桶) / stat-methods/(stat_method 映射 s44_verifier) / cost-models/(cost_model 映射 accounting) / execution/(execution_broker) / regimes/(quant_regime) / risk-models/(risk_model) / edge-types/(edge_type) / logic/(防未来函数/T+1 约束/涨跌停/防过拟合门/窗口偏差/小样本降权/多重检验/频次隔离/cost 一致性/survivorship/regime 条件/方向感知 17 规则) / actions/(跑回测/验证信号/执行交易/风控熔断 4 动作)。桥接现有：data-sources/(17)→quant_data_hub / specs/(101)→stat_method / dragon-tiger/(41)→execution_broker/seat_profile。
+
 ## 7. 受影响文件 + 关联 spec
 
 | 文件/spec | 改动 |
