@@ -98,6 +98,36 @@
 - 关系：factor→stock / signal→trade / backtest→strategy / regime→signal / policy→sector（预期差动态权重）
 - 复用 Vibe-Research 现有：s44_verifier（§44v2 验证 M4 断路器触发条件）+ ablation_runner（因子消融）+ trade_journal（模拟盘验 M3 CentralRouter）+ strategies/cards（M1 打板战法）
 
+## 6.5 流程系统（端到端，方法论串成流程）
+
+数据采集 → 图谱注入 → 因子计算 → 策略生成 → 回测验证 → 模拟盘 → 实盘执行 → 风控 → 反馈闭环
+
+1. **数据采集（DataHub）**：astock/gstock/newsradar/market + baostock cache 5230 股 + stoke NLP + mootdx tick（M1 VPIN 原料）
+2. **图谱注入（M7 LLM 智能体）**：DeepSeek 公告→JSON→图谱 inbox 待审 + 实体/关系更新
+3. **因子计算（AlphaEngine）**：向量化 + shift(1) 防前视 + M1 VPIN/M2 预期差/M6 日历效应因子
+4. **策略生成**：strategies/cards + S194 信号融合（方向感知编码 S199）+ M3 CentralRouter 跨频次撮合
+5. **回测验证（BacktestCore）**：A 股 T+1/成本/涨跌停 + §44v2 s44_verifier（day_paired+permutation+Bonferroni+walk_forward+days_robust<60 cap）
+6. **模拟盘**：trade_journal + forward_test 30/60 天
+7. **实盘执行（TradeExecutor）**：S192 开户后 QMT/PTrade + M3 CentralRouter 内部撮合
+8. **风控**：M4 断路器（相关性>0.85 冻结）+ M5 财报季排雷 + RiskController 敞口
+9. **反馈闭环**：forward_test 30/60 天复验 → DIMENSION_LIFT_REGISTRY 更新 → lift_to_multiplier 调整 → 策略升/降级 → 回测修正
+
+## 6.6 闭环（三重反馈，防断裂）
+
+- **策略闭环**：spec→plan→tasks→TDD+grill+verification → 模拟盘 → forward_test 30/60 天 → R3 enforce（S197 两门 safeguard）→ lift 复验 → 升降级 → 回测修正
+- **图谱闭环**：代码改实体→图谱同步（CLAUDE.md 会话开始协议）+ reviews 8 项检查（断链/孤立/coverage）+ inbox 待审（M7 LLM 抽取实体先进 inbox 审核通过才进正式区，注入质量门）
+- **§44v2 闭环**：lift 验证 → DIMENSION_LIFT_REGISTRY DB-backed 动态读（S197 R2）→ lift_to_multiplier → 生产权重 → 30/60 天复验 → 升降级（迟滞带防抖动，月频非周频）
+
+## 6.7 质量保证（多道防线，有质量）
+
+- **SDD §0 分级工作流**：small/medium/large + spec→plan→tasks→TDD+grill+verification（CLAUDE.md §0.1）——每条方法论子 spec 走 SDD
+- **§44v2 统计防线**：day_paired+permutation+Bonferroni+walk_forward+days_robust<60 provisional cap ×0.5（不阻断集成但诚实标注）——M1-M7 因子都要过
+- **对抗审查 ≥6 视角**：统计方法论/承重代码 adversarial verify（CLAUDE.md 自动复盘 2026-09-05）——S198/S197/S193 R5 已验证抓到 solo 漏的 CRITICAL（look-ahead/基线 endogenous/ci_overlap 死接线）
+- **图谱质量门**：inbox 待审（confidence+source+quality_score）+ reviews 8 项检查 + 断链/孤立/coverage——M7 LLM 注入不直接灌入
+- **工程底线**：不臆造（financial_rigor.py 验算）+ 私有数据隔离（.vibe-research/ gitignored）+ em_get 防封（限流/熔断/代理）
+- **M4/M5/M3 防线**：断路器（相关性>0.85 冻结切现金）+ 财报季排雷（1/4/8 月拉黑）+ CentralRouter 内部撮合（防多频次内耗）
+- **forward_test 30/60 天 R3 enforce**（S197）：live OOS 积累（backfill 无效=真 blocker）→ 两门 safeguard（enforce=跑+写+报 pending，promote=人 review 后 apply）→ 防自动改生产权重破坏
+
 ## 7. 受影响文件 + 关联 spec
 
 | 文件/spec | 改动 |
