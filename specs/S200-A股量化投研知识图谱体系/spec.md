@@ -39,6 +39,21 @@
 - **2024 微盘股踩踏教训**：国九条+ST 新规 → 10 年回测模型爆仓，历史废纸
 - Vibe-Research 现有：§44 v2 + em_get circuit_breaker（防封非因子）→ 加因子相关性 Systemic Circuit Breaker
 
+### 📅 M5：财报季排雷（ReportSeasonCircuitBreaker）——1/4/8 月雷区
+- 财报季（1 月预告/4 月一季报+年报/8 月中报）雷区：未披露财报+财务指标异常节点→自动拉黑
+- 从工程源头杜绝连续一字跌停（业绩雷）
+- Vibe-Research 现有：reports/ + metrics/（缺财报季排雷 circuit breaker）
+
+### 📅 M6：日历效应 + 国家队护盘——A 股非线性防线
+- 日历效应：两会/十一/中央经济工作会等窗口先验概率修正
+- 国家队护盘：跌破关键整数关口时权重股不计成本护盘行为函数（实时监控）
+- Vibe-Research 现有：market 情绪 + indices（缺日历效应先验 + 国家队护盘函数）
+
+### 🤖 M7：LLM 图谱智能体——DeepSeek 公告解析
+- 本地大模型（DeepSeek 等开源）异步解析上市公司公告→标准 JSON→实时注入图谱
+- 比肉眼更早捕获隐藏暗线概念股
+- Vibe-Research 现有：chat.py（hithink LLM）+ stoke NLP（缺 LLM 公告→JSON→图谱注入）
+
 ## 3. 五域实体（用户框架，落地 investing/quantitative-system/）
 
 | 域 | 实体 | 关系 | Vibe-Research 现有 |
@@ -73,6 +88,8 @@
 - **底层统一资产库 + Barra 风险对冲**：RiskController 监控全系统总敞口（Beta Exposure），短线打板买医药+中长线选股自动调低医药权重防单一行业过度暴露
 - **中层图谱特征广播**：GraphEngine 实时解析新闻/研报，"半导体"节点关联热度暴涨 300%→广播 Sector_Heat_Signal→短线加入打板池+趋势算周线突破
 - **频次隔离**：逻辑账户 A（长线基本面）+ B（短线高频）+ C（中频波段），各自决策，CentralRouter 内部撮合
+- **股指期货基差（升贴水率）**：全市场对冲盘恐慌度牛熊风向标（中频波段监控，基差异常=对冲盘恐慌）
+- **可转债反哺矩阵**：正股封死涨停→毫秒级联动买入 T+0 无涨跌停限制可转债，用 T+0 工具赚涨停溢价（高频短线，绕 A 股 T+1 限制）
 
 ## 6. Vibe-Research 落地（investing/quantitative-system/）
 
@@ -90,9 +107,12 @@
 | `investing/logic/` | 加 M2 预期差 + M3 CentralRouter + M4 断路器 logic 规则 |
 | `investing/actions/` | 加 internal_crossing + circuit_breaker_freeze + broadcast_signal |
 | S201-M1（VPIN）| 新 spec：VPIN 订单流毒性 + 冰山订单检测 |
-| S202-M2（预期差）| 新 spec：Beta News Sensitivity + 预期差度量 |
+| S202-M2（预期差）| 新 spec：Beta News Sensitivity + 预期差度量 + 日历效应先验（M6 并入）|
 | S203-M3（CentralRouter）| 新 spec：逻辑账户隔离 + 内部撮合路由 |
 | S204-M4（断路器）| 新 spec：因子相关性矩阵 + Systemic Circuit Breaker |
+| S205-M5（财报季排雷）| 新 spec：ReportSeasonCircuitBreaker（1/4/8 月雷区拉黑未披露+财务异常）|
+| S206-M6（日历+国家队）| 新 spec：两会窗口先验 + 国家队护盘行为函数 |
+| S207-M7（LLM 智能体）| 新 spec：DeepSeek 公告→JSON→图谱注入 + 暗线概念股捕获 |
 
 ## 8. 验收
 
