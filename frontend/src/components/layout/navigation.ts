@@ -87,6 +87,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/chat", label: "AI 对话" },
       { to: "/scheduled-tasks", label: "定时任务" },
       { to: "/pipeline", label: "流程管线" },
+      { to: "/architecture", label: "项目架构" },
       { to: "/health", label: "系统健康" },
       { to: "/metrics", label: "指标分析" },
     ],
