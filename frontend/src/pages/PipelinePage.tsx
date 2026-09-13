@@ -6,8 +6,8 @@
  * 参考：N8N（状态色+点击弹日志）/ LangFlow（子流程 group）/ Dify（连线数据流标注）/ ComfyUI（minimap）
  * 双语节点标题（对齐图谱 MOC quantitative-system/ 双语）。
  */
-import { useState, useMemo, useCallback, type ReactNode } from "react";
-import ReactFlow, {
+import { useState, useMemo, useCallback } from "react";
+import { ReactFlow,
   ReactFlowProvider,
   Background,
   Controls,
@@ -21,10 +21,10 @@ import ReactFlow, {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import dagre from "@dagrejs/dagre";
-import { Drawer, Collapse, Timeline, Badge, Tooltip } from "antd";
+import { Drawer, Collapse, Timeline, Badge } from "antd";
 import {
   Database, Network, Calculator, Target, FlaskConical,
-  TrendingUp, Send, ShieldCheck, RefreshCw, ChevronDown, ChevronRight,
+  TrendingUp, Send, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -158,7 +158,7 @@ const STATUS_TEXT: Record<StepStatus, string> = {
 
 // ── dagre 布局 ──
 function layoutNodesEdges(steps: PipelineStep[], tasks: ScheduledTask[]) {
-  const g = new dagre.daglib.graphlib.Graph();
+  const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "LR", nodesep: 60, ranksep: 80 });
 
@@ -200,7 +200,7 @@ function layoutNodesEdges(steps: PipelineStep[], tasks: ScheduledTask[]) {
     label: "反馈",
   });
 
-  dagre.daglib.layout(g);
+  dagre.layout(g);
   const positioned = nodes.map((n) => {
     const pos = g.node(n.id);
     return { ...n, position: { x: pos.x - 110, y: pos.y - 50 } };

@@ -24,8 +24,9 @@ export function JournalWinRateCurve() {
       return {
         tooltip: {
           trigger: "axis",
-          formatter: (params: Array<{ dataIndex: number }>) => {
-            const t = trends[params[0]?.dataIndex];
+          formatter: (params) => {
+            const p = Array.isArray(params) ? params[0] : params;
+            const t = trends[p?.dataIndex ?? -1];
             if (!t) return "";
             const wr = (t.win_rate * 100).toFixed(1);
             const dir = t.win_rate < 0.5 ? "（低于 50% 基准·负 edge 方向）" : "（≥50%·正方向）";
