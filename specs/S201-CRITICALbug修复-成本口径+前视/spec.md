@@ -107,3 +107,45 @@ S201 草案 DIAGNOSIS + FIX DIRECTION 都有缺陷，须修订后方可实现。
 - gap 前视"训练/实盘分模式"5 坑：arity bug 死代码 / "训练留未来" fewshot skew / "T 之前 bar 代理"不可实现 / 二分 train/live 粒度错 / live 已静默退化反偏非前视。正解 = candidate 语义两侧 + 重建 case 库 + 修 arity
 - 6 视角共识：bug 真实但 spec 现状会让 cost 实际未统一（1.46%→~0.72% 非 0.20-0.30%）+ ablation/fewshot 残留前视 + 有制造假阳性风险。按上述修订 spec 后再实现
 
+
+## 8. S201b 承重对抗审 verdict（w4ndolnj5 6 视角，needs-revision 7 CRITICAL）
+
+**核心推翻**：S201b cost-sweep "+0.36% robust_edge at flat 0.10%" 是 **flat-vs-per-trade category error**——flat 减法每笔同减 0.10% 忽略 stamp 0.05% + 佣金 5元门 mean 0.7136% = undercharge 0.7636%。降 ROUND_TRIP_COST_PCT 0.70→0.15 是 per-trade 路径（_cost_pct line 89 = RTC+stamp+commission），每笔 cost 降 -0.55pp，day_mean -1.0%→~-0.45% **仍 falsified**。**诚实 per-trade route 不 unfalsify，+0.36% 是 flat-cost mirage**。
+
+### 7 CRITICAL 执行错误（不可按 spec 直接实施）
+
+1. **unfalsification 前提错**：cost-sweep +0.36% 来自 flat 减法（compute_net_at_levels 每笔同减 flat c，忽略 stamp+佣金 5元门 mean 0.7136%=undercharge 0.7636%）。降 RTC 是 per-trade flat addend（_cost_pct line 89），每笔 -0.55pp，day_mean -1.0%→~-0.45% 仍 falsified。**佣金门是结构性杀手非 spread**（96% entries 触发 5元 floor，median entry 23.80→佣金 0.42%，与 spread 无关）。即使 RTC=0 也 falsified（佣金门 0.7636%>gross 0.4655%→net=-0.30%）。
+2. **出场乐观修错行**：spec 说 178/188 但这两行只设 PathReturn.exit_price（journal 元数据），不喂 net/cost。真正 gross 硬编码 line 172 `gross=float(stop_pct)` + line 181 `gross=float(take_profit_pct)`。只碰 178/188=NO-OP。须重写 stop/take 分支从 gap-through-aware fill 算 gross。
+3. **take-side 修反了**：BREAKOUT_TAKE_PCT=8.0 是 limit sell（触及限价即成交），fill 在限价水平已 realistic。对 take gap-through 会 fill 限价之上=高估盈利=制造 spec 自己警告的 fake robust_edge。**只修 stop-side(172)，不碰 take-side(181)**。
+4. **佣金门是杀手非 spread**：即使 RTC=0（零 spread+slippage），real mean cost=stamp(0.05)+commission(0.7136)=0.7636%>gross day_mean 0.4655%→net=-0.298% FALSIFIED。降 spread 不可能 unfalsify。
+5. **14 脚本计数错**（11 非 ~5）+ 3 类须不同修法：A=6 flat-deduct（换 _cost_pct）/ B=4 gross无扣（加扣非换常量）/ C=1 event-flat（传 cost=None）。不 import ROUND_TRIP_COST_PCT，改 accounting alone=mixed-caliber。
+6. **journal 策略错**：cost-only=read-only recompute（零 mutation，gross_return cost-independent，net=gross-_cost_pct 从冻结字段重算，S201a 已证明）；exit-optimism=re-run path_return + 版本保留（ALTER TABLE gross_return_v2+exit_model_version 或 fills_json append-only）。**绝不可 INSERT OR REPLACE**（journal_recorder.py:244 覆盖全字段无 before-image，违 reproducibility 底线）。settle_pending 只碰 is_realized=0 holds，不碰 2888 realized。
+7. **多重比较未校正**：5 口径各 n_comparisons=1 无跨口径校正。BH 0.022×5=0.11>0.05 → flat 0.10% 降 exploratory 非 robust_edge。verdict 跨相邻口径翻转(robust→exploratory→falsified)说明 edge cost-marginal 非 robust。
+
+### spread_target: 0.15%（微观结构 justified 非 verdict cherry-pick）
+
+0.10% slippage（S189 T0_SLIPPAGE_PCT）+ 0.05% residual half-spread（tick-based A 股 0.02-0.20%）。价格依赖（5元 full-spread 0.20% vs 50元 0.02%），5元门佣金抵消低价 under-charge。须跑 fine sweep {0.10/0.12/0.15/0.18/0.20}+per-trade-lowered sweep 证明稳定性（预期全 falsified）。spec 须写"值来自微观结构非 verdict"防 researcher-DoF。
+
+### exit_optimism_fix（4 CRITICAL 修正）
+
+1. **修 gross 非 exit_price**：172/181 硬编码 gross，178/188 只元数据。须重写 stop/take 分支 gap-through-aware fill 算 gross。
+2. **只 stop-side**：take 是 limit sell 已 realistic，gap-through 会高估。只修 stop（172）。
+3. **gap-through 主项非 eps**：48% stop exits gap-through at open，mean -4.24% vs 硬编码 -4.0%。stop fill=if open<=stop→fill=open（gap-through worse）；elif low<=stop→fill=stop*(1-eps)。加 exit-day sellability check（一字跌停 locked→carry）+ bar contiguity guard。
+4. **同 pass=sequencing 非 bundling**：production path 即使 0 spread 也 falsified（佣金门），无"造假 robust_edge"风险（只在 flat cost-sweep）。同 pass 真因=gross honesty（S201a -1.0% 低估 falsification ~1.2pp，诚实 -2.2%）+ cost-sweep honesty（flat-0.10% mirage 擦到 -0.85%）。最小干净 bundle=(a)降 RTC+(b1)fix stop-172 gap-through+(d)bulk re-settle 或 version column。
+
+### journal_strategy（拆两类）
+
+- **cost-only**（降 spread+扫 14 脚本+cost-sweep）=read-only recompute 零 mutation。gross_return cost-independent，net=gross-_cost_pct 从冻结字段重算。泛化 S201a 模式，cost_caliber 参数化 verdict 层，journal 冻结不动。
+- **exit-optimism**（改 gross_return 本身）=须 re-run path_return+版本保留（ALTER TABLE gross_return_v2+exit_model_version 或 fills_json append-only 或 spec 文本归档旧 §44 verdict 数字标 superseded）。
+
+### unfalsify_verdict: 0.15% 不 unfalsify
+
++0.36% robust_edge 是 flat-cost-sweep multiple-testing artifact，非真 edge。佣金门是结构性杀手。spec 须删"降 spread 可能 unfalsify"前提。
+
+### s192_impact: 不翻案
+
+0.10% robust_edge 是 flat-cost artifact 非 新证据。S192 有 3 cost-independent 否定（breakout falsified/T+0 无 edge/selection 证否），降 spread 改不了。
+
+### 方向对（保留）
+
+降 spread 方向对（entry=Executor 真实 T+1 open 非 0.60% spread 桥接）+ 修 stop 出场乐观方法论对 + 5元门绝不可 flatten + cost-sweep 诚实校准有独立价值（去 0.70% 美股假设）。修 7 CRITICAL 后可实施。
