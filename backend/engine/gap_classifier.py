@@ -131,16 +131,20 @@ def _count_recent_gaps(bars: list[dict], idx: int, window: int = GAP_HISTORY_WIN
     return gaps
 
 
-def _classify_gap_from_bars(bars: list[dict], target_idx: int) -> dict:
+def _classify_gap_from_bars(bars: list[dict], target_idx: int, mode: str = "candidate") -> dict:
     """纯函数核心：从日 K 列表 + 目标日 idx 算缺口分类。无 IO，可单测。
 
-    返 {type: 普通/突破/持续/衰竭/无缺口, direction: 向上/向下/无,
-        regime: 趋势启动/中继/反转/噪声/无, confidence: 0-1,
-        params: {量比, 回补状态, 压力位, 历史缺口数}}
+    S201c candidate 语义（去前视）：
+    - mode="candidate"（默认，实盘/检索用）：不查 _is_filled（未来 bar），突破/持续不 require not filled。
+      只用 D 日 bar（量比+压力位+历史缺口），避免 _is_filled 扫 D+1..D+3 前视膨胀准确率。
+    - mode="confirmed"（标签训练用）：查 _is_filled D+1..D+3 realized，突破/持续 require not filled。
+      合法但 verify 有 label/metric 循环（D+1..D+3 fill ⊂ D+3 continuation metric）。
+
+    返 {type: 普通/突破/持续/衰竭/无缺口, direction, regime, confidence, params, mode}。
     """
     result = {
         "type": "无缺口", "direction": "无", "regime": "无",
-        "confidence": 0.0, "params": {},
+        "confidence": 0.0, "params": {}, "mode": mode,
     }
     if target_idx < 0 or target_idx >= len(bars):
         result["params"] = {"error": "target_idx 越界"}
@@ -153,39 +157,49 @@ def _classify_gap_from_bars(bars: list[dict], target_idx: int) -> dict:
 
     direction = gap["direction"]
     vol_ratio = _vol_ratio(bars, target_idx)
-    filled = _is_filled(bars, target_idx, gap)
     at_pressure = _at_pressure_level(bars, target_idx, direction)
     recent_gaps = _count_recent_gaps(bars, target_idx)
     n_recent = len(recent_gaps)
 
+    # S201c: candidate 模式不查 _is_filled（去前视）；confirmed 模式用 D+1..D+3 realized
+    if mode == "confirmed":
+        filled = _is_filled(bars, target_idx, gap)
+        fill_status = "3日内回补" if filled else "3日不回补"
+    else:  # candidate（默认）
+        filled = None  # 不查（未知，待 realized）
+        fill_status = "candidate未知（待realized，去前视）"
+
     params = {
         "量比": round(vol_ratio, 3),
-        "回补状态": "3日内回补" if filled else "3日不回补",
+        "回补状态": fill_status,
         "压力位": "在前高/前低附近" if at_pressure else "不在压力位",
         "历史缺口数_20日": n_recent,
+        "mode": mode,
     }
 
     # 分类逻辑（spec §2，顺序：突破 → 衰竭 → 持续 → 普通）：
-    # 衰竭优先于持续（衰竭=第三个缺口+异常量，是更特殊条件，先判避免被持续吞）
-    # 突破：量比≥2.0 + 3 日不回补 + 在压力位
-    # 衰竭：第三个缺口（历史≥2 缺口）+ 量比≥3.0 或 <1.0
-    # 持续：突破之后 + 量比≥1.5 + 不回补（历史有缺口）
-    # 普通：否则
+    # S201c: 突破/持续 candidate 不 require not filled（去前视）；confirmed 才 require
+    breakout_cond = (vol_ratio >= VOL_RATIO_BREAKOUT and at_pressure)
+    continuation_cond = (vol_ratio >= VOL_RATIO_CONTINUATION and n_recent >= 1)
+    if mode == "confirmed":
+        breakout_cond = breakout_cond and not filled
+        continuation_cond = continuation_cond and not filled
+
     gap_type = "普通"
     regime = "噪声"
     confidence = 0.3
 
-    if not filled and vol_ratio >= VOL_RATIO_BREAKOUT and at_pressure:
+    if breakout_cond:
         gap_type = "突破"
         regime = "趋势启动" if direction == "向上" else "反转"  # 向下突破=空头反转（A 股做空受限仅 regime）
         confidence = 0.7
     elif n_recent >= 2 and (vol_ratio >= VOL_RATIO_EXHAUSTION_HIGH or vol_ratio < VOL_RATIO_EXHAUSTION_LOW):
-        # 衰竭缺口：第三个缺口 + 异常放量或缩量
+        # 衰竭缺口：第三个缺口 + 异常放量或缩量（不查 filled，:182 本就 clean）
         gap_type = "衰竭"
         regime = "反转"
         confidence = 0.65
-    elif not filled and vol_ratio >= VOL_RATIO_CONTINUATION and n_recent >= 1:
-        # 持续缺口：之前有缺口（突破）+ 量比≥1.5 + 不回补
+    elif continuation_cond:
+        # 持续缺口：之前有缺口（突破）+ 量比≥1.5
         gap_type = "持续"
         regime = "趋势中继"
         confidence = 0.6
@@ -193,7 +207,7 @@ def _classify_gap_from_bars(bars: list[dict], target_idx: int) -> dict:
         # 普通缺口：缺口小 + 量比<2.0 或 3 日内回补
         gap_type = "普通"
         regime = "噪声"
-        confidence = 0.4 if filled else 0.35  # 回补快=更确定普通
+        confidence = 0.4 if (filled is True) else 0.35  # 回补快=更确定普通
 
     return {
         "type": gap_type,
@@ -201,6 +215,7 @@ def _classify_gap_from_bars(bars: list[dict], target_idx: int) -> dict:
         "regime": regime,
         "confidence": confidence,
         "params": params,
+        "mode": mode,
     }
 
 
@@ -235,18 +250,19 @@ def classify_gap(code: str, date: str) -> dict:
     return _classify_gap_from_bars(bars, target_idx)
 
 
-def _fetch_baostock_bars(code: str, end_date: str, count: int = 60) -> list[dict]:
-    """baostock 拉日 K（复用 engine.bars_provider 的 _baostock_a_share_hist 如果可用）。"""
+def _fetch_baostock_bars(code: str, end_date: str = "", count: int = 60) -> list[dict]:
+    """baostock 拉日 K（复用 engine.bars_provider._baostock_a_share_hist）。
+
+    S201c arity fix: 原 3 参调用 _baostock_a_share_hist(code, start, end_date) vs 签名 1 参 (code: str)
+    → TypeError 被 except 吞返[] → classify_gap 恒"baostock 无数据"，query_gap_regime 死代码。
+    修：只传 code（_baostock_a_share_hist 内部算最近 400 天，覆盖 60 日窗口 + 20 日压力位 + 3 日 + 20 日历史）。
+    """
     try:
         from engine.bars_provider import _baostock_a_share_hist  # noqa: PLC0415
-        # _baostock_a_share_hist(code, start, end) 返 bars 列表
-        from datetime import datetime, timedelta
-        end = datetime.strptime(end_date, "%Y-%m-%d")
-        start = (end - timedelta(days=count * 2)).strftime("%Y-%m-%d")  # count*2 天覆盖周末
-        bars = _baostock_a_share_hist(code, start, end_date)
-        return bars or []
+        # _baostock_a_share_hist(code) 1 参，返最近 400 天 bars（含 pctChg/isST）
+        return _baostock_a_share_hist(code) or []
     except Exception as e:  # noqa: BLE001
-        logger.warning("classify_gap baostock 拉 %s %s 失败: %s", code, end_date, e)
+        logger.warning("classify_gap baostock 拉 %s 失败: %s", code, e)
         return []
 
 
