@@ -288,6 +288,19 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 scan_watchlist_gaps 已创建（cron 30 17 * * 0-4，S193 R4 缺口变盘推送）")
 
+    # S206：盘中扫 price_alerts 支撑/压力位触及 → 飞书推送（价格预警+新闻+研判，9:00-14:55 每 5 分钟）
+    if "scan_price_alerts" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="scan_price_alerts",
+            description="S206：盘中扫 price_alerts 支撑/压力位触及 → 飞书推送（价格预警+相关新闻+AI研判）",
+            task_type="scan_price_alerts",
+            cron_expr="*/5 9-14 * * 0-4",  # 盘中每 5 分钟（9:00-14:55，周一-周五）
+            payload={},
+            enabled=True,
+            notify_on_success=False,  # 自身调 NotificationService.send 推飞书
+        ))
+        logger.info("[scheduler] seed 默认任务 scan_price_alerts 已创建（cron */5 9-14 * * 0-4，S206 价格预警）")
+
     # S069 R1：每日 post-market 记当日 forward_test picks + universe（晚 limitup_precompute 15min）。
     # weather 用 build_context（完整架构）；T+1 收益由 R2 次日回填（待接）。
     if "forward_test_daily" not in existing:
