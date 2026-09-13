@@ -22,10 +22,6 @@ import {
   Trash2,
   AlertCircle,
   Activity,
-  HeartPulse,
-  ScatterChart,
-  Info,
-  TrendingDown,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -133,11 +129,10 @@ const riskLevelLabel = (level: string) => {
 
 // ── Tab 定义 ──
 
+// Track B IA Decision 5: 删 health/pb-roe 空壳 tab（4→2 tab: holdings/risk）
 const TABS = [
   { key: "holdings", label: "持仓管理", icon: <ShieldCheck className="h-3.5 w-3.5" /> },
   { key: "risk", label: "风险仪表盘", icon: <Activity className="h-3.5 w-3.5" /> },
-  { key: "health", label: "健康分", icon: <HeartPulse className="h-3.5 w-3.5" /> },
-  { key: "pb-roe", label: "PB-ROE 散点", icon: <ScatterChart className="h-3.5 w-3.5" /> },
 ];
 
 // ── 风险仪表盘 Tab（自包含：按需加载，独立刷新）──
@@ -363,88 +358,9 @@ function RiskDashboardTab() {
   );
 }
 
-// ── 健康分 Tab（数据源待接入 → honest placeholder）──
+// Track B IA Decision 5: HealthScoreTab+PbRoeScatterTab removed (空壳 placeholder, 后端落地再加)
 
-function HealthScoreTab() {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-          数据源待接入
-        </span>
-        <span className="text-xs text-muted-foreground">健康分聚合端点未落地</span>
-      </div>
-      <GlassCard className="p-6">
-        <EmptyState
-          icon={<HeartPulse className="h-10 w-10 text-muted-foreground/40" />}
-          title="持仓健康分待接入"
-          description={
-            <span className="space-y-1 text-left">
-              <p>健康分计划从持仓维度聚合：集中度（单股权重）、行业暴露、</p>
-              <p>估值分位（PE/PB 历史百分位）、波动率、最大回撤。</p>
-              <p>后端需新增 /portfolio/health-score 聚合端点，</p>
-              <p>读 valuation_percentile + holdings 交叉计算。</p>
-            </span>
-          }
-        />
-      </GlassCard>
-      <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-        <span>
-          健康分是主观聚合指标（非客观数据），落地后须标"参考性"而非"确定性"。
-          数据源：valuation_percentile（5yr PE/PB 分位）+ holdings 权重 + 行业分类。
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ── PB-ROE 散点 Tab（数据源待接入 → honest placeholder）──
-
-function PbRoeScatterTab() {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-          数据源待接入
-        </span>
-        <span className="text-xs text-muted-foreground">PB-ROE 聚合端点未落地</span>
-      </div>
-      <GlassCard className="p-6">
-        <EmptyState
-          icon={<ScatterChart className="h-10 w-10 text-muted-foreground/40" />}
-          title="PB-ROE 散点图待接入"
-          description={
-            <span className="space-y-1 text-left">
-              <p>散点图计划横轴 PB（市净率）、纵轴 ROE（净资产收益率），</p>
-              <p>每个点一只持仓股，颜色/大小区分权重。</p>
-              <p>后端需新增 /portfolio/pb-roe 端点，</p>
-              <p>读 financials.roe + valuation.pb 交叉拼接持仓列表。</p>
-            </span>
-          }
-        />
-      </GlassCard>
-      <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-        <span>
-          PB-ROE 散点用于判断持仓估值 vs 盈利能力的匹配度——低 PB 高 ROE 区间
-          （左上）通常是价值机会，高 PB 低 ROE（右下）是泡沫风险区。
-          数据源：financials.roe（单股逐个取）+ valuation.pb，当前无聚合端点。
-        </span>
-      </div>
-      <GlassCard className="p-4">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <TrendingDown className="h-3.5 w-3.5" />
-          <span>
-            参考雪球个股页 PB-ROE 散点设计。落地后此 tab 展示持仓散点 + 行业基准线 + 合理区间标注。
-          </span>
-        </div>
-      </GlassCard>
-    </div>
-  );
-}
-
-// ── 主页：四维 cockpit ──
+// ── 主页 ──
 
 export function PortfolioPage() {
   const queryClient = useQueryClient();
@@ -854,8 +770,6 @@ export function PortfolioPage() {
       )}
 
       {activeTab === "risk" && <RiskDashboardTab />}
-      {activeTab === "health" && <HealthScoreTab />}
-      {activeTab === "pb-roe" && <PbRoeScatterTab />}
 
       <Disclaimer />
     </div>

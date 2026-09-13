@@ -38,7 +38,7 @@ function NotFound() {
     <div className="flex h-[60vh] flex-col items-center justify-center gap-2 text-center">
       <div className="text-2xl font-semibold text-gray-700">404 · 页面不存在 Not Found</div>
       <div className="text-sm text-gray-500">路由已迁移或不存在，回首页继续</div>
-      <Link to="/market" className="text-blue-600 underline">回首页 /market</Link>
+    <Link to="/today" className="text-blue-600 underline">回首页 /today</Link>
     </div>
   );
 }
@@ -47,9 +47,16 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      // ─── 6 域 19 内容路由（S186 Phase 2 精简）───
+      // ─── Track B IA: 4 主入口 + 系统次入口（19→4） ───
+      // 主入口
+      { path: "/", element: redirect("/today") },
+      { path: "/today", element: lazyEl(() => import("@/pages/today/TodayPage"), "TodayPage") },
+      { path: "/workspace", element: lazyEl(() => import("@/pages/workspace/WorkspacePage"), "WorkspacePage") },
+      { path: "/ledger", element: lazyEl(() => import("@/pages/ledger/LedgerPage"), "LedgerPage") },
+      { path: "/review", element: lazyEl(() => import("@/pages/review/ReviewPage"), "ReviewPage") },
+
+      // ─── 旧页保留作详情页（新主入口链过去或嵌，保兼容）───
       // 看盘域
-      { path: "/", element: redirect("/market") },
       { path: "/market", element: lazyEl(() => import("@/pages/market/MarketPage"), "MarketPage") },
       { path: "/intraday", element: lazyEl(() => import("@/pages/intraday/IntradayCockpit"), "IntradayCockpit") },
       { path: "/sentiment/weather", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },

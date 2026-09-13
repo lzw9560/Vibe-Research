@@ -1441,6 +1441,7 @@ export interface ScheduledTask {
   notify_on_failure: boolean;
   last_run_at: string | null;
   last_run_status: string | null;
+  last_run_duration_ms?: number | null;  // Track B: PipelinePage 耗时列
   created_at: string;
   updated_at: string;
 }
