@@ -96,11 +96,11 @@ export const router = createBrowserRouter([
       { path: "/daily-review/sectors", element: redirect("/market") },
       { path: "/daily-review/review", element: redirect("/market") },
       // 看盘散页 → /market
-      { path: "/intel", element: redirect("/market") },
+      { path: "/intel", element: lazyEl(() => import("@/pages/Intel"), "Intel") },  // 审计修: 恢复资讯雷达页（原 redirect /market 致孤儿,MarketPage 链此）
       { path: "/sectors", element: redirect("/market") },
       { path: "/sector-divergence", element: redirect("/market") },
       { path: "/prediction", element: lazyEl(() => import("@/pages/Prediction"), "Prediction") },  // 恢复前瞻页 S017 短线预测工作台（原 redirect /market 致页面孤儿，用户看不到）
-      { path: "/debate", element: redirect("/market") },
+      { path: "/debate", element: lazyEl(() => import("@/pages/Debate"), "Debate") },  // 审计修: 恢复多空辩论页（原 redirect /market 致孤儿,AdvisoryPage 链此）
       // 选股散页 → /screener
       { path: "/candidates", element: redirect("/screener") },
       { path: "/value-funnel", element: lazyEl(() => import("@/pages/ValueFunnel"), "ValueFunnel") },  // 恢复选股漏斗页 S005 中长线价值漏斗（原 redirect /screener 致页面孤儿，用户看不到）
@@ -119,7 +119,7 @@ export const router = createBrowserRouter([
       { path: "/strategy-signals", element: redirect("/strategy") },
       { path: "/backtest", element: redirect("/strategy") },
       { path: "/verifier-records", element: redirect("/strategy") },
-      { path: "/value-verdict", element: redirect("/strategy") },
+      { path: "/value-verdict", element: redirect("/multiline") },  // 审计修: VerdictRenderer 在 /multiline 非 /strategy
       // workflow → 新域
       { path: "/workflow", element: redirect("/review") },
       { path: "/workflow/intraday", element: redirect("/intraday") },
@@ -129,7 +129,7 @@ export const router = createBrowserRouter([
       { path: "/workflow/post-market", element: redirect("/review") },
       { path: "/workflow/topology", element: redirect("/topology") },  // 路由修复: →/topology(独立拓扑页) 非 /review(lossy)
       { path: "/workflow/first-board", element: redirect("/screener") },
-      { path: "/workflow/pre-market", element: redirect("/screener") },
+      { path: "/workflow/pre-market", element: redirect("/limitup/premarket") },  // 审计修: →盘前选股页(PreMarketBriefing)非 /screener,FactorDetailPage 回链期待
       { path: "/workflow/selection", element: redirect("/screener") },
       { path: "/workflow/candidates/:code", element: lazyEl(() => import("@/pages/workflow/CandidateDetail")) },  // 保留（参数化详情页）
       { path: "/workflow/factor/:factorId", element: lazyEl(() => import("@/pages/workflow/FactorDetailPage"), "FactorDetailPage") },  // 保留
@@ -138,8 +138,8 @@ export const router = createBrowserRouter([
       { path: "/sentiment/weather/strategy", element: redirect("/sentiment/weather") },
       { path: "/sentiment/weather/fuse", element: redirect("/sentiment/weather") },
       // strategy 子路由 → /strategy
-      { path: "/strategy/funnel/forward-test", element: redirect("/strategy") },
-      { path: "/strategy/funnel/config", element: redirect("/strategy") },
+      { path: "/strategy/funnel/forward-test", element: lazyEl(() => import("@/pages/strategy/ForwardTestPage")) },  // 审计修: 恢复前向测试页(StrategyPage EntryCard 链此,原 redirect /strategy 致孤儿)
+      { path: "/strategy/funnel/config", element: lazyEl(() => import("@/pages/strategy/StrategyConfigPage")) },  // 审计修: 恢复战法阈值配置页(StrategyPage EntryCard 链此,原 redirect /strategy 致孤儿)
       // 404 catch-all（路由修复：未知路由不空白，兜底到 NotFound 提示页）
       { path: "*", element: <NotFound /> },
     ],

@@ -38,7 +38,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/prediction", label: "前瞻" },
       { to: "/workflow/intraday/ofi", label: "资金流看板" },
       { to: "/sentiment/weather", label: "情绪气象" },
-      { to: "/sectors/:key", label: "板块" },
     ],
   },
   {
