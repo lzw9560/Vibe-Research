@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, X, RefreshCw, Star } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
-import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
+import { loadWatch, saveWatch, addCodes, apiWatchlist } from "@/lib/watchlist";
 import { useLiveQuotes, isTradingHours } from "@/hooks/useLiveQuotes";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,23 @@ export function Watchlist() {
   // 实时行情默认**关闭**——开着会持续请求，让用户自己决定要不要开。
   const [live, setLive] = useState(loadLive);
 
+  // 挂载时从 backend DB 拉自选股（apiWatchlist.fetch → /api/watchlist），跨设备同步。
+  // 失败则保留 localStorage fallback（useState 初始化已用 loadWatch 秒开）。
+  useEffect(() => {
+    let cancelled = false;
+    apiWatchlist
+      .fetch()
+      .then((dbCodes) => {
+        if (!cancelled && dbCodes.length) setCodes(dbCodes);
+      })
+      .catch(() => {
+        /* localStorage fallback 已在 useState 初始化 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const { quotes, loading, updatedAt, polling, error, refresh } = useLiveQuotes(codes, live);
 
   const toggleLive = () => {
@@ -56,11 +73,17 @@ export function Watchlist() {
       setInput("");
       return;
     }
+    // 乐观更新（UI 立即响应）+ localStorage fallback + backend DB 同步（跨设备共享）。
     setCodes(next); saveWatch(next); setInput(""); setHint(`已添加 ${added} 只`);
+    const newCodes = next.filter((c) => !codes.includes(c));
+    apiWatchlist.add(newCodes).catch((e) => setHint(`本地已加，后端同步失败：${e}`));
   };
   const remove = (c: string) => {
     const next = codes.filter((x) => x !== c);
     setCodes(next); saveWatch(next);
+    apiWatchlist.remove(c).catch(() => {
+      /* localStorage fallback 已更新 */
+    });
   };
 
   const aiContext = useMemo(
@@ -83,7 +106,7 @@ export function Watchlist() {
     <div>
       <PageHeader
         title="自选股"
-        subtitle="批量添加、一屏总览你关注的标的。数据只存本地、不上传。"
+        subtitle="批量添加、一屏总览你关注的标的。数据存后端 DB 跨设备同步，本地 fallback。"
         actions={
           <div className="flex items-center gap-2">
             <button
