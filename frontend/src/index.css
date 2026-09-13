@@ -69,7 +69,7 @@
     --card: 0 0% 100%;
     --card-foreground: 222 40% 12%;
 
-    --primary: 15 82% 50%;             /* 暖橙红主色（亮色版，略深保对比） */
+    --primary: 15 75% 50%;             /* 暖橙红主色（降饱和 82→75% <80% 避过艳）*/
     --primary-foreground: 0 0% 100%;
     --accent: 25 90% 50%;
     --accent-foreground: 0 0% 100%;
@@ -106,7 +106,7 @@
     --card: 22 40% 10%;                /* 卡底偏暖 */
     --card-foreground: 25 25% 90%;
 
-    --primary: 18 92% 52%;             /* 更浓郁的朱橙（比暗色版更暖） */
+    --primary: 18 75% 52%;             /* 更浓郁的朱橙（降饱和 92→75% <80% 避过艳）*/
     --primary-foreground: 22 50% 7%;
     --accent: 30 96% 55%;              /* 金橙强调 */
     --accent-foreground: 22 50% 7%;
@@ -143,7 +143,7 @@
     /* 纵深暖冷双光晕（顶橙 + 右下冷蓝），别留死黑 */
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(1100px 620px at 12% -12%, var(--bg-glow-1, hsl(15 89% 56% / 0.11)), transparent 60%),
+      radial-gradient(1100px 620px at 12% -12%, var(--bg-glow-1, hsl(15 75% 56% / 0.11)), transparent 60%),
       radial-gradient(980px 720px at 108% 112%, var(--bg-glow-2, hsl(220 60% 45% / 0.08)), transparent 55%);
     background-attachment: fixed;
   }
@@ -164,6 +164,11 @@
   .prose table { border-collapse: collapse; width: 100%; }
   .prose th, .prose td { border: 1px solid hsl(var(--border)); }
   .prose tbody tr:nth-child(even) { background: hsl(var(--muted) / 0.3); }
+
+  /* Track A: 数据数字等宽对齐 + 键盘焦点环(无障碍) + 锚点平滑滚动（skill: tabular-nums/focus-visible/smooth） */
+  body { font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; border-radius: 2px; }
+  html { scroll-behavior: smooth; }
 
   ::-webkit-scrollbar { width: 12px; height: 12px; }
   ::-webkit-scrollbar-track { background: transparent; }
