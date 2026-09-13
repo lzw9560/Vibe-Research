@@ -1,7 +1,7 @@
 # Spec: S199 — S194 方向感知编码重测
 
-> 状态：已实现（R1-R3 完成，R4 结论如下；A6 ≥6 视角 grill 待父 agent 拿 delta_ic 后起）
-> 作者：Claude  日期：2026-09-13
+> 状态：已实现（R1-R3 完成，R4 结论；A6 ≥6 视角 grill done verdict=needs-revision，R5 follow-up 2 测试 done 修订 §8）
+> 作者：Claude  日期：2026-09-13（R5：2026-09-14）
 > 分级：medium（reconstruct_s194_signals.py + run_s194_ablation.py 离线重跑，非生产 fusion_pipeline.py）
 > 关联：[[S194-信号融合基线]] F1 no_contribution / [[S193-缺口理论集成]] R5 v2 诊断 / [[S198-衰竭regime条件翻转]] flip done / [[S201c]] gap candidate done
 
@@ -46,6 +46,7 @@ S194 F1 消融结论：gap signal **no_contribution**（delta_ic≈0，p=0.33 �
 | `backend/tools/run_s194_ablation.py` | 重跑 F1 消融 A/B（R2）|
 | `backend/s44_verifier/stats.py` | day_clustered+permutation+Bonferroni 复用（R3，已有）|
 | `backend/tools/verify_gap_classification.py` | 多窗口 sanity（R3c，已有 R5 v3 框架）|
+| `backend/tools/s199_followup_tests.py` | R5 grill follow-up：breakout 分层 §44 lift + binary gate ablation（新增）|
 
 ## 4. 验收
 
@@ -118,16 +119,75 @@ Bonferroni K=6：gap_3d/gap_5d/perm_3d/5d/10d 全 survive（p_adj<0.05）；gap_
 2. §44 day_clustered + permutation（trade-level + market-level 多窗口 3/5/10 日）
 3. Bonferroni-BH 多重比较校正
 
-**没测什么**：
-- gap 信号单独（非融合分）的选股力 IC
-- gap 在非 breakout arm（floor 27 case）的预测力
-- 盘中信号（OFI/fund_flow）与 gap 交互
-- regime-stratified（牛月/熊月拆分）
+**没测什么**（R5 后部分已测，标注）：
+- ~~gap 信号单独（非融合分）的选股力 IC~~ → R5 测 binary gate（无 edge）+ breakout 分层 lift（Simpson paradox）
+- ~~gap 在非 breakout arm（floor 27 case）的预测力~~ → R5 确认 floor arm realized=0 不可测
+- 盘中信号（OFI/fund_flow）与 gap 交互（仍未测）
+- ~~regime-stratified（牛月/熊月拆分）~~ → R5 未测 regime（grill expert 6 发现的 bear-day edge 仍是 open question，本轮不测）
 
-**判定**：
-- gap 信号有 **selection edge**（组级 lift 1.27-1.69x，permutation p=0.002 survive Bonferroni）——gap-present 组收益显著高于 no-gap 组
-- gap 信号 **无 ranking edge**（融合分 delta_ic ≈ -0.002，p=0.56 robust）——gap regime score 不 rank-correlate 个体收益
-- 二者不矛盾（[[breakout-trade-profitable-despite-falsified-selection]]：交易盈利≠选股 edge）——gap 有组级区分力但无个体排序力，与 breakout 信号重叠（3001/3028 是 breakout arm）
-- **S194 no_contribution 确认**：gap 不进融合权重（IC 无增量）
-- **方向感知假设（S193 R5 v2 诊断）部分支持**：§44 lift A>B 全窗口（+0.01-0.02）但 ablation delta_ic 无差异——方向感知改善组级 lift 但不改变 IC 结论
-- **不 finalize S192 翻案 / 不改 fusion 权重**——A6 ≥6 视角 grill 待父 agent 拿本结果后起（grounded 非投机）
+**判定**（R5 后修订，见下方 R5）：
+- gap 信号有 **market-level forward-return edge**（deconfounded，3/5/10d lift 1.47-1.70 permutation p=0.002 survive Bonferroni）——gap-present 前向收益确实更高
+- gap 信号 **无 trade-level winrate edge**（Simpson's paradox：pooled winrate lift=0.98<1，gap 绝对 winrate 更低 38.27% vs 39.07%；binary gate winrate delta -0.65pp）——原 R4 "selection edge（组级 lift 1.27-1.69x）" overstated，trade-level lift 是日聚类假象非 per-trade winrate edge
+- gap 信号 **无 ranking edge**（融合分 delta_ic ≈ -0.002 p=0.56 robust；binary gate 亦无 edge）——graded 和 binary 均 no_contribution
+- 二者不矛盾（[[breakout-trade-profitable-despite-falsified-selection]]：交易盈利≠选股 edge）——gap 有 forward-return edge 但无 trade-winrate edge，无 ranking edge
+- **S194 no_contribution 确认（加强）**：gap 不进融合权重——graded IC 无增量 + binary gate 亦无 edge（winrate delta 负，mean delta +0.064pp 噪声级）
+- **方向感知假设（S193 R5 v2 诊断）部分支持→inconclusive**：§44 lift A>B 全窗口（+0.01-0.02）但 ablation delta_ic 无差异 + R5c Section C overlap bug（raw_b=raw_a 与 surv_b 重叠）→ inconclusive 非 partially supported
+- **不 finalize S192 翻案 / 不改 fusion 权重**——R5 加强 no_contribution（binary gate 亦无 edge）
+
+### R5 grill follow-up 测试（2026-09-14，needs-revision 后 2 定向测试）
+
+≥6 视角 grill（wtj2t1343）verdict=needs-revision：selection edge 与 breakout 混淆（99% gap-present 是 breakout arm）+ graded ablation 对 binary gate 盲。跑 grill 推荐的 2 定向测试定夺。脚本 `tools/s199_followup_tests.py`（§44v2：day_clustered+permutation+Bonferroni+前置窗口 sanity；n=2888 n_days=148 robust tier）。
+
+#### R5a 测试 1：breakout 分层 §44 lift（deconfound gap vs breakout）
+
+按 breakout 分层——gap-present-WITH-breakout vs no-gap-WITH-breakout（控 breakout 测 gap 增量）。floor arm realized=0（27 case 全未实现），分层是 no-op（所有 gap-present 本就是 breakout arm）→ deconfound = within-breakout 对比（breakout held constant）。
+
+Trade-level（gross_return）：
+| 组 | surv_n | raw_n | surv_wr | raw_wr | day_paired_lift | perm_p |
+|---|---|---|---|---|---|---|
+| unstratified（orig ref） | 554 | 2334 | 0.3827 | 0.3907 | 1.2754 | 0.0020 |
+| bk-stratified gap_a（dir-aware） | 554 | 2334 | 0.3827 | 0.3907 | 1.2754 | 0.0020 |
+| bk-stratified gap_b（dir-agnostic） | 578 | 2310 | 0.3841 | 0.3905 | 1.2815 | 0.0020 |
+
+- confound delta（orig - bk-stratified）= +0.0000 → lift **不是 breakout 驱动**（breakout held constant 后 lift 不变）——grill 的 breakout-confound 担忧**证伪**
+- **Simpson's paradox**：pooled_wr_lift=0.9795（gap 绝对 winrate 更低 38.27% vs 39.07%）但 day_paired_lift=1.2754（gap per-day 相对更高）→ trade-level "selection edge" = 日聚类假象，非 per-trade winrate edge
+
+Market-level（bars 前向 3/5/10d，within breakout arm，前置窗口 sanity §44v2 ①）：
+| 窗口 | surv_n | raw_n | surv_wr | raw_wr | lift | perm_p | Bonf_adj |
+|---|---|---|---|---|---|---|---|
+| 3d | 615 | 2346 | 0.5285 | 0.4160 | 1.6995 | 0.0020 | 0.0060 ✓ |
+| 5d | 611 | 2329 | 0.5205 | 0.4122 | 1.6756 | 0.0020 | 0.0060 ✓ |
+| 10d | 579 | 2261 | 0.4508 | 0.4029 | 1.4711 | 0.0020 | 0.0060 ✓ |
+
+- market-level pooled winrate gap > no-gap（0.5285 vs 0.4160 @3d）→ market-level lift **是真的**（非 Simpson），survive Bonferroni
+- trade-level 是 Simpson（pooled<1），market-level 是真（pooled>1）→ gap 有 forward-return edge 但无 trade-winrate edge
+
+**R5a 结论**：gap 无 breakout 外独立 per-trade selection edge（deconfound 后 trade-level 是 Simpson 假象，pooled lift 0.98<1）；但 market-level forward-return edge 真实（deconfounded，survive Bonferroni）。grill 的 breakout-confound 担忧证伪（lift 非 breakout 驱动，confound delta=0.0000），但 "selection edge" overstatement 经 Simpson's paradox 确认。
+
+#### R5b 测试 2：binary gate ablation（threshold edge 非 graded rank）
+
+gap 作 0/1 FILTER（gap-present=1, no-gap=0），gate ON（gated=gap-present）vs gate OFF（ablated=all）。测 winrate/mean-return delta（非 rank IC，graded ablation 测不到的 binary threshold effect）。
+
+| 配置 | n | winrate | mean_return | day_t | p |
+|---|---|---|---|---|---|
+| gate ON（gap_a-present） | 554 | 0.3827 | +0.5296% | +2.285 | 0.0119 |
+| gate OFF（all, ablated） | 2888 | 0.3892 | +0.4655% | +2.601 | 0.0051 |
+| DELTA | — | **-0.65pp** | +0.064pp | — | — |
+| gate ON（gap_b-present, bk） | 578 | 0.3841 | +0.5556% | +2.312 | 0.0111 |
+| DELTA（vs all bk） | — | -0.51pp | +0.090pp | — | — |
+
+- winrate delta **负**（gap gate 降低 winrate -0.65pp）→ binary gate **无 winrate edge**
+- mean_return delta 微正（+0.064pp = +0.064%/笔，fat tail：少赢但大赢）→ 不构成 material edge（噪声级）
+- graded IC ablation（R2）delta_ic≈-0.002 p=0.56 无 rank edge；binary gate 亦无 edge → no_contribution 对 graded 和 binary 均成立
+
+**R5b 结论**：gap-as-binary-gate 无 edge（winrate delta 负，mean delta +0.064pp 噪声级）。graded ablation 漏的 binary edge **不存在**。no_contribution 对 graded 和 binary 均成立——fusion 决策（gap 不进融合）证据加强。
+
+### R5 最终 verdict
+
+**needs-revision（spec 文本已修订，fusion 决策 sound）**：
+- fusion 决策 "gap 不进融合权重" **sound 且加强**——graded IC 无增量 + binary gate 亦无 edge（R5b）
+- "selection edge" claim **修订**：原 "组级 lift 1.27-1.69x" → "market-level forward-return edge（真，deconfounded，survive Bonferroni）+ trade-level Simpson's paradox（pooled 0.98<1，非 per-trade winrate edge）"
+- breakout-confound **证伪**（deconfound delta=0.0000，lift 非 breakout 驱动）；Simpson's paradox **确认**（trade-level "selection edge" 是日聚类假象）
+- binary-gate-blindness 担忧**证伪**（binary gate 亦无 edge）
+- §44v2 合规：day_clustered + permutation + Bonferroni（K=3，mature n_days=148≥60）+ 前置窗口 sanity（3/5/10d）均过
+- **不 finalize S192 翻案 / 不改 fusion 权重**——R5 加强 no_contribution
