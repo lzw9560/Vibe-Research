@@ -130,7 +130,7 @@ class TestClassifyGap:
         prev = bars[19]["high"]
         bars[20] = _bar("2026-09-21", prev + 0.6, prev + 1.0, prev + 0.4, prev + 0.7, 3000.0)
         r = _classify_gap_from_bars(bars, 20)  # 默认 candidate
-        assert r["type"] == "衰竭" and r["regime"] == "反转"
+        assert r["type"] == "衰竭" and r["regime"] == "动能延续"  # S198 gate 5/5 PASS 翻转：衰竭实测 continuation 非 reversal
         assert r["params"]["历史缺口数_20日"] >= 2
 
     def test_continuation_gap_confirmed(self):

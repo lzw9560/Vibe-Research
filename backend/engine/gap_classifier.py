@@ -196,7 +196,12 @@ def _classify_gap_from_bars(bars: list[dict], target_idx: int, mode: str = "cand
     elif n_recent >= 2 and (vol_ratio >= VOL_RATIO_EXHAUSTION_HIGH or vol_ratio < VOL_RATIO_EXHAUSTION_LOW):
         # 衰竭缺口：第三个缺口 + 异常放量或缩量（不查 filled，:182 本就 clean）
         gap_type = "衰竭"
-        regime = "反转"
+        # S198 gate 5/5 PASS 翻转（2026-09-13）：衰竭实测 5 日 continuation 55.2%
+        # （regime-stratified bull 61.5% AND bear 56.6%，非牛月 artifact）→ 延续非反转。
+        # 原 regime="反转" 被 day_paired(lift=1.33)+permutation(p=0.002)+regime+10日 全 PASS 证伪。
+        # walk_forward oos_unstable（加分项非 gate）→ 标 provisional，待更长 OOS 数据复验。
+        # 用"动能延续"非"趋势中继"避免与持续缺口(line 204) label 碰撞；direction 字段载向上/向下。
+        regime = "动能延续"
         confidence = 0.65
     elif continuation_cond:
         # 持续缺口：之前有缺口（突破）+ 量比≥1.5

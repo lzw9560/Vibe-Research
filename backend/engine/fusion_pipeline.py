@@ -24,7 +24,7 @@ from strategies.premarket_selection import _compute_breakout
 from vr_paths import resolve_data_dir
 
 GAP_REGIME_ENCODE: dict[str, float] = {
-    "无": 0.0, "噪声": 0.1, "反转": 0.5, "趋势中继": 0.7, "趋势启动": 0.9,
+    "无": 0.0, "噪声": 0.1, "反转": 0.5, "动能延续": 0.5, "趋势中继": 0.7, "趋势启动": 0.9,  # S198 flip: 衰竭→动能延续(continuation, gate 5/5 PASS)，暂 0.5 不改 fusion 行为，S199 方向感知重测 re-tune
 }
 
 _EMPTY_FUSION: dict = {

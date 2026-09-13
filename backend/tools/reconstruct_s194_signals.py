@@ -25,7 +25,8 @@ from strategies.premarket_selection import _compute_breakout
 GAP_REGIME_ENCODE = {
     "无": 0.0,
     "噪声": 0.1,
-    "反转": 0.5,
+    "反转": 0.5,  # breakaway down 空头反转（gap_classifier.py:194，仍保留）
+    "动能延续": 0.5,  # S198 flip: 衰竭→continuation（gate 5/5 PASS），暂 0.5，S199 方向感知重测 re-tune
     "趋势中继": 0.7,
     "趋势启动": 0.9,
 }
