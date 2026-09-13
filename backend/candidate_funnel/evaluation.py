@@ -239,13 +239,15 @@ def lift_to_multiplier(
 # r3-enforce R8 搁置（path_lift 没臂读+forward_test 18天<30阈值），但 R3-R4 sizing 接线独立有用
 # 让 ×0.5 cap 接 sizing 路径（当前默认 1.0 不咬）。前瞻基建，当前空转（breakout paper_track 不 sizing）
 DIM_ARM_MAP: dict[str, list[str] | None] = {
-    "breakout": ["breakout"],  # breakout 维度（days<60 → ×0.5）
     "floor": None,      # N/A——指数复制非选股，lift 不作用 → 1.0
     "gap": None,        # dead_arm → 不 sizing
     "limitup": None,    # dormant mock
     "trend": ["trend_swing"],  # S181 R7：进 cron paper_track，×0.5 provisional cap（EXPLORATORY 未验证）
     # S185 P1-4（wok7j1arm grill）：盘中 conditioning 维度 → breakout 臂；低波 → floor 臂
     # 盘中因子 ofi/seal_sincerity/bid_ask_pressure 映射到 breakout（盘中 conditioning 非 T-1 选股）
+    # ⚠️ min-multiplier 风险（S197 对抗审 wrs3bqhis HIGH）：breakout 臂取最保守 multiplier
+    # （lift_for_arm:271 min），ofi/seal_sincerity/bid_ask_pressure 任一 lift<1 days≥60→×0.1
+    # 拖垮整个 breakout 臂（即使 breakout 自身 lift≥2）。S197 R3 两门 safeguard 落地前不自动改。
     "breakout": ["breakout", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure"],
 }
 
