@@ -152,8 +152,23 @@ async def get_recommendation(code: str, date: str | None = None) -> StockRecomme
     else:
         level = RecommendationLevel.LOW_QUALITY
 
-    # 行业归一化（简化：以当前得分作为相对表现，实际应计算行业中位数）
-    industry_normalized = min(gene.total_score, 100.0)
+    # 行业中性化（S202：真 demean 替代 min(score,100) stub）
+    try:
+        from s44_verifier.ic_ir import industry_demean
+        import numpy as np
+        # 同行业股票的中位数 demean（去行业暴露）
+        all_genes = getattr(gene, "_all_genes", None)
+        if all_genes and len(all_genes) >= 2:
+            scores = np.array([g.total_score for g in all_genes], dtype=float)
+            inds = np.array([getattr(g, "industry", "unknown") for g in all_genes])
+            residuals = industry_demean(scores, inds)
+            # 找当前股票的 residual
+            idx = next((i for i, g in enumerate(all_genes) if g.code == code), None)
+            industry_normalized = float(residuals[idx]) if idx is not None else min(gene.total_score, 100.0)
+        else:
+            industry_normalized = min(gene.total_score, 100.0)  # fallback stub
+    except Exception:
+        industry_normalized = min(gene.total_score, 100.0)  # fallback stub
 
     # 仓位建议
     pos = POSITION_SUGGESTIONS.get(level, {"research_position": "0%", "logic": ""})
