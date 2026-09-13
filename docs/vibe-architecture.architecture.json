@@ -49,13 +49,13 @@
     {
       "id": "ashare_market",
       "type": "external",
-      "label": "A股市场 A-share market",
+      "label": "A股市场 market",
       "pos": [
         40,
         300
       ],
       "size": [
-        120,
+        160,
         60
       ]
     },
@@ -212,31 +212,32 @@
       "from": "ashare_market",
       "to": "astock",
       "label": "行情数据 em_get",
-      "variant": "emphasis"
+      "variant": "emphasis",
+      "labelDy": 56
     },
     {
       "id": "data-to-strategy",
       "from": "astock",
       "to": "strategies",
-      "label": "数据喂策略 data→strategy"
+      "label": "数据→策略"
     },
     {
       "id": "strategy-to-verify",
       "from": "strategies",
       "to": "s44_verifier",
-      "label": "信号验证 verify"
+      "label": "验证 verify"
     },
     {
       "id": "verify-to-exec",
       "from": "s44_verifier",
       "to": "scheduled_tasks",
-      "label": "验证后执行 execute"
+      "label": "执行 exec"
     },
     {
       "id": "exec-to-journal",
       "from": "scheduled_tasks",
       "to": "trade_journal",
-      "label": "模拟盘记录 journal",
+      "label": "记录 journal",
       "fromSide": "top",
       "toSide": "bottom"
     },
@@ -244,7 +245,7 @@
       "id": "exec-to-monitor",
       "from": "scheduled_tasks",
       "to": "price_monitor",
-      "label": "价格预警 alert",
+      "label": "预警 alert",
       "fromSide": "bottom",
       "toSide": "top",
       "labelDy": 24
@@ -253,14 +254,14 @@
       "id": "monitor-to-bot",
       "from": "price_monitor",
       "to": "feishu_bot",
-      "label": "触及推送 push",
+      "label": "推送 push",
       "variant": "emphasis"
     },
     {
       "id": "llm-to-graph",
       "from": "m7_llm_agent",
       "to": "knowledge_graph",
-      "label": "公告→图谱注入 inject",
+      "label": "注入 inject",
       "variant": "dashed",
       "labelDy": 56
     },
@@ -268,7 +269,7 @@
       "id": "graph-to-strategy",
       "from": "knowledge_graph",
       "to": "strategies",
-      "label": "认知反哺 feedback",
+      "label": "反哺 feedback",
       "variant": "dashed",
       "fromSide": "bottom",
       "toSide": "top"
