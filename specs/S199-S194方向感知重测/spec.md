@@ -1,6 +1,6 @@
 # Spec: S199 — S194 方向感知编码重测
 
-> 状态：草案（S198 flip 衰竭→动能延续 gate 5/5 PASS + S201c gap candidate 去前视 都 done，S194 no_contribution 真因=方向无关编码，重测 unblock）
+> 状态：已实现（R1-R3 完成，R4 结论如下；A6 ≥6 视角 grill 待父 agent 拿 delta_ic 后起）
 > 作者：Claude  日期：2026-09-13
 > 分级：medium（reconstruct_s194_signals.py + run_s194_ablation.py 离线重跑，非生产 fusion_pipeline.py）
 > 关联：[[S194-信号融合基线]] F1 no_contribution / [[S193-缺口理论集成]] R5 v2 诊断 / [[S198-衰竭regime条件翻转]] flip done / [[S201c]] gap candidate done
@@ -76,3 +76,58 @@ S194 F1 消融结论：gap signal **no_contribution**（delta_ic≈0，p=0.33 �
 - 方向感知编码**可能**翻 S194 no_contribution（若 edge 来自 upward regime 被方向无关稀释），但**也可能**仍无 edge（若 gap regime 本身无选股力，方向感知救不了——breakout arm §44 已证否弱选股 1.36x）。
 - S198 flip 证衰竭 continuation（动能延续），但 continuation ≠ 选股 edge（[[breakout-trade-profitable-despite-falsified-selection]]：交易盈利≠选股 edge，止盈止损创造正 EV）。
 - **不预设结论**——跑完 R2/R3 看 delta_ic + p 值定。若翻 no_contribution 须过 §44v2（day_paired+permutation+Bonferroni+前置窗口 sanity）。
+
+## 8. 实测结果（R1-R3 跑完，2026-09-13）
+
+### R1 方向感知编码（已实现）
+- `encode_gap_direction_aware(regime, direction)` = base_score × direction_weight（A 股 long-only：up=1.0, down=0.0, none=1.0）
+- `encode_gap_direction_agnostic(regime)` = base_score（旧方向无关，对照组）
+- TDD 21 测试全绿（test_s199_direction_aware.py）
+
+### R2 消融 A vs B（fresh data n=3028, n_days=151, robust tier）
+| 版本 | delta_ic | delta_pval | verdict |
+|---|---|---|---|
+| A（方向感知） | -0.0021 | 0.5575 | no_contribution |
+| B（方向无关） | -0.0022 | 0.5601 | no_contribution |
+| A - B | +0.0001 | — | 无差异 |
+
+**结论**：方向感知编码未改变 gap 信号在融合分消融中的 no_contribution verdict（robust tier, p>>0.05）。A vs B delta_ic 差 +0.0001 = 噪声级。
+
+### R3 §44 验证（day_clustered + permutation + Bonferroni）
+
+**Trade-level（gross_return）**：
+- gap-present day_clustered t=+2.285 p=0.0119 day_mean=+0.71%
+- no-gap day_clustered t=+2.411 p=0.0086 day_mean=+0.44%
+- day_paired_lift winrate_lift=1.2754 permutation_p=0.0020（显著）
+
+**Market-level（bars 前向 3/5/10 日）**：
+| 窗口 | gap t | gap p | gap day_mean | no-gap day_mean | lift | perm_p |
+|---|---|---|---|---|---|---|
+| 3日 | +5.362 | 0.0000 | +4.24% | -1.09% | 1.6875 | 0.0020 |
+| 5日 | +4.203 | 0.0000 | +4.17% | -1.41% | 1.6423 | 0.0020 |
+| 10日 | +2.149 | 0.0167 | +2.68% | -1.77% | 1.4550 | 0.0020 |
+
+Bonferroni K=6：gap_3d/gap_5d/perm_3d/5d/10d 全 survive（p_adj<0.05）；gap_10d Bonf 0.1002✗ 但 BH 0.0167✓。
+
+**A vs B lift 对照**：A 略高于 B（+0.01~0.02 全窗口），方向感知边缘提升但非显著。
+
+### R4 结论（诚实，不外推）
+
+**测了什么**：
+1. 融合分消融 delta_ic A vs B（gap 信号对融合分 IC 的贡献增量）—— robust tier, no_contribution
+2. §44 day_clustered + permutation（trade-level + market-level 多窗口 3/5/10 日）
+3. Bonferroni-BH 多重比较校正
+
+**没测什么**：
+- gap 信号单独（非融合分）的选股力 IC
+- gap 在非 breakout arm（floor 27 case）的预测力
+- 盘中信号（OFI/fund_flow）与 gap 交互
+- regime-stratified（牛月/熊月拆分）
+
+**判定**：
+- gap 信号有 **selection edge**（组级 lift 1.27-1.69x，permutation p=0.002 survive Bonferroni）——gap-present 组收益显著高于 no-gap 组
+- gap 信号 **无 ranking edge**（融合分 delta_ic ≈ -0.002，p=0.56 robust）——gap regime score 不 rank-correlate 个体收益
+- 二者不矛盾（[[breakout-trade-profitable-despite-falsified-selection]]：交易盈利≠选股 edge）——gap 有组级区分力但无个体排序力，与 breakout 信号重叠（3001/3028 是 breakout arm）
+- **S194 no_contribution 确认**：gap 不进融合权重（IC 无增量）
+- **方向感知假设（S193 R5 v2 诊断）部分支持**：§44 lift A>B 全窗口（+0.01-0.02）但 ablation delta_ic 无差异——方向感知改善组级 lift 但不改变 IC 结论
+- **不 finalize S192 翻案 / 不改 fusion 权重**——A6 ≥6 视角 grill 待父 agent 拿本结果后起（grounded 非投机）

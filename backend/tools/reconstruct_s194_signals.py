@@ -21,15 +21,47 @@ from engine.gap_classifier import _classify_gap_from_bars
 from engine.trade_journal import TradeJournal
 from strategies.premarket_selection import _compute_breakout
 
-# gap regime → 序数编码（方向性强弱；非严谨验证值，仅喂模型用，下游 ablation 测其预测力）
-GAP_REGIME_ENCODE = {
+# gap regime → 基础序数编码（方向性强弱；非严谨验证值，仅喂模型用，下游 ablation 测其预测力）
+# S199: rename GAP_REGIME_ENCODE → GAP_REGIME_BASE_SCORE（方向感知前的 base score）
+GAP_REGIME_BASE_SCORE = {
     "无": 0.0,
     "噪声": 0.1,
     "反转": 0.5,  # breakaway down 空头反转（gap_classifier.py:194，仍保留）
-    "动能延续": 0.5,  # S198 flip: 衰竭→continuation（gate 5/5 PASS），暂 0.5，S199 方向感知重测 re-tune
+    "动能延续": 0.5,  # S198 flip: 衰竭→continuation（gate 5/5 PASS），S199 方向感知重测
     "趋势中继": 0.7,
     "趋势启动": 0.9,
 }
+# Backward-compat alias（旧引用）
+GAP_REGIME_ENCODE = GAP_REGIME_BASE_SCORE
+
+# A 股 long-only direction weight（§1.1 弱合规：做空受限）
+# 向上 → 1.0（可交易多头）；向下 → 0.0（不可交易，空头受限→零贡献）；无 → 1.0（无缺口中性，不 zero out base）
+DIRECTION_WEIGHT = {
+    "向上": 1.0,   # tradeable (long-only)
+    "向下": 0.0,   # not tradeable (short restricted → zero contribution)
+    "无": 1.0,     # no gap = neutral, doesn't zero out the base score
+}
+
+
+def encode_gap_direction_aware(regime: str, direction: str) -> float:
+    """Version A: 方向感知编码 = regime_base_score × direction_weight.
+
+    A 股 long-only（§1.1 弱合规）：向上→full score（可交易多头），向下→0.0
+    （做空受限不可交易→零贡献，不把空头信号当多头喂稀释 upward edge）。
+    无缺口 → base × 1.0（中性，不额外 zero out）。
+    未知 direction → 0.0（保守，不喂不可交易信号）。
+    """
+    base = GAP_REGIME_BASE_SCORE.get(regime, 0.0)
+    weight = DIRECTION_WEIGHT.get(direction, 0.0)
+    return base * weight
+
+
+def encode_gap_direction_agnostic(regime: str) -> float:
+    """Version B: 旧方向无关编码（对照组，证明 edge 来自方向感知非他因）.
+
+    与 S194 原始编码一致：regime → scalar，direction 不进编码。
+    """
+    return GAP_REGIME_BASE_SCORE.get(regime, 0.0)
 
 
 def find_idx(bars: list[dict], date: str) -> int | None:
@@ -70,6 +102,7 @@ def main() -> None:
         breakout_binary = br[1] if br else None
         gap = _classify_gap_from_bars(bars, idx)
         regime = gap.get("regime", "无")
+        direction = gap.get("direction", "无")
         out.append({
             "signal_id": rec.signal_id,
             "stock": rec.stock_code,
@@ -80,10 +113,12 @@ def main() -> None:
             "breakout_score": breakout_score,
             "breakout_binary": breakout_binary,
             "gap_regime": regime,
-            "gap_regime_encoded": GAP_REGIME_ENCODE.get(regime, 0.0),
+            "gap_direction": direction,
+            "gap_regime_encoded": encode_gap_direction_agnostic(regime),  # backward-compat
+            "gap_regime_encoded_a": encode_gap_direction_aware(regime, direction),  # S199 version A
+            "gap_regime_encoded_b": encode_gap_direction_agnostic(regime),  # S199 version B (control)
             "gap_confidence": gap.get("confidence", 0.0),
             "gap_type": gap.get("type"),
-            "gap_direction": gap.get("direction"),
         })
 
     print(json.dumps(out, ensure_ascii=False, indent=2))
