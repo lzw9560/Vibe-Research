@@ -12,12 +12,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 
 H2_CACHE = ROOT / ".vibe-research" / "h2_features_cache_full.json"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-ROUND_TRIP_COST = 0.70
 PARAMS = (-3.0, 8.0, 3)
 
 feats = json.loads(H2_CACHE.read_text())
@@ -39,11 +39,14 @@ for f in feats:
     if _is_unbuyable_next_bar(bars[d_idx+1]): continue  # D+1 一字板不可买
     sim = simulate_holding(bars, D, *PARAMS)
     if sim is None: continue
-    net = sim["return_pct"] - ROUND_TRIP_COST
+    # S201b: 逐笔 _cost_pct（entry=T+1 open，5元门 size-dependent）
+    entry_price = float(bars[d_idx + 1].get("open", 0) or 0)
+    cost = _cost_pct(entry_price, 100.0, D) if entry_price > 0 else 0.0
+    net = sim["return_pct"] - cost
     obs.append({"D": D, "first_lock_idx": f.get("first_lock_idx"),
                 "is_first_bar": f.get("first_lock_idx") == 0,
                 "is_early": f.get("first_lock_idx") is not None and f["first_lock_idx"] <= 1,
-                "net": net, "win": 1 if net > 0 else 0})
+                "net": net, "win": 1 if net > 0 else 0, "cost": cost})
 
 if len(obs) < 30:
     print(f"n={len(obs)} <30 探索性"); sys.exit()
@@ -92,7 +95,7 @@ for _arm_name, _key in [("first_bar", "is_first_bar"), ("early_2bar", "is_early"
         survivors_by_day=_surv_by_day,
         universe_by_day=_universe_by_day,
         n_comparisons=2,  # Bonferroni K=2（本 harness 2 filter：is_first_bar + is_early）
-        round_trip_cost=ROUND_TRIP_COST,
+        round_trip_cost=sum(o["cost"] for o in obs) / len(obs) if obs else 0.0,
         script="tools/miaoban_superset_31d_lift.py",
         params={"arm": _arm_name, "filter_key": _key, "path": list(PARAMS)},
     )

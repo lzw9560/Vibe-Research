@@ -23,6 +23,7 @@ from tools.first_board_layer_lift import day_paired_lift, four_state, _winrate  
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402
 from strategies.kline_returns import simulate_holding  # noqa: E402
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from strategies.pattern_scan import scan_patterns  # noqa: E402
 
 # 预注册冻结（commit 74295b9）
@@ -111,6 +112,7 @@ def run_low_absorption_c3_lift():
     raw_strong = defaultdict(list)
     tight_strong = defaultdict(list)
     n_events = 0
+    _all_absorption_costs: list[float] = []  # S201b: track per-trade costs for mean
 
     for code, bars in cache.items():
         if not bars or len(bars) < 24:
@@ -127,7 +129,11 @@ def run_low_absorption_c3_lift():
             if raw_sim is None:
                 continue
             n_events += 1
-            ret = raw_sim["return_pct"]
+            # S201b: 逐笔 _cost_pct（entry=D+2 open，5元门 size-dependent）
+            _ep = float(bars[d_idx + 2].get("open", 0) or 0) if d_idx + 2 < len(bars) else 0.0
+            _tc = _cost_pct(_ep, 100.0, D) if _ep > 0 else 0.0
+            ret = raw_sim["return_pct"] - _tc
+            _all_absorption_costs.append(_tc)
             raw_by_day[D].append(ret)
             strong = is_strong.get(D, False)
             if strong:
@@ -229,7 +235,7 @@ def run_low_absorption_c3_lift():
             survivors_by_day=dict(_surv),
             universe_by_day=dict(_raw),
             n_comparisons=8,  # Bonferroni K=8 pre-registered
-            round_trip_cost=0.70,
+            round_trip_cost=sum(_all_absorption_costs) / len(_all_absorption_costs) if _all_absorption_costs else 0.0,
             script="tools/low_absorption_c3_lift.py",
             params={"arm": _arm_name, "c3": C3_THRESHOLD, "path": list(DEFAULT_PATH_PARAMS)},
         )

@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 
 # grill-decisions.md 硬剔除阈值（待 B1 验证后校准——本脚本就是验它们的）
 LAYER_THRESHOLDS: dict = {
@@ -385,6 +386,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
 
     # 逐层 by_day 收益（layer0=raw 全首板，layer1/2/3=剔除存活）
     by_day: dict[str, dict[str, list[float]]] = {"layer0": {}, "layer1": {}, "layer2": {}, "layer3": {}}
+    _all_layer_costs: list[float] = []  # S201b: track per-trade costs for mean
     n_first_boards = 0
 
     for di, d_date in enumerate(dates):
@@ -454,6 +456,10 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
                 tr = target_return(d1o, d2c)
                 if tr is None:
                     continue
+                # S201b: 逐笔 _cost_pct（entry=D+1 open，5元门 size-dependent）
+                cost = _cost_pct(float(d1o or 0), 100.0, d_date) if d1o else 0.0
+                tr = tr - cost
+                _all_layer_costs.append(cost)
                 by_day[layer_name].setdefault(d_date, []).append(tr)
 
         if (di + 1) % 5 == 0 or di + 1 == len(dates):
@@ -517,7 +523,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
             survivors_by_day=dict(_surv),
             universe_by_day=_raw_universe,
             n_comparisons=3,  # 3 layer 同族 Bonferroni K=3（honest count；非模板 8，§1.2 不臆造）
-            round_trip_cost=0.70,  # A 股 round-trip 0.70%（与 s44_gap_run_60d/platform_breakout 一致；returns 为 percent）
+            round_trip_cost=sum(_all_layer_costs) / len(_all_layer_costs) if _all_layer_costs else 0.0,  # S201b: per-trade mean 非 flat 0.70
             script="tools/first_board_layer_lift.py",
             params={"layer": _arm_name, "thresholds": LAYER_THRESHOLDS,
                     "cost_pct": COST_PCT, "days_back": days_back},

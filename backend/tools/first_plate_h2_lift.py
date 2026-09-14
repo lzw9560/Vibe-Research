@@ -30,6 +30,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from tools.first_board_layer_lift import day_paired_lift, four_state  # noqa: E402
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 
 # 预注册冻结参数
 EARLY_LOCK_CUTOFF = "100000000"   # 早封板 = first_lock time <= 10:00
@@ -140,6 +141,7 @@ def compute_h2_features(today_bars: list[dict], next_bars: list[dict],
         "broken_duration_min": broken_duration_min,
         "is_one_word": is_one_word,
         "next_day_return": next_day_return,
+        "next_day_open": float(next_bars[0].get("open", 0) or 0) if next_bars else 0.0,  # S201b: entry for _cost_pct
         "auction_open_pct": auction_open_pct,
     }
 
@@ -346,6 +348,7 @@ def main() -> int:
 
     # R4: day_paired_lift 5 组 + null（T2.2 early/one_word + T2.3 open/late/drop）
     raw_by_day: dict[str, list[float]] = defaultdict(list)
+    _all_h2_costs: list[float] = []  # S201b: track per-trade costs for mean
     early_by_day: dict[str, list[float]] = defaultdict(list)
     oneword_by_day: dict[str, list[float]] = defaultdict(list)
     open_by_day: dict[str, list[float]] = defaultdict(list)
@@ -353,7 +356,11 @@ def main() -> int:
     drop_by_day: dict[str, list[float]] = defaultdict(list)
     latexa_by_day: dict[str, list[float]] = defaultdict(list)
     for f in features:
-        ret = f["next_day_return"]
+        # S201b: 逐笔 _cost_pct（entry=next_day_open，5元门 size-dependent）
+        _ep = float(f.get("next_day_open", 0) or 0)
+        _tc = _cost_pct(_ep, 100.0, f["date"]) if _ep > 0 else 0.0
+        _all_h2_costs.append(_tc)
+        ret = (f["next_day_return"] or 0.0) - _tc
         raw_by_day[f["date"]].append(ret)
         if _is_early_lock(f):
             early_by_day[f["date"]].append(ret)
@@ -426,7 +433,7 @@ def main() -> int:
             survivors_by_day=dict(_surv),
             universe_by_day=dict(raw_by_day),
             n_comparisons=6,  # Bonferroni K=6 pre-registered
-            round_trip_cost=0.70,
+            round_trip_cost=sum(_all_h2_costs) / len(_all_h2_costs) if _all_h2_costs else 0.0,
             script="tools/first_plate_h2_lift.py",
             params={
                 "arm": _arm_name,

@@ -364,3 +364,108 @@ class TestLatestCloseTargetDate:
 
     def test_latest_close_empty_bars(self, recorder):
         assert recorder._latest_close([], target_date="2026-01-05") is None
+
+
+# ===========================================================================
+# S201b stage 2: 版本保留——settle_pending 用 UPDATE 非 INSERT OR REPLACE
+# ===========================================================================
+
+class TestSettleVersionPreserve:
+    """S201b stage 2 — settle_pending 版本保留（spec verdict #6）。
+
+    绝不 INSERT OR REPLACE（覆盖全字段无 before-image，违 reproducibility）。
+    update_settlement_v2 只 UPDATE 指定字段，冻结 gross_return 不动。
+    新 gross 写 gross_return_v2 + exit_model_version。
+    """
+
+    def test_settle_preserves_frozen_gross_and_writes_v2(self, journal, recorder):
+        """settle 后 gross_return 不变（冻结），新 gross 写 gross_return_v2。"""
+        hold = JournalRecord.create(
+            arm="breakout", stock_code="000001",
+            entry_price=10.0, entry_date="2026-01-15",
+            exit_reason="hold", is_realized=0,
+            fills_json=json.dumps({"optimism_flag": "path_return_none_t1_guard"}),
+        )
+        journal.insert(hold)
+        # bars: T+2 gap-through stop（open=9.5 <= stop_level=9.6）
+        bars = [
+            {"date": "2026-01-15", "open": 10.0, "high": 10.2, "low": 9.8, "close": 10.1, "volume": 10000},
+            {"date": "2026-01-16", "open": 10.0, "high": 10.3, "low": 9.9, "close": 10.2, "volume": 10000},  # entry=10.0
+            {"date": "2026-01-17", "open": 9.5, "high": 9.8, "low": 9.3, "close": 9.6, "volume": 10000},  # T+2 gap-through
+            {"date": "2026-01-18", "open": 9.7, "high": 10.0, "low": 9.5, "close": 9.8, "volume": 10000},
+            {"date": "2026-01-19", "open": 9.8, "high": 10.1, "low": 9.6, "close": 10.0, "volume": 10000},
+        ]
+        recorder._bars_provider = lambda code: bars if code == "000001" else []
+        settled = recorder.settle_pending_breakout()
+        assert settled["n_settled"] == 1
+        records = journal.query_records(arm="breakout", is_realized=None, is_dead_arm=0)
+        assert len(records) == 1  # UPDATE 非新行
+        rec = records[0]
+        assert rec.is_realized == 1
+        assert rec.exit_reason == "stop"
+        # gross_return 冻结（hold 时为 None，settle 后仍 None）
+        assert rec.gross_return is None
+        # gross_return_v2 有新值（gap-through fill=open=9.5, gross=(9.5-10.0)/10.0*100=-5.0%）
+        assert rec.gross_return_v2 is not None
+        assert rec.gross_return_v2 == pytest.approx(-5.0, abs=0.1)
+        assert rec.exit_model_version == "v2_gap_through_aware"
+
+    def test_settle_does_not_touch_realized_records(self, journal, recorder):
+        """is_realized=1 的记录不被 settle 触碰（gross_return + gross_return_v2 不变）。"""
+        # 已 realized 记录（frozen gross_return=-4.0）
+        realized = JournalRecord.create(
+            arm="breakout", stock_code="000002",
+            entry_price=10.0, entry_date="2026-01-14",
+            exit_reason="stop", is_realized=1,
+            gross_return=-4.0,
+            exit_price=9.6, exit_date="2026-01-16",
+            net_pnl=-40.0, cost_pct=0.85,
+        )
+        journal.insert(realized)
+        # hold 记录（is_realized=0）
+        hold = JournalRecord.create(
+            arm="breakout", stock_code="000001",
+            entry_price=10.0, entry_date="2026-01-15",
+            exit_reason="hold", is_realized=0,
+        )
+        journal.insert(hold)
+        bars = [
+            {"date": "2026-01-15", "open": 10.0, "high": 10.2, "low": 9.8, "close": 10.1, "volume": 10000},
+            {"date": "2026-01-16", "open": 10.0, "high": 10.3, "low": 9.9, "close": 10.2, "volume": 10000},
+            {"date": "2026-01-17", "open": 9.5, "high": 9.8, "low": 9.3, "close": 9.6, "volume": 10000},
+            {"date": "2026-01-18", "open": 9.7, "high": 10.0, "low": 9.5, "close": 9.8, "volume": 10000},
+            {"date": "2026-01-19", "open": 9.8, "high": 10.1, "low": 9.6, "close": 10.0, "volume": 10000},
+        ]
+        recorder._bars_provider = lambda code: bars if code == "000001" else []
+        settled = recorder.settle_pending_breakout()
+        assert settled["n_settled"] == 1  # 只 settle 了 hold
+        # realized 记录未被触碰——按 stock_code 单独查
+        all_realized = journal.query_records(arm="breakout", is_realized=1, is_dead_arm=0)
+        rec_realized = [r for r in all_realized if r.stock_code == "000002"]
+        assert len(rec_realized) == 1
+        assert rec_realized[0].gross_return == -4.0  # frozen 不变
+        assert rec_realized[0].gross_return_v2 is None  # 未被 v2 写入
+        assert rec_realized[0].exit_model_version == ""  # 未被 v2 标记
+
+    def test_settle_preserves_fills_json(self, journal, recorder):
+        """settle 后 fills_json 不变（INSERT OR REPLACE 会覆盖，UPDATE 保留）。"""
+        original_fills = json.dumps({"optimism_flag": "path_return_none_t1_guard", "custom": "data"})
+        hold = JournalRecord.create(
+            arm="breakout", stock_code="000001",
+            entry_price=10.0, entry_date="2026-01-15",
+            exit_reason="hold", is_realized=0,
+            fills_json=original_fills,
+        )
+        journal.insert(hold)
+        bars = [
+            {"date": "2026-01-15", "open": 10.0, "high": 10.2, "low": 9.8, "close": 10.1, "volume": 10000},
+            {"date": "2026-01-16", "open": 10.0, "high": 10.3, "low": 9.9, "close": 10.2, "volume": 10000},
+            {"date": "2026-01-17", "open": 9.5, "high": 9.8, "low": 9.3, "close": 9.6, "volume": 10000},
+            {"date": "2026-01-18", "open": 9.7, "high": 10.0, "low": 9.5, "close": 9.8, "volume": 10000},
+            {"date": "2026-01-19", "open": 9.8, "high": 10.1, "low": 9.6, "close": 10.0, "volume": 10000},
+        ]
+        recorder._bars_provider = lambda code: bars if code == "000001" else []
+        recorder.settle_pending_breakout()
+        records = journal.query_records(arm="breakout", is_realized=None, is_dead_arm=0)
+        # fills_json 保留原值（UPDATE 未碰）
+        assert records[0].fills_json == original_fills

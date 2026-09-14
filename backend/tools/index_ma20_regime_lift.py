@@ -2,13 +2,13 @@
 """§44 v2 verdict: index_ma20 regime gate —— 涨停股隔夜 gap 是否被 regime 条件化.
 
 Factor: index sh.000001 close vs MA20 (strong=close>MA20 / weak=close<MA20), day-level binary.
-Target: 涨停股隔夜 gap (D close -> D+1 open), net of 0.70% round-trip cost.
+Target: 涨停股隔夜 gap (D close -> D+1 open), net of 逐笔 _cost_pct round-trip cost.
 Sample: zt_history (is_final=1) + baostock_kline_cache 涨停股 (pctChg at limit threshold).
 Methodology (§44 v2 strict):
   1. Multi-window sanity (mean+WR+IC per regime bucket)
   2. day_paired (per-day mean, non-pooled — high-count days don't dominate)
   3. Permutation null (shuffle regime labels across days) + Bonferroni (K=1)
-  4. Cost: 0.70% round-trip; one-word D-day boards excluded (sealed, unbuyable)
+  4. Cost: 逐笔 _cost_pct（5元门 size-dependent，S201b）; one-word D-day boards excluded (sealed, unbuyable)
   5. No extrapolation (regime-edge on selection != full-pipeline edge)
 """
 import datetime, json, sqlite3, sys, statistics, random, math
@@ -18,11 +18,11 @@ from collections import defaultdict
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
 REGIME_F = ROOT / ".vibe-research" / "index_ma20_regime.json"
-COST = 0.70          # % round-trip
 TOL = 0.01           # one-word board price tolerance
 MA_WINDOW = 20
 N_PERM = 10000       # permutation iterations
@@ -95,7 +95,9 @@ for code, bars in cache.items():
             n_no_regime += 1
             continue
         gap = (d1_open - d_close) / d_close * 100
-        net_gap = gap - COST
+        # S201b: 逐笔 _cost_pct（entry=D close，overnight gap trade）
+        cost = _cost_pct(float(d_close), 100.0, D)
+        net_gap = gap - cost
         obs.append({
             "D": D,
             "code": code,
@@ -104,6 +106,7 @@ for code, bars in cache.items():
             "win": 1 if net_gap > 0 else 0,
             "regime": reg["regime"],
             "from_zt": (D, code) in zt_set,
+            "cost": cost,
         })
 
 print(f"scanned {n_codes} codes | obs={len(obs)} | excluded: no_d1={n_no_d1} one_word={n_one_word} no_regime={n_no_regime}")
@@ -325,10 +328,10 @@ for _arm_name, _arm_days in _s168_arms:
         survivors_by_day=dict(_surv_by_day),
         universe_by_day=dict(_univ_by_day),
         n_comparisons=8,  # Bonferroni K=8（保守，多窗口×多 regime 对比）
-        round_trip_cost=COST,
+        round_trip_cost=sum(o["cost"] for o in obs) / len(obs) if obs else 0.0,
         script="tools/index_ma20_regime_lift.py",
         params={
-            "arm": _arm_name, "cost_pct": COST, "regime": _arm_name,
+            "arm": _arm_name, "cost_pct": "per_trade", "regime": _arm_name,
             "ma_window": MA_WINDOW, "n_perm": N_PERM,
             "one_word_excluded": True, "tol": TOL,
         },

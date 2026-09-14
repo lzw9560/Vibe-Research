@@ -6,7 +6,7 @@
 # §44 verdict 用更好数据确认; 秒板 hint 待 n 涨后复验(zt_pool 每日+1 day coverage)
 # 防封: 当前 akshare+cache+2s sleep 低量一次性(13 call); productionize 改 eastmoney_get route(push2ex URL)
 """S156: zt_pool 历史 re-test 封单量+封板时间+秒板 net-profit-verify。
-复用 S155 net 逻辑（simulate_holding+unbuyable+0.70%cost+top-vs-all）+ zt_pool 精确首封/封板资金。
+复用 S155 net 逻辑（simulate_holding+unbuyable+逐笔_cost_pct+top-vs-all）+ zt_pool 精确首封/封板资金。
 signal_date=D（涨停日，feature D close 已知），entry=D+1 open（续涨/缺口验证）。"""
 import datetime, json, sqlite3, sys, time
 from pathlib import Path
@@ -14,13 +14,13 @@ from collections import defaultdict
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 
 KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 ZT_CACHE = ROOT / ".vibe-research" / "zt_pool_hist_cache.json"
-ROUND_TRIP_COST = 0.70
 PARAMS = (-3.0, 8.0, 3)
 
 def fetch_zt_pool(date_compact):  # YYYYMMDD
@@ -73,7 +73,7 @@ def main(smoke_days=None):
         conn.close()
     if smoke_days:
         em_dates = em_dates[:smoke_days]
-    print(f"dates={len(em_dates)} cost={ROUND_TRIP_COST}% params={PARAMS}", flush=True)
+    print(f"dates={len(em_dates)} cost=per_trade params={PARAMS}", flush=True)
 
     obs = []  # {D, code, seal_amount, first_lock, is_early, is_late, is_miaoban, is_broken, net, win}
     for di, D in enumerate(em_dates):
@@ -91,13 +91,16 @@ def main(smoke_days=None):
             if _is_unbuyable_next_bar(bars[d_idx+1]): continue  # D+1 一字板不可买
             sim = simulate_holding(bars, D, *PARAMS)
             if sim is None: continue
-            net = sim["return_pct"] - ROUND_TRIP_COST
+            # S201b: 逐笔 _cost_pct（entry=T+1 open，5元门 size-dependent）
+            entry_price = float(bars[d_idx + 1].get("open", 0) or 0)
+            cost = _cost_pct(entry_price, 100.0, D) if entry_price > 0 else 0.0
+            net = sim["return_pct"] - cost
             fl = _time_hhmmss(s["first_lock"])
             ll = _time_hhmmss(s["last_lock"])
             obs.append({"D": D, "code": code, "seal_amount": s["seal_amount"],
                         "first_lock": fl, "is_early": fl <= "100000", "is_late": fl > "140000",
                         "is_miaoban": fl <= "093100", "is_broken": fl != ll and ll != "000000",
-                        "net": net, "win": 1 if net > 0 else 0})
+                        "net": net, "win": 1 if net > 0 else 0, "cost": cost})
 
     if len(obs) < 30:
         print(f"n={len(obs)} < 30 探索性"); return
@@ -176,11 +179,11 @@ def main(smoke_days=None):
             survivors_by_day=_surv_by_day,
             universe_by_day=_universe_by_day,
             n_comparisons=5,  # Bonferroni K=5（5 arm，§44v2 按 n 调不 over-correct）
-            round_trip_cost=ROUND_TRIP_COST,
+            round_trip_cost=sum(o["cost"] for o in obs) / len(obs) if obs else 0.0,
             script="tools/zt_pool_seal_time_lift.py",
             params={
                 "arm": _arm_name, "quintile": _is_quintile,
-                "path": list(PARAMS), "cost": ROUND_TRIP_COST,
+                "path": list(PARAMS), "cost": "per_trade",
             },
         )
         _s168_verdicts[_arm_name] = {

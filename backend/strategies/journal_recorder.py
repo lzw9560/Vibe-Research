@@ -22,9 +22,10 @@ floor 走 mark-to-market（C3/C6 不走 path_return）。trend 与 breakout 同�
 **H3 单位统一**：pnl_unit 固定 CNY。可平仓臂 net_pnl = return_pct/100 × notional；
 gap 臂 net_pnl = net_ratio × notional；floor 臂 unrealized_pnl = (close-entry)×shares。
 
-**H7 gap-aware fill**：accounting.path_return 当前 stop/take 有乐观偏差
-（gap-through 未建模）。不改 accounting.py 接口（只读约束），在 fills_json
-记 optimism_flag + raw exit_price，文档化偏差量级。
+**H7 gap-aware fill**：S201b stage 2 修复——accounting.path_return stop 分支已实现
+gap-through-aware fill（open<=stop→fill=open, low<=stop→fill=stop*(1-eps)）+
+一字跌停 sellability check。新 gross 写 gross_return_v2（冻结 gross_return 不动），
+exit_model_version="v2_gap_through_aware" 标记版本。
 """
 from __future__ import annotations
 
@@ -168,18 +169,19 @@ class JournalRecorder:
         path_return T+1 guard（accounting.py:120 idx+2>=len→None）需 T+2+ 天 bar——
         盘后 T 跑 breakout 全记 is_realized=0 'hold'。次日 bars 增长后，此方法回头
         重算：query is_realized=0 'hold' → bars_provider 取 bars（已含 T+2+）→
-        path_return → 若完整 exit（非截断 max_hold）→ INSERT OR REPLACE **同 signal_id**
-        （绕过 .create() 生新 UUID）更新 is_realized=1 + net_pnl + exit_price=pr.exit_price。
+        path_return → 若完整 exit（非截断 max_hold）→ update_settlement_v2（UPDATE 非
+        INSERT OR REPLACE）更新 is_realized=1 + gross_return_v2 + exit_model_version。
+        冻结 gross_return 不动（S201b stage 2 版本保留）。
 
         **截断 max_hold（SH5）**：path_return max_hold exit（accounting.py:170
         exit_idx=min(idx+1+max_hold_days, len-1)）在 bars 不足完整持仓期时截断返非 None
         PathReturn。须检测 signal_idx+2+max_hold > len(bars) → 留 hold 等更多 bars，
         否则过早标 realized 后续 stop/take 永不检查 → 胜率错。
 
-        **signal_id bypass .create()**：JournalRecord.create()（trade_journal.py:94）
-        硬编 signal_id=str(uuid.uuid4())，cls(signal_id=uuid,...,**kwargs) 传 signal_id
-        会 TypeError（multiple values）。直接构造 JournalRecord(signal_id=pos.signal_id)
-        绕过 .create()，复用原 id 做 INSERT OR REPLACE 幂等更新。
+        **S201b stage 2 版本保留**：绝不 INSERT OR REPLACE（spec verdict #6：覆盖全字段
+        无 before-image 违 reproducibility）。update_settlement_v2 只 UPDATE 指定字段
+        （gross_return_v2/exit_price/exit_reason/net_pnl/cost_pct/is_realized/exit_model_version），
+        保留 gross_return + fills_json + created_at 不变。
         """
         pending = self._journal.query_records(arm="breakout", is_realized=0, is_dead_arm=0)
         # query_records 无 exit_reason 参数（trade_journal.py:197），Python 层 filter
@@ -215,34 +217,22 @@ class JournalRecorder:
                 signal_idx = _find_signal_idx(bars, pos.entry_date)
                 if signal_idx is not None and signal_idx + 2 + BREAKOUT_MAX_HOLD > len(bars):
                     continue  # 截断 max_hold，留 hold 等更多 bars
-            # 标 realized——INSERT OR REPLACE 同 signal_id（绕过 .create()）
+            # S201b stage 2: 标 realized——用 update_settlement_v2（UPDATE 非 INSERT OR REPLACE）
+            # 冻结 gross_return 不动，新 gross 写 gross_return_v2 + exit_model_version
             position_notional = float(pos.entry_price) * DEFAULT_SIZE
             net_pnl = pr.return_pct / 100.0 * position_notional
-            record = JournalRecord(
-                signal_id=pos.signal_id,  # bypass .create()——复用原 id 做 INSERT OR REPLACE
-                arm="breakout", stock_code=pos.stock_code,
-                entry_price=pos.entry_price, entry_date=pos.entry_date,
-                exit_price=pr.exit_price, exit_date=pr.exit_date,
+            updated = self._journal.update_settlement_v2(
+                signal_id=pos.signal_id,
+                gross_return_v2=pr.gross_return_pct,
+                exit_price=pr.exit_price,
+                exit_date=pr.exit_date,
                 exit_reason=pr.exit_reason,
                 net_pnl=round(net_pnl, 2),
-                cost_pct=pr.cost_pct, gross_return=pr.gross_return_pct,
-                is_realized=1,
-                fills_json=json.dumps({
-                    "won": pr.won,
-                    "return_pct": pr.return_pct,
-                    "exit_reason": pr.exit_reason,
-                    "exit_date": pr.exit_date,
-                    "exit_price": pr.exit_price,
-                    "cost_pct": pr.cost_pct,
-                    "gross_return_pct": pr.gross_return_pct,
-                    "optimism_flag": "gap_through_unmodeled",
-                    "settled_by": "settle_pending_breakout",
-                    "position_notional": round(position_notional, 2),
-                }),
-                created_at=pos.created_at,  # 保留原 created_at
+                cost_pct=pr.cost_pct,
+                exit_model_version="v2_gap_through_aware",
             )
-            self._journal.insert(record)  # INSERT OR REPLACE 同 signal_id 幂等
-            n_settled += 1
+            if updated:
+                n_settled += 1
         return {"n_pending": len(holds), "n_settled": n_settled}
 
     # ── S181 settle_pending_trend（仿 settle_pending_breakout，换 TREND_* params）──
@@ -254,7 +244,7 @@ class JournalRecorder:
         TREND_STOP_PCT/TREND_TAKE_PCT/TREND_MAX_HOLD 更宽（趋势波段容噪声/追趋势/持仓更久）。
 
         逻辑同 settle_pending_breakout：query is_realized=0 arm='trend' exit_reason='hold'
-        → 重算 path_return(TREND_*) → 截断 max_hold 检测 → INSERT OR REPLACE 同 signal_id。
+        → 重算 path_return(TREND_*) → 截断 max_hold 检测 → update_settlement_v2（S201b stage 2）。
         """
         pending = self._journal.query_records(arm="trend", is_realized=0, is_dead_arm=0)
         holds = [r for r in pending if r.exit_reason == "hold"]
@@ -290,31 +280,19 @@ class JournalRecorder:
                     continue  # 截断 max_hold，留 hold 等更多 bars
             position_notional = float(pos.entry_price) * DEFAULT_SIZE
             net_pnl = pr.return_pct / 100.0 * position_notional
-            record = JournalRecord(
-                signal_id=pos.signal_id,  # bypass .create()——复用原 id 做 INSERT OR REPLACE
-                arm="trend", stock_code=pos.stock_code,
-                entry_price=pos.entry_price, entry_date=pos.entry_date,
-                exit_price=pr.exit_price, exit_date=pr.exit_date,
+            # S201b stage 2: update_settlement_v2（UPDATE 非 INSERT OR REPLACE，冻结 gross_return）
+            updated = self._journal.update_settlement_v2(
+                signal_id=pos.signal_id,
+                gross_return_v2=pr.gross_return_pct,
+                exit_price=pr.exit_price,
+                exit_date=pr.exit_date,
                 exit_reason=pr.exit_reason,
                 net_pnl=round(net_pnl, 2),
-                cost_pct=pr.cost_pct, gross_return=pr.gross_return_pct,
-                is_realized=1,
-                fills_json=json.dumps({
-                    "won": pr.won,
-                    "return_pct": pr.return_pct,
-                    "exit_reason": pr.exit_reason,
-                    "exit_date": pr.exit_date,
-                    "exit_price": pr.exit_price,
-                    "cost_pct": pr.cost_pct,
-                    "gross_return_pct": pr.gross_return_pct,
-                    "optimism_flag": "gap_through_unmodeled",
-                    "settled_by": "settle_pending_trend",
-                    "position_notional": round(position_notional, 2),
-                }),
-                created_at=pos.created_at,  # 保留原 created_at
+                cost_pct=pr.cost_pct,
+                exit_model_version="v2_gap_through_aware",
             )
-            self._journal.insert(record)  # INSERT OR REPLACE 同 signal_id 幂等
-            n_settled += 1
+            if updated:
+                n_settled += 1
         return {"n_pending": len(holds), "n_settled": n_settled}
 
     # ── breakout 臂（可平仓臂，C2 path_return）─────────────────────────
@@ -409,7 +387,7 @@ class JournalRecorder:
                     "exit_date": pr.exit_date,
                     "cost_pct": pr.cost_pct,
                     "gross_return_pct": pr.gross_return_pct,
-                    "optimism_flag": "gap_through_unmodeled",
+                    "optimism_flag": "gap_through_modeled_v2",
                     "raw_exit_reason": pr.exit_reason,
                     "position_notional": round(position_notional, 2),
                 }),
@@ -521,7 +499,7 @@ class JournalRecorder:
                     "exit_date": pr.exit_date,
                     "cost_pct": pr.cost_pct,
                     "gross_return_pct": pr.gross_return_pct,
-                    "optimism_flag": "gap_through_unmodeled",
+                    "optimism_flag": "gap_through_modeled_v2",
                     "raw_exit_reason": pr.exit_reason,
                     "position_notional": round(position_notional, 2),
                     "arm_params": {

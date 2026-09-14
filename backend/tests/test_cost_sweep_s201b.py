@@ -2,17 +2,18 @@
 """S201b cost-sweep 纯函数 compute_net_at_levels 测试。
 
 测：各口径 net returns 单调（cost 越高 net 越低）+ 逐笔口径独立 + 返 5 口径。
+S201b：levels 改为 [0.10, 0.15, 0.20, 0.30]（去 0.70，加 0.15）。
 """
 from __future__ import annotations
 
-from tools.cost_sweep_s201b import compute_net_at_levels
+from tools.cost_sweep_s201b import compute_net_at_levels, COST_LEVELS_PCT
 
 
 def test_returns_monotonic_decreasing_with_cost():
     """cost 越高 net 越低（单调）。"""
     gross = [0.02, 0.03, -0.01, 0.05]  # 分数
     per_trade = [1.46, 1.46, 1.46, 1.46]  # 百分数（统一便于比较）
-    sweeps = compute_net_at_levels(gross, per_trade, levels_pct=[0.10, 0.20, 0.30, 0.70])
+    sweeps = compute_net_at_levels(gross, per_trade, levels_pct=[0.10, 0.15, 0.20, 0.30])
     # flat 口径 mean net 单调递减
     means = [sum(s["returns"]) / len(s["returns"]) for s in sweeps[:4]]
     assert means[0] > means[1] > means[2] > means[3], f"flat 口径 net 应随 cost 递减: {means}"
@@ -33,7 +34,7 @@ def test_returns_count_matches_input():
     """每口径 returns 数 = gross 数。"""
     gross = [0.01] * 5
     per_trade = [1.0] * 5
-    sweeps = compute_net_at_levels(gross, per_trade, levels_pct=[0.10, 0.70])
+    sweeps = compute_net_at_levels(gross, per_trade, levels_pct=[0.10, 0.30])
     # 2 flat + 1 逐笔 = 3
     assert len(sweeps) == 3
     for s in sweeps:
@@ -50,10 +51,17 @@ def test_empty_inputs_safe():
 
 
 def test_round_trip_cost_fraction():
-    """round_trip_cost 是分数（0.007=0.7%），非百分数。"""
+    """round_trip_cost 是分数（0.0015=0.15%），非百分数。"""
     from pytest import approx
     gross = [0.02]
     per_trade = [1.46]
-    sweeps = compute_net_at_levels(gross, per_trade, levels_pct=[0.70])
-    assert sweeps[0]["round_trip_cost"] == approx(0.007)  # 0.70% → 分数
+    sweeps = compute_net_at_levels(gross, per_trade, levels_pct=[0.15])
+    assert sweeps[0]["round_trip_cost"] == approx(0.0015)  # 0.15% → 分数
     assert sweeps[1]["round_trip_cost"] == approx(0.0146)  # mean 1.46% → 分数
+
+
+def test_default_levels_no_0_70():
+    """S201b：默认 levels 不含 0.70（已降为 0.15）。"""
+    assert 0.70 not in COST_LEVELS_PCT
+    assert 0.15 in COST_LEVELS_PCT
+    assert COST_LEVELS_PCT == [0.10, 0.15, 0.20, 0.30]

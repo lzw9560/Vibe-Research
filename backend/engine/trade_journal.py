@@ -96,6 +96,9 @@ class JournalRecord:
     is_dead_arm: int = 0
     fills_json: str = ""
     created_at: str = ""
+    # S201b stage 2: 版本保留——新 exit model 的 gross 写 v2，冻结 gross_return 不动
+    gross_return_v2: float | None = None
+    exit_model_version: str = ""
 
     @classmethod
     def create(
@@ -139,7 +142,9 @@ CREATE TABLE IF NOT EXISTS trade_journal (
   unrealized_pnl  REAL,
   is_dead_arm     INTEGER DEFAULT 0,
   fills_json      TEXT,
-  created_at      TEXT NOT NULL
+  created_at      TEXT NOT NULL,
+  gross_return_v2 REAL,
+  exit_model_version TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tj_arm ON trade_journal(arm);
 CREATE INDEX IF NOT EXISTS idx_tj_entry_date ON trade_journal(entry_date);
@@ -163,6 +168,12 @@ class TradeJournal:
         conn = sqlite3.connect(str(self._db_path))
         try:
             conn.executescript(_SCHEMA)
+            # S201b stage 2: 版本保留列（additive ALTER TABLE，幂等）
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(trade_journal)")}
+            if "gross_return_v2" not in cols:
+                conn.execute("ALTER TABLE trade_journal ADD COLUMN gross_return_v2 REAL")
+            if "exit_model_version" not in cols:
+                conn.execute("ALTER TABLE trade_journal ADD COLUMN exit_model_version TEXT")
             conn.commit()
         finally:
             conn.close()
@@ -214,6 +225,32 @@ class TradeJournal:
         finally:
             conn.close()
 
+    def update_settlement_v2(
+        self, signal_id: str, gross_return_v2: float, exit_price: float,
+        exit_date: str, exit_reason: str, net_pnl: float, cost_pct: float,
+        exit_model_version: str = "v2_gap_through_aware",
+    ) -> bool:
+        """S201b stage 2 — UPDATE 结算字段 + v2 列，冻结 gross_return 不动。
+
+        **绝不 INSERT OR REPLACE**（spec verdict #6：覆盖全字段无 before-image，
+        违 reproducibility 底线）。此方法只 UPDATE 指定字段，保留 gross_return
+        + fills_json + created_at 不变。只碰 is_realized=0 holds（set → 1）。
+        """
+        conn = self._conn()
+        try:
+            cur = conn.execute(
+                """UPDATE trade_journal
+                   SET gross_return_v2=?, exit_price=?, exit_date=?, exit_reason=?,
+                       net_pnl=?, cost_pct=?, is_realized=1, exit_model_version=?
+                   WHERE signal_id=? AND is_realized=0""",
+                (gross_return_v2, exit_price, exit_date, exit_reason,
+                 net_pnl, cost_pct, exit_model_version, signal_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+
     def query_records(
         self, arm: str | None = None, is_realized: int | None = None,
         is_dead_arm: int | None = 0, limit: int = 5000,
@@ -244,6 +281,9 @@ class TradeJournal:
 
     @staticmethod
     def _row_to_record(row: sqlite3.Row) -> JournalRecord:
+        # S201b stage 2: gross_return_v2/exit_model_version 可能不存在于旧 DB（migration 前）
+        gr_v2 = row["gross_return_v2"] if "gross_return_v2" in row.keys() else None
+        emv = row["exit_model_version"] if "exit_model_version" in row.keys() else ""
         return JournalRecord(
             signal_id=row["signal_id"], arm=row["arm"],
             stock_code=row["stock_code"], entry_price=row["entry_price"],
@@ -256,6 +296,8 @@ class TradeJournal:
             is_dead_arm=row["is_dead_arm"],
             fills_json=row["fills_json"] or "",
             created_at=row["created_at"],
+            gross_return_v2=gr_v2,
+            exit_model_version=emv or "",
         )
 
     # ── equity 曲线（C4/C6）────────────────────────────────────────────

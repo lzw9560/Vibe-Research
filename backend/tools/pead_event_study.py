@@ -28,10 +28,10 @@ sys.path.insert(0, str(ROOT / "backend"))
 from tools.first_board_premium_baseline import _load_kline_cache, _bs_code  # noqa: E402
 
 # ── 常量 ──────────────────────────────────────────────────────────────────
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 CACHE_PATH = Path("/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/baostock_kline_cache.json")
 FORECAST_CACHE = ROOT / "backend" / ".scratch" / "pead-event-study" / "forecast_reports.json"
 OUT_DIR = ROOT / "backend" / ".scratch" / "pead-event-study"
-COST_PCT = 0.70          # round-trip 成本（买+卖，佣金+滑点+印花税弱近似）
 N_PERM = 500             # permutation 次数 (p-value 分辨率 0.002, alpha_adj=0.01 足够)
 PERM_SEED = 42
 ALPHA_ADJ = 0.05 / 5     # Bonferroni K=5（5 个 horizon，D+1~D+5）
@@ -253,7 +253,7 @@ def compute_all_returns(
                 xc = _to_float(xb.get("close"))
                 if eo is None or xc is None or eo <= 0:
                     continue
-                net_ret = (xc - eo) / eo * 100 - COST_PCT
+                net_ret = (xc - eo) / eo * 100 - _cost_pct(float(eo or 0), 100.0, str(entry_date))
                 result[N]["universe_by_day"][pub].append(net_ret)
                 if code in event_codes:
                     result[N]["event_by_day"][pub].append(net_ret)
@@ -512,7 +512,7 @@ def run_pead_analysis() -> dict:
             xc = _to_float(xb.get("close"))
             if eo is None or xc is None or eo <= 0:
                 continue
-            net_ret = (xc - eo) / eo * 100 - COST_PCT
+            net_ret = (xc - eo) / eo * 100 - _cost_pct(float(eo or 0), 100.0, str(entry_date))
             all_by_day[N].setdefault(pub, []).append(net_ret)
             if ftype in GOOD_NEWS_TYPES:
                 good_by_day[N].setdefault(pub, []).append(net_ret)
@@ -559,7 +559,7 @@ def run_pead_analysis() -> dict:
             xc = _to_float(xb.get("close"))
             if eo is None or xc is None or eo <= 0:
                 continue
-            net_ret = (xc - eo) / eo * 100 - COST_PCT
+            net_ret = (xc - eo) / eo * 100 - _cost_pct(float(eo or 0), 100.0, str(entry_date))
             cu = e.get("chg_up")
             cd = e.get("chg_dwn")
             if cu is not None and cd is not None:
@@ -579,7 +579,7 @@ def run_pead_analysis() -> dict:
         "factor": "PEAD (业绩预告 drift)",
         "method": "§44 v2: day_paired non-pooled + within-day permutation null + Bonferroni K=5",
         "params": {
-            "cost_pct": COST_PCT,
+            "cost_pct": "per_trade",
             "n_perm": N_PERM,
             "alpha_adj": round(ALPHA_ADJ, 5),
             "horizons": horizons,
@@ -592,7 +592,7 @@ def run_pead_analysis() -> dict:
         "ic": ic_results,
         "good_types": list(GOOD_NEWS_TYPES),
         "bad_types": list(BAD_NEWS_TYPES),
-        "note": ("event drift = (D+N close - D+1 open)/D+1 open - 0.70% cost; "
+        "note": ("event drift = (D+N close - D+1 open)/D+1 open - per_trade _cost_pct; "
                  "universe = all cache stocks same window; "
                  "day_paired lift non-pooled; within-day permutation null; "
                  "不外推: PEAD selection edge ≠ overall edge (盘中 60% 未测)"),

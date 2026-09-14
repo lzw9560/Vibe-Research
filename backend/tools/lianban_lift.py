@@ -12,13 +12,13 @@ ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码�
 sys.path.insert(0, str(ROOT / "backend"))
 from data.sources.eastmoney import ths_limit_up_pool
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 LB_CACHE = ROOT / ".vibe-research" / "ths_lb_cache.json"
-ROUND_TRIP_COST = 0.70
 PARAMS = (-3.0, 8.0, 3)
 
 def parse_boards(high_days: str) -> int:
@@ -68,9 +68,12 @@ def main():
             if _is_unbuyable_next_bar(bars[d_idx + 1]): continue
             sim = simulate_holding(bars, D, *PARAMS)
             if sim is None: continue
-            net = sim["return_pct"] - ROUND_TRIP_COST
+            # S201b: 逐笔 _cost_pct（保留 5元门 size-dependent，非 flat 0.70%）
+            entry_price = float(bars[d_idx + 1].get("open", 0) or 0)
+            cost = _cost_pct(entry_price, 100.0, D) if entry_price > 0 else 0.0
+            net = sim["return_pct"] - cost
             obs.append({"D": D, "code": code, "boards": s["boards"],
-                        "net": net, "win": 1 if net > 0 else 0})
+                        "net": net, "win": 1 if net > 0 else 0, "cost": cost})
 
     if len(obs) < 30:
         print(f"n={len(obs)} <30 探索性"); return
@@ -126,9 +129,9 @@ def main():
             survivors_by_day=dict(_surv_by_day),
             universe_by_day=dict(_universe_by_day),
             n_comparisons=4,  # Bonferroni K=4（4 arm，§44v2 按 n 调不 over-correct）
-            round_trip_cost=ROUND_TRIP_COST,
+            round_trip_cost=sum(o["cost"] for o in obs) / len(obs) if obs else 0.0,
             script="tools/lianban_lift.py",
-            params={"arm": _arm_name, "path": list(PARAMS), "cost": ROUND_TRIP_COST},
+            params={"arm": _arm_name, "path": list(PARAMS), "cost": "per_trade"},
         )
         _s168_verdicts[_arm_name] = {
             "status": _v.status, "selection_lift": _v.selection_lift,

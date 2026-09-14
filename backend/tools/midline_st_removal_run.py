@@ -22,7 +22,7 @@ from tools.midline_event_harness import run_event_verdict  # noqa: E402
 from tools.scan_st_removal_history import CACHE as REMOVAL_CACHE, scan  # noqa: E402
 
 HORIZONS = [1, 5, 10, 15, 20]
-COST = 0.0070
+COST = None  # S201b: per-trade real cost（accounting._cost_pct 5元 min+印花+spread），非 flat 0.0070
 N_COMPARISONS = 5  # 5 horizons（BH K=5 多重比较校正）
 
 

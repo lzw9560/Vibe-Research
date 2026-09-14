@@ -14,7 +14,8 @@ simulate_holding lines 104-106/114；非"给定 Trades → path return"）。
   - path_return → Accounting（lines 104-119 stop/take/max_hold + return）
 T+1 guard（idx+2>=len → None）保留——Accounting 需 T+2（首可卖日）才能算 path。
 
-cost 模型（spec §2）：0.70% round-trip（spread+slippage）+ 印花 0.1%（sell-side）
+cost 模型（spec §2）：0.15% round-trip（0.10% slippage + 0.05% residual half-spread）
++ 印花 0.1%（sell-side）
 + 佣金 5 元（per side，A 股最低佣金）。apply_cost=False 时 simulate_holding
 legacy 无 cost（backward compat 精确匹配）。
 """
@@ -27,7 +28,9 @@ from engine.decision import Trades
 from engine.executor import fillability_check
 
 #: round-trip spread+slippage 成本（百分点，不含佣金/印花）。
-ROUND_TRIP_COST_PCT: float = 0.70
+#: S201b：0.70→0.15（0.10% slippage S189 T0_SLIPPAGE_PCT + 0.05% residual half-spread；
+#: 0.60% spread 是美股假设，A股 tick-based 0.02-0.20%，5元门佣金抵消低价 under-charge）。
+ROUND_TRIP_COST_PCT: float = 0.15
 #: A 股印花税（sell-side，百分点）。2023-08-28 起减半至 0.05%（原 0.10%）。
 STAMP_DUTY_PCT: float = 0.05
 STAMP_DUTY_PCT_PRE_2023_08_28: float = 0.10
@@ -41,6 +44,9 @@ COMMISSION_RATE_PCT: float = 0.025
 #: T+0 成交价已是分钟 VWAP（市场均价），不需 breakout 的 0.70% 理论价桥接——真实 shortfall
 #: 对流动 A 股约 0.05-0.20%，取 0.10% 保守。S189 grill 修订（原 t0_cost 直接 return _cost_pct 0.70% 高估 T+0 成本 ~5x）。
 T0_SLIPPAGE_PCT: float = 0.10
+#: S201b stage 2: 止损正常触发的微小滑点（fill 略低于止损价，市场冲击）。
+#: gap-through 是主修正项（48% stop exits gap-through at open），eps 是正常触止损的次要修正。
+STOP_SLIPPAGE_EPS: float = 0.001
 
 
 @dataclass(frozen=True)
@@ -58,9 +64,9 @@ class PathReturn:
     exit_date: str
     cost_pct: float = 0.0
     gross_return_pct: float = 0.0
-    # S175 T2（spec grill SH7）：三分支均设。stop/take=entry*(1±pct/100) 乐观水平
-    # （gap-through 未建模，fills_json 带 optimism_flag='gap_through_unmodeled'）；
-    # max_hold=bars[exit_idx].close（真实 close）。覆写 S173 journal_recorder.py:24 只读约束。
+    # S175 T2（spec grill SH7）：三分支均设。S201b stage 2 修复 stop gap-through-aware
+    # fill（open<=stop→fill=open, low<=stop→fill=stop*(1-eps), 一字跌停→carry）；
+    # take=limit sell 触及即成交（不 gap-through，防高估盈利）；max_hold=bars[exit_idx].close。
     exit_price: float = 0.0
 
 
@@ -114,6 +120,17 @@ def _find_signal_idx(bars: list, signal_date: str) -> int | None:
     )
 
 
+def _is_sellable_bar(high_f: float, low_f: float, stop_level: float) -> bool:
+    """检查止损卖单能否在此 bar 成交（非一字跌停 locked）。
+
+    一字跌停：high==low（无日内振幅）且价格在止损位或以下 → 无法卖，须 carry。
+    一字涨停：high==low 但价格在止损位以上 → 不影响（不会触止损）。
+    """
+    if high_f == low_f and high_f <= stop_level:
+        return False
+    return True
+
+
 def path_return(
     trades: Trades,
     bars: list,
@@ -159,25 +176,42 @@ def path_return(
 
     cost = _cost_pct(entry, trades.size, entry_date=str(_bar_get(bars[entry_idx], "date", ""))) if apply_cost else 0.0
 
+    # S201b stage 2: stop_level/take_level 提前算（gap-through-aware fill 需要）
+    stop_level = entry * (1 + stop_pct / 100)
+    take_level = entry * (1 + take_profit_pct / 100)
+
     # stop/take 循环（simulate_holding lines 104-112）——T+2 起检查
     for j in range(idx + 2, min(idx + 2 + max_hold_days, len(bars))):
         low = _bar_get(bars[j], "low", 0.0)
         high = _bar_get(bars[j], "high", 0.0)
+        open_val = _bar_get(bars[j], "open", 0.0)
         try:
             low_f = float(low)
             high_f = float(high)
+            open_f = float(open_val)
         except (TypeError, ValueError):
             continue
-        if low_f and low_f <= entry * (1 + stop_pct / 100):
-            gross = float(stop_pct)
+        # S201b stage 2: stop gap-through-aware fill（修硬编码 gross=float(stop_pct)）
+        # 一字跌停 locked → 无法卖，carry 到下一 bar
+        stop_fill_price: float | None = None
+        if _is_sellable_bar(high_f, low_f, stop_level):
+            if open_f and open_f <= stop_level:
+                # gap-through：开盘已在止损位或以下 → fill=open（更差）
+                stop_fill_price = open_f
+            elif low_f and low_f <= stop_level:
+                # 正常触止损：fill=止损位*(1-eps)（微小滑点）
+                stop_fill_price = stop_level * (1 - STOP_SLIPPAGE_EPS)
+        if stop_fill_price is not None:
+            gross = (stop_fill_price - entry) / entry * 100
             net = gross - cost
             return PathReturn(
-                won=False, return_pct=round(net, 2) if apply_cost else gross,
+                won=False, return_pct=round(net, 2) if apply_cost else round(gross, 2),
                 exit_reason="stop", exit_date=str(_bar_get(bars[j], "date", "")),
-                cost_pct=cost, gross_return_pct=gross,
-                exit_price=entry * (1 + stop_pct / 100),  # S175 T2：stop level（乐观，gap-through 未建模）
+                cost_pct=cost, gross_return_pct=round(gross, 2),
+                exit_price=stop_fill_price,
             )
-        if high_f and high_f >= entry * (1 + take_profit_pct / 100):
+        # S201b stage 2: take-side 不碰（limit sell 触及即成交，fill 在限价水平已 realistic）
+        if high_f and high_f >= take_level:
             gross = float(take_profit_pct)
             net = gross - cost
             return PathReturn(
@@ -185,7 +219,7 @@ def path_return(
                 return_pct=round(net, 2) if apply_cost else gross,
                 exit_reason="take", exit_date=str(_bar_get(bars[j], "date", "")),
                 cost_pct=cost, gross_return_pct=gross,
-                exit_price=entry * (1 + take_profit_pct / 100),  # S175 T2：take level（乐观）
+                exit_price=take_level,  # S175 T2：take level（limit sell，不 gap-through）
             )
 
     # max_hold exit（simulate_holding lines 113-119）

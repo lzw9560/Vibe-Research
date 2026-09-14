@@ -36,7 +36,7 @@ def build_return_series(
     kline_cache: dict,
     calendar: list[str],
     horizon: int,
-    cost_pct: float | None = 0.0070,
+    cost_pct: float | None = None,  # S201b: None=per-trade _cost_pct（默认），非 flat 0.0070
 ) -> tuple[list[float], list[str], dict, list[float]]:
     """构建 event edge return series（decimal 制，扣 cost）。
 
@@ -140,7 +140,7 @@ def run_event_verdict(
     kline_cache: dict,
     calendar: list[str],
     horizon: int,
-    cost: float | None = 0.0070,
+    cost: float | None = None,  # S201b: None=per-trade _cost_pct（默认），非 flat 0.0070
     frozen_commit: str,
     n_comparisons: int = 1,
     params: dict | None = None,
@@ -157,7 +157,7 @@ def run_event_verdict(
     if cost is None and costs:
         avg_cost_ratio = sum(costs) / len(costs) / 100.0
     else:
-        avg_cost_ratio = cost if cost is not None else 0.0070
+        avg_cost_ratio = cost if cost is not None else 0.0  # S201b: fallback 0 not flat 0.0070
     return wire_verdict(
         line_id=line_id,
         returns=returns,

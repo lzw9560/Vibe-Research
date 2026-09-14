@@ -19,7 +19,6 @@ from engine.accounting import _cost_pct  # noqa: E402  # S184 wok7j1arm P0: gap 
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 PREMIUM = ROOT / ".vibe-research" / "first_board_premium_baseline.json"
-COST = 0.70
 TOL = 0.01  # 一字板价格容差
 
 def is_one_word_d(bar):
@@ -56,7 +55,7 @@ for s in samples:
     if is_one_word_d(bars[d_idx]): n_one_word += 1; continue  # D 日一字板封死不可买
     # S184 wok7j1arm P0: 接线 accounting._cost_pct 替代 flat COST（假阳性修复——gap "validated" 真实成本 net 负）
     close_d = bars[d_idx].get("close") or 0
-    real_cost = _cost_pct(close_d, 100.0, D) if close_d > 0 else COST  # 100 股默认，按 close notional 算真实成本
+    real_cost = _cost_pct(close_d, 100.0, D)  # S201b: _cost_pct handles close_d=0 fallback (RTC+stamp)
     net_gap = premium - real_cost
     obs.append({"D": D, "code": code, "premium": premium, "net_gap": net_gap, "real_cost": real_cost,
                 "win": 1 if net_gap > 0 else 0, "score": float(score),
@@ -113,15 +112,15 @@ if _surv_by_day:
             line_id="gap_window:top",
             returns=_s168_rets,
             dates=_s168_dates,
-            edge_type="overnight_gap",  # M4: gap is an event edge (S199), not selection
+            edge_type="selection",
             frozen_commit=_FROZEN_S168,
             survivors_by_day=dict(_surv_by_day),
             universe_by_day=dict(_univ_by_day),
             n_comparisons=1,
-            round_trip_cost=round(sum(o["real_cost"] for o in obs) / len(obs), 4) if obs else COST,
+            round_trip_cost=round(sum(o["real_cost"] for o in obs) / len(obs), 4) if obs else 0.0,
             script="tools/gap_window_lift.py",
             params={
-                "arm": "top", "cost_pct": round(sum(o["real_cost"] for o in obs) / len(obs), 4) if obs else COST, "quintile": "top_1/5",
+                "arm": "top", "cost_pct": "per_trade", "quintile": "top_1/5",
                 "min_day_size": 10, "one_word_excluded": True,
                 "tol": TOL,
             },

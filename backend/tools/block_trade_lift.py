@@ -2,7 +2,7 @@
 """大宗交易折价（印迹效应）§44 v2 verdict 脚本。
 
 因子：大宗交易折价率（block trade discount）。D-1 有大宗交易的股，按折价率分层。
-target：D open→exit net（扣 0.70% round-trip cost），day_paired lift vs 同期无大宗 universe。
+target：D open→exit net（扣 逐笔 _cost_pct round-trip cost），day_paired lift vs 同期无大宗 universe。
 方法论：§44 v2 — 前置窗口 sanity + day_paired 非池化 + within-day null + Bonferroni + 不外推。
 
 数据源：
@@ -17,10 +17,10 @@ import random
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 BLOCK = ROOT / ".vibe-research" / "block_trade_raw.json"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-COST = 0.70
 EXIT_WINDOWS = [1, 3, 5]
 N_PERM = 2000
 BONF_K = 9           # 3 strata × 3 windows
@@ -108,6 +108,8 @@ def compute_returns(code, bt_date):
     if str(bars[entry_idx].get("isST", "0")) == "1":
         return None
     results = {}
+    # S201b: 逐笔 _cost_pct（保留 5元门 size-dependent，非 flat 0.70%）
+    cost = _cost_pct(float(entry_open), 100.0, bt_date)
     for w in EXIT_WINDOWS:
         exit_idx = entry_idx + (w - 1)
         if exit_idx >= len(bars):
@@ -118,11 +120,13 @@ def compute_returns(code, bt_date):
             results[w] = None
             continue
         gross = (exit_close - entry_open) / entry_open * 100
-        results[w] = gross - COST
+        results[w] = gross - cost
+    results["_cost"] = cost
     return results
 
 print("\nComputing block-trade forward returns...", end=" ", flush=True)
 block_returns = {s: {w: [] for w in EXIT_WINDOWS} for s in STRATA}
+_all_trade_costs: list[float] = []  # S201b: track per-trade costs for mean
 n_skip = 0
 for sname, pairs in strata_pairs.items():
     for (bt_date, code), rec in pairs.items():
@@ -130,11 +134,14 @@ for sname, pairs in strata_pairs.items():
         if rets is None:
             n_skip += 1
             continue
+        _tc = rets.pop("_cost", 0.0)
+        _all_trade_costs.append(_tc)
         for w in EXIT_WINDOWS:
             r = rets.get(w)
             if r is not None:
                 block_returns[sname][w].append((bt_date, code, r))
-print(f"done ({time.time()-t0:.1f}s, skipped {n_skip} no-kline)")
+_mean_cost_pct = sum(_all_trade_costs) / len(_all_trade_costs) if _all_trade_costs else 0.0
+print(f"done ({time.time()-t0:.1f}s, skipped {n_skip} no-kline, mean_cost={_mean_cost_pct:.3f}%)")
 
 # ── 5. Universe returns per day ────────────────────────────────────────────
 print("Computing universe returns per day...", end=" ", flush=True)
@@ -172,7 +179,9 @@ for bt_date in bt_dates:
             if not exit_close or exit_close <= 0:
                 continue
             gross = (exit_close - entry_open) / entry_open * 100
-            universe_returns[bt_date][w].append(gross - COST)
+            # S201b: 逐笔 _cost_pct（universe 同 cost model）
+            _u_cost = _cost_pct(float(entry_open), 100.0, str(bars[entry_idx].get("date", bt_date)))
+            universe_returns[bt_date][w].append(gross - _u_cost)
             n_univ_total += 1
 print(f"done ({time.time()-t0:.1f}s, {n_univ_total} obs across {len(universe_returns)} days)")
 
@@ -337,10 +346,10 @@ for _sname in STRATA:
             survivors_by_day=dict(_block_by_day),
             universe_by_day=_univ_by_day,
             n_comparisons=BONF_K,  # Bonferroni K=9 pre-registered (3 strata × 3 windows)
-            round_trip_cost=COST,
+            round_trip_cost=_mean_cost_pct,
             script="tools/block_trade_lift.py",
             params={"stratum": _sname, "exit_window": _w,
-                    "bonf_k": BONF_K, "cost": COST,
+                    "bonf_k": BONF_K, "cost": "per_trade",
                     "strata": list(STRATA.keys()), "exit_windows": EXIT_WINDOWS},
         )
         _s168_verdicts[f"{_sname}:{_w}d"] = {
