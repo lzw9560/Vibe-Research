@@ -1,19 +1,25 @@
-// Track B IA: /today — 今日动作队列（新 home，替 /market root redirect）
-// 布局: PRIMARY 待办动作队列 + 次卡 大盘指数strip+自选快照 + 辅折叠 昨日复盘摘要 + CTA脊
-// 数据源: useDateTriplet(时段)/useIndices(大盘)/apiWatchlist+useLiveQuotes(自选)/useBombAlerts(预警)
-//        /useEvaluationSummary(§44)/useDailyWinReview(昨日复盘)
+// 多维度 IA: /today — 时间线（今日 hub）
+// 时段感知: useDateTriplet stage 驱动（晚上=复盘+T+1备 / 盘前=T+1选 / 盘中=实时）
+// 7 状态灯汇总（5线+风控+数据）+ 时间线闭环卡 + 动作队列 + 大盘/自选快照
+// focus 日 T-1/T/T+1 切（借 useDateTriplet）
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronDown, RefreshCw, Clock, Calendar } from "lucide-react";
 import { useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { NextStepBar } from "@/components/ui/NextStepBar";
-import { useIndices, useDateTriplet, useDailyWinReview, useBombAlerts } from "@/lib/query";
+import { useIndices, useDateTriplet, useDailyWinReview, useBombAlerts, useScheduledTasks } from "@/lib/query";
 import { useEvaluationSummary } from "@/lib/query/strategy";
+import { useStrategyBacktest } from "@/lib/query/strategy";
 import { apiWatchlist } from "@/lib/watchlist";
 import { useLiveQuotes } from "@/hooks/useLiveQuotes";
 import type { DimensionValidation } from "@/lib/candidates";
+import { SevenLineStatus } from "@/components/lines/SevenLineStatus";
+import { LineLoopCard } from "@/components/lines/LineLoopCard";
+import { CrossLineDrawer } from "@/components/lines/CrossLineDrawer";
+import { LINES, buildSevenLineItems } from "@/components/lines/lines";
+import type { LineStatus } from "@/components/lines/LineStatusLight";
 import { cn } from "@/lib/utils";
 
 const STAGE_LABEL: Record<string, string> = {
@@ -25,12 +31,45 @@ const STAGE_LABEL: Record<string, string> = {
   non_trading: "非交易日",
 };
 
+// 时段→动作映射（时段感知核心）
+function stageActions(stage: string): { focus: string; hint: string }[] {
+  switch (stage) {
+    case "pre_market":
+      return [
+        { focus: "T+1 选股", hint: "盘前候选就绪，切盘面选股" },
+        { focus: "竞价监控", hint: "9:15 竞价开始" },
+      ];
+    case "pre_open":
+      return [
+        { focus: "竞价监控", hint: "集合竞价中，看竞价异常" },
+        { focus: "切盘中", hint: "9:30 开盘切盘中盯盘" },
+      ];
+    case "intraday":
+      return [
+        { focus: "盘中盯盘", hint: "自选 live + 预警" },
+        { focus: "信号触发", hint: "信号触发记日志待 §44" },
+      ];
+    case "post_transition":
+    case "post_market":
+      return [
+        { focus: "收盘复盘", hint: "查今日战绩 + §44 verdict" },
+        { focus: "T+1 备", hint: "明日军备 + 选股" },
+      ];
+    default:
+      return [
+        { focus: "T+1 选股", hint: "非交易日，可提前选股备军" },
+      ];
+  }
+}
+
 export function TodayPage() {
   const { data: triplet } = useDateTriplet();
   const { data: indices, isLoading: idxLoading } = useIndices();
   const { data: evaluation } = useEvaluationSummary();
   const { data: winReview } = useDailyWinReview();
   const { data: bombAlerts } = useBombAlerts();
+  const { data: backtest } = useStrategyBacktest(60);
+  const { data: tasks } = useScheduledTasks();
 
   // 自选股快照
   const { data: watchlistCodes } = useQuery({
@@ -42,16 +81,82 @@ export function TodayPage() {
   const { quotes } = useLiveQuotes(topCodes, topCodes.length > 0);
 
   const [showReview, setShowReview] = useState(false);
+  const [drawerCode, setDrawerCode] = useState<string | null>(null);
   const stage = triplet?.stage ?? "pre_market";
   const stageLabel = STAGE_LABEL[stage] ?? "盘前";
   const today = triplet?.today ?? new Date().toISOString().slice(0, 10);
 
+  // ── 七灯 status 计算 ──
+  const isTradingDay = triplet?.is_trading_day ?? false;
+  const timeStatus: LineStatus = isTradingDay ? "ok" : "idle";
+
+  const watchCount = watchlistCodes?.length ?? 0;
+  const selectionStatus: LineStatus = watchCount > 0 ? "ok" : "pending";
+
+  const pendingDims = evaluation?.dimensions?.filter(
+    (d: DimensionValidation) => d.status.includes("待复验") || d.status.includes("探索"),
+  ) ?? [];
+  const validationStatus: LineStatus =
+    pendingDims.length > 0 ? "pending" : evaluation?.dimensions?.length ? "ok" : "idle";
+
+  const strategyStatus: LineStatus =
+    backtest && backtest.length > 0 ? "ok" : "idle";
+
+  // 认知线: 无直接 endpoint → idle（honest，标待接线）
+  const cognitionStatus: LineStatus = "idle";
+
+  const alertCount = bombAlerts?.length ?? 0;
+  const riskStatus: LineStatus = alertCount > 0 ? "alert" : "ok";
+
+  const taskList = tasks ?? [];
+  const failedTasks = taskList.filter(t => t.last_run_status === "failed");
+  const dataStatus: LineStatus = failedTasks.length > 0 ? "alert" : taskList.length > 0 ? "ok" : "idle";
+
+  const sevenItems = buildSevenLineItems(
+    {
+      time: timeStatus,
+      selection: selectionStatus,
+      validation: validationStatus,
+      strategy: strategyStatus,
+      cognition: cognitionStatus,
+      risk: riskStatus,
+      data: dataStatus,
+    },
+    {
+      time: stageLabel,
+      selection: watchCount > 0 ? `${watchCount} 自选` : "去选股",
+      validation: pendingDims.length > 0 ? `${pendingDims.length} 待复验` : undefined,
+      strategy: backtest?.length ? `${backtest.length} 战法` : undefined,
+      cognition: "待接线",
+      risk: alertCount > 0 ? `${alertCount} 预警` : undefined,
+      data: failedTasks.length > 0 ? `${failedTasks.length} 失败` : undefined,
+    },
+  );
+
+  // 时间线步骤环
+  const timeLine = LINES[0];
+  const stageActionsList = stageActions(stage);
+
   // 待办动作队列
   const todos: { id: string; label: string; detail: string; link: string; badge?: string }[] = [];
 
-  // ① 预警（炸板/价格）
-  if (bombAlerts && bombAlerts.length > 0) {
-    const alertCount = bombAlerts.length;
+  // 时段感知动作
+  stageActionsList.forEach((a, i) => {
+    todos.push({
+      id: `stage-${i}`,
+      label: a.focus,
+      detail: a.hint,
+      link: a.focus.includes("选股") ? "/workspace?phase=premarket"
+        : a.focus.includes("竞价") ? "/bidding"
+        : a.focus.includes("盯盘") ? "/workspace?phase=intraday"
+        : a.focus.includes("复盘") ? "/review"
+        : "/today",
+      badge: "前往",
+    });
+  });
+
+  // 预警
+  if (alertCount > 0) {
     todos.push({
       id: "alerts",
       label: "预警",
@@ -61,48 +166,49 @@ export function TodayPage() {
     });
   }
 
-  // ② 盘前候选就绪
-  todos.push({
-    id: "premarket",
-    label: "盘前候选就绪",
-    detail: "breakout 候选 (§44 lift 1.4x 待验证)",
-    link: "/workspace?phase=premarket",
-    badge: "选股",
-  });
-
-  // ③ §44 待复验
-  if (evaluation && evaluation.dimensions) {
-    const pending = evaluation.dimensions.filter((d: DimensionValidation) => d.status.includes("待复验") || d.status.includes("探索"));
-    if (pending.length > 0) {
-      todos.push({
-        id: "s44",
-        label: "§44 待复验",
-        detail: `${pending.length} 项维度待 60 天复验`,
-        link: "/review?tab=backtest",
-        badge: "查看",
-      });
-    }
+  // §44 待复验
+  if (pendingDims.length > 0) {
+    todos.push({
+      id: "s44",
+      label: "§44 待复验",
+      detail: `${pendingDims.length} 项维度待 60 天复验`,
+      link: "/review?tab=validation",
+      badge: "查看",
+    });
   }
-
-  // ④ 待平仓日志桩
-  todos.push({
-    id: "journal",
-    label: "待平仓日志桩",
-    detail: "昨买标的到止盈位，待记卖出",
-    link: "/ledger?tab=journal",
-    badge: "记日志",
-  });
-
-  // 预警
-  const alertCount = bombAlerts?.length ?? 0;
 
   return (
     <div>
       <PageHeader
         title="今日"
-        subtitle={`${today} · ${stageLabel}${triplet?.is_trading_day ? "" : " · 非交易日"}`}
-        actions={<RefreshCw className="h-4 w-4 text-muted-foreground" />}
+        subtitle={`${today} · ${stageLabel}${isTradingDay ? "" : " · 非交易日"}`}
+        actions={
+          <div className="flex items-center gap-2">
+            {/* focus 日 T-1/T/T+1 切 */}
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5" />
+              {triplet?.review && <span className="opacity-60">{triplet.review.slice(5)}</span>}
+              <span className="font-medium text-foreground">{today.slice(5)}</span>
+              {triplet?.forward && <span className="opacity-60">{triplet.forward.slice(5)}</span>}
+            </span>
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          </div>
+        }
       />
+
+      {/* 七灯汇总 */}
+      <SevenLineStatus items={sevenItems} />
+
+      {/* 时间线闭环卡 */}
+      <div className="mb-4">
+        <LineLoopCard
+          title="时间线闭环"
+          subtitle="盘前→竞价→盘中→收盘复盘→T+1备→(loop)"
+          steps={timeLine.steps}
+          currentStep={stage === "pre_market" ? 0 : stage === "pre_open" ? 1 : stage === "intraday" ? 2 : 3}
+          icon={<Clock className="h-3.5 w-3.5 text-muted-foreground" />}
+        />
+      </div>
 
       {/* PRIMARY: 待办动作队列 */}
       <GlassCard tier="primary" className="mb-4">
@@ -177,19 +283,25 @@ export function TodayPage() {
                 const q = quotes[code];
                 const pct = q?.change_pct ?? 0;
                 return (
-                  <Link
+                  <div
                     key={code}
-                    to={`/stock/${code}`}
                     className="rounded-lg border border-border/30 bg-muted/10 px-2.5 py-2 transition-colors hover:border-primary/30"
                   >
-                    <div className="text-xs text-muted-foreground">{code}</div>
+                    <div className="flex items-center justify-between">
+                      <Link to={`/stock/${code}`} className="text-xs text-muted-foreground hover:text-primary">{code}</Link>
+                      <button
+                        onClick={() => setDrawerCode(code)}
+                        className="text-[10px] text-primary/60 hover:text-primary"
+                        title="跨线视图"
+                      >⇄</button>
+                    </div>
                     <div className={cn(
                       "text-sm font-mono font-medium",
                       pct >= 0 ? "text-red-500" : "text-green-500",
                     )}>
                       {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
@@ -226,6 +338,13 @@ export function TodayPage() {
 
       {/* CTA 脊 */}
       <NextStepBar pageCtx="today" />
+
+      {/* 跨线 drawer */}
+      <CrossLineDrawer
+        open={drawerCode !== null}
+        onClose={() => setDrawerCode(null)}
+        stockCode={drawerCode}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import {
-  Home, LayoutDashboard, Wallet, BookOpen, Settings,
+  Home, LayoutDashboard, Settings,
 } from "lucide-react";
 
 export interface NavGroup {
@@ -21,13 +21,13 @@ export const THEMES = [
 ] as const;
 
 // 底部信息
-export const APP_VERSION = "v0.2.0";
+export const APP_VERSION = "v0.3.0";
 export const REPO_URL = "https://github.com/simonlin1212/Vibe-Research";
 export const CONTACT_HANDLE = "lzw9560";
 
-// Track B IA: 6域28tab → 4主入口 + 系统折叠
-// 今日(动作队列) / 盘面(选股+盯盘合并+相位toggle) / 持仓日志(portfolio+journal+risk) / 复盘(review+strategy+topology+forward-test)
-// 系统折叠: 设置/AI/定时/管线/架构/健康
+// 多维度 IA: 5 线主入口 + 数据层 + 系统折叠
+// 今日(时间) / 盘面(选股) / 复盘(验证+策略 2 tab) / 图谱(认知) / 数据层
+// 持仓日志移入旧页（策略线"模拟"步，经 CTA 脊访问）
 export const NAV_GROUPS: NavGroup[] = [
   {
     name: "主入口",
@@ -35,8 +35,9 @@ export const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { to: "/today", label: "今日" },
       { to: "/workspace", label: "盘面" },
-      { to: "/ledger", label: "持仓日志" },
       { to: "/review", label: "复盘" },
+      { to: "/graph", label: "图谱" },
+      { to: "/data", label: "数据层" },
     ],
   },
   {
@@ -46,7 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/settings", label: "设置" },
       { to: "/chat", label: "AI 对话" },
       { to: "/scheduled-tasks", label: "定时任务" },
-      { to: "/pipeline", label: "任务健康" },
+      { to: "/pipeline", label: "流程管线" },
       { to: "/architecture", label: "项目架构" },
       { to: "/health", label: "系统健康" },
     ],
@@ -78,27 +79,18 @@ export const LEGACY_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    name: "个股",
+    name: "个股·策略",
     icon: LayoutDashboard,
     tabs: [
+      { to: "/ledger", label: "持仓日志" },
       { to: "/multiline", label: "多策略总览" },
       { to: "/strategy", label: "策略验证" },
       { to: "/fusion", label: "融合研判" },
     ],
   },
   {
-    name: "持仓",
-    icon: Wallet,
-    tabs: [
-      { to: "/portfolio", label: "组合" },
-      { to: "/journal", label: "交易日志" },
-      { to: "/risk", label: "风险看板" },
-      { to: "/advisory", label: "建议中心" },
-    ],
-  },
-  {
     name: "复盘",
-    icon: BookOpen,
+    icon: LayoutDashboard,
     tabs: [
       { to: "/topology", label: "拓扑图" },
       { to: "/industry", label: "行业研究" },
@@ -106,5 +98,5 @@ export const LEGACY_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-// flat-4 rail: 不再用手风琴，4 主入口永久可见
+// flat-5 rail: 5 主入口永久可见
 export const DEFAULT_EXPANDED_GROUP = "主入口";

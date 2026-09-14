@@ -47,13 +47,14 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      // ─── Track B IA: 4 主入口 + 系统次入口（19→4） ───
-      // 主入口
+      // ─── 多维度 IA: 5 线主入口 + 数据层 + 系统次入口 ───
+      // 主入口（5 线 + 数据底座）
       { path: "/", element: redirect("/today") },
       { path: "/today", element: lazyEl(() => import("@/pages/today/TodayPage"), "TodayPage") },
       { path: "/workspace", element: lazyEl(() => import("@/pages/workspace/WorkspacePage"), "WorkspacePage") },
-      { path: "/ledger", element: lazyEl(() => import("@/pages/ledger/LedgerPage"), "LedgerPage") },
       { path: "/review", element: lazyEl(() => import("@/pages/review/ReviewPage"), "ReviewPage") },
+      { path: "/graph", element: lazyEl(() => import("@/pages/cognition/CognitionPage"), "CognitionPage") },
+      { path: "/data", element: lazyEl(() => import("@/pages/data/DataFoundationPage"), "DataFoundationPage") },
 
       // ─── 旧页保留作详情页（新主入口链过去或嵌，保兼容）───
       // 看盘域
@@ -75,6 +76,7 @@ export const router = createBrowserRouter([
       { path: "/fusion", element: lazyEl(() => import("@/pages/FusionPage")) },  // FE-6: S194 融合研判展示（输股票代码查 regime/方向/置信度/相似 case）
 
       // 模拟盘域
+      { path: "/ledger", element: lazyEl(() => import("@/pages/ledger/LedgerPage"), "LedgerPage") },  // 持仓+日志（策略线"模拟"步，经 CTA 脊访问）
       { path: "/journal", element: lazyEl(() => import("@/pages/Journal"), "Journal") },
       { path: "/portfolio", element: lazyEl(() => import("@/pages/portfolio/PortfolioPage"), "PortfolioPage") },
       { path: "/risk", element: lazyEl(() => import("@/pages/RiskDashboard")) },  // FE-1: RiskDashboard 组件已写，S179 清理漏挂，补回独立路由
@@ -82,7 +84,6 @@ export const router = createBrowserRouter([
       { path: "/multiline", element: lazyEl(() => import("@/pages/multiline/MultilinePage"), "MultilinePage") },
 
       // 复盘策略域
-      { path: "/review", element: lazyEl(() => import("@/pages/review/ReviewPage"), "ReviewPage") },
       { path: "/strategy", element: lazyEl(() => import("@/pages/strategy/StrategyPage")) },
       { path: "/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },  // FE-5: 拓扑图独立页（组件在 workflow/，旧 /workflow/topology redirect 到 /review，补独立 /topology）
 
@@ -123,9 +124,9 @@ export const router = createBrowserRouter([
       // 风险 → /portfolio
       { path: "/risk-dashboard", element: redirect("/risk") },  // 路由修复: →/risk(风险看板独立页 S179) 非 /portfolio(lossy)
       // 策略散页 → /strategy
-      { path: "/strategy-signals", element: redirect("/strategy") },
-      { path: "/backtest", element: redirect("/strategy") },
-      { path: "/verifier-records", element: redirect("/strategy") },
+      { path: "/strategy-signals", element: redirect("/review?tab=strategy") },
+      { path: "/backtest", element: redirect("/review?tab=validation") },
+      { path: "/verifier-records", element: redirect("/review?tab=validation") },
       { path: "/value-verdict", element: redirect("/multiline") },  // 审计修: VerdictRenderer 在 /multiline 非 /strategy
       // workflow → 新域
       { path: "/workflow", element: redirect("/review") },

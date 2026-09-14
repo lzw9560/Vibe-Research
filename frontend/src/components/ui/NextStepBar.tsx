@@ -1,5 +1,6 @@
-// CTA 脊：每页底部"下一步"导航栏，串起 4 主入口闭环。
-// 今日→盘面(盘前)→9:25切盘中→盘面(盘中)→记日志→/ledger→收盘复盘→/review→调漏斗参→/workspace ←LOOP
+// CTA 脊：每页底部"下一步"导航栏，串起 5 线闭环。
+// 今日(时间)→盘面(选股)→记日志→/ledger→收盘复盘→/review→调参→/workspace ←LOOP
+// 认知→反哺策略→验证; 数据→任务健康→今日
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,16 @@ const PAGE_STEPS: Record<string, NextStep[]> = {
   ],
   review: [
     { label: "调漏斗参", to: "/workspace?phase=premarket", reason: "复盘出结论，回盘面调漏斗参数", primary: true },
+    { label: "认知图谱", to: "/graph", reason: "M7 公告→新信号，反哺策略" },
     { label: "明日盘面", to: "/today", reason: "调参完毕，明日盘面见" },
+  ],
+  cognition: [
+    { label: "反哺策略", to: "/review?tab=strategy", reason: "M7 新认知→反哺策略调战法", primary: true },
+    { label: "验证新信号", to: "/review?tab=validation", reason: "新信号→§44 验证" },
+  ],
+  data: [
+    { label: "任务健康", to: "/pipeline", reason: "数据采集任务状态详情", primary: true },
+    { label: "今日盘面", to: "/today", reason: "数据就绪，回今日看动作" },
   ],
 };
 

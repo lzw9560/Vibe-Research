@@ -1,5 +1,5 @@
-// Track B IA: /ledger — 持仓+日志合并（PortfolioPage 删空壳 tab 保 holdings/risk + Journal 吞入）
-// 决策5: PortfolioPage 删 health/pb-roe 空壳 tab → 2tab(holdings/risk)
+// 多维度 IA: /ledger — 持仓+日志合并（策略线"模拟"步）
+// PortfolioPage 删空壳 tab 保 holdings/risk + Journal 吞入
 // 旧 /portfolio /journal /risk 路由 redirect → /ledger 保兼容
 import { Suspense, lazy } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -9,6 +9,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { TabBar } from "@/components/ui/TabBar";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { NextStepBar } from "@/components/ui/NextStepBar";
+import { LineLoopCard } from "@/components/lines/LineLoopCard";
+import { RiskBadgeRow } from "@/components/lines/RiskBadge";
+import { LINES } from "@/components/lines/lines";
 
 // 懒加载子组件
 const PortfolioPage = lazy(() =>
@@ -48,9 +51,28 @@ export function LedgerPage() {
     ? "持仓管理 + 风险仪表盘（PortfolioPage 2 tab）"
     : "交易日志 + §44 复验待验桩（信号触发记此）";
 
+  // 策略线步骤环（/ledger = "模拟"步）
+  const strategyLine = LINES[3];
+
   return (
     <div>
       <PageHeader title="持仓日志" subtitle={subtitle} />
+
+      {/* 风控横切徽章 */}
+      <div className="mb-4">
+        <RiskBadgeRow />
+      </div>
+
+      {/* 策略线闭环卡（当前在"模拟"步） */}
+      <div className="mb-4">
+        <LineLoopCard
+          title="策略线闭环"
+          subtitle="战法→回测§44→模拟→前向R3→复盘→调战法→(loop)"
+          steps={strategyLine.steps}
+          currentStep={2}
+          icon={<Wallet className="h-3.5 w-3.5 text-muted-foreground" />}
+        />
+      </div>
 
       <div className="mb-6">
         <TabBar tabs={TABS} activeKey={active} onChange={switchTab} />

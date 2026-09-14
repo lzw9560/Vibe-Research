@@ -42,8 +42,9 @@ export function Layout() {
   const isMainActive = (to: string) => {
     if (to === "/today") return pathname === "/" || pathname === "/today";
     if (to === "/workspace") return pathname.startsWith("/workspace");
-    if (to === "/ledger") return pathname.startsWith("/ledger");
     if (to === "/review") return pathname.startsWith("/review");
+    if (to === "/graph") return pathname.startsWith("/graph");
+    if (to === "/data") return pathname.startsWith("/data");
     return isTabActive(to);
   };
 
