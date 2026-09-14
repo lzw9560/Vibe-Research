@@ -68,6 +68,160 @@ def _find_idx(bars: list[dict], date: str) -> int | None:
     return None
 
 
+# ─── extracted testable split functions (S199 open-2) ────────────────────
+# WHY extracted: Section C had an overlap bug (raw_b = raw_a) because the
+# inline Version B split reused the direction-aware no-gap set, which
+# includes downward gaps (gap_a==0 but gap_b>0). Extracting into a single
+# function that splits by a named gap_field eliminates the aliasing.
+
+
+def split_fwd_returns(
+    data: list[dict],
+    gap_field: str,
+    n: int,
+    get_bars,
+) -> tuple[dict, dict, dict]:
+    """Split cases by gap_field into surv (gap>0) / raw (gap==0) / all by day.
+
+    For forward-return (market-level) at window n.  The surv and raw groups
+    are a disjoint partition of all (no overlap) — this is the fix for the
+    Section C bug where ``raw_b = raw_a`` aliased downward-gap cases into
+    both groups.
+
+    Returns (surv_by_day, raw_by_day, all_by_day) where each is
+    ``{date_str: [float, ...]}``.
+    """
+    surv: dict[str, list[float]] = defaultdict(list)
+    raw: dict[str, list[float]] = defaultdict(list)
+    all_: dict[str, list[float]] = defaultdict(list)
+    for d in data:
+        bars = get_bars(d["stock"])
+        if not bars:
+            continue
+        idx = _find_idx(bars, d["entry_date"])
+        if idx is None:
+            continue
+        ret = _future_return(bars, idx, n)
+        if ret is None:
+            continue
+        entry_date = d["entry_date"]
+        all_[entry_date].append(ret)
+        if d[gap_field] > 0:
+            surv[entry_date].append(ret)
+        else:
+            raw[entry_date].append(ret)
+    return surv, raw, all_
+
+
+def split_trade_returns(
+    data: list[dict],
+    gap_field: str,
+) -> tuple[dict, dict, dict]:
+    """Split trade-level cases by gap_field into surv/raw/all by day.
+
+    Uses gross_return as the outcome.  Disjoint partition (same fix
+    rationale as ``split_fwd_returns``).
+    """
+    surv: dict[str, list[float]] = defaultdict(list)
+    raw: dict[str, list[float]] = defaultdict(list)
+    all_: dict[str, list[float]] = defaultdict(list)
+    for d in data:
+        if d.get("gross_return") is None:
+            continue
+        entry_date = d["entry_date"]
+        ret = float(d["gross_return"])
+        all_[entry_date].append(ret)
+        if d[gap_field] > 0:
+            surv[entry_date].append(ret)
+        else:
+            raw[entry_date].append(ret)
+    return surv, raw, all_
+
+
+def regime_stratified_lift(
+    data: list[dict],
+    gap_field: str,
+    regime_map: dict[str, str],
+    windows: tuple[int, ...],
+    get_bars,
+) -> dict[str, dict[int, dict]]:
+    """Compute gap edge lift (day_paired + permutation) per regime per window.
+
+    Splits cases by ``regime_map[entry_date]`` into bull/bear/range, then
+    within each regime runs ``day_paired_lift`` + ``permutation_p_value`` at
+    each window.  Returns ``{regime: {window: {lift, perm_p, n_days,
+    surv_n, raw_n}}}``.
+    """
+    results: dict[str, dict[int, dict]] = {}
+    for tag in ("bull", "bear", "range"):
+        regime_cases = [
+            d for d in data if regime_map.get(d["entry_date"]) == tag
+        ]
+        if not regime_cases:
+            results[tag] = {}
+            continue
+        win_results: dict[int, dict] = {}
+        for n in windows:
+            surv, raw, all_ = split_fwd_returns(
+                regime_cases, gap_field, n, get_bars)
+            pl = day_paired_lift(surv, raw)
+            lift = (
+                pl.winrate_lift_avg
+                if pl and pl.winrate_lift_avg is not None
+                else None
+            )
+            perm_p = (
+                permutation_p_value(surv, all_, lift)
+                if lift is not None
+                else 1.0
+            )
+            win_results[n] = {
+                "lift": lift,
+                "perm_p": perm_p,
+                "n_days": pl.n_days if pl else 0,
+                "surv_n": pl.surv_n_pooled if pl else 0,
+                "raw_n": pl.raw_n_pooled if pl else 0,
+            }
+        results[tag] = win_results
+    return results
+
+
+def regime_stratified_trade_lift(
+    data: list[dict],
+    gap_field: str,
+    regime_map: dict[str, str],
+) -> dict[str, dict]:
+    """Compute trade-level gap edge lift per regime.
+
+    Returns ``{regime: {lift, perm_p, n_days, surv_n, raw_n}}``.
+    """
+    results: dict[str, dict] = {}
+    for tag in ("bull", "bear", "range"):
+        regime_cases = [
+            d for d in data if regime_map.get(d["entry_date"]) == tag
+        ]
+        surv, raw, all_ = split_trade_returns(regime_cases, gap_field)
+        pl = day_paired_lift(surv, raw)
+        lift = (
+            pl.winrate_lift_avg
+            if pl and pl.winrate_lift_avg is not None
+            else None
+        )
+        perm_p = (
+            permutation_p_value(surv, all_, lift)
+            if lift is not None
+            else 1.0
+        )
+        results[tag] = {
+            "lift": lift,
+            "perm_p": perm_p,
+            "n_days": pl.n_days if pl else 0,
+            "surv_n": pl.surv_n_pooled if pl else 0,
+            "raw_n": pl.raw_n_pooled if pl else 0,
+        }
+    return results
+
+
 def main() -> None:
     signals_path = sys.argv[1] if len(sys.argv) > 1 else "/tmp/s194_signals_fresh.json"
     raw = Path(signals_path).read_text()
@@ -269,43 +423,16 @@ def main() -> None:
     print(f"\n  | 窗口 | A lift | A perm_p | B lift | B perm_p | A-B lift |")
     print(f"  |---|---|---|---|---|---|")
     for n in WINDOWS:
-        # Version A (direction-aware)
-        g_a = [(r, d) for r, d in gap_fwd[n]]
-        # Version B: also include downward gaps
-        gap_b_fwd: list[tuple[float, str]] = []
-        for d in data:
-            bars = get_bars(d["stock"])
-            if not bars:
-                continue
-            idx = _find_idx(bars, d["entry_date"])
-            if idx is None:
-                continue
-            ret = _future_return(bars, idx, n)
-            if ret is None:
-                continue
-            if d["gap_b"] > 0:
-                gap_b_fwd.append((ret, d["entry_date"]))
-        # A lift
-        surv_a: dict[str, list[float]] = defaultdict(list)
-        for ret, date in g_a:
-            surv_a[date].append(ret)
-        raw_a: dict[str, list[float]] = defaultdict(list)
-        for ret, date in nogap_fwd[n]:
-            raw_a[date].append(ret)
-        all_a: dict[str, list[float]] = defaultdict(list)
-        for ret, date in g_a:
-            all_a[date].append(ret)
-        for ret, date in nogap_fwd[n]:
-            all_a[date].append(ret)
+        # Version A (direction-aware): surv=upward gaps, raw=no-gap+downward
+        surv_a, raw_a, all_a = split_fwd_returns(data, "gap_a", n, get_bars)
         pl_a = day_paired_lift(surv_a, raw_a)
         lift_a = pl_a.winrate_lift_avg if pl_a and pl_a.winrate_lift_avg else None
         pp_a = permutation_p_value(surv_a, all_a, lift_a) if lift_a else 1.0
-        # B lift
-        surv_b: dict[str, list[float]] = defaultdict(list)
-        for ret, date in gap_b_fwd:
-            surv_b[date].append(ret)
-        raw_b = raw_a  # same no-gap set
-        all_b = all_a  # same universe
+        # Version B (direction-agnostic): surv=all gaps, raw=truly no-gap
+        # FIX (S199 open-2): raw_b built from gap_b==0 only — NOT raw_a which
+        # includes downward gaps (gap_a==0 but gap_b>0). The old aliasing
+        # (raw_b = raw_a) put downward gaps in BOTH surv_b and raw_b.
+        surv_b, raw_b, all_b = split_fwd_returns(data, "gap_b", n, get_bars)
         pl_b = day_paired_lift(surv_b, raw_b)
         lift_b = pl_b.winrate_lift_avg if pl_b and pl_b.winrate_lift_avg else None
         pp_b = permutation_p_value(surv_b, all_b, lift_b) if lift_b else 1.0
@@ -316,27 +443,130 @@ def main() -> None:
         print(f"  | {n}日 | {la} | {pp_a:.4f} | {lb} | {pp_b:.4f} | {diff_s} |")
 
     # ════════════════════════════════════════════════════════════════════════
-    # D. 结论（诚实，不外推）
+    # D. Regime-stratified gap edge (bull/bear/range, §44v2 regime-conditional)
     # ════════════════════════════════════════════════════════════════════════
     print(f"\n{'='*70}")
-    print("D. 结论（§44v2 诚实判定，不外推）")
+    print("D. Regime-stratified（bull/bear/range gap edge lift）")
+    print(f"{'='*70}")
+
+    regime_map: dict[str, str] = {}
+    try:
+        from tools.gap_regime_stratified import compute_regime_labels
+        regime_map = compute_regime_labels()
+    except Exception as e:
+        print(f"  regime labels unavailable: {e}")
+
+    if regime_map:
+        n_tagged = sum(
+            1 for d in data if regime_map.get(d.get("entry_date")))
+        print(f"  regime_map: {len(regime_map)} dates, "
+              f"{n_tagged}/{len(data)} cases tagged")
+
+        # D1. Trade-level (gross_return)
+        print(f"\n  --- D1. Trade-level (gap_a direction-aware) ---")
+        print(f"  | regime | lift | perm_p | n_days | surv_n | raw_n |")
+        print(f"  |---|---|---|---|---|---|")
+        trade_reg = regime_stratified_trade_lift(
+            data, "gap_a", regime_map)
+        regime_p_list: list[float] = []
+        regime_p_keys: list[str] = []
+        for tag in ("bull", "bear", "range"):
+            r = trade_reg[tag]
+            lift_s = f"{r['lift']:.4f}" if r["lift"] is not None else "n/a"
+            print(f"  | {tag} | {lift_s} | {r['perm_p']:.4f} | "
+                  f"{r['n_days']} | {r['surv_n']} | {r['raw_n']} |")
+            if r["lift"] is not None:
+                regime_p_list.append(r["perm_p"])
+                regime_p_keys.append(f"trade_{tag}")
+
+        # D2. Market-level (3/5/10d, pre-window sanity §44v2 ①)
+        print(f"\n  --- D2. Market-level (gap_a, multi-window) ---")
+        print(f"  | regime | window | lift | perm_p | n_days | "
+              f"surv_n | raw_n |")
+        print(f"  |---|---|---|---|---|---|---|")
+        mkt_reg = regime_stratified_lift(
+            data, "gap_a", regime_map, WINDOWS, get_bars)
+        for tag in ("bull", "bear", "range"):
+            for n in WINDOWS:
+                r = mkt_reg[tag].get(n, {})
+                lift_v = r.get("lift")
+                lift_s = f"{lift_v:.4f}" if lift_v is not None else "n/a"
+                print(f"  | {tag} | {n}d | {lift_s} | "
+                      f"{r.get('perm_p', 1.0):.4f} | "
+                      f"{r.get('n_days', 0)} | {r.get('surv_n', 0)} | "
+                      f"{r.get('raw_n', 0)} |")
+                if lift_v is not None:
+                    regime_p_list.append(r["perm_p"])
+                    regime_p_keys.append(f"mkt_{tag}_{n}d")
+
+        # D3. Bonferroni (§44v2, K capped at 8)
+        k_eff = min(len(regime_p_list), _MAX_BONFERRONI_K)
+        print(f"\n  Bonferroni (K={len(regime_p_list)}, "
+              f"effective cap={k_eff}):")
+        if regime_p_list:
+            adj_reg = bonferroni_bh(regime_p_list, method="bonferroni")
+            print(f"  | test | raw_p | Bonf_adj | sig |")
+            print(f"  |---|---|---|---|")
+            for i, key in enumerate(regime_p_keys):
+                sig = "✓" if adj_reg[i] < 0.05 else "✗"
+                print(f"  | {key} | {regime_p_list[i]:.4f} | "
+                      f"{adj_reg[i]:.4f} {sig} |")
+
+        # D4. Regime-conditional verdict (bull vs bear focus)
+        bull_r = trade_reg.get("bull", {})
+        bear_r = trade_reg.get("bear", {})
+        bull_lift = bull_r.get("lift")
+        bear_lift = bear_r.get("lift")
+        print(f"\n  regime-conditional (trade-level):")
+        print(f"    bull lift={bull_lift}  bear lift={bear_lift}")
+        if bull_lift is not None and bear_lift is not None:
+            if bull_lift > 1.0 and bear_lift > 1.0:
+                print("    → gap edge in BOTH bull AND bear "
+                      "(regime-independent)")
+            elif bull_lift > 1.0 or bear_lift > 1.0:
+                stronger = "bull" if (bull_lift or 0) > (bear_lift or 0) else "bear"
+                print(f"    → gap edge regime-dependent "
+                      f"(stronger in {stronger})")
+            else:
+                print("    → gap edge absent in both bull and bear")
+        else:
+            print("    → insufficient data for bull/bear comparison")
+
+        for tag in ("bull", "bear", "range"):
+            r = trade_reg[tag]
+            if r["n_days"] > 0 and r["n_days"] < 30:
+                print(f"  WARNING: {tag} n_days={r['n_days']} (<30) "
+                      f"→ exploratory, not validated (§44v2 ②)")
+            elif 30 <= r["n_days"] < 60:
+                print(f"  NOTE: {tag} n_days={r['n_days']} (<60) "
+                      f"→ provisional, not yet robust tier (§44v2 ②)")
+    else:
+        print("  (skipped — regime_map empty)")
+
+    # ════════════════════════════════════════════════════════════════════════
+    # E. 结论（诚实，不外推）
+    # ════════════════════════════════════════════════════════════════════════
+    print(f"\n{'='*70}")
+    print("E. 结论（§44v2 诚实判定，不外推）")
     print(f"{'='*70}")
     print(f"""
   测了什么：
   1. 融合分消融 delta_ic A vs B（方向感知 vs 方向无关）—— gap 信号对融合分预测力的贡献增量
   2. §44 day_clustered_t_test + permutation_p_value（trade-level + market-level 多窗口）
   3. Bonferroni-BH 多重比较校正
+  4. Section C overlap fix（raw_b 不再 alias raw_a，downward gap 不再双计）
+  5. Regime-stratified gap edge（bull/bear/range 拆分，trade + market 多窗口）
 
   没测什么：
   - 未测 gap 信号单独（非融合分）的选股力 IC
   - 未测 gap 信号在非 breakout arm（如 floor）的预测力
   - 未测盘中信号（OFI/fund_flow）与 gap 的交互效应
-  - 未测 regime-stratified（牛月/熊月拆分）的 gap 信号力
 
   结论方向（跑完数据后填入上方结果）：
   - 若 A delta_ic 正 + p<0.05 → gap 有 edge（翻 S194 no_contribution）
   - 若 A delta_ic ~0 + p≥0.05 → 确认 no_contribution（gap 不进融合权重）
   - A vs B 无显著差异 → 方向感知编码未改变 gap 信号预测力
+  - regime-conditional: bull AND bear 均 lift>1 → regime-independent edge
   """)
 
 
