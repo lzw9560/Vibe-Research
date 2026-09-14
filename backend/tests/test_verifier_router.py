@@ -261,3 +261,95 @@ def test_status_chinese_to_english_mapping():
     assert _status_chinese_to_english("待复验") == "underpowered"
     assert _status_chinese_to_english("validated") == "robust_edge"
     assert _status_chinese_to_english("unknown") == "exploratory"
+
+
+# ── M4: per-dimension edge_type correctness (5-type enum) ──────────────────
+# S201 track-d-edge: remove hardcoded "all selection" annotation.
+# Each dimension gets its true edge_type: selection/event/population/overnight_gap/path.
+
+_VALID_EDGE_TYPES = {"selection", "event", "population", "overnight_gap", "path"}
+
+
+def test_dims_edge_type_in_5_type_enum():
+    """Every dimension's edge_type must be one of the 5 valid types."""
+    for d in client.get("/api/evaluation/dims").json():
+        assert d["edge_type"] in _VALID_EDGE_TYPES, (
+            f"{d['dimension_id']}: edge_type={d['edge_type']} not in 5-type enum"
+        )
+
+
+def test_dims_not_all_selection():
+    """Hardcoded 'all selection' bug guard: at least one dimension must be
+    non-selection (path_lift=path, low_volatility=population, ofi=event)."""
+    dims = client.get("/api/evaluation/dims").json()
+    edge_types = {d["edge_type"] for d in dims}
+    assert edge_types != {"selection"}, (
+        "all dimensions labeled 'selection' — hardcoded bug not fixed"
+    )
+    assert len(edge_types) >= 3, (
+        f"expected ≥3 distinct edge_types, got {edge_types}"
+    )
+
+
+def test_dims_path_lift_edge_type_is_path():
+    """path_lift dimension tests full path return → edge_type='path'."""
+    dim = next(d for d in client.get("/api/evaluation/dims").json()
+               if d["dimension_id"] == "path_lift")
+    assert dim["edge_type"] == "path"
+
+
+def test_dims_low_volatility_edge_type_is_population():
+    """low_volatility is externally validated population anomaly (红利低波
+    9-12% annualized triple-consensus) → edge_type='population'."""
+    dim = next(d for d in client.get("/api/evaluation/dims").json()
+               if d["dimension_id"] == "low_volatility")
+    assert dim["edge_type"] == "population"
+
+
+def test_dims_ofi_accumulated_edge_type_is_event():
+    """ofi_accumulated is an intraday event (盘中→D收) → edge_type='event'."""
+    dim = next(d for d in client.get("/api/evaluation/dims").json()
+               if d["dimension_id"] == "ofi_accumulated")
+    assert dim["edge_type"] == "event"
+
+
+def test_dims_seal_sincerity_edge_type_is_event():
+    """seal_sincerity is an intraday event (盘中→D收) → edge_type='event'."""
+    dim = next(d for d in client.get("/api/evaluation/dims").json()
+               if d["dimension_id"] == "seal_sincerity")
+    assert dim["edge_type"] == "event"
+
+
+def test_dims_bid_ask_pressure_edge_type_is_event():
+    """bid_ask_pressure is an intraday event (盘中→D收) → edge_type='event'."""
+    dim = next(d for d in client.get("/api/evaluation/dims").json()
+               if d["dimension_id"] == "bid_ask_pressure")
+    assert dim["edge_type"] == "event"
+
+
+def test_dims_gene_score_still_selection():
+    """gene_score is a selection factor (Spearman rho, direction prediction)
+    → edge_type='selection'. Guard against regression."""
+    dim = next(d for d in client.get("/api/evaluation/dims").json()
+               if d["dimension_id"] == "gene_score")
+    assert dim["edge_type"] == "selection"
+
+
+def test_gap_window_lift_uses_overnight_gap_not_selection():
+    """gap_window_lift.py must use edge_type='overnight_gap' (not 'selection').
+    The overnight gap (D收→D+1开) is an event edge, not a selection edge.
+    S199 proven: market-level forward-return edge. Source inspection test
+    because the script cannot be imported (runs on import)."""
+    from pathlib import Path
+    src = Path(__file__).resolve().parents[1] / "tools" / "gap_window_lift.py"
+    content = src.read_text(encoding="utf-8")
+    # Must contain edge_type="overnight_gap"
+    assert 'edge_type="overnight_gap"' in content, (
+        "gap_window_lift.py must use edge_type='overnight_gap' — "
+        "gap is an event edge (S199), not a selection edge"
+    )
+    # Must NOT contain edge_type="selection" (the old wrong label)
+    assert 'edge_type="selection"' not in content, (
+        "gap_window_lift.py still uses edge_type='selection' — "
+        "overnight gap was wrongly labeled as selection edge"
+    )

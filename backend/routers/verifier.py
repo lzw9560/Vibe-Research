@@ -42,6 +42,24 @@ _OVERFIT_PLACEHOLDER: dict[str, Any] = {
     "pbo": None, "cscv": None, "dsr": None, "haircut": None, "min_trl": None,
 }
 
+# M4 (track-d-edge): per-dimension edge_type mapping.
+# Replaces hardcoded "all selection" (# REGISTRY 12 维皆 selection-layer).
+# Each dimension labeled by its true edge nature:
+#   selection   — can the factor pick stocks that beat the universe? (lift)
+#   event       — is there a population-level event return > 0? (one-sample t-test)
+#   population  — population-level anomaly (e.g., low-vol, externally validated)
+#   overnight_gap — overnight gap (D收→D+1开) event edge (S199 proven)
+#   path        — full holding-period path return lift
+# Defaults to "selection" for dimensions not listed below (most §44 lift tests
+# are selection edges). Only non-selection dimensions are explicitly mapped.
+_DIMENSION_EDGE_TYPE: dict[str, str] = {
+    "path_lift": "path",           # 选股整体 path_lift — full path return
+    "low_volatility": "population",  # 红利低波 9-12% triple-consensus (externally validated)
+    "ofi_accumulated": "event",     # 盘中 OFI 累积 → D收 (intraday event)
+    "seal_sincerity": "event",      # 封单诚意 → D收 (intraday event)
+    "bid_ask_pressure": "event",   # 买卖盘压力 → D收 (intraday event)
+}
+
 
 def _status_chinese_to_english(chinese: str) -> str:
     """Map Chinese validation_status → S161 English enum.
@@ -122,7 +140,7 @@ def _dim_to_response(dim, data_snapshot_id: str | None = None) -> dict[str, Any]
         "n_effective": None,      # 待 day_paired effective-n wiring
         "days_robust": dim.days_robust,
         "status": _status_chinese_to_english(status_cn),
-        "edge_type": "selection",  # REGISTRY 12 维皆 selection-layer
+        "edge_type": _DIMENSION_EDGE_TYPE.get(dim.dimension_id, "selection"),  # M4 per-dim
         "tradeable": False,        # 选股层无 validated 维度
         "event_metrics": None,    # event edge 在 recorder records（§3 event verdict）
         "event_status": None,

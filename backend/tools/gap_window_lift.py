@@ -113,7 +113,7 @@ if _surv_by_day:
             line_id="gap_window:top",
             returns=_s168_rets,
             dates=_s168_dates,
-            edge_type="selection",
+            edge_type="overnight_gap",  # M4: gap is an event edge (S199), not selection
             frozen_commit=_FROZEN_S168,
             survivors_by_day=dict(_surv_by_day),
             universe_by_day=dict(_univ_by_day),

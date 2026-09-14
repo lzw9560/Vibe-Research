@@ -16,7 +16,7 @@ from . import wiring  # noqa: TID252  (relative import within package)
 from . import stats as stats_mod  # noqa: TID252  (R3 merged methodology)
 from .stats import _EVENT_MATERIALITY_FLOOR  # noqa: TID252
 
-_EdgeType = Literal["selection", "event", "population"]
+_EdgeType = Literal["selection", "event", "population", "overnight_gap", "path"]
 _Status = Literal["robust_edge", "underpowered", "falsified", "not_validated", "exploratory"]
 _DsrMethod = Literal["cross_trial_variance", "lenient_single_estimate", "N/A"]
 _EventStatus = Literal["event_robust", "event_thin_positive", "event_falsified", "event_not_tested"]
@@ -24,10 +24,16 @@ _EventStatus = Literal["event_robust", "event_thin_positive", "event_falsified",
 #: R5 window sanity — maps edge_type to the window that should show advantage.
 #: event (gap) → overnight_gap; selection → path (full path return);
 #: population → overnight_gap (same as event, the population-level gap).
+#: M4 (track-d-edge): overnight_gap is an event edge (S199 proven market-level
+#: forward-return edge); path is a selection-like edge (full holding-period lift).
+_EVENT_EDGE_TYPES = frozenset({"event", "overnight_gap"})
+_SELECTION_LIKE_EDGE_TYPES = frozenset({"selection", "path"})
 _WINDOW_FOR_EDGE: dict[str, str] = {
     "event": "overnight_gap",
     "selection": "path",
     "population": "overnight_gap",
+    "overnight_gap": "overnight_gap",
+    "path": "path",
 }
 
 
@@ -331,9 +337,10 @@ def verify(
                 )
 
     # ── event metrics + event_status (day-clustered one-sample t-test) ────
+    # M4: overnight_gap is an event edge (S199) — treated identically to "event".
     event_metrics: Optional[EventMetrics] = None
     event_status: Optional[_EventStatus] = None
-    if edge_type == "event" and n > 0 and not r5_skip_heavy:
+    if edge_type in _EVENT_EDGE_TYPES and n > 0 and not r5_skip_heavy:
         t_res = (
             # HIGH #8: pass original `returns` (with NaN), NOT stripped `r`.
             # day_clustered_t_test does its own NaN masking aligned to both
@@ -402,8 +409,8 @@ def verify(
     if r5_skip_heavy:
         # R5 window sanity found no advantage → exploratory, skip heavy methodology
         status: _Status = "exploratory"
-    elif edge_type == "event":
-        # Event edges: status driven by event_status (not selection_lift)
+    elif edge_type in _EVENT_EDGE_TYPES:
+        # Event/overnight_gap edges: status driven by event_status (not selection_lift)
         if days_robust < 60:
             status: _Status = "underpowered"
         elif event_status == "event_robust":
@@ -430,9 +437,10 @@ def verify(
     notes: list[str] = []
     if r5_note:
         notes.append(r5_note)
-    # R7: anti-extrapolation — selection-falsified must warn a population event
+    # R7: anti-extrapolation — selection/path-falsified must warn a population event
     # edge may still exist (spec R7 须; §44v1 wrong-window disaster guard).
-    if status == "falsified" and edge_type == "selection":
+    # M4: path is selection-like (full path lift), so anti-extrapolation applies.
+    if status == "falsified" and edge_type in _SELECTION_LIKE_EDGE_TYPES:
         notes.append("selection falsified; population event edge may exist (see event verdict)")
     if status == "underpowered" and days_robust < 60:
         notes.append(f"underpowered: days_robust={days_robust}<60 (R6 gate)")

@@ -1035,3 +1035,88 @@ def test_latest_snapshot_ids_by_dimension(tmp_path):
     )
     result2 = rec.latest_snapshot_ids_by_dimension(["gene_score"])
     assert result2 == {"gene_score": "pit:2"}  # pit:4 not matched (no dimension_id)
+
+
+# ── M4: overnight_gap + path edge_type handling (5-type enum) ──────────────
+# S201 track-d-edge: extend _EdgeType from 3→5 types. overnight_gap is an event
+# edge (gap D收→D+1开 is a population-level forward-return edge, S199 proven).
+# path is a selection-like edge (full holding-period return lift).
+
+
+def test_overnight_gap_edge_type_accepted_and_returned():
+    """verify() accepts edge_type='overnight_gap' and echoes it in Verdict."""
+    rng = np.random.default_rng(5)
+    r = rng.normal(0.001, 0.012, 100)
+    v = verify(r, n_trials=1, edge_type="overnight_gap")
+    assert v.edge_type == "overnight_gap"
+
+
+def test_overnight_gap_populates_event_metrics():
+    """overnight_gap is an event edge — verify() computes event_metrics
+    (same as edge_type='event'). If it didn't, the gap's mean return / t-test
+    would be silently dropped, mislabeling a real event edge."""
+    rng = np.random.default_rng(5)
+    r = rng.normal(0.001, 0.012, 100)
+    dates = [f"2026-01-{i % 10 + 1:02d}" for i in range(100)]
+    v = verify(r, n_trials=1, edge_type="overnight_gap", dates=dates)
+    assert v.event_metrics is not None
+    assert v.event_metrics.n_event == 100
+
+
+def test_overnight_gap_status_driven_by_event_status():
+    """overnight_gap status uses event_status logic (not selection_lift).
+    With positive returns + 60+ days → event_robust → robust_edge."""
+    rng = np.random.default_rng(42)
+    # 70 days, consistently positive → event_robust
+    returns = [0.005] * 70
+    dates = [f"2026-01-{i+1:02d}" for i in range(70)]
+    v = verify(np.array(returns), n_trials=1, edge_type="overnight_gap", dates=dates)
+    assert v.status == "robust_edge"
+    assert v.event_status == "event_robust"
+
+
+def test_path_edge_type_accepted_and_returned():
+    """verify() accepts edge_type='path' and echoes it in Verdict."""
+    rng = np.random.default_rng(5)
+    r = rng.normal(0.001, 0.012, 100)
+    v = verify(r, n_trials=1, edge_type="path")
+    assert v.edge_type == "path"
+
+
+def test_path_does_not_populate_event_metrics():
+    """path is selection-like — verify() does NOT compute event_metrics
+    (path tests lift, not one-sample mean>0)."""
+    rng = np.random.default_rng(5)
+    r = rng.normal(0.001, 0.012, 100)
+    v = verify(r, n_trials=1, edge_type="path")
+    assert v.event_metrics is None
+
+
+def test_path_falsified_triggers_anti_extrapolation_note():
+    """path falsified → anti-extrapolation note (like selection).
+    R7: selection/path falsified must warn a population event edge may exist."""
+    # Build data where survivors < universe → lift < 1 → falsified
+    rng = np.random.default_rng(42)
+    surv = {"d1": [-0.02, -0.03, -0.01], "d2": [-0.04, -0.02, -0.01]}
+    univ = {"d1": [0.01, 0.02, -0.01, 0.005, 0.03],
+            "d2": [0.02, 0.01, -0.005, 0.015, 0.025]}
+    # 60+ unique days needed for non-underpowered
+    surv_60 = {f"d{i:03d}": [-0.02, -0.03] for i in range(60)}
+    univ_60 = {f"d{i:03d}": [0.01, 0.02, -0.01, 0.005, 0.03] for i in range(60)}
+    r = np.array([v for vs in surv_60.values() for v in vs])
+    v = verify(r, n_trials=1, edge_type="path",
+               survivors_by_day=surv_60, universe_by_day=univ_60)
+    assert v.status == "falsified"
+    assert "population event edge may exist" in v.note
+
+
+def test_window_for_edge_includes_overnight_gap():
+    """_WINDOW_FOR_EDGE maps overnight_gap → overnight_gap window."""
+    from s44_verifier.verifier import _WINDOW_FOR_EDGE
+    assert _WINDOW_FOR_EDGE.get("overnight_gap") == "overnight_gap"
+
+
+def test_window_for_edge_includes_path():
+    """_WINDOW_FOR_EDGE maps path → path window."""
+    from s44_verifier.verifier import _WINDOW_FOR_EDGE
+    assert _WINDOW_FOR_EDGE.get("path") == "path"
