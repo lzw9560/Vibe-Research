@@ -36,9 +36,31 @@ const REVIEW_TABS: { key: ReviewTabKey; label: string; icon: ReactNode }[] = [
   { key: "strategy", label: "策略", icon: <Layers className="h-3.5 w-3.5" /> },
 ];
 
+// Track E A7: dimension_id → edge_type 映射（镜像 M4 backend _DIMENSION_EDGE_TYPE）。
+// 后端 evaluation_summary 未序列化 edge_type，前端按 dimension_id 派生（不臆造，
+// 映射源 backend/routers/verifier.py M4 commit 0dfb525）。
+const DIMENSION_EDGE_TYPE: Record<string, string> = {
+  path_lift: "path",
+  low_volatility: "population",
+  ofi_accumulated: "event",
+  seal_sincerity: "event",
+  bid_ask_pressure: "event",
+  overnight_gap: "overnight_gap",
+};
+
+const EDGE_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "全部 edge-type" },
+  { value: "selection", label: "selection（短线选股）" },
+  { value: "event", label: "event（中线事件）" },
+  { value: "population", label: "population（群体异常）" },
+  { value: "overnight_gap", label: "overnight_gap（隔夜缺口）" },
+  { value: "path", label: "path（整体路径）" },
+];
+
 // §44 verdict 全量表（验证线核心）
 function VerdictSpine() {
   const { data: evaluation, isLoading } = useEvaluationSummary();
+  const [edgeFilter, setEdgeFilter] = useState("all");
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">加载 §44 verdict…</p>;
@@ -54,6 +76,15 @@ function VerdictSpine() {
     );
   }
 
+  // 派生 edge_type + 按 filter 筛选（不可变：filter 产新数组）
+  const withEdge = evaluation.dimensions.map((dim: DimensionValidation) => ({
+    ...dim,
+    edge_type: dim.edge_type ?? DIMENSION_EDGE_TYPE[dim.dimension_id] ?? "selection",
+  }));
+  const filtered = edgeFilter === "all"
+    ? withEdge
+    : withEdge.filter((d) => d.edge_type === edgeFilter);
+
   return (
     <GlassCard tier="primary">
       <div className="mb-3">
@@ -62,11 +93,31 @@ function VerdictSpine() {
           {evaluation.honest_label ?? "—"} · 冻结 commit: {evaluation.frozen_commit?.slice(0, 8) ?? "—"}
         </p>
       </div>
+
+      {/* A7: edge-type 筛选器 */}
+      <div className="mb-3 flex items-center gap-2">
+        <label htmlFor="edge-filter" className="text-xs text-muted-foreground">edge-type 筛：</label>
+        <select
+          id="edge-filter"
+          value={edgeFilter}
+          onChange={(e) => setEdgeFilter(e.target.value)}
+          className="rounded border border-border/50 bg-background px-2 py-1 text-xs"
+        >
+          {EDGE_TYPE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <span className="text-[10px] text-muted-foreground/70">
+          {filtered.length}/{withEdge.length} 维度
+        </span>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50 text-left text-xs text-muted-foreground">
               <th className="py-2 pr-4">维度</th>
+              <th className="py-2 pr-4">edge-type</th>
               <th className="py-2 pr-4">lift</th>
               <th className="py-2 pr-4">n</th>
               <th className="py-2 pr-4">状态</th>
@@ -76,9 +127,14 @@ function VerdictSpine() {
             </tr>
           </thead>
           <tbody>
-            {evaluation.dimensions.map((dim: DimensionValidation) => (
+            {filtered.map((dim) => (
               <tr key={dim.dimension_id} className="border-b border-border/30">
                 <td className="py-2 pr-4 font-medium">{dim.label}</td>
+                <td className="py-2 pr-4">
+                  <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-600">
+                    {dim.edge_type}
+                  </span>
+                </td>
                 <td className="py-2 pr-4 font-mono">
                   {dim.lift != null ? dim.lift.toFixed(3) : "—"}
                 </td>

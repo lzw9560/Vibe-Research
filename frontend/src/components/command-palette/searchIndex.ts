@@ -90,6 +90,7 @@ const RESEARCH_PRESETS: { name: string; path: string; aliases: string[] }[] = [
   { name: "量化模型", path: "/quant-models", aliases: ["量化模型", "M1", "M7", "OFI", "quant"] },
   { name: "图谱", path: "/graph", aliases: ["图谱", "认知", "M7", "graph", "公告"] },
   { name: "数据", path: "/data", aliases: ["数据", "数据层", "采集", "data", "backfill"] },
+  { name: "财报季", path: "/earnings-calendar", aliases: ["财报季", "财报日历", "雷区", "披露", "earnings", "M5"] },
 ];
 
 const RESEARCH_INDEX: SearchItem[] = RESEARCH_PRESETS.map((s) => ({

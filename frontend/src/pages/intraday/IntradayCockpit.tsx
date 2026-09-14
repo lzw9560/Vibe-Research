@@ -5,7 +5,7 @@
 // deferred：盘中实时行情/OFI/告警/教练数据均未测（§44 选股层证否，edge 在未测盘中盘口博弈）。
 // 接 S176 OFI 采集器（已采数据）+ S178 OfiDashboard + Phase 0 SplitLayout/HonestEmptyState/currentStock。
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { RefreshCw, Lightbulb, Clock, Activity } from "lucide-react";
 import { SplitLayout } from "@/components/layout/SplitLayout";
 import { OfiDashboard } from "@/components/intraday/OfiDashboard";
@@ -320,6 +320,7 @@ function BreakoutRow({
   isSelected: boolean;
   onSelect: () => void;
 }) {
+  const navigate = useNavigate();
   return (
     <button
       onClick={onSelect}
@@ -342,6 +343,18 @@ function BreakoutRow({
         <span>入场 {fmtPrice(c.entry_ref)}</span>
         <span className="text-red-500/70">止损 {fmtPrice(c.stop_loss)}</span>
         <span className="text-emerald-500/70">止盈 {fmtPrice(c.take_profit)}</span>
+      </div>
+      {/* Track E A8: 因子→§44 verdict 直达（breakout 候选→breakout 维度 verdict） */}
+      <div className="mt-0.5 text-right">
+        <span
+          role="link"
+          tabIndex={0}
+          onClick={(e) => { e.stopPropagation(); navigate("/review?tab=validation"); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); navigate("/review?tab=validation"); } }}
+          className="cursor-pointer text-[10px] text-primary hover:underline"
+        >
+          查 §44 verdict →
+        </span>
       </div>
     </button>
   );

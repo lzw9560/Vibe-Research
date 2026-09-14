@@ -183,6 +183,15 @@ export function TodayPage() {
     });
   }
 
+  // Track E A8: 因子→§44 verdict 直达（始终可达，非仅 pending 时）
+  todos.push({
+    id: "s44-verdict",
+    label: "查 §44 verdict",
+    detail: "因子 verdict 全量表（lift / 状态 / 降权 / edge-type）",
+    link: "/review?tab=validation",
+    badge: "查看",
+  });
+
   return (
     <div>
       <PageHeader

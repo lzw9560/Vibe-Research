@@ -85,6 +85,9 @@ export interface DimensionValidation {
   status: string;             // validated / 未validated / 劣于随机 / 探索性 / 待复验
   weight_multiplier: number;  // ×1.0 / ×0.5 / ×0.1
   note: string;
+  /** Track E A7: edge 性质 5 类（selection/event/population/overnight_gap/path）。
+   *  后端 evaluation_summary 未序列化此字段，前端按 DIMENSION_EDGE_TYPE 映射派生（镜像 M4 backend）。 */
+  edge_type?: string;
 }
 /** run 级评价层诚实标注（对齐 FunnelResult.evaluation_summary）。 */
 export interface EvaluationSummary {

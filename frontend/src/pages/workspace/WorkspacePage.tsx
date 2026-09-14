@@ -4,7 +4,7 @@
 // 信号诚实化: 子组件内信号卡复用 DimensionValidationBadge
 import { Suspense, lazy } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { Filter, Gavel, Users, Layers, Eye, SlidersHorizontal } from "lucide-react";
+import { Filter, Gavel, Users, Layers, Eye, SlidersHorizontal, CalendarDays, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { NextStepBar } from "@/components/ui/NextStepBar";
@@ -130,6 +130,13 @@ export function WorkspacePage() {
             >
               <Eye className="h-3 w-3" /> 盘前选股 →
             </Link>
+            <Link
+              to="/earnings-calendar"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+              title="财报季日历（1/4/8 月雷区 + 未披露预警，排雷规则待 M5）"
+            >
+              <CalendarDays className="h-3 w-3" /> 财报季 →
+            </Link>
           </div>
 
           <Suspense fallback={Fallback}>
@@ -145,6 +152,18 @@ export function WorkspacePage() {
               未验证信号 CTA → 记日志待 §44 复验，仅 validated → 记交易。
             </p>
           </GlassCard>
+
+          {/* Track E A4: OFI 看板独立页入口（cockpit 内已 embed OfiDashboard，此为聚焦独立页深链） */}
+          <div className="mb-3 flex items-center gap-2">
+            <Link
+              to="/workflow/intraday/ofi"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+              title="OFI 盘中数据看板（read-only · 非信号 · M1 VPIN 微观结构原料）"
+            >
+              <BarChart3 className="h-3 w-3" /> OFI 看板（独立页）→
+            </Link>
+          </div>
+
           <Suspense fallback={Fallback}>
             <IntradayCockpit />
           </Suspense>
