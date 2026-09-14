@@ -24,6 +24,7 @@ import {
   Activity,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FocusDayStrip } from "@/components/ui/FocusDayStrip";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -494,7 +495,8 @@ export function PortfolioPage() {
         title="投资管理"
         subtitle="持仓出场 · 风险 · 健康 · 估值 四维 cockpit"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <FocusDayStrip />
             {activeTab === "holdings" && holdings.length > 0 && (
               <AskAiButton
                 context={aiContext}

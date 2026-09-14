@@ -4,7 +4,7 @@
 
 import { NAV_GROUPS } from "@/components/layout/navigation";
 
-export type SearchGroup = "route" | "stock" | "signal";
+export type SearchGroup = "route" | "stock" | "signal" | "research";
 
 export type SearchAction =
   | { type: "navigate"; path: string }
@@ -81,8 +81,28 @@ const SIGNAL_INDEX: SearchItem[] = SIGNAL_PRESETS.map((s) => ({
   action: { type: "apply-preset" as const, path: s.path, preset: s.preset },
 }));
 
+// ── 研究深挖索引（Track D M2）─────────────────────────────────────────────
+// 骨干全可达不进主导航：战法/因子/量化模型/图谱/数据 经 palette lazy-load（code-split）。
+// 主导航保 5（今日/盘面/复盘/图谱/数据层）；图谱/数据在此亦列便于键盘直达。
+const RESEARCH_PRESETS: { name: string; path: string; aliases: string[] }[] = [
+  { name: "战法", path: "/strategy", aliases: ["战法", "策略", "strategy", "回测"] },
+  { name: "因子", path: "/review?tab=validation", aliases: ["因子", "验证", "§44", "factor", "verdict"] },
+  { name: "量化模型", path: "/quant-models", aliases: ["量化模型", "M1", "M7", "OFI", "quant"] },
+  { name: "图谱", path: "/graph", aliases: ["图谱", "认知", "M7", "graph", "公告"] },
+  { name: "数据", path: "/data", aliases: ["数据", "数据层", "采集", "data", "backfill"] },
+];
+
+const RESEARCH_INDEX: SearchItem[] = RESEARCH_PRESETS.map((s) => ({
+  id: `research:${s.path}`,
+  title: s.name,
+  subtitle: `研究深挖 → ${s.path}`,
+  group: "research" as const,
+  keywords: s.aliases,
+  action: { type: "navigate" as const, path: s.path },
+}));
+
 // ── 合并索引 ─────────────────────────────────────────────────────────────────
-export const SEARCH_INDEX: SearchItem[] = [...ROUTE_INDEX, ...STOCK_INDEX, ...SIGNAL_INDEX];
+export const SEARCH_INDEX: SearchItem[] = [...ROUTE_INDEX, ...STOCK_INDEX, ...SIGNAL_INDEX, ...RESEARCH_INDEX];
 
 // ── 模糊匹配 ─────────────────────────────────────────────────────────────────
 /** 子序列匹配 + 评分：连续匹配加分、起始匹配加分。返回 0 = 不匹配。 */

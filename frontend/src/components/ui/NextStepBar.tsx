@@ -37,6 +37,11 @@ const PAGE_STEPS: Record<string, NextStep[]> = {
     { label: "任务健康", to: "/pipeline", reason: "数据采集任务状态详情", primary: true },
     { label: "今日盘面", to: "/today", reason: "数据就绪，回今日看动作" },
   ],
+  "quant-models": [
+    { label: "OFI 看板", to: "/workflow/intraday/ofi", reason: "M1 已实现的盘中 OFI 只读看板", primary: true },
+    { label: "认知图谱", to: "/graph", reason: "M7 LLM 图谱 home（注入流 spec-only）" },
+    { label: "回今日", to: "/today", reason: "回今日盘面动作队列" },
+  ],
 };
 
 export function NextStepBar({ pageCtx }: { pageCtx: keyof typeof PAGE_STEPS }) {

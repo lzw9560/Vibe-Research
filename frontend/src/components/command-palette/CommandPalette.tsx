@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Search, CornerDownLeft, Hash, Filter, Route } from "lucide-react";
+import { Search, CornerDownLeft, Hash, Filter, Route, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSelectStock } from "@/stores/currentStock";
 import { useCommandPalette } from "./useCommandPalette";
@@ -14,12 +14,14 @@ const GROUP_ICON: Record<SearchGroup, ComponentType<{ className?: string }>> = {
   route: Route,
   stock: Hash,
   signal: Filter,
+  research: Telescope,
 };
 
 const GROUP_LABEL: Record<SearchGroup, string> = {
   route: "路由",
   stock: "股票",
   signal: "信号",
+  research: "研究深挖",
 };
 
 const MAX_RESULTS = 12;

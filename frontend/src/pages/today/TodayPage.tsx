@@ -4,11 +4,15 @@
 // focus 日 T-1/T/T+1 切（借 useDateTriplet）
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertCircle, ChevronDown, RefreshCw, Clock, Calendar } from "lucide-react";
+import { AlertCircle, ChevronDown, Clock, Telescope } from "lucide-react";
 import { useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { NextStepBar } from "@/components/ui/NextStepBar";
+import { FocusDayStrip } from "@/components/ui/FocusDayStrip";
+import { SeatRankingBoard } from "@/components/seat/SeatRankingBoard";
+import { useCommandPalette } from "@/components/command-palette/useCommandPalette";
+import { useFocusDay } from "@/stores/focusDay";
 import { useIndices, useDateTriplet, useDailyWinReview, useBombAlerts, useScheduledTasks } from "@/lib/query";
 import { useEvaluationSummary } from "@/lib/query/strategy";
 import { useStrategyBacktest } from "@/lib/query/strategy";
@@ -63,7 +67,9 @@ function stageActions(stage: string): { focus: string; hint: string }[] {
 }
 
 export function TodayPage() {
-  const { data: triplet } = useDateTriplet();
+  const { focusDate } = useFocusDay();
+  const { open: openPalette } = useCommandPalette();
+  const { data: triplet } = useDateTriplet(focusDate ?? undefined);
   const { data: indices, isLoading: idxLoading } = useIndices();
   const { data: evaluation } = useEvaluationSummary();
   const { data: winReview } = useDailyWinReview();
@@ -183,15 +189,18 @@ export function TodayPage() {
         title="今日"
         subtitle={`${today} · ${stageLabel}${isTradingDay ? "" : " · 非交易日"}`}
         actions={
-          <div className="flex items-center gap-2">
-            {/* focus 日 T-1/T/T+1 切 */}
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              {triplet?.review && <span className="opacity-60">{triplet.review.slice(5)}</span>}
-              <span className="font-medium text-foreground">{today.slice(5)}</span>
-              {triplet?.forward && <span className="opacity-60">{triplet.forward.slice(5)}</span>}
-            </span>
-            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-3">
+            {/* focus 日 T-1/T/T+1 切（全局，跨页跟切重拉） */}
+            <FocusDayStrip />
+            <button
+              onClick={openPalette}
+              className="inline-flex items-center gap-1 rounded-lg border border-border/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
+              title="研究深挖（Cmd+K / Ctrl+K）"
+            >
+              <Telescope className="h-3.5 w-3.5" />
+              研究深挖
+              <kbd className="rounded border border-border/40 px-1 text-[9px]">⌘K</kbd>
+            </button>
           </div>
         }
       />
@@ -242,6 +251,13 @@ export function TodayPage() {
           ))}
         </div>
       </GlassCard>
+
+      {/* M1 盘后榜：盘后 phase 显今日龙虎榜净买入排名（cross-cutting 席位 view） */}
+      {(stage === "post_market" || stage === "post_transition") && (
+        <div className="mb-4">
+          <SeatRankingBoard />
+        </div>
+      )}
 
       {/* 次卡1: 大盘指数 strip */}
       <div className="mb-4">

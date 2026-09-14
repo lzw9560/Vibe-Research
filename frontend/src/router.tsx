@@ -55,6 +55,7 @@ export const router = createBrowserRouter([
       { path: "/review", element: lazyEl(() => import("@/pages/review/ReviewPage"), "ReviewPage") },
       { path: "/graph", element: lazyEl(() => import("@/pages/cognition/CognitionPage"), "CognitionPage") },
       { path: "/data", element: lazyEl(() => import("@/pages/data/DataFoundationPage"), "DataFoundationPage") },
+      { path: "/quant-models", element: lazyEl(() => import("@/pages/quant/QuantModelsPage"), "QuantModelsPage") },  // Track D M3: 量化模型 M1-M7（via Cmd+K palette）
 
       // ─── 旧页保留作详情页（新主入口链过去或嵌，保兼容）───
       // 看盘域

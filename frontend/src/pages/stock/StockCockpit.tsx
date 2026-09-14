@@ -15,6 +15,7 @@ import { useStockDeep } from "@/lib/query/stock";
 import type { Quote, StockDeep as StockDeepData } from "@/lib/api";
 import { cn, pctColor } from "@/lib/utils";
 import { RightPanel } from "./RightPanel";
+import { StockSeatCard } from "@/components/seat/StockSeatCard";
 
 // ─── 格式化（A 股红涨绿跌，复用 StockDeep 范式）──────────────────────────
 
@@ -113,6 +114,8 @@ function ChartCenter({ code, data }: { code: string; data: StockDeepData }) {
       </GlassCard>
       <BasicInfoCard quote={quote} />
       <SignalArea code={code} />
+      {/* M1 per-stock 席位活动：龙虎榜记录 + 买卖席位 + 机构净额（cross-cutting 席位 view） */}
+      <StockSeatCard dragonTiger={data.dragon_tiger ?? null} code={code} />
       <Disclaimer compact />
     </div>
   );

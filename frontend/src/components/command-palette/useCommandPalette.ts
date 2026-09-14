@@ -16,10 +16,12 @@ export function useCommandPalette(): CommandPaletteState {
   const close = useCallback(() => setIsOpen(false), []);
   const toggle = useCallback(() => setIsOpen((p) => !p), []);
 
-  // Cmd+K 全局 toggle（仅 metaKey，避 Ctrl+K 浏览器冲突）
+  // Cmd+K（mac）/ Ctrl+K（Win/Linux）全局 toggle
+  // Track D M2: 扩 ctrlKey——非 macOS 平台 Ctrl+K 触发（Cmd+K 在 Win 无效）。
+  // 避 shift/alt 组合干扰；lowercase 容错大写锁定。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setIsOpen((p) => !p);
       }

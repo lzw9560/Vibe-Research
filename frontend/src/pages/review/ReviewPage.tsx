@@ -6,6 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import { Suspense, lazy, type ReactNode, useState } from "react";
 import { FlaskConical, Layers, Activity, FileText, NotebookPen, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FocusDayStrip } from "@/components/ui/FocusDayStrip";
 import { TabBar } from "@/components/ui/TabBar";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { NextStepBar } from "@/components/ui/NextStepBar";
@@ -184,7 +185,11 @@ export function ReviewPage() {
 
   return (
     <div>
-      <PageHeader title="复盘" subtitle={subtitle} />
+      <PageHeader
+        title="复盘"
+        subtitle={subtitle}
+        actions={<FocusDayStrip />}
+      />
 
       {/* 风控横切徽章 */}
       <div className="mb-4">

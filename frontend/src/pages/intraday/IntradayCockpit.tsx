@@ -12,12 +12,14 @@ import { OfiDashboard } from "@/components/intraday/OfiDashboard";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 import { BombAlertBanner } from "@/components/risk/BombAlertBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FocusDayStrip } from "@/components/ui/FocusDayStrip";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { TabBar } from "@/components/ui/TabBar";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { cn, pctColor } from "@/lib/utils";
 import { useCurrentStock, useSelectStock } from "@/stores/currentStock";
+import { useFocusDay } from "@/stores/focusDay";
 import {
   useDateTriplet,
   useEmotion,
@@ -57,7 +59,8 @@ const fmtAmount = (v: number | null | undefined): string => {
 // ═════════════════════════════════════════════════════════════════════════
 
 export function IntradayCockpit() {
-  const { data: triplet } = useDateTriplet();
+  const { focusDate } = useFocusDay();
+  const { data: triplet } = useDateTriplet(focusDate ?? undefined);
   const [tab, setTab] = useState("breakout");
   const { code: curCode, name: curName } = useCurrentStock();
   const selectStock = useSelectStock();
@@ -115,7 +118,8 @@ export function IntradayCockpit() {
         title="盘中 cockpit"
         subtitle="候选列表 + 个股预览 + OFI + 告警 + 教练 · 盘中数据 60% 未测，honest empty 不假装"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <FocusDayStrip />
             <AskAiButton context={askAiContext} label="问 AI" />
             <button
               onClick={refreshAll}
