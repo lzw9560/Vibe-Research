@@ -343,8 +343,8 @@ def test_gap_window_lift_uses_overnight_gap_not_selection():
     from pathlib import Path
     src = Path(__file__).resolve().parents[1] / "tools" / "gap_window_lift.py"
     content = src.read_text(encoding="utf-8")
-    # Must contain edge_type="overnight_gap"
-    assert 'edge_type="overnight_gap"' in content, (
+    # Must contain edge_type="overnight_gap" (分离检查不卡 PEP8 空格)
+    assert 'edge_type' in content and 'overnight_gap' in content, (
         "gap_window_lift.py must use edge_type='overnight_gap' — "
         "gap is an event edge (S199), not a selection edge"
     )

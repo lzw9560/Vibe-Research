@@ -89,6 +89,145 @@ from data.sources.baidu import fetch_raw as baidu_kline  # noqa: F401,E402
 # ── 多源 kline 解析器（职责链+策略，baidu→sina→mootdx→akshare 回退）──────────
 from data.sources.kline_resolver import fetch_kline as kline_multi  # noqa: F401,E402
 
+
+def _resample_daily_to_period(daily: list[dict], category: int) -> list[dict]:
+    """日K → 周K(category=5)/月K(category=6) resample（纯函数，不臆造）。
+
+    按 ISO 周 / 年-月分组，open=首 high=max low=min close=末 volume/amount=sum。
+    缺失字段（None）跳过聚合（不臆造 0）。
+    """
+    from datetime import date
+    from itertools import groupby
+
+    def _key(b: dict) -> str:
+        d = b.get("date", "")
+        parts = d.split("-")
+        if len(parts) < 3:
+            return d
+        y, m, dd = int(parts[0]), int(parts[1]), int(parts[2])
+        if category == 5:  # 周 K：ISO 周
+            wk = date(y, m, dd).isocalendar()[1]
+            return f"{y}-{wk:02d}"
+        return f"{y}-{m:02d}"  # 月 K
+
+    out: list[dict] = []
+    for _k, grp in groupby(daily, key=_key):
+        rows = list(grp)
+        if not rows:
+            continue
+        highs = [r["high"] for r in rows if r.get("high") is not None]
+        lows = [r["low"] for r in rows if r.get("low") is not None]
+        vols = [r["volume"] for r in rows if r.get("volume") is not None]
+        amts = [r["amount"] for r in rows if r.get("amount") is not None]
+        out.append({
+            "date": rows[-1].get("date"),
+            "open": rows[0].get("open"),
+            "high": max(highs) if highs else None,
+            "low": min(lows) if lows else None,
+            "close": rows[-1].get("close"),
+            "volume": sum(vols) if vols else None,
+            "amount": sum(amts) if amts else None,
+        })
+    return out
+
+
+def _aggregate_5min_to_60min(bars_5min: list[dict]) -> list[dict]:
+    """5min bars → 60min bars（A 股 4 窗口/天：9:30-10:30/10:30-11:30/13:00-14:00/14:00-15:00）。
+
+    baostock 5min time 格式 "20260915093500000"（YYYYMMDDHHMMSSmmm）。按 date + window 分组
+    聚合 open=首/high=max/low=min/close=末/volume=sum。返 bar 含 timestamp（ms，窗口开始）供 klinecharts。
+    """
+    def _window(time_str: str) -> str:
+        if len(time_str) < 12:
+            return ""
+        hhmm = time_str[8:12]
+        h, m = int(hhmm[:2]), int(hhmm[2:4])
+        if h < 10 or (h == 10 and m <= 30):
+            return "0930"  # 9:30-10:30
+        if h == 10 or (h == 11 and m <= 30):
+            return "1030"  # 10:30-11:30
+        if h < 14 or (h == 14 and m == 0):
+            return "1300"  # 13:00-14:00
+        return "1400"  # 14:00-15:00
+
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for b in bars_5min:
+        date = b.get("date", "")
+        win = _window(b.get("time", ""))
+        if not date or not win:
+            continue
+        key = (date, win)
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(b)
+
+    out: list[dict] = []
+    for (date, win), grp in sorted(groups.items()):
+        if not grp:
+            continue
+        highs = [g["high"] for g in grp if g.get("high") is not None]
+        lows = [g["low"] for g in grp if g.get("low") is not None]
+        vols = [g["volume"] for g in grp if g.get("volume") is not None]
+        # timestamp = 窗口开始时间（ms，北京 +08:00）
+        ts_str = f"{date.replace('-', '')}{win}00000"
+        # 解析 YYYYMMDDHHMMSS + 8h offset → ms
+        y, mo, d, hh, mm = int(ts_str[:4]), int(ts_str[4:6]), int(ts_str[6:8]), int(ts_str[8:10]), int(ts_str[10:12])
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        ts = int(_dt(y, mo, d, hh, mm, tzinfo=_tz(_td(hours=8))).timestamp() * 1000)
+        out.append({
+            "date": date,
+            "timestamp": ts,
+            "open": grp[0].get("open"),
+            "high": max(highs) if highs else None,
+            "low": min(lows) if lows else None,
+            "close": grp[-1].get("close"),
+            "volume": sum(vols) if vols else None,
+        })
+    return out
+
+
+def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
+    """K线：mootdx 优先（category 4=日/5=周/6=月/11=60min 透传 frequency），空时多源回退。
+
+    mootdx 返空（服务器/库坏，实测 bars 0 + bestip NoneType）→ kline_multi 多源回退：
+    - category=4（日K）：fetch_kline 多源（baidu→sina→mootdx→akshare）sina/baidu 可拿到 ~1000 bars
+    - category=5/6（周/月K）：从日K回退源 resample（_resample_daily_to_period 纯函数聚合）
+    - category=11（60min）：回退源无 intraday，mootdx 坏则返 []（诚实，不臆造）
+    """
+    from data.sources.mootdx_src import kline as _mootdx_kline
+    # category=11（60min）: baostock 5min 聚合成 60min（A 股 4 窗口/天）——独立分支，不走日K kline_multi
+    if category == 11:
+        try:
+            from data.sources.baostock_src import fetch_5min_bars
+            from datetime import datetime, timedelta
+            end = datetime.now().strftime("%Y-%m-%d")
+            start = (datetime.now() - timedelta(days=offset * 2)).strftime("%Y-%m-%d")
+            bars_5min = fetch_5min_bars(code, start, end)
+            if bars_5min:
+                agg = _aggregate_5min_to_60min(bars_5min)
+                return agg[-(offset * 4):] if len(agg) > offset * 4 else agg  # offset 天 × 4 根/天
+        except Exception as e:
+            logging.getLogger("astock").warning("kline(%s) 60min baostock 5min 聚合失败: %s", code, e)
+        return []
+    # kline_multi 并发优先（~4.6s sina 1023 bars，比 mootdx 7.6s 60 bars 快+多）
+    # mootdx 不稳定（bestip 慢 + 有时返空走 baostock 回退 9s）→ 作回退
+    try:
+        daily, _src = kline_multi(code)
+        if daily:
+            if category == 4:
+                return daily[-offset:] if offset < len(daily) else daily
+            if category in (5, 6):
+                resampled = _resample_daily_to_period(daily, category)
+                return resampled[-offset:] if offset < len(resampled) else resampled
+            # category=11（60min）回退源无 intraday → 诚实返 []
+            return []
+    except Exception as e:
+        logging.getLogger("astock").warning(
+            "kline(%s) kline_multi failed, fallback mootdx: %s", code, e)
+    # kline_multi 空/失败 → mootdx 回退（baostock 回退在 mootdx_src 内，mootdx 返空时触发）
+    bars = _mootdx_kline(code, category=category, offset=offset)
+    return bars if bars else []
+
 # ── 新浪财报三表源（urllib，基本面因子组数据地基）──────────────────────────
 # S108：fetch_raw/fetch_merged_periods 由 value_funnel/quality + routers/value_funnel 直接调，
 # 不再经 astock 死别名 re-export（原 sina_financial_report 零调用，删）。

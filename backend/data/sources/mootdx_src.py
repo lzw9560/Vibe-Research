@@ -29,16 +29,41 @@ def _get_mootdx_client():
     return getattr(_astock, '_mootdx_client', _mootdx_client)
 
 
+# mootdx bars frequency 映射（mootdx 用 frequency 非 category）：4=日 5=周 6=月 3=60min
+# 外部 kline(category=) 透传到此映射。category 11（60min）→ frequency 3。
+_CAT2FREQ: dict[int, int] = {4: 4, 5: 5, 6: 6, 11: 3}
+
+
 def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
-    """K线：category 4=日 5=周 6=月 11=60分钟。"""
+    """K线：category 4=日 5=周 6=月 11=60分钟。
+
+    mootdx bars 用 frequency 参数（非 category）——经 _CAT2FREQ 映射透传。
+    S206: mootdx bars 接口实测返空（库/数据源问题）→ 加 baostock 日 K 回退（category=4 时）。
+    baostock 日 K 数据可信（qfq 前复权），mootdx 坏时不致 cockpit 无 K 线。
+    """
     try:
         client = _get_mootdx_client()()
-        df = client.bars(symbol=code, category=category, offset=offset)
+        df = client.bars(symbol=code, frequency=_CAT2FREQ.get(category, 4), offset=offset)
     except (TypeError, ValueError, KeyError, AttributeError) as e:
         # mootdx 连不上/空返回裸解包（如 "not enough values to unpack"）→ 视作无数据
         logging.getLogger("astock").warning("kline(%s) mootdx 解析失败: %s", code, e)
-        return []
-    return df.to_dict("records") if df is not None and not df.empty else []
+        df = None
+    rows = df.to_dict("records") if df is not None and not df.empty else []
+    # S206: mootdx 返空 → baostock 日 K 回退（category=4 日线）
+    if not rows and category == 4:
+        try:
+            from datetime import datetime, timedelta
+            from data.sources.baostock_src import fetch_daily_bars
+            end = datetime.now().strftime("%Y-%m-%d")
+            start = (datetime.now() - timedelta(days=offset * 2)).strftime("%Y-%m-%d")  # offset*2 容纳周末
+            bars = fetch_daily_bars(code, start, end)
+            if bars:
+                bars = bars[-offset:] if len(bars) > offset else bars
+                logging.getLogger("astock").info("kline(%s) mootdx 空→baostock 回退 %d bars", code, len(bars))
+                return bars
+        except Exception as e:
+            logging.getLogger("astock").warning("kline(%s) baostock 回退失败: %s", code, e)
+    return rows
 
 
 def finance(code: str) -> dict:

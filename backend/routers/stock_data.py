@@ -2,10 +2,16 @@
 Stock data router.
 """
 import asyncio
+import logging
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import time as _time
 from typing import Any, Callable, Dict, Tuple
+
+# deep 端点 TTL 缓存：12 源聚合 ~28s（kline 多源串行慢），日内数据 60s 缓存
+# quote 滞后 60s 可接受（cockpit 非实时交易），K 线/财务日内不变；第一次 28s 后续秒返
+_DEEP_CACHE: Dict[str, Tuple[float, dict]] = {}
+_DEEP_CACHE_TTL = 60
 
 import astock
 from data import mappers
@@ -213,12 +219,12 @@ def disclosure(code: str = Query(...)) -> Dict[str, Any]:
 
 
 @router.get("/api/kline")
-def kline(code: str = Query(...), category: int = Query(4), offset: int = Query(60, ge=1, le=800)) -> Dict[str, Any]:
+async def kline(code: str = Query(...), category: int = Query(4), offset: int = Query(60, ge=1, le=800)) -> Dict[str, Any]:
     """K线（需 mootdx）。category 4=日 5=周 6=月 11=60分钟。"""
     from routers.common import _validate
     code = _validate(code)
     try:
-        return {"data": astock.kline(code, category=category, offset=offset)}
+        return {"data": await asyncio.to_thread(astock.kline, code, category=category, offset=offset)}
     except astock.DependencyMissing as e:
         raise HTTPException(501, str(e)) from e
     except Exception as e:  # noqa: BLE001
@@ -243,16 +249,36 @@ async def stock_deep(code: str) -> Dict[str, Any]:
     """个股深度数据聚合：行情 + K线 + 估值 + 资金流 + 龙虎榜 + 涨停分析 + 财务 + 板块 + 概念 + 公告 + 研报。"""
     from routers.common import _validate
     code = _validate(code)
+    # TTL 缓存命中：日内数据 + quote 60s 滞后可接受（避免 28s 重复聚合）
+    now = _time.time()
+    cached = _DEEP_CACHE.get(code)
+    if cached and now - cached[0] < _DEEP_CACHE_TTL:
+        return cached[1]
 
-    async def _safe_call(name: str, fetch):
+    async def _safe_call(name: str, fetch, timeout: float = 8.0):
+        """并发跑 fetch（to_thread），8s 超时降级返 None（不拖累 deep 木桶）。
+
+        limitup 17.8s / fund_flow 5.1s 等慢源超 8s 返 None 降级——
+        cockpit 主 K 线+quote+财务 这些核心源都 <6s 正常返。
+        """
+        _t0 = _time.time()
         try:
-            return await asyncio.to_thread(fetch)
+            r = await asyncio.wait_for(asyncio.to_thread(fetch), timeout=timeout)
+            _t1 = _time.time()
+            logging.getLogger("stock_deep").info("[deep] %s done %.1fs", name, _t1 - _t0)
+            return r
+        except asyncio.TimeoutError:
+            _t1 = _time.time()
+            logging.getLogger("stock_deep").warning("[deep] %s TIMEOUT %.1fs (>%ss 降级)", name, _t1 - _t0, timeout)
+            return None
         except Exception as e:  # noqa: BLE001
+            _t1 = _time.time()
+            logging.getLogger("stock_deep").warning("[deep] %s FAIL %.1fs: %s", name, _t1 - _t0, repr(e)[:120])
             return None
 
     try:
         quote_task = _safe_call("quote", lambda: astock.tencent_quote([code]))
-        kline_task = _safe_call("kline", lambda: astock.kline(code, category=4, offset=60))
+        kline_task = _safe_call("kline", lambda: astock.kline(code, category=4, offset=60), timeout=15.0)  # kline 核心源，baostock 回退 6.4s + 并发余量，不能 8s 降级
         valuation_task = _safe_call("valuation", lambda: astock.full_valuation(code))
         percentile_task = _safe_call("percentile", lambda: astock.valuation_percentile(code))
         fund_flow_task = _safe_call("fund_flow", lambda: astock.stock_fund_flow_120d(code))
@@ -294,7 +320,7 @@ async def stock_deep(code: str) -> Dict[str, Any]:
             raw_q = quote_data.get(code) or next(iter(quote_data.values()), None)
             quote_data = mappers.quote_from_tencent(code, raw_q) if raw_q else None
 
-        return {
+        result = {
             "data": {
                 "quote": quote_data,
                 "kline": kline_data,
@@ -310,6 +336,8 @@ async def stock_deep(code: str) -> Dict[str, Any]:
                 "reports": reports_data,
             }
         }
+        _DEEP_CACHE[code] = (_time.time(), result)
+        return result
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"个股深度数据聚合异常：{e}") from e
 

@@ -60,6 +60,8 @@ class TestMigration:
             "exit_price", "exit_date", "exit_reason", "net_pnl", "pnl_unit",
             "cost_pct", "gross_return", "is_realized", "unrealized_pnl",
             "is_dead_arm", "fills_json", "created_at",
+            # S201b stage 2: version-preserve columns（update_settlement_v2 用，gross_return 保留旧版不覆盖）
+            "exit_model_version", "gross_return_v2",
         }
         assert cols == expected
 

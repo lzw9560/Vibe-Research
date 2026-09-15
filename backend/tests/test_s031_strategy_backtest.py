@@ -44,7 +44,7 @@ def test_run_strategy_backtest_aggregates(mock_dates, mock_load, mock_kline_mapp
 
     results = run_strategy_backtest(60)
 
-    assert len(results) == 12  # S086 合并后 12 战法（9 既有 + low_absorption + S081 PRD 2 + storm_reversal）
+    assert len(results) == 15  # S086 合并 12 + S203 新增 first_board_limitup/leader_drop_reversal/relay_23 = 15 战法
     assert all(r.available_days == 1 for r in results)  # DB 实际可用天数
     first_plate = next(r for r in results if r.strategy_code == "first_plate")
     assert first_plate.sample_size == 1

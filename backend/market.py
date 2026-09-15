@@ -455,28 +455,32 @@ def get_global_macro() -> dict:
     （grill #6：双层缓存 TTL 打架——外层 5min 使内层 24h 永不生效）。
     worldmonitor 不可达 → 各子块空（诚实缺省，不臆造、不抛）。
     合成分（CII/热点）标 ``source: worldmonitor_composite``，作输入之一不作唯一依据。
+    @deprecated 2026-09-15 S206: worldmonitor MCP client 未实现 initialize 握手+SSE 解析
+    (worldmonitor.py:108-111 TODO 自承)，breaker 永驻 OPEN，11 fetcher 全 None。修 ROI 太低→
+    从活跃调用摘除。下方 build() 仍保留但 worldmonitor 永久不可达→恒返 available:False。
+    复活须先补 MCP initialize+SSE 解析。
     """
     def build():
         try:
-            from data.sources import worldmonitor as wm
+            from data.sources import worldmonitor as wm  # noqa: F401 @deprecated（见上 docstring）
         except Exception:
             return {"commodities": [], "fx": [], "cii": {}, "hotspots": [], "updated": None,
                     "source": "worldmonitor", "available": False}
-        # 单次取 market_data，本地分区（避免重复调用触发 breaker/限流）
-        md = wm.parse_market_data(wm.fetch_market_data())
-        commodity_syms = ("CL", "XAU", "HG", "BRENT", "WTI", "GOLD", "COPPER")
-        fx_syms = ("DXY", "USDCNH", "USD-CNH", "EURUSD")
-        commodities = [m for m in md if m.get("symbol") in commodity_syms]
-        fx = [m for m in md if m.get("symbol") in fx_syms]
-        cii = wm.parse_country_risk(wm.fetch_country_risk())
-        hotspots = wm.parse_hotspot_escalation(wm.fetch_hotspot_escalation())
-        return {
-            "commodities": commodities,
-            "fx": fx,
-            "cii": cii,
-            "hotspots": hotspots,
-            "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
-            "source": "worldmonitor",
-            "available": bool(commodities or fx or cii.get("countries") or hotspots),
-        }
+        # @deprecated: worldmonitor 永久不可达（MCP 握手未实现），诚实返 unavailable 不臆造。
+        # 原调用 wm.parse_market_data(wm.fetch_market_data()) 等保留在下方注释备查，不再执行。
+        return {"commodities": [], "fx": [], "cii": {}, "hotspots": [],
+                "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
+                "source": "worldmonitor", "available": False}
+        # --- 以下原逻辑保留备查（worldmonitor 不可达时走不到）---
+        # md = wm.parse_market_data(wm.fetch_market_data())
+        # commodity_syms = ("CL", "XAU", "HG", "BRENT", "WTI", "GOLD", "COPPER")
+        # fx_syms = ("DXY", "USDCNH", "USD-CNH", "EURUSD")
+        # commodities = [m for m in md if m.get("symbol") in commodity_syms]
+        # fx = [m for m in md if m.get("symbol") in fx_syms]
+        # cii = wm.parse_country_risk(wm.fetch_country_risk())
+        # hotspots = wm.parse_hotspot_escalation(wm.fetch_hotspot_escalation())
+        # return {"commodities": commodities, "fx": fx, "cii": cii, "hotspots": hotspots,
+        #         "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
+        #         "source": "worldmonitor",
+        #         "available": bool(commodities or fx or cii.get("countries") or hotspots)}
     return build()

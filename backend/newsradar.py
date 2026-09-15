@@ -111,32 +111,28 @@ def _fetch_global_intel() -> list[dict]:
     worldmonitor 永久不可达时前 5 次各等满超时再短路会拖垮雷达刷新。
     """
     try:
-        from data.sources import worldmonitor as wm
+        from data.sources import worldmonitor as wm  # noqa: F401 @deprecated 2026-09-15 S206
     except Exception:
         return []
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FTimeout
-
-    def worker():
-        out: list[dict] = []
-        try:
-            out.extend(wm.parse_news_clusters(wm.fetch_news_clusters()))
-        except Exception:
-            pass
-        try:
-            out.extend(wm.parse_news_intelligence(wm.fetch_news_intelligence()))
-        except Exception:
-            pass
-        return out
-
-    try:
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            items = ex.submit(worker).result(timeout=8)
-    except FTimeout:
-        return []  # worldmonitor 慢/不可达——不阻塞 fetch_radar
-    except Exception:
-        return []
-    items.sort(key=lambda x: x.get("ts") or "", reverse=True)
-    return items
+    # @deprecated: worldmonitor MCP 握手未实现（worldmonitor.py:108-111 TODO），永久不可达。
+    # 诚实返空不阻塞 fetch_radar，不浪费 8s 超时线程。原 worker() 保留在下方注释备查。
+    return []
+    # --- 以下原逻辑保留备查（worldmonitor 不可达走不到）---
+    # from concurrent.futures import ThreadPoolExecutor, TimeoutError as FTimeout
+    # def worker():
+    #     out: list[dict] = []
+    #     try: out.extend(wm.parse_news_clusters(wm.fetch_news_clusters()))
+    #     except Exception: pass
+    #     try: out.extend(wm.parse_news_intelligence(wm.fetch_news_intelligence()))
+    #     except Exception: pass
+    #     return out
+    # try:
+    #     with ThreadPoolExecutor(max_workers=1) as ex:
+    #         items = ex.submit(worker).result(timeout=8)
+    # except FTimeout: return []
+    # except Exception: return []
+    # items.sort(key=lambda x: x.get("ts") or "", reverse=True)
+    # return items
 
 
 def fetch_radar() -> dict:

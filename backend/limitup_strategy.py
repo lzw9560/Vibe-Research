@@ -486,6 +486,12 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
                 })
             history_for_bt.append(h)
 
+    # S203 wiring 修正：拷贝涨停池 raw 的 seal/industry/limit 字段进 GeneScore。
+    # 不拷则 _build_limitup_msc 读 seal_to_float_ratio=0.0（C3 永不 fire）+ industry=""（C2
+    # zt_count_today 不调 sector_cycle 永远 0）→ 首板涨停生产永不命中（mock 测漏，runtime 验出）。
+    seal_amount = stock_item.seal_amount or 0.0
+    float_shares = stock_item.float_shares or 0.0
+    seal_to_float_ratio = (seal_amount / float_shares) if float_shares > 0 else 0.0
     return GeneScore(
         code=code,
         name=name,
@@ -497,6 +503,10 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
         last_zt_dates=last_dates,
         zt_count_250d=len(stock_history),
         backtest_points=bt_points,
+        seal_amount=seal_amount,
+        float_shares=float_shares,
+        seal_to_float_ratio=seal_to_float_ratio,
+        industry=stock_item.industry or "",
         date=target_date,
     )
 
@@ -543,7 +553,115 @@ async def get_strategy_signals(code: str, date: str | None = None) -> list[Strat
 
     # 重建含回测数据的 gene_score
     gene_obj = await _rebuild_gene_with_backtest(code, result.date)
-    return match_strategies(code, gene_obj)
+    # S203 wiring(a) phase 1+2: 建 msc（seal + zt_count + high_gene 从 gene_obj + sector_cycle
+    # + bars 从 baostock cache + lbc 从涨停池 raw）让 首板涨停/反包/接力 等读 msc 的战法
+    # 在涨停路径能 fire（之前 data_unavailable）
+    lbc = await _get_lbc_for_code(code, result.date)
+    # S203 C1 修正：涨停路径填 sector_rank（从 result.gene_scores 按 industry 筛 + total_score
+    # 排名），让首板涨停 C1 的 sector_rank<=3 fallback 真能用（之前 None 只能靠 high_gene=1，
+    # 09-14 high_gene=1 是 0 只 → C1 永不过 → 首板涨停 0 fire）。
+    industry = gene_obj.industry or getattr(gene, "industry", "")
+    sector_rank = _compute_sector_rank(result.gene_scores, code, industry)
+    msc = _build_limitup_msc(gene_obj, result.date, lbc=lbc, sector_rank=sector_rank)
+    return match_strategies(code, gene_obj, market_scan_ctx=msc)
+
+
+def _get_recent_bars(code: str) -> list[dict] | None:
+    """S203 wiring(a) phase 2: 从 baostock cache 取该 code 最近 2 bars（T-1+T，date asc 尾部）。
+
+    复用 engine.bars_provider._load_cache（模块级懒加载，加载一次后 per-code 查，
+    不每 code 重读 31MB 文件）。cache 缺该 code / bars<2 / 加载失败 → None
+    （诚实降级，反包 C2/C3/C4 + 接力 C2 data_unavailable，不臆造）。
+    """
+    try:
+        from engine.bars_provider import _load_cache
+        bars = _load_cache().get(code, [])
+    except Exception:  # noqa: BLE001 — cache 加载失败降级 None（不崩）
+        return None
+    if not bars or len(bars) < 2:
+        return None
+    return list(bars[-2:])  # date asc 尾部 2 bars（T-1 + T）
+
+
+# 涨停池 raw lbc 缓存（per-date，{date_iso: (ts, {code: lbc})}）——get_strategy_signals
+# per-stock 调用，但整池只拉一次（5min TTL 内复用），不每 stock 重复拉涨停池。
+_LBC_CACHE: dict = {}
+_LBC_TTL = 300.0  # 5 分钟
+
+
+async def _get_lbc_for_code(code: str, date: str) -> int | None:
+    """S203 wiring(a) phase 2: 从涨停池 raw 取该 code 当下连板数 lbc。
+
+    public_fetch_zt_pool 返 ZTPoolItem（.boards=lbc，连板数）。per-date 缓存整池
+    {code: lbc} map（5min TTL）——get_strategy_signals per-stock 调用复用，不每 stock 重复拉。
+    date 格式 YYYY-MM-DD（ScreenerResult.date）→ 内部转 YYYYMMDD（eastmoney 端点要求）。
+    涨停池空 / code 不在池 / 拉取失败 → None（诚实降级，接力 C1 data_unavailable，不臆造）。
+    """
+    now = time.time()
+    cached = _LBC_CACHE.get(date)
+    if cached and now - cached[0] < _LBC_TTL:
+        return cached[1].get(code)
+    try:
+        from limitup_screener import public_fetch_zt_pool
+        target = date.replace("-", "")  # YYYY-MM-DD → YYYYMMDD
+        zt_pool, _yzt, _zb = await public_fetch_zt_pool(target)
+    except Exception:  # noqa: BLE001 — 涨停池拉取失败降级空 map（不崩，不臆造）
+        zt_pool = []
+    lbc_map = {item.code: int(item.boards or 0) for item in zt_pool if item.code}
+    _LBC_CACHE[date] = (now, lbc_map)
+    return lbc_map.get(code)
+
+
+def _compute_sector_rank(gene_scores: list, code: str, industry: str) -> int | None:
+    """S203 C1：算该股在它 industry 里的 gene_score 排名（1=最强），供首板涨停 C1 的 sector_rank<=3。
+
+    涨停路径的 sector_rank 从 result.gene_scores（当日全涨停股 + 行业 + gene_score）算：
+    按 industry 筛同行业涨停股 → total_score 降序排名 → 该股位次。
+    industry 空 / 该股不在列表 / 同行业仅它自己 → None（诚实降级，C1 走 high_gene fallback）。
+    排名=1 时同行业仅它自己（无板块共振），C1 仍可借 sector_rank<=3 过，但 C2 zt_count_today
+    会拦（板块涨停<2）——双闸门不互扰。
+    """
+    if not industry:
+        return None
+    same = [g for g in gene_scores if (getattr(g, "industry", "") or "") == industry]
+    if not same:
+        return None
+    same_sorted = sorted(same, key=lambda g: getattr(g, "total_score", 0.0), reverse=True)
+    for i, g in enumerate(same_sorted):
+        if g.code == code:
+            return i + 1
+    return None
+
+
+def _build_limitup_msc(gene: GeneScore, date: str, lbc: int | None = None, sector_rank: int | None = None) -> dict:
+    """S203 wiring(a) phase 1+2: 从 gene_obj + sector_cycle + baostock cache + 涨停池 raw 建 msc。
+
+    涨停 pipeline 之前不构造 msc（strategy_base:127 注明）→ 首板涨停/反包 data_unavailable。
+    本 helper 从 gene_obj（已有 seal_to_float_ratio + high_gene + industry）+ sector_cycle
+    （_get_zt_count_by_date_industry 按 industry 取板块涨停家数）+ baostock cache（bars）+
+    涨停池 raw（lbc）建 msc，传给 match_strategies。
+
+    phase 1: seal + zt_count + high_gene（首板涨停 C1/C2/C3 能 fire）。
+    phase 2: + bars（baostock K线 cache，反包 C2/C3/C4 大跌/吞没/放量 + 接力 C2 量比）
+             + lbc（涨停池 raw 当下连板数，接力 C1）。
+    bars 从 baostock cache 文件读（无网络）；lbc 由调用方传（get_strategy_signals 走涨停池 raw，
+    per-date 缓存不每 stock 重复拉）。bars/lbc 缺失 → None（战法 data_unavailable 降级，不臆造）。
+    """
+    zt_count_today = 0
+    if getattr(gene, "industry", ""):
+        try:
+            from strategies.sector_cycle import _get_zt_count_by_date_industry
+            zt_count_today = _get_zt_count_by_date_industry(date, gene.industry)
+        except Exception:  # noqa: BLE001 — sector_cycle 失败降级 0（不臆造）
+            zt_count_today = 0
+    return {
+        "seal_to_float_ratio": getattr(gene, "seal_to_float_ratio", 0.0),
+        "zt_count_today": zt_count_today,
+        "high_gene": getattr(gene, "high_gene", False),  # 首板涨停 C1 用（双保险，ctx.gene 也有）
+        "sector_rank": sector_rank,  # S203 C1：涨停路径从 result.gene_scores 算（caller 传），非涨停 funnel 由 funnel 填
+        "bars": _get_recent_bars(getattr(gene, "code", "")),  # phase 2: 反包/接力 bars
+        "lbc": lbc,  # phase 2: 接力当下连板数（None=未取到，data_unavailable 降级）
+    }
 
 
 def get_strategy_registry() -> list[dict]:

@@ -4,6 +4,8 @@
 对应 spec: specs/S005-中长线价值选股漏斗.md
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
 from typing import Optional

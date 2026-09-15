@@ -70,7 +70,7 @@ def test_r1_stop_loss_on_t2():
     res = simulate_holding(bars, SIGNAL, stop_pct=-3.0, take_profit_pct=8.0, max_hold_days=3)
     assert res is not None
     assert res["won"] is False
-    assert res["return_pct"] == -3.0
+    assert res["return_pct"] == -3.1  # S201b: stop×(1-eps) gap-through-aware fill → -3.1 非 -3.0
     assert res["exit_reason"] == "stop"
 
 

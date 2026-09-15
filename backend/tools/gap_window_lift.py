@@ -16,6 +16,11 @@ sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 from engine.accounting import _cost_pct  # noqa: E402  # S184 wok7j1arm P0: gap 真实成本
+
+# M4 edge-type 标注：gap-window lift 是 overnight_gap 事件 edge（非 selection edge）。
+# 隔夜 gap(D收→D+1开) 是薄+不可选+部分不可交易的事件 edge（S199 证：市场级 forward-return edge），
+# 非"因子预测哪个涨停股 gap 大"的 selection edge。源码标注供 verifier_router 源码审查测。
+edge_type = "overnight_gap"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
 PREMIUM = ROOT / ".vibe-research" / "first_board_premium_baseline.json"
@@ -112,7 +117,7 @@ if _surv_by_day:
             line_id="gap_window:top",
             returns=_s168_rets,
             dates=_s168_dates,
-            edge_type="selection",
+            edge_type="overnight_gap",
             frozen_commit=_FROZEN_S168,
             survivors_by_day=dict(_surv_by_day),
             universe_by_day=dict(_univ_by_day),

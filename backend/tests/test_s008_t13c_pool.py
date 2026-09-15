@@ -16,8 +16,8 @@ from data.mappers import zt_pool_item_from_dict
 def _raw_pool_item(code="600519", **over):
     base = {
         "c": code, "n": "贵州茅台", "lbc": 3, "fbt": 93500, "zbc": 1,
-        "zje": 1850.0, "open": 1800.0, "seal_amount": 5e8,
-        "float_shares": 1e8, "prev_close": 1680.0, "zdp": 10.0, "hybk": "白酒",
+        "zje": 1850.0, "open": 1800.0, "fund": 5e8,
+        "ltsz": 1e8, "prev_close": 1680.0, "zdp": 10.0, "hybk": "白酒",
     }
     base.update(over)
     return base

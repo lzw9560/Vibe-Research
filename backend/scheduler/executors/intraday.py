@@ -14,6 +14,30 @@ from scheduler.db import _SEAL_COLLECT_SUBPROCESS_TIMEOUT
 logger = logging.getLogger("vibe-research")
 
 
+def _instrumented(call_name: str, task_type: str, fn, *args, **kwargs):
+    """S206 T7: per-call instrumented logging——定位 stale-reap 簇根因。
+
+    包外部 sync call（hithink/tencent/baostock SDK 非 requests），记 enter/exit/duration
+    +task_type。reaper 1300s 是兜底非根因；根因疑是某 SDK call 无 timeout 在 async 路径
+    不可被超时打断 → ThreadPoolExecutor max_workers=2 池饿死。本 logging 在 log 里暴露
+    哪个 call 慢/卡，开盘后跑一天看 09:28-10:44 簇卡在哪个 call。
+    """
+    import time as _t
+    t0 = _t.monotonic()
+    logger.info("[instrumented] ENTER %s task=%s", call_name, task_type)
+    try:
+        result = fn(*args, **kwargs)
+        dt = (_t.monotonic() - t0) * 1000
+        n = len(result) if hasattr(result, "__len__") else "?"
+        logger.info("[instrumented] EXIT  %s task=%s dur=%.0fms n=%s", call_name, task_type, dt, n)
+        return result
+    except Exception as e:
+        dt = (_t.monotonic() - t0) * 1000
+        logger.warning("[instrumented] FAIL  %s task=%s dur=%.0fms err=%s: %s",
+                       call_name, task_type, dt, type(e).__name__, str(e)[:120])
+        raise
+
+
 def seal_intraday_collect(payload: Dict[str, Any]) -> Dict[str, Any]:
     """S055：盘中封单时序采集（S150 T0.7 根治：subprocess 跑全逻辑）。
 
@@ -172,12 +196,12 @@ def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     zt_codes: list[str] = []
     if intraday:
         try:
-            zt_codes = [r["code"] for r in hithink_src.limit_up_pool(date) if r.get("code")]
+            zt_codes = [r["code"] for r in _instrumented("hithink.limit_up_pool", "microstructure", hithink_src.limit_up_pool, date) if r.get("code")]
         except Exception:  # noqa: BLE001 — hithink 涨停池失败不影响排名快照
             pass
         rank_codes = {it["code"] for items in ranking_items.values() for it in items if it.get("code")}
         quote_codes = list({*zt_codes, *rank_codes})
-        quotes = fetch_raw(quote_codes) if quote_codes else {}
+        quotes = _instrumented("tencent.fetch_raw", "microstructure", fetch_raw, quote_codes) if quote_codes else {}
         save_quote_snapshots(date, ts, quotes)
 
     # 3. hithink 集合竞价快照——§44 reframe 标记的最未证否盘中 edge（auction_volume_ratio）

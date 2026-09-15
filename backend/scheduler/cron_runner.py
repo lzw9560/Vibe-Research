@@ -46,7 +46,7 @@ class CronScheduler:
         if self._running:
             return
         # R4 重启恢复：DB 残留 running 行的任务加入去重集合，防重启后重放。
-        # S150 R2：重建前先 reap stale running（>800s 挂死），避免把挂死 run 重新加回
+        # S150 R2：重建前先 reap stale running（>1300s 挂死），避免把挂死 run 重新加回
         # _running_task_ids 致重启也救不了（fork 根因 B：line 2180 重建回 stale）。
         self._reap_stale_runs()
         for t in _manager.list_tasks():
@@ -86,7 +86,7 @@ class CronScheduler:
         # R9：统一 BEIJING_TZ——now 带时区，cron 命中按北京时间比较（懒导入避免模块级重依赖）
         from limitup_screener import BEIJING_TZ
         now = datetime.now(BEIJING_TZ)
-        # S150 R2：每轮 reap stale running run（>800s 视挂死）→ DB 标 failed + discard
+        # S150 R2：每轮 reap stale running run（>1300s 视挂死）→ DB 标 failed + discard
         # _running_task_ids，防 collect_once 挂死堵 dedup（根因 B 真修，与 R1 timeout 双保险）
         self._reap_stale_runs()
         tasks = [t for t in _manager.list_tasks() if t.enabled]
@@ -131,7 +131,7 @@ class CronScheduler:
     def _reap_stale_runs(self) -> None:
         """S150 R2：reap stale running run → discard _running_task_ids（去堵 dedup）。
 
-        每轮 _tick + start 重建前调，清 DB stale（>800s 挂死）→ 返 task_id 列表 →
+        每轮 _tick + start 重建前调，清 DB stale（>1300s 挂死）→ 返 task_id 列表 →
         从 _running_task_ids discard，让被堵 task 能再触发（根因 B 真修）。
         """
         try:

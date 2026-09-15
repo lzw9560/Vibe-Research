@@ -10,6 +10,7 @@
 """
 
 import asyncio
+from datetime import datetime
 
 import pytest
 
@@ -80,6 +81,9 @@ _EXPECTED_TASK_TYPES = {
     # S188 RB-9 每周头脑风暴提醒（周一 9:00 飞书+待办）
     "weekly_brainstorm_remind",
     "daily_full_pull",  # S191
+    # S206: 盘中 watchlist gap scan + price alert（新增注册任务类型）
+    "scan_watchlist_gaps",
+    "scan_price_alerts",
 }
 
 
@@ -531,7 +535,7 @@ class TestForwardTestT1Settle:
         # 3 newest NULL dates 全 stuck + 1 older non-stuck（08-20）
         for d in ("2026-08-29", "2026-08-28", "2026-08-27", "2026-08-20"):
             record_daily_recommendations(d, [DailyRecommendation(d, "000001", "A", "first_plate", 70.0)])
-        stuck = {d: "2026-09-04T15:50:00" for d in ("2026-08-29", "2026-08-28", "2026-08-27")}
+        stuck = {d: datetime.now().isoformat() for d in ("2026-08-29", "2026-08-28", "2026-08-27")}
         (tmp_path / "t1_stuck_dates.json").write_text(json.dumps(stuck), encoding="utf-8")
 
         # mock compute 返有 next_bar；record 返 len（不落盘也够验证 dates_processed）

@@ -403,6 +403,7 @@ async def get_intraday_holdings() -> dict[str, Any]:
             code = h["code"]
             q = quotes.get(code, {})
             seal_status = _judge_seal_status(code, q, h)
+            seal_degraded = _is_seal_status_degraded(seal_status, code)
             row = {
                 "code": code,
                 "name": h.get("name", code),
@@ -411,19 +412,30 @@ async def get_intraday_holdings() -> dict[str, Any]:
                 "current_price": q.get("current_price") or q.get("price"),
                 "pnl_pct": _pnl_pct(h.get("entry_price"), q.get("current_price") or q.get("price")),
                 "seal_status": seal_status,
+                "seal_status_degraded": seal_degraded,
                 "current_zone": current_zone,
-                "dual_pressure": seal_status == "炸板未回封" and current_zone == "red",
+                # S206 T2: dual_pressure 诚实降级——三态（unavailable/no_pressure/pressure）。
+                # 原 boolean `seal_status == "炸板未回封" and current_zone == "red"` 恒 False
+                #（_judge_seal_status 结构性无法返回"炸板未回封"，:453 注释自承降级）。
+                # 字段保留 hook 待 P2 5min 分时重建（不删字段结构）。
+                "dual_pressure": _compute_dual_pressure(seal_status, code, current_zone),
             }
             rows.append(row)
 
-        # 双重压力行置顶
-        rows.sort(key=lambda r: (not r["dual_pressure"], r["code"]))
+        # S206 T2 deprecated: 双重压力行置顶——当前"pressure"不可达
+        # （_judge_seal_status 无法判炸板未回封），排序退化为按 code。
+        # P2 TODO: 5min 分时重建后恢复 pressure 置顶排序。
+        rows.sort(key=lambda r: (r["dual_pressure"] != "pressure", r["code"]))
 
         return {
             "data": {
                 "holdings": rows,
                 "current_zone": current_zone,
-                "dual_pressure_count": sum(1 for r in rows if r["dual_pressure"]),
+                # S206 T2 deprecated: dual_pressure_count——当前恒 0
+                # （"pressure" 不可达）。P2 TODO: 5min 重建后恢复计数。
+                "dual_pressure_count": sum(
+                    1 for r in rows if r["dual_pressure"] == "pressure"
+                ),
             }
         }
     except Exception as exc:  # noqa: BLE001
@@ -438,6 +450,51 @@ def _current_zone() -> str:
     return "yellow"
 
 
+def _is_seal_status_degraded(seal_status: str, code: str) -> bool:
+    """封板状态判定是否降级（S206 T2 诚实降级）。
+
+    _judge_seal_status 用现价近似，结构性无法判炸板回封（需分时数据 S055）。
+    降级条件 per stock-type（非全局 flag）：
+
+    - "数据未取得" → 降级（无数据）
+    - "未封板" → 降级（现价 <9.8% 可能是炸板后回落，无法区分）
+    - "封住" + 主板（00/60 开头，10% 限）→ 不降级
+      （pct>=9.8 对 10% 限有效，能确认封住 → 正向排除"炸板未回封"）
+    - "封住" + 非主板（创业板30/科创板688/北交所8,4，20%/30% 限）→ 降级
+      （9.8% 阈值对 20%/30% 限不适用，"封住"判定本身不可靠）
+    """
+    if seal_status in ("数据未取得", "未封板"):
+        return True
+    if seal_status == "封住":
+        return code.startswith(("30", "688", "8", "4"))
+    return True  # 未知状态，保守降级
+
+
+def _compute_dual_pressure(
+    seal_status: str, code: str, current_zone: str
+) -> str:
+    """计算双重压力状态（S206 T2 诚实降级版）。
+
+    返回值（三态，非 boolean）：
+    - "unavailable": 封板检测降级，无法判定（区分"没压力" vs "判不了"）
+    - "no_pressure": 可确认无双重压力（主板封住 → 排除炸板未回封）
+    - "pressure": 双重压力（炸板未回封 + red zone）—— 保留接口待 P2 5min 重建
+
+    原 boolean `seal_status == "炸板未回封" and current_zone == "red"` 恒 False
+    （_judge_seal_status 结构性无法返回"炸板未回封"）。
+    三态区分了"判不了"(unavailable) vs "没压力"(no_pressure)，不再混为 False。
+
+    P2 TODO: 5min 分时数据回补后，_judge_seal_status 重建炸板检测，
+    在此启用 "pressure" 分支：seal_status == "炸板未回封" and current_zone == "red"。
+    current_zone 参数保留为此 hook。
+    """
+    if _is_seal_status_degraded(seal_status, code):
+        return "unavailable"
+    # 主板"封住" → 确认封住 → 排除炸板未回封 → 无双重压力
+    # （zone 不影响：确认封住即排除炸板，与色带无关）
+    return "no_pressure"
+
+
 def _judge_seal_status(code: str, quote: dict, holding: dict) -> str:
     """个股封板状态判定（spec §3.2）。
 
@@ -446,6 +503,10 @@ def _judge_seal_status(code: str, quote: dict, holding: dict) -> str:
     - 炸板未回封：触及涨停后打开未封回
     - 未封板：未触及涨停
     - 数据未取得：报价缺失
+
+    S206 T2 deprecated: 本函数用现价近似，结构性无法返回"炸板回封"/"炸板未回封"
+    （需分时数据 S055 封单时序）。dual_pressure 已改用 _compute_dual_pressure
+    诚实降级为三态。P2 TODO: 5min 分时回补后重建炸板检测。
     """
     if not quote:
         return "数据未取得"
@@ -619,35 +680,40 @@ async def get_t1_projection() -> dict[str, Any]:
         if snap is None or snap.get("score") is None:
             return {"data": {"status": "insufficient_data", "message": "数据不足，无法预判"}}
 
-        # 双场景预推算（维持 / 反弹）
+        # S206 T12: 砍掉拍脑袋 +5 投影（grill 判 refuted 过拟合）。改为：
+        # - 14:30 前标 not_ready（尾盘未到，无投影依据）
+        # - 数据驱动投影（14:30-15:00 6 根 5min bar 动量）等 P2 baostock 回补到 30-60 天后做
         current_score = snap["score"]
-        # 场景 1：维持——尾盘 30 分钟情绪不变，T+1 STI ≈ 当前 score
+        # 场景 1：维持——唯一数据驱动场景（当前 score 维持）
         scenario_hold = {
             "name": "维持",
             "projected_t1_score": round(current_score, 2),
             "projected_t1_weather": _score_to_weather(current_score),
             "assumption": "尾盘 30 分钟情绪维持当前水平",
         }
-        # 场景 2：反弹——尾盘拉升，score +5（乐观估计）
-        rebound_score = min(100.0, current_score + 5)
+        # 场景 2：反弹——原 +5 拍脑袋砍掉（无数据依据），标 not_ready 等数据驱动版本
         scenario_rebound = {
             "name": "反弹",
-            "projected_t1_score": round(rebound_score, 2),
-            "projected_t1_weather": _score_to_weather(rebound_score),
-            "assumption": "尾盘 30 分钟情绪回升 +5 分",
+            "projected_t1_score": None,
+            "projected_t1_weather": None,
+            "assumption": "尾盘动量投影待 P2 baostock 5min 回补后数据驱动实现（S206 T12 砍 +5 拍脑袋）",
+            "status": "not_ready",
         }
 
-        # 写投影到最新 snapshot（DB + ring buffer）
-        snap["projected_t1_score"] = scenario_rebound["projected_t1_score"]
-        snap["projected_t1_weather"] = scenario_rebound["projected_t1_weather"]
-        save_intraday(snap)
+        # S206 T12: 修 snap 原地变异（原 snap["projected_t1"] 污染 ring buffer）。
+        # deepcopy 后写投影，不污染 _sampler.latest() 的原始快照。
+        import copy  # noqa: PLC0415
+        snap_copy = copy.deepcopy(snap)
+        snap_copy["projected_t1_score"] = scenario_hold["projected_t1_score"]
+        snap_copy["projected_t1_weather"] = scenario_hold["projected_t1_weather"]
+        save_intraday(snap_copy)
 
         return {
             "data": {
                 "status": "ready",
                 "current_score": current_score,
                 "scenarios": [scenario_hold, scenario_rebound],
-                "disclaimer": "投影，非最终判定（CC2）—— 收盘后以 STI 盘后定时计算结果为准",
+                "disclaimer": "投影，非最终判定（CC2）—— 收盘后以 STI 盘后定时计算结果为准。反弹场景待数据驱动（S206 T12）",
                 "as_of": snap.get("time"),
             }
         }

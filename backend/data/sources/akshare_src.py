@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 
 from ._common import DependencyMissing
 
@@ -196,6 +197,33 @@ def _fetch_cyq_klines(code: str) -> list[dict] | None:
     return out
 
 
+# S114 深挖 mini_racer 崩修正：singleton V8 isolate + lock 串行 call。
+# 旧 chip_distribution 每次 new py_mini_racer.MiniRacer() + eval(CYQ_JS)，并发定时任务
+# （intraday_microstructure_snapshot / ofi_collect 等多线程同时算筹码）各 new V8 isolate
+# → V8 address_pool_manager 重复 init 崩（[FATAL:address_pool_manager.cc(67)] !pool->IsInitialized()，
+# libmini_racer.dylib exit 133）。全局只 init 一次 + lock 串行 call（V8 isolate 单线程，并发 call 不安全）。
+_CYQ_RACER = None  # py_mini_racer.MiniRacer singleton（惰性 init，进程级）
+_CYQ_RACER_LOCK = threading.Lock()
+
+
+def _run_cyq(klines: list) -> dict:
+    """筹码分布 V8 计算——singleton MiniRacer + lock 串行 call。
+
+    首次调用惰性 init（new MiniRacer + eval CYQ_JS 一次），后续复用。所有 call 经
+    _CYQ_RACER_LOCK 串行（V8 isolate 非线程安全）。崩根因（并发 new isolate 致地址池重复
+    init）由此消除。init/call 异常仍由 chip_distribution 的 try 兜底返 {}。
+    """
+    global _CYQ_RACER
+    with _CYQ_RACER_LOCK:
+        if _CYQ_RACER is None:
+            import py_mini_racer  # noqa: PLC0415 — V8 计算依赖（akshare 已带，不新增）
+            from .cyq_js import CYQ_JS  # noqa: PLC0415 — 东财原 JS（逐字搬，R5 保真）
+            _CYQ_RACER = py_mini_racer.MiniRacer()
+            _CYQ_RACER.eval(CYQ_JS)
+        # 筗最后一条 = 最新交易日筹码分布（index 0-based，klinedata 全量）
+        return _CYQ_RACER.call("CYQCalculator", len(klines) - 1, klines)
+
+
 def chip_distribution(code: str) -> dict:
     """筹码分布（东财 CYQCalculator，最新交易日）—— 获利比例 / 平均成本 / 集中度 / 90%&70%成本区间。
 
@@ -218,12 +246,7 @@ def chip_distribution(code: str) -> dict:
     if not klines:
         return {}  # R3 诚实 fallback（falsy，走 diagnosis missing 标记）
     try:
-        import py_mini_racer  # noqa: PLC0415 — V8 计算依赖（akshare 已带，不新增）
-        from .cyq_js import CYQ_JS  # noqa: PLC0415 — 东财原 JS（逐字搬，R5 保真）
-        js = py_mini_racer.MiniRacer()
-        js.eval(CYQ_JS)
-        # 算最后一条 = 最新交易日筹码分布（index 0-based，klinedata 全量）
-        mcode = js.call("CYQCalculator", len(klines) - 1, klines)
+        mcode = _run_cyq(klines)  # singleton V8 + lock 串行 call（防 mini_racer 地址池重复 init 崩）
     except Exception as e:
         logging.getLogger("astock").warning(
             "chip_distribution(%s) CYQCalculator 计算失败: %s", code, e)

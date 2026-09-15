@@ -90,6 +90,8 @@ class TestScheduledTasksImports(unittest.TestCase):
             "healthcheck_ping",  # S188 RB-2
             "weekly_brainstorm_remind",  # S188 RB-9
             "daily_full_pull",  # S191
+            # S206: watchlist gap scan + price alerts（新注册任务类型，期望集补齐）
+            "scan_watchlist_gaps", "scan_price_alerts",
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

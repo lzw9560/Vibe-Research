@@ -45,10 +45,10 @@ def gene_factory():
 # ============================================================
 
 class TestRegistry:
-    def test_registry_has_12_strategies(self):
-        """AC1: STRATEGY_REGISTRY 12 项（9 原有 + S081 PRD 2 + S086 storm_reversal 合并）。"""
+    def test_registry_has_15_strategies(self):
+        """AC1: STRATEGY_REGISTRY 15 项（12 合并 + S203 first_board_limitup/leader_drop_reversal/relay_23）。"""
         from limitup_strategy import STRATEGY_REGISTRY
-        assert len(STRATEGY_REGISTRY) == 12
+        assert len(STRATEGY_REGISTRY) == 15
 
     def test_weak_turn_strong_registered(self):
         """AC1: weak_turn_strong 注册项存在。"""
@@ -67,14 +67,15 @@ class TestRegistry:
         assert s["entry_type"] == "次日突破昨日最高价确认"
 
     def test_existing_9_strategies_unchanged(self):
-        """AC1: 现有 9 战法 code 不破坏。"""
+        """AC1: 现有 9 战法 code 不破坏（仍存在于注册表，S203 新增插在前部不删既有）。"""
         from limitup_strategy import STRATEGY_REGISTRY
-        existing = {s["code"] for s in STRATEGY_REGISTRY[:9]}
-        assert existing == {
+        codes = {s["code"] for s in STRATEGY_REGISTRY}
+        original_9 = {
             "first_plate", "consecutive_relay", "break_reseal", "low_absorption",
             "reverse_package", "n_shape_counterattack", "platform_breakout",
             "end_of_day_sneak", "dragon_head",
         }
+        assert original_9.issubset(codes), f"原 9 战法缺失：{original_9 - codes}"
 
 
 # ============================================================

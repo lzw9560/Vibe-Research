@@ -570,8 +570,9 @@ def zt_pool_item_from_dict(raw: dict, pool_date: str | None = None) -> ZTPoolIte
     """em_zt_topic_pool 单项 raw dict → ZTPoolItem。
 
     raw 键→model 字段：c→code、n→name、lbc→boards、fbt→seal_time、zbc→broken_count、
-    zje→limit_price、open→open、seal_amount→seal_amount、float_shares→float_shares、
-    prev_close→prev_close、zdp→limit_pct、hybk→industry。
+    zje→limit_price、open→open、fund→seal_amount（封单额，元）、ltsz→float_shares（流通市值，元，
+    字段名虽含 shares 但 raw 无流通股本只提供市值，消费者均作封成比分母元/元）、prev_close→prev_close、
+    zdp→limit_pct、hybk→industry。
     ``pool_date`` 为合成字段（service 注入池日期），默认 None。
     """
     return ZTPoolItem(
@@ -582,8 +583,13 @@ def zt_pool_item_from_dict(raw: dict, pool_date: str | None = None) -> ZTPoolIte
         broken_count=_numf(raw.get("zbc")),
         limit_price=_numf(raw.get("zje")),
         open=_numf(raw.get("open")),
-        seal_amount=_numf(raw.get("seal_amount")),
-        float_shares=_numf(raw.get("float_shares")),
+        # S203 深挖数据管道修正：东财 raw 键是 fund（封单额，元）+ ltsz（流通市值，元），
+        # 非 seal_amount/float_shares（这俩键 raw 里根本不存在→_numf(None)=0→封成比恒 0
+        # → 首板涨停 C3 + 八项⑥ + auction_screener 封成比全失效）。对齐 diagnosis.py:284
+        # 已有的正确接法（pool_item.get("fund")）。float_shares 字段名虽含 shares 但 raw
+        # 只提供 ltsz 流通市值不提供流通股本，所有消费者都拿它当封成比分母（元/元 无量纲）。
+        seal_amount=_numf(raw.get("fund")),
+        float_shares=_numf(raw.get("ltsz")),
         prev_close=_numf(raw.get("prev_close")),
         limit_pct=_numf(raw.get("zdp")),
         industry=raw.get("hybk"),

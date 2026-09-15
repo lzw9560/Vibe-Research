@@ -83,9 +83,8 @@ class TestSealIntradayCollectExecutor:
         monkeypatch.setattr("risk.bomb_alert_rules.check_all_rules", lambda *a, **k: [])
         monkeypatch.setattr("risk.bomb_alert_dispatcher.process_alerts", lambda *a, **k: [])
 
-        from scheduled_tasks import TaskExecutor
-        executor = TaskExecutor()
-        result = executor._execute_seal_intraday_collect({})
+        from risk.seal_intraday_collect_cli import run_collect
+        result = run_collect({})
 
         assert result["written"] == 2
         assert result["trajectory_written"] == 2
@@ -116,9 +115,8 @@ class TestSealIntradayCollectExecutor:
             raise RuntimeError("circuit breaker open")
         monkeypatch.setattr("astock.em_zt_topic_pool", _fail)
 
-        from scheduled_tasks import TaskExecutor
-        executor = TaskExecutor()
-        result = executor._execute_seal_intraday_collect({})
+        from risk.seal_intraday_collect_cli import run_collect
+        result = run_collect({})
 
         assert result["written"] == 0
         assert result["data_status"] == "degraded"
@@ -138,9 +136,8 @@ class TestSealIntradayCollectExecutor:
             raise RuntimeError("trajectory compute boom")
         monkeypatch.setattr("strategies.intraday_features.compute_trajectory", _boom)
 
-        from scheduled_tasks import TaskExecutor
-        executor = TaskExecutor()
-        result = executor._execute_seal_intraday_collect({})
+        from risk.seal_intraday_collect_cli import run_collect
+        result = run_collect({})
 
         # 主采集成功
         assert result["written"] == 2
@@ -158,9 +155,8 @@ class TestSealIntradayCollectExecutor:
         # mock get_snapshots_by_code 返空（极端：latest 有但时序查不到）
         monkeypatch.setattr("risk.seal_intraday_collector.get_snapshots_by_code", lambda code, date=None: [])
 
-        from scheduled_tasks import TaskExecutor
-        executor = TaskExecutor()
-        result = executor._execute_seal_intraday_collect({})
+        from risk.seal_intraday_collect_cli import run_collect
+        result = run_collect({})
 
         assert result["written"] == 2
         # 派生跳过（snaps 空）
@@ -177,8 +173,7 @@ class TestSealIntradayCollectExecutor:
         monkeypatch.setattr("risk.bomb_alert_rules.check_all_rules", lambda *a, **k: [])
         monkeypatch.setattr("risk.bomb_alert_dispatcher.process_alerts", lambda *a, **k: [])
 
-        from scheduled_tasks import TaskExecutor
-        executor = TaskExecutor()
-        result = executor._execute_seal_intraday_collect({"prune": True, "retention_days": 30})
+        from risk.seal_intraday_collect_cli import run_collect
+        result = run_collect({"prune": True, "retention_days": 30})
         assert "pruned" in result
         assert result["pruned"] >= 0  # 空库 prune 返 0

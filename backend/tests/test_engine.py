@@ -354,7 +354,7 @@ class TestSimulateHoldingSplit:
         res = simulate_holding(bars, SIGNAL, -3.0, 8.0, 3)
         assert res is not None
         assert res["won"] is False
-        assert res["return_pct"] == -3.0
+        assert res["return_pct"] == -3.1  # S201b: stop×(1-STOP_SLIPPAGE_EPS) gap-through-aware fill → -3.1 非 -3.0
         assert res["exit_reason"] == "stop"
 
     def test_backward_compat_max_hold(self):
@@ -521,7 +521,8 @@ class TestPathReturnExitPrice:
         filled = Executor().execute(_make_trades(), bars_stop, T1OpenFill())
         pr = path_return(filled, bars_stop, -3.0, 8.0, 3, apply_cost=True)
         assert pr is not None and pr.exit_reason == "stop"
-        assert pr.exit_price == pytest.approx(10.5 * 0.97, abs=0.01)  # 10.185
+        # S201b: stop_level×(1-STOP_SLIPPAGE_EPS)=10.5×0.97×0.999=10.174815（gap-through-aware fill, 非 10.185）
+        assert pr.exit_price == pytest.approx(10.174815, abs=0.01)
 
     def test_max_hold_exit_price_is_close(self):
         """max_hold 分支 exit_price = bars[exit_idx].close（:165 已算，T2 暴露）。"""
