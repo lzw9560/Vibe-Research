@@ -91,13 +91,15 @@ class TestWeatherHardSwitch:
 class TestStrategyRegistry:
     """策略注册表完整性。"""
 
-    def test_registry_has_12_strategies(self):
-        """S086 合并后 12 个策略（9 常规 + low_absorption + S081 PRD 2 + storm_reversal）。
+    def test_registry_has_15_strategies(self):
+        """S086 合并后 12 个策略 + S203 新增 3 个 = 15 个策略。
 
         旧 STRATEGY_FUNNEL_REGISTRY（10）+ 旧 STRATEGY_REGISTRY（11）合并为单一
         STRATEGY_REGISTRY（12），STRATEGY_FUNNEL_REGISTRY 为别名同源。
+        S203 wiring(a) 新增：first_board_limitup（首板涨停）/ leader_drop_reversal
+        （龙头大跌反包）/ relay_23（接力二三板）→ 15 项。
         """
-        assert len(STRATEGY_FUNNEL_REGISTRY) == 12
+        assert len(STRATEGY_FUNNEL_REGISTRY) == 15
         from strategies.strategy_funnel_registry import STRATEGY_REGISTRY
         assert STRATEGY_REGISTRY is STRATEGY_FUNNEL_REGISTRY
 

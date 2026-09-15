@@ -446,3 +446,298 @@ class DragonHeadStrategy(BaseStrategy):
         if pattern is None or pattern.amount_yi is None:
             return None
         return pattern.amount_yi > 10
+
+
+class FirstBoardLimitupStrategy(BaseStrategy):
+    """S203 首板涨停（用户 brief：板块共振 + 封单精品门槛 + 板块内前 3）。
+
+    区别 first_plate（首板挖掘 gene-based 涨停频次≥6）+ dragon_head（非涨停龙头追踪
+    sector_rank≤3）：本战法是**涨停首板**——板块共振（zt_count_today≥2）+ 封单精品
+    （seal_to_float_ratio≥0.5%）+ 龙头地位（sector_rank≤3）。
+
+    ⚠️ 涨停 pipeline 当前不构造 market_scan_ctx（strategy_base.py:127 注明）→ 本战法
+    在涨停路径 data_unavailable（不命中，非逻辑过滤）。wiring（涨停池 raw seal_to_float_ratio
+    merge + sector_cycle zt_count_today 进 msc）待 G5/harness 或专门 wiring task。
+    edge_type=selection（待验，§44v2 window sanity 后定，决策#7 verifier-side）。
+    社区阈值（zt_count_today≥2 / seal≥0.5%）标 overfit 风险，须 sensitivity sweep（S204 R13）。
+    """
+
+    code = "first_board_limitup"
+    name = "首板涨停"
+
+    def match(self, ctx) -> StrategyMatchResult:
+        msc = getattr(ctx, "market_scan_ctx", None) or {}
+        pattern = msc.get("pattern") if isinstance(msc, dict) else None
+        sector_rank = msc.get("sector_rank")
+        zt_count_today = msc.get("zt_count_today")
+        seal_to_float = msc.get("seal_to_float_ratio")
+
+        # 无 msc 任一字段 → data_unavailable 整战法降级（涨停 pipeline 无 msc，诚实不臆造）
+        if pattern is None and sector_rank is None and zt_count_today is None and seal_to_float is None:
+            return make_data_unavailable_result(self.code, self.name, [
+                ("first_board_limitup.c1", "龙头地位", "sector_rank", "<= 3"),
+                ("first_board_limitup.c2", "板块共振", "zt_count_today", ">= 2"),
+                ("first_board_limitup.c3", "封单精品", "seal_to_float_ratio", ">= 0.005"),
+            ])
+
+        # C1 龙头地位: high_gene=1（ctx.gene，涨停路径有）OR sector_rank≤3（msc，非涨停 funnel）
+        # S203 wiring(a) phase 1：涨停路径 gene_obj 有 high_gene（无 sector_rank），C1 用 high_gene 兜底
+        gene = getattr(ctx, "gene", None)
+        high_gene = getattr(gene, "high_gene", None) if gene else None
+        c1_hit = bool(high_gene) or (sector_rank is not None and sector_rank <= 3)
+        if c1_hit:
+            c1_state = "hit"
+            c1_desc = f"high_gene={high_gene}, sector_rank={sector_rank}（龙头确认）"
+            c1_val = f"hg={high_gene}, sr={sector_rank}"
+        elif high_gene is None and sector_rank is None:
+            c1_state, c1_desc, c1_val, c1_hit = "data_unavailable", "无 high_gene/sector_rank", None, False
+        else:
+            c1_state = "miss"
+            c1_desc = f"high_gene={high_gene}, sector_rank={sector_rank}（非龙头）"
+            c1_val = f"hg={high_gene}, sr={sector_rank}"
+        # C2 板块共振 zt_count_today≥2（板块涨停家数，探索性门槛须 sweep）
+        if zt_count_today is None:
+            c2_state, c2_desc, c2_val, c2_hit = "data_unavailable", "zt_count_today 数据缺失", None, False
+        else:
+            c2_hit = zt_count_today >= 2
+            c2_state = "hit" if c2_hit else "miss"
+            c2_desc = f"板块涨停家数 {zt_count_today}（阈值≥2，板块共振）"
+            c2_val = str(zt_count_today)
+        # C3 封单精品 seal_to_float_ratio≥0.005（0.5%，社区阈值标 overfit 须 sweep）
+        if seal_to_float is None:
+            c3_state, c3_desc, c3_val, c3_hit = "data_unavailable", "seal_to_float_ratio 数据缺失", None, False
+        else:
+            c3_hit = seal_to_float >= 0.005
+            c3_state = "hit" if c3_hit else "miss"
+            c3_desc = f"封单/流通市值 {seal_to_float}（阈值≥0.005，精品封单）"
+            c3_val = str(seal_to_float)
+
+        conditions = [
+            ConditionEval(condition_id="first_board_limitup.c1", condition_name="龙头地位",
+                          factor="sector_rank", threshold="<= 3", actual_value=c1_val,
+                          state=c1_state, description=c1_desc),
+            ConditionEval(condition_id="first_board_limitup.c2", condition_name="板块共振",
+                          factor="zt_count_today", threshold=">= 2", actual_value=c2_val,
+                          state=c2_state, description=c2_desc),
+            ConditionEval(condition_id="first_board_limitup.c3", condition_name="封单精品",
+                          factor="seal_to_float_ratio", threshold=">= 0.005", actual_value=c3_val,
+                          state=c3_state, description=c3_desc),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = c1_hit and c2_hit and c3_hit
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.6 if fired else None, data_ok=True,
+        )
+
+    def compute_confidence(self, matches, ctx) -> float:
+        return 0.6
+
+
+def _detect_leader_drop_reversal(bars):
+    """S203 T5：从 baostock bars 检测龙头大跌反包（T-1 大跌 + T 吞没 + 放量）。
+
+    bars: list of {date, open, high, low, close, volume}（按 date asc）。None/不足 → 全 data_unavailable。
+    大跌从 close/open 差复算（不依赖 pctChg 字段，R14 注入前可用）。
+    返 (c2_drop_hit, c3_engulf_hit, c4_volume_hit, descriptions)。
+    """
+    if not bars or len(bars) < 2:
+        return None, None, None, ["bars 不足/缺失"]
+    prev = bars[-2]  # T-1 大跌日
+    curr = bars[-1]  # T 反包日
+    try:
+        # C2 T-1 大跌: prev.close 相对 prev.open 跌 ≥7%（日内大跌，从 close 复算不依赖 pctChg）
+        # round 4 位避 float 噪声（-7% 算成 -0.06999 → round -0.07 精确）
+        drop_pct = round((float(prev["close"]) - float(prev["open"])) / float(prev["open"]), 4)
+        c2_hit = drop_pct <= -0.07
+        c2_desc = f"T-1 日内跌幅 {drop_pct*100:.1f}%（阈值≤-7%，龙头大跌）"
+        # C3 T 吞没: curr.close ≥ prev.open（吞没前日阴线）AND curr.open ≤ prev.close（低开反包）
+        c3_hit = (float(curr["close"]) >= float(prev["open"])
+                  and float(curr["open"]) <= float(prev["close"]))
+        c3_desc = (f"T close {curr['close']} ≥ T-1 open {prev['open']}（吞没）且 "
+                   f"T open {curr['open']} ≤ T-1 close {prev['close']}（低开反包）")
+        # C4 放量: curr.volume / prev.volume ≥ 1.2
+        prev_vol = float(prev.get("volume", 0))
+        curr_vol = float(curr.get("volume", 0))
+        c4_hit = (prev_vol > 0 and curr_vol / prev_vol >= 1.2)
+        c4_desc = f"T 量比 {curr_vol/prev_vol:.2f}（阈值≥1.2，爆量反包）" if prev_vol > 0 else "T-1 volume=0 无法算量比"
+        return c2_hit, c3_hit, c4_hit, [c2_desc, c3_desc, c4_desc]
+    except (TypeError, ValueError, ZeroDivisionError, KeyError) as e:
+        return None, None, None, [f"bars 解析失败: {e}"]
+
+
+class LeaderDropReversalStrategy(BaseStrategy):
+    """S203 T5：龙头大跌反包（用户 brief：龙头大跌触发量化止损后筹码真空，5/10 日均线爆量反包吞没阴线）。
+
+    区别 reverse_package（炸板后反包 open_count≥2）+ pattern_reversal（长上影后反包）：
+    本战法是**龙头大跌后反包**——T-1 日大跌≥7% + T 日吞没前日阴线 + 放量≥1.2x +
+    龙头确认（gene.high_gene=1 或 msc.sector_rank≤3）。
+
+    ⚠️ ctx 无 bars 字段（strategy_base StrategyMatchContext 只有 code/gene/market_scan_ctx）→
+    bars 须从 msc.bars 读（涨停 pipeline 当前不构造 msc.bars → data_unavailable）。
+    大跌从 close/open 差复算（不依赖 pctChg，R14 注入前可用）。edge_type=event（待验，
+    §44v2 须 R11 event_drift 修正才 verdict 可靠——G2 T5b 已 done）。
+    """
+
+    code = "leader_drop_reversal"
+    name = "龙头大跌反包"
+
+    def match(self, ctx) -> StrategyMatchResult:
+        msc = getattr(ctx, "market_scan_ctx", None) or {}
+        gene = getattr(ctx, "gene", None)
+        bars = msc.get("bars") if isinstance(msc, dict) else None
+        high_gene = getattr(gene, "high_gene", None) if gene else None
+        sector_rank = msc.get("sector_rank") if isinstance(msc, dict) else None
+
+        # 无 bars + 无龙头确认 → data_unavailable 整战法降级
+        if bars is None and high_gene is None and sector_rank is None:
+            return make_data_unavailable_result(self.code, self.name, [
+                ("leader_drop_reversal.c1", "龙头确认", "high_gene/sector_rank", "high_gene=1 or sector_rank<=3"),
+                ("leader_drop_reversal.c2", "T-1 大跌", "bars close/open", "<= -7%"),
+                ("leader_drop_reversal.c3", "T 吞没", "bars close/open", "curr.close>=prev.open & curr.open<=prev.close"),
+                ("leader_drop_reversal.c4", "放量", "bars volume", ">= 1.2x"),
+            ])
+
+        # C1 龙头确认: high_gene=1 或 sector_rank≤3
+        if high_gene is None and sector_rank is None:
+            c1_state, c1_desc, c1_val, c1_hit = "data_unavailable", "无 high_gene/sector_rank", None, False
+        else:
+            c1_hit = (high_gene == 1) or (sector_rank is not None and sector_rank <= 3)
+            c1_state = "hit" if c1_hit else "miss"
+            c1_desc = f"high_gene={high_gene}, sector_rank={sector_rank}（龙头确认）"
+            c1_val = f"hg={high_gene}, sr={sector_rank}"
+
+        # C2/C3/C4 bars 检测
+        c2_hit, c3_hit, c4_hit, bars_descs = _detect_leader_drop_reversal(bars)
+        if c2_hit is None:
+            c2_state = c3_state = c4_state = "data_unavailable"
+            c2_val = c3_val = c4_val = None
+            c2_desc = c3_desc = c4_desc = bars_descs[0] if bars_descs else "bars 缺失"
+        else:
+            c2_state = "hit" if c2_hit else "miss"
+            c3_state = "hit" if c3_hit else "miss"
+            c4_state = "hit" if c4_hit else "miss"
+            c2_desc, c3_desc, c4_desc = bars_descs[0], bars_descs[1], bars_descs[2]
+            c2_val = c3_val = c4_val = "见 desc"
+
+        conditions = [
+            ConditionEval(condition_id="leader_drop_reversal.c1", condition_name="龙头确认",
+                          factor="high_gene/sector_rank", threshold="hg=1 or sr<=3", actual_value=c1_val,
+                          state=c1_state, description=c1_desc),
+            ConditionEval(condition_id="leader_drop_reversal.c2", condition_name="T-1 大跌",
+                          factor="bars close/open", threshold="<= -7%", actual_value=c2_val,
+                          state=c2_state, description=c2_desc),
+            ConditionEval(condition_id="leader_drop_reversal.c3", condition_name="T 吞没",
+                          factor="bars close/open", threshold="curr.close>=prev.open & curr.open<=prev.close",
+                          actual_value=c3_val, state=c3_state, description=c3_desc),
+            ConditionEval(condition_id="leader_drop_reversal.c4", condition_name="放量",
+                          factor="bars volume", threshold=">= 1.2x", actual_value=c4_val,
+                          state=c4_state, description=c4_desc),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        fired = all(c.state == "hit" for c in conditions)
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="全条件命中",
+            confidence=0.55 if fired else None, data_ok=True,
+        )
+
+    def compute_confidence(self, matches, ctx) -> float:
+        return 0.55
+
+
+class Relay23Strategy(BaseStrategy):
+    """S203 T6：接力二三板（当下连板 lbc≥2 + 量比 [1.5,2.5] + Dragon Score 占位）。
+
+    区别 consecutive_relay（gene-based 250 日涨停频次≥2 + 封板率≥60%，历史频次口径）：
+    本战法是**当下连板接力**——当日涨停池 lbc≥2（区别历史频次）+ T 量比 1.5-2.5x
+    （放量但不爆量，接力健康区：缩量<1.5 无人接力，爆量>2.5 抛压过重）+ Dragon Score
+    （占位，dimension_registry 已建结构但未接线生产 compute，当前 data_unavailable）。
+
+    C3 Dragon Score 标占位——dimension_registry（5 维 + 接力 config）结构已落，dragon_score
+    composite 0-100 compute 待接线。当前 C3=data_unavailable **不阻塞 fire**：fire=C1+C2
+    命中，C3 为标注维度待接（区别 LowAbsorption C3 缩量 data_unavailable 阻塞 fire——彼为
+    数据缺失，此处为功能占位）。
+    edge_type=selection(待验，§44v2 window sanity 后定)。社区阈值（lbc≥2 / 量比 [1.5,2.5]）
+    标 overfit 风险，须 sensitivity sweep（S204 R13，dimension_registry sweep_range 已声明）。
+    """
+
+    code = "relay_23"
+    name = "接力二三板"
+
+    @staticmethod
+    def _eval_vol_ratio(bars):
+        """C2 量比 = T.volume / T-1.volume（bars 尾部 2 根，date asc）。
+
+        返 (ratio, state, desc, val, hit)。bars 不足/字段缺失/prev_vol=0 → data_unavailable。
+        """
+        if not bars or len(bars) < 2:
+            return None, "data_unavailable", "bars 不足/缺失，无法算量比", None, False
+        prev, curr = bars[-2], bars[-1]
+        try:
+            prev_vol = float(prev.get("volume", 0))
+            curr_vol = float(curr.get("volume", 0))
+        except (TypeError, ValueError, KeyError):
+            return None, "data_unavailable", "volume 字段解析失败", None, False
+        if prev_vol <= 0:
+            return None, "data_unavailable", "T-1 volume=0 无法算量比", None, False
+        ratio = round(curr_vol / prev_vol, 4)
+        hit = 1.5 <= ratio <= 2.5
+        state = "hit" if hit else "miss"
+        desc = f"T 量比 {ratio:.2f}（区间 [1.5, 2.5]，接力健康区）"
+        return ratio, state, desc, f"{ratio:.2f}", hit
+
+    def match(self, ctx) -> StrategyMatchResult:
+        msc = getattr(ctx, "market_scan_ctx", None) or {}
+        lbc = msc.get("lbc")
+        bars = msc.get("bars")
+
+        # 无 lbc + 无 bars → 整战法 data_unavailable（涨停 pipeline 未构造 msc 时诚实降级）
+        if lbc is None and bars is None:
+            return make_data_unavailable_result(self.code, self.name, [
+                ("relay_23.c1", "当下连板", "lbc", ">= 2"),
+                ("relay_23.c2", "量比健康区", "bars volume ratio", "[1.5, 2.5]"),
+                ("relay_23.c3", "Dragon Score", "dimension_registry", "占位待接线"),
+            ])
+
+        # C1 当下连板 lbc≥2（涨停池 raw lbc，区别 consecutive_relay 的 250 日历史频次）
+        if lbc is None:
+            c1_state, c1_desc, c1_val, c1_hit = "data_unavailable", "lbc 数据缺失", None, False
+        else:
+            c1_hit = lbc >= 2
+            c1_state = "hit" if c1_hit else "miss"
+            c1_desc = f"当下连板 {lbc}（阈值≥2，接力二三板）"
+            c1_val = str(lbc)
+
+        # C2 量比 [1.5, 2.5]（T/T-1 volume，放量但不爆量）
+        _ratio, c2_state, c2_desc, c2_val, c2_hit = self._eval_vol_ratio(bars)
+
+        # C3 Dragon Score 占位（dimension_registry 接线待，当前 data_unavailable 不阻塞 fire）
+        c3_state, c3_desc, c3_val = "data_unavailable", "Dragon Score 占位（dimension_registry 接线待）", None
+
+        conditions = [
+            ConditionEval(condition_id="relay_23.c1", condition_name="当下连板",
+                          factor="lbc", threshold=">= 2", actual_value=c1_val,
+                          state=c1_state, description=c1_desc),
+            ConditionEval(condition_id="relay_23.c2", condition_name="量比健康区",
+                          factor="bars volume ratio", threshold="[1.5, 2.5]", actual_value=c2_val,
+                          state=c2_state, description=c2_desc),
+            ConditionEval(condition_id="relay_23.c3", condition_name="Dragon Score",
+                          factor="dimension_registry", threshold="占位待接线", actual_value=c3_val,
+                          state=c3_state, description=c3_desc),
+        ]
+        hit_count = sum(1 for c in conditions if c.state == "hit")
+        # C3 占位 data_unavailable 不阻塞——fire = C1+C2 命中（Dragon Score 接线后改为全条件）
+        fired = c1_hit and c2_hit
+        return StrategyMatchResult(
+            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
+            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            fire_rule="C1+C2 命中（C3 Dragon Score 占位待接线）",
+            confidence=0.5 if fired else None, data_ok=True,
+        )
+
+    def compute_confidence(self, matches, ctx) -> float:
+        return 0.5

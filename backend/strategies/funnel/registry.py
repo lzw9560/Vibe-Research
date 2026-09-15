@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """策略注册表 + 权重加载。
 
-单一 ``STRATEGY_REGISTRY: list[StrategyConfig]``（12 项，含 storm_reversal）。
+单一 ``STRATEGY_REGISTRY: list[StrategyConfig]``（15 项，含 storm_reversal）。
 ``STRATEGY_FUNNEL_REGISTRY`` 保留为别名（向后兼容 routers/strategy + test）。
 
 权重来源：.vibe-research/strategy_weights.json（Phase 0d 全样本回归定稿，非拍脑袋）。
@@ -30,11 +30,14 @@ from strategies.impl import (
     ConsecutiveRelayStrategy,
     DragonHeadStrategy,
     EndOfDaySneakStrategy,
+    FirstBoardLimitupStrategy,
     FirstPlateStrategy,
+    LeaderDropReversalStrategy,
     LowAbsorptionStrategy,
     NShapeCounterattackStrategy,
     PatternReversalStrategy,
     PlatformBreakoutStrategy,
+    Relay23Strategy,
     ReversePackageStrategy,
     StormReversalStrategy,
     WeakTurnStrongStrategy,
@@ -51,7 +54,7 @@ StrategyFunnelConfig = StrategyConfig
 
 
 # ===========================================================================
-# 策略注册表（单一 STRATEGY_REGISTRY：12 项，合并旧 dict + 旧 dataclass）
+# 策略注册表（单一 STRATEGY_REGISTRY：15 项，合并旧 dict + 旧 dataclass）
 # ===========================================================================
 
 STRATEGY_REGISTRY: list[StrategyConfig] = [
@@ -75,6 +78,42 @@ STRATEGY_REGISTRY: list[StrategyConfig] = [
         ],
     ),
     StrategyConfig(
+        code="first_board_limitup",
+        name="首板涨停",
+        strategy_impl=FirstBoardLimitupStrategy(),
+        stop_loss_pct=-5.0, take_profit_pct=10.0, max_hold_days=3,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["晴天"], is_primary=True, fallback=False,
+        entry_type="次日竞价/开盘确认后",
+        entry_condition="板块共振(zt_count_today≥2)+封单≥0.5%+龙头(high_gene/sector_rank≤3)",
+        stop_loss_condition="跌破5日均线-5%",
+        take_profit_condition="涨至+8%~+12%后回落",
+        exit_condition="持仓3日未盈利或触发止损/止盈",
+        aliases=["首板涨停", "板块共振首板"],
+        quality_standards=[
+            QualityCheck("板块涨停家数≥2", True, "板块共振，避无板块效应秒板"),
+            QualityCheck("封单/流通市值≥0.5%", True, "精品封单门槛"),
+        ],
+    ),
+    StrategyConfig(
+        code="leader_drop_reversal",
+        name="龙头大跌反包",
+        strategy_impl=LeaderDropReversalStrategy(),
+        stop_loss_pct=-3.0, take_profit_pct=6.0, max_hold_days=1,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["极端反弹"], is_primary=False, fallback=False,
+        entry_type="次日竞价/开盘确认后",
+        entry_condition="龙头大跌≥7%+吞没前日阴线+放量≥1.2x（⚠️占位：phase 2 bars wiring 待，当前 data_unavailable 不 fire）",
+        stop_loss_condition="跌破入场价-3%",
+        take_profit_condition="涨至+4%~+6%后回落",
+        exit_condition="T+1 严格卖出或触发止损/止盈",
+        aliases=["龙头大跌反包", "反包板"],
+        quality_standards=[
+            QualityCheck("龙头确认(high_gene)", True, "核心龙头大跌后反包"),
+            QualityCheck("T-1大跌≥7%", True, "龙头大跌触发量化止损割肉筹码真空"),
+        ],
+    ),
+    StrategyConfig(
         code="consecutive_relay",
         name="连板接力",
         strategy_impl=ConsecutiveRelayStrategy(),
@@ -90,6 +129,25 @@ STRATEGY_REGISTRY: list[StrategyConfig] = [
         quality_standards=[
             QualityCheck("连板数≥2", True, "入场条件（连板接力定义）"),
             QualityCheck("封板率≥80%", True, "封板决心"),
+        ],
+    ),
+    StrategyConfig(
+        code="relay_23",
+        name="接力二三板",
+        strategy_impl=Relay23Strategy(),
+        stop_loss_pct=-5.0, take_profit_pct=12.0, max_hold_days=2,
+        funnel_type="limitup", weight_set="limitup",
+        weather_regimes=["晴天"], is_primary=False, fallback=False,
+        entry_type="次日竞价/开盘确认后",
+        entry_condition="当下连板 lbc≥2+量比[1.5,2.5](放量不爆量)+Dragon Score(占位待接线)",
+        stop_loss_condition="跌破前日收盘价-5%",
+        take_profit_condition="涨至+8%~+12%后回落",
+        exit_condition="连板高度≥3板或触发止损/止盈",
+        aliases=["接力二三", "二板接力", "三板接力"],
+        note="S203：当下连板接力（lbc 区别 consecutive_relay 历史频次）；Dragon Score C3 占位待 dimension_registry 接线，当前不阻塞 fire",
+        quality_standards=[
+            QualityCheck("当下连板≥2", True, "接力定义（lbc≥2 非历史频次）"),
+            QualityCheck("量比[1.5,2.5]", True, "放量不爆量，接力健康区"),
         ],
     ),
     StrategyConfig(
@@ -277,8 +335,11 @@ STRATEGY_REGISTRY: list[StrategyConfig] = [
 # 向后兼容别名：旧 STRATEGY_FUNNEL_REGISTRY 消费方（routers/strategy.py / test）零改动
 STRATEGY_FUNNEL_REGISTRY: list[StrategyConfig] = STRATEGY_REGISTRY
 
-# S094 T11（spec §3.M）：12 战法按 funnel_type 归组——score_candidates 必填 funnel_type，
+# S094 T11（spec §3.M）：15 战法按 funnel_type 归组——score_candidates 必填 funnel_type，
 # 只跑该组的战法（limitup 7 / market_scan 5），二者不交叉（R7）。
+# 注：S203 新增 first_board_limitup/leader_drop_reversal/relay_23 虽 funnel_type=limitup，
+# 但不入此列表——它们读 msc（bars/lbc/seal/zt_count），由 get_strategy_signals 的
+# _build_limitup_msc 构造、走 dispatch_match 全注册表路径 fire，不经 candidate funnel。
 STRATEGIES_BY_FUNNEL_TYPE: dict[str, list[str]] = {
     "limitup": [
         "first_plate", "consecutive_relay", "break_reseal", "n_shape_counterattack",

@@ -439,6 +439,7 @@ def match_strategies(
     indicators: Any = None,
     card: Any = None,
     derived: dict | None = None,  # S081：显式 derived（pre_market_workflow 无 card 时直传 fetch_derived）
+    market_scan_ctx: dict | None = None,  # S203 wiring(a)：涨停 pipeline 构造 msc 传战法（seal/zt_count/bars）
 ) -> list:
     """旧签名兼容包装：build StrategyContext → dispatch_match。
 
@@ -446,6 +447,8 @@ def match_strategies(
     position_advisor / prediction_ingest / score_candidates + 测试）。
     card 非空时从 card 子对象 override 读 pool_item/indicators/derived（S084 R5）。
     S081：derived 参数优先（pre_market_workflow 无 card 时直传 fetch_derived 结果）。
+    S203 wiring(a)：market_scan_ctx 参数——涨停 pipeline 构造（seal_to_float_ratio +
+    zt_count_today + bars）传战法（首板涨停/反包/接力），None 时战法 data_unavailable 降级。
     """
     if card is not None:
         if pool_item is None:
@@ -463,6 +466,7 @@ def match_strategies(
         indicators=indicators,
         derived=derived,
         weather_state=None,
+        market_scan_ctx=market_scan_ctx,  # S203 wiring(a)
     )
     # 延迟 import 打破环：strategy_base ← strategy_funnel_registry ← impl ← strategy_base
     from strategies.strategy_funnel_registry import STRATEGY_REGISTRY
