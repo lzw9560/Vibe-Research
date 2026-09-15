@@ -117,6 +117,7 @@ def test_load_kline_cache_wires_enrich_pctchg(monkeypatch, tmp_path):
         ]
     }))
     monkeypatch.setattr(fb, "KLINE_CACHE", fake)
+    monkeypatch.setattr(fb, "_KLINE_CACHE_MEMO", None)  # reset memo（mtime-key 已自动失效，此为防御显式）
     cache = fb._load_kline_cache()
     bar = cache["600000"][1]
     assert bar["pctChg"] == 10.0  # 0.0 被 enrich 覆盖（wiring 生效）

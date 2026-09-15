@@ -107,31 +107,39 @@ def _bs_code(code: str) -> str:
 
 
 _KLINE_CACHE_MEMO: tuple[float, dict[str, list[dict]]] | None = None  # (mtime, enriched)
+_KLINE_CACHE_LOCK = __import__("threading").Lock()  # 防 ThreadPoolExecutor 并发重复 parse+enrich（perf，非正确性）
 
 
 def _load_kline_cache() -> dict[str, list[dict]]:
-    """加载 baostock_kline_cache.json + enrich pctChg（mtime-keyed memo 避重复 parse+enrich）。
+    """加载 baostock_kline_cache.json + enrich pctChg（mtime-keyed memo + double-checked lock 避重复 parse+enrich）。
 
     S204 T1: baostock 一字板 pctChg=0.0/None 数据缺口（实测 580/200 股）→ enrich_pctchg 覆盖
     （决策#12 harness 层，不动 bar_utils 源码）。非零 baostock pctChg 99.98% 准确→保留。
     memo 按 mtime 失效——文件变（refresh_kline_cache 重写/测试 monkeypatch）自动重载。
-    返回 enriched dict 共享 memo 引用——callers **只读不 mutate**（mutate 会污染 memo）。
+    double-checked locking：fast path 无锁（memo 命中直接返），冷启动 race 时加锁防两线程重复 parse 160MB。
+    返回 enriched dict 共享 memo 引用——callers **只读不 mutate**（实测无 mutator，2026-09-16 二审核实；
+    bars.append 等均为本地 list 构建非 cache memo 突变）。
     """
     global _KLINE_CACHE_MEMO
     try:
         mtime = KLINE_CACHE.stat().st_mtime
     except OSError:
         return {}
+    # fast path（无锁）：memo 命中 + mtime 一致 → 直接返（common case）
     if _KLINE_CACHE_MEMO is not None and _KLINE_CACHE_MEMO[0] == mtime:
         return _KLINE_CACHE_MEMO[1]
-    try:
-        cache = json.loads(KLINE_CACHE.read_bytes())
-    except Exception:
-        return {}
-    from engine.pctchg_injector import enrich_pctchg
-    enriched = {code: enrich_pctchg(bars) for code, bars in cache.items()}
-    _KLINE_CACHE_MEMO = (mtime, enriched)
-    return enriched
+    with _KLINE_CACHE_LOCK:
+        # re-check under lock：另一线程等锁时可能已 populate
+        if _KLINE_CACHE_MEMO is not None and _KLINE_CACHE_MEMO[0] == mtime:
+            return _KLINE_CACHE_MEMO[1]
+        try:
+            cache = json.loads(KLINE_CACHE.read_bytes())
+        except Exception:
+            return {}
+        from engine.pctchg_injector import enrich_pctchg
+        enriched = {code: enrich_pctchg(bars) for code, bars in cache.items()}
+        _KLINE_CACHE_MEMO = (mtime, enriched)
+        return enriched
 
 
 def _fetch_baostock_bars(code: str, start_date: str, end_date: str, bs) -> list[dict]:
