@@ -6,6 +6,28 @@
 >
 > Codebase Archaeologist drift audit（2026-09-15）发现 + 2026-09-16 reviewer 复核。§44 承重 + 数据污染，**必须 ≥6 lens grill 才能实现**。
 
+## grill 修订（2026-09-16，≥6 lens workflow `wf_e7376d78-a23`，全 6 lens REVISE → synthesis REVISE）
+
+> **核心发现：spec 原前提 FALSE。bug 是 non-manifesting latent unit-inconsistency，非 verdict-falsification。**
+> 6 lens 对抗 grill（completeness / s44v2-interaction / production-blast / fix-correctness / falsifiability / regression，全 REVISE）核 code 后确认两条独立理由，both verified against code：
+
+### 1. 机制（CRITICAL）——floor 不 gate 10/11 的 primary verdict
+`effective_floor`（`verifier.py:408`）只 gate `event_status`，后者只对 `_EVENT_EDGE_TYPES={event, overnight_gap}`（`verifier.py:439-448`）驱动 primary `status`。**10/11 harness 是 `edge_type="selection"`**（grep 确认：lianban/first_board_layer/first_plate_h2/index_ma20/miaoban/platform_breakout/low_absorption/block_trade/valuation_pe/zt_pool_seal_time），其 status 走 `selection_lift`（`verifier.py:449-462`），与 floor 无关。floor bug **不 falsify 10/11 的 primary verdict**——只 corrupt secondary `event_status` 字段（data hygiene 问题，非 verdict 救火）。只 `gap_window_lift`（overnight_gap）primary status 受 floor 影响。
+
+### 2. returns 单位（CRITICAL）——bug non-manifesting
+spec §1 原假设 returns 是 ratio（day_lift "0.01-0.05 量级"）。**实际 returns 是 pct-points**（gap ~0.45-1.15；`accounting.py:84-95` `_cost_pct` 返百分点；`gap_window_lift.py:65` `net_gap=premium(pct)-real_cost(pct)`；:75 print as `%`）。buggy floor 0.075 从未 bind——`day_mean ~1.15 >> 0.075`。**bug non-manifesting**：即使 gap_window_lift 的 verdict 也没被 floor 误杀（event_status 仍 event_robust）。"11 verdict 被静默 falsify/underpowered" claim = 10x overstated + 实际 0 verdict 受影响。
+
+### 修订后的 fix（synthesis 推荐，DRY）
+- **加 `returns_unit: Literal['pct','ratio']='pct'` param 到 `wire_verdict`**（`tools/_s44_wire.py:60`，11 harness 共享边界）。当 `'pct'`：`returns=[r/100 for r in rets]` + `round_trip_cost=cost/100` → 调 `verify` 用 ratio-scale（与 `_EVENT_MATERIALITY_FLOOR=0.003` 一致）。对齐 4 个 reference correct harnesses（`cost_sweep_s201b` / `midline_event_harness` / `gap_regime_stratified` / `s44_gap_run_60d:436` 都 convert BOTH returns + cost）。
+- **不** per-harness `/100`（spec 原 R1）——DRY 违反 + 只修 cost 不修 returns 留新不一致（returns pct vs floor ratio）+ 改 0 verdicts。
+- **R2/R3 conditionalize**：flip set 实际为空（selection: floor-irrelevant；gap: pct-returns floor 从未 bind + days<60 → underpowered per `verifier.py:441-442` regardless）。R2 expect 0 flips；**R2 须 isolate from G1**（pctChg 修复）——recompute `verify()` from stored `return_series` in `recorder.db`（`_s44_wire.py:154` 存）+ `round_trip_cost/100`，**不** re-derive from G1-fixed cache（否则 before/after conflates S207+G1）。R3 conditional on R2 first confirming ≥1 real flip（否则 no-op，不跑 §44v2 复核 phantom 翻案）。
+- **R4 gaps fix**（5 子项）：(a) hard-raise 加在 `verify()`（`verifier.py:200`，非 `wire_verdict`——`test_s44_wire` mock verify 安全）；(b) test 文件放 `backend/tests/test_round_trip_cost_unit.py`（非 `backend/s44_verifier/tests/`——后者不存在 + 在 testpaths 外）；(c) `test_s44_wire.py:55` `round_trip_cost=0.70`→`0.007`（ratio）+ `:64` assert 同步 `==0.007`（消除 buggy-pct 示范）；(d) **ordering**：R4 hard-raise 须在 `returns_unit` helper 落地后才提交（否则 11 harness 传 pct 0.15-0.70 全 >0.1 crash）；(e) R4 extend 断言 returns ratio-scale（`median|return|<0.5`）。
+- **registry count correct 4 harness / 6 dims**（非 2）：`turnover`+`seal_amount`（first_board_layer）+ `first_plate_h2` + `late_lock` + `platform_breakout` + `low_absorption`（`evaluation.py:63-125`）。全 selection-type → floor 不影响 frozen lift 值（lift=selection winrate ratio，cost-independent）→ 生产 weight_multiplier 不受影响（P1 经正确链路成立，非"只 2 frozen + lift≈1.0"）。
+- **§4 line numbers off-by-1**（`_load_kline_cache` refactor 致）：gap_window 125→126, lianban 132→133, index_ma20 331→332, miaoban 98→99, valuation_pe 105→106, zt_pool 182→183。implementer 须 grep `round_trip_cost=` 字符串匹配（非行号）。
+
+### 优先级重评 + 实施状态
+**S207 从"P1 verdict 腐败"降为"non-manifesting latent unit-consistency P2"**。fix 是 data-hygiene / future-proofing（不改任何当前 verdict——11 仍 robust）。`synthesis.can_implement_autonomously=True`（修订后），但本 spec 实施 **deferred**——§44-critical `wire_verdict` API change + non-manifesting，待用户定优先级（implement now vs defer；non-manifesting 故低紧迫）。原 §1/§3/§5/§9 的 "11 verdict falsified" / "只 2 frozen" / "day_lift 0.01-0.05" / R2 翻案 / R3 审翻案 claims **SUPERSEDED 本节**。
+
 ## 1. 问题 / 目标
 
 11 个 §44 harness 把 `round_trip_cost` 当**百分点**传（0.15 = 0.15%），但 `verifier.py:408` 期望 **ratio**（0.0015）→ **100x 单位错** → `effective_floor = max(0.003, cost*0.5)` 膨胀 100x（0.003 → 0.075）→ 正常 day_lift（0.01-0.05 量级）全被 floor 误杀 → **11 个 harness 的 §44 verdict 被静默 falsify/underpowered**。
