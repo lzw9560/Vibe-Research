@@ -15,6 +15,7 @@ import pandas as pd
 from . import wiring  # noqa: TID252  (relative import within package)
 from . import stats as stats_mod  # noqa: TID252  (R3 merged methodology)
 from .stats import _EVENT_MATERIALITY_FLOOR  # noqa: TID252
+from .event_drift import adjust_event_drift  # noqa: TID252  (R11 event drift fix)
 
 _EdgeType = Literal["selection", "event", "population", "overnight_gap", "path"]
 _Status = Literal["robust_edge", "underpowered", "falsified", "not_validated", "exploratory"]
@@ -255,23 +256,27 @@ def verify(
     r5_skip_heavy = False
     r5_note = ""
     if window_sanity is not None:
-        edge_window = _WINDOW_FOR_EDGE.get(edge_type)
-        if edge_window and edge_window in window_sanity:
-            ws = window_sanity[edge_window]
+        # R8 fix (决策#7 verifier-side only): check ALL windows, not just edge_type's
+        # matching window. Any window with advantage → proceed (not exploratory).
+        # Only NO window has advantage → exploratory. Prevents §44v1 wrong-window
+        # disaster (selection edge in overnight_gap missed when R5 only checks path).
+        any_advantage = False
+        checked_windows: list[str] = []
+        for wname, ws in window_sanity.items():
             ws_mean = float(ws.get("mean", 0.0))
             ws_winrate = float(ws.get("winrate", 0.0))
             ws_base_rate = float(ws.get("base_rate", 0.5))
-            has_advantage = ws_mean > 0 and ws_winrate > ws_base_rate
-            if not has_advantage:
-                r5_skip_heavy = True
-                r5_note = (
-                    f"R5 window sanity: no advantage in '{edge_window}' window "
-                    f"(mean={ws_mean:.4f}, winrate={ws_winrate:.4f}, "
-                    f"base_rate={ws_base_rate:.4f}) → exploratory, "
-                    f"heavy methodology skipped"
-                )
-        # edge_window not in window_sanity → R5 can't check this edge_type,
-        # proceed normally (honest: we tried but no data for this window)
+            if ws_mean > 0 and ws_winrate > ws_base_rate:
+                any_advantage = True
+                break
+            checked_windows.append(wname)
+        if not any_advantage and checked_windows:
+            r5_skip_heavy = True
+            r5_note = (
+                f"R5 window sanity: no advantage in ANY window "
+                f"({checked_windows}) → exploratory, heavy methodology skipped"
+            )
+        # window_sanity empty/no windows → R5 can't check, proceed normally
     else:
         r5_note = "R5 window sanity: not provided, skipped"
 
@@ -337,10 +342,15 @@ def verify(
                 )
 
     # ── event metrics + event_status (day-clustered one-sample t-test) ────
-    # M4: overnight_gap is an event edge (S199) — treated identically to "event".
+    # R8 双算 (决策#7): event_metrics computed for ANY edge_type (not just
+    # event/overnight_gap). selection strategies also get event_metrics so their
+    # overnight_gap edge is tested + reported (old bug: only event types got it,
+    # selection's event edge untested). status still driven by edge_type's
+    # primary metric (event→event_status, selection→selection_lift); the other
+    # is reported in Verdict for visibility.
     event_metrics: Optional[EventMetrics] = None
     event_status: Optional[_EventStatus] = None
-    if edge_type in _EVENT_EDGE_TYPES and n > 0 and not r5_skip_heavy:
+    if n > 0 and not r5_skip_heavy:
         t_res = (
             # HIGH #8: pass original `returns` (with NaN), NOT stripped `r`.
             # day_clustered_t_test does its own NaN masking aligned to both
@@ -353,10 +363,20 @@ def verify(
         mean_return = float(r.mean())
         win_rate = float((r > 0).mean())
 
+        # R11 event drift fix: 两样本减市场 drift（event vs universe_by_day）。
+        # 无 universe → drift None（回退单样本 mean>0，drift 风险 noted）。
+        drift = adjust_event_drift(returns, universe_by_day) if universe_by_day else None
+
         if t_res is not None:
             t_stat_val: Optional[float] = t_res.t_stat
-            base_rate_val: Optional[float] = 0.0  # one-sample mean>0: null = 0
-            net_mean_val: Optional[float] = t_res.day_mean  # day-clustered net mean
+            base_rate_val: Optional[float] = (
+                drift.universe_mean if drift is not None and drift.universe_mean is not None
+                else 0.0
+            )  # R11: base_rate = universe baseline (not 0) when drift-adjusted
+            net_mean_val: Optional[float] = (
+                drift.drift_adjusted_mean if drift is not None and drift.drift_adjusted_mean is not None
+                else t_res.day_mean
+            )  # R11: net = drift-adjusted (event - universe) when universe provided
 
             # 多重比较校正（grill #3）：event 边际多 horizon/arm 重复测，p_one_sided
             # 须 Bonferroni/BH 校正（同 selection 分支）。by-n：小 n<60 用 BH，大 n≥60
@@ -367,11 +387,18 @@ def verify(
             evt_bh = stats_mod.bonferroni_bh(
                 [t_res.p_one_sided], n_comparisons, "BH",
             )
-            p_bonf = None
+            # R8 双算: don't overwrite selection's p_bonf. selection uses Bonferroni
+            # (p_bonf set by selection branch above), event uses BH (p_bh). Both
+            # reported in Verdict; status picks based on edge_type. Old bug: event
+            # branch set p_bonf=None, clobbering selection's Bonferroni.
             p_bh = evt_bh[0] if evt_bh else None
 
             if t_res.day_mean <= 0:
                 event_status = "event_falsified"
+            elif drift is not None and drift.is_drift_inflated:
+                # R11 drift-inflated: event_mean>0 but drift_adjusted<=0 (market drift)
+                # → NOT robust, downgrade to thin_positive (防牛市 base_rate=0 假阳性)
+                event_status = "event_thin_positive"
             elif (p_bh if p_bh is not None else t_res.p_one_sided) < 0.05:
                 # Directionally confirmed (p < 0.05)
                 # MEDIUM #7: materiality floor extracted from magic 0.003.

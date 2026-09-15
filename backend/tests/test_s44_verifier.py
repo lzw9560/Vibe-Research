@@ -816,11 +816,11 @@ def test_r5_window_sanity_no_advantage_forces_exploratory():
         returns.extend(day_rets.tolist())
         dates.extend([f"2026-01-{i + 1:02d}"] * 10)
 
-    # window_sanity: overnight_gap has NO advantage (mean<0, winrate<base_rate)
+    # window_sanity: NO advantage in ANY window (R8 fix: R5 checks all windows)
     window_sanity = {
         "overnight_gap": {"mean": -0.01, "median": -0.005, "winrate": 0.40, "base_rate": 0.50},
-        "d1_intraday": {"mean": 0.001, "median": 0.0, "winrate": 0.51, "base_rate": 0.50},
-        "path": {"mean": 0.005, "median": 0.003, "winrate": 0.52, "base_rate": 0.50},
+        "d1_intraday": {"mean": -0.002, "median": 0.0, "winrate": 0.48, "base_rate": 0.50},
+        "path": {"mean": -0.005, "median": -0.003, "winrate": 0.45, "base_rate": 0.50},
     }
 
     # Act
@@ -829,11 +829,11 @@ def test_r5_window_sanity_no_advantage_forces_exploratory():
         window_sanity=window_sanity,
     )
 
-    # Assert: forced exploratory (no advantage in overnight_gap window)
+    # Assert: forced exploratory (no advantage in ANY window)
     assert v.status == "exploratory"
     assert v.event_status is None  # heavy methodology skipped
     assert "no advantage" in v.note.lower()
-    assert "overnight_gap" in v.note
+    assert "any window" in v.note.lower()
 
 
 def test_r5_window_sanity_none_notes_skipped():
@@ -876,6 +876,61 @@ def test_r5_window_sanity_with_advantage_proceeds_normally():
 
     # Assert: not forced to exploratory (advantage found → heavy methodology runs)
     assert v.event_metrics is not None  # heavy methodology NOT skipped
+
+
+def test_r5_checks_all_windows_finds_advantage_in_non_matching():
+    """R8 fix: R5 checks ALL windows. selection strategy with path NO advantage
+    but overnight_gap HAS advantage → NOT forced exploratory (proceeds).
+
+    Old bug: R5 only checked edge_type's matching window (selection→path),
+    so a selection strategy with edge in overnight_gap was marked exploratory
+    (§44v1 wrong-window disaster). Fix: check all windows, any advantage → proceed.
+    """
+    rng = np.random.default_rng(42)
+    returns, dates = [], []
+    for i in range(60):
+        day_rets = rng.normal(0.005, 0.01, 10)
+        returns.extend(day_rets.tolist())
+        dates.extend([f"2026-01-{i + 1:02d}"] * 10)
+    # path NO advantage (selection's matching window), overnight_gap HAS advantage
+    window_sanity = {
+        "overnight_gap": {"mean": 0.013, "median": 0.012, "winrate": 0.55, "base_rate": 0.50},
+        "d1_intraday": {"mean": -0.001, "median": 0.0, "winrate": 0.48, "base_rate": 0.50},
+        "path": {"mean": -0.005, "median": -0.003, "winrate": 0.45, "base_rate": 0.50},
+    }
+    v = verify(
+        np.array(returns), n_trials=1, edge_type="selection", dates=dates,
+        window_sanity=window_sanity,
+    )
+    # R5 found overnight_gap advantage → didn't skip → note has no "no advantage"
+    assert "no advantage" not in v.note.lower()
+    # 双算: event_metrics computed (selection also gets event edge test)
+    assert v.event_metrics is not None
+
+
+def test_verifier_dual_calc_selection_and_event():
+    """R8 双算: edge_type='selection' → BOTH selection_lift AND event_metrics computed.
+
+    Old bug: event_metrics only computed for event/overnight_gap edge_type →
+    selection strategy's event (overnight) edge untested. Fix: any edge_type
+    gets event_metrics (reported alongside selection_lift).
+    """
+    rng = np.random.default_rng(42)
+    returns, dates = [], []
+    for i in range(60):
+        day_rets = rng.normal(0.005, 0.01, 10)
+        returns.extend(day_rets.tolist())
+        dates.extend([f"2026-01-{i + 1:02d}"] * 10)
+    survivors_by_day = {f"2026-01-{i + 1:02d}": [0.005] * 10 for i in range(60)}
+    universe_by_day = {f"2026-01-{i + 1:02d}": [0.001] * 10 for i in range(60)}
+    v = verify(
+        np.array(returns), n_trials=1, edge_type="selection", dates=dates,
+        survivors_by_day=survivors_by_day, universe_by_day=universe_by_day,
+    )
+    assert v.selection_lift is not None  # selection computed
+    assert v.event_metrics is not None  # 双算: event_metrics ALSO computed for selection
+    # p_bonferroni (selection's) AND p_bh (event's) both populated, not clobbered
+    assert v.p_bonferroni is not None  # selection Bonferroni not overwritten by event
 
 
 # ── MEDIUM #7: materiality floor boundary (extracted from magic 0.003) ───────
@@ -1083,13 +1138,17 @@ def test_path_edge_type_accepted_and_returned():
     assert v.edge_type == "path"
 
 
-def test_path_does_not_populate_event_metrics():
-    """path is selection-like — verify() does NOT compute event_metrics
-    (path tests lift, not one-sample mean>0)."""
+def test_path_now_populates_event_metrics_dual_calc():
+    """R8 双算: path NOW gets event_metrics (any edge_type does).
+
+    Old (pre-R8): path didn't get event_metrics (only event/overnight_gap did) —
+    path's overnight event edge untested. New (R8): path gets event_metrics
+    dual-computed alongside selection_lift — event edge now tested + reported.
+    """
     rng = np.random.default_rng(5)
     r = rng.normal(0.001, 0.012, 100)
     v = verify(r, n_trials=1, edge_type="path")
-    assert v.event_metrics is None
+    assert v.event_metrics is not None  # R8 双算: populated (was None pre-R8)
 
 
 def test_path_falsified_triggers_anti_extrapolation_note():
