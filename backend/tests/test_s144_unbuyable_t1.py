@@ -56,7 +56,7 @@ def _install_fake_baostock(monkeypatch, bars_by_code: dict[str, list[dict]]) -> 
     def _logout():
         pass
 
-    def _query(bs_code, fields, start_date, end_date, adjustflag="2"):
+    def _query(bs_code, fields, start_date, end_date, adjustflag="2", frequency="d"):
         # bs_code 形如 sh.600000 / sz.000001 → 取 6 位 code
         code6 = bs_code.split(".")[-1] if bs_code else ""
         rows = bars_by_code.get(code6, [])
@@ -213,7 +213,7 @@ def test_r4_take_profit_on_buy_day_skipped():
     # 新代码：T+1 止盈被跳过，T+2 无触发，T+3 触止损 → {False,-3.0}
     # 旧代码：T+1 触止盈 → {True,8.0}。精确区分（非弱永真式）。
     assert res["won"] is False
-    assert res["return_pct"] == -3.0  # T+3 止损触发（非 T+1 止盈）
+    assert res["return_pct"] == -3.1  # T+3 止损触发（非 T+1 止盈）; S201b stop×(1-eps) → -3.1 非 -3.0
 
 
 def test_r4_max_hold_1_exits_at_t2_not_buy_day():
