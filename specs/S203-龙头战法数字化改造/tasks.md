@@ -1,7 +1,25 @@
 # Tasks — S203 龙头战法数字化改造
 
-> 状态：草案（2026-09-14，plan-writing workflow `wpy8b0kef` 起草 + 主 loop 调和）。SDD §0：plan→**tasks 可执行 checklist**。TDD：每 task 先写 test（红）→实现（绿）→重构。
+> 状态：草案→**部分实施**（2026-09-14 起草；2026-09-16 主 loop 标记进度，见下方）。
 > 关联：[[./spec.md]]、[[./plan.md]]、[[../_shared/dragon-score-dimension-registry.md]]。
+
+## 实施状态（2026-09-16）
+
+- ✅ **T0** grep zt_count_250d 7 文件：审计确认 7 文件引用全在（gene_based:91/131/248 + strategy_base:348/380 + funnel/scoring:97/105 + routers/workflow.py:221/250 + scheduler/notifications.py:57）。手动确认 task，basis 有效。
+- ✅ **T1** dimension_registry.py：DONE（`06f898a`，Dimension+DIMENSION_REGISTRY+战法ScoreConfig+3 战法 config）。
+- ✅ **T2** dragon_score.py：DONE（`06f898a`，composite 0-100）。⚠️ `_normalize` 是骨架待接线（harness 层公式）。
+- 🔶 **T3** dragon_head C2/C3 seal gate：S203 P2，待核是否已落 gene_based.py:393（audit: C3 Dragon Score 占位 `data_unavailable`，fire=C1+C2；C2 zt_count_today≥2 + C3 seal_to_float_ratio≥0.005 待核）。
+- 🔶 **T4** consecutive_relay C1 lbc≥2：待核 gene_based.py:91 是否改 lbc（audit: Relay23Strategy 已建但 C1 是否从 zt_count_250d≥2 改 lbc≥2 未确认）。
+- ✅ **T5** leader_drop_reversal：DONE（`06f898a`，LeaderDropReversalStrategy，大跌从 close 差复算不依赖 pctChg）。
+- 🔶 **T6** intraday_loss_breaker：built+green **UNWIRED**（`c5e641e`，stage-1 待 G4 接 router/scheduler）。
+- ⏸️ **T7** QMT 4 模板：spec-only 未建（放 specs/S203/templates/ 标 BLOCKER）。
+- ✅ **T8** regime-stratified harness ×2（first_board_limitup + reverse_package）：built（`06f898a`），verdict 须等 G1 pctChg+isST 全到位（pctChg DONE，isST DEFERRED）+ S204 verifier（DONE）。
+- ✅ **T9** sensitivity_sweep：built（`06f898a`），待 G6 验 overfit 检测。
+- ⏸️ **T10** 全量验收：G7，未做。
+
+**关键依赖**：S203 P5 regime harness（T8）的 verdict 现依赖 G1 pctChg（DONE `7e75465`）+ S204 verifier（DONE `fb2cc65`）。isST（T2 S204）DEFERRED 不阻塞 S203 match 逻辑（用 close 价格+em_get 涨停池数据），只阻塞 ST 股一字板 5% 阈值精度。
+
+---
 
 # Cross-spec 全局 phase 序（synth）
 

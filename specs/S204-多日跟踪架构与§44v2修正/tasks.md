@@ -1,9 +1,30 @@
 # Tasks — S204 多日跟踪架构与§44v2修正
 
-> 状态：草案（2026-09-14，plan-writing workflow `wpy8b0kef` 起草 + 主 loop 调和）。SDD §0：plan→**tasks 可执行 checklist**。TDD：每 task 先写 test（红）→实现（绿）→重构。
+> 状态：草案→**部分实施**（2026-09-14 起草；2026-09-16 主 loop 自主推进 G1+G2，见下方实施状态）。
 > 关联：[[./spec.md]]、[[./plan.md]]、[[../_shared/dragon-score-dimension-registry.md]]。
 
-# Cross-spec 全局 phase 序（synth）
+## 实施状态（2026-09-16，主 loop 自主推进；用户 asleep）
+
+**G1 数据地基**：
+- ✅ **T1 pctchg_injector**：模块+逻辑+接线全 DONE（`fc7397d`/`ccdb3fb`/`7e75465`）。`enrich_pctchg` 修 0.0/None 覆盖；`_load_kline_cache` 单点注入 + mtime memo；8 harness 接全（lianban/gap/index_ma20/derive_first_board/zt_pool_seal_time/miaoban/valuation_pe/multifactor）。real-cache 验证 580 一字涨停板/200 股修复（baostock pctChg=0.0/None 数据缺口，实测比审计估更广——审计只数 ==0.0 漏 None）。
+- ⏸️ **T2 enrich_isst**：**DEFERRED 需用户决策**。实测 cache isST 91% 缺失（baostock 仅近端 ~8.8% 回填），cache-LOCF 0/139 可修（isST 观测晚于误判板，LOCF 默认 0）。需外部历史 ST 源（baostock `query_stock_basic` current-only / akshare ST history / 重 fetch with isST field）——**选源是用户决策**。ST 污染 139 板/200 股（小于 pctChg 580/200 股），pctChg 修复是更大污染源已先做。
+- ✅ **T3 forward_test_backfill cron**：DONE（`39d6c39`）。cron `0 18 * * 0-4` 注册，long-running ~3 个月真实交易日积累 ≥60 天（不可臆造/加速）。
+
+**G2 §44v2 verifier 修正**（DONE）：
+- ✅ **T5** verifier 双算 + R5 查 ALL 窗口：DONE（`fb2cc65`）。
+- ✅ **T5b** event_drift：DONE + wired `verifier.py:18/368`（`fb2cc65`）。
+- ✅ **T6** family_grouping：DONE（`fb2cc65`）。⚠️ `split_into_subphases` + K 冻结 pre-registration 部分待核 family_grouping.py 是否含（commit 3 的 S203 sensitivity_sweep.py 已建，待 G6 验）。
+
+**未做**（G3-G7）：
+- ⏸️ T4 underpowered 标注（R15/R16/R17）/ T7 DIM_ARM_MAP arm-sizing（audit: evaluation.py:241 空转）/ T8 R3 enforce（audit: seed.py:265 无 enforce key + override 表只 path_lift 有 compute_fn，[[s44-verdict-production-link-verified]]）/ T9-T12 跟踪架构接线（模块 built+green unwired `c5e641e`，待接 router/scheduler）/ T13 sweep harness（built `06f898a` 待 G6 验）。
+
+**配套**：
+- ✅ test_e2e.py 挂起修（`3168106`，@live 标 TestRiskEndpoints 2 测试，解全量 pytest 安全网）。
+- ✅ S207 spec 审计修正 9→11 + P1 非 P0（`23a5e90`，[[s44-verdict-production-link-verified]]）；≥6 lens grill 跑中（wf_e7376d78-a23）。
+
+---
+
+## Cross-spec 全局 phase 序（synth）
 
 > 来自 plan-writing workflow `wpy8b0kef` synth（cross-spec 依赖排序+一致性）。
 
