@@ -232,14 +232,20 @@ class TestWinRateEndpoints:
 
 
 class TestRiskEndpoints:
+    @pytest.mark.live
     def test_risk_oneday_list(self):
+        """走 mootdx/akshare 实时网络——sandbox 内 garbled/no-data 无限重试挂起全量套件（~10% 卡死）。
+        标 @live：离线 -m "not live" 跳过，避免 hang + 解锁全量 pytest 安全网（2026-09-16 审计 CRITICAL）。
+        """
         r = client.get("/api/risk/oneday/list")
         assert r.status_code in (200, 502)
         if r.status_code == 200:
             data = r.json()
             assert "data" in data
 
+    @pytest.mark.live
     def test_risk_seats(self):
+        """同 test_risk_oneday_list——/api/risk/seats 走实时网络，离线跳过。"""
         r = client.get("/api/risk/seats")
         assert r.status_code in (200, 502)
         if r.status_code == 200:
