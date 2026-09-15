@@ -106,19 +106,32 @@ def _bs_code(code: str) -> str:
     return f"sh.{code}" if code.startswith("6") else f"sz.{code}"
 
 
+_KLINE_CACHE_MEMO: tuple[float, dict[str, list[dict]]] | None = None  # (mtime, enriched)
+
+
 def _load_kline_cache() -> dict[str, list[dict]]:
-    if not KLINE_CACHE.exists():
+    """加载 baostock_kline_cache.json + enrich pctChg（mtime-keyed memo 避重复 parse+enrich）。
+
+    S204 T1: baostock 一字板 pctChg=0.0/None 数据缺口（实测 580/200 股）→ enrich_pctchg 覆盖
+    （决策#12 harness 层，不动 bar_utils 源码）。非零 baostock pctChg 99.98% 准确→保留。
+    memo 按 mtime 失效——文件变（refresh_kline_cache 重写/测试 monkeypatch）自动重载。
+    返回 enriched dict 共享 memo 引用——callers **只读不 mutate**（mutate 会污染 memo）。
+    """
+    global _KLINE_CACHE_MEMO
+    try:
+        mtime = KLINE_CACHE.stat().st_mtime
+    except OSError:
         return {}
+    if _KLINE_CACHE_MEMO is not None and _KLINE_CACHE_MEMO[0] == mtime:
+        return _KLINE_CACHE_MEMO[1]
     try:
         cache = json.loads(KLINE_CACHE.read_bytes())
     except Exception:
         return {}
-    # S204 T1 wiring: baostock cache 一字板 pctChg=0.0 数据缺口（实测 63/105506 bars 抽样，
-    # baostock 对一字涨停板返 pctChg=0.0 → is_unbuyable_next_bar 读 0.0<9.8 误判可买=污染 ALL 回测）。
-    # enrich_pctchg 覆盖 0.0/缺失为 close 差复算值（决策#12 harness 层，不动 bar_utils 源码）；
-    # 非零 baostock pctChg 99.98% 准确→保留。统一在此注入→所有走 _load_kline_cache 的 harness 生效。
     from engine.pctchg_injector import enrich_pctchg
-    return {code: enrich_pctchg(bars) for code, bars in cache.items()}
+    enriched = {code: enrich_pctchg(bars) for code, bars in cache.items()}
+    _KLINE_CACHE_MEMO = (mtime, enriched)
+    return enriched
 
 
 def _fetch_baostock_bars(code: str, start_date: str, end_date: str, bs) -> list[dict]:

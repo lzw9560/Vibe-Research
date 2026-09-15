@@ -15,6 +15,7 @@ from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
+from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0/None 一字板修复）
 
 H2_CACHE = ROOT / ".vibe-research" / "h2_features_cache_full.json"
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
@@ -22,7 +23,7 @@ PARAMS = (-3.0, 8.0, 3)
 
 feats = json.loads(H2_CACHE.read_text())
 # NOTE: h2_features_cache_full（5min kline 派生，list_of_dicts）无对应 schema — 派生 artifact
-bars_cache = json.loads(KLINE.read_bytes())
+bars_cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复）
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
 validate_or_reject("baostock_kline",
                    [b for bars in bars_cache.values() for b in bars],

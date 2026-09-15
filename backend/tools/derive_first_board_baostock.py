@@ -97,9 +97,15 @@ def is_limit_up(code: str, bar: dict) -> bool:
 # ── 派生（baostock cache → zt/fb 集合）─────────────────────────────────────────
 
 def load_cache() -> tuple[dict, dict[str, dict]]:
-    """加载 baostock cache，返 (raw, code→{date:bar} 索引)。"""
+    """加载 baostock cache，返 (raw, code→{date:bar} 索引)。
+
+    S204 T1: 走 _load_kline_cache（enriched，一字板 pctChg=0.0/None 修复）——本文件从 pctChg
+    反推 prev_close（is_limit_up 判涨停），pctChg=0 → prev_close=close → 漏判所有一字涨停→污染
+    first_board 宇宙（喂 s44_gap_run_60d / gap_regime_stratified）。enrich 后 pctChg 正确。
+    """
     t0 = time.time()
-    raw = json.loads(CACHE.read_bytes())
+    from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1
+    raw = _load_kline_cache()
     codebars = {c: {b["date"]: b for b in bars} for c, bars in raw.items()}
     log.info(f"[load] {len(raw)} codes, {time.time()-t0:.1f}s")
     return raw, codebars

@@ -17,6 +17,7 @@ from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
+from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0/None 一字板修复）
 
 KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
@@ -60,7 +61,7 @@ def _time_hhmmss(t: str) -> str:
     return (digits + "000000")[:6]
 
 def main(smoke_days=None):
-    cache = json.loads(KLINE_CACHE.read_bytes())
+    cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复）
     # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
     validate_or_reject("baostock_kline",
                        [b for bars in cache.values() for b in bars],

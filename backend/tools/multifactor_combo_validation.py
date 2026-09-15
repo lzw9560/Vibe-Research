@@ -46,6 +46,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from tools.kline_ta_validation import _compute_ta  # noqa: E402
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar  # noqa: E402
+from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0/None 一字板修复）
 
 VR = ROOT / ".vibe-research"
 BASELINE = VR / "first_board_premium_baseline.json"
@@ -163,7 +164,7 @@ def build_feature_matrix() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str
     print("Loading data...")
     baseline = json.loads(BASELINE.read_bytes())
     samples = baseline["samples"]
-    kline = json.loads(KLINE.read_bytes())
+    kline = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复；pctchg feature 也用真实值）
     lb = json.loads(THS_LB.read_text())
     profit = json.loads(PROFIT.read_text())
     conn = sqlite3.connect(str(GENE_DB), timeout=10)
