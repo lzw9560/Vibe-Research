@@ -204,28 +204,54 @@ def test_stop_normal_touch_fills_at_stop_level_with_slippage():
 
 
 def test_stop_locked_down_bar_carries_to_next_bar():
-    """S201b stage 2: 一字跌停（high==low 且价格在止损位以下）→ 无法卖，carry 到下一 bar。
+    """S201b2: 一字跌停（high==low 且 ≤ stop）→ stop 触发 pending，下个 tradeable bar 填 open。
 
-    locked-down bar 上止损卖单无法成交（无买家），须 carry。
+    locked-down bar 无法成交（无买家），但 stop 已触发（price 已穿 stop）→ pending market sell
+    填下个 tradeable bar 的集合竞价 open（非重新评估 trigger）。修 S201b carry 丢 trigger bug。
     """
     entry = 10.0
     stop_pct = -4.0  # stop_level = 9.6
     bars = [
         _bar("2026-01-01", 10.0, 10.2, 9.8, 10.1),   # signal
         _bar("2026-01-02", 10.0, 10.3, 9.9, 10.2),    # T+1 entry
-        _bar("2026-01-03", 9.0, 9.0, 9.0, 9.0),       # T+2: 一字跌停（high==low=9.0 <= stop_level=9.6）
-        _bar("2026-01-04", 9.8, 10.0, 9.5, 9.7),      # T+3: 正常 bar，low=9.5 <= stop → 触止损
+        _bar("2026-01-03", 9.0, 9.0, 9.0, 9.0),       # T+2: 一字跌停 9.0 <= stop 9.6 → pending_stop
+        _bar("2026-01-04", 9.8, 10.0, 9.5, 9.7),      # T+3: tradeable → pending fill=open=9.8
         _bar("2026-01-05", 9.7, 10.0, 9.5, 9.8),      # T+4
     ]
     pr = path_return(_make_trades(entry), bars, stop_pct, 8.0, 3, apply_cost=False)
     assert pr is not None
     assert pr.exit_reason == "stop"
-    # exit_date 应是 T+3（bars[3]），非 T+2（bars[2] locked → carry）
+    # exit_date 是 T+3（bars[3]）：T+2 locked → pending，T+3 tradeable 填 open
     assert pr.exit_date == "2026-01-04"
-    # T+3 正常触止损：fill = stop_level * (1-eps)
-    expected_fill = 9.6 * (1 - STOP_SLIPPAGE_EPS)
-    expected_gross = (expected_fill - entry) / entry * 100
+    # pending market sell 填 T+3 open=9.8（overnight recovery 后 open>stop → 填 recovered open，诚实）
+    expected_fill = 9.8  # T+3 open（非 stop×(1-eps)——stop 已 pending，填下 bar open）
+    expected_gross = (expected_fill - entry) / entry * 100  # (9.8-10)/10 = -2.0%
+    assert pr.exit_price == pytest.approx(expected_fill, abs=0.001)
     assert pr.gross_return_pct == pytest.approx(expected_gross, abs=0.01)
+
+
+def test_stop_locked_below_then_recovery_triggers_pending_fill():
+    """S201b2: locked-below-stop bar 后跟 recovery → stop 须触发(pending)，填下 bar open。
+
+    bug: _is_sellable_bar False 在 locked-below-stop bar 跳过整个 trigger 检查 →
+    若下 bar recovery(open>stop, low>stop)，stop 永不触发 → max_hold 乐观泄露。
+    修: locked-below-stop → pending_stop，下 tradeable bar 填 open。
+    """
+    entry = 10.0
+    stop_pct = -4.0  # stop_level = 9.6
+    bars = [
+        _bar("2026-01-01", 10.0, 10.2, 9.8, 10.1),   # signal
+        _bar("2026-01-02", 10.0, 10.3, 9.9, 10.2),    # T+1 entry
+        _bar("2026-01-03", 9.0, 9.0, 9.0, 9.0),       # T+2: 一字跌停 9.0 <= stop 9.6 → pending
+        _bar("2026-01-04", 10.2, 10.3, 10.1, 10.25),  # T+3: recovery open=10.2 > stop → pending fill open
+        _bar("2026-01-05", 10.1, 10.2, 10.0, 10.15),  # T+4
+    ]
+    pr = path_return(_make_trades(entry), bars, stop_pct, 8.0, 3, apply_cost=False)
+    assert pr is not None
+    assert pr.exit_reason == "stop"  # bug 时会 max_hold
+    assert pr.exit_date == "2026-01-04"  # T+3
+    assert pr.exit_price == pytest.approx(10.2, abs=0.001)  # pending fill at T+3 open
+    assert pr.gross_return_pct == pytest.approx(2.0, abs=0.01)  # (10.2-10)/10*100 = +2.0%
 
 
 def test_take_profit_unchanged_by_stop_fix():

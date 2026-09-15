@@ -180,6 +180,11 @@ def path_return(
     stop_level = entry * (1 + stop_pct / 100)
     take_level = entry * (1 + take_profit_pct / 100)
 
+    # S201b2: pending_stop 状态机——locked-below-stop bar 触发 stop (pending)，
+    # 下个 tradeable bar 填 open（pending market sell 填集合竞价 open）。
+    # 修 S201b carry 丢 trigger bug：_is_sellable_bar False 跳过整个 trigger 检查 →
+    # locked-below-stop 后跟 recovery → stop 永不触发 → max_hold 乐观泄露（§8 反目标）。
+    pending_stop = False
     # stop/take 循环（simulate_holding lines 104-112）——T+2 起检查
     for j in range(idx + 2, min(idx + 2 + max_hold_days, len(bars))):
         low = _bar_get(bars[j], "low", 0.0)
@@ -192,15 +197,25 @@ def path_return(
         except (TypeError, ValueError):
             continue
         # S201b stage 2: stop gap-through-aware fill（修硬编码 gross=float(stop_pct)）
-        # 一字跌停 locked → 无法卖，carry 到下一 bar
         stop_fill_price: float | None = None
-        if _is_sellable_bar(high_f, low_f, stop_level):
+        if pending_stop:
+            # S201b2: stop 已在 prior locked bar 触发；此 bar tradeable → fill=open
+            # （pending market sell 填集合竞价 open；仍 locked 则继续 carry pending）
+            if _is_sellable_bar(high_f, low_f, stop_level):
+                stop_fill_price = open_f
+        elif _is_sellable_bar(high_f, low_f, stop_level):
             if open_f and open_f <= stop_level:
                 # gap-through：开盘已在止损位或以下 → fill=open（更差）
                 stop_fill_price = open_f
             elif low_f and low_f <= stop_level:
                 # 正常触止损：fill=止损位*(1-eps)（微小滑点）
                 stop_fill_price = stop_level * (1 - STOP_SLIPPAGE_EPS)
+        else:
+            # S201b2: locked bar（一字跌停 high==low 且 ≤ stop）——stop 触发 pending
+            # （price 已穿 stop；无法在此 bar 成交，pending 到下个 tradeable bar 填 open）。
+            # 一字涨停（locked above stop）不触止损，carry。
+            if high_f <= stop_level:
+                pending_stop = True
         if stop_fill_price is not None:
             gross = (stop_fill_price - entry) / entry * 100
             net = gross - cost
