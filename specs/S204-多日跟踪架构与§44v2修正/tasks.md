@@ -13,7 +13,7 @@
 **G2 §44v2 verifier 修正**（DONE）：
 - ✅ **T5** verifier 双算 + R5 查 ALL 窗口：DONE（`fb2cc65`）。
 - ✅ **T5b** event_drift：DONE + wired `verifier.py:18/368`（`fb2cc65`）。
-- ✅ **T6** family_grouping：DONE（`fb2cc65`）。⚠️ `split_into_subphases` + K 冻结 pre-registration 部分待核 family_grouping.py 是否含（commit 3 的 S203 sensitivity_sweep.py 已建，待 G6 验）。
+- ✅ **T6** family_grouping：DONE（`fb2cc65`，2026-09-16 核 family_grouping.py：`EQUIVALENCE_FAMILIES` 3 族 + `effective_family_count` + `split_into_subphases`（K=12→[8,4]）+ `FrozenK` dataclass 全在）。
 
 **未做**（G3-G7）：
 - ⏸️ T4 underpowered 标注（R15/R16/R17）/ T7 DIM_ARM_MAP arm-sizing（audit: evaluation.py:241 空转）/ T8 R3 enforce（audit: seed.py:265 无 enforce key + override 表只 path_lift 有 compute_fn，[[s44-verdict-production-link-verified]]）/ T9-T12 跟踪架构接线（模块 built+green unwired `c5e641e`，待接 router/scheduler）/ T13 sweep harness（built `06f898a` 待 G6 验）。

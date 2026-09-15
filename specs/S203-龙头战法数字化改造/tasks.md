@@ -8,8 +8,8 @@
 - ✅ **T0** grep zt_count_250d 7 文件：审计确认 7 文件引用全在（gene_based:91/131/248 + strategy_base:348/380 + funnel/scoring:97/105 + routers/workflow.py:221/250 + scheduler/notifications.py:57）。手动确认 task，basis 有效。
 - ✅ **T1** dimension_registry.py：DONE（`06f898a`，Dimension+DIMENSION_REGISTRY+战法ScoreConfig+3 战法 config）。
 - ✅ **T2** dragon_score.py：DONE（`06f898a`，composite 0-100）。⚠️ `_normalize` 是骨架待接线（harness 层公式）。
-- 🔶 **T3** dragon_head C2/C3 seal gate：S203 P2，待核是否已落 gene_based.py:393（audit: C3 Dragon Score 占位 `data_unavailable`，fire=C1+C2；C2 zt_count_today≥2 + C3 seal_to_float_ratio≥0.005 待核）。
-- 🔶 **T4** consecutive_relay C1 lbc≥2：待核 gene_based.py:91 是否改 lbc（audit: Relay23Strategy 已建但 C1 是否从 zt_count_250d≥2 改 lbc≥2 未确认）。
+- ⏸️ **T3** dragon_head C2/C3 seal gate：**NOT done**（2026-09-16 核 gene_based.py:402+：dragon_head 只有 C1 sector_rank≤3，缺 C2 zt_count_today≥2 + C3 seal_to_float_ratio≥0.005）。S203 P2 待实现。
+- ⏸️ **T4** consecutive_relay C1 lbc≥2：**NOT done**（2026-09-16 核 gene_based.py:91/98：C1 仍 `zt_count_250d>=2` 非 `lbc>=2`）。S203 P3 待实现（T0 grep 7 文件已确认，可改）。
 - ✅ **T5** leader_drop_reversal：DONE（`06f898a`，LeaderDropReversalStrategy，大跌从 close 差复算不依赖 pctChg）。
 - 🔶 **T6** intraday_loss_breaker：built+green **UNWIRED**（`c5e641e`，stage-1 待 G4 接 router/scheduler）。
 - ⏸️ **T7** QMT 4 模板：spec-only 未建（放 specs/S203/templates/ 标 BLOCKER）。
