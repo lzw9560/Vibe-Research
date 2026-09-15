@@ -314,6 +314,19 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 forward_test_daily 已创建（cron 45 15 * * 0-4）")
 
+    # S204 T3：forward_test_records 回补 cron（每日 18:00 retroactive 重派，accumulate 至 ≥60 天解 §44v2 R3 enforce 阻塞）。
+    # main() 幂等（删 + 全量重派），随 eastmoney_live 信号日增（daily_data_refresh 日积 1/trading day）增长。
+    if "forward_test_backfill" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="forward_test_backfill",
+            description="S204 T3：forward_test_records 回补（retroactive 重派 eastmoney_live 全信号日，幂等；积累至 ≥60 天解 §44v2 R3 enforce days_robust 阻塞）",
+            task_type="forward_test_backfill",
+            cron_expr="0 18 * * 0-4",  # 18:00（盘后晚于 forward_test_daily 15:45 + t1_settle 15:50，重派含当日）
+            payload={"target_days": 60, "use_weather": True},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 forward_test_backfill 已创建（cron 0 18 * * 0-4，S204 T3）")
+
     # S069 R2：每日 post-market 回填昨日 forward_test T+1 收益（baostock kline 次日 bar）。
     if "forward_test_t1_settle" not in existing:
         _manager.create_task(ScheduledTask(

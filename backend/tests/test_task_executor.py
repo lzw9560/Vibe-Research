@@ -51,6 +51,7 @@ _EXPECTED_TASK_TYPES = {
     "evaluation_backtest",  # S151 R3：评价层 30日首次/60日复验检查点
     "forward_test_daily",
     "forward_test_t1_settle",
+    "forward_test_backfill",  # S204 T3 — forward_test_records 回补 cron（≥60 天解 §44v2 R3 enforce 阻塞）
     "first_board_t1_review",
     "first_board_quote_probe",
     "zt_history_snapshot",

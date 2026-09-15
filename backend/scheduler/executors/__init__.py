@@ -70,6 +70,7 @@ class TaskExecutor:
             "scan_price_alerts": self._execute_scan_price_alerts,
             "forward_test_daily": self._execute_forward_test_daily,
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,
+            "forward_test_backfill": self._execute_forward_test_backfill,  # S204 T3 — forward_test_records 回补 cron（≥60 天解 §44v2 R3 enforce 阻塞）
             "first_board_t1_review": self._execute_first_board_t1_review,
             "first_board_quote_probe": self._execute_first_board_quote_probe,
             "zt_history_snapshot": self._execute_zt_history_snapshot,
@@ -296,6 +297,21 @@ class TaskExecutor:
     def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import forward_test_t1_settle
         return forward_test_t1_settle(payload)
+
+    def _execute_forward_test_backfill(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S204 T3: forward_test_records 回补（retroactive 重派 eastmoney_live 全信号日，幂等）。
+
+        tools/forward_test_backfill.main() 删 forward_test_records 全量重派（幂等）；每日 cron 随
+        eastmoney_live 增长重派，积累至 ≥60 天解 §44v2 R3 enforce 阻塞（days_robust<60 → ×0.5 cap）。
+        use_weather=True 走 build_context 历史天气（完整架构）；早期日无 STI → weather=None 退化下界。
+        """
+        from tools.forward_test_backfill import main as backfill_main
+        use_weather = bool(payload.get("use_weather", True))
+        try:
+            rc = backfill_main(use_weather=use_weather)
+            return {"status": "ok" if rc == 0 else "error", "exit_code": rc, "use_weather": use_weather}
+        except Exception as e:
+            return {"status": "error", "error": repr(e)[:200], "use_weather": use_weather}
 
     def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.first_board import first_board_t1_review
