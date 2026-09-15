@@ -23,6 +23,12 @@ def enrich_pctchg(bars: list[dict]) -> list[dict]:
     注入值：``pctChg = (close[d] - close[d-1]) / close[d-1] * 100``。
     首日无前收 → 0.0（不臆造）。除权日 close[d-1]≠preclose → 与 baostock 原值微小差异，
     但一字板 +10% 阈值 9.8%（有容差）不受影响。
+
+    **覆盖策略（2026-09-16 TDD 修正）**：实测 baostock_kline_cache.json（5231 股/105506 bars 抽样 50 股）
+    字段**含** pctChg（10 keys 非 docstring 旧述的 7），但 0.3% bars pctChg=0.0——其中一字板 63 个
+    （baostock 对一字涨停板返 pctChg=0.0 的数据缺口；is_unbuyable 读 0.0<9.8 误判可买=真 bug）。
+    非零 baostock pctChg 验证 99.98% 准确（8383 match / 2 mismatch）→ **保留**；
+    0.0/缺失 → **覆盖**为 close 差复算值。旧逻辑 ``b.get("pctChg", calc)`` 键存在（值 0.0）返 0.0 → bug 未修。
     """
     out: list[dict] = []
     prev_close: float | None = None
@@ -35,8 +41,13 @@ def enrich_pctchg(bars: list[dict]) -> list[dict]:
                 pct = 0.0
         else:
             pct = 0.0
-        # 已有 pctChg（baostock 原值）保留不覆盖；缺则注入计算值
-        enriched = {**b, "pctChg": b.get("pctChg", round(pct, 4))}
+        # baostock 非零 pctChg 保留（99.98% 准确）；0.0/缺失（数据缺口）→ 用 close 差复算覆盖
+        existing = b.get("pctChg")
+        try:
+            keep_existing = existing is not None and float(existing) != 0.0
+        except (TypeError, ValueError):
+            keep_existing = False
+        enriched = {**b, "pctChg": existing if keep_existing else round(pct, 4)}
         out.append(enriched)
         prev_close = float(close) if close is not None else prev_close
     return out

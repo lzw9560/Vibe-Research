@@ -110,9 +110,15 @@ def _load_kline_cache() -> dict[str, list[dict]]:
     if not KLINE_CACHE.exists():
         return {}
     try:
-        return json.loads(KLINE_CACHE.read_bytes())
+        cache = json.loads(KLINE_CACHE.read_bytes())
     except Exception:
         return {}
+    # S204 T1 wiring: baostock cache 一字板 pctChg=0.0 数据缺口（实测 63/105506 bars 抽样，
+    # baostock 对一字涨停板返 pctChg=0.0 → is_unbuyable_next_bar 读 0.0<9.8 误判可买=污染 ALL 回测）。
+    # enrich_pctchg 覆盖 0.0/缺失为 close 差复算值（决策#12 harness 层，不动 bar_utils 源码）；
+    # 非零 baostock pctChg 99.98% 准确→保留。统一在此注入→所有走 _load_kline_cache 的 harness 生效。
+    from engine.pctchg_injector import enrich_pctchg
+    return {code: enrich_pctchg(bars) for code, bars in cache.items()}
 
 
 def _fetch_baostock_bars(code: str, start_date: str, end_date: str, bs) -> list[dict]:

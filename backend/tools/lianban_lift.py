@@ -14,6 +14,7 @@ from data.sources.eastmoney import ths_limit_up_pool
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0 一字板修复）
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
@@ -42,7 +43,7 @@ def fetch_lb(date_compact):
         print(f"  lb {date_compact} ERR {repr(e)[:80]}", flush=True); return []
 
 def main():
-    cache = json.loads(KLINE.read_bytes())
+    cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0 修复）
     # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
     validate_or_reject("baostock_kline",
                        [b for bars in cache.values() for b in bars],
