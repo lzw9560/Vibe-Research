@@ -19,7 +19,7 @@ export function LimitupSummary({ emotion, loading }: Props) {
         <Flame className="h-4 w-4 text-primary" />
         <h3 className="text-sm font-semibold">涨停 / 炸板 / 连板</h3>
         {emotion?.date && (
-          <span className="ml-auto text-[11px] text-muted-foreground/50">
+          <span className="ml-auto text-[11px] text-muted-foreground">
             {emotion.date}
           </span>
         )}
@@ -102,7 +102,7 @@ export function LimitupSummary({ emotion, loading }: Props) {
                 <p className={cn("mt-0.5 font-mono text-sm font-bold", c.cls)}>
                   {c.v == null ? "—" : `${(c.v * 100).toFixed(1)}%`}
                 </p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground/50">
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
                   {c.hint}
                 </p>
               </div>

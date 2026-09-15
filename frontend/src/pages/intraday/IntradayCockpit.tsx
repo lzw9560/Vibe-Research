@@ -6,7 +6,7 @@
 // 接 S176 OFI 采集器（已采数据）+ S178 OfiDashboard + Phase 0 SplitLayout/HonestEmptyState/currentStock。
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { RefreshCw, Lightbulb, Clock, Activity } from "lucide-react";
+import { RefreshCw, Lightbulb, Clock, Activity, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { SplitLayout } from "@/components/layout/SplitLayout";
 import { OfiDashboard } from "@/components/intraday/OfiDashboard";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
@@ -29,7 +29,7 @@ import {
   useCoachTimetable,
 } from "@/lib/query";
 import { usePremarketSelection, type PremarketCandidate } from "@/lib/query/premarket";
-import type { LianbanStock, CoachTimetableSlot, CoachChecklistItem } from "@/lib/api";
+import type { LianbanStock, CoachTimetableSlot, CoachChecklistItem, IntradaySnapshot } from "@/lib/api";
 
 // SplitLayout 高度——留 OFI 看板 + 页头空间（同 StockCockpit COCKPIT_HEIGHT 范式）
 const COCKPIT_HEIGHT = "h-[calc(100vh-22rem)] min-h-[400px]";
@@ -52,6 +52,19 @@ const fmtAmount = (v: number | null | undefined): string => {
   if (v >= 1e8) return (v / 1e8).toFixed(1) + "亿";
   if (v >= 1e4) return (v / 1e4).toFixed(0) + "万";
   return v.toFixed(0);
+};
+
+// ─── 盘中情绪色带（green=一致 / yellow=走偏 / red=背离，同 EmotionTrendChart）──
+const ZONE_COLORS: Record<string, string> = {
+  green: "#22c55e",
+  yellow: "#f59e0b",
+  red: "#ef4444",
+};
+
+const ZONE_LABELS: Record<string, string> = {
+  green: "一致",
+  yellow: "走偏",
+  red: "背离",
 };
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -137,6 +150,13 @@ export function IntradayCockpit() {
         盘中数据 60% 未测（edge 在未测盘中盘口博弈）· OFI / 告警 / 教练如实呈现，无数据时显示空态不假装
       </div>
 
+      {/* 盘中情绪速览条——常驻顶部，全天可见（score/zone/封板率/炸板率/涨跌比） */}
+      <SentimentStrip
+        latest={latest}
+        isLoading={latestQ.isLoading}
+        error={latestQ.error != null}
+      />
+
       {/* 非交易日 honest empty */}
       {!isTradingDay && (
         <div className="mb-4">
@@ -190,6 +210,115 @@ export function IntradayCockpit() {
       </div>
 
       <Disclaimer />
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// SentimentStrip — 顶部情绪速览条（常驻，非图表，紧凑数字）
+// 渲染 Layer 1 latest snapshot：分数+趋势+色带 / 涨停数 / 封板率 / 炸板率 / 涨跌比
+// 空态区分：端点挂了（error，红色条）vs 真没采到（no-data，非交易时段等）
+// ═════════════════════════════════════════════════════════════════════════
+
+interface SentimentStripProps {
+  latest: IntradaySnapshot | null | undefined;
+  isLoading: boolean;
+  error: boolean;
+}
+
+function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
+  // 端点挂了——红色条，如实说明
+  if (error) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-2 text-xs">
+        <span className="font-medium text-red-500">情绪数据加载失败</span>
+        <span className="text-muted-foreground/50">·</span>
+        <span className="text-muted-foreground">端点未取得（盘中情绪 latest 不可用）</span>
+      </div>
+    );
+  }
+
+  // 加载中——灰色条
+  if (isLoading) {
+    return (
+      <div className="mb-3 rounded-lg border border-border/60 bg-muted/10 px-4 py-2.5 text-xs text-muted-foreground">
+        盘中情绪加载中…
+      </div>
+    );
+  }
+
+  // 真没采到——dashed 条（非交易时段 / 采样未启动）
+  if (!latest) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-lg border border-dashed border-border/40 bg-muted/10 px-4 py-2.5 text-xs">
+        <span className="text-muted-foreground">盘中情绪暂无数据</span>
+        <span className="text-muted-foreground/50">·</span>
+        <span className="text-muted-foreground">非交易时段或采样未启动</span>
+      </div>
+    );
+  }
+
+  const zoneColor = ZONE_COLORS[latest.zone] ?? "#94a3b8";
+  const zoneLabel = ZONE_LABELS[latest.zone] ?? latest.zone;
+  const TrendIcon = latest.trend === "up" ? TrendingUp : latest.trend === "down" ? TrendingDown : Minus;
+  const trendColor = latest.trend === "up" ? "text-emerald-500" : latest.trend === "down" ? "text-red-500" : "text-muted-foreground";
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-border/60 bg-muted/10 px-4 py-2.5">
+      {/* 情绪分数 + 趋势 + zone 色带 */}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground">情绪分数</span>
+        {latest.score != null ? (
+          <>
+            <span className="font-mono text-base font-bold text-primary">
+              {latest.score.toFixed(1)}
+            </span>
+            <span className={cn("flex items-center", trendColor)}>
+              <TrendIcon className="h-3.5 w-3.5" />
+            </span>
+            <span
+              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+              style={{ background: zoneColor }}
+            >
+              {zoneLabel}
+            </span>
+          </>
+        ) : (
+          <span className="font-mono text-base font-bold text-muted-foreground">—</span>
+        )}
+      </div>
+
+      <span className="h-4 w-px bg-border/40" />
+
+      {/* 涨停数 */}
+      <Metric label="涨停" value={latest.zt_count != null ? String(latest.zt_count) : "—"} />
+
+      {/* 封板率 */}
+      <Metric label="封板率" value={latest.seal_rate != null ? `${latest.seal_rate.toFixed(0)}%` : "—"} />
+
+      {/* 炸板率 */}
+      <Metric label="炸板率" value={latest.break_rate != null ? `${latest.break_rate.toFixed(0)}%` : "—"} />
+
+      {/* 涨跌比 */}
+      <Metric label="涨跌比" value={latest.ad_ratio != null ? latest.ad_ratio.toFixed(2) : "—"} />
+
+      {/* 采样时间 */}
+      {latest.time && (
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          {latest.time}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── 速览条单个指标 ──────────────────────────────────────────────────────
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="font-mono text-sm font-medium">{value}</span>
     </div>
   );
 }
@@ -600,7 +729,7 @@ function IntradayCoachCompact({
           <span className="font-mono font-medium">
             {watchingCount}/{monitoringCount}/{holdingCount}
           </span>
-          <span className="text-muted-foreground/50">（观/盯/持）</span>
+          <span className="text-muted-foreground">（观/盯/持）</span>
         </div>
         {bombCount > 0 && (
           <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-500">
@@ -609,7 +738,7 @@ function IntradayCoachCompact({
         )}
       </div>
 
-      <p className="mt-2 text-[11px] text-muted-foreground/50">
+      <p className="mt-2 text-[11px] text-muted-foreground">
         当前时间 {currentTime}
       </p>
     </GlassCard>

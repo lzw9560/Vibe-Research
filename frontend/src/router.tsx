@@ -6,7 +6,7 @@ import { lazy, Suspense, type ComponentType } from "react";
 import { Layout } from "@/components/layout/Layout";
 
 const PageFallback = (
-  <div className="flex h-[60vh] items-center justify-center text-sm text-gray-500">
+  <div className="flex h-[60vh] items-center justify-center text-sm text-muted-foreground">
     加载中…
   </div>
 );
@@ -37,8 +37,8 @@ function NotFound() {
   return (
     <div className="flex h-[60vh] flex-col items-center justify-center gap-2 text-center">
       <div className="text-2xl font-semibold text-gray-700">404 · 页面不存在 Not Found</div>
-      <div className="text-sm text-gray-500">路由已迁移或不存在，回首页继续</div>
-    <Link to="/today" className="text-blue-600 underline">回首页 /today</Link>
+      <div className="text-sm text-muted-foreground">路由已迁移或不存在，回首页继续</div>
+    <Link to="/today" className="text-primary underline">回首页 /today</Link>
     </div>
   );
 }
@@ -112,7 +112,7 @@ export const router = createBrowserRouter([
       { path: "/prediction", element: lazyEl(() => import("@/pages/Prediction"), "Prediction") },  // 恢复前瞻页 S017 短线预测工作台（原 redirect /market 致页面孤儿，用户看不到）
       { path: "/debate", element: lazyEl(() => import("@/pages/Debate"), "Debate") },  // 审计修: 恢复多空辩论页（原 redirect /market 致孤儿,AdvisoryPage 链此）
       // 选股散页 → /screener
-      { path: "/candidates", element: redirect("/screener") },
+      { path: "/candidates", element: lazyEl(() => import("@/pages/Candidates"), "Candidates") },  // 恢复候选池主页（漏斗R1/R2+选股池+因子参数ThresholdPanel，69126e2 误删）
       { path: "/value-funnel", element: lazyEl(() => import("@/pages/ValueFunnel"), "ValueFunnel") },  // 恢复选股漏斗页 S005 中长线价值漏斗（原 redirect /screener 致页面孤儿，用户看不到）
       { path: "/limitup/gene", element: redirect("/limitup") },
       { path: "/limitup/auction", element: redirect("/limitup") },
@@ -122,7 +122,7 @@ export const router = createBrowserRouter([
       { path: "/my-reports", element: redirect("/review") },
       { path: "/notes", element: redirect("/review") },
       // 建议散页 → /advisory
-      { path: "/recommendation", element: redirect("/advisory") },
+      { path: "/recommendation", element: lazyEl(() => import("@/pages/Recommendation"), "Recommendation") },  // 恢复建议页（MultiArm+StockRecommendation）
       // 风险 → /portfolio
       { path: "/risk-dashboard", element: redirect("/risk") },  // 路由修复: →/risk(风险看板独立页 S179) 非 /portfolio(lossy)
       // 策略散页 → /strategy

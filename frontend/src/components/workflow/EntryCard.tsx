@@ -24,7 +24,7 @@ export function EntryCard({ to, title, subtitle, icon: Icon, date }: Props) {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h3 className="font-semibold">{title}</h3>
-              <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground/70">{subtitle}</p>
           </div>

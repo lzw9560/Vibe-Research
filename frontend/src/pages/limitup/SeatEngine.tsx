@@ -55,7 +55,7 @@ export function SeatEngine() {
     "量化席位": "text-info",
     "跟风席位": "text-muted-foreground",
     "机构专用": "text-accent",
-    "inactive": "text-muted-foreground/40",
+    "inactive": "text-muted-foreground",
   };
 
   // S066 AskAi：注入席位画像统计
@@ -106,7 +106,7 @@ export function SeatEngine() {
           </div>
         ) : groups.length === 0 ? (
           <EmptyState
-            icon={<RefreshCw className="h-8 w-8 text-muted-foreground/40" />}
+            icon={<RefreshCw className="h-8 w-8 text-muted-foreground" />}
             title="暂无席位数据"
             description="点击「构建画像」拉取历史龙虎榜数据"
           />
@@ -120,7 +120,7 @@ export function SeatEngine() {
                       <span className={cn("text-xs font-medium", typeColors[type] || "text-muted-foreground")}>
                         {type}
                       </span>
-                      <span className="text-[11px] text-muted-foreground/50">({seats.length})</span>
+                      <span className="text-[11px] text-muted-foreground">({seats.length})</span>
                     </span>
                   }
                 />
@@ -138,18 +138,18 @@ export function SeatEngine() {
                           净{s.net_amt >= 0 ? "+" : ""}{(s.net_amt / 10000).toFixed(0)}万
                         </span>
                       </div>
-                      <p className="mt-0.5 text-[10px] text-muted-foreground/50">
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
                         交易 {s.stock_cooldown} 只 · 最后 {s.last_seen || "未知"}
                       </p>
                     </div>
                   ))}
                 </div>
                 {seats.length > 12 && (
-                  <p className="mt-1 text-[11px] text-muted-foreground/50">… 还有 {seats.length - 12} 个席位</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">… 还有 {seats.length - 12} 个席位</p>
                 )}
               </div>
             ))}
-            <p className="text-[11px] text-muted-foreground/50">
+            <p className="text-[11px] text-muted-foreground">
               免责声明：席位标签基于龙虎榜历史数据统计特征，不代表对未来行为的预测，不构成投资建议。
             </p>
           </div>

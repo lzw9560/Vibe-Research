@@ -274,7 +274,7 @@ function UnknownContent({ records }: { records: readonly RecorderRecord[] }) {
   if (records.length === 0) return null;
   return (
     <GlassCard className="p-3 border-l-2 border-gray-500/40">
-      <p className="text-xs font-medium text-gray-400">
+      <p className="text-xs font-medium text-muted-foreground">
         未分类 verdict（edge_type=population 或 experiment_id 未知）
       </p>
       <ul className="mt-2 space-y-0.5">

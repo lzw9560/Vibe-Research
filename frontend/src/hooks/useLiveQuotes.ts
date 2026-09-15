@@ -115,9 +115,13 @@ export function useLiveQuotes(codes: string[], enabled: boolean): LiveQuotesStat
   }, [fetchOnce]);
 
   // 首次进入 / 自选变化：立即拉一次（与开关无关，页面总要有数据）
+  // ⚠️ 依赖用 codes.join(",") 字符串而非 codes 数组本身——调用方常 `arr.slice()`
+  // 每次渲染产新数组引用，直接依赖 codes 会每次渲染触发 effect→fetchOnce→
+  // setQuotes→重渲染→死循环（Maximum update depth exceeded），导航点击看起来"没动作"。
+  const codesKey = codes.join(",");
   useEffect(() => {
     void fetchOnce();
-  }, [codes, fetchOnce]);
+  }, [codesKey, fetchOnce]);
 
   // 轮询循环
   useEffect(() => {

@@ -121,7 +121,7 @@ function ScoredRegion({
       </div>
       {view === "matrix" ? (
         <GlassCard className="p-4">
-          <p className="mb-3 text-xs text-muted-foreground/60">战法后"分N" = 策略分 strategy_score（0-100，权重集加权），非 confidence</p>
+          <p className="mb-3 text-xs text-muted-foreground">战法后"分N" = 策略分 strategy_score（0-100，权重集加权），非 confidence</p>
           <div className="space-y-1">
             {codes.map(([code, e]) => (
               <div key={code} className="flex items-center gap-2 py-1.5 text-sm border-b border-border/20 last:border-0">
@@ -145,12 +145,12 @@ function ScoredRegion({
               <div className="mb-2 flex items-center gap-2">
                 <h3 className="font-semibold">{e.name}</h3>
                 <Badge variant="info">{e.candidates.length} 只</Badge>
-                <span className="text-xs text-muted-foreground/50">{stratCode}</span>
+                <span className="text-xs text-muted-foreground">{stratCode}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {e.candidates.map((c) => (
                   <span key={c.code} className="rounded border border-border/40 px-2 py-0.5 text-xs">
-                    {c.name}({c.code}) <span className="text-muted-foreground/60">分{c.strategy_score}</span>
+                    {c.name}({c.code}) <span className="text-muted-foreground">分{c.strategy_score}</span>
                   </span>
                 ))}
               </div>

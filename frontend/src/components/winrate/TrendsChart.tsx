@@ -49,7 +49,7 @@ export function TrendsChart({ windowSize }: TrendsChartProps) {
   }
   if (isError || !data || data.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground/60">
+      <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
         暂无趋势数据
       </div>
     );

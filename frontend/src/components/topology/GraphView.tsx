@@ -186,7 +186,7 @@ export function GraphView({
 
   if (isEmpty) {
     return (
-      <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground/60">
+      <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
         暂无拓扑数据
       </div>
     );

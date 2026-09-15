@@ -61,7 +61,7 @@ export default function FusionPage() {
           placeholder="6 位股票代码，如 600519"
           className="w-64 rounded-lg border px-3 py-2 text-sm dark:bg-gray-900 dark:text-gray-100"
         />
-        <button type="submit" disabled={loading || !code.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
+        <button type="submit" disabled={loading || !code.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm text-white hover:bg-primary disabled:opacity-50">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           <span className="ml-1">查询</span>
         </button>
@@ -80,11 +80,11 @@ export default function FusionPage() {
               <Sparkles className="h-4 w-4" />{code} 融合研判（最新交易日）
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-              <div><div className="text-xs text-gray-500">regime</div><div className="font-medium">{result.regime}</div></div>
-              <div><div className="text-xs text-gray-500">方向</div><div className="font-medium">{result.direction}</div></div>
-              <div><div className="text-xs text-gray-500">置信度</div><div className="font-medium">{(result.confidence * 100).toFixed(0)}%</div></div>
+              <div><div className="text-xs text-muted-foreground">regime</div><div className="font-medium">{result.regime}</div></div>
+              <div><div className="text-xs text-muted-foreground">方向</div><div className="font-medium">{result.direction}</div></div>
+              <div><div className="text-xs text-muted-foreground">置信度</div><div className="font-medium">{(result.confidence * 100).toFixed(0)}%</div></div>
               <div>
-                <div className="text-xs text-gray-500">信号权重</div>
+                <div className="text-xs text-muted-foreground">信号权重</div>
                 <div className="text-xs">{Object.entries(result.signal_weights).map(([k, v]) => `${k}=${v.toFixed(2)}`).join(" / ") || "（无）"}</div>
               </div>
             </div>
@@ -93,10 +93,10 @@ export default function FusionPage() {
           <GlassCard className="p-4">
             <div className="mb-2 text-sm font-medium">历史相似 case（FS1 检索，不过§44，定性参考）</div>
             {result.top_similar_cases.length === 0 ? (
-              <div className="text-sm text-gray-400">无相似 case（case 库空或信号值全 0）</div>
+              <div className="text-sm text-muted-foreground">无相似 case（case 库空或信号值全 0）</div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="text-xs text-gray-500">
+                <thead className="text-xs text-muted-foreground">
                   <tr><th className="px-2 py-1 text-left">股票</th><th className="px-2 py-1 text-left">入场日</th><th className="px-2 py-1 text-left">arm</th><th className="px-2 py-1 text-right">相似度</th><th className="px-2 py-1 text-left">结果</th></tr>
                 </thead>
                 <tbody>

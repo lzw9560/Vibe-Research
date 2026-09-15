@@ -52,7 +52,7 @@ function FillEditor({ fills, onChange }: {
           <button onClick={() => del(i)} className="text-red-500 hover:underline">删</button>
         </div>
       ))}
-      <button onClick={addRow} className="text-xs text-blue-500 hover:underline">+ 加一笔成交</button>
+      <button onClick={addRow} className="text-xs text-primary hover:underline">+ 加一笔成交</button>
     </div>
   );
 }
@@ -134,7 +134,7 @@ function AddTradeForm() {
       <button
         onClick={submit}
         disabled={add.isPending}
-        className="rounded bg-blue-500 px-3 py-1 text-sm text-white disabled:opacity-50"
+        className="rounded bg-primary px-3 py-1 text-sm text-white disabled:opacity-50"
       >
         {add.isPending ? "记录中…" : "记录"}
       </button>

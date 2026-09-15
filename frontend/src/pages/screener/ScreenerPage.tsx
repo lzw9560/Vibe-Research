@@ -212,7 +212,7 @@ export function ScreenerPage() {
         ) : (
           <div className="py-12 text-center">
             <div className="text-sm text-muted-foreground">通用筛选结果待接入</div>
-            <div className="mt-1 text-[12px] text-muted-foreground/60">
+            <div className="mt-1 text-[12px] text-muted-foreground">
               后端筛选 API 建成后，按上方条件筛选全市场股票并展示在此
             </div>
             <button

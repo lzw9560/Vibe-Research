@@ -83,7 +83,7 @@ export default function ChatPage() {
       <GlassCard className="flex h-[68vh] flex-col overflow-hidden">
         <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
           {messages.length === 0 && (
-            <div className="flex h-full items-center justify-center text-sm text-gray-400">
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               <Sparkles className="mr-2 h-4 w-4" />问点什么，例如「分析 600519」
             </div>
           )}
@@ -92,10 +92,10 @@ export default function ChatPage() {
               key={i}
               className={cn(
                 "flex flex-col gap-1 rounded-lg p-3 text-sm",
-                m.role === "user" ? "bg-blue-50 dark:bg-blue-950/30" : "bg-gray-50 dark:bg-gray-900/40",
+                m.role === "user" ? "bg-blue-50 dark:bg-blue-950/30" : "bg-muted/30 dark:bg-gray-900/40",
               )}
             >
-              <div className="text-xs font-medium text-gray-500">
+              <div className="text-xs font-medium text-muted-foreground">
                 {m.role === "user" ? "你" : "AI"}
               </div>
               <div className="prose prose-sm max-w-none dark:prose-invert">
@@ -117,7 +117,7 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={handleClear}
-            className="rounded p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="rounded p-2 text-muted-foreground hover:bg-muted/30 dark:hover:bg-gray-800"
             title="清空对话"
             disabled={messages.length === 0}
           >
@@ -132,7 +132,7 @@ export default function ChatPage() {
           />
           <button
             type="submit"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-lg bg-primary px-4 py-2 text-sm text-white hover:bg-primary disabled:opacity-50"
             disabled={loading || !input.trim()}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

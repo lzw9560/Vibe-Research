@@ -79,7 +79,7 @@ export default function RiskDashboard() {
       case "LOW":
         return "text-emerald-600 bg-emerald-50";
       default:
-        return "text-gray-600 bg-gray-50";
+        return "text-gray-600 bg-muted/30";
     }
   };
 

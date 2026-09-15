@@ -85,7 +85,7 @@ export function Notes() {
 
       {notes.length === 0 ? (
         <EmptyState
-          icon={<NotebookPen className="h-8 w-8 text-muted-foreground/40" />}
+          icon={<NotebookPen className="h-8 w-8 text-muted-foreground" />}
           title="还没有记录"
           description="在「每日复盘」「资讯雷达」或「问 AI」里点「存入沉淀」保存分析结果。"
         />
@@ -100,9 +100,9 @@ export function Notes() {
                     {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${KIND_COLOR[n.kind] || "bg-muted/50 text-muted-foreground"}`}>{n.kind}</span>
                     <span className="flex-1 truncate text-sm font-medium">{n.title}</span>
-                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground/60">{fmt(n.ts)}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{fmt(n.ts)}</span>
                   </button>
-                  <button onClick={() => setNotes(deleteNote(n.id))} className="shrink-0 text-muted-foreground/60 hover:text-destructive" title="删除">
+                  <button onClick={() => setNotes(deleteNote(n.id))} className="shrink-0 text-muted-foreground hover:text-destructive" title="删除">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>

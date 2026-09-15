@@ -152,7 +152,7 @@ export function MyReports() {
       {/* 列表（按行业分组） */}
       {isLoading || (reports ?? []).length === 0 ? (
         <EmptyState
-          icon={<FolderOpen className="h-8 w-8 text-muted-foreground/40" />}
+          icon={<FolderOpen className="h-8 w-8 text-muted-foreground" />}
           title={isLoading ? "加载中…" : "还没有归档的研报"}
           description="把你收集的研报拖进上面的框，会自动按行业分好类。"
         />
@@ -174,20 +174,20 @@ export function MyReports() {
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{r.name}</p>
-                      <p className="text-[11px] text-muted-foreground/60">
+                      <p className="text-[11px] text-muted-foreground">
                         {fmtSize(r.size)} · {fmtDate(r.ts)}
                       </p>
                     </div>
                     <button
                       onClick={() => download(r)}
-                      className="shrink-0 text-muted-foreground/60 hover:text-primary"
+                      className="shrink-0 text-muted-foreground hover:text-primary"
                       title="下载"
                     >
                       <Download className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => remove(r)}
-                      className="shrink-0 text-muted-foreground/50 hover:text-destructive"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
                       title="删除"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

@@ -76,7 +76,7 @@ export function ScatterChart({ points, height = 360 }: ScatterChartProps) {
 
   if (points.length === 0) {
     return (
-      <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground/60">
+      <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
         暂无散点数据
       </div>
     );

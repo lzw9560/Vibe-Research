@@ -54,9 +54,9 @@ export function EarningsSnapshot({ val, fin, pctl }: Props) {
     <GlassCard glow className="mb-4">
       <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
         <ClipboardList className="h-4 w-4 text-primary" /> 财报速览
-        {fin.period && <span className="text-xs font-normal text-muted-foreground/60">· {fin.period}</span>}
+        {fin.period && <span className="text-xs font-normal text-muted-foreground">· {fin.period}</span>}
       </h3>
-      <p className="mb-3 text-[11px] text-muted-foreground/60">
+      <p className="mb-3 text-[11px] text-muted-foreground">
         最新财报 + 前向一致预期 + 估值位置一眼看全。客观数据机械分档，不构成买卖建议。
       </p>
 
@@ -86,7 +86,7 @@ export function EarningsSnapshot({ val, fin, pctl }: Props) {
       {/* 前向一致预期 */}
       {fwd.length > 0 && (
         <p className="mt-3 text-xs text-muted-foreground">
-          <span className="text-muted-foreground/60">前向预期：</span>{fwd.join(" · ")}
+          <span className="text-muted-foreground">前向预期：</span>{fwd.join(" · ")}
         </p>
       )}
     </GlassCard>

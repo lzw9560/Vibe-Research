@@ -59,10 +59,10 @@ export function LineLoopCard({
             <span key={i} className="inline-flex items-center gap-0.5">
               {step.link ? <Link to={step.link}>{content}</Link> : content}
               {i < steps.length - 1 && (
-                <ArrowRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40" />
+                <ArrowRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
               )}
               {i === steps.length - 1 && (
-                <ArrowRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40 rotate-180" />
+                <ArrowRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground rotate-180" />
               )}
             </span>
           );

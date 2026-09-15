@@ -125,7 +125,7 @@ export function AuctionScreener() {
                       <tr>
                         <td colSpan={12} className="py-8">
                           <EmptyState
-                            icon={<Info className="h-8 w-8 text-muted-foreground/40" />}
+                            icon={<Info className="h-8 w-8 text-muted-foreground" />}
                             title="今日无符合条件的竞价选股标的"
                           />
                         </td>
@@ -133,8 +133,8 @@ export function AuctionScreener() {
                     ) : (
                         result?.candidates?.map((c, i) => (
                           <tr key={c.code} className="transition-colors hover:bg-muted/20">
-                            <td className="whitespace-nowrap px-2 py-2.5 font-mono text-xs text-muted-foreground/50">{i + 1}</td>
-                            <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted-foreground/60">{c.code}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 font-mono text-xs text-muted-foreground">{i + 1}</td>
+                            <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted-foreground">{c.code}</td>
                             <td className="px-3 py-2.5 font-medium">{c.name}</td>
                             <td className="px-3 py-2.5 text-center">
                                <span className={`inline-block rounded-md px-2 py-0.5 font-mono text-sm font-bold ${
@@ -185,7 +185,7 @@ export function AuctionScreener() {
           )}
 
           {result?.updated && (
-            <p className="mt-2 text-[11px] text-muted-foreground/50">更新时间: {result.updated}</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">更新时间: {result.updated}</p>
           )}
         </>
       )}

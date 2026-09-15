@@ -7,7 +7,7 @@ const STATUS_COLOR = {
   red: { dot: "bg-red-500", pill: "bg-red-500/10 text-red-500" },
   amber: { dot: "bg-amber-500", pill: "bg-amber-500/10 text-amber-500" },
   green: { dot: "bg-emerald-500", pill: "bg-emerald-500/10 text-emerald-500" },
-  gray: { dot: "bg-gray-400", pill: "bg-gray-400/10 text-gray-400" },
+  gray: { dot: "bg-gray-400", pill: "bg-gray-400/10 text-muted-foreground" },
 } as const;
 
 function colorOf(v: DimensionValidation) {

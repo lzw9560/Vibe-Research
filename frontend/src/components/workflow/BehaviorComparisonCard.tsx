@@ -88,7 +88,7 @@ export function BehaviorComparisonCard() {
         )}
 
         <div className="mt-3 flex items-center justify-between">
-          <p className="text-[10px] text-muted-foreground/60">{data.disclaimer}</p>
+          <p className="text-[10px] text-muted-foreground">{data.disclaimer}</p>
           <Link to="/behavior-loop" className="text-xs text-primary hover:underline">
             深看 →
           </Link>

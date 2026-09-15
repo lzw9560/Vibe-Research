@@ -76,7 +76,7 @@ function DefaultCockpitLeft() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
       <p className="text-sm font-medium text-muted-foreground">列表区</p>
-      <p className="text-xs text-muted-foreground/60">页面填充左栏内容</p>
+      <p className="text-xs text-muted-foreground">页面填充左栏内容</p>
     </div>
   );
 }

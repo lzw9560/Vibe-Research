@@ -56,7 +56,7 @@ export function DataTable<T>({
   };
 
   const defaultEmptyState = (
-    <div className="py-8 text-center text-sm text-muted-foreground/60">暂无数据</div>
+    <div className="py-8 text-center text-sm text-muted-foreground">暂无数据</div>
   );
 
   const sortKeyOf = (col: Column<T>) => col.sortKey ?? col.key;
@@ -72,7 +72,7 @@ export function DataTable<T>({
     const active = sort && sort.key === sortKeyOf(col);
     if (active && sort!.direction === "asc") return <span aria-hidden="true">▲</span>;
     if (active && sort!.direction === "desc") return <span aria-hidden="true">▼</span>;
-    return <span aria-hidden="true" className="text-muted-foreground/40">↕</span>;
+    return <span aria-hidden="true" className="text-muted-foreground">↕</span>;
   };
 
   if (loading) {

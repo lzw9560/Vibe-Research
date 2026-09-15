@@ -16,7 +16,7 @@ interface Props {
   viewMode: ViewMode;
 }
 
-const scoreColor = (s: number) => (s >= 75 ? "text-primary" : s >= 60 ? "text-blue-400" : "text-gray-400");
+const scoreColor = (s: number) => (s >= 75 ? "text-primary" : s >= 60 ? "text-blue-400" : "text-muted-foreground");
 const fmtPct = (v: number | null | undefined) => (v == null ? "—" : `${v.toFixed(1)}%`);
 
 // 五维口径（后端 calc_total_score 权重）
@@ -35,7 +35,7 @@ function ExpandedDetail({ row }: { row: GeneScore }) {
       {/* 标记 */}
       <div className="flex flex-wrap items-center gap-1.5">
         {row.qualify && (
-          <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-blue-400">合格</span>
+          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-blue-400">合格</span>
         )}
         {row.high_gene && (
           <span className="rounded bg-primary/15 px-1.5 py-0.5 text-primary">高基因</span>
@@ -52,7 +52,7 @@ function ExpandedDetail({ row }: { row: GeneScore }) {
           {FACTOR_ROWS.map(({ key, weight }) => (
             <div key={key} className="flex justify-between">
               <span className="text-muted-foreground">
-                {key} <span className="text-muted-foreground/50">({weight})</span>
+                {key} <span className="text-muted-foreground">({weight})</span>
               </span>
               <span className="font-mono">{fmtPct(row.factors[key])}</span>
             </div>
@@ -119,7 +119,7 @@ export function GeneResultTable({ data, loading, expandedCode, onToggle, viewMod
               onClick={() => onToggle(row.code)}
               className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/20"
             >
-              <span className="w-6 text-xs text-muted-foreground/50">{row.code}</span>
+              <span className="w-6 text-xs text-muted-foreground">{row.code}</span>
               <span className="flex-1 font-medium">
                 {row.name}
                 {dim && (
@@ -127,7 +127,7 @@ export function GeneResultTable({ data, loading, expandedCode, onToggle, viewMod
                 )}
               </span>
               <span className="text-xs text-muted-foreground">溢价{fmtPct(row.factors["次日溢价率"])}</span>
-              <span className={cn("font-mono font-bold", dim ? "text-gray-400" : scoreColor(row.total_score))}>{row.total_score}</span>
+              <span className={cn("font-mono font-bold", dim ? "text-muted-foreground" : scoreColor(row.total_score))}>{row.total_score}</span>
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {expanded && <div className="px-3 pb-3"><ExpandedDetail row={row} /></div>}

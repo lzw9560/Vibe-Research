@@ -55,7 +55,7 @@ export function ScenarioCards() {
             <span>后续上行 {hist.follow_up_distribution.up}</span>
             <span>持平 {hist.follow_up_distribution.flat}</span>
             <span>下行 {hist.follow_up_distribution.down}</span>
-            <span className="text-muted-foreground/60">（样本 {hist.sample_size}）</span>
+            <span className="text-muted-foreground">（样本 {hist.sample_size}）</span>
           </div>
         )}
       </div>

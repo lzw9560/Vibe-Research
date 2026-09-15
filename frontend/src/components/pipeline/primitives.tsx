@@ -12,7 +12,7 @@ export function ArrowDown({ label }: { label?: string }) {
     <div className="flex flex-col items-center py-0.5">
       <div className="h-2 w-px bg-border/40" />
       <span className="text-[9px] text-border/50 leading-none">▼</span>
-      {label && <span className="text-[10px] text-muted-foreground">{label}</span>}
+      {label && <span className="text-[10px] text-foreground/80">{label}</span>}
     </div>
   );
 }
@@ -24,7 +24,7 @@ export function FunnelShrinkBar({ input, output }: { input: number; output: numb
     <div className="flex items-center gap-1.5 px-1">
       <div className="h-1.5 flex-1 rounded bg-muted/30" />
       <div className="h-1.5 rounded bg-primary/40" style={{ width: `${ratio * 100}%` }} />
-      <span className="text-[10px] text-muted-foreground">{input}→{output}</span>
+      <span className="text-[10px] text-foreground/80">{input}→{output}</span>
     </div>
   );
 }

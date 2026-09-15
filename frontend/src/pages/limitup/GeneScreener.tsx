@@ -134,7 +134,7 @@ export function GeneScreener() {
             高基因 <span className="font-bold text-primary">{highCount}</span> 只
           </span>
           {freshness && (
-            <span className="text-xs text-muted-foreground/60">数据状态：{freshness}</span>
+            <span className="text-xs text-muted-foreground">数据状态：{freshness}</span>
           )}
         </div>
         {recomputeMsg && (

@@ -17,6 +17,7 @@
     "antd": "^5.29.3",
     "clsx": "^2.1.0",
     "echarts": "^6.0.0",
+    "klinecharts": "^10.0.3",
     "lucide-react": "^0.460.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -78,7 +78,7 @@ export function WatchlistBoard({ date }: WatchlistBoardProps) {
           );
         })}
       </div>
-      <p className="mt-2 text-[10px] text-muted-foreground/60">
+      <p className="mt-2 text-[10px] text-muted-foreground">
         参考值，非执行指令；市场有风险
       </p>
     </div>
@@ -113,7 +113,7 @@ function WatchlistCard({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-medium">{name}</span>
-            <span className="font-mono text-[10px] text-muted-foreground/60">{code}</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{code}</span>
           </div>
           {status && (
             <span

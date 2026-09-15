@@ -34,7 +34,7 @@ export function Journal() {
             onClick={() => setTab(t.key)}
             className={`border-b-2 px-3 py-1.5 text-sm transition-colors ${
               tab === t.key
-                ? "border-blue-500 text-blue-500"
+                ? "border-blue-500 text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >

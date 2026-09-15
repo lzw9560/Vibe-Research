@@ -30,11 +30,11 @@ const STATUS_STYLE: Record<
     label: "证否（劣于随机）",
   },
   not_validated: {
-    pill: "bg-gray-400/10 text-gray-400",
+    pill: "bg-gray-400/10 text-muted-foreground",
     label: "弱信号非欠样本",
   },
   exploratory: {
-    pill: "bg-gray-400/10 text-gray-400",
+    pill: "bg-gray-400/10 text-muted-foreground",
     label: "探索性",
   },
 };
@@ -125,7 +125,7 @@ export function DimensionValidationCard({
         </div>
         <div className="flex items-center gap-1.5">
           {/* R5: edge_type 主 scoping 标签旁 status */}
-          <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-600">
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
             {edgeLabel}
           </span>
           <span
@@ -242,7 +242,7 @@ export function DimensionValidationCard({
 
       {/* R7: selection-falsified 防外推 note */}
       {isSelFalsified && (
-        <div className="rounded bg-blue-500/10 px-2 py-1 text-[10px] text-blue-600">
+        <div className="rounded bg-primary/10 px-2 py-1 text-[10px] text-primary">
           {SELECTION_FALSIFIED_NOTE}
         </div>
       )}
@@ -282,7 +282,7 @@ export function DimensionValidationCard({
               "rounded px-2 py-0.5 text-xs",
               record.overfit_stats.pbo != null
                 ? "bg-emerald-500/10 text-emerald-600"
-                : "bg-gray-200/50 text-gray-400",
+                : "bg-gray-200/50 text-muted-foreground",
             )}
           >
             PBO: {pboDisplay(record)}
@@ -297,7 +297,7 @@ export function DimensionValidationCard({
                   "rounded px-2 py-0.5 text-xs",
                   val != null
                     ? "bg-emerald-500/10 text-emerald-600"
-                    : "bg-gray-200/50 text-gray-400",
+                    : "bg-gray-200/50 text-muted-foreground",
                 )}
               >
                 {key.toUpperCase()}: {val != null ? val.toFixed(3) : "待建"}

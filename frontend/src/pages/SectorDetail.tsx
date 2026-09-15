@@ -70,7 +70,7 @@ export function SectorDetail() {
       ) : (
         <GlassCard>
           <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <Wrench className="h-8 w-8 text-muted-foreground/50" />
+            <Wrench className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               该板块的环节骨架尚在<b className="text-foreground">实时核实</b>补全中（不靠模型记忆）——已核实的板块见左侧。
             </p>

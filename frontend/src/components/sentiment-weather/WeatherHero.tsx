@@ -28,7 +28,7 @@ export function WeatherHero({ weather, onRefresh, refreshing }: WeatherHeroProps
   }, [weatherState]);
 
   return (
-    <GlassCard className={`p-5 border bg-blue-500/5 border-blue-500/10`}>
+    <GlassCard className={`p-5 border bg-primary/5 border-blue-500/10`}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         {/* Left: Weather State + STI Score */}
         <div className="flex items-center gap-4">

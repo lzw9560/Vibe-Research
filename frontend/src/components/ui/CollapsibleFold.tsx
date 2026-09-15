@@ -18,7 +18,7 @@ export function CollapsibleFold({ title, subtitle, children, defaultOpen = false
     <GlassCard className="mb-3 p-3">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-left">
         <h3 className="text-sm font-semibold">{title}</h3>
-        {subtitle && <span className="text-xs text-muted-foreground/60">{subtitle}</span>}
+        {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
         <ChevronRight className={cn("ml-auto h-4 w-4 transition-transform", open && "rotate-90")} />
       </button>
       {open && <div className="mt-3 space-y-3">{children}</div>}

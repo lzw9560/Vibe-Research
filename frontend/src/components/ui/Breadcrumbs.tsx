@@ -19,7 +19,7 @@ export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
         const isLast = index === items.length - 1;
         return (
           <span key={index} className="flex items-center gap-1">
-            {index > 0 && <span className="text-muted-foreground/60">/</span>}
+            {index > 0 && <span className="text-muted-foreground">/</span>}
             {item.to && !isLast ? (
               <Link to={item.to} className="hover:text-foreground transition-colors">
                 {item.label}

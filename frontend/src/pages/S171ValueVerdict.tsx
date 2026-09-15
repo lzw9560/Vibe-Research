@@ -22,8 +22,8 @@ const STATUS_HUMAN: Record<VerifierStatus, { label: string; tone: string; why: s
   robust_edge: { label: "稳", tone: "text-emerald-400", why: "统计上站得住，三关全过" },
   underpowered: { label: "数据不够", tone: "text-amber-400", why: "样本少，待积累（不是没效果，是测不了）" },
   falsified: { label: "证否", tone: "text-red-400", why: "方向反了或不如随机" },
-  not_validated: { label: "弱信号", tone: "text-gray-400", why: "有方向但没到门槛（不是没效果，是没够强）" },
-  exploratory: { label: "不能定论", tone: "text-gray-400", why: "角度间矛盾或依赖假设，下不了结论" },
+  not_validated: { label: "弱信号", tone: "text-muted-foreground", why: "有方向但没到门槛（不是没效果，是没够强）" },
+  exploratory: { label: "不能定论", tone: "text-muted-foreground", why: "角度间矛盾或依赖假设，下不了结论" },
 };
 
 // 角度① 对冲版子结论→人话
@@ -31,12 +31,12 @@ const EVENT_STATUS_HUMAN: Record<EventStatus, { label: string; tone: string }> =
   event_robust: { label: "稳（价差够强够显著）", tone: "text-emerald-400" },
   event_thin_positive: { label: "弱正（方向对但不够显著）", tone: "text-amber-400" },
   event_falsified: { label: "证否（价差反了或扣成本后为负）", tone: "text-red-400" },
-  event_not_tested: { label: "没测", tone: "text-gray-400" },
+  event_not_tested: { label: "没测", tone: "text-muted-foreground" },
 };
 
 // 选股准不准倍数→人话（>2 稳，1-2 弱，<1 不如随机）
 function liftHuman(lift: number | null): { label: string; tone: string } {
-  if (lift == null) return { label: "—", tone: "text-gray-400" };
+  if (lift == null) return { label: "—", tone: "text-muted-foreground" };
   if (lift >= 2) return { label: `${lift.toFixed(2)}× 稳`, tone: "text-emerald-400" };
   if (lift >= 1) return { label: `${lift.toFixed(2)}× 弱`, tone: "text-amber-400" };
   return { label: `${lift.toFixed(2)}× 不如随机`, tone: "text-red-400" };
@@ -183,7 +183,7 @@ export function S171ValueVerdict() {
         <GlassCard className="p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold">角度① 对冲版</span>
-            <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-400">做多低 PE + 做空高 PE</span>
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-blue-400">做多低 PE + 做空高 PE</span>
           </div>
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
             看价差收益（价值-成长，市场涨跌抵消）。正宗 Fama-French HML 测法，但 A 股做空难。
@@ -309,7 +309,7 @@ function TierBtn({ active, onClick, label }: { active: boolean; onClick: () => v
       onClick={onClick}
       className={cn(
         "rounded px-2.5 py-1 text-xs transition-colors",
-        active ? "bg-blue-500/20 text-blue-300" : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+        active ? "bg-primary/20 text-blue-300" : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
       )}
     >
       {label}
@@ -368,7 +368,7 @@ function MetricRow({ label, value, hint }: { label: string; value: string; hint?
     <div className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">
         {label}
-        {hint && <span className="text-[10px] text-muted-foreground/60 ml-1">({hint})</span>}
+        {hint && <span className="text-[10px] text-muted-foreground ml-1">({hint})</span>}
       </span>
       <span className="font-mono text-foreground">{value}</span>
     </div>
@@ -415,7 +415,7 @@ function BugFixCard({ bug }: { bug: S171ValueBundle["bug_fixes"][number] }) {
   const statusBadge = {
     fixed: { label: "已修", tone: "bg-emerald-500/10 text-emerald-400" },
     pending: { label: "未验", tone: "bg-amber-500/10 text-amber-400" },
-    annotated: { label: "已标注", tone: "bg-gray-500/10 text-gray-400" },
+    annotated: { label: "已标注", tone: "bg-gray-500/10 text-muted-foreground" },
   }[bug.status];
   return (
     <div className={cn("rounded border border-l-2 border-border p-2", sevColor)}>

@@ -10,7 +10,7 @@ const STATUS_META: Record<VerificationStatus, { icon: typeof CheckCircle2; color
   met_down: { icon: XCircle, color: "text-red-600", label: "下行验证" },
   within: { icon: MinusCircle, color: "text-muted-foreground", label: "区间内" },
   data_missing: { icon: HelpCircle, color: "text-amber-600", label: "数据缺失" },
-  pending: { icon: Clock, color: "text-blue-500", label: "待验证" },
+  pending: { icon: Clock, color: "text-primary", label: "待验证" },
 };
 
 const METRIC_LABELS: Record<string, string> = {
@@ -36,7 +36,7 @@ function ConditionRow({ c }: { c: VerificationCondition }) {
     <div className="flex items-center justify-between border-b border-border/30 py-1.5 text-sm last:border-0">
       <div className="flex-1">
         <span className="text-muted-foreground">{METRIC_LABELS[c.metric] ?? c.metric}</span>
-        <span className="ml-2 text-xs text-muted-foreground/60">{c.note ?? ""}</span>
+        <span className="ml-2 text-xs text-muted-foreground">{c.note ?? ""}</span>
       </div>
       <div className="flex items-center gap-3 font-mono text-xs">
         <span className="text-muted-foreground">
@@ -70,7 +70,7 @@ export function VerificationCardBlock({ date }: { date?: string }) {
     return () => { mounted = false; };
   }, [date]);
 
-  if (loading) return <div className="text-sm text-muted-foreground/60">加载验证对账卡…</div>;
+  if (loading) return <div className="text-sm text-muted-foreground">加载验证对账卡…</div>;
   if (error) return <div className="text-sm text-red-600">{error}</div>;
   if (conditions.length === 0) return null;
 
@@ -83,7 +83,7 @@ export function VerificationCardBlock({ date }: { date?: string }) {
         <span className="text-sm font-medium">
           {pending > 0 ? "明日验证条件预览" : "昨日验证对账"}
         </span>
-        <span className="text-xs text-muted-foreground/60">
+        <span className="text-xs text-muted-foreground">
           {verified > 0 ? `${verified}/${conditions.length} 已对账` : `${conditions.length} 条待验证`}
         </span>
       </div>
@@ -92,7 +92,7 @@ export function VerificationCardBlock({ date }: { date?: string }) {
           <ConditionRow key={`${c.metric}-${c.id}`} c={c} />
         ))}
       </div>
-      <div className="mt-2 text-[11px] text-muted-foreground/50">
+      <div className="mt-2 text-[11px] text-muted-foreground">
         条件句式为「若…则确认…」，无涨跌预测；对齐 S060 验证条件卡 spec；历史统计特征，市场有风险
       </div>
     </div>

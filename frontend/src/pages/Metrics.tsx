@@ -75,7 +75,7 @@ export function Metrics() {
   if (error || !breakdown) {
     return (
       <EmptyState
-        icon={<AlertCircle className="h-8 w-8 text-muted-foreground/40" />}
+        icon={<AlertCircle className="h-8 w-8 text-muted-foreground" />}
         title="加载失败"
         description={error ?? "未知错误"}
       />
@@ -123,7 +123,7 @@ export function Metrics() {
                   </div>
                 ))}
               </div>
-              <div className="mt-2 text-[10px] text-muted-foreground/60">{data.note}</div>
+              <div className="mt-2 text-[10px] text-muted-foreground">{data.note}</div>
             </GlassCard>
           );
         })}
@@ -135,7 +135,7 @@ export function Metrics() {
           <div>
             总目标耗时：<b>{breakdown.summary.total_target}</b> {breakdown.summary.unit}
           </div>
-          <div className="text-muted-foreground/60">{breakdown.note}</div>
+          <div className="text-muted-foreground">{breakdown.note}</div>
         </div>
       </GlassCard>
     </div>

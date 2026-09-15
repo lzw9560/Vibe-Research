@@ -22,11 +22,11 @@ function statusBadge(status: string): string {
     enforced: "bg-green-500/15 text-green-600",
     underpowered: "bg-yellow-500/15 text-yellow-600",
     disabled: "bg-red-500/15 text-red-600",
-    bear_exempt: "bg-blue-500/15 text-blue-600",
-    floor_exempt_per_arm: "bg-blue-500/15 text-blue-600",
-    empty: "bg-gray-500/15 text-gray-500",
+    bear_exempt: "bg-primary/15 text-primary",
+    floor_exempt_per_arm: "bg-primary/15 text-primary",
+    empty: "bg-gray-500/15 text-muted-foreground",
   };
-  return map[status] ?? "bg-gray-500/15 text-gray-500";
+  return map[status] ?? "bg-gray-500/15 text-muted-foreground";
 }
 
 // S175 T9（诚实呈现）：DSR method 人话标签（lenient→宽松估计，非严谨跨 trial）
@@ -39,15 +39,15 @@ function dsrMethodLabel(method: string): string {
 
 // S175 T9：§44 verdict 人话标签 + 颜色（C7：falsified ≠ weak ≠ 待复阅）
 function verdictLabel(verdict: string | undefined): { text: string; cls: string } {
-  if (!verdict || verdict === "untested") return { text: "未测", cls: "bg-gray-500/15 text-gray-500" };
+  if (!verdict || verdict === "untested") return { text: "未测", cls: "bg-gray-500/15 text-muted-foreground" };
   const map: Record<string, { text: string; cls: string }> = {
-    externally_validated: { text: "外部验证", cls: "bg-blue-500/15 text-blue-600" },
+    externally_validated: { text: "外部验证", cls: "bg-primary/15 text-primary" },
     "§44_falsified": { text: "§44证否", cls: "bg-red-500/15 text-red-600" },
     exploratory: { text: "探索性·未验证", cls: "bg-amber-500/15 text-amber-600" }, // S181 R8: trend 骨架建 §44 未验
     dead_arm: { text: "已证否·dead", cls: "bg-red-500/15 text-red-500" },
-    mock_not_ready: { text: "mock·未就绪", cls: "bg-gray-500/15 text-gray-500" },
+    mock_not_ready: { text: "mock·未就绪", cls: "bg-gray-500/15 text-muted-foreground" },
   };
-  return map[verdict] ?? { text: verdict, cls: "bg-gray-500/15 text-gray-500" };
+  return map[verdict] ?? { text: verdict, cls: "bg-gray-500/15 text-muted-foreground" };
 }
 
 // S175 T9（SH）：纸面≠真盘警告横幅（静态 + 动态 gap 占位）
@@ -76,7 +76,7 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
         </div>
       </div>
       {isDormant && (
-        <div className="mb-2 rounded bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">
+        <div className="mb-2 rounded bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground">
           {stats.dormant_note ?? "dormant"}
         </div>
       )}
@@ -138,7 +138,7 @@ function RecordRow({ r }: { r: ClosedLoopRecord }) {
   return (
     <tr className={isDead ? "opacity-50" : ""}>
       <td className="px-2 py-1 text-xs">
-        <span className={`rounded px-1 py-0.5 text-[10px] ${isDead ? "bg-red-500/15 text-red-500" : "bg-blue-500/15 text-blue-500"}`}>
+        <span className={`rounded px-1 py-0.5 text-[10px] ${isDead ? "bg-red-500/15 text-red-500" : "bg-primary/15 text-primary"}`}>
           {r.arm}{isDead ? " (dead)" : ""}
         </span>
       </td>
@@ -236,7 +236,7 @@ export function JournalLedger() {
                   {ddStatus.portfolio.status} ×{ddStatus.portfolio.size_multiplier}
                 </span>
                 {ddStatus.portfolio.is_bear_market && (
-                  <span className="ml-1 text-[10px] text-blue-500">熊市</span>
+                  <span className="ml-1 text-[10px] text-primary">熊市</span>
                 )}
               </GlassCard>
             )}

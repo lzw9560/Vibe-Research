@@ -67,7 +67,7 @@ function ModuleCard({ mod }: { mod: QuantModule }) {
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground/80">{mod.note}</p>
       <div className="mt-auto flex items-center justify-between pt-1">
-        {mod.status === "live" ? <LiveDataChip mod={mod} /> : <span className="text-[10px] text-muted-foreground/60">未实现</span>}
+        {mod.status === "live" ? <LiveDataChip mod={mod} /> : <span className="text-[10px] text-muted-foreground">未实现</span>}
         {mod.link && (
           <Link to={mod.link} className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline">
             进入 <ArrowUpRight className="h-3 w-3" />

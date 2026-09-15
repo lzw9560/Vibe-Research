@@ -32,7 +32,7 @@ function ExcursionCard({ data }: { data: ExcursionSummary | undefined }) {
       )}
       <div className="text-muted-foreground">⚠️ {data.bias_note}</div>
       <details>
-        <summary className="cursor-pointer text-blue-500">逐笔明细（{data.items.length}）</summary>
+        <summary className="cursor-pointer text-primary">逐笔明细（{data.items.length}）</summary>
         <div className="mt-1 overflow-x-auto">
           <table className="w-full">
             <thead><tr className="text-muted-foreground">

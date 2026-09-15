@@ -123,7 +123,7 @@ export function MarketPage() {
                   <p className="text-xs text-muted-foreground">
                     {indicesQ.error ? "行情未接通" : "加载中…"}
                   </p>
-                  <p className="mt-1 font-mono text-lg font-bold text-muted-foreground/40">
+                  <p className="mt-1 font-mono text-lg font-bold text-muted-foreground">
                     —
                   </p>
                 </GlassCard>
@@ -161,7 +161,7 @@ export function MarketPage() {
               <GlassCard key={g.key} className="p-3">
                 <p className="truncate text-xs text-muted-foreground">
                   {g.name}{" "}
-                  <span className="text-muted-foreground/40">{g.region}</span>
+                  <span className="text-muted-foreground">{g.region}</span>
                 </p>
                 <p
                   className={cn(
@@ -213,7 +213,7 @@ export function MarketPage() {
             <Gauge className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold">情绪天气</h3>
             {weather?.data_updated && (
-              <span className="ml-auto text-[11px] text-muted-foreground/50">
+              <span className="ml-auto text-[11px] text-muted-foreground">
                 {weather.data_updated}
               </span>
             )}
@@ -269,7 +269,7 @@ export function MarketPage() {
           )}
           全球情报
           {radar && (
-            <span className="text-[11px] text-muted-foreground/50">
+            <span className="text-[11px] text-muted-foreground">
               {radar.stats.total_sources} 源 · {radar.industries.length} 赛道
             </span>
           )}
@@ -281,7 +281,7 @@ export function MarketPage() {
                 加载中…
               </p>
             ) : !radar || radar.industries.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground/60">
+              <p className="py-4 text-center text-sm text-muted-foreground">
                 暂无情报。
                 <Link to="/intel" className="text-primary">
                   去资讯雷达页刷新抓取 →

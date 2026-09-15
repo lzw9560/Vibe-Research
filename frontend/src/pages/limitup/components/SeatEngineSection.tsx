@@ -47,11 +47,11 @@ export function SeatEngineSection() {
       </div>
       <GlassCard className="p-4">
         {loading ? (
-          <p className="py-4 text-center text-sm text-muted-foreground/60">加载中…</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">加载中…</p>
         ) : seats.length === 0 ? (
           <div className="py-4 text-center">
             <p className="text-sm text-muted-foreground">暂无席位数据</p>
-            <p className="mt-1 text-xs text-muted-foreground/50">点击「构建画像」拉取历史龙虎榜数据</p>
+            <p className="mt-1 text-xs text-muted-foreground">点击「构建画像」拉取历史龙虎榜数据</p>
           </div>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

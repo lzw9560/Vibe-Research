@@ -60,7 +60,7 @@ export function PremarketSelection() {
           <button
             onClick={() => refetch()}
             disabled={isFetching || !date}
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+            className="rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary disabled:opacity-50"
           >
             {isFetching ? "查询中…" : "刷新"}
           </button>
@@ -74,7 +74,7 @@ export function PremarketSelection() {
         </div>
       )}
 
-      {isLoading && <div className="text-sm text-gray-500">加载中…</div>}
+      {isLoading && <div className="text-sm text-muted-foreground">加载中…</div>}
       {error && <div className="text-sm text-red-400">查询失败：{(error as Error).message}</div>}
 
       {data && (
@@ -91,7 +91,7 @@ export function PremarketSelection() {
                 <Param label="最大持有" value={`${data.risk_params.max_hold_days} 日`} />
                 <Param label="日历因子" value={`×${data.calendar_multiplier}（${data.calendar_reason || "常规"}）`} />
               </div>
-              <p className="mt-3 text-xs text-gray-400">{data.market_note}</p>
+              <p className="mt-3 text-xs text-muted-foreground">{data.market_note}</p>
             </div>
           </GlassCard>
 
@@ -102,7 +102,7 @@ export function PremarketSelection() {
                 候选（{data.count}）— breakout 分数降序
               </h3>
               <table className="w-full text-left text-sm">
-                <thead className="text-gray-400">
+                <thead className="text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1">代码</th>
                     <th className="px-2 py-1">名称</th>
@@ -124,13 +124,13 @@ export function PremarketSelection() {
                       </td>
                       <td className="px-2 py-1.5 text-gray-300">{c.name || "—"}</td>
                       <td className="px-2 py-1.5">
-                        <span className={c.breakout_binary ? "text-emerald-400" : "text-gray-400"}>
+                        <span className={c.breakout_binary ? "text-emerald-400" : "text-muted-foreground"}>
                           {c.breakout_score.toFixed(3)}
                           {c.breakout_binary ? " ●" : ""}
                         </span>
                       </td>
                       <td className="px-2 py-1.5 text-gray-300">
-                        {c.t1_close} <span className="text-xs text-gray-500">({c.t1_date})</span>
+                        {c.t1_close} <span className="text-xs text-muted-foreground">({c.t1_date})</span>
                       </td>
                       <td className="px-2 py-1.5 text-gray-300">{c.entry_ref}</td>
                       <td className="px-2 py-1.5 text-red-400">{c.stop_loss}</td>
@@ -141,7 +141,7 @@ export function PremarketSelection() {
                 </tbody>
               </table>
               {data.candidates.length === 0 && (
-                <p className="py-4 text-center text-sm text-gray-500">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   无满足条件的候选（调高 min_score 或换日）
                 </p>
               )}
@@ -156,7 +156,7 @@ export function PremarketSelection() {
 function Param({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="text-gray-400">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       <span className="ml-2 font-medium text-gray-100">{value}</span>
     </div>
   );

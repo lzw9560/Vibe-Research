@@ -79,24 +79,24 @@ function SelectionUniverseNode({
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium">⑤ 选股宇宙</div>
-          <div className="text-[11px] text-muted-foreground">板块 TOP-N 成分股 · §44 未验证</div>
+          <div className="text-[11px] text-foreground/80">板块 TOP-N 成分股 · §44 未验证</div>
         </div>
         <div className="text-lg font-bold text-primary">
           {isLoading ? "…" : candidateCount}
         </div>
       </div>
       {sectorsScanned != null && !isLoading && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground/60">
+        <div className="mt-0.5 text-[10px] text-foreground/70">
           扫描 {sectorsScanned} 板块 · {candidateCount} 只候选
         </div>
       )}
       {candidateCount === 0 && !isLoading && !note && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground/60">
+        <div className="mt-0.5 text-[10px] text-foreground/70">
           无候选（§44 Phase 2 未验证，本地 baostock 数据）
         </div>
       )}
       {note && !isLoading && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground/60">{note}</div>
+        <div className="mt-0.5 text-[10px] text-foreground/70">{note}</div>
       )}
     </div>
   );
@@ -111,19 +111,19 @@ function PatternScanNode({ candidates }: { candidates: ScoredCandidate[] }) {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium">⑥ K线形态</div>
-          <div className="text-[11px] text-muted-foreground">PatternScan 因子概览</div>
+          <div className="text-[11px] text-foreground/80">PatternScan 因子概览</div>
         </div>
-        <span className="rounded bg-muted/30 px-1 text-[10px] text-muted-foreground">§44 未验证</span>
+        <span className="rounded bg-muted/30 px-1 text-[10px] text-foreground/80">§44 未验证</span>
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
         {factorNames.map((f) => (
-          <span key={f} className="rounded bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
+          <span key={f} className="rounded bg-muted/20 px-1.5 py-0.5 text-[10px] text-foreground/80">
             {f}
           </span>
         ))}
       </div>
       {candidates.length === 0 && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground/60">无候选数据（因子未扫描）</div>
+        <div className="mt-0.5 text-[10px] text-foreground/70">无候选数据（因子未扫描）</div>
       )}
     </div>
   );
@@ -138,12 +138,12 @@ function FinalSelectionNode({ candidates }: { candidates: ScoredCandidate[] }) {
     // F5：空态引导卡——不显空白，用 GlassCard + Clock 图标暗示"采集中"
     return (
       <GlassCard className="flex flex-col items-center justify-center gap-1.5 p-4 text-center">
-        <Clock className="h-5 w-5 text-muted-foreground/50" />
-        <div className="text-xs font-medium text-muted-foreground">market_scan 数据采集中</div>
-        <div className="text-[10px] text-muted-foreground/60">
+        <Clock className="h-5 w-5 text-foreground/60" />
+        <div className="text-xs font-medium text-foreground/80">market_scan 数据采集中</div>
+        <div className="text-[10px] text-foreground/70">
           K线形态扫描 + 5 战法匹配需盘后数据回填
         </div>
-        <div className="text-[10px] text-muted-foreground/50">
+        <div className="text-[10px] text-foreground/60">
           当前状态：0 只候选（sti_timeline 数据库为空，盘后采集任务未跑）
         </div>
       </GlassCard>
@@ -153,14 +153,14 @@ function FinalSelectionNode({ candidates }: { candidates: ScoredCandidate[] }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">⑧ 候选终选</span>
-        <span className="text-[10px] text-muted-foreground/70">{candidates.length} 只 · §44 未验证</span>
+        <span className="text-xs font-semibold tracking-wide text-foreground/80 uppercase">⑧ 候选终选</span>
+        <span className="text-[10px] text-foreground/80">{candidates.length} 只 · §44 未验证</span>
       </div>
       {shown.map((c) => (
         <CandidateCard key={c.code} c={c} />
       ))}
       {overflow > 0 && (
-        <div className="text-[10px] text-muted-foreground">…共 {candidates.length} 只（显前 {MAX_CANDIDATES}）</div>
+        <div className="text-[10px] text-foreground/80">…共 {candidates.length} 只（显前 {MAX_CANDIDATES}）</div>
       )}
     </div>
   );
@@ -173,14 +173,14 @@ function CandidateCard({ c }: { c: ScoredCandidate }) {
   return (
     <div className="rounded-lg border border-dashed border-muted/40 bg-card/20 p-2">
       <div className="flex items-center justify-between">
-        <div className="text-xs font-medium text-muted-foreground">
-          {c.name} <span className="text-muted-foreground/60">{c.code}</span>
+        <div className="text-xs font-medium text-foreground/80">
+          {c.name} <span className="text-foreground/70">{c.code}</span>
         </div>
         <span className="text-sm font-bold tabular-nums text-primary">
           {c.strategy_score?.toFixed(1) ?? "—"}
         </span>
       </div>
-      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground/60">
+      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-foreground/70">
         {sector && <span>板块 {sector}</span>}
         {confidence != null && <span>置信 {confidence.toFixed(2)}</span>}
         {c.strategy_name && <span>战法 {c.strategy_name}</span>}

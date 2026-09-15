@@ -111,7 +111,7 @@ const riskLevelColor = (level: string) => {
     case "LOW":
       return "text-emerald-600 bg-emerald-50";
     default:
-      return "text-gray-600 bg-gray-50";
+      return "text-gray-600 bg-muted/30";
   }
 };
 
@@ -192,7 +192,7 @@ function RiskDashboardTab() {
   if (error && !data) {
     return (
       <EmptyState
-        icon={<AlertCircle className="h-8 w-8 text-muted-foreground/40" />}
+        icon={<AlertCircle className="h-8 w-8 text-muted-foreground" />}
         title="风险数据加载失败"
         description={error}
         action={
@@ -207,7 +207,7 @@ function RiskDashboardTab() {
   if (!data) {
     return (
       <EmptyState
-        icon={<Activity className="h-8 w-8 text-muted-foreground/40" />}
+        icon={<Activity className="h-8 w-8 text-muted-foreground" />}
         title="暂无风险数据"
         description="未取得风险分布数据，稍后再试。"
       />
@@ -589,7 +589,7 @@ export function PortfolioPage() {
                 {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} 添加
               </Button>
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground/60">
+            <p className="mt-2 text-[11px] text-muted-foreground">
               同一代码再次添加会按加权平均成本合并（加仓）。
             </p>
           </GlassCard>
@@ -605,11 +605,11 @@ export function PortfolioPage() {
             <div className="mb-2 flex items-center justify-between">
               <h3 className="font-semibold">持仓明细</h3>
               {data?.updated && (
-                <span className="text-xs text-muted-foreground/60">更新于 {data.updated}</span>
+                <span className="text-xs text-muted-foreground">更新于 {data.updated}</span>
               )}
             </div>
             {holdings.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground/60">
+              <p className="py-8 text-center text-sm text-muted-foreground">
                 {isLoading ? "加载中…" : "还没有持仓记录，用上面的表单添加一笔。"}
               </p>
             ) : (
@@ -629,7 +629,7 @@ export function PortfolioPage() {
                       <tr key={h.code} className="border-b border-border/30">
                         <td className="px-2 py-2.5">
                           <span className="font-medium">{h.name}</span>
-                          <span className="ml-1.5 font-mono text-xs text-muted-foreground/60">{h.code}</span>
+                          <span className="ml-1.5 font-mono text-xs text-muted-foreground">{h.code}</span>
                         </td>
                         <td className="px-2 py-2.5 font-mono">{fmtPx(h.price)}</td>
                         <td className="px-2 py-2.5 font-mono text-muted-foreground">{fmt(h.shares)}</td>
@@ -644,7 +644,7 @@ export function PortfolioPage() {
                         <td className="px-2 py-2.5">
                           <button
                             onClick={() => remove(h.code)}
-                            className="text-muted-foreground/50 hover:text-destructive"
+                            className="text-muted-foreground hover:text-destructive"
                             title="删除"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -718,7 +718,7 @@ export function PortfolioPage() {
           </div>
           <GlassCard>
             {closed.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground/60">
+              <p className="py-6 text-center text-sm text-muted-foreground">
                 还没有清仓记录。卖出后在上面记一笔，作为已实现盈亏的历史。
               </p>
             ) : (
@@ -738,7 +738,7 @@ export function PortfolioPage() {
                       <tr key={i} className="border-b border-border/30">
                         <td className="px-2 py-2.5">
                           <span className="font-medium">{c.name}</span>
-                          <span className="ml-1.5 font-mono text-xs text-muted-foreground/60">{c.code}</span>
+                          <span className="ml-1.5 font-mono text-xs text-muted-foreground">{c.code}</span>
                         </td>
                         <td className="px-2 py-2.5 font-mono text-muted-foreground">{c.date}</td>
                         <td className="px-2 py-2.5 font-mono">{fmtPx(c.price)}</td>
@@ -755,7 +755,7 @@ export function PortfolioPage() {
                         <td className="px-2 py-2.5">
                           <button
                             onClick={() => removeClosed(i)}
-                            className="text-muted-foreground/50 hover:text-destructive"
+                            className="text-muted-foreground hover:text-destructive"
                             title="删除"
                           >
                             <Trash2 className="h-3.5 w-3.5" />

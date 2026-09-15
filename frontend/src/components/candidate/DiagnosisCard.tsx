@@ -132,7 +132,7 @@ export function DiagnosisCardView({ card }: { card: Card }) {
                 <span className={
                   it.status === "pass" ? "text-emerald-600" :
                   it.status === "fail" ? "text-red-600" :
-                  "text-muted-foreground/60"
+                  "text-muted-foreground"
                 }>
                   {it.status === "pass" ? "通过" : it.status === "fail" ? "未过" : "—"}
                   {it.actual ? `（${it.actual}）` : ""}

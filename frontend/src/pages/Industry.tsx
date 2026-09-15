@@ -78,7 +78,7 @@ export function Industry() {
           />
         ) : allRows.length === 0 ? (
           <EmptyState
-            icon={<TrendingDown className="h-8 w-8 text-muted-foreground/40" />}
+            icon={<TrendingDown className="h-8 w-8 text-muted-foreground" />}
             title="暂无行业数据"
           />
         ) : (
@@ -132,7 +132,7 @@ export function Industry() {
                 <tbody className="divide-y divide-border/20">
                   {allRows.map((row, i) => (
                     <tr key={row.code} className="transition-colors hover:bg-muted/15">
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground/50">
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
                         {i + 1}
                       </td>
                       <td className="px-3 py-2 font-medium">{row.name}</td>
@@ -141,7 +141,7 @@ export function Industry() {
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 font-mono text-right text-danger">{row.up_count}</td>
                       <td className="whitespace-nowrap px-3 py-2 font-mono text-right text-success">{row.down_count}</td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-right text-xs text-muted-foreground/60">{row.code}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-right text-xs text-muted-foreground">{row.code}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -211,7 +211,7 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
       {status === "done" && <MarketSentimentBar snapshot={intradaySnapshot} />}
 
       {briefing.as_of && status === "done" && (
-        <p className="mt-4 text-xs text-muted-foreground/50">更新于 {formatRelativeTime(briefing.as_of)}</p>
+        <p className="mt-4 text-xs text-muted-foreground">更新于 {formatRelativeTime(briefing.as_of)}</p>
       )}
 
       {/* S093 T17（R8）：盯盘入口全天可见——取消 isIntraday 门控，三个 EntryCard 常驻 */}
@@ -322,7 +322,7 @@ function MarketSentimentBar({ snapshot }: { snapshot?: IntradaySnapshot | null }
           </p>
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-muted-foreground/60">
+      <p className="mt-2 text-[10px] text-muted-foreground">
         参考值，非执行指令；市场有风险
       </p>
     </GlassCard>

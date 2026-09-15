@@ -13,7 +13,7 @@ const TYPE_COLORS: Record<string, string> = {
   "量化席位": "text-blue-400",
   "跟风席位": "text-muted-foreground",
   "机构专用": "text-purple-400",
-  "inactive": "text-muted-foreground/40",
+  "inactive": "text-muted-foreground",
 };
 
 const TYPE_BGS: Record<string, string> = {
@@ -21,7 +21,7 @@ const TYPE_BGS: Record<string, string> = {
   "量化席位": "bg-blue-400/10 text-blue-400",
   "跟风席位": "bg-muted-foreground/10 text-muted-foreground",
   "机构专用": "bg-purple-400/10 text-purple-400",
-  "inactive": "bg-muted-foreground/5 text-muted-foreground/40",
+  "inactive": "bg-muted-foreground/5 text-muted-foreground",
 };
 
 export function SeatProfileModal({ seatName, onClose }: Props) {
@@ -120,7 +120,7 @@ export function SeatProfileModal({ seatName, onClose }: Props) {
                 { label: "平均卖出", value: fmtAmt(profile.avg_sell_amt), icon: TrendingDown },
               ].map((m) => (
                 <div key={m.label} className="rounded-lg bg-muted/20 p-3 text-center">
-                  <div className="flex items-center justify-center gap-1 text-muted-foreground/60">
+                  <div className="flex items-center justify-center gap-1 text-muted-foreground">
                     <m.icon className="h-3 w-3" />
                     <p className="text-[10px]">{m.label}</p>
                   </div>
@@ -149,14 +149,14 @@ export function SeatProfileModal({ seatName, onClose }: Props) {
             {/* 冷却期 & 其他 */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-muted/20 p-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/60">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
                   <p className="text-[11px]">股票冷却期</p>
                 </div>
                 <p className="mt-1 font-mono text-lg font-bold text-foreground">{profile.stock_cooldown} 只</p>
               </div>
               <div className="rounded-lg bg-muted/20 p-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/60">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Tag className="h-3.5 w-3.5" />
                   <p className="text-[11px]">席位类型</p>
                 </div>
@@ -173,7 +173,7 @@ export function SeatProfileModal({ seatName, onClose }: Props) {
                 {consensusLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
               </div>
               {consensusError ? (
-                <p className="rounded-lg border border-border/30 bg-muted/10 p-3 text-xs text-muted-foreground/60">
+                <p className="rounded-lg border border-border/30 bg-muted/10 p-3 text-xs text-muted-foreground">
                   {consensusError}
                 </p>
               ) : consensus ? (
@@ -189,7 +189,7 @@ export function SeatProfileModal({ seatName, onClose }: Props) {
                     )}>
                       {consensus.signal || "无信号"}
                     </span>
-                    <span className="text-[11px] text-muted-foreground/50">{consensus.date}</span>
+                    <span className="text-[11px] text-muted-foreground">{consensus.date}</span>
                   </div>
                   {consensus.stock_code && (
                     <p className="mt-1.5 text-[11px] text-muted-foreground">
@@ -208,11 +208,11 @@ export function SeatProfileModal({ seatName, onClose }: Props) {
                     </div>
                   )}
                   {consensus.disclaimer && (
-                    <p className="mt-2 text-[10px] text-muted-foreground/40 italic">{consensus.disclaimer}</p>
+                    <p className="mt-2 text-[10px] text-muted-foreground italic">{consensus.disclaimer}</p>
                   )}
                 </div>
               ) : (
-                <p className="rounded-lg border border-border/30 bg-muted/10 p-3 text-xs text-muted-foreground/60">
+                <p className="rounded-lg border border-border/30 bg-muted/10 p-3 text-xs text-muted-foreground">
                   暂无共识数据
                 </p>
               )}

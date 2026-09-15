@@ -13,8 +13,8 @@ const STATUS_PILL: Record<VerifierStatus, string> = {
   robust_edge: "bg-emerald-500/10 text-emerald-600",
   underpowered: "bg-amber-500/10 text-amber-600",
   falsified: "bg-red-500/10 text-red-600",
-  not_validated: "bg-gray-400/10 text-gray-400",
-  exploratory: "bg-gray-400/10 text-gray-400",
+  not_validated: "bg-gray-400/10 text-muted-foreground",
+  exploratory: "bg-gray-400/10 text-muted-foreground",
 };
 
 function fmtParams(params: Record<string, unknown>): string {
@@ -34,13 +34,13 @@ function VerifierRecordRow({
       <div className="flex items-center justify-between gap-2">
         <button
           onClick={onClick}
-          className="font-mono text-sm text-blue-500 hover:underline"
+          className="font-mono text-sm text-primary hover:underline"
         >
           {record.recorder_id}
         </button>
         <div className="flex items-center gap-1.5">
           {/* v2: edge_type 主 scoping 标签旁 status */}
-          <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-600">
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
             {record.verdict.edge_type}
           </span>
           <span
@@ -128,7 +128,7 @@ export function VerifierRecords() {
       </div>
 
       {selected && (
-        <div className="rounded-lg bg-blue-500/10 p-2 text-xs text-blue-600">
+        <div className="rounded-lg bg-primary/10 p-2 text-xs text-primary">
           已选: {selected}（stub，无真实导航——S161 wire 后接重算/查看）
         </div>
       )}

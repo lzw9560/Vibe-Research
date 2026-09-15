@@ -113,7 +113,7 @@ function FollowOrderGap({ data }: { data: FollowOrderResponse }) {
   const b = data.gap_breakdown;
   if (b.dormant) {
     return (
-      <div className="mt-2 rounded bg-gray-100 p-2 text-[10px] leading-relaxed text-muted-foreground">
+      <div className="mt-2 rounded bg-muted/30 p-2 text-[10px] leading-relaxed text-muted-foreground">
         <b>4 源 gap dormant：</b>{b.dormant_reason}
       </div>
     );

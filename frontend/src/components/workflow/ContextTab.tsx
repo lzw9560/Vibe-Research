@@ -98,12 +98,12 @@ export function ContextTab({ date }: Props) {
             {storm.factors.map((f) => (
               <div key={f.name} className="flex justify-between">
                 <span className="text-muted-foreground/70">{f.name}</span>
-                <span className={f.data_status === "missing" ? "text-muted-foreground/40" : "text-foreground"}>{f.score} ({f.detail})</span>
+                <span className={f.data_status === "missing" ? "text-muted-foreground" : "text-foreground"}>{f.score} ({f.detail})</span>
               </div>
             ))}
           </div>
         )}
-        {storm?.disclaimer && <p className="mt-2 text-[10px] text-muted-foreground/40">{storm.disclaimer}</p>}
+        {storm?.disclaimer && <p className="mt-2 text-[10px] text-muted-foreground">{storm.disclaimer}</p>}
       </GlassCard>
 
       <GlassCard className="p-4">

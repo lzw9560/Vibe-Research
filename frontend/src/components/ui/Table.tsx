@@ -33,7 +33,7 @@ export function Table<T>({
 
   if (!data || data.length === 0) {
     return (
-      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground/60">
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
         {emptyMessage}
       </div>
     );

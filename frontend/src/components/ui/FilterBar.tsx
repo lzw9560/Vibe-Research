@@ -39,7 +39,7 @@ export function FilterBar({ search, pills, sort, right, className }: FilterBarPr
       {search && (
         <div className="relative min-w-[180px] flex-1">
           <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
           <input
@@ -48,7 +48,7 @@ export function FilterBar({ search, pills, sort, right, className }: FilterBarPr
             onChange={(e) => search.onChange(e.target.value)}
             placeholder={search.placeholder ?? "搜索..."}
             aria-label="搜索"
-            className="w-full rounded-lg border border-border/60 bg-muted/20 py-1.5 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="w-full rounded-lg border border-border/60 bg-muted/20 py-1.5 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
         </div>
       )}

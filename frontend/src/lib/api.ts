@@ -154,6 +154,9 @@ export const api = {
   sentimentWeatherPardonRevoke: (pardonId: string) =>
     request<{ data: { success: boolean } }>(`/sentiment/weather/pardon/revoke?pardon_id=${pardonId}`, "POST"),
   stockDeep: (code: string) => get<StockDeep>(`/stock/${code}/deep`),
+  // K 线（多时间维度）：category 4=日 5=周 6=月 11=60min。前端切换维度调此端点。
+  kline: (code: string, category: number = 4, offset: number = 60) =>
+    get<any[]>(`/kline?code=${code}&category=${category}&offset=${offset}`),
   // ora-3 §1.5：图谱关联摘要（替代节点数徽标，前端做外链跳 Obsidian）
   stockKgSummary: (code: string) =>
     get<{ data: StockKgSummary }>(`/stock/${code}/kg-summary`),

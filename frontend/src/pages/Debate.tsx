@@ -167,7 +167,7 @@ export function Debate() {
                 <span key={p.title} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                   {p.ok
                     ? <CheckCircle2 className="h-3 w-3 text-primary/70" />
-                    : <Circle className="h-3 w-3 text-muted-foreground/40" />}
+                    : <Circle className="h-3 w-3 text-muted-foreground" />}
                   {p.title}
                 </span>
               ))}
@@ -199,7 +199,7 @@ export function Debate() {
       {stages.length === 0 && !running && (
         <GlassCard className="mt-4">
           <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-            <Swords className="h-8 w-8 text-muted-foreground/40" />
+            <Swords className="h-8 w-8 text-muted-foreground" />
             输入一个代码开始。后端会先拉一份客观事实底稿，再让多方 / 空方基于同一份数据互相质疑。
             <span className="text-xs">产出的是「分歧点 + 验证清单」，不是买卖建议。</span>
           </div>

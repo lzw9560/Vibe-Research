@@ -89,7 +89,7 @@ export default function FirstBoardPage() {
           {/* 历史快捷日期（有快照的最近 5 个，MM-DD 格式） */}
           {datesData?.dates?.length ? (
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground/60">历史:</span>
+              <span className="text-[10px] text-muted-foreground">历史:</span>
               {datesData.dates.slice(0, 5).map((d) => (
                 <button
                   key={d}
@@ -107,7 +107,7 @@ export default function FirstBoardPage() {
                 </button>
               ))}
               {datesData.dates.length > 5 && (
-                <span className="text-[10px] text-muted-foreground/40">
+                <span className="text-[10px] text-muted-foreground">
                   +{datesData.dates.length - 5}
                 </span>
               )}
@@ -148,7 +148,7 @@ export default function FirstBoardPage() {
       {/* 刷新提示 + 历史快照标注 */}
       {(refreshing || isFromCache) && (
         <div className="mb-3 flex items-center gap-2 text-xs">
-          {refreshing && <span className="text-muted-foreground/60">刷新中…</span>}
+          {refreshing && <span className="text-muted-foreground">刷新中…</span>}
           {isFromCache && (
             <span title="from_cache=true · 快照不含 zt_pool_count/excluded/env_flags">
               <Badge variant="warning">历史快照</Badge>

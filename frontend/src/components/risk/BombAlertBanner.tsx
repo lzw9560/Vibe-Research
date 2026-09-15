@@ -85,7 +85,7 @@ export function SealAmountSparkline({ code, date }: { code: string; date?: strin
   }, [code, date]);
 
   if (loading) return <div className="text-xs text-muted-foreground">加载封单时序…</div>;
-  if (points.length < 2) return <div className="text-xs text-muted-foreground/60">封单时序不足</div>;
+  if (points.length < 2) return <div className="text-xs text-muted-foreground">封单时序不足</div>;
 
   const max = Math.max(...points);
   const min = Math.min(...points);

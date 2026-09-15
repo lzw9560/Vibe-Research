@@ -269,7 +269,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
                 </>
               )}
               {review.missing_kline > 0 && (
-                <p className="mt-2 text-[10px] text-muted-foreground/60">
+                <p className="mt-2 text-[10px] text-muted-foreground">
                   {review.missing_kline} 只因 K 线缺失排除
                 </p>
               )}
@@ -325,7 +325,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
           </GlassCard>
 
           {/* 风险注记 */}
-          <p className="text-[10px] text-muted-foreground/50">
+          <p className="text-[10px] text-muted-foreground">
             {review.disclaimer ?? "历史统计特征，市场有风险，研究参考"}
           </p>
 

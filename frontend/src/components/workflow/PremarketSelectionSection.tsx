@@ -63,7 +63,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold">盘前选股</h3>
-          <span className="text-[10px] text-muted-foreground/50">S071 breakout 弱信号</span>
+          <span className="text-[10px] text-muted-foreground">S071 breakout 弱信号</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300/70">
@@ -71,7 +71,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
           </span>
           <button
             onClick={() => refetch()}
-            className="text-muted-foreground/50 hover:text-primary"
+            className="text-muted-foreground hover:text-primary"
             title="刷新"
           >
             <RefreshCw className="h-3 w-3" />
@@ -93,7 +93,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
         )}
       </div>
       {data.market_note && (
-        <p className="text-xs text-muted-foreground/60">{data.market_note}</p>
+        <p className="text-xs text-muted-foreground">{data.market_note}</p>
       )}
 
       {/* 候选表 */}
@@ -140,7 +140,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
         </table>
       </div>
 
-      <p className="text-[10px] text-muted-foreground/50">
+      <p className="text-[10px] text-muted-foreground">
         §44 naive lift=1.36x &lt;2x 非 validated edge（4 方向特征里最弱），edge 主来自风控非对称。前向测试期间不投真金。
       </p>
     </GlassCard>

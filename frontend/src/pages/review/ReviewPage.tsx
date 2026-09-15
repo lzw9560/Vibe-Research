@@ -131,7 +131,7 @@ function VerdictSpine() {
               <tr key={dim.dimension_id} className="border-b border-border/30">
                 <td className="py-2 pr-4 font-medium">{dim.label}</td>
                 <td className="py-2 pr-4">
-                  <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-600">
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
                     {dim.edge_type}
                   </span>
                 </td>

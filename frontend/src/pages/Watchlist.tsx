@@ -202,7 +202,7 @@ export function Watchlist() {
           </div>
         </div>
         {codes.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground/60">
+          <p className="py-8 text-center text-sm text-muted-foreground">
             还没有自选股，用上面的框粘贴一串代码批量添加。
           </p>
         ) : (
@@ -232,7 +232,7 @@ export function Watchlist() {
                       <td className="px-2 py-2.5">
                         <button
                           onClick={() => remove(c)}
-                          className="text-muted-foreground/50 hover:text-destructive"
+                          className="text-muted-foreground hover:text-destructive"
                           title="移除"
                         >
                           <X className="h-3.5 w-3.5" />

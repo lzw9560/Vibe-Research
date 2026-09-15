@@ -36,10 +36,10 @@ const ACTION_META: Record<
 > = {
   enter: { color: "text-emerald-600", bg: "bg-emerald-50", label: "入场" },
   add: { color: "text-emerald-600", bg: "bg-emerald-50", label: "加仓" },
-  hold: { color: "text-gray-600", bg: "bg-gray-50", label: "持有" },
+  hold: { color: "text-gray-600", bg: "bg-muted/30", label: "持有" },
   reduce: { color: "text-amber-600", bg: "bg-amber-50", label: "减仓" },
   close: { color: "text-red-600", bg: "bg-red-50", label: "清仓" },
-  no_signal: { color: "text-gray-500", bg: "bg-gray-50", label: "无信号" },
+  no_signal: { color: "text-muted-foreground", bg: "bg-muted/30", label: "无信号" },
 };
 
 const SOURCE_LABEL: Record<AdvisoryItem["win_rate_source"], string> = {
@@ -298,7 +298,7 @@ export function AdvisoryPage() {
           !loading &&
           !error && (
             <EmptyState
-              icon={<Info className="h-8 w-8 text-muted-foreground/40" />}
+              icon={<Info className="h-8 w-8 text-muted-foreground" />}
               title="暂无建议数据"
               description="未取得建议，稍后再试。"
             />
@@ -322,7 +322,7 @@ export function AdvisoryPage() {
             （事实核验 / 资深工程师 / 安全 / 一致性 / 冗余 / 红线），
             逼出隐藏假设与盲点，避免 solo review 的确认偏误。
           </p>
-          <p className="mt-2 text-xs text-muted-foreground/60">
+          <p className="mt-2 text-xs text-muted-foreground">
             后端 grill-me 接入待落地，暂不可用。落地后此处可输入标的/论点启动一轮审查。
           </p>
         </GlassCard>
@@ -342,7 +342,7 @@ export function AdvisoryPage() {
           <p className="text-sm text-muted-foreground">
             同一份客观数据底稿，多方与空方各自立论、互相质疑，最后由中立主持归纳分歧点与验证清单——不给买卖结论，判断留给你自己。
           </p>
-          <p className="mt-2 text-[11px] text-muted-foreground/60">
+          <p className="mt-2 text-[11px] text-muted-foreground">
             一轮约 100 秒 · 3 次模型调用 · 约 3.5 万字进上下文（拉底稿约 35 秒走公开数据接口，不耗 token）。
           </p>
           <Link

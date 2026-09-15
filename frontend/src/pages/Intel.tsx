@@ -122,7 +122,7 @@ function InvestmentNewsPanel() {
                     : "border-primary/25 text-muted-foreground hover:border-primary/60 hover:text-foreground",
                 )}>
                 <span className="h-2 w-2 rounded-full" style={{ background: ind.accent }} />
-                {ind.name}<span className="text-muted-foreground/50">{ind.items.length}</span>
+                {ind.name}<span className="text-muted-foreground">{ind.items.length}</span>
               </button>
             ))}
           </div>
@@ -161,7 +161,7 @@ function InvestmentNewsPanel() {
               {/* 资讯列表 */}
               <div className="space-y-2">
                 {cur.items.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground/60">近 {data!.recent_days} 天该赛道暂无更新</p>
+                  <p className="py-6 text-center text-sm text-muted-foreground">近 {data!.recent_days} 天该赛道暂无更新</p>
                 ) : (
                   cur.items.map((it, i) => (
                     <a key={i} href={it.url} target="_blank" rel="noreferrer"
@@ -280,7 +280,7 @@ function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
       ) : loading && rows.length === 0 ? (
         <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> 正在汇总关注股的{kind === "filings" ? "公告" : "新闻"}…</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground/60">关注列表里的个股近期暂无{kind === "filings" ? "公告" : "新闻"}。</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">关注列表里的个股近期暂无{kind === "filings" ? "公告" : "新闻"}。</p>
       ) : (
         <div className="space-y-2">
           {rows.map((r, i) => (
@@ -352,7 +352,7 @@ export function Intel() {
         )}
       </GlassCard>
 
-      <p className="mt-3 text-[11px] text-muted-foreground/60">
+      <p className="mt-3 text-[11px] text-muted-foreground">
         只做公开信息聚合、不做推荐、不预测涨跌。公告 / 新闻均来自你关注列表里个股的公开披露与公开源；赛道资讯已按合规词表过滤。今日要点由你自己配置的 AI 提炼。
       </p>
       <Disclaimer />

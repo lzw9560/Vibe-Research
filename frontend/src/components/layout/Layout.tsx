@@ -97,7 +97,7 @@ export function Layout() {
         <div className="mt-2 mb-1">
           <button
             onClick={() => setShowLegacy(!showLegacy)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground/60 transition-colors hover:text-foreground"
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
           >
             <span className="flex-1 text-left">更多(旧页)</span>
             <span className={cn("text-xs transition-transform", showLegacy && "rotate-90")}>›</span>
@@ -176,7 +176,7 @@ export function Layout() {
                   </button>
                 </div>
               </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground/60">
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
                 {APP_VERSION} · 模拟盘跟踪 · 真盘你定
               </p>
             </>

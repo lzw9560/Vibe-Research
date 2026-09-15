@@ -52,7 +52,7 @@ export function StrategyFilter({ strategies, selected, onChange, className, weat
               selected.has(s)
                 ? "bg-primary/15 text-primary"
                 : isUnfit
-                  ? "bg-muted/10 text-muted-foreground/50 hover:bg-muted/20"
+                  ? "bg-muted/10 text-muted-foreground hover:bg-muted/20"
                   : "bg-muted/20 text-muted-foreground hover:bg-muted/30 hover:text-foreground",
             )}
           >

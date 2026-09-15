@@ -326,7 +326,7 @@ export default function SentimentWeather() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold">情绪气象站</h1>
-          <p className="text-xs text-muted-foreground/60">市场情绪天气 · 策略自动切换中枢</p>
+          <p className="text-xs text-muted-foreground">市场情绪天气 · 策略自动切换中枢</p>
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="h-8 px-2">

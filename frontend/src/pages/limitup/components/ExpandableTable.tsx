@@ -13,7 +13,7 @@ interface Props {
   onToggle: (code: string) => void;
 }
 
-const scoreColor = (s: number) => s >= 75 ? "text-primary" : s >= 60 ? "text-blue-400" : "text-gray-400";
+const scoreColor = (s: number) => s >= 75 ? "text-primary" : s >= 60 ? "text-blue-400" : "text-muted-foreground";
 const fmtPct = (v: number | null | undefined) => v == null ? "—" : `${v.toFixed(1)}%`;
 
 export function ExpandableTable({ data, expandedCode, expandedData, expandedLoading, expandedError, onToggle }: Props) {
@@ -25,7 +25,7 @@ export function ExpandableTable({ data, expandedCode, expandedData, expandedLoad
             onClick={() => onToggle(row.code)}
             className="w-full flex items-center gap-3 rounded-lg border border-border/30 p-3 text-left hover:bg-muted/20 transition-colors"
           >
-            <span className="w-6 text-xs text-muted-foreground/50">{row.code}</span>
+            <span className="w-6 text-xs text-muted-foreground">{row.code}</span>
             <span className="flex-1 font-medium">{row.name}</span>
             <span className={cn("font-mono font-bold", scoreColor(row.total_score))}>{row.total_score}</span>
             <span className="text-xs text-muted-foreground">溢价{fmtPct(row.factors["次日溢价率"])}</span>

@@ -107,7 +107,7 @@ export function StockSeatCard({ dragonTiger, code }: { dragonTiger: DragonTiger 
                   </tr>
                 </thead>
                 <tbody>
-                  {buySeats.slice(0, 5).map((s) => <SeatRow key={s.name} seat={s} side="buy" />)}
+                  {buySeats.slice(0, 5).map((s, i) => <SeatRow key={`${i}-${s.name}`} seat={s} side="buy" />)}
                 </tbody>
               </table>
             </div>
@@ -127,7 +127,7 @@ export function StockSeatCard({ dragonTiger, code }: { dragonTiger: DragonTiger 
                   </tr>
                 </thead>
                 <tbody>
-                  {sellSeats.slice(0, 5).map((s) => <SeatRow key={s.name} seat={s} side="sell" />)}
+                  {sellSeats.slice(0, 5).map((s, i) => <SeatRow key={`${i}-${s.name}`} seat={s} side="sell" />)}
                 </tbody>
               </table>
             </div>

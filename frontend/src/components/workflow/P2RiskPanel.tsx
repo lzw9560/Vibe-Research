@@ -80,7 +80,7 @@ export function P2RiskPanel({ briefing }: P2RiskPanelProps) {
               因子：zt={briefing.p2_factors.zt_count ?? "—"} big_loss={briefing.p2_factors.big_loss ?? "—"} floor={briefing.p2_factors.floor ?? "—"} ladder_success={briefing.p2_factors.ladder_success ?? "—"} ladder_height={briefing.p2_factors.ladder_height ?? "—"}
             </p>
           )}
-          <p className="mt-1 text-muted-foreground/60">
+          <p className="mt-1 text-muted-foreground">
             链：{briefing.market_phase} → {briefing.position_cap_tier} → cap {briefing.market_phase_cap != null ? `${Math.round(briefing.market_phase_cap * 100)}%` : "—"}
           </p>
           <p className="mt-1 text-[10px] text-amber-600/70">

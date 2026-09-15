@@ -57,7 +57,7 @@ function RulesEditor() {
           onError: (e) => setErr(e instanceof ApiError ? e.message : String(e)),
         }); }}
         disabled={save.isPending}
-        className="rounded bg-blue-500 px-3 py-1 text-sm text-white disabled:opacity-50"
+        className="rounded bg-primary px-3 py-1 text-sm text-white disabled:opacity-50"
       >
         {save.isPending ? "保存中…" : "保存规则"}
       </button>
@@ -107,7 +107,7 @@ function FeesEditor() {
           onError: (e) => setErr(e instanceof ApiError ? e.message : String(e)),
         }); }}
         disabled={save.isPending}
-        className="rounded bg-blue-500 px-3 py-1 text-sm text-white disabled:opacity-50"
+        className="rounded bg-primary px-3 py-1 text-sm text-white disabled:opacity-50"
       >
         {save.isPending ? "保存中…" : "保存费率"}
       </button>
@@ -135,7 +135,7 @@ function EquityBaseEditor() {
             onError: (e) => setErr(e instanceof ApiError ? e.message : String(e)),
           }); }}
           disabled={save.isPending || !val}
-          className="rounded bg-blue-500 px-3 py-1 text-sm text-white disabled:opacity-50"
+          className="rounded bg-primary px-3 py-1 text-sm text-white disabled:opacity-50"
         >
           {save.isPending ? "保存中…" : "保存"}
         </button>

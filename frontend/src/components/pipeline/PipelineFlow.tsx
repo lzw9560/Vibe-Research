@@ -41,12 +41,12 @@ function PipelineStep({
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{step}</span>
         <div className="min-w-0 flex-1">
-          <span className="truncate text-xs font-medium">{title}</span>
-          {sub && <span className="ml-1.5 text-[10px] text-muted-foreground/60">{sub}</span>}
+          <span className="truncate text-sm font-bold text-primary">{title}</span>
+          {sub && <span className="ml-1.5 text-[10px] text-foreground/90">{sub}</span>}
         </div>
-        {count != null && <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{count}</span>}
+        {count != null && <span className="shrink-0 font-mono text-[11px] tabular-nums text-foreground">{count}</span>}
         {hasChildren && (
-          <span className={cn("shrink-0 text-[10px] text-muted-foreground/50 transition-transform", open && "rotate-90")}>▶</span>
+          <span className={cn("shrink-0 text-[10px] text-foreground/80 transition-transform", open && "rotate-90")}>▶</span>
         )}
       </button>
       {open && hasChildren && <div className="mt-2">{children}</div>}
@@ -73,17 +73,17 @@ export function PipelineFlow({ briefing, F, funnelLayers }: Props) {
           type="button"
           onClick={() => setLane("limitup")}
           className={cn("rounded-lg px-4 py-1.5 text-sm font-semibold transition-all",
-            lane === "limitup" ? "bg-primary/16 text-primary" : "text-muted-foreground hover:text-foreground")}
+            lane === "limitup" ? "bg-primary/16 text-primary" : "text-foreground hover:text-foreground")}
         >
-          涨停叉 <span className="ml-1 text-[10px] text-muted-foreground/60">已实现 {scored.length}</span>
+          涨停叉 <span className="ml-1 text-[10px] text-foreground/90">已实现 {scored.length}</span>
         </button>
         <button
           type="button"
           onClick={() => setLane("nonlimitup")}
           className={cn("rounded-lg px-4 py-1.5 text-sm font-semibold transition-all",
-            lane === "nonlimitup" ? "bg-primary/16 text-primary" : "text-muted-foreground hover:text-foreground")}
+            lane === "nonlimitup" ? "bg-primary/16 text-primary" : "text-foreground hover:text-foreground")}
         >
-          非涨停叉 <span className="ml-1 text-[10px] text-muted-foreground/60">{marketScan.length}</span>
+          非涨停叉 <span className="ml-1 text-[10px] text-foreground/90">{marketScan.length}</span>
         </button>
       </div>
 

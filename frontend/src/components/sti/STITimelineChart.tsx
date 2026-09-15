@@ -197,7 +197,7 @@ export function STITimelineChart({ className }: Props) {
         </div>
         <div className="mt-3 rounded-lg border border-border/40 bg-muted/15 p-4 text-center">
           <p className="text-sm text-muted-foreground">暂无时间线数据</p>
-          <p className="mt-1 text-[11px] text-muted-foreground/50">最近 60 个交易日的情绪温度走势</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">最近 60 个交易日的情绪温度走势</p>
         </div>
       </GlassCard>
     );

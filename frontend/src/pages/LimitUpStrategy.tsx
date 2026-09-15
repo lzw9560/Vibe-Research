@@ -114,7 +114,7 @@ export function LimitUpStrategy() {
       <GlassCard className="mb-6 p-4">
         <div className="mb-3 flex items-center gap-2">
           <h3 className="text-sm font-semibold text-muted-foreground">涨停股基因得分清单</h3>
-          <span className="text-[11px] text-muted-foreground/50">客观数据，非推荐</span>
+          <span className="text-[11px] text-muted-foreground">客观数据，非推荐</span>
         </div>
         {error ? (
           <div className="flex items-center justify-center py-8 text-sm text-destructive"><Info className="mr-1.5 h-4 w-4" /> {error}</div>
@@ -129,7 +129,7 @@ export function LimitUpStrategy() {
       <SeatEngineSection />
 
       {/* 免责声明 */}
-      <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-muted/10 p-2.5 text-[11px] leading-relaxed text-muted-foreground/60">
+      <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-muted/10 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
         <Info className="mt-0.5 h-3 w-3 shrink-0" />
         <span>本页面所有数据基于<strong>历史统计特征</strong>，不代表未来行为，<strong>不构成投资建议</strong>。</span>
       </div>

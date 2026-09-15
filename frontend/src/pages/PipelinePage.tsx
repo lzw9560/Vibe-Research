@@ -200,10 +200,10 @@ function BackboneNode({ data }: NodeProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-lg border bg-background px-3 py-2 shadow-sm transition-all hover:shadow-md",
-        d.fork === "s44" ? "border-amber-500/50 ring-1 ring-amber-500/20"
-        : d.fork === "strategy" ? "border-emerald-500/50 ring-1 ring-emerald-500/20"
-        : "border-border",
+        "flex items-center gap-2 rounded-lg border px-3 py-2 transition-all",
+        d.fork === "s44" ? "border-amber-500/60"
+        : d.fork === "strategy" ? "border-emerald-500/60"
+        : "border-border/60",
       )}
       style={{ width: 160 }}
     >
@@ -211,9 +211,9 @@ function BackboneNode({ data }: NodeProps) {
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
         {d.step}
       </span>
-      <span className="text-xs font-medium">{d.label}</span>
+      <span className="text-sm font-bold text-primary">{d.label}</span>
       {d.fork && (
-        <span className="ml-auto text-[9px] text-muted-foreground">fork</span>
+        <span className="ml-auto text-[9px] text-foreground/70">fork</span>
       )}
       <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-muted-foreground" />
     </div>
@@ -226,7 +226,7 @@ function ForkNode({ data }: NodeProps) {
   return (
     <div
       className="flex items-center gap-1.5 rounded-full border-2 px-2.5 py-1 shadow-sm"
-      style={{ width: 130, borderColor: color, backgroundColor: `${color}10` }}
+      style={{ width: 130, borderColor: color }}
     >
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !border-0" style={{ background: color }} />
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
@@ -254,7 +254,7 @@ function LineLegend({ activeLine, setActiveLine }: { activeLine: string | null; 
         >
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: line.color }} />
           {line.label}
-          <span className="opacity-50">({line.steps.length}步)</span>
+          <span className="opacity-80">({line.steps.length}步)</span>
         </button>
       ))}
     </div>

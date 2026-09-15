@@ -99,7 +99,7 @@ export default function IntradayCoach() {
         <GlassCard className="mt-2 p-4">
           {checklist.length === 0 ? (
             <EmptyState
-              icon={<Activity className="h-8 w-8 text-muted-foreground/50" />}
+              icon={<Activity className="h-8 w-8 text-muted-foreground" />}
               title="暂无候选/持仓"
               description="盘前简报生成候选后，此处逐只显示条件达成度"
             />
@@ -255,7 +255,7 @@ function ChecklistCard({ item }: { item: CoachChecklistItem }) {
         </div>
       )}
       {item.data_status === "missing" && (
-        <p className="mt-1 text-[10px] text-muted-foreground/60">数据缺失（不臆造）</p>
+        <p className="mt-1 text-[10px] text-muted-foreground">数据缺失（不臆造）</p>
       )}
       {hasWarning && (
         <p className="mt-1.5 text-xs text-red-500">{item.max_hold_warning}</p>
@@ -266,7 +266,7 @@ function ChecklistCard({ item }: { item: CoachChecklistItem }) {
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    watching: "bg-blue-500/15 text-blue-500",
+    watching: "bg-primary/15 text-primary",
     monitoring: "bg-amber-500/15 text-amber-500",
     holding: "bg-green-500/15 text-green-600",
   };

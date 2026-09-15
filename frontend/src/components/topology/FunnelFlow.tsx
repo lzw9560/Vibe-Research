@@ -85,7 +85,7 @@ function PassedCandidatesPanel({ layer }: { layer: FunnelLayer }) {
       )}
 
       {passed.length === 0 ? (
-        <p className="text-xs text-muted-foreground/60">
+        <p className="text-xs text-muted-foreground">
           该层无通过候选
         </p>
       ) : (
@@ -103,7 +103,7 @@ function PassedCandidatesPanel({ layer }: { layer: FunnelLayer }) {
       )}
 
       {layer.data_reason && (
-        <p className="mt-2 text-[11px] text-muted-foreground/50">
+        <p className="mt-2 text-[11px] text-muted-foreground">
           {layer.data_reason}
         </p>
       )}

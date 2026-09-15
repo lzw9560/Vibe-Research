@@ -47,7 +47,7 @@ export function ValueFunnel() {
       <header className="space-y-1 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">中长线价值选股漏斗</h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             输入行业/主题/指数 → L1 全市场扫描 → L2 去劣7条 → L3 精细分析 → L4 四大师深度（文字交 AI）
           </p>
         </div>
@@ -57,7 +57,7 @@ export function ValueFunnel() {
       {/* 输入 */}
       <div className="flex gap-2 items-end flex-wrap">
         <div className="flex-1 min-w-[240px]">
-          <label className="text-xs text-gray-500">行业/主题/指数</label>
+          <label className="text-xs text-muted-foreground">行业/主题/指数</label>
           <input
             value={direction} onChange={(e) => setDirection(e.target.value)}
             placeholder="如：AI算力 / 创新药 / 沪深300"
@@ -65,7 +65,7 @@ export function ValueFunnel() {
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">阶段</label>
+          <label className="text-xs text-muted-foreground">阶段</label>
           <select value={stage} onChange={(e) => setStage(e.target.value)}
             className="border rounded px-2 py-2 text-sm">
             <option value="all">全流程</option>
@@ -127,7 +127,7 @@ function FunnelLayers({ result }: { result: ValueFunnelResult }) {
             <div className="font-medium">{l.layer_id} · {l.name}</div>
             <div>输入 {l.input_count} → 输出 {l.output_count}</div>
             {l.filtered_out.length > 0 && (
-              <details className="mt-1 text-xs text-gray-500">
+              <details className="mt-1 text-xs text-muted-foreground">
                 <summary>被弃 {l.filtered_out.length}</summary>
                 {l.filtered_out.map((f, i) => (
                   <div key={i}>{f.code || "—"}：{f.reason}</div>
@@ -149,7 +149,7 @@ function QualityCard({ code, qa }: { code: string; qa: QualityAssessment }) {
         <span className="font-medium">{code}</span>
         <span>通过 {qa.pass_count}/{qa.inapplicable_count > 0 ? 7 - qa.inapplicable_count : 7}</span>
       </div>
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-muted-foreground">
         绝对 {qa.pass_rate_absolute.toFixed(4)} · 调整 {qa.pass_rate_adjusted?.toFixed(4) ?? "—"}
         {qa.data_years_note && <span className="ml-1 text-amber-700">（{qa.data_years_note}）</span>}
       </div>
@@ -158,11 +158,11 @@ function QualityCard({ code, qa }: { code: string; qa: QualityAssessment }) {
           <div key={m.index} className="flex justify-between">
             <span>
               {m.index}. {m.name}
-              {m.exempt && <span className="text-blue-600"> 豁免{m.exempt_rule}</span>}
+              {m.exempt && <span className="text-primary"> 豁免{m.exempt_rule}</span>}
             </span>
             <span className={
-              m.inapplicable ? "text-gray-400" :
-              m.missing ? "text-gray-400" :
+              m.inapplicable ? "text-muted-foreground" :
+              m.missing ? "text-muted-foreground" :
               m.passed ? "text-green-600" : "text-red-600"
             }>
               {m.inapplicable ? "不适用" : m.missing ? "未取得" : m.passed ? "通过" : "未通过"}
@@ -171,7 +171,7 @@ function QualityCard({ code, qa }: { code: string; qa: QualityAssessment }) {
           </div>
         ))}
       </div>
-      <div className="mt-2 text-xs text-gray-500 border-t pt-1">
+      <div className="mt-2 text-xs text-muted-foreground border-t pt-1">
         护城河代理：毛利率持续{qa.moat.gross_margin_persistence ? "高" : "—"} ·
         ROE均值{qa.moat.roe_stability ?? "—"}%
         <div className="text-[10px]">{qa.moat.note}</div>
@@ -210,7 +210,7 @@ function DeepSkeleton({ skeleton }: { skeleton: DeepAnalysisSkeleton }) {
       <div className="flex justify-between items-center">
         <span className="font-medium">{data.name}（{data.code}）</span>
         <button onClick={onAi} disabled={busy || !data.ai_pending}
-          className="px-3 py-1 rounded text-xs bg-blue-600 text-white disabled:opacity-50"
+          className="px-3 py-1 rounded text-xs bg-primary text-white disabled:opacity-50"
           title={data.ai_pending ? "调 AI 填四大师文字" : "已生成"}>
           {busy ? "AI 生成中…" : data.ai_pending ? "交 AI 生成" : "已生成"}
         </button>
@@ -220,9 +220,9 @@ function DeepSkeleton({ skeleton }: { skeleton: DeepAnalysisSkeleton }) {
         {data.perspectives.map((p) => (
           <div key={p.master} className="border-l-2 border-gray-300 pl-2">
             <div className="font-medium text-xs">【{p.master}】{p.framework}</div>
-            <div className="text-xs text-gray-500">数据：{p.data_skeleton}</div>
+            <div className="text-xs text-muted-foreground">数据：{p.data_skeleton}</div>
             {p.ai_text && <div className="text-xs mt-1 whitespace-pre-wrap">{p.ai_text}</div>}
-            {!p.ai_text && <div className="text-xs text-gray-400">（待 AI 生成）</div>}
+            {!p.ai_text && <div className="text-xs text-muted-foreground">（待 AI 生成）</div>}
           </div>
         ))}
       </div>

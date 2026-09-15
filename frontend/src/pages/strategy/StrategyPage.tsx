@@ -118,7 +118,7 @@ export default function StrategyPage() {
         icon={Layers}
       />
 
-      <p className="text-[10px] text-muted-foreground/60">
+      <p className="text-[10px] text-muted-foreground">
         参考值，非执行指令；市场有风险
       </p>
 

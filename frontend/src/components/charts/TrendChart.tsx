@@ -150,7 +150,7 @@ export function HitRateChart({ rows, height = 320 }: HitRateChartProps) {
   if (sorted.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-muted-foreground/60"
+        className="flex items-center justify-center text-sm text-muted-foreground"
         style={{ height }}
       >
         暂无命中率快照数据
@@ -226,7 +226,7 @@ export function AvgReturnChart({ rows, height = 320 }: AvgReturnChartProps) {
   if (sorted.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-muted-foreground/60"
+        className="flex items-center justify-center text-sm text-muted-foreground"
         style={{ height }}
       >
         暂无平均收益快照数据
@@ -296,7 +296,7 @@ export function StrategyWinRateChart({ rows, height = 360 }: StrategyWinRateChar
   if (dates.length === 0 || strategyCodes.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-muted-foreground/60"
+        className="flex items-center justify-center text-sm text-muted-foreground"
         style={{ height }}
       >
         暂无战法胜率快照数据

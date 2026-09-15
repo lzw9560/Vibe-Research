@@ -54,7 +54,7 @@ export default function BiddingPage() {
         <button
           onClick={load}
           disabled={loading}
-          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+          className="rounded-lg bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           <span className="ml-1">刷新</span>
@@ -81,10 +81,10 @@ export default function BiddingPage() {
         </div>
         <div className="flex flex-wrap gap-1.5 text-xs">
           {watchlist.length === 0 ? (
-            <span className="text-gray-400">空（非竞价时段或无候选）</span>
+            <span className="text-muted-foreground">空（非竞价时段或无候选）</span>
           ) : (
             watchlist.map((c) => (
-              <span key={c} className="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800">{c}</span>
+              <span key={c} className="rounded bg-muted/30 px-1.5 py-0.5 dark:bg-gray-800">{c}</span>
             ))
           )}
         </div>
@@ -93,13 +93,13 @@ export default function BiddingPage() {
       <GlassCard className="overflow-hidden">
         <div className="border-b px-4 py-2 text-sm font-medium">竞价信号（{signals.length} 条）</div>
         {signals.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-400">
+          <div className="p-8 text-center text-sm text-muted-foreground">
             无信号（非竞价时段 9:15-9:25 / 盘后 / 停牌）
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs dark:bg-gray-900">
+              <thead className="bg-muted/30 text-xs dark:bg-gray-900">
                 <tr>
                   <th className="px-3 py-2 text-left">代码</th>
                   <th className="px-3 py-2 text-left">名称</th>
@@ -119,7 +119,7 @@ export default function BiddingPage() {
                     <td className="px-3 py-2 text-right">{(s.confidence * 100).toFixed(0)}%</td>
                     <td className="px-3 py-2 text-right">{(s.open_premium * 100).toFixed(2)}</td>
                     <td className="px-3 py-2 text-right">{s.volume_ratio.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-xs text-gray-500">{s.reasoning.join("；")}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{s.reasoning.join("；")}</td>
                   </tr>
                 ))}
               </tbody>

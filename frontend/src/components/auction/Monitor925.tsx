@@ -133,7 +133,7 @@ export function Monitor925() {
               <tbody className="divide-y divide-border/20">
                 {signals.map((s) => (
                   <tr key={s.code} className="transition-colors hover:bg-muted/20">
-                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted-foreground/60">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted-foreground">
                       {s.code}
                     </td>
                     <td className="px-3 py-2.5 font-medium">{s.name}</td>
@@ -160,7 +160,7 @@ export function Monitor925() {
           </div>
         ) : (
           <EmptyState
-            icon={<Activity className="h-8 w-8 text-muted-foreground/40" />}
+            icon={<Activity className="h-8 w-8 text-muted-foreground" />}
             title="暂无竞价信号"
           />
         )}
@@ -182,7 +182,7 @@ export function Monitor925() {
           </div>
         ) : (
           <EmptyState
-            icon={<Eye className="h-8 w-8 text-muted-foreground/40" />}
+            icon={<Eye className="h-8 w-8 text-muted-foreground" />}
             title="暂无自选监控"
           />
         )}

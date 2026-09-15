@@ -141,7 +141,7 @@ function DisciplineCard({ dp }: { dp: RiskReportResponse["discipline"] | undefin
     <div className="space-y-2 text-xs">
       <div>执行率 <span className="text-foreground">{dp.execution_rate != null ? `${(dp.execution_rate * 100).toFixed(0)}%` : "—"}</span></div>
       {wi.cost_of_indiscipline != null && (
-        <div className="rounded bg-blue-500/10 p-2">
+        <div className="rounded bg-primary/10 p-2">
           只做按计划的交易，净盈亏会是 {yuan(wi.planned_only_net)} 元
           （实际 {yuan(wi.actual_net)}，差 {yuan(wi.cost_of_indiscipline)}）—— 纪律值多少钱，一个数说清
         </div>

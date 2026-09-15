@@ -15,7 +15,7 @@ function statusBg(it: EightStandardItem | undefined): string {
   if (!it) return "";
   if (it.status === "fail") return "bg-red-500/15 text-red-400";
   if (it.status === "pass") return "bg-emerald-500/10 text-emerald-400";
-  return "bg-muted/10 text-muted-foreground/40"; // missing
+  return "bg-muted/10 text-muted-foreground"; // missing
 }
 
 export function CandidateFactorTable({ candidates }: Props) {
@@ -67,7 +67,7 @@ export function CandidateFactorTable({ candidates }: Props) {
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1 text-center text-muted-foreground/50">{isOpen ? "▾" : "▸"}</td>
+                    <td className="px-2 py-1 text-center text-muted-foreground">{isOpen ? "▾" : "▸"}</td>
                   </tr>
                   {isOpen && (
                     <tr key={`${c.code}-detail`}>
@@ -88,42 +88,42 @@ export function CandidateFactorTable({ candidates }: Props) {
                           )}
                           {/* 量价/资金 */}
                           <div>
-                            <span className="text-muted-foreground/60">连板:</span> {ind.consec_boards ?? "—"} |
-                            <span className="text-muted-foreground/60 ml-2">换手:</span> {ind.turnover_pct?.toFixed(1) ?? "—"}% |
-                            <span className="text-muted-foreground/60 ml-2">量比:</span> {ind.vol_ratio?.toFixed(2) ?? "—"} |
-                            <span className="text-muted-foreground/60 ml-2">成交额:</span> {ind.amount_yi?.toFixed(1) ?? "—"}亿 |
-                            <span className="text-muted-foreground/60 ml-2">封板率:</span> {g?.factors?.["封板率"]?.toFixed(1) ?? "—"}%
+                            <span className="text-muted-foreground">连板:</span> {ind.consec_boards ?? "—"} |
+                            <span className="text-muted-foreground ml-2">换手:</span> {ind.turnover_pct?.toFixed(1) ?? "—"}% |
+                            <span className="text-muted-foreground ml-2">量比:</span> {ind.vol_ratio?.toFixed(2) ?? "—"} |
+                            <span className="text-muted-foreground ml-2">成交额:</span> {ind.amount_yi?.toFixed(1) ?? "—"}亿 |
+                            <span className="text-muted-foreground ml-2">封板率:</span> {g?.factors?.["封板率"]?.toFixed(1) ?? "—"}%
                           </div>
                           <div>
-                            <span className="text-muted-foreground/60">主力净流:</span> {ind.main_net_inflow ?? "—"}万 |
-                            <span className="text-muted-foreground/60 ml-2">北向:</span> {ind.northbound ?? "—"} |
-                            <span className="text-muted-foreground/60 ml-2">封单:</span> {ind.seal_amount ?? "—"} |
-                            <span className="text-muted-foreground/60 ml-2">流通市值:</span> {ind.float_market_cap ? `${(ind.float_market_cap / 1e8).toFixed(1)}亿` : "—"}
+                            <span className="text-muted-foreground">主力净流:</span> {ind.main_net_inflow ?? "—"}万 |
+                            <span className="text-muted-foreground ml-2">北向:</span> {ind.northbound ?? "—"} |
+                            <span className="text-muted-foreground ml-2">封单:</span> {ind.seal_amount ?? "—"} |
+                            <span className="text-muted-foreground ml-2">流通市值:</span> {ind.float_market_cap ? `${(ind.float_market_cap / 1e8).toFixed(1)}亿` : "—"}
                           </div>
                           {/* 基因 5 因子（S047 full 权重 40/25/25/0/10） */}
                           <div>
-                            <span className="text-muted-foreground/60">基因因子:</span> 次日溢价率 {g?.factors?.["次日溢价率"]?.toFixed(1) ?? "—"} / 红盘率 {g?.factors?.["红盘率"]?.toFixed(1) ?? "—"} / 封板率 {g?.factors?.["封板率"]?.toFixed(1) ?? "—"} / 炸板后溢价 {g?.factors?.["炸板后溢价"]?.toFixed(1) ?? "—"} / 涨停频次 {g?.factors?.["涨停频次"]?.toFixed(1) ?? "—"}
+                            <span className="text-muted-foreground">基因因子:</span> 次日溢价率 {g?.factors?.["次日溢价率"]?.toFixed(1) ?? "—"} / 红盘率 {g?.factors?.["红盘率"]?.toFixed(1) ?? "—"} / 封板率 {g?.factors?.["封板率"]?.toFixed(1) ?? "—"} / 炸板后溢价 {g?.factors?.["炸板后溢价"]?.toFixed(1) ?? "—"} / 涨停频次 {g?.factors?.["涨停频次"]?.toFixed(1) ?? "—"}
                           </div>
                           {/* pool_item 涨停池原始（S084 解耦子对象） */}
                           {c.pool_item && (
                             <div>
-                              <span className="text-muted-foreground/60">涨停池:</span> 连板 {(c.pool_item as Record<string, number | string | null>).lbc ?? "—"} / 炸板 {(c.pool_item as Record<string, number | string | null>).zbc ?? "—"} / 首封 {(c.pool_item as Record<string, number | string | null>).fbt ?? "—"} / 涨幅 {(c.pool_item as Record<string, number | string | null>).zdp ?? "—"}% / 换手 {(c.pool_item as Record<string, number | string | null>).hs ?? "—"}% / 价 {(c.pool_item as Record<string, number | string | null>).p ?? "—"}
+                              <span className="text-muted-foreground">涨停池:</span> 连板 {(c.pool_item as Record<string, number | string | null>).lbc ?? "—"} / 炸板 {(c.pool_item as Record<string, number | string | null>).zbc ?? "—"} / 首封 {(c.pool_item as Record<string, number | string | null>).fbt ?? "—"} / 涨幅 {(c.pool_item as Record<string, number | string | null>).zdp ?? "—"}% / 换手 {(c.pool_item as Record<string, number | string | null>).hs ?? "—"}% / 价 {(c.pool_item as Record<string, number | string | null>).p ?? "—"}
                             </div>
                           )}
                           {/* derived S070 R7 分时派生 */}
                           {c.derived && (
                             <div>
-                              <span className="text-muted-foreground/60">分时派生:</span> 炸板时长 {(c.derived as Record<string, number | string | null>).broken_duration_min ?? "—"}min / 最大回撤 {(c.derived as Record<string, number | string | null>).max_drop_pct ?? "—"}% / 尾封 {(c.derived as Record<string, number | string | null>).last_lock_time ?? "—"}
+                              <span className="text-muted-foreground">分时派生:</span> 炸板时长 {(c.derived as Record<string, number | string | null>).broken_duration_min ?? "—"}min / 最大回撤 {(c.derived as Record<string, number | string | null>).max_drop_pct ?? "—"}% / 尾封 {(c.derived as Record<string, number | string | null>).last_lock_time ?? "—"}
                             </div>
                           )}
                           {/* K线派生（S081 PRD 战法因子） */}
                           <div>
-                            <span className="text-muted-foreground/60">K线:</span> 最高涨幅 {ind.max_high_pct?.toFixed(1) ?? "—"}% / 上影线 {ind.shadow_length_pct?.toFixed(1) ?? "—"}% / MA5状态 {ind.ma_5_status ?? "—"} / 前日换手 {ind.prev_turnover_pct?.toFixed(1) ?? "—"}%
+                            <span className="text-muted-foreground">K线:</span> 最高涨幅 {ind.max_high_pct?.toFixed(1) ?? "—"}% / 上影线 {ind.shadow_length_pct?.toFixed(1) ?? "—"}% / MA5状态 {ind.ma_5_status ?? "—"} / 前日换手 {ind.prev_turnover_pct?.toFixed(1) ?? "—"}%
                           </div>
                           {/* 未取得数据源（补充 missing 数据源显示——哪些字段缺数据 + 原因）*/}
                           {ind.missing && Object.keys(ind.missing).length > 0 && (
                             <div className="text-yellow-500/70">
-                              <span className="text-muted-foreground/60">未取得:</span>{" "}
+                              <span className="text-muted-foreground">未取得:</span>{" "}
                               {Object.entries(ind.missing).map(([k, v]) => `${k}(${v})`).join(" · ")}
                             </div>
                           )}
