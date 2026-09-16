@@ -48,23 +48,23 @@ HARNESS_MODULES = {
 }
 
 
-def _zt_picks() -> list[tuple[str, str]]:
-    """zt_history lbc>=1 涨停池 picks（date, code）。"""
+def _zt_picks() -> list[tuple[str, str, int]]:
+    """zt_history lbc>=1 涨停池 picks（date, code, lbc）。partial msc 用 lbc 解锁 leader_identity。"""
     if not ZT_DB.exists():
         return []
     conn = sqlite3.connect(str(ZT_DB))
     try:
         rows = conn.execute(
-            "SELECT date, code FROM zt_history WHERE lbc>=1 AND is_final=1 ORDER BY date"
+            "SELECT date, code, lbc FROM zt_history WHERE lbc>=1 AND is_final=1 ORDER BY date"
         ).fetchall()
     finally:
         conn.close()
-    return [(r[0], r[1]) for r in rows if r[0] and r[1]]
+    return [(r[0], r[1], int(r[2]) if r[2] is not None else 0) for r in rows if r[0] and r[1]]
 
 
 def compute_obs(
     cache: dict[str, list[dict]],
-    picks: list[tuple[str, str]],
+    picks: list[tuple],
     match_fn,
     *,
     msc: dict | None = None,
@@ -74,9 +74,17 @@ def compute_obs(
 
     match_fn(code, date, bars, msc) 返 composite or None（None=不命中）。
     命中后算 gap_ret=(open[D+1]-close[D])/close[D]（decimal）+ cost。
+
+    partial msc（2026-09-17）：picks 含 lbc（3 元组 date,code,lbc），per-pick 构建
+    pick_msc={"lbc": lbc} 传 match_fn——解锁 dixi_longtou 的 leader_identity（吃 lbc）。
+    其他 3 战法不吃 lbc 不影响（印证 4 专家"3/4 战法 0 命中是数学结构决定"）。
+    验证 4 专家共识"零成本没试"——传 lbc 后 dixi_longtou 能否跨门槛（>30）。
     """
     obs: list[dict] = []
-    for D, code in picks:
+    for pick in picks:
+        # 兼容 2/3 元组（_zt_picks 返 3 元组 date,code,lbc）
+        D, code = pick[0], pick[1]
+        lbc = pick[2] if len(pick) > 2 else 0
         bars = cache.get(code)
         if not bars:
             continue
@@ -88,7 +96,9 @@ def compute_obs(
             continue
         if _is_unbuyable_next_bar(bars[d_idx]):
             continue  # D 日一字板封死（入场日 close 买不到）
-        score = match_fn(code, D, bars=bars, msc=msc)
+        # partial msc：per-pick lbc 解锁 leader_identity（match_dixi_longtou 读 msc.lbc）
+        pick_msc = {**(msc or {}), "lbc": lbc} if lbc else msc
+        score = match_fn(code, D, bars=bars, msc=pick_msc)
         if score is None:
             continue  # 不命中（composite <= 30）
         close_d = float(bars[d_idx].get("close", 0) or 0)
