@@ -71,6 +71,8 @@ class TaskExecutor:
             "forward_test_daily": self._execute_forward_test_daily,
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,
             "forward_test_backfill": self._execute_forward_test_backfill,  # S204 T3 — forward_test_records 回补 cron（≥60 天解 §44v2 R3 enforce 阻塞）
+            "early_admission_scan": self._execute_early_admission_scan,  # S204 T10 — pre-涨停候选入池（manual trigger，auto-source deferred）
+            "escalation_run": self._execute_escalation_run,  # S204 T11 — tracking→watching auto-promote（enabled=False 阈值未验证）
             "first_board_t1_review": self._execute_first_board_t1_review,
             "first_board_quote_probe": self._execute_first_board_quote_probe,
             "zt_history_snapshot": self._execute_zt_history_snapshot,
@@ -312,6 +314,45 @@ class TaskExecutor:
             return {"status": "ok" if rc == 0 else "error", "exit_code": rc, "use_weather": use_weather}
         except Exception as e:
             return {"status": "error", "error": repr(e)[:200], "use_weather": use_weather}
+
+    def _execute_early_admission_scan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S204 T10: early_admission 扫描入池（pre-涨停候选 → candidate_tracking_pool）。
+
+        接受 payload.candidates（list[dict] 含 code/sector_rank/zt_count_today/lbc/high_gene，as of T-1）
+        + payload.run_date + payload.previous_trade_day。scan_early_admission pit guard T-1 only（不取数不臆造）。
+        **auto-candidate-source（funnel→early_admission shape adapter）deferred**——需设计决策（high_gene/
+        sector_rank 从 funnel gene_score/pool_item 怎么映射）。当前 manual trigger：POST /api/scheduler/trigger
+        {task_type:"early_admission_scan", payload:{candidates, run_date, previous_trade_day}}。
+        """
+        from early_admission import scan_early_admission
+        import tracking_pool_repo as _repo
+        candidates = payload.get("candidates") or []
+        run_date = payload.get("run_date") or datetime.now().date().isoformat()
+        previous_trade_day = payload.get("previous_trade_day")
+        if not candidates:
+            return {"status": "no_candidates", "note": "auto-candidate-source deferred（funnel adapter 设计决策）；manual trigger 传 payload.candidates"}
+        admitted = scan_early_admission(run_date, candidates, previous_trade_day=previous_trade_day)
+        inserted = 0
+        for c in admitted:
+            if _repo.insert_tracking_record(c.code, c.admit_date, c.signal_type, c.indicators_t1):
+                inserted += 1
+            _repo.upsert_indicator_snapshot(c.code, c.admit_date, c.indicators_t1, snapshot_source="early_admit")
+        return {"status": "ok", "admitted": len(admitted), "inserted": inserted, "run_date": run_date}
+
+    def _execute_escalation_run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S204 T11: escalation run（tracking→watching auto-promote + promoted→decayed）。
+
+        **enabled=False（maturity 阈值未验证：min_age=3/gene+20%/sector_rank≤5 社区参数标 overfit）**——
+        auto-escalate 会让 watching 列表噪声大。决策#11：只 candidate→watching 自动，watching 以上人工。
+        T12 decay WATCHING→FILTERED reason='decayed'（非→CANDIDATE 防振荡）。manual trigger 验证阈值后改 enabled=True。
+        """
+        from escalation_engine import escalate
+        run_date = payload.get("run_date") or datetime.now().date().isoformat()
+        try:
+            promoted = escalate(run_date)
+            return {"status": "ok", "promoted": promoted, "promoted_count": len(promoted), "run_date": run_date}
+        except Exception as e:
+            return {"status": "error", "error": repr(e)[:200], "run_date": run_date}
 
     def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.first_board import first_board_t1_review

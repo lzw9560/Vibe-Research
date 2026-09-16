@@ -327,6 +327,34 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 forward_test_backfill 已创建（cron 0 18 * * 0-4，S204 T3）")
 
+    # S204 T10: early_admission 扫描入池（pre-涨停候选 → candidate_tracking_pool）。
+    # enabled=False：auto-candidate-source（funnel→early_admission adapter）deferred，需设计决策。
+    # manual trigger 验证：POST /api/scheduler/trigger {task_type, payload:{candidates, run_date, previous_trade_day}}。
+    if "early_admission_scan" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="early_admission_scan",
+            description="S204 T10：pre-涨停候选入池（manual trigger，auto-source deferred——funnel adapter 设计决策）",
+            task_type="early_admission_scan",
+            cron_expr="0 9 * * 0-4",  # 盘前 09:00（manual trigger 为主，enabled=False 直到 adapter 落地）
+            payload={},
+            enabled=False,
+        ))
+        logger.info("[scheduler] seed 默认任务 early_admission_scan 已创建（enabled=False，S204 T10，manual trigger 为主）")
+
+    # S204 T11: escalation run（tracking→watching auto-promote + promoted→decayed）。
+    # enabled=False：maturity 阈值（min_age=3/gene+20%/sector_rank≤5）社区参数未验证→auto-escalate 会让 watching 噪声大。
+    # 决策#11：只 candidate→watching 自动。manual trigger 验证阈值后改 enabled=True。
+    if "escalation_run" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="escalation_run",
+            description="S204 T11：escalation（tracking→watching auto-promote + decay；enabled=False 阈值未验证）",
+            task_type="escalation_run",
+            cron_expr="15 9 * * 0-4",  # 盘前 09:15（晚 early_admission 09:00，manual trigger 为主）
+            payload={},
+            enabled=False,
+        ))
+        logger.info("[scheduler] seed 默认任务 escalation_run 已创建（enabled=False，S204 T11，maturity 阈值未验证）")
+
     # S069 R2：每日 post-market 回填昨日 forward_test T+1 收益（baostock kline 次日 bar）。
     if "forward_test_t1_settle" not in existing:
         _manager.create_task(ScheduledTask(

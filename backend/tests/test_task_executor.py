@@ -52,6 +52,8 @@ _EXPECTED_TASK_TYPES = {
     "forward_test_daily",
     "forward_test_t1_settle",
     "forward_test_backfill",  # S204 T3 — forward_test_records 回补 cron（≥60 天解 §44v2 R3 enforce 阻塞）
+    "early_admission_scan",  # S204 T10 — pre-涨停候选入池（manual trigger，auto-source deferred）
+    "escalation_run",  # S204 T11 — tracking→watching auto-promote（enabled=False 阈值未验证）
     "first_board_t1_review",
     "first_board_quote_probe",
     "zt_history_snapshot",

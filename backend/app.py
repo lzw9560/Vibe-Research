@@ -71,6 +71,7 @@ from routers import fusion as fusion_router  # S194 FE-6：融合研判查询（
 from routers import wechat_bot as wechat_bot_router  # 微信 Bot 双向对话（企业微信回调 + KG 工具）
 from routers import verifier as verifier_router  # S165：§44 验证卡 + 实验记录（contract-first UI 接线）
 from routers import journal as journal_router  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger，fresh-impl）
+from routers import tracking as tracking_router  # S204 T9：多日跟踪查询 API（candidate_tracking_pool + indicator_snapshots 只读看板）
 try:
     from routers import value_funnel as value_funnel_router
 except Exception as _vf_err:  # noqa: BLE001 — value_funnel 半成品/缺 quality.py 时不挡 app 启动
@@ -292,6 +293,7 @@ app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
 app.include_router(notes_router.router)  # 投研记录笔记（CRUD + SQLite 落盘）
 app.include_router(verifier_router.router)  # S165：§44 验证卡 + 实验记录
 app.include_router(journal_router.router)  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger）
+app.include_router(tracking_router.router)  # S204 T9：多日跟踪查询 API
 if value_funnel_router is not None:
     app.include_router(value_funnel_router.router)
 
