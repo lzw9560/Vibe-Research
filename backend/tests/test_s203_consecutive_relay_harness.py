@@ -49,13 +49,33 @@ class TestComputeObs:
         obs = h.compute_obs(cache, [("2026-02-01", "000001")])  # date 不在 bars
         assert obs == []
 
-    def test_filters_unbuyable(self, monkeypatch):
-        """一字板封死（_is_unbuyable_next_bar=True）→ 跳过 survivorship 过滤。"""
+    def test_filters_d_day_unbuyable(self, monkeypatch):
+        """D 日一字板（close 买不到）→ 过滤。验 filter 查 D 日非 D+1（verify w5d3urvxz CRITICAL fix）。"""
         import tools.s203_consecutive_relay_harness as h
         cache = {"000001": self._bars()}
-        monkeypatch.setattr(h, "_is_unbuyable_next_bar", lambda bar: True)
-        obs = h.compute_obs(cache, [("2026-01-15", "000001")])
-        assert obs == []
+        # mock: 只 D 日 bar（2026-01-15）返 True（一字板），D+1 返 False
+        monkeypatch.setattr(
+            h, "_is_unbuyable_next_bar",
+            lambda bar: str(bar.get("date", ""))[:10] == "2026-01-15",
+        )
+        obs = h.compute_obs(
+            cache, [("2026-01-15", "000001")], cost_fn=lambda *a, **k: 0.0
+        )
+        assert obs == []  # D 日一字板 → 入场日 close 买不到 → 过滤
+
+    def test_d1_unbuyable_does_not_filter(self, monkeypatch):
+        """D+1 一字板（不影响 D 日 close 买入）→ 不过滤。验 filter 查 D 日非 D+1。"""
+        import tools.s203_consecutive_relay_harness as h
+        cache = {"000001": self._bars()}
+        # mock: 只 D+1 bar（2026-01-16）返 True，D 日返 False
+        monkeypatch.setattr(
+            h, "_is_unbuyable_next_bar",
+            lambda bar: str(bar.get("date", ""))[:10] == "2026-01-16",
+        )
+        obs = h.compute_obs(
+            cache, [("2026-01-15", "000001")], cost_fn=lambda *a, **k: 0.0
+        )
+        assert len(obs) == 1  # D 日可买 → 不过滤；D+1 一字板不影响 D 日 close 入场
 
     def test_gap_ret_decimal_not_pct(self, monkeypatch):
         """gap_ret 用 decimal（0.02=2%），非 pct（2.0）——对齐 regime_stats。"""

@@ -79,8 +79,11 @@ def compute_obs(
         if d_idx is None or d_idx + 1 >= len(bars):
             continue
         nxt = bars[d_idx + 1]
-        if _is_unbuyable_next_bar(nxt):
-            continue  # 一字板封死买不到（survivorship 过滤）
+        # 入场是 D 日 close（gap_ret = open[D+1] - close[D] / close[D]），该过滤 D 日
+        # 一字板（全天锁涨停，close 买不到），不是 D+1。verify w5d3urvxz CRITICAL fix：
+        # 原 _is_unbuyable_next_bar(nxt) 查 D+1 错天——D 日一字板 57 个被算入，抬 61% edge。
+        if _is_unbuyable_next_bar(bars[d_idx]):
+            continue  # D 日一字板封死（入场日 close 买不到，survivorship 过滤）
         close_d = float(bars[d_idx].get("close", 0) or 0)
         open_d1 = float(nxt.get("open", 0) or 0)
         if close_d <= 0 or open_d1 <= 0:
