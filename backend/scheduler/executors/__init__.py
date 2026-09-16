@@ -71,6 +71,7 @@ class TaskExecutor:
             "forward_test_daily": self._execute_forward_test_daily,
             "forward_test_t1_settle": self._execute_forward_test_t1_settle,
             "forward_test_backfill": self._execute_forward_test_backfill,  # S204 T3 — forward_test_records 回补 cron（≥60 天解 §44v2 R3 enforce 阻塞）
+            "r3_enforce": self._execute_r3_enforce,  # S204 T8 — §44v2 verdict 定期 enforce 降级（days≥60 → lift_to_multiplier + write_override）
             "early_admission_scan": self._execute_early_admission_scan,  # S204 T10 — pre-涨停候选入池（manual trigger，auto-source deferred）
             "escalation_run": self._execute_escalation_run,  # S204 T11 — tracking→watching auto-promote（enabled=False 阈值未验证）
             "first_board_t1_review": self._execute_first_board_t1_review,
@@ -314,6 +315,15 @@ class TaskExecutor:
             return {"status": "ok" if rc == 0 else "error", "exit_code": rc, "use_weather": use_weather}
         except Exception as e:
             return {"status": "error", "error": repr(e)[:200], "use_weather": use_weather}
+
+    def _execute_r3_enforce(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S204 T8: §44v2 R3 enforce——per-arm days_robust 跨 60 天阈 → lift_to_multiplier 升降级 + write_override。
+
+        当前 forward_test ~20 天 → skip all underpowered（接线建好待 ≥60 天 bite，不造假 enforce）。
+        非 arm 级 dimension（gene_score/turnover 等无 arm 映射）→ 保持 frozen 不重算。
+        """
+        from scheduler.executors.backtest import r3_enforce  # noqa: PLC0415
+        return r3_enforce(payload)
 
     def _execute_early_admission_scan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S204 T10: early_admission 扫描入池（post-首板候选 → candidate_tracking_pool）。

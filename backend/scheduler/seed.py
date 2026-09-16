@@ -327,6 +327,22 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 forward_test_backfill 已创建（cron 0 18 * * 0-4，S204 T3）")
 
+    # S204 T8: R3 enforce——§44v2 verdict 定期 enforce 降级（盘前 06:00，per-arm days_robust 跨 60 天阈
+    # → lift_to_multiplier 升降级 + write_override 刷新 override）。当前 forward_test ~20 天 → skip all
+    # underpowered（接线建好待 ≥60 天 bite）。非 reminder（evaluation_backtest 是 reminder+apply_revalidation），
+    # T8 是直接 enforce：调 backtest.r3_enforce 算 per-arm distinct exit_date + write_override。
+    if "r3_enforce" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="r3_enforce",
+            description="S204 T8：§44v2 R3 enforce——per-arm days_robust 跨 60 天阈 → lift_to_multiplier 升降级 + write_override",
+            task_type="r3_enforce",
+            cron_expr="0 6 * * 0-4",  # 盘前 06:00（周一-周五，开盘前 enforce）
+            payload={"enforce": True, "threshold_days": 60},
+            enabled=True,
+            notify_on_success=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 r3_enforce 已创建（cron 0 6 * * 0-4，S204 T8 §44v2 enforce）")
+
     # S204 T10: early_admission 扫描入池（pre-涨停候选 → candidate_tracking_pool）。
     # auto-source=funnel cache 是**错源**（验证 2026-09-16：funnel final_candidates 是 post-涨停 lbc2-3，
     # early_admission 要 pre-涨停 lbc=1/sector_startup → 0 admits 正确但无用）。

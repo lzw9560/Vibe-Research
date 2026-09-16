@@ -207,6 +207,86 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
     return ckpt
 
 
+def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S204 T8: R3 enforce——§44v2 verdict 定期 enforce 降级。
+
+    非 reminder（evaluation_backtest 是 reminder+apply_revalidation）——T8 是直接 enforce：
+    per-arm 算 current days_robust（trade_journal distinct exit_date），≥60 阈 → 调
+    lift_to_multiplier + write_override 刷新 override。当前 forward_test ~20 天 → skip all underpowered。
+
+    非 arm 级 dimension（gene_score/turnover/seal_amount 等无 arm 映射）→ skip（保持 frozen baseline，
+    不重算 days）——只 arm 级 dimension（breakout/trend/post_first_board 及其盘中因子）有
+    forward_test records 可重算 days。
+    """
+    from candidate_funnel.evaluation import (  # noqa: PLC0415
+        DIMENSION_LIFT_REGISTRY, DIM_ARM_MAP, lift_to_multiplier,
+    )
+    from candidate_funnel.lift_override import write_override  # noqa: PLC0415
+    from engine.trade_journal import TradeJournal  # noqa: PLC0415
+
+    threshold_days = int(payload.get("threshold_days", 60))
+    journal = TradeJournal()
+
+    # 反查 DIM_ARM_MAP: dimension → arm
+    dim_to_arm: dict[str, str] = {}
+    for arm, dims in DIM_ARM_MAP.items():
+        if dims:
+            for dim_id in dims:
+                dim_to_arm[dim_id] = arm
+
+    enforced: list[dict] = []
+    skipped_underpowered: list[dict] = []
+    skipped_non_arm: list[str] = []
+
+    for dim_id, dim in DIMENSION_LIFT_REGISTRY.items():
+        if dim_id.endswith("_ref"):
+            continue  # 参照不参与
+        arm = dim_to_arm.get(dim_id)
+        if arm is None:
+            # 非 arm 级（gene_score/turnover/sector_heat 等）→ 保持 frozen，不重算
+            skipped_non_arm.append(dim_id)
+            continue
+        # arm 级：算 current days_robust（distinct exit_date，含死臂历史）
+        records = journal.query_records(arm=arm, is_realized=1, is_dead_arm=None)
+        current_days = len({r.exit_date for r in records if r.exit_date})
+        if current_days < threshold_days:
+            skipped_underpowered.append({
+                "dimension_id": dim_id, "arm": arm,
+                "current_days": current_days, "threshold": threshold_days,
+            })
+            continue
+        # ≥60 → enforce: lift_to_multiplier + write_override 刷新
+        status, mult = lift_to_multiplier(
+            dim.lift, dim.n, days_robust=current_days,
+        )
+        write_override(
+            dim_id, dim.lift, dim.n, current_days,
+            phase="r3_enforce",
+            source_script="scheduler/executors/backtest.py::r3_enforce",
+        )
+        enforced.append({
+            "dimension_id": dim_id, "arm": arm,
+            "current_days": current_days,
+            "lift": dim.lift, "n": dim.n,
+            "status": status, "weight_multiplier": mult,
+        })
+
+    summary = (
+        f"R3 enforce: {len(enforced)} enforced, "
+        f"{len(skipped_underpowered)} underpowered (<{threshold_days}d), "
+        f"{len(skipped_non_arm)} non-arm (frozen)"
+    )
+    logger.warning("[r3_enforce] %s", summary)
+    return {
+        "status": "ok",
+        "enforced": enforced,
+        "skipped_underpowered": skipped_underpowered,
+        "skipped_non_arm": skipped_non_arm,
+        "threshold_days": threshold_days,
+        "summary": summary,
+    }
+
+
 def forward_test_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     """S069 R1：每日 post-market 记当日 forward_test picks + universe codes（收益 NULL，R2 次日回填）。
 
