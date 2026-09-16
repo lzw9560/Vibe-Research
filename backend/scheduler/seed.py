@@ -486,6 +486,23 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 zt_history_snapshot 已创建（cron 15 17 * * 0-4）")
+
+    # S211 通电收尾（2026-09-17）：regime_cache_fetch——17:20（kline_refresh 17:15 后、
+    # trade_journal_daily 17:30 前）。刷 index_ma20_regime.json 防 consecutive_relay
+    # regime=None 误保守 ×0.5（升 bull ×1.0 前必须接 cron，否则 bull 被当未知误保守）。
+    # fork 发现 index_ma20_regime_fetch.py 原 hardcoded "2026-09-06" → cache 停 09-06，
+    # 已改 dynamic today()；本 task 跑脚本刷 cache。
+    if "regime_cache_fetch" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="regime_cache_fetch",
+            description="S211 刷 index_ma20_regime.json（baostock sh.000001 + MA20 + regime 标签），consecutive_relay regime-stratified cap 依赖",
+            task_type="regime_cache_fetch",
+            cron_expr="20 17 * * 0-4",  # 17:20（kline_refresh 17:15 后、trade_journal_daily 17:30 前）
+            payload={},
+            enabled=True,
+            depends_on="kline_refresh",  # S190 R5：晚 kline_refresh 后跑
+        ))
+        logger.info("[scheduler] seed 默认任务 regime_cache_fetch 已创建（cron 20 17 * * 0-4，depends_on=kline_refresh）")
     for t in _manager.list_tasks():
         if t.name == "zt_history_snapshot" and t.cron_expr == "0 16 * * 0-4":
             old_cron = t.cron_expr

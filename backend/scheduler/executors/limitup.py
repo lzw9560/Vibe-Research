@@ -164,6 +164,40 @@ def zt_history_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": f"error: {e}"}
 
 
+def regime_cache_fetch(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """刷 index_ma20_regime.json（baostock sh.000001 + MA20 + regime 标签）。
+
+    consecutive_relay regime-stratified cap 依赖此 cache（bull ×0.5 / bear+range ×0.5）。
+    17:20 跑（kline_refresh 17:15 后、trade_journal_daily 17:30 前）——防 cache 滞后
+    导致 consecutive_relay regime=None 误保守 ×0.5（升 bull ×1.0 前必须接 cron，
+    否则 regime=None 时 bull 被当未知误保守）。
+
+    根因（2026-09-17 fork 发现）：index_ma20_regime_fetch.py:19 原 hardcoded "2026-09-06"
+    → cache 永远停在 09-06。已改 dynamic today()，本 executor 跑脚本刷 cache。
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+    script = Path(__file__).resolve().parents[2] / "tools" / "index_ma20_regime_fetch.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script)], capture_output=True, text=True, timeout=180,
+        )
+        if result.returncode != 0:
+            logger.warning("[regime_cache_fetch] 脚本失败 rc=%s: %s",
+                           result.returncode, result.stderr[:300])
+            return {"status": f"error: rc={result.returncode}", "stderr": result.stderr[:200]}
+        last_line = result.stdout.strip().split("\n")[-1] if result.stdout.strip() else ""
+        logger.info("[regime_cache_fetch] 刷 cache ok: %s", last_line)
+        return {"status": "ok", "stdout_tail": result.stdout[-200:], "last_line": last_line}
+    except subprocess.TimeoutExpired:
+        logger.warning("[regime_cache_fetch] 脚本超时 180s")
+        return {"status": "error: timeout"}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[regime_cache_fetch] 异常: %s", e)
+        return {"status": f"error: {e}"}
+
+
 def st_play_radar(payload: Dict[str, Any]) -> Dict[str, Any]:
     """S148 R3：盘后 ST-play radar——扫 ST 股公告 → 摘帽/重组/扭亏 白名单 → st_play_radar.json。
 

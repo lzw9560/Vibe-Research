@@ -15,8 +15,10 @@ from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-dat
 from data.sources.baostock_src import fetch_bars
 
 # query full history daily K for sh.000001（P2 DRY: 迁到 baostock_src）
+# end date 动态 today（原 hardcoded 2026-09-06 → cache 停在 09-06，consecutive_relay live regime=None）
+_end = datetime.date.today().strftime("%Y-%m-%d")
 bars = fetch_bars(
-    "sh.000001", "2004-01-04", "2026-09-06",
+    "sh.000001", "2004-01-04", _end,
     fields="date,close", adjustflag="3",  # no adjust for index
 )
 if not bars:
