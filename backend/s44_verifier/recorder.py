@@ -145,9 +145,12 @@ class Recorder:
         verdict-reproducibility can recompute without re-deriving from data.
         """
         ts = _now_iso()
-        # recorder_id = timestamp + snapshot_id tail (unique + traceable)
+        # recorder_id = timestamp + snapshot_id tail + line_id tail (unique + traceable)
+        # S209 T6 fix: line_id 区分 selection/event（同秒同 snapshot 不撞 UNIQUE）
         snap_tail = data_snapshot_id.replace("+", "-")[-12:]
-        recorder_id = f"{ts.replace(':', '').replace('-', '')}-{snap_tail}"
+        line_id = str(params.get("line_id", "")) if isinstance(params, dict) else ""
+        line_tail = hashlib.sha256(line_id.encode("utf-8")).hexdigest()[:8] if line_id else "noline"
+        recorder_id = f"{ts.replace(':', '').replace('-', '')}-{snap_tail}-{line_tail}"
 
         conn = self._conn()
         try:

@@ -1020,6 +1020,31 @@ def test_recorder_save_load(tmp_path):
     assert len(record.return_series) == len(returns)
 
 
+def test_recorder_id_unique_for_different_line_ids(tmp_path):
+    """S209 T6 fix: selection + event 同秒同 snapshot + 不同 line_id → 不同 recorder_id（不撞 UNIQUE）。"""
+    from s44_verifier.recorder import Recorder
+    recorder = Recorder(db_path=str(tmp_path / "test_recorder_unique.db"))
+    common = {
+        "data_snapshot_id": "test_snap_123",
+        "input_hashes": {"universe": "abc"},
+        "return_series": [0.01, -0.02, 0.03],
+        "dates": ["2026-01-01", "2026-01-02", "2026-01-03"],
+        "frozen_commit": "b4e7446",
+        "verdict": {"status": "underpowered"},
+    }
+    rid_sel = recorder.save(
+        params={"line_id": "post_first_board:selection", "edge_type": "selection"}, **common,
+    )
+    rid_evt = recorder.save(
+        params={"line_id": "post_first_board:event", "edge_type": "event"}, **common,
+    )
+    assert rid_sel != rid_evt, (
+        f"selection({rid_sel}) 与 event({rid_evt}) recorder_id 应不同（line_id 区分）"
+    )
+    assert recorder.load(rid_sel) is not None
+    assert recorder.load(rid_evt) is not None
+
+
 def test_compute_composite_snapshot_id(tmp_path):
     """HIGH #2: composite data_snapshot_id = f"{universe_hash[:12]}+{cache_hash[:12]}"."""
     from s44_verifier.recorder import compute_composite_snapshot_id
