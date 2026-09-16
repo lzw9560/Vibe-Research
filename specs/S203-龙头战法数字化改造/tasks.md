@@ -13,7 +13,7 @@
 - ✅ **T5** leader_drop_reversal：DONE（`06f898a`，LeaderDropReversalStrategy，大跌从 close 差复算不依赖 pctChg）。
 - 🔶 **T6** intraday_loss_breaker：built+green **UNWIRED**（`c5e641e`，stage-1 待 G4 接 router/scheduler）。
 - ⏸️ **T7** QMT 4 模板：spec-only 未建（放 specs/S203/templates/ 标 BLOCKER）。
-- ✅ **T8** regime-stratified harness ×2（first_board_limitup + reverse_package）：built（`06f898a`），verdict 须等 G1 pctChg+isST 全到位（pctChg DONE，isST DEFERRED）+ S204 verifier（DONE）。
+- ✅ **T8** regime-stratified harness ×4 全建齐（first_board_limitup + reverse_package `06f898a` + consecutive_relay + leader_drop_reversal `e664353`）：verdict 须等数据 ≥60 天（当前 ~22 天 forward_test，pctChg DONE，isST DEFERRED，S204 verifier DONE，R11 event_drift DONE T5b）。
 - ✅ **T9** sensitivity_sweep：built（`06f898a`），待 G6 验 overfit 检测。
 - ⏸️ **T10** 全量验收：G7，未做。
 
