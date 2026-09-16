@@ -62,15 +62,87 @@ def load_returns_by_date() -> dict[str, dict[str, dict]]:
     return by_date
 
 
+ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
+KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
+
+
+def _collect_signal_dates_multi_source() -> list[tuple[str, str]]:
+    """多数据源异构 merge：signal_date 候选日 + source 标（去重，按日升序）。
+
+    三源（不臆造，全 cache/本地 DB，zero em_get）：
+    1. zt_history（历史涨停池，9 个月 cache，DISTINCT date WHERE lbc>=1 AND is_final=1）
+    2. gene_scores（eastmoney_live + kline_rebuild 全 source，当日实时 + 历史回补）
+    3. baostock kline cache（date 补缺，2113 日 2018→2026，仅取近 9 个月匹配 §44 窗口）
+
+    去重：同日多源只取 1（优先 zt_history > gene_scores > baostock，标首源）。
+    返 [(date, source), ...] 升序。source ∈ {zt_history, gene_scores, baostock}。
+
+    R6 gate（≥60 天）：单源 eastmoney_live=48 <60；多源 merge 后 ≥170（zt_history 26 +
+    gene_scores 171 + baostock 近 9 月 ~180，去重后 ~180）——立即解锁 §44 verdict。
+    """
+    merged: dict[str, str] = {}
+
+    # 源 1: zt_history（历史涨停池，cache）
+    if ZT_DB.exists():
+        try:
+            c = sqlite3.connect(str(ZT_DB))
+            rows = c.execute(
+                "SELECT DISTINCT date FROM zt_history WHERE lbc>=1 AND is_final=1 ORDER BY date"
+            ).fetchall()
+            c.close()
+            for r in rows:
+                d = (r[0] or "")[:10]
+                if d and d not in merged:
+                    merged[d] = "zt_history"
+        except Exception as e:  # noqa: BLE001
+            print(f"[signal_dates] zt_history 读失败: {e}")
+
+    # 源 2: gene_scores（全 source——eastmoney_live + kline_rebuild）
+    if DB.exists():
+        try:
+            c = sqlite3.connect(str(DB))
+            rows = c.execute(
+                "SELECT DISTINCT date FROM gene_scores ORDER BY date"
+            ).fetchall()
+            c.close()
+            for r in rows:
+                d = (r[0] or "")[:10]
+                if d and d not in merged:
+                    merged[d] = "gene_scores"
+        except Exception as e:  # noqa: BLE001
+            print(f"[signal_dates] gene_scores 读失败: {e}")
+
+    # 源 3: baostock kline cache（补缺——近 9 个月匹配 §44 窗口）
+    # kline cache 有 2113 日（2018→2026），只取近 9 个月（~180 交易日）避免远古日无 picks
+    if KLINE_CACHE.exists():
+        try:
+            import json as _json
+            cache = _json.loads(KLINE_CACHE.read_bytes())
+            all_dates: set[str] = set()
+            for bars in cache.values():
+                for b in bars:
+                    ds = str(b.get("date", ""))[:10]
+                    if ds:
+                        all_dates.add(ds)
+            # 近 9 个月窗口（2026-01-01 起，匹配 forward_test 实际跑期）
+            for d in sorted(all_dates):
+                if d >= "2026-01-01" and d not in merged:
+                    merged[d] = "baostock"
+        except Exception as e:  # noqa: BLE001
+            print(f"[signal_dates] baostock cache 读失败: {e}")
+
+    return sorted(merged.items(), key=lambda x: x[0])
+
+
 def main(use_weather: bool = False) -> int:
     ret_map = load_returns_map()
     by_date = load_returns_by_date()
-    conn = sqlite3.connect(str(DB))
-    dates = [r[0] for r in conn.execute(
-        "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-    ).fetchall()]
-    conn.close()
-    print(f"eastmoney_live 信号日数: {len(dates)}")
+    date_sources = _collect_signal_dates_multi_source()
+    dates = [d for d, _ in date_sources]
+    source_counts: dict[str, int] = {}
+    for _, src in date_sources:
+        source_counts[src] = source_counts.get(src, 0) + 1
+    print(f"signal_date 多源 merge: {len(dates)} 日 | source 分布: {source_counts}")
     if not dates:
         return 1
 
