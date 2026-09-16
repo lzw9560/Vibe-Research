@@ -9,7 +9,7 @@
 - ✅ **T1** dimension_registry.py：DONE（`06f898a`，Dimension+DIMENSION_REGISTRY+战法ScoreConfig+3 战法 config）。
 - ✅ **T2** dragon_score.py：DONE（`06f898a`，composite 0-100）。⚠️ `_normalize` 是骨架待接线（harness 层公式）。
 - ✅ **T3** dragon_head C2/C3 seal gate：**DONE**（涨停 path 全接——limitup_strategy.py:489-495 拷涨停池 raw seal/industry/limit 进 GeneScore + _build_limitup_msc:636 建 msc 含 seal_to_float_ratio + zt_count_today(via sector_cycle._get_zt_count_by_date_industry) + high_gene + sector_rank + bars + lbc；first_board_limitup.match:468-509 评 C1+C2+C3；test_limitup_msc_wiring 27 passed 验证）。market_scan path (aggregation.py:183 msc 只 pattern/sector_rank) 是可选增强（非涨停 funnel，首板涨停 主跑涨停 path）——不阻塞。原 "NOT done" + "msc wiring DEFERRED" 标错（只查了 market_scan path 漏了涨停 path _build_limitup_msc）。
-- ⏸️ **T4** consecutive_relay C1 lbc≥2：**NOT done**（2026-09-16 核 gene_based.py:91/98：C1 仍 `zt_count_250d>=2` 非 `lbc>=2`）。S203 P3 待实现（T0 grep 7 文件已确认，可改）。
+- ⏸️ **T4** consecutive_relay C1 lbc≥2：**DEFER**（决策 2026-09-16，用户定延期非 drop）。核 gene_based.py:91/98：C1 仍 `zt_count_250d>=2`（历史频次接力）。改 lbc≥2 会变 Relay23 副本（Relay23 已用 lbc≥2 当下连板动量）——consecutive_relay（历史频次，宽）vs Relay23（当下动量，窄）是**不同信号**，保留原样不冲突。spec T4 基于误解（以为两战法该一样）。延期至用户确认 consecutive_relay 是否仍生产用——若是死策略再废弃，否则永久保留原样。
 - ✅ **T5** leader_drop_reversal：DONE（`06f898a`，LeaderDropReversalStrategy，大跌从 close 差复算不依赖 pctChg）。
 - 🔶 **T6** intraday_loss_breaker：built+green **UNWIRED**（`c5e641e`，stage-1 待 G4 接 router/scheduler）。
 - ⏸️ **T7** QMT 4 模板：spec-only 未建（放 specs/S203/templates/ 标 BLOCKER）。
