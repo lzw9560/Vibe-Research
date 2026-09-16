@@ -318,11 +318,12 @@ class TaskExecutor:
     def _execute_early_admission_scan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S204 T10: early_admission 扫描入池（pre-涨停候选 → candidate_tracking_pool）。
 
-        auto-source：load funnel cache for T-1（load_funnel_result）→ extract final_candidates
-        （code / gene_score.total_score / pool_item.lbc / sector_phase.count_today）→ scan_early_admission。
-        high_gene = 1 if gene_score.total_score >= 80（routers/limitup/metrics.py:78 规则）。
-        zt_count_today = sector_phase.count_today（funnel 已算，不重复调 sector_cycle）。
-        manual override：payload.candidates 优先（list[dict] 含 code/sector_rank/zt_count_today/lbc/high_gene）。
+        **验证发现（2026-09-16 实跑 funnel cache 2026-09-15）**：auto-source=funnel cache 是**错源**——
+        funnel final_candidates 是 post-涨停（lbc 2-3，已涨停），early_admission 要 pre-涨停（lbc=1 /
+        sector_startup / high_gene）。adapter 正确排除 post-涨停（lbc>=2 不 admit）→ 产出 0 admits（正确但无用）。
+        **真 auto-source 须建 pre-涨停 scanner**（板块启动初期 + 连板苗子，非涨停 funnel）——future 设计+build task。
+        当前 manual override（payload.candidates）是唯一有效输入；auto-source 代码保留作 plumbing（pre-涨停
+        scanner 建好后改 source 即可）。high_gene = 1 if total_score >= 80（routers/limitup/metrics.py:78）。
         pit guard T-1 only（scan_early_admission 不取数不臆造）。
         """
         from early_admission import scan_early_admission

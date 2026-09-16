@@ -328,18 +328,20 @@ def _ensure_seed_tasks() -> None:
         logger.info("[scheduler] seed 默认任务 forward_test_backfill 已创建（cron 0 18 * * 0-4，S204 T3）")
 
     # S204 T10: early_admission 扫描入池（pre-涨停候选 → candidate_tracking_pool）。
-    # auto-source 已接：load funnel cache T-1 final_candidates → adapter（code/gene_score.total_score→high_gene>=80/pool_item.lbc/sector_phase.count_today→zt_count_today）。
-    # enabled=False：adapter 产出待验证（manual trigger POST /api/scheduler/trigger 看候选是否合理 → flip enabled=True）。
+    # auto-source=funnel cache 是**错源**（验证 2026-09-16：funnel final_candidates 是 post-涨停 lbc2-3，
+    # early_admission 要 pre-涨停 lbc=1/sector_startup → 0 admits 正确但无用）。
+    # 真 auto-source 须建 pre-涨停 scanner（future）——非涨停 funnel。当前 manual trigger 是唯一有效输入。
+    # enabled=False：adapter 产出待 pre-涨停 scanner 建好后验证。
     if "early_admission_scan" not in existing:
         _manager.create_task(ScheduledTask(
             name="early_admission_scan",
-            description="S204 T10：pre-涨停候选入池（auto-source=funnel cache T-1；enabled=False adapter 待验证）",
+            description="S204 T10：pre-涨停候选入池（auto-source 错源 funnel 是 post-涨停；须建 pre-涨停 scanner；enabled=False）",
             task_type="early_admission_scan",
-            cron_expr="0 9 * * 0-4",  # 盘前 09:00（manual trigger 验证后改 enabled=True）
+            cron_expr="0 9 * * 0-4",  # 盘前 09:00（pre-涨停 scanner 建好后改 enabled=True）
             payload={},
             enabled=False,
         ))
-        logger.info("[scheduler] seed 默认任务 early_admission_scan 已创建（enabled=False，S204 T10，auto-source 已接待验证）")
+        logger.info("[scheduler] seed 默认任务 early_admission_scan 已创建（enabled=False，S204 T10，auto-source 须 pre-涨停 scanner）")
 
     # S204 T11: escalation run（tracking→watching auto-promote + promoted→decayed）。
     # enabled=False：maturity 阈值（min_age=3/gene+20%/sector_rank≤5）社区参数未验证→auto-escalate 会让 watching 噪声大。
