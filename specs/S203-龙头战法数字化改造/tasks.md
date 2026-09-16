@@ -8,7 +8,7 @@
 - ✅ **T0** grep zt_count_250d 7 文件：审计确认 7 文件引用全在（gene_based:91/131/248 + strategy_base:348/380 + funnel/scoring:97/105 + routers/workflow.py:221/250 + scheduler/notifications.py:57）。手动确认 task，basis 有效。
 - ✅ **T1** dimension_registry.py：DONE（`06f898a`，Dimension+DIMENSION_REGISTRY+战法ScoreConfig+3 战法 config）。
 - ✅ **T2** dragon_score.py：DONE（`06f898a`，composite 0-100）。⚠️ `_normalize` 是骨架待接线（harness 层公式）。
-- ⏸️ **T3** dragon_head C2/C3 seal gate：**NOT done**（2026-09-16 核 gene_based.py:402+：dragon_head 只有 C1 sector_rank≤3，缺 C2 zt_count_today≥2 + C3 seal_to_float_ratio≥0.005）。S203 P2 待实现。
+- 🔶 **T3** dragon_head C2/C3 seal gate：**match 逻辑 DONE（first_board_limitup, gene_based.py:455-509 有 C1+C2+C3）**；**msc data-wiring DEFERRED**（aggregation.py:183 msc 只 pattern/sector_rank/rel_strength，缺 zt_count_today + seal_to_float_ratio；涨停 path msc=None 全无）。spec T3 "gene_based.py:393 改 dragon_head" 过时——实际首板战法是 `first_board_limitup`（已建 C2/C3），`dragon_head`（旧龙头战法）只 C1 是设计如此（不同战法）。wiring 剩余：① seal_to_float_ratio 从 pool_item merge 进 msc（易，pool_item 可得）+ ② zt_count_today 从 sector_cycle 进 msc（需 sector 查询集成）+ ③ 涨停 path 也建 msc（limitup_strategy.py:566）。"专门 wiring task"——data-plumbing 非加条件。
 - ⏸️ **T4** consecutive_relay C1 lbc≥2：**NOT done**（2026-09-16 核 gene_based.py:91/98：C1 仍 `zt_count_250d>=2` 非 `lbc>=2`）。S203 P3 待实现（T0 grep 7 文件已确认，可改）。
 - ✅ **T5** leader_drop_reversal：DONE（`06f898a`，LeaderDropReversalStrategy，大跌从 close 差复算不依赖 pctChg）。
 - 🔶 **T6** intraday_loss_breaker：built+green **UNWIRED**（`c5e641e`，stage-1 待 G4 接 router/scheduler）。
