@@ -60,6 +60,13 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         source_script="tools/kline_ta_validation.py",
         note="4 方向特征里最弱，CI 不重叠非纯噪声但 <2x",
     ),
+    "post_first_board": DimensionValidation(
+        dimension_id="post_first_board", label="post-首板 relay (lbc==1)",
+        lift=None, n=0, days_robust=0,              # 未测——exploratory PAPER（S209）
+        validation_status="探索性", weight_multiplier=0.5,   # underpowered cap ×0.5（days<60）
+        source_script="tools/s209_t10_executor_harness.py (T6 defer，未建)",
+        note="S209 探索性 PAPER 臂——breakout +0.36% net 前提证否（5元佣金门+regime 假象），自证 net edge 不继承假阳性。lift_mult=0.5 until §44 walk-forward ≥120 天。",
+    ),
     "turnover": DimensionValidation(
         dimension_id="turnover", label="换手剔除(>30%)",
         lift=0.9979, n=14366, days_robust=167,           # 167 日大样本 robust
@@ -249,6 +256,7 @@ DIM_ARM_MAP: dict[str, list[str] | None] = {
     # （lift_for_arm:271 min），ofi/seal_sincerity/bid_ask_pressure 任一 lift<1 days≥60→×0.1
     # 拖垮整个 breakout 臂（即使 breakout 自身 lift≥2）。S197 R3 两门 safeguard 落地前不自动改。
     "breakout": ["breakout", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure"],
+    "post_first_board": ["post_first_board"],  # S209 T10 探索性 PAPER 臂（lbc==1 首板 relay，未验证）
 }
 
 

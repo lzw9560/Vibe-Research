@@ -52,6 +52,13 @@ BREAKOUT_STOP_PCT: float = -4.0
 BREAKOUT_TAKE_PCT: float = 8.0
 BREAKOUT_MAX_HOLD: int = 3
 
+#: S209 T10 post_first_board 臂（探索性 PAPER，继承 breakout 冻结 -4/+8/3 @ 74295b9，不新 sweep）。
+#: 前提证伪（ashare-practitioner）：breakout +0.36% net 是 5元佣金门+regime 假象→net=-0.30%；
+#: 本臂 exploratory 自证 net edge，不继承假阳性。lift_mult=0.5 underpowered cap。
+POST_FIRST_BOARD_STOP_PCT: float = -4.0
+POST_FIRST_BOARD_TAKE_PCT: float = 8.0
+POST_FIRST_BOARD_MAX_HOLD: int = 3
+
 #: trend swing 臂 stop/take/max_hold 配置（S181）。
 #: 趋势波段比 breakout 持仓更久——更宽 stop（容噪声）/更大 take（追趋势）/更长 max_hold。
 #: 初始值，待 trend_swing_arm spec grill 后校准。
@@ -148,6 +155,8 @@ class JournalRecorder:
                     results[arm] = self._process_floor(target_date)
                 elif arm == "breakout":
                     results[arm] = self._process_breakout(target_date)
+                elif arm == "post_first_board":
+                    results[arm] = self._process_post_first_board(target_date)
                 elif arm == "trend":
                     results[arm] = self._process_trend(target_date)
                 elif arm == "gap":
@@ -390,6 +399,111 @@ class JournalRecorder:
                     "optimism_flag": "gap_through_modeled_v2",
                     "raw_exit_reason": pr.exit_reason,
                     "position_notional": round(position_notional, 2),
+                }),
+            )
+            self._journal.insert(record)
+            n_realized += 1
+
+        return {
+            "n_candidates": len(candidates),
+            "n_buyable": n_buyable,
+            "n_unbuyable": n_unbuyable,
+            "n_realized": n_realized,
+        }
+
+    # ── S209 T10 post_first_board 臂（探索性 PAPER，仿 _process_breakout 换 scan_pre_limitup）──
+
+    def _process_post_first_board(self, target_date: str) -> dict:
+        """post_first_board 臂（S209 探索性 PAPER）：scan_pre_limitup → Trades → execute → path_return。
+
+        仿 _process_breakout，仅 signal 生成器不同：scan_pre_limitup(target_date, previous_trade_day=target_date)
+        → lbc==1 首板 on target_date（zt_history T-1=signal date）。fill T1OpenFill（target_date+1 open）。
+        -4/+8/3 冻结（继承 breakout 74295b9，不新 sweep）。is_unbuyable 过滤（一字板封死 survivorship）。
+        前提证伪（breakout +0.36% net 是 5元佣金门+regime 假象）→ exploratory 自证，lift_mult=0.5。
+        """
+        from pre_limitup_scanner import scan_pre_limitup  # noqa: PLC0415
+
+        # 首板 on target_date（signal date = previous_trade_day = target_date）
+        candidates = scan_pre_limitup(target_date, previous_trade_day=target_date)
+        n_unbuyable = 0
+        n_buyable = 0
+        n_realized = 0
+
+        for cand in candidates:
+            bars = self._bars_provider(cand["code"])
+            if not bars:
+                continue
+
+            trades = Trades(
+                code=cand["code"],
+                signal_date=target_date,
+                fill_type=FILL_T_PLUS_1_OPEN,
+                direction="long",
+                size=DEFAULT_SIZE,
+            )
+            filled = self._executor.execute(trades, bars, T1OpenFill())
+
+            if not filled.is_accepted():
+                # survivorship 过滤：一字板封死买不到
+                record = JournalRecord.create(
+                    arm="post_first_board", stock_code=cand["code"],
+                    entry_price=None, entry_date=target_date,
+                    exit_reason="unbuyable", is_realized=1,
+                    fills_json=json.dumps({
+                        "fill_status": filled.fill_status,
+                        "fill_reason": filled.fill_reason,
+                    }),
+                )
+                self._journal.insert(record)
+                n_unbuyable += 1
+                continue
+
+            n_buyable += 1
+            pr = path_return(
+                filled, bars,
+                stop_pct=POST_FIRST_BOARD_STOP_PCT,
+                take_profit_pct=POST_FIRST_BOARD_TAKE_PCT,
+                max_hold_days=POST_FIRST_BOARD_MAX_HOLD,
+                apply_cost=True,
+            )
+            if pr is None:
+                # T+1 guard 或数据不足 → 仍录 entry，标 unrealized 'hold'
+                record = JournalRecord.create(
+                    arm="post_first_board", stock_code=cand["code"],
+                    entry_price=filled.entry_price, entry_date=target_date,
+                    exit_reason="hold", is_realized=0,
+                    fills_json=json.dumps({
+                        "fill_status": filled.fill_status,
+                        "optimism_flag": "path_return_none_t1_guard",
+                    }),
+                )
+                self._journal.insert(record)
+                continue
+
+            position_notional = float(filled.entry_price) * DEFAULT_SIZE
+            net_pnl = pr.return_pct / 100.0 * position_notional
+
+            record = JournalRecord.create(
+                arm="post_first_board", stock_code=cand["code"],
+                entry_price=filled.entry_price, entry_date=target_date,
+                exit_price=pr.exit_price,
+                exit_date=pr.exit_date, exit_reason=pr.exit_reason,
+                net_pnl=round(net_pnl, 2),
+                cost_pct=pr.cost_pct,
+                gross_return=pr.gross_return_pct,
+                is_realized=1,
+                fills_json=json.dumps({
+                    "won": pr.won,
+                    "return_pct": pr.return_pct,
+                    "exit_reason": pr.exit_reason,
+                    "exit_date": pr.exit_date,
+                    "cost_pct": pr.cost_pct,
+                    "gross_return_pct": pr.gross_return_pct,
+                    "optimism_flag": "exploratory_paper_gap_through_modeled_v2",
+                    "raw_exit_reason": pr.exit_reason,
+                    "position_notional": round(position_notional, 2),
+                    "lbc": cand.get("lbc"),
+                    "zt_count_today": cand.get("zt_count_today"),
                 }),
             )
             self._journal.insert(record)
