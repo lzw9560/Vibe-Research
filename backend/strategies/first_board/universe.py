@@ -152,8 +152,35 @@ def fetch_zt_pool(date: str) -> list[dict]:
         list[dict]：东财 push2ex getTopicZTPool 原始池，每项含
         c/n/lbc/zbc/fbt/fund/zje/p/ltsz/fundamt/hybk 等字段。
         非交易日或数据源故障 → []。
+
+    S205: 历史日优先 zt_history snapshot fallback——em_get 实时涨停池当日，
+    历史日无；zt_history（.vibe-research/zt_history.db）存历史 snapshot（33 天~积累）。
+    解锁 forward_test 历史日 picks（pool_map 非空 → storm_reversal 战法 match 命中）。
+    zt_history 字段 code/name 转成 em_get c/n 格式（score_candidates pool_map 读 c）。
     """
     compact = date.replace("-", "") if "-" in date else date
+    # S205: 历史日优先 zt_history snapshot fallback
+    try:
+        from vr_paths import resolve_data_dir  # noqa: PLC0415
+        import sqlite3  # noqa: PLC0415
+        zt_db = resolve_data_dir() / "zt_history.db"
+        if zt_db.exists():
+            conn = sqlite3.connect(str(zt_db))
+            try:
+                rows = conn.execute(
+                    "SELECT code,name,lbc,zbc,fbt,fund,zje,p,ltsz,fundamt,hybk "
+                    "FROM zt_history WHERE date=? AND is_final=1",
+                    (date,),
+                ).fetchall()
+                if rows:
+                    # zt_history code/name → em_get c/n 格式（pool_map 读 c）
+                    cols = ["c", "n", "lbc", "zbc", "fbt", "fund", "zje", "p", "ltsz", "fundamt", "hybk"]
+                    return [dict(zip(cols, r)) for r in rows]
+            finally:
+                conn.close()
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("fetch_zt_pool zt_history fallback 失败 date=%s err=%s", date, e)
+    # 当日 or zt_history 无 → em_get 实时
     try:
         # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装空池），
         # try/except 兜底返 []（上层 run_first_board_filter 走空候选降级）。
