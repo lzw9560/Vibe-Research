@@ -72,19 +72,20 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     ),
     # S211 consecutive_relay arm（lbc>=2 连板接力）——regime-stratified caps。
     # verify w5d3urvxz 三重验证后 bull robust_edge 站住。2026-09-17 S214 hithink backfill
-    # zt_history 33→315 天后重跑：bull n=269 days=65 net_mean=+1.131%（比 33 天 +1.055% 略升更稳）。
-    # 但综合 refuted（4真/3假）→ bull ×0.5 provisional 保守（待 60 天 forward live OOS 升 ×1.0）。
+    # zt_history 33→315 天 + baostock cache backfill 更早 bars → verdict 315 天满窗口：
+    # bull n=613 days=67 net_mean=+1.5677%（随样本增大更强更稳：33天+1.055%→78天+1.131%→315天+1.5677%，days=67≥60 跨门槛）。
+    # 但综合 refuted（4真/3假）+ backtest in-sample（非 forward live OOS）→ bull ×0.5 provisional 保守（待 60 天 forward live OOS 升 ×1.0）。
     # regime_caps: bull ×0.5 provisional / bear+range ×0.5（underpowered days<60）。
     # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
     "consecutive_relay": DimensionValidation(
         dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap)",
-        lift=None, n=269, days_robust=65,   # bull regime（315 天 zt_history + 78 天 cache 窗口，2026-09-17 重跑）
+        lift=None, n=613, days_robust=67,   # bull regime（315 天满窗口，baostock backfill 后，2026-09-17）
         validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
         source_script="tools/s203_consecutive_relay_harness.py",
-        note="S211 regime-stratified: bull robust_edge +1.131%（S214 backfill 315 天 zt_history 重跑，"
-             "n=269/days=65，比 33 天 +1.055% 略升更稳）但综合 refuted → bull ×0.5 provisional "
-             "（2026-09-17 用户定，待 60 天 forward OOS 升 ×1.0）/ bear+range underpowered days<60（×0.5）。"
-             "overnight gap path（D收→D+1开）。",
+        note="S211 regime-stratified: bull robust_edge +1.5677%（baostock backfill 315 天满窗口，n=613/days=67，"
+             "随样本增大更强更稳：33天+1.055%→78天+1.131%→315天+1.5677%，days=67≥60 跨门槛）但综合 refuted → "
+             "bull ×0.5 provisional（待 60 天 forward live OOS 升 ×1.0；backtest in-sample 即使 days≥60 仍等 forward）/ "
+             "bear+range underpowered days<60（×0.5）。overnight gap path（D收→D+1开）。",
         regime_caps={"bull": 0.5, "bear": 0.5, "range": 0.5},
     ),
     "turnover": DimensionValidation(
