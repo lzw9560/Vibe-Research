@@ -36,7 +36,7 @@ while d <= end:
     if is_trading_day(d) and ds not in existing:
         print(f"回补 {ds}...", flush=True)
         try:
-            n = snapshot_zt_pool(date=ds)  # fallback 链自动 em→ths→hithink
+            n = snapshot_zt_pool(date=ds, is_final=True)  # 历史日终盘稳定（T6 查 is_final=1，fallback 链 em→ths→hithink）
             if n > 0:
                 filled += 1
                 print(f"  {ds}: {n} 条", flush=True)
