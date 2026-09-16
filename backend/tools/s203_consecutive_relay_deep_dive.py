@@ -117,7 +117,8 @@ def main() -> dict:
     print("\n=== 市值 split（bull，ltsz 亿）===")
     cap_splits = results.setdefault("cap", {})
     for lo, hi, label in [(0, 50, "小盘<50亿"), (50, 200, "中盘50-200亿"), (200, 99999, "大盘>=200亿")]:
-        sub = [o for o in bull_obs if o["ltsz"] and lo <= float(o["ltsz"]) < hi]
+        # ltsz 单位元，/1e8 转亿
+        sub = [o for o in bull_obs if o["ltsz"] and lo <= float(o["ltsz"]) / 1e8 < hi]
         s = _stats(sub)
         cap_splits[label] = s
         print(f"  {label}: n={s['n']} days={s['days']} net_mean={s['net_mean_pct']}% wr={s['wr']}")
