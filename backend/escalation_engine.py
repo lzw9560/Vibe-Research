@@ -121,7 +121,17 @@ def escalate(
     """
     promoted: list[str] = []
 
-    # 1. 'tracking' tracks → evaluate promote（candidate→watching）
+    # 0. increment tracking_age_days for all active tracking tracks（daily age）
+    #    CRITICAL bug fix 2026-09-16（T11 harness design 发现）：tracking_age_days 默认 0
+    #    + 只 promote/decay 时 update → should_promote age_ok (>=3) 永远 False → 无候选 promote。
+    #    每日 escalate 增 1（trading day；manual 多次触发或 over-increment，cron daily 为准）。
+    for t in tracking_repo.get_active_tracks("tracking"):
+        tracking_repo.update_tracking_status(
+            t.code, t.first_admit_date, "tracking",
+            tracking_age_days=t.tracking_age_days + 1,
+        )
+
+    # 1. 'tracking' tracks → evaluate promote（candidate→watching）—— re-read 含 incremented age
     for t in tracking_repo.get_active_tracks("tracking"):
         snaps = tracking_repo.get_snapshots_for(t.code, up_to_date=run_date)
         # R7 两池同步：若 workflow_state 无 (code, run_date) → ensure_candidate 再 transition
