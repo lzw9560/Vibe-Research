@@ -45,7 +45,8 @@ _logger = logging.getLogger(__name__)
 
 #: 默认臂列表（orchestrator 顺序调用）。
 #: trend 臂（S181）接入——select_trend_candidates 已就绪，从 mock 升为可平仓实臂。
-DEFAULT_ARMS: list[str] = ["floor", "breakout", "trend"]
+#: S211 consecutive_relay 臂（lbc>=2 连板接力，overnight gap path，regime-stratified cap）。
+DEFAULT_ARMS: list[str] = ["floor", "breakout", "trend", "consecutive_relay"]
 
 #: breakout 臂 stop/take/max_hold 配置（premarket_selection HONEST_LABEL 制度）。
 BREAKOUT_STOP_PCT: float = -4.0
@@ -97,15 +98,18 @@ class JournalRecorder:
         from engine.paper_portfolio import PaperPortfolio  # noqa: PLC0415
         self._portfolio = PaperPortfolio(self._journal)
 
-    def _arm_size(self, arm: str, base: float = DEFAULT_SIZE) -> float:
+    def _arm_size(self, arm: str, base: float = DEFAULT_SIZE, regime: str | None = None) -> float:
         """T4（S209 §4）：§44 lift cap 真咬仓位——接 PaperPortfolio.final_size 4-layer。
 
         breakout/trend/post_first_board lift=0.5（未validated/探索性）→ 50 股（halve）。
         floor/gap/mock lift=1.0 → 100 股（N/A 不缩）。
         intraday_mult MVP=1.0（v2 接 per-code 单笔浮亏 state）。
         arm_mult/port_mult days<60→1.0 underpowered（DrawdownBreaker H4）。
+
+        S211：regime 参数支持 consecutive_relay regime-stratified caps
+        （bull ×1.0 / bear+range ×0.5）。regime=None → 保守 weight_multiplier。
         """
-        return max(self._portfolio.final_size(arm, base), 0.0)
+        return max(self._portfolio.final_size(arm, base, regime=regime), 0.0)
 
     def record_t0_fill(
         self, signal_id: str, fill_type: str, price: float, ts: str,
@@ -159,6 +163,7 @@ class JournalRecorder:
         # S175 R3：settle_pending 先重算昨日未平 'hold'（path_return T+1 guard 需 T+2+ bars）
         self.settle_pending_breakout()
         self.settle_pending_trend()
+        self.settle_pending_consecutive_relay()
 
         results: dict[str, Any] = {}
         for arm in arms:
@@ -171,6 +176,8 @@ class JournalRecorder:
                     results[arm] = self._process_post_first_board(target_date)
                 elif arm == "trend":
                     results[arm] = self._process_trend(target_date)
+                elif arm == "consecutive_relay":
+                    results[arm] = self._process_consecutive_relay(target_date)
                 elif arm == "gap":
                     results[arm] = self._process_gap(target_date)
                 elif arm == "limitup":
@@ -315,6 +322,182 @@ class JournalRecorder:
             if updated:
                 n_settled += 1
         return {"n_pending": len(holds), "n_settled": n_settled}
+
+    # ── S211 consecutive_relay 臂（overnight gap path，regime-stratified cap）──
+
+    def _regime_for_date(self, date: str) -> str | None:
+        """S211: 查 date 的 MA20 3-way regime（bull/bear/range）。
+
+        懒 load compute_regime_labels（cache index_ma20_regime.json）。失败/无 cache → None
+        （保守 ×0.5 cap）。session 内 cache 避免重复 load。
+        """
+        if not hasattr(self, "_regime_cache") or self._regime_cache is None:
+            try:
+                from tools.gap_regime_stratified import compute_regime_labels  # noqa: PLC0415
+                self._regime_cache = compute_regime_labels() or {}
+            except Exception as e:  # noqa: BLE001
+                _logger.warning("compute_regime_labels 失败（regime=None 保守）: %s", e)
+                self._regime_cache = {}
+        return self._regime_cache.get(date)
+
+    def settle_pending_consecutive_relay(self) -> dict:
+        """S211 — 重算昨日未平 consecutive_relay 'hold' 记录（D+1 bar 到达后 settle）。
+
+        overnight gap path 需 D+1 bar（exit=open[D+1]）。_process 当日跑时 D+1 缺 → 'hold'
+        is_realized=0。次日 bars 增长后此方法重算：query is_realized=0 'hold' →
+        gap_net_return(close[D], open[D+1]) → update_settlement_v2 标 realized。
+        """
+        pending = self._journal.query_records(arm="consecutive_relay", is_realized=0, is_dead_arm=0)
+        holds = [r for r in pending if r.exit_reason == "hold"]
+        n_settled = 0
+        for pos in holds:
+            bars = self._bars_provider(pos.stock_code)
+            if not bars:
+                continue
+            d_idx = next(
+                (i for i, b in enumerate(bars)
+                 if str(b.get("date", ""))[:10] == pos.entry_date),
+                None,
+            )
+            if d_idx is None or d_idx + 1 >= len(bars):
+                continue  # D+1 bar 仍缺
+            close_d = float(bars[d_idx].get("close", 0) or 0)
+            open_d1 = float(bars[d_idx + 1].get("open", 0) or 0)
+            if close_d <= 0 or open_d1 <= 0:
+                continue
+            entry_price = float(pos.entry_price) if pos.entry_price else close_d
+            regime = self._regime_for_date(pos.entry_date)
+            size = self._arm_size("consecutive_relay", regime=regime)
+            net_ratio, cost_pct, gross_ratio = gap_net_return(
+                entry_price, open_d1, entry_date=pos.entry_date, size=size,
+            )
+            position_notional = entry_price * size
+            net_pnl = net_ratio * position_notional
+            updated = self._journal.update_settlement_v2(
+                signal_id=pos.signal_id,
+                gross_return_v2=round(gross_ratio * 100, 4),
+                exit_price=open_d1,
+                exit_date=str(bars[d_idx + 1].get("date", ""))[:10],
+                exit_reason="overnight_gap",
+                net_pnl=round(net_pnl, 2),
+                cost_pct=cost_pct,
+                exit_model_version="s211_overnight_gap",
+            )
+            if updated:
+                n_settled += 1
+        return {"n_pending": len(holds), "n_settled": n_settled}
+
+    def _process_consecutive_relay(self, target_date: str) -> dict:
+        """S211 consecutive_relay 臂（overnight gap path，regime-stratified §44 cap）。
+
+        1. scan_consecutive_relay(target_date) → lbc>=2 picks（zt_history T-1=signal date）
+        2. per pick: bars 找 D_idx（target_date）+ D+1 bar
+        3. D 日一字板 filter（_is_unbuyable_next_bar(bars[D_idx])，入场日 close 买不到）
+        4. D+1 bar 缺 → 'hold' is_realized=0（settle_pending 次日重算）
+        5. gap_net_return(close[D], open[D+1]) → (net_ratio, cost_pct, gross_ratio)
+        6. net_pnl = net_ratio × position_notional；size = _arm_size(regime)（§44 cap bite）
+        7. trade_journal.insert(is_realized=1)
+
+        与 _process_post_first_board 区别：overnight gap path（非 -4/+8/3 path_return），
+        entry=D 日 close（非 T+1 open），exit=D+1 open（1 天强制平，无 stop/take）。
+        """
+        from pre_limitup_scanner import scan_consecutive_relay  # noqa: PLC0415
+        from strategies.kline_returns import _is_unbuyable_next_bar  # noqa: PLC0415
+
+        candidates = scan_consecutive_relay(target_date, previous_trade_day=target_date)
+        n_unbuyable = 0
+        n_buyable = 0
+        n_realized = 0
+
+        for cand in candidates:
+            code = cand.get("code") or ""
+            if not code:
+                continue
+            bars = self._bars_provider(code)
+            if not bars:
+                continue
+
+            d_idx = next(
+                (i for i, b in enumerate(bars) if str(b.get("date", ""))[:10] == target_date),
+                None,
+            )
+            if d_idx is None:
+                continue  # 无 D 日 bar
+            close_d = float(bars[d_idx].get("close", 0) or 0)
+            if d_idx + 1 >= len(bars):
+                # D+1 bar 缺（T+1 guard）→ 'hold' is_realized=0
+                # entry_price=close_d（D 日 bar 已有，settle 时 exit=open[D+1] 补）
+                record = JournalRecord.create(
+                    arm="consecutive_relay", stock_code=code,
+                    entry_price=close_d if close_d > 0 else None,
+                    entry_date=target_date,
+                    exit_reason="hold", is_realized=0,
+                    fills_json=json.dumps({
+                        "optimism_flag": "d1_bar_missing_t1_guard",
+                        "lbc": cand.get("lbc"),
+                    }),
+                )
+                self._journal.insert(record)
+                continue
+
+            # D 日一字板 filter（入场日 close 买不到，survivorship 过滤）
+            if _is_unbuyable_next_bar(bars[d_idx], code=code):
+                record = JournalRecord.create(
+                    arm="consecutive_relay", stock_code=code,
+                    entry_price=None, entry_date=target_date,
+                    exit_reason="unbuyable", is_realized=1,
+                    fills_json=json.dumps({
+                        "fill_reason": "d_day_unbuyable_一字板",
+                        "lbc": cand.get("lbc"),
+                    }),
+                )
+                self._journal.insert(record)
+                n_unbuyable += 1
+                continue
+
+            open_d1 = float(bars[d_idx + 1].get("open", 0) or 0)
+            if close_d <= 0 or open_d1 <= 0:
+                continue
+
+            regime = self._regime_for_date(target_date)
+            size = self._arm_size("consecutive_relay", regime=regime)
+            net_ratio, cost_pct, gross_ratio = gap_net_return(
+                close_d, open_d1, entry_date=target_date, size=size,
+            )
+            position_notional = close_d * size
+            net_pnl = net_ratio * position_notional
+
+            record = JournalRecord.create(
+                arm="consecutive_relay", stock_code=code,
+                entry_price=close_d, entry_date=target_date,
+                exit_price=open_d1,
+                exit_date=str(bars[d_idx + 1].get("date", ""))[:10],
+                exit_reason="overnight_gap",
+                net_pnl=round(net_pnl, 2),
+                cost_pct=cost_pct,
+                gross_return=round(gross_ratio * 100, 4),
+                is_realized=1,
+                fills_json=json.dumps({
+                    "net_ratio": round(net_ratio, 6),
+                    "gross_ratio": round(gross_ratio, 6),
+                    "cost_pct": cost_pct,
+                    "position_notional": round(position_notional, 2),
+                    "arm_path": "overnight_gap",
+                    "regime": regime,
+                    "lbc": cand.get("lbc"),
+                    "optimism_flag": "s211_overnight_gap_regime_stratified",
+                }),
+            )
+            self._journal.insert(record)
+            n_buyable += 1
+            n_realized += 1
+
+        return {
+            "n_candidates": len(candidates),
+            "n_buyable": n_buyable,
+            "n_unbuyable": n_unbuyable,
+            "n_realized": n_realized,
+        }
 
     # ── breakout 臂（可平仓臂，C2 path_return）─────────────────────────
 

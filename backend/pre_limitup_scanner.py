@@ -41,6 +41,24 @@ def _zt_history_lbc1(date: str) -> list[dict[str, Any]]:
     return [{"code": r[0], "hybk": r[1] or "", "lbc": int(r[2])} for r in rows]
 
 
+def _zt_history_lbc_ge2(date: str) -> list[dict[str, Any]]:
+    """S211: zt_history T-1 WHERE lbc>=2 AND is_final=1（连板接力，consecutive_relay arm 源）。
+
+    返 [{code, hybk, lbc}]。lbc>=2 连板（2 板+，非首板）。
+    """
+    if not ZT_DB.exists():
+        return []
+    conn = sqlite3.connect(str(ZT_DB))
+    try:
+        rows = conn.execute(
+            "SELECT code, hybk, lbc FROM zt_history WHERE date=? AND lbc>=2 AND is_final=1",
+            (date,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [{"code": r[0], "hybk": r[1] or "", "lbc": int(r[2])} for r in rows]
+
+
 def _sector_zt_count(date: str, industry: str) -> int:
     """板块涨停家数（sector_cycle._get_zt_count_by_date_industry，查 gene_scores.db）。失败降级 0。"""
     if not industry:
@@ -80,3 +98,22 @@ def scan_pre_limitup(run_date: str, previous_trade_day: str | None = None) -> li
             "high_gene": 0,  # DROPPED（死阈值 + 证否 0.942x，不扫 cutoff 反 data dredging）
         })
     return candidates
+
+
+def scan_consecutive_relay(run_date: str, previous_trade_day: str | None = None) -> list[dict[str, Any]]:
+    """S211: consecutive_relay arm candidate scanner（lbc>=2 连板接力，overnight gap path）。
+
+    Gathers lbc>=2 连板 from zt_history T-1（signal date = previous_trade_day = run_date）。
+    zero em_get（zt_history.db 离线）。pit guard T-1 only。
+
+    Returns:
+        list[dict]——每 dict {code, lbc}。喂 JournalRecorder._process_consecutive_relay。
+        entry: D 日 close（一字板 filter），exit: D+1 open（overnight gap 捕获）。
+    """
+    if not previous_trade_day:
+        try:
+            previous_trade_day = (datetime.strptime(run_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        except ValueError:
+            previous_trade_day = run_date
+
+    return [{"code": r["code"], "lbc": r["lbc"]} for r in _zt_history_lbc_ge2(previous_trade_day)]

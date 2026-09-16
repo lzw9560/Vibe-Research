@@ -57,20 +57,23 @@ class PaperPortfolio:
 
     def final_size(
         self, arm: str, arm_size: float, lift_multiplier: float | None = None,
-        intraday_mult: float = 1.0,
+        intraday_mult: float = 1.0, regime: str | None = None,
     ) -> float:
         """T4（S209 §4）：4-layer final_size = arm_size × arm_mult × portfolio_mult × lift_mult × intraday_mult。
 
         用 risk.intraday_loss_breaker.compute_final_size 纯函数（4-layer，原 dead code 复活）。
         MVP: intraday_mult=1.0（v2 接 per-code 单笔浮亏 state，evaluate_loss_breaker +
         intraday_multiplier）。
-        lift_mult 默认 None → lift_for_arm(arm) 动态算（§44 cap 真咬仓位，S180 R3）。
+        lift_mult 默认 None → lift_for_arm(arm, regime) 动态算（§44 cap 真咬仓位，S180 R3）。
         floor/gap/mock 臂 lift_mult=1.0（N/A cap 不作用）。
         arm_mult/port_mult 来自 DrawdownBreaker（per-arm + portfolio DD，days<60→1.0 underpowered）。
+
+        S211：regime 参数支持 consecutive_relay regime-stratified caps（bull ×1.0 /
+        bear+range ×0.5）。regime=None → 保守 weight_multiplier（旧 caller 向后兼容）。
         """
         if lift_multiplier is None:
             from candidate_funnel.evaluation import lift_for_arm  # noqa: PLC0415
-            lift_multiplier = lift_for_arm(arm)[0]
+            lift_multiplier = lift_for_arm(arm, regime)[0]
         arm_mult, _ = self._breaker.size_multiplier(arm=arm)
         port_mult, _ = self._breaker.portfolio_multiplier()
         from risk.intraday_loss_breaker import compute_final_size  # noqa: PLC0415

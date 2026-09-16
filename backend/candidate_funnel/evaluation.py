@@ -38,6 +38,9 @@ class DimensionValidation:
     note: str = ""
     frozen_commit: str = FROZEN_COMMIT
     frozen_at: str = "2026-09-05"
+    # S211: regime-stratified caps（consecutive_relay 专有——bull robust ×1.0 /
+    # bear+range underpowered ×0.5）。None = 单值 weight_multiplier（旧维度）。
+    regime_caps: Optional[dict] = None
 
 
 # R1：DIMENSION_LIFT_REGISTRY 初始冻结值（全部来自 §44 已跑脚本输出，禁臆造）
@@ -66,6 +69,20 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="探索性", weight_multiplier=0.5,   # underpowered cap ×0.5（days<60）
         source_script="tools/s209_t10_executor_harness.py (T6 defer，未建)",
         note="S209 探索性 PAPER 臂——breakout +0.36% net 前提证否（5元佣金门+regime 假象），自证 net edge 不继承假阳性。lift_mult=0.5 until §44 walk-forward ≥120 天。",
+    ),
+    # S211 consecutive_relay arm（lbc>=2 连板接力）——regime-stratified caps。
+    # verify w5d3urvxz 三重验证后 bull robust_edge 站住（+1.055% drift-adjusted，
+    # CRITICAL filter + BH + drift R11 全修）。bear/range underpowered（days<60）。
+    # regime_caps: bull ×1.0（robust）/ bear+range ×0.5（underpowered）。
+    # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
+    "consecutive_relay": DimensionValidation(
+        dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap)",
+        lift=None, n=276, days_robust=66,   # bull regime（verify w5d3urvxz 三重验证）
+        validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
+        source_script="tools/s203_consecutive_relay_harness.py",
+        note="S211 regime-stratified: bull robust_edge +1.055% drift-adjusted（×1.0）/ "
+             "bear+range underpowered days<60（×0.5）。overnight gap path（D收→D+1开）。",
+        regime_caps={"bull": 1.0, "bear": 0.5, "range": 0.5},
     ),
     "turnover": DimensionValidation(
         dimension_id="turnover", label="换手剔除(>30%)",
@@ -257,10 +274,11 @@ DIM_ARM_MAP: dict[str, list[str] | None] = {
     # 拖垮整个 breakout 臂（即使 breakout 自身 lift≥2）。S197 R3 两门 safeguard 落地前不自动改。
     "breakout": ["breakout", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure"],
     "post_first_board": ["post_first_board"],  # S209 T10 探索性 PAPER 臂（lbc==1 首板 relay，未验证）
+    "consecutive_relay": ["consecutive_relay"],  # S211 连板接力臂（lbc>=2, overnight gap, regime-stratified）
 }
 
 
-def lift_for_arm(arm: str) -> tuple[float, str]:
+def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
     """按臂查对应维度 lift_to_multiplier 结果（用冻结 registry，S180 R3）。
 
     返 (lift_multiplier, status_note)。N/A 臂（floor/gap/mock）返 (1.0, 'N/A')。
@@ -268,6 +286,10 @@ def lift_for_arm(arm: str) -> tuple[float, str]:
 
     §44v2 P0：override 优先（get_effective_dimension）——30/60 天 revalidation 写回后
     升降级即时生效，fallback frozen baseline（b1aba21）。
+
+    S211：regime 参数支持 consecutive_relay regime-stratified caps。
+    regime=None（旧 caller 默认）→ 保守 weight_multiplier（不误放全权重）。
+    regime 指定 → 返该 regime cap（如 bull ×1.0）。
     """
     from candidate_funnel.lift_override import get_effective_dimension
     dims = DIM_ARM_MAP.get(arm)
@@ -277,6 +299,16 @@ def lift_for_arm(arm: str) -> tuple[float, str]:
     for dim_id in dims:
         d = get_effective_dimension(dim_id)
         if d is None:
+            continue
+        # S211: regime-stratified caps（consecutive_relay）
+        if d.regime_caps is not None:
+            if regime is not None:
+                cap = d.regime_caps.get(regime)
+                if cap is not None:
+                    multipliers.append((cap, f"{dim_id} regime={regime}"))
+                    continue
+            # regime=None → 保守 weight_multiplier（不误放全权重，bear/range underpowered）
+            multipliers.append((d.weight_multiplier, f"{dim_id} regime=None 保守"))
             continue
         _, mult = lift_to_multiplier(d.lift, d.n, days_robust=d.days_robust)
         multipliers.append((mult, d.dimension_id))
@@ -367,12 +399,14 @@ def _apply_evaluation_layer(
             if not d.dimension_id.endswith("_ref")
             and d.dimension_id != "trend_swing"  # S181 R7: arm sizing 维度非选股层 §44 验证
             and d.dimension_id != "post_first_board"  # S209: arm sizing 维度非选股层
+            and d.dimension_id != "consecutive_relay"  # S211: arm sizing 维度非选股层（regime-stratified）
             and d.dimension_id not in ("low_volatility", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure")  # S185 P1-4: 盘中/低波非选股层
         ],
         "pending_dims": [d.dimension_id for d in DIMENSION_LIFT_REGISTRY.values()
                          if d.validation_status == "探索性"
                          and d.dimension_id != "trend_swing"
                          and d.dimension_id != "post_first_board"
+                         and d.dimension_id != "consecutive_relay"  # S211: arm sizing 维度
                          and d.dimension_id not in ("ofi_accumulated", "seal_sincerity", "bid_ask_pressure")],  # S185 P1-4: 盘中因子非选股层 pending
         "frozen_commit": FROZEN_COMMIT,
     }
