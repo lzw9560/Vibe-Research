@@ -39,7 +39,11 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     target_date = payload.get("target_date")  # None → run_daily default prev_trading_date_str
     settled = recorder.settle_pending_breakout()
-    results = recorder.run_daily(target_date=target_date, arms=["floor", "breakout", "trend"])
+    # S211（2026-09-17）：arms 加 consecutive_relay——唯一已证 edge（bull +1.055%
+    # drift-adjusted）arm 从 dormant 转活。scan_consecutive_relay 直读 zt_history.db
+    # （17:15 zt_history_snapshot 已写当日涨停池，早于 17:30 trade_journal_daily）。
+    # regime cap bite：bull ×0.5 provisional（综合 refuted 保守，待 60 天 forward OOS 升 ×1.0）。
+    results = recorder.run_daily(target_date=target_date, arms=["floor", "breakout", "trend", "consecutive_relay"])
     mtm = recorder.update_floor_mtm(target_date=target_date)
     # S175 R10/R11：PaperPortfolio.equity() 落盘供 R9 推荐 sizing（R9↔R10 接线 SH1 fix）+
     # drawdown_breaker 接生产路径（从 API 层移 executor，overlay stub deferred）。

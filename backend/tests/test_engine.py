@@ -259,7 +259,7 @@ class TestBoardAwareLimits:
         assert _limit_pct_for_code("830001") == 30.0  # 北交所
 
     def test_unbuyable_thresholds_by_board(self):
-        """board-aware 一字板阈值：主板 9.8% / 创业板 19.8% / ST 4.8%。"""
+        """board-aware 一字板阈值：主板 9.8% / 创业板 19.8% / ST 按 board（新规 2026-09-17 不用 5%）。"""
         def one_word(pct):
             """一字板 bar（四价相等 + pctChg=pct）。"""
             return _dbar("d", 11, 11, 11, 11, pctChg=pct)
@@ -269,9 +269,13 @@ class TestBoardAwareLimits:
         # 创业板 20% → threshold 19.8%
         assert is_unbuyable_next_bar(one_word(20.0), code="300001") is True
         assert is_unbuyable_next_bar(one_word(15.0), code="300001") is False  # 15<19.8
-        # ST 5% → threshold 4.8%
-        st_bar = _dbar("d", 5.25, 5.25, 5.25, 5.25, pctChg=5.0, isST=1)
-        assert is_unbuyable_next_bar(st_bar, code="000001") is True
+        # ST 新规（2026-09-17）：ST 股按 board 阈值（主板 10%），不用 5% ST 特殊阈值
+        # ——根除 baostock isST 91% 缺失误判。isST 字段被忽略，按 code 判板块。
+        # ST 5% 涨停不再判 unbuyable（5.0<9.8 可买）；ST 10% 涨停才 unbuyable（按主板阈值）。
+        st_5pct = _dbar("d", 5.25, 5.25, 5.25, 5.25, pctChg=5.0, isST=1)
+        assert is_unbuyable_next_bar(st_5pct, code="000001") is False  # ST 5% < 9.8 不 unbuyable
+        st_10pct = _dbar("d", 5.5, 5.5, 5.5, 5.5, pctChg=10.0, isST=1)
+        assert is_unbuyable_next_bar(st_10pct, code="000001") is True  # ST 10% 按主板阈值 unbuyable
 
     def test_kline_returns_delegate_matches_engine(self):
         """kline_returns._is_unbuyable_next_bar 薄委托 engine（code="" → 9.8% 主板）。"""

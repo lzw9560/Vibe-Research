@@ -25,6 +25,7 @@ import json
 import logging
 from typing import Any
 
+from engine.pctchg_injector import enrich_pctchg
 from vr_paths import resolve_data_dir
 
 _logger = logging.getLogger(__name__)
@@ -167,9 +168,12 @@ class KlineCacheBarsProvider:
             return self._etf_bars(code)
         cached = _load_cache().get(code, [])
         if cached:
-            return cached
+            # S204 T1b: 注 pctChg（baostock cache 0.3% bars pctChg=0.0 含一字板 →
+            # is_unbuyable 读 0.0<9.8 误判可买 → 假交易。enrich 0.0/缺失复算覆盖，非零保留）
+            return enrich_pctchg(cached)
         # S183: A 股 cache miss（kline_refresh 全量拉 timeout 缺当日 bar）→ baostock fallback
-        return _baostock_a_share_hist(code)
+        bars = _baostock_a_share_hist(code)
+        return enrich_pctchg(bars) if bars else bars
 
     @staticmethod
     def _etf_bars(code: str) -> list[dict]:

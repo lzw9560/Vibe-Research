@@ -13,9 +13,15 @@ ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码�
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
+from engine.pctchg_injector import enrich_pctchg  # S204 T1b: 第 7 个 bypass（7e75465 接 6 harness 漏此）
 KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
 DB = ROOT / ".vibe-research" / "gene_scores.db"
-cache = json.loads(KLINE.read_bytes())
+raw_cache = json.loads(KLINE.read_bytes())
+# S204 T1b: enrich pctChg（一字板 0.0 复算覆盖）——补第 7 个 bypass。
+# 隔夜 gap 数（line 61 用 close/open 直算）不依赖 pctChg 本来干净；
+# path 窗口数（line 63 simulate_holding 走 is_unbuyable 读 pctChg）此前被一字板 0.0 误判可买污染。
+# enrich 后 path 数干净——reframe 的 path 负收益结论若变需重验（隔夜 gap 核心结论不受影响）。
+cache = {code: enrich_pctchg(bars) for code, bars in raw_cache.items()}
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
 validate_or_reject("baostock_kline",
                    [b for bars in cache.values() for b in bars],

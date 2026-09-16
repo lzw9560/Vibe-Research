@@ -51,7 +51,13 @@ def is_unbuyable_next_bar(nb: object, code: str = "") -> bool:
     正常上涨/有区间/跌停均返 False（可买）。跌停一字板对做多可买（有人抛、买家成交）。
 
     code="" → 主板 10% → 阈值 9.8%（匹配 kline_returns 原口径，backward compat）。
-    code="300xxx" → 创业板 20% → 阈值 19.8%。ST 股（bar.isST）→ 5% → 阈值 4.8%。
+    code="300xxx" → 创业板 20% → 阈值 19.8%。
+
+    ST 新规（2026-09-17，用户定）：ST 股按其代码板块涨跌幅判（主板 10% / 创业科创 20% /
+    北交 30%），不再用 5% ST 特殊阈值——根除 baostock isST 字段 91% 缺失导致的误判
+    （isST='0' 非空字符串 truthy → 非 ST 股误用 5% → board-aware 失效）。ST 股不剔除，
+    按 board 阈值统一判一字板。lbc>=2 连板 picks 实测 0 ST 股（1126 里 0 个），新规对
+    consecutive_relay arm 是 no-op 但根除其他战法（首板）的 ST 残留污染。
 
     用 _bar_get 统一 dict/SimpleNamespace（原 kline_returns 版只支持 dict .get，此处超集）。
     """
@@ -60,16 +66,8 @@ def is_unbuyable_next_bar(nb: object, code: str = "") -> bool:
     nb_low = _bar_get(nb, "low", 0.0)
     nb_close = _bar_get(nb, "close", 0.0)
     nb_pct = _bar_get(nb, "pctChg", 0.0)
-    # board-specific limit（ST 检测：baostock isST 字段，1=ST）。
-    # ⚠️ baostock/缓存返 isST 为字符串 '0'/'1'——Python 非空字符串 '0' 也 truthy，
-    # 直接 `5.0 if is_st` 会让所有非 ST 股（isST='0'）误用 5% ST 阈值，board-aware 失效。
-    # 归一化：int(float(is_st))==1 才判 ST（兼容 int 1 / str '1' / str '0' / 缺省 0）。
-    is_st_raw = _bar_get(nb, "isST", 0)
-    try:
-        is_st = int(float(is_st_raw)) == 1
-    except (TypeError, ValueError):
-        is_st = False
-    limit_pct = 5.0 if is_st else _limit_pct_for_code(code)
+    # board-specific limit（按代码板块判阈值，不读 isST 字段——ST 新规 2026-09-17）。
+    limit_pct = _limit_pct_for_code(code)
     threshold = limit_pct - LIMIT_TOLERANCE
     try:
         pct_f = float(nb_pct)

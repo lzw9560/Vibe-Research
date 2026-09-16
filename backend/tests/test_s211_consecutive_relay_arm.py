@@ -56,10 +56,10 @@ class TestLiftForArmRegime:
         assert hasattr(d, "regime_caps") and d.regime_caps is not None
 
     def test_lift_for_arm_consecutive_relay_bull(self):
-        """bull regime ×1.0（robust_edge）。"""
+        """bull regime ×0.5（provisional——综合 refuted 保守，待 60 天 forward OOS 升 ×1.0）。"""
         from candidate_funnel.evaluation import lift_for_arm
         mult, _ = lift_for_arm("consecutive_relay", regime="bull")
-        assert mult == 1.0, f"bull 应 ×1.0, got {mult}"
+        assert mult == 0.5, f"bull 应 ×0.5 provisional, got {mult}"
 
     def test_lift_for_arm_consecutive_relay_bear(self):
         """bear regime ×0.5（underpowered）。"""
@@ -98,10 +98,10 @@ class TestFinalSizeRegime:
         return pp
 
     def test_final_size_consecutive_relay_bull(self, tmp_path, monkeypatch):
-        """bull regime ×1.0 → final_size 不缩。"""
+        """bull regime ×0.5 provisional → final_size halve（保守，待 forward OOS 升 ×1.0）。"""
         pp = self._make_pp(monkeypatch)
         result = pp.final_size("consecutive_relay", 10000, regime="bull")
-        assert result == 10000, f"bull ×1.0 应 10000, got {result}"
+        assert result == 5000, f"bull ×0.5 provisional 应 5000, got {result}"
 
     def test_final_size_consecutive_relay_bear(self, tmp_path, monkeypatch):
         """bear regime ×0.5 → final_size halve。"""
@@ -172,9 +172,9 @@ class TestProcessConsecutiveRelay:
         assert records[0].is_realized == 0
 
     def test_arm_size_consecutive_relay_bull_bite(self, recorder):
-        """_arm_size('consecutive_relay', regime='bull') → 100 股（×1.0）。"""
+        """_arm_size('consecutive_relay', regime='bull') → 50 股（×0.5 provisional）。"""
         size = recorder._arm_size("consecutive_relay", regime="bull")
-        assert size == 100.0, f"bull ×1.0 应 100 股, got {size}"
+        assert size == 50.0, f"bull ×0.5 provisional 应 50 股, got {size}"
 
     def test_arm_size_consecutive_relay_bear_bite(self, recorder):
         """_arm_size('consecutive_relay', regime='bear') → 50 股（×0.5）。"""

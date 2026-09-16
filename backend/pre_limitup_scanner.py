@@ -42,16 +42,17 @@ def _zt_history_lbc1(date: str) -> list[dict[str, Any]]:
 
 
 def _zt_history_lbc_ge2(date: str) -> list[dict[str, Any]]:
-    """S211: zt_history T-1 WHERE lbc>=2 AND is_final=1（连板接力，consecutive_relay arm 源）。
+    """S211: zt_history T-1 WHERE lbc>=2 AND lbc<=3 AND is_final=1（连板接力，consecutive_relay arm 源）。
 
-    返 [{code, hybk, lbc}]。lbc>=2 连板（2 板+，非首板）。
+    返 [{code, hybk, lbc}]。lbc 2-3 连板（甜点区间）。
+    lbc>=4 排除（deep_dive 证 edge 消失 -0.02%，高位风险——tools/s203_consecutive_relay_deep_dive.py）。
     """
     if not ZT_DB.exists():
         return []
     conn = sqlite3.connect(str(ZT_DB))
     try:
         rows = conn.execute(
-            "SELECT code, hybk, lbc FROM zt_history WHERE date=? AND lbc>=2 AND is_final=1",
+            "SELECT code, hybk, lbc FROM zt_history WHERE date=? AND lbc>=2 AND lbc<=3 AND is_final=1",
             (date,),
         ).fetchall()
     finally:

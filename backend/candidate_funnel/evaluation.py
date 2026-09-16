@@ -72,17 +72,19 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     ),
     # S211 consecutive_relay arm（lbc>=2 连板接力）——regime-stratified caps。
     # verify w5d3urvxz 三重验证后 bull robust_edge 站住（+1.055% drift-adjusted，
-    # CRITICAL filter + BH + drift R11 全修）。bear/range underpowered（days<60）。
-    # regime_caps: bull ×1.0（robust）/ bear+range ×0.5（underpowered）。
+    # CRITICAL filter + BH + drift R11 全修, n=276/days=66）。但综合 refuted（4真/3假）。
+    # regime_caps: bull ×0.5 provisional（2026-09-17 用户定半仓先试，待 60 天 forward
+    # live OOS 复验转 robust 升 ×1.0）/ bear+range ×0.5（underpowered days<60）。
     # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
     "consecutive_relay": DimensionValidation(
         dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap)",
         lift=None, n=276, days_robust=66,   # bull regime（verify w5d3urvxz 三重验证）
         validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
         source_script="tools/s203_consecutive_relay_harness.py",
-        note="S211 regime-stratified: bull robust_edge +1.055% drift-adjusted（×1.0）/ "
+        note="S211 regime-stratified: bull robust_edge +1.055% drift-adjusted 但综合 refuted → "
+             "bull ×0.5 provisional（2026-09-17 用户定，待 60 天 forward OOS 升 ×1.0）/ "
              "bear+range underpowered days<60（×0.5）。overnight gap path（D收→D+1开）。",
-        regime_caps={"bull": 1.0, "bear": 0.5, "range": 0.5},
+        regime_caps={"bull": 0.5, "bear": 0.5, "range": 0.5},
     ),
     "turnover": DimensionValidation(
         dimension_id="turnover", label="换手剔除(>30%)",
