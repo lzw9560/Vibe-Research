@@ -316,15 +316,13 @@ class TaskExecutor:
             return {"status": "error", "error": repr(e)[:200], "use_weather": use_weather}
 
     def _execute_early_admission_scan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """S204 T10: early_admission 扫描入池（pre-涨停候选 → candidate_tracking_pool）。
+        """S204 T10: early_admission 扫描入池（post-首板候选 → candidate_tracking_pool）。
 
-        **验证发现（2026-09-16 实跑 funnel cache 2026-09-15）**：auto-source=funnel cache 是**错源**——
-        funnel final_candidates 是 post-涨停（lbc 2-3，已涨停），early_admission 要 pre-涨停（lbc=1 /
-        sector_startup / high_gene）。adapter 正确排除 post-涨停（lbc>=2 不 admit）→ 产出 0 admits（正确但无用）。
-        **真 auto-source 须建 pre-涨停 scanner**（板块启动初期 + 连板苗子，非涨停 funnel）——future 设计+build task。
-        当前 manual override（payload.candidates）是唯一有效输入；auto-source 代码保留作 plumbing（pre-涨停
-        scanner 建好后改 source 即可）。high_gene = 1 if total_score >= 80（routers/limitup/metrics.py:78）。
-        pit guard T-1 only（scan_early_admission 不取数不臆造）。
+        auto-source = S208 pre_limitup_scanner（scan_pre_limitup，查 zt_history T-1 lbc==1 首板 +
+        sector_cycle 板块 zt count，**drop high_gene 死信号**）。替代 funnel 错源（funnel 是 post-涨停 lbc2-3 → 0 admits）。
+        **专家 reframe**（panel w1iu01jnl）：high_gene >=80 死阈值（max 50.46）+ 证否 0.942x → DROP；
+        relay_seed (lbc==1) post-首板（compound with sector activity）；真 edge 问题在 executor entry/exit 规则（并行设计）。
+        manual override（payload.candidates）优先。pit guard T-1 only。zero em_get。
         """
         from early_admission import scan_early_admission
         import tracking_pool_repo as _repo
@@ -337,30 +335,12 @@ class TaskExecutor:
                 previous_trade_day = (datetime.strptime(run_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
             except ValueError:
                 previous_trade_day = run_date
-        # 候选源：manual payload.candidates 优先，否则 auto-load funnel cache T-1
+        # 候选源：manual payload.candidates 优先，否则 S208 pre_limitup_scanner（替代 funnel 错源）
+        # funnel cache 是 post-涨停 lbc2-3 → 0 admits（错源）；scanner 查 zt_history T-1 lbc==1 首板（post-首板 pre-二板）。
         candidates = payload.get("candidates")
         if not candidates:
-            try:
-                from candidate_funnel.funnel_cache import load_funnel_result
-                fr = load_funnel_result(previous_trade_day)
-            except Exception as e:  # noqa: BLE001
-                return {"status": "error", "error": f"funnel_cache load: {repr(e)[:150]}", "run_date": run_date}
-            if fr is None:
-                return {"status": "no_funnel_cache", "funnel_date": previous_trade_day,
-                        "note": "funnel cache for T-1 不存在；manual trigger 传 payload.candidates"}
-            candidates = []
-            for c in getattr(fr, "final_candidates", []) or []:
-                gene = getattr(c, "gene_score", None) or {}
-                pool = getattr(c, "pool_item", None) or {}
-                sp = getattr(c, "sector_phase", None) or {}
-                total_score = gene.get("total_score") if isinstance(gene, dict) else None
-                candidates.append({
-                    "code": getattr(c, "code", ""),
-                    "sector_rank": None,  # DiagnosisCard 无 sector_rank（early_admission 只快照不判定）
-                    "zt_count_today": sp.get("count_today") if isinstance(sp, dict) else None,
-                    "lbc": pool.get("lbc") if isinstance(pool, dict) else None,
-                    "high_gene": 1 if (total_score is not None and total_score >= 80) else 0,
-                })
+            from pre_limitup_scanner import scan_pre_limitup
+            candidates = scan_pre_limitup(run_date, previous_trade_day=previous_trade_day)
         admitted = scan_early_admission(run_date, candidates, previous_trade_day=previous_trade_day)
         inserted = 0
         for a in admitted:
