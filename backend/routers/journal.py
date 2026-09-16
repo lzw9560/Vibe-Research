@@ -84,6 +84,60 @@ async def journal_winrate_trends(arm: str | None = Query(None)) -> Dict[str, Any
     return await asyncio.to_thread(_build)
 
 
+@router.get("/api/journal/arm-forward-monitor")
+async def journal_arm_forward_monitor(arm: str = Query("consecutive_relay")) -> Dict[str, Any]:
+    """consecutive_relay arm forward OOS 监控——backtest baseline 对比 + 距 60 天倒计时 + kill criteria 评估（报告不 enforce）。
+
+    arm 已通电生产（50 股/笔 ×0.5 provisional），无 arm 级 kill switch——此 endpoint 报告
+    forward 指标供人工监控。enforce（auto-pause）defer 到 60 天数据后（YAGNI：数据少时
+    enforce 过早，4 专家共识先报告型）。
+
+    数据源 trade_journal（is_realized=1 AND is_dead_arm=0）+ aggregate_by_arm stats。
+    kill criteria 复用 forward_test 逻辑（consecutive_loss<8 / winrate>=60 / lift>=2.0）
+    但在 trade_journal records 上算，不建 arm_status 表（YAGNI 15 行不改 schema）。
+    """
+    def _build() -> dict:
+        tj = TradeJournal()
+        stats = tj.aggregate_by_arm(arm=arm).get(arm, {})
+        records = tj.query_records(arm=arm, is_realized=1, is_dead_arm=0, limit=5000)
+        # consecutive_loss：从最近往前数连亏（复用 forward_test kill criteria 逻辑）
+        consecutive_loss = 0
+        for r in sorted(records, key=lambda x: x.entry_date or "", reverse=True):
+            if r.net_pnl is not None and r.net_pnl < 0:
+                consecutive_loss += 1
+            else:
+                break
+        n_days = stats.get("n_days") or stats.get("days") or 0
+        n_picks = stats.get("n_picks") or stats.get("n") or len(records)
+        forward_mean = stats.get("net_mean_pct") or stats.get("mean_net_pct")
+        baseline = 1.055  # consecutive_relay bull backtest drift-adjusted（对比基准）
+        winrate = stats.get("net_winrate") or stats.get("winrate") or 0
+        return {
+            "available": True,
+            "arm": arm,
+            "n_picks": n_picks,
+            "n_days": n_days,
+            "days_to_60": max(0, 60 - n_days),
+            "status": "underpowered" if n_days < 60 else "ready_for_verdict",
+            "forward": {
+                "net_mean_pct": forward_mean,
+                "winrate": winrate,
+                "consecutive_loss": consecutive_loss,
+                "baseline_backtest_pct": baseline,
+                "vs_baseline": (forward_mean - baseline) if forward_mean is not None else None,
+            },
+            "kill_criteria": {
+                "consecutive_loss_ge_5": consecutive_loss >= 5,  # Tier 1 auto-pause 候选（报告）
+                "winrate_lt_50": winrate < 50,
+                "days_lt_60": n_days < 60,
+            },
+            "stats_full": stats,
+            "note": "报告型 monitor（不 enforce）。enforce defer 到 60 天数据后。"
+                    "kill criteria 复用 forward_test（consecutive_loss<8/winrate>=60/lift>=2.0）。",
+        }
+    return await asyncio.to_thread(_build)
+
+
 @router.get("/api/journal/drawdown-status")
 async def journal_drawdown_status() -> Dict[str, Any]:
     """drawdown 熔断状态：per-arm + portfolio equity/回撤/size_multiplier。"""
