@@ -271,6 +271,21 @@ def test_bh_step_up_correction():
         assert a == pytest.approx(0.03, abs=1e-6)
 
 
+def test_bh_single_p_uses_n_comparisons():
+    """verify w5d3urvxz HIGH fix: 单 p + n_comparisons 该 p*n 非 raw p（原 no-op bug）。"""
+    p_values = [0.02]
+    # n=4 → BH 单 p 退化 Bonferroni-like: 0.02*4=0.08
+    adj = bonferroni_bh(p_values, n=4, method="BH")
+    assert len(adj) == 1
+    assert adj[0] == pytest.approx(0.08, abs=1e-6)
+
+
+def test_bh_single_p_n1_no_correction():
+    """单 p + n=1 → 不校正（raw p）。"""
+    adj = bonferroni_bh([0.02], n=1, method="BH")
+    assert adj[0] == pytest.approx(0.02, abs=1e-6)
+
+
 def test_bh_empty_p_values():
     # Act
     adj = bonferroni_bh([], n=5, method="BH")

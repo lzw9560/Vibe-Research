@@ -352,6 +352,13 @@ def bonferroni_bh(
         return [min(p * k, 1.0) for p in p_values]
 
     # BH (Benjamini-Hochberg) step-up
+    # verify w5d3urvxz HIGH fix: 单 p 时 m 该用 n_comparisons 非 len(p_values)=1
+    # （原 m=len(p_values)=1 → no-op, n 被忽略 → raw p 用 → 假 robust_edge）
+    if len(p_values) <= 1:
+        m = n if n is not None else 1
+        if m <= 1:
+            return [min(p, 1.0) for p in p_values]
+        return [min(p * m, 1.0) for p in p_values]
     m = len(p_values)
     if m <= 1:
         return [min(p, 1.0) for p in p_values]
