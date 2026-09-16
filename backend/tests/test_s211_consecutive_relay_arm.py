@@ -208,3 +208,22 @@ class TestSettlePendingConsecutiveRelay:
         realized = journal.query_records(arm="consecutive_relay", is_realized=1, is_dead_arm=None)
         assert len(realized) == 1
         assert realized[0].exit_price == 10.2  # open[D+1]
+
+
+class TestRunDailyConsecutiveRelayWired:
+    """S211 run_daily 接线——consecutive_relay arm active 生产验证。"""
+
+    def test_run_daily_calls_process_consecutive_relay(self, recorder):
+        """run_daily(arms=["consecutive_relay"]) 调 _process_consecutive_relay + result key。"""
+        with patch.object(recorder, "_process_consecutive_relay",
+                           return_value={"n_candidates": 1, "n_buyable": 1, "n_unbuyable": 0, "n_realized": 0}) as mock_process:
+            with patch.object(recorder, "settle_pending_consecutive_relay"):
+                result = recorder.run_daily(target_date="2026-01-15", arms=["consecutive_relay"])
+        mock_process.assert_called_once_with("2026-01-15")
+        assert "consecutive_relay" in result
+        assert result["consecutive_relay"]["n_candidates"] == 1
+
+    def test_default_arms_includes_consecutive_relay(self):
+        """DEFAULT_ARMS 含 consecutive_relay（arm 默认生产 active）。"""
+        from strategies.journal_recorder import DEFAULT_ARMS
+        assert "consecutive_relay" in DEFAULT_ARMS
