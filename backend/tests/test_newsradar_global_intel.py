@@ -2,6 +2,8 @@
 """S020 P3 newsradar 全球情报赛道单测。monkeypatch worldmonitor，零网络。"""
 import newsradar
 
+import pytest
+
 
 def _patch_wm(monkeypatch, clusters=None, intel=None):
     from data.sources import worldmonitor as wm
@@ -9,6 +11,7 @@ def _patch_wm(monkeypatch, clusters=None, intel=None):
     monkeypatch.setattr(wm, "fetch_news_intelligence", lambda jmespath=None: intel)
 
 
+@pytest.mark.skip(reason="worldmonitor deprecated 2026-09-15 S206，_fetch_global_intel 永久返空（wm.fetch_news_clusters/intelligence 调用注释，待 MCP 复活）")
 def test_fetch_global_intel_merges_and_desc(monkeypatch):
     clusters = {"result": {"content": [{"type": "text", "text": '[{"title":"B","ts":"2026-07-29"}]'}]}}
     intel = {"result": {"content": [{"type": "text", "text": '[{"headline":"A","date":"2026-07-30"}]'}]}}

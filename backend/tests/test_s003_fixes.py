@@ -125,10 +125,12 @@ def test_kline_graceful_on_mootdx_empty(monkeypatch):
     import astock
 
     class _FakeClient:
-        def bars(self, symbol, category, offset):
+        def bars(self, *args, **kwargs):
             raise ValueError("not enough values to unpack (expected 2, got 0)")
 
     monkeypatch.setattr(astock, "_mootdx_client", lambda: _FakeClient())
+    monkeypatch.setattr(astock, "kline_multi", lambda *a, **k: ([], "stub"))  # 防真网络（baidu/sina）返数据
+    monkeypatch.setattr("data.sources.mootdx_src.kline", lambda *a, **k: [])  # mootdx fallback 源头 stub（_get_mootdx_client 非 astock._mootdx_client）
     res = client.get("/api/kline?code=600519")
     assert res.status_code == 200, f"kline 502: {res.status_code} {res.text[:200]}"
     assert res.json() == {"data": []}
@@ -156,6 +158,9 @@ def test_kline_finance_graceful_when_mootdx_factory_fails(monkeypatch):
         raise ValueError("not enough values to unpack (expected 2, got 0)")
 
     monkeypatch.setattr(astock, "_mootdx_client", _boom)
+    monkeypatch.setattr(astock, "kline_multi", lambda *a, **k: ([], "stub"))  # 防真网络返数据
+    monkeypatch.setattr("data.sources.mootdx_src.kline", lambda *a, **k: [])  # mootdx fallback 源头 stub
+    monkeypatch.setattr("data.sources.mootdx_src.finance", lambda *a, **k: {})  # /api/finance mootdx 源头 stub
     rk = client.get("/api/kline?code=600519")
     rf = client.get("/api/finance?code=600519")
     assert rk.status_code == 200 and rk.json() == {"data": []}, rk.text[:120]

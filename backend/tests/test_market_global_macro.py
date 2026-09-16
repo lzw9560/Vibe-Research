@@ -2,6 +2,8 @@
 """S020 P4 market 全球宏观/地缘分块单测。monkeypatch worldmonitor，零网络。"""
 import market
 
+import pytest
+
 
 def _mcp(payload):
     """把裸 dict/list 包成 MCP tools/call 响应（content text = json）。"""
@@ -16,6 +18,7 @@ def _patch_wm(monkeypatch, market_rows=None, cii=None, hotspots=None):
     monkeypatch.setattr(wm, "fetch_hotspot_escalation", lambda jmespath=None: _mcp(hotspots or {}))
 
 
+@pytest.mark.skip(reason="worldmonitor deprecated 2026-09-15 S206，get_global_macro 硬编码 available:False（分区逻辑注释，待 MCP initialize+SSE 复活）")
 def test_get_global_macro_partitions(monkeypatch):
     rows = [
         {"symbol": "CL", "price": "80.5"},
