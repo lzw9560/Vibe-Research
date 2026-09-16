@@ -64,7 +64,7 @@ def _seed_record(*, verdict=None, params=None, data_snapshot_id="abc123+def456")
 def test_dims_returns_12_records():
     resp = client.get("/api/evaluation/dims")
     assert resp.status_code == 200
-    assert len(resp.json()) == 17  # S181 R7 trend_swing + P1-4: low_volatility + ofi/seal/bid_ask
+    assert len(resp.json()) == 18  # 17 + post_first_board S209 T3（探索性 ×0.5）
 
 
 def test_dims_match_contract_fields():

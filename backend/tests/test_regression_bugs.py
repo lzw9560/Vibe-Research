@@ -92,6 +92,10 @@ class TestScheduledTasksImports(unittest.TestCase):
             "daily_full_pull",  # S191
             # S206: watchlist gap scan + price alerts（新注册任务类型，期望集补齐）
             "scan_watchlist_gaps", "scan_price_alerts",
+            "forward_test_backfill",  # S204 T3 — forward_test_records 回补 cron
+            "early_admission_scan",  # S204 T10 — pre-涨停候选入池
+            "escalation_run",  # S204 T11 — tracking→watching auto-promote
+            "r3_enforce",  # S204 T8 — §44v2 verdict 定期 enforce 降级
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

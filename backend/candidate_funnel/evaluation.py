@@ -366,11 +366,13 @@ def _apply_evaluation_layer(
             for d in DIMENSION_LIFT_REGISTRY.values()
             if not d.dimension_id.endswith("_ref")
             and d.dimension_id != "trend_swing"  # S181 R7: arm sizing 维度非选股层 §44 验证
+            and d.dimension_id != "post_first_board"  # S209: arm sizing 维度非选股层
             and d.dimension_id not in ("low_volatility", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure")  # S185 P1-4: 盘中/低波非选股层
         ],
         "pending_dims": [d.dimension_id for d in DIMENSION_LIFT_REGISTRY.values()
                          if d.validation_status == "探索性"
                          and d.dimension_id != "trend_swing"
+                         and d.dimension_id != "post_first_board"
                          and d.dimension_id not in ("ofi_accumulated", "seal_sincerity", "bid_ask_pressure")],  # S185 P1-4: 盘中因子非选股层 pending
         "frozen_commit": FROZEN_COMMIT,
     }
