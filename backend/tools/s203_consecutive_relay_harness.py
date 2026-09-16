@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # noqa: E402
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402
 from tools.regime_stratified_consecutive_relay_lift import run  # noqa: E402
-from tools.gap_regime_stratified import compute_regime_labels  # noqa: E402
+from tools.gap_regime_stratified import compute_market_o2c_gap_by_date, compute_regime_labels  # noqa: E402
 from strategies.kline_returns import _is_unbuyable_next_bar  # noqa: E402
 from engine.accounting import _cost_pct  # noqa: E402
 
@@ -142,10 +142,14 @@ def main() -> dict:
         flush=True,
     )
 
+    # S210 T3: 算 market o2c gap by date 传 run()（drift fix 控牛市 drift）
+    universe_by_day = compute_market_o2c_gap_by_date()
+    print(f"[drift] market o2c gap: {len(universe_by_day)} 天", flush=True)
     results = run(
         returns=rets,
         dates=dts,
         regime_map=regime_map,
+        universe_by_day=universe_by_day,
         frozen_commit=FROZEN,
         round_trip_cost=round(mean_cost_dec, 6),
     )

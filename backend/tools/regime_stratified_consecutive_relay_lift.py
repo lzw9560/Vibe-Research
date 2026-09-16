@@ -52,6 +52,7 @@ def run(
     returns: list[float],
     dates: list[str],
     regime_map: dict[str, str] | None = None,
+    universe_by_day: dict[str, list[float]] | None = None,
     frozen_commit: str = FROZEN_COMMIT,
     round_trip_cost: float = 0.0,
 ) -> dict[str, dict]:
@@ -101,12 +102,20 @@ def run(
         for d in sorted(by_day.keys()):
             regime_dates.extend([d] * len(by_day[d]))
 
+        # S210 T2: per regime filter universe（同 regime days）让 drift fix 控 regime-specific drift
+        universe_by_regime: dict[str, list[float]] | None = None
+        if universe_by_day is not None:
+            universe_by_regime = {
+                d: universe_by_day[d] for d in universe_by_day
+                if regime_map.get(d) == tag
+            }
         v = wire_verdict(
             line_id=f"{STRATEGY_NAME}_regime:{tag}",
             returns=rets,
             edge_type="event",
             frozen_commit=frozen_commit,
             dates=regime_dates,
+            universe_by_day=universe_by_regime,
             n_comparisons=N_COMPARISONS_PER_FAMILY,
             round_trip_cost=round_trip_cost,
             script=SCRIPT_PATH,

@@ -212,3 +212,55 @@ def test_run_uses_event_edge_type(monkeypatch):
         # event edge does NOT pass survivors_by_day / universe_by_day
         assert call.get("survivors_by_day") is None
         assert call.get("universe_by_day") is None
+
+
+def test_run_passes_filtered_universe_by_day_per_regime(monkeypatch):
+    """S210 T2: run() 传 universe_by_day → per regime wire_verdict 收到 filtered（同 regime days）。
+
+    drift fix：event edge 也传 universe_by_day，per regime filter 同 regime days
+    让 drift fix 控 regime-specific drift。
+    """
+    returns, dates, regime_map = _make_synthetic_data(n_days_per_regime=20, picks_per_day=3)
+    universe_global = {d: [0.001] for d in regime_map}  # 1 gap per regime day
+
+    captured: dict = {}
+
+    def _fake_wire(line_id, **kwargs):
+        captured[line_id] = kwargs.get("universe_by_day")
+        return _FakeVerdict()
+
+    monkeypatch.setattr(harness, "wire_verdict", _fake_wire)
+
+    harness.run(
+        returns=returns, dates=dates, regime_map=regime_map,
+        universe_by_day=universe_global,
+    )
+
+    # bull wire_verdict 收到 bull days only (2026-01-*)
+    bull_universe = captured.get("consecutive_relay_regime:bull")
+    assert bull_universe is not None
+    assert all(d.startswith("2026-01") for d in bull_universe)
+    assert len(bull_universe) == 20  # 20 bull days
+    # bear 收到 bear days (2026-02-*)
+    bear_universe = captured.get("consecutive_relay_regime:bear")
+    assert all(d.startswith("2026-02") for d in bear_universe)
+    # range 收到 range days (2026-03-*)
+    range_universe = captured.get("consecutive_relay_regime:range")
+    assert all(d.startswith("2026-03") for d in range_universe)
+
+
+def test_run_universe_by_day_none_backward_compat(monkeypatch):
+    """S210 T2: universe_by_day=None → wire_verdict 收到 None（向后兼容，drift None）。"""
+    returns, dates, regime_map = _make_synthetic_data(n_days_per_regime=20, picks_per_day=3)
+    captured: dict = {}
+
+    def _fake_wire(line_id, **kwargs):
+        captured[line_id] = kwargs.get("universe_by_day")
+        return _FakeVerdict()
+
+    monkeypatch.setattr(harness, "wire_verdict", _fake_wire)
+
+    harness.run(returns=returns, dates=dates, regime_map=regime_map)  # universe_by_day=None
+
+    for tag in ("bull", "bear", "range"):
+        assert captured[f"consecutive_relay_regime:{tag}"] is None

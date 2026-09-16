@@ -202,12 +202,16 @@ def _load_regime_cache() -> list[tuple[str, float, float]] | None:
 
 
 def _fetch_index_bars_baostock() -> list[dict]:
-    """Fallback: fetch sh.000001 daily close from baostock (if cache missing)."""
+    """Fallback: fetch sh.000001 daily bars from baostock (if cache missing).
+
+    S210: fields 加 open（drift fix 需 market o2c gap = open[D+1]-close[D]）。
+    range 扩到 2025-06-01 覆盖 zt_history 范围（2025-06-03~）。
+    """
     try:
         from data.sources.baostock_src import fetch_bars  # noqa: PLC0415
         bars = fetch_bars(
-            "sh.000001", "2025-11-01", "2026-09-06",
-            fields="date,close", adjustflag="3",  # no adjust for index
+            "sh.000001", "2025-06-01", "2026-09-30",
+            fields="date,open,close", adjustflag="3",  # no adjust for index
         )
         return bars
     except Exception:
@@ -217,17 +221,54 @@ def _fetch_index_bars_baostock() -> list[dict]:
         try:
             bs.login()
             rs = bs.query_history_k_data_plus(
-                "sh.000001", "date,close",
-                start_date="2025-11-01", end_date="2026-09-06",
+                "sh.000001", "date,open,close",
+                start_date="2025-06-01", end_date="2026-09-30",
             )
             while rs.error_code == "0" and rs.next():
                 row = rs.get_row_data()
-                if row[1]:
-                    bars.append({"date": row[0], "close": float(row[1])})
+                bars.append({
+                    "date": row[0],
+                    "open": float(row[1]) if len(row) > 1 and row[1] else None,
+                    "close": float(row[2]) if len(row) > 2 and row[2] else None,
+                })
             bs.logout()
         except Exception as e:  # noqa: BLE001
             print(f"[regime] baostock fetch failed: {e}")
         return bars
+
+
+def compute_market_o2c_gap_by_date() -> dict[str, list[float]]:
+    """S210 T1: 市场隔夜 gap by date（event drift fix 数据层）。
+
+    market o2c gap = (index_open[D+1] - index_close[D]) / index_close[D] per date。
+    复用 _fetch_index_bars_baostock（fields=open+close）。
+
+    Returns: ``{date: [gap_decimal]}``（list 包装兼容 event_drift universe_by_day）。
+    缺 open/close → 跳过（不臆造）。
+    """
+    bars = _fetch_index_bars_baostock()
+    if not bars:
+        return {}
+    by_date: dict[str, dict] = {}
+    for b in bars:
+        d = str(b.get("date", ""))[:10]
+        if d:
+            by_date[d] = b
+    sorted_dates = sorted(by_date.keys())
+    gaps: dict[str, list[float]] = {}
+    for i, d in enumerate(sorted_dates):
+        if i + 1 >= len(sorted_dates):
+            break  # 无 D+1
+        close_d = by_date[d].get("close")
+        open_d1 = by_date[sorted_dates[i + 1]].get("open")
+        if close_d is None or open_d1 is None:
+            continue
+        close_d = float(close_d)
+        open_d1 = float(open_d1)
+        if close_d <= 0:
+            continue
+        gaps[d] = [(open_d1 - close_d) / close_d]  # decimal, list 包装
+    return gaps
 
 
 def compute_regime_labels() -> dict[str, str]:
