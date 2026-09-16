@@ -71,19 +71,20 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         note="S209 探索性 PAPER 臂——breakout +0.36% net 前提证否（5元佣金门+regime 假象），自证 net edge 不继承假阳性。lift_mult=0.5 until §44 walk-forward ≥120 天。",
     ),
     # S211 consecutive_relay arm（lbc>=2 连板接力）——regime-stratified caps。
-    # verify w5d3urvxz 三重验证后 bull robust_edge 站住（+1.055% drift-adjusted，
-    # CRITICAL filter + BH + drift R11 全修, n=276/days=66）。但综合 refuted（4真/3假）。
-    # regime_caps: bull ×0.5 provisional（2026-09-17 用户定半仓先试，待 60 天 forward
-    # live OOS 复验转 robust 升 ×1.0）/ bear+range ×0.5（underpowered days<60）。
+    # verify w5d3urvxz 三重验证后 bull robust_edge 站住。2026-09-17 S214 hithink backfill
+    # zt_history 33→315 天后重跑：bull n=269 days=65 net_mean=+1.131%（比 33 天 +1.055% 略升更稳）。
+    # 但综合 refuted（4真/3假）→ bull ×0.5 provisional 保守（待 60 天 forward live OOS 升 ×1.0）。
+    # regime_caps: bull ×0.5 provisional / bear+range ×0.5（underpowered days<60）。
     # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
     "consecutive_relay": DimensionValidation(
         dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap)",
-        lift=None, n=276, days_robust=66,   # bull regime（verify w5d3urvxz 三重验证）
+        lift=None, n=269, days_robust=65,   # bull regime（315 天 zt_history + 78 天 cache 窗口，2026-09-17 重跑）
         validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
         source_script="tools/s203_consecutive_relay_harness.py",
-        note="S211 regime-stratified: bull robust_edge +1.055% drift-adjusted 但综合 refuted → "
-             "bull ×0.5 provisional（2026-09-17 用户定，待 60 天 forward OOS 升 ×1.0）/ "
-             "bear+range underpowered days<60（×0.5）。overnight gap path（D收→D+1开）。",
+        note="S211 regime-stratified: bull robust_edge +1.131%（S214 backfill 315 天 zt_history 重跑，"
+             "n=269/days=65，比 33 天 +1.055% 略升更稳）但综合 refuted → bull ×0.5 provisional "
+             "（2026-09-17 用户定，待 60 天 forward OOS 升 ×1.0）/ bear+range underpowered days<60（×0.5）。"
+             "overnight gap path（D收→D+1开）。",
         regime_caps={"bull": 0.5, "bear": 0.5, "range": 0.5},
     ),
     "turnover": DimensionValidation(
