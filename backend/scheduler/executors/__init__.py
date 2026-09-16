@@ -318,26 +318,56 @@ class TaskExecutor:
     def _execute_early_admission_scan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S204 T10: early_admission 扫描入池（pre-涨停候选 → candidate_tracking_pool）。
 
-        接受 payload.candidates（list[dict] 含 code/sector_rank/zt_count_today/lbc/high_gene，as of T-1）
-        + payload.run_date + payload.previous_trade_day。scan_early_admission pit guard T-1 only（不取数不臆造）。
-        **auto-candidate-source（funnel→early_admission shape adapter）deferred**——需设计决策（high_gene/
-        sector_rank 从 funnel gene_score/pool_item 怎么映射）。当前 manual trigger：POST /api/scheduler/trigger
-        {task_type:"early_admission_scan", payload:{candidates, run_date, previous_trade_day}}。
+        auto-source：load funnel cache for T-1（load_funnel_result）→ extract final_candidates
+        （code / gene_score.total_score / pool_item.lbc / sector_phase.count_today）→ scan_early_admission。
+        high_gene = 1 if gene_score.total_score >= 80（routers/limitup/metrics.py:78 规则）。
+        zt_count_today = sector_phase.count_today（funnel 已算，不重复调 sector_cycle）。
+        manual override：payload.candidates 优先（list[dict] 含 code/sector_rank/zt_count_today/lbc/high_gene）。
+        pit guard T-1 only（scan_early_admission 不取数不臆造）。
         """
         from early_admission import scan_early_admission
         import tracking_pool_repo as _repo
-        candidates = payload.get("candidates") or []
+        from datetime import timedelta
         run_date = payload.get("run_date") or datetime.now().date().isoformat()
+        # T-1（caller 传 or run_date - 1 day fallback）
         previous_trade_day = payload.get("previous_trade_day")
+        if not previous_trade_day:
+            try:
+                previous_trade_day = (datetime.strptime(run_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+            except ValueError:
+                previous_trade_day = run_date
+        # 候选源：manual payload.candidates 优先，否则 auto-load funnel cache T-1
+        candidates = payload.get("candidates")
         if not candidates:
-            return {"status": "no_candidates", "note": "auto-candidate-source deferred（funnel adapter 设计决策）；manual trigger 传 payload.candidates"}
+            try:
+                from candidate_funnel.funnel_cache import load_funnel_result
+                fr = load_funnel_result(previous_trade_day)
+            except Exception as e:  # noqa: BLE001
+                return {"status": "error", "error": f"funnel_cache load: {repr(e)[:150]}", "run_date": run_date}
+            if fr is None:
+                return {"status": "no_funnel_cache", "funnel_date": previous_trade_day,
+                        "note": "funnel cache for T-1 不存在；manual trigger 传 payload.candidates"}
+            candidates = []
+            for c in getattr(fr, "final_candidates", []) or []:
+                gene = getattr(c, "gene_score", None) or {}
+                pool = getattr(c, "pool_item", None) or {}
+                sp = getattr(c, "sector_phase", None) or {}
+                total_score = gene.get("total_score") if isinstance(gene, dict) else None
+                candidates.append({
+                    "code": getattr(c, "code", ""),
+                    "sector_rank": None,  # DiagnosisCard 无 sector_rank（early_admission 只快照不判定）
+                    "zt_count_today": sp.get("count_today") if isinstance(sp, dict) else None,
+                    "lbc": pool.get("lbc") if isinstance(pool, dict) else None,
+                    "high_gene": 1 if (total_score is not None and total_score >= 80) else 0,
+                })
         admitted = scan_early_admission(run_date, candidates, previous_trade_day=previous_trade_day)
         inserted = 0
-        for c in admitted:
-            if _repo.insert_tracking_record(c.code, c.admit_date, c.signal_type, c.indicators_t1):
+        for a in admitted:
+            if _repo.insert_tracking_record(a.code, a.admit_date, a.signal_type, a.indicators_t1):
                 inserted += 1
-            _repo.upsert_indicator_snapshot(c.code, c.admit_date, c.indicators_t1, snapshot_source="early_admit")
-        return {"status": "ok", "admitted": len(admitted), "inserted": inserted, "run_date": run_date}
+            _repo.upsert_indicator_snapshot(a.code, a.admit_date, a.indicators_t1, snapshot_source="early_admit")
+        return {"status": "ok", "candidates": len(candidates), "admitted": len(admitted),
+                "inserted": inserted, "run_date": run_date, "previous_trade_day": previous_trade_day}
 
     def _execute_escalation_run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S204 T11: escalation run（tracking→watching auto-promote + promoted→decayed）。
