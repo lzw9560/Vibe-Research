@@ -2,8 +2,9 @@
 """S078 涨停历史 snapshot 数据地基。
 
 每日盘后 snapshot `astock.em_zt_topic_pool` 终盘涨停池 → `zt_history` SQLite DB
-（**不 prune，累积 indefinitely**）。涨停池历史 >1 月无可用源（em/ths/akshare 均 ~1 月），
-本模块自建累积，供首板流 + 任何涨停类战法长窗 §44 复验。
+（**不 prune，累积 indefinitely**）。涨停池历史 em/ths 不可回补（em ~14 天 rolling，ths 试拉返 0），
+但 hithink 可回溯 2024-06（S214 backfill 脚本 tools/zt_history_backfill.py 已验 2025-06 → 2026-09 补 315 交易日）。
+本模块自建累积 + hithink backfill，供首板流 + 涨停类战法长窗 §44 复验。
 
 工程底线：
 - em_get 限流（`astock.em_zt_topic_pool` 已包熔断+代理，不裸调 requests）
