@@ -149,6 +149,16 @@ CREATE TABLE IF NOT EXISTS trade_journal (
 CREATE INDEX IF NOT EXISTS idx_tj_arm ON trade_journal(arm);
 CREATE INDEX IF NOT EXISTS idx_tj_entry_date ON trade_journal(entry_date);
 CREATE INDEX IF NOT EXISTS idx_tj_is_realized ON trade_journal(is_realized);
+
+-- S213 arm 级 kill switch 框架（plumbing，enforce defer 60 天后）
+-- is_active=0 → lift_for_arm 返 0.0 停交易；weight_override 设值时优先于 registry
+CREATE TABLE IF NOT EXISTS arm_status (
+  arm             TEXT PRIMARY KEY,
+  is_active       INTEGER DEFAULT 1,
+  weight_override REAL,
+  kill_reason     TEXT,
+  killed_at       TEXT
+);
 """
 
 
@@ -386,6 +396,54 @@ class TradeJournal:
                 result[a]["p_adjusted_bh"] = adjusted[i] if i < len(adjusted) else None
 
         return result
+
+    def query_arm_status(self, arm: str) -> dict | None:
+        """S213 arm 级 kill switch 状态（is_active / weight_override / kill_reason / killed_at）。
+
+        无记录返 None（=active，走 registry 默认）。is_active=0 → lift_for_arm 返 0.0 停交易。
+        weight_override 设值时优先于冻结 registry（enforce kill / provisional 降权）。
+        """
+        import sqlite3
+        conn = sqlite3.connect(str(self._db_path))
+        try:
+            row = conn.execute(
+                "SELECT arm, is_active, weight_override, kill_reason, killed_at "
+                "FROM arm_status WHERE arm=?",
+                (arm,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return None
+        return {
+            "arm": row[0], "is_active": bool(row[1]),
+            "weight_override": row[2], "kill_reason": row[3], "killed_at": row[4],
+        }
+
+    def set_arm_status(self, arm: str, *, is_active: bool = True,
+                      weight_override: float | None = None,
+                      kill_reason: str | None = None) -> None:
+        """S213 设置 arm kill switch 状态（upsert）。
+
+        is_active=False + kill_reason → lift_for_arm 返 0.0 停交易。
+        weight_override 设值 → 优先于 registry（provisional 降权 / kill）。
+        """
+        import datetime
+        import sqlite3
+        killed_at = datetime.datetime.now().isoformat() if not is_active else None
+        conn = sqlite3.connect(str(self._db_path))
+        try:
+            conn.execute(
+                "INSERT INTO arm_status (arm, is_active, weight_override, kill_reason, killed_at) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(arm) DO UPDATE SET is_active=excluded.is_active, "
+                "weight_override=excluded.weight_override, kill_reason=excluded.kill_reason, "
+                "killed_at=excluded.killed_at",
+                (arm, 1 if is_active else 0, weight_override, kill_reason, killed_at),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def query_winrate_trends(self, arm: str | None = None) -> list[dict]:
         """S183：累积胜率时序（按周分桶，实时聚合非落盘 snapshot）。

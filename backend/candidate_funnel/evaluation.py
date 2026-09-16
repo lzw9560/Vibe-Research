@@ -293,6 +293,19 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
     regime=None（旧 caller 默认）→ 保守 weight_multiplier（不误放全权重）。
     regime 指定 → 返该 regime cap（如 bull ×1.0）。
     """
+    # S213 arm 级 kill switch（plumbing，enforce defer 60 天后）
+    # arm_status override 优先于 registry：is_active=False → 返 0.0 停交易；weight_override 设值 → 优先
+    try:
+        from engine.trade_journal import TradeJournal
+        status = TradeJournal().query_arm_status(arm)
+        if status is not None:
+            if not status["is_active"]:
+                return (0.0, f"arm kill: {status.get('kill_reason') or 'inactive'}")
+            wo = status.get("weight_override")
+            if wo is not None:
+                return (float(wo), f"arm override: {status.get('kill_reason') or 'manual'}")
+    except Exception:
+        pass  # arm_status 读失败（表未建/db 缺）→ 走 registry fallback（不阻塞，backward compat）
     from candidate_funnel.lift_override import get_effective_dimension
     dims = DIM_ARM_MAP.get(arm)
     if not dims:
