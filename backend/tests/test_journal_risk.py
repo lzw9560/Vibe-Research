@@ -34,6 +34,7 @@ def fresh(tmp_path, monkeypatch):
     import astock
     monkeypatch.setattr(astock, "em_zt_topic_pool", lambda *a, **k: [])
     monkeypatch.setattr(astock, "kline_multi", lambda *a, **k: ([], "stub"))
+    monkeypatch.setattr("data.sources.mootdx_src.kline", lambda *a, **k: [])  # mootdx fallback 真网络 stub（防 executor shutdown race）
     return journal
 
 
@@ -322,6 +323,7 @@ class TestRouter:
         import astock
         monkeypatch.setattr(astock, "em_zt_topic_pool", lambda *a, **k: [])
         monkeypatch.setattr(astock, "kline_multi", lambda *a, **k: ([], "stub"))
+        monkeypatch.setattr("data.sources.mootdx_src.kline", lambda *a, **k: [])  # mootdx fallback 真网络 stub
         app = FastAPI()
         app.include_router(jr.router)
         return TestClient(app)
