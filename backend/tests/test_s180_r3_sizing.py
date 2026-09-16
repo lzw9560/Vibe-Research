@@ -38,47 +38,56 @@ class TestLiftForArm:
 
 
 class TestPaperPortfolioFinalSizeWiring:
+    """T4（S209 §4）：PaperPortfolio.final_size 4-layer = arm×port×lift×intraday。
+
+    mock DrawdownBreaker.size_multiplier/portfolio_multiplier 返 1.0（underpowered），
+    验 lift_for_arm 真接通（§44 cap 真咬仓位，不再是 decorative）。
+    """
+
     def _make_pp(self, monkeypatch):
         from engine.paper_portfolio import PaperPortfolio
-        return PaperPortfolio()
+        pp = PaperPortfolio()
+        monkeypatch.setattr(pp._breaker, "size_multiplier", lambda arm=None: (1.0, "ok"))
+        monkeypatch.setattr(pp._breaker, "portfolio_multiplier", lambda: (1.0, "ok"))
+        return pp
 
     def test_final_size_breakout_applies_lift_cap(self, tmp_path, monkeypatch):
-        """paper_portfolio.final_size('breakout',...) 默认 None → 调 lift_for_arm ×0.5。"""
+        """breakout lift_for_arm=0.5 → final_size = 10000 × 1.0 × 1.0 × 0.5 × 1.0 = 5000。"""
         pp = self._make_pp(monkeypatch)
-        captured = {}
-
-        def fake_final_size(arm, arm_size, lift_multiplier):
-            captured["arm"] = arm
-            captured["lift_multiplier"] = lift_multiplier
-            return arm_size * lift_multiplier
-
-        monkeypatch.setattr(pp._breaker, "final_size", fake_final_size)
         result = pp.final_size("breakout", 10000)
-        assert captured["lift_multiplier"] == 0.5, f"breakout 应调 lift_for_arm ×0.5，got {captured['lift_multiplier']}"
-        assert result == 5000  # 10000 × 0.5
+        assert result == 5000, f"breakout lift=0.5 应 halve，got {result}"
 
     def test_final_size_floor_lift_1(self, tmp_path, monkeypatch):
-        """floor final_size lift_multiplier=1.0（N/A cap 不作用）。"""
+        """floor lift=1.0（N/A cap 不作用）→ final_size 不缩。"""
         pp = self._make_pp(monkeypatch)
-        captured = {}
-
-        def fake_final_size(arm, arm_size, lift_multiplier):
-            captured["lift_multiplier"] = lift_multiplier
-            return arm_size * lift_multiplier
-
-        monkeypatch.setattr(pp._breaker, "final_size", fake_final_size)
-        pp.final_size("floor", 5000)
-        assert captured["lift_multiplier"] == 1.0
+        result = pp.final_size("floor", 5000)
+        assert result == 5000, f"floor lift=1.0 应不缩，got {result}"
 
     def test_final_size_explicit_lift_override(self, tmp_path, monkeypatch):
-        """显式传 lift_multiplier 覆盖 lift_for_arm。"""
+        """显式传 lift_multiplier=0.1 覆盖 lift_for_arm。"""
         pp = self._make_pp(monkeypatch)
-        captured = {}
+        result = pp.final_size("breakout", 10000, lift_multiplier=0.1)
+        assert result == 1000, f"显式 lift=0.1 应 ×0.1，got {result}"
 
-        def fake_final_size(arm, arm_size, lift_multiplier):
-            captured["lift_multiplier"] = lift_multiplier
-            return arm_size * lift_multiplier
+    def test_final_size_intraday_zero_blocks_trade(self, tmp_path, monkeypatch):
+        """T4 第 4 层 intraday_mult=0 → final_size=0（禁交易，吃大面熔断）。"""
+        pp = self._make_pp(monkeypatch)
+        result = pp.final_size("breakout", 10000, intraday_mult=0.0)
+        assert result == 0, f"intraday_mult=0 应禁交易，got {result}"
 
-        monkeypatch.setattr(pp._breaker, "final_size", fake_final_size)
-        pp.final_size("breakout", 10000, lift_multiplier=0.1)
-        assert captured["lift_multiplier"] == 0.1
+    def test_final_size_intraday_half(self, tmp_path, monkeypatch):
+        """T4 第 4 层 intraday_mult=0.5 → final_size 再 ×0.5。"""
+        pp = self._make_pp(monkeypatch)
+        # 10000 × 1.0 × 1.0 × 0.5(lift) × 0.5(intraday) = 2500
+        result = pp.final_size("breakout", 10000, intraday_mult=0.5)
+        assert result == 2500, f"intraday=0.5 应再 halve，got {result}"
+
+    def test_final_size_arm_mult_bites(self, tmp_path, monkeypatch):
+        """arm_mult（per-arm DD）→ final_size 缩（DrawdownBreaker.size_multiplier 0.5）。"""
+        from engine.paper_portfolio import PaperPortfolio
+        pp = PaperPortfolio()
+        monkeypatch.setattr(pp._breaker, "size_multiplier", lambda arm=None: (0.5, "enforced"))
+        monkeypatch.setattr(pp._breaker, "portfolio_multiplier", lambda: (1.0, "ok"))
+        # 10000 × 0.5(arm) × 1.0(port) × 0.5(lift) × 1.0(intraday) = 2500
+        result = pp.final_size("breakout", 10000)
+        assert result == 2500, f"arm_mult=0.5 应缩，got {result}"

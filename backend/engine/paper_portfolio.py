@@ -24,6 +24,9 @@ from engine.drawdown_breaker import DrawdownBreaker
 
 _logger = logging.getLogger(__name__)
 
+#: T5（S209 §4）：<30 decided trades 探索性 floor——arm_size 不归零，保留最小仓位。
+EXPLORATORY_ARM_FLOOR: float = 0.05
+
 
 class PaperPortfolio:
     """read-only 聚合——委托 TradeJournal + DrawdownBreaker，不存独立 state。
@@ -54,17 +57,24 @@ class PaperPortfolio:
 
     def final_size(
         self, arm: str, arm_size: float, lift_multiplier: float | None = None,
+        intraday_mult: float = 1.0,
     ) -> float:
-        """委托 DrawdownBreaker.final_size（H5 三层乘积 arm×portfolio×lift）。
+        """T4（S209 §4）：4-layer final_size = arm_size × arm_mult × portfolio_mult × lift_mult × intraday_mult。
 
-        S180 R3: lift_multiplier 默认 None → 内部调 lift_for_arm(arm) 动态算
-        （用冻结 DIMENSION_LIFT_REGISTRY + lift_to_multiplier，days<60→×0.5）。
-        floor/gap/mock 臂 N/A → 1.0 cap 不作用。
+        用 risk.intraday_loss_breaker.compute_final_size 纯函数（4-layer，原 dead code 复活）。
+        MVP: intraday_mult=1.0（v2 接 per-code 单笔浮亏 state，evaluate_loss_breaker +
+        intraday_multiplier）。
+        lift_mult 默认 None → lift_for_arm(arm) 动态算（§44 cap 真咬仓位，S180 R3）。
+        floor/gap/mock 臂 lift_mult=1.0（N/A cap 不作用）。
+        arm_mult/port_mult 来自 DrawdownBreaker（per-arm + portfolio DD，days<60→1.0 underpowered）。
         """
         if lift_multiplier is None:
             from candidate_funnel.evaluation import lift_for_arm  # noqa: PLC0415
             lift_multiplier = lift_for_arm(arm)[0]
-        return self._breaker.final_size(arm, arm_size, lift_multiplier)
+        arm_mult, _ = self._breaker.size_multiplier(arm=arm)
+        port_mult, _ = self._breaker.portfolio_multiplier()
+        from risk.intraday_loss_breaker import compute_final_size  # noqa: PLC0415
+        return compute_final_size(arm_size * arm_mult, port_mult, lift_multiplier, intraday_mult)
 
     def bayesian_arm_size(self, arm: str, max_size: float = 1.0) -> float:
         """Beta-Bernoulli 后验驱动 arm_size（wok7j1arm P1）。
@@ -76,14 +86,14 @@ class PaperPortfolio:
         try:
             from scipy.stats import beta as beta_dist  # noqa: PLC0415
         except ImportError:
-            return 0.0
+            return EXPLORATORY_ARM_FLOOR
         trends = self._journal.query_winrate_trends(arm=arm)
         if not trends:
-            return 0.0
+            return EXPLORATORY_ARM_FLOOR
         last = trends[-1]
         n_decided = last.get("n_decided", 0)
-        if n_decided < 1:
-            return 0.0
+        if n_decided < 30:
+            return EXPLORATORY_ARM_FLOOR  # T5: 探索性 floor
         n_win = round(last.get("win_rate", 0) * n_decided)
         n_loss = n_decided - n_win
         # Beta(1+n_win, 1+n_loss) 后验——下 5% 分位（保守下界）

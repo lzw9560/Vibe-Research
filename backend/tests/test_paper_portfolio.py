@@ -80,3 +80,40 @@ class TestPaperPortfolio:
         assert pp.equity() == pytest.approx(DEFAULT_INITIAL_CAPITAL + 130.0, abs=0.01)
         # breakout per-arm 只含 breakout
         assert pp.equity(arm="breakout") == pytest.approx(DEFAULT_INITIAL_CAPITAL + 100.0, abs=0.01)
+
+
+class TestT5BayesianFloor:
+    """T5（S209 §4）：bayesian_arm_size <30 decided trades → EXPLORATORY_ARM_FLOOR=0.05 不归零。
+
+    原返 0.0 = 死臂，与 exploratory PAPER 定位矛盾（探索性臂保留最小仓位）。
+    """
+
+    def test_no_trades_returns_floor(self, tmp_path):
+        """空 journal（0 trades <30）→ 0.05 floor（非 0.0 死臂）。"""
+        from engine.paper_portfolio import PaperPortfolio, EXPLORATORY_ARM_FLOOR
+        journal = TradeJournal(db_path=tmp_path / "t5.db")
+        pp = PaperPortfolio(journal=journal)
+        assert pp.bayesian_arm_size("breakout") == EXPLORATORY_ARM_FLOOR
+
+    def test_few_trades_returns_floor(self, tmp_path, monkeypatch):
+        """10 decided trades（<30）→ 0.05 floor。"""
+        from engine.paper_portfolio import PaperPortfolio, EXPLORATORY_ARM_FLOOR
+        journal = TradeJournal(db_path=tmp_path / "t5.db")
+        pp = PaperPortfolio(journal=journal)
+        monkeypatch.setattr(journal, "query_winrate_trends", lambda arm=None: [{
+            "n_decided": 10, "win_rate": 0.5,
+        }])
+        assert pp.bayesian_arm_size("breakout") == EXPLORATORY_ARM_FLOOR
+
+    def test_many_trades_uses_posterior(self, tmp_path, monkeypatch):
+        """≥30 decided trades → Beta 后验下 5% 分位（非 floor，数据累积仓位增长）。"""
+        from engine.paper_portfolio import PaperPortfolio, EXPLORATORY_ARM_FLOOR
+        journal = TradeJournal(db_path=tmp_path / "t5.db")
+        pp = PaperPortfolio(journal=journal)
+        # 100 decided, 60% winrate → 后验 lower > 0.05（数据足够，跳出 floor）
+        monkeypatch.setattr(journal, "query_winrate_trends", lambda arm=None: [{
+            "n_decided": 100, "win_rate": 0.6,
+        }])
+        size = pp.bayesian_arm_size("breakout")
+        assert size > EXPLORATORY_ARM_FLOOR, f"100 trades 60% win 应 > floor，got {size}"
+        assert size < 1.0, f"下 5% 分位应保守 <1.0，got {size}"

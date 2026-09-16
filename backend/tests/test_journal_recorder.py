@@ -139,6 +139,56 @@ class TestBreakoutArm:
         assert records[0].entry_price is None
 
 
+class TestT4ArmSize:
+    """T4（S209 §4）：§44 lift cap 真咬仓位——_arm_size 接 PaperPortfolio.final_size 4-layer。
+
+    breakout/trend/post_first_board lift=0.5（underpowered/探索性）→ 50 股（halve）。
+    floor lift=1.0（N/A）→ 100 股不缩。§44 v2 不再 decorative。
+    """
+
+    def test_arm_size_breakout_halves(self, recorder):
+        """breakout lift=0.5（underpowered）→ 50 股（DEFAULT_SIZE 100 halve）。"""
+        size = recorder._arm_size("breakout")
+        assert size == 50.0, f"breakout lift=0.5 应 50 股，got {size}"
+
+    def test_arm_size_floor_full(self, recorder):
+        """floor lift=1.0（N/A cap 不作用）→ 100 股不缩。"""
+        size = recorder._arm_size("floor")
+        assert size == 100.0, f"floor lift=1.0 应 100 股，got {size}"
+
+    def test_arm_size_post_first_board_halves(self, recorder):
+        """post_first_board lift=0.5（探索性）→ 50 股。"""
+        size = recorder._arm_size("post_first_board")
+        assert size == 50.0, f"post_first_board lift=0.5 应 50 股，got {size}"
+
+    def test_arm_size_trend_halves(self, recorder):
+        """trend lift=0.5（探索性 trend_swing）→ 50 股。"""
+        size = recorder._arm_size("trend")
+        assert size == 50.0, f"trend lift=0.5 应 50 股，got {size}"
+
+    def test_process_breakout_uses_arm_size(self, journal, recorder):
+        """_process_breakout 用 _arm_size → position_notional=entry×size（非 DEFAULT 100）。"""
+        from strategies.premarket_selection import PreMarketCandidate
+        candidate = PreMarketCandidate(
+            code="000001", name="平安银行",
+            breakout_score=0.95, breakout_binary=1,
+            t1_close=10.0, t1_date="2026-01-15",
+        )
+        bars = _make_bars("2026-01-15")
+        # mock _arm_size=30（非 DEFAULT 100 也非 lift 50，清晰区分 size 真接通）
+        with patch.object(recorder, "_arm_size", return_value=30.0):
+            with patch("strategies.premarket_selection.select_premarket_candidates",
+                       return_value=[candidate]):
+                recorder._bars_provider = lambda code: bars if code == "000001" else []
+                recorder._process_breakout("2026-01-15")
+        records = journal.query_records(arm="breakout", is_dead_arm=None)
+        assert len(records) == 1
+        fills = json.loads(records[0].fills_json) if records[0].fills_json else {}
+        # entry≈10.1（T+1 open）× 30 = ~303（非 100×10.1=1010）
+        pos_notional = fills.get("position_notional", 0)
+        assert 290 < pos_notional < 320, f"position_notional 应≈303，got {pos_notional}"
+
+
 class TestFloorArm:
     """C3/C6 floor 走 MTM 不走 path_return。"""
 

@@ -94,6 +94,18 @@ class JournalRecorder:
         self._journal = journal or TradeJournal()
         self._executor = executor or Executor()
         self._bars_provider = bars_provider or (lambda _code: [])
+        from engine.paper_portfolio import PaperPortfolio  # noqa: PLC0415
+        self._portfolio = PaperPortfolio(self._journal)
+
+    def _arm_size(self, arm: str, base: float = DEFAULT_SIZE) -> float:
+        """T4（S209 §4）：§44 lift cap 真咬仓位——接 PaperPortfolio.final_size 4-layer。
+
+        breakout/trend/post_first_board lift=0.5（未validated/探索性）→ 50 股（halve）。
+        floor/gap/mock lift=1.0 → 100 股（N/A 不缩）。
+        intraday_mult MVP=1.0（v2 接 per-code 单笔浮亏 state）。
+        arm_mult/port_mult days<60→1.0 underpowered（DrawdownBreaker H4）。
+        """
+        return max(self._portfolio.final_size(arm, base), 0.0)
 
     def record_t0_fill(
         self, signal_id: str, fill_type: str, price: float, ts: str,
@@ -228,7 +240,7 @@ class JournalRecorder:
                     continue  # 截断 max_hold，留 hold 等更多 bars
             # S201b stage 2: 标 realized——用 update_settlement_v2（UPDATE 非 INSERT OR REPLACE）
             # 冻结 gross_return 不动，新 gross 写 gross_return_v2 + exit_model_version
-            position_notional = float(pos.entry_price) * DEFAULT_SIZE
+            position_notional = float(pos.entry_price) * self._arm_size("breakout")
             net_pnl = pr.return_pct / 100.0 * position_notional
             updated = self._journal.update_settlement_v2(
                 signal_id=pos.signal_id,
@@ -287,7 +299,7 @@ class JournalRecorder:
                 signal_idx = _find_signal_idx(bars, pos.entry_date)
                 if signal_idx is not None and signal_idx + 2 + TREND_MAX_HOLD > len(bars):
                     continue  # 截断 max_hold，留 hold 等更多 bars
-            position_notional = float(pos.entry_price) * DEFAULT_SIZE
+            position_notional = float(pos.entry_price) * self._arm_size("trend")
             net_pnl = pr.return_pct / 100.0 * position_notional
             # S201b stage 2: update_settlement_v2（UPDATE 非 INSERT OR REPLACE，冻结 gross_return）
             updated = self._journal.update_settlement_v2(
@@ -330,12 +342,13 @@ class JournalRecorder:
             if not bars:
                 continue
 
+            size = self._arm_size("breakout")
             trades = Trades(
                 code=cand.code,
                 signal_date=target_date,
                 fill_type=FILL_T_PLUS_1_OPEN,
                 direction="long",
-                size=DEFAULT_SIZE,
+                size=size,
             )
             filled = self._executor.execute(trades, bars, T1OpenFill())
 
@@ -376,7 +389,7 @@ class JournalRecorder:
                 self._journal.insert(record)
                 continue
 
-            position_notional = float(filled.entry_price) * DEFAULT_SIZE
+            position_notional = float(filled.entry_price) * size
             net_pnl = pr.return_pct / 100.0 * position_notional
             gross_pnl = pr.gross_return_pct / 100.0 * position_notional
 
@@ -434,12 +447,13 @@ class JournalRecorder:
             if not bars:
                 continue
 
+            size = self._arm_size("post_first_board")
             trades = Trades(
                 code=cand["code"],
                 signal_date=target_date,
                 fill_type=FILL_T_PLUS_1_OPEN,
                 direction="long",
-                size=DEFAULT_SIZE,
+                size=size,
             )
             filled = self._executor.execute(trades, bars, T1OpenFill())
 
@@ -480,7 +494,7 @@ class JournalRecorder:
                 self._journal.insert(record)
                 continue
 
-            position_notional = float(filled.entry_price) * DEFAULT_SIZE
+            position_notional = float(filled.entry_price) * size
             net_pnl = pr.return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
@@ -547,12 +561,13 @@ class JournalRecorder:
             if not bars:
                 continue
 
+            size = self._arm_size("trend")
             trades = Trades(
                 code=code,
                 signal_date=target_date,
                 fill_type=FILL_T_PLUS_1_OPEN,
                 direction="long",
-                size=DEFAULT_SIZE,
+                size=size,
             )
             filled = self._executor.execute(trades, bars, T1OpenFill())
 
@@ -593,7 +608,7 @@ class JournalRecorder:
                 self._journal.insert(record)
                 continue
 
-            position_notional = float(filled.entry_price) * DEFAULT_SIZE
+            position_notional = float(filled.entry_price) * size
             net_pnl = pr.return_pct / 100.0 * position_notional
             gross_pnl = pr.gross_return_pct / 100.0 * position_notional
 

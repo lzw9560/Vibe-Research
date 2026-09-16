@@ -31,9 +31,9 @@ T10 executor 须有 entry/exit 规则从 S208 post-首板候选（lbc==1）提 t
 - T1 pctChg 注入（S204 R14）——**✅ DONE**（`ccdb3fb`/`7e75465`，enrich_pctchg + _load_kline_cache）。
 - T2 post_first_board 处理加 journal_recorder.py（mirror _process_breakout，调 scan_pre_limitup）。
 - T3 DIM_ARM_MAP['post_first_board'] + DIMENSION_LIFT_REGISTRY entry（lift=None, status='探索性', weight_multiplier=0.5）。
-- T4 **P0**：4-layer compute_final_size 接 PaperPortfolio.final_size（当前 3-layer 漏 intraday_mult）——intraday_loss_breaker backstop 失效。
-- T5 **P0**：exploratory_arm_floor=0.05 加 PaperPortfolio（bayesian arm size floor <30 trades）。
-- T6 backend/tools/s209_t10_executor_harness.py（§44 验证，DRY 复用 path_return + regime_stratified + wire_verdict）。
+- T4 **P0** ✅ DONE：4-layer compute_final_size 接 PaperPortfolio.final_size——改用 compute_final_size 纯函数（arm×port×lift×intraday），intraday_mult MVP=1.0（v2 接 per-code state）。journal_recorder _process_breakout/trend/post_first_board + settle_pending_* 接 _arm_size（§44 lift cap 真咬仓位：breakout/trend/post_first_board 100→50 股，不再 decorative）。test_s180_r3_sizing + test_journal_recorder::TestT4ArmSize 全绿（45 passed）。
+- T5 **P0** ✅ DONE：EXPLORATORY_ARM_FLOOR=0.05 加 PaperPortfolio.bayesian_arm_size——<30 decided trades → 0.05 floor（原返 0.0=死臂，与 exploratory PAPER 定位矛盾）。test_paper_portfolio::TestT5BayesianFloor 全绿。
+- T6 backend/tools/s209_t10_executor_harness.py（§44 验证，DRY 复用 path_return + regime_stratified + wire_verdict）——**🔄 进行中**（fork agent）。
 - T7 跑 harness ~46 天 → **预期 underpowered**（诚实）。若 'robust_edge' → 查 bug（pctChg 注入错？cost 算错？）。
 
 ## 5. 验收
