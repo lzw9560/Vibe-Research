@@ -44,6 +44,7 @@ from tools.long_value_run import (  # noqa: E402
     gate_delisting_coverage,
     dry_run,
     mini_wire,
+    reproduce_verdict,
 )
 
 
@@ -899,3 +900,100 @@ def test_mini_wire_empty_when_months_lt_4(monkeypatch):
     monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
     r = mini_wire(months=["2025-12-31", "2026-01-31"])
     assert r.get("data_status") == "empty"
+
+
+# ---------- T15: A5 reproduce ----------
+
+
+def test_reproduce_verdict_missing_returns_missing(monkeypatch):
+    """T15: verdict_id 不存在返 data_status=missing 不臆造。"""
+    monkeypatch.setattr("s44_verifier.recorder.Recorder.load", lambda self, vid: None)
+    r = reproduce_verdict("nonexistent-id")
+    assert r.get("data_status") == "missing"
+
+
+def test_reproduce_verdict_recomputes_status_consistent(monkeypatch):
+    """T15: 读 record + 重算 status 一致 → consistent=True。"""
+    from s44_verifier.recorder import VerifierRecord
+    record = VerifierRecord(
+        recorder_id="test-001",
+        data_snapshot_id="snap",
+        input_hashes={},
+        return_series=[0.01, 0.02, -0.01],
+        dates=["2025-12-31", "2026-01-31", "2026-02-28"],
+        params={"edge_type": "event", "n_comparisons": 1, "round_trip_cost": 0.0025, "event_materiality_floor": 0.001},
+        frozen_commit="scratch",
+        verdict={"status": "robust_edge"},
+        timestamp="2026-09-17T00:00:00",
+    )
+    monkeypatch.setattr("s44_verifier.recorder.Recorder.load", lambda self, vid: record)
+
+    class FakeVerdict:
+        status = "robust_edge"
+
+    monkeypatch.setattr("s44_verifier.verifier.verify", lambda **kw: FakeVerdict())
+    r = reproduce_verdict("test-001")
+    assert r["stored_status"] == "robust_edge"
+    assert r["recomputed_status"] == "robust_edge"
+    assert r["consistent"] is True
+
+
+def test_reproduce_verdict_uses_event_materiality_floor(monkeypatch):
+    """T15: record.params 含 event_materiality_floor，verify 收到（bug 6 reproduce-storage）。"""
+    from s44_verifier.recorder import VerifierRecord
+    record = VerifierRecord(
+        recorder_id="test-002",
+        data_snapshot_id="snap",
+        input_hashes={},
+        return_series=[0.01, 0.02],
+        dates=["2025-12-31", "2026-01-31"],
+        params={"edge_type": "event", "n_comparisons": 1, "round_trip_cost": 0.0025, "event_materiality_floor": 0.001, "walk_train": 36, "line_id": "S171_test"},
+        frozen_commit="scratch",
+        verdict={"status": "robust_edge"},
+        timestamp="2026-09-17T00:00:00",
+    )
+    monkeypatch.setattr("s44_verifier.recorder.Recorder.load", lambda self, vid: record)
+    captured: dict = {}
+
+    class FakeVerdict:
+        status = "robust_edge"
+
+    def fake_verify(**kw):
+        captured.update(kw)
+        return FakeVerdict()
+
+    monkeypatch.setattr("s44_verifier.verifier.verify", fake_verify)
+    reproduce_verdict("test-002")
+    # event_materiality_floor 从 record.params 传 verify（bug 6 fix）
+    assert captured.get("event_materiality_floor") == 0.001
+    assert captured.get("walk_train") == 36
+    assert captured.get("edge_type") == "event"
+    assert captured.get("returns") == [0.01, 0.02]
+    # line_id 不在 _VERIFY_PARAMS 白名单 → 被过滤不传 verify
+    assert "line_id" not in captured
+
+
+def test_reproduce_verdict_error_returns_error_status(monkeypatch):
+    """T15: 重算崩（缺 survivors/universe）返 data_status=error 不臆造。"""
+    from s44_verifier.recorder import VerifierRecord
+    record = VerifierRecord(
+        recorder_id="test-003",
+        data_snapshot_id="snap",
+        input_hashes={},
+        return_series=[0.01, 0.02],
+        dates=["2025-12-31", "2026-01-31"],
+        params={"edge_type": "selection", "n_comparisons": 1},
+        frozen_commit="scratch",
+        verdict={"status": "robust_edge"},
+        timestamp="2026-09-17T00:00:00",
+    )
+    monkeypatch.setattr("s44_verifier.recorder.Recorder.load", lambda self, vid: record)
+
+    def raise_verify(**kw):
+        raise ValueError("missing survivors_by_day")
+
+    monkeypatch.setattr("s44_verifier.verifier.verify", raise_verify)
+    r = reproduce_verdict("test-003")
+    assert r.get("data_status") == "error"
+    assert r["stored_status"] == "robust_edge"
+    assert "survivors" in r.get("note", "")

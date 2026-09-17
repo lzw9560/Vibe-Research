@@ -1165,3 +1165,63 @@ def mini_wire(months: list[str] | None = None, *, recorder_db: str | Path | None
         "n_returns": len(all_q1),
         "data_status": "ok",
     }
+
+
+def reproduce_verdict(verdict_id: str) -> dict:
+    """T15 A5 reproduce：读 Recorder 取 verdict_id 的 params + return_series，
+    用显式 _VERIFY_PARAMS 白名单重建 verify_kwargs 重算 status，
+    比对存的一致（含 event_materiality_floor 存了能读——bug 6 reproduce-storage）。
+
+    缺 verdict_id 返 {data_status: "missing"} 不臆造。
+    重算崩（缺 survivors/universe 等 selection verdict）返 {data_status: "error"} 不臆造。
+    §44 关联只读 Recorder 重算，不改守护区。
+    """
+    from s44_verifier.recorder import Recorder  # noqa: PLC0415
+    from s44_verifier.verifier import verify  # noqa: PLC0415
+
+    recorder = Recorder()
+    record = recorder.load(verdict_id)
+    if record is None:
+        return {"data_status": "missing", "note": f"verdict_id {verdict_id} 不存在"}
+
+    stored_status = (
+        record.verdict.get("status") if isinstance(record.verdict, dict) else None
+    )
+
+    # 显式 verify 参数白名单（不用 inspect.signature——monkeypatch verify 会致签名变 **kwargs，
+    # record.params 全被 filter；显式列表 test 友好 + line_id 等 metadata 被过滤不传 verify）
+    _VERIFY_PARAMS = frozenset({
+        "edge_type", "n_comparisons", "n_trials", "round_trip_cost",
+        "window_sanity", "walk_train", "walk_test", "step",
+        "event_materiality_floor", "tradeable", "periods_per_year",
+        "frozen_commit", "data_snapshot_id", "survivors_by_day", "universe_by_day",
+    })
+    verify_kwargs: dict = {
+        k: v for k, v in (record.params or {}).items()
+        if k in _VERIFY_PARAMS and v is not None
+    }
+    # returns + dates 从 record 取（非 params——Recorder 存 return_series + dates 独立列）
+    verify_kwargs["returns"] = record.return_series
+    if record.dates is not None:
+        verify_kwargs["dates"] = record.dates
+
+    try:
+        recomputed = verify(**verify_kwargs)
+        recomputed_status = getattr(recomputed, "status", None)
+    except Exception as e:  # noqa: BLE001
+        return {
+            "verdict_id": verdict_id,
+            "stored_status": stored_status,
+            "data_status": "error",
+            "note": f"重算失败（可能缺 survivors/universe）: {e}",
+            "params": record.params,
+        }
+
+    consistent = stored_status == recomputed_status
+    return {
+        "verdict_id": verdict_id,
+        "stored_status": stored_status,
+        "recomputed_status": recomputed_status,
+        "consistent": consistent,
+        "params": record.params,
+    }
