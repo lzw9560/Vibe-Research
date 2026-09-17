@@ -1,6 +1,12 @@
 """
 Trading Workflow router.
 Provides pre-market, intraday, and post-market workflow endpoints.
+
+前端未接线 endpoint 分类（2026-09-17 排查，audit-skip）：
+- admin trigger（curl/调度器触发，非 UI，保留不删）: pre-market/run, refresh, settle,
+  verification-card/generate, verification-card/verify
+- user-facing future（该接 workflow cockpit UI，标 TODO future）: realtime, signals,
+  strategies, strategies/{name}/match, win-rate, adjustments
 """
 import asyncio
 import json

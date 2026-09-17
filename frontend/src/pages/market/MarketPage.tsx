@@ -199,6 +199,26 @@ export function MarketPage() {
           error={overviewQ.error ? "板块数据未取得" : null}
           onRefresh={() => void overviewQ.refetch()}
         />
+        {/* 热门板块详情入口（/sectors/:key 不再孤儿） */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground">热门板块详情：</span>
+          {[
+            { to: "/sectors/humanoid", label: "人形机器人" },
+            { to: "/sectors/ai-computing", label: "AI 算力" },
+            { to: "/sectors/hbm", label: "HBM" },
+            { to: "/sectors/cpo", label: "光互联" },
+            { to: "/sectors/business-space", label: "商业航天" },
+            { to: "/sectors/ai-pharma", label: "生物医药" },
+          ].map((s) => (
+            <Link
+              key={s.to}
+              to={s.to}
+              className="rounded bg-muted/40 px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {s.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* 3. 涨停 / 炸板 / 连板摘要 */}

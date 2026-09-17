@@ -1,6 +1,12 @@
 """
 Sentiment Weather Station router.
 Provides market weather state, multi-factor scoring, strategy recommendations, and fuse rules.
+
+前端未接线 endpoint 分类（2026-09-17 排查，audit-skip）：
+- admin trigger（刷新快照，非 UI，保留不删）: weather/refresh
+- user-facing future（该接 SentimentWeather 页，标 TODO future）: weather/exit-signals（退出信号列表）
+- CRUD future（熔断/pardon 管理操作，评估接 or 删，暂保留标 future）: weather/pardon/outcome,
+  weather/fuse/history, weather/fuse/update
 """
 from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import datetime, timedelta
