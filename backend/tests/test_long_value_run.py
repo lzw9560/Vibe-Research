@@ -38,6 +38,10 @@ from tools.long_value_run import (  # noqa: E402
     _benchmark_monthly_return,
     wire_auxiliary_low_high,
     wire_secondary_q1_hs300,
+    wire_s171_full,
+    gate_cross_primary_consistency,
+    gate_sensitivity_consistency,
+    gate_delisting_coverage,
 )
 
 
@@ -667,3 +671,147 @@ def test_benchmark_monthly_return_no_volume_check():
     assert abs(_benchmark_monthly_return(bars, "2026-01-31", "2025-12-31") - 0.01) < 0.001
     # 第一个月无前月返 None
     assert _benchmark_monthly_return(bars, "2025-12-31", None) is None
+
+
+# ---------- T13: 三 gate 互验 + wire_s171_full ----------
+
+
+def test_gate_cross_primary_consistent():
+    """T13.2a: ①② status 同→PASS consistent。"""
+    r = gate_cross_primary_consistency("robust_edge", "robust_edge")
+    assert r["pass"] is True
+    assert r["label"] == "consistent"
+
+
+def test_gate_cross_primary_both_no_edge():
+    """T13.2a: ①② 都无 edge（falsified vs underpowered）→PASS consistent。"""
+    r = gate_cross_primary_consistency("falsified", "underpowered")
+    assert r["pass"] is True
+    assert r["label"] == "consistent"
+    assert "都无" in r["note"]
+
+
+def test_gate_cross_primary_inconsistent():
+    """T13.2a: ①② 矛盾（一有一无）→降级 exploratory。"""
+    r = gate_cross_primary_consistency("robust_edge", "falsified")
+    assert r["pass"] is False
+    assert r["label"] == "exploratory"
+    assert "不一致" in r["note"]
+
+
+def test_gate_cross_primary_unknown_skip():
+    """T13.2a: status unknown→skip（R5 skip 时 selection_lift=None 不崩）。"""
+    r = gate_cross_primary_consistency("unknown", "robust_edge")
+    assert r["pass"] is True
+    assert r["label"] == "skip"
+
+
+def test_gate_sensitivity_consistent():
+    """T13.2b: 两档一致→robust。"""
+    r = gate_sensitivity_consistency({
+        "consistent": True, "sensitive_flag": False, "data_status": "ok",
+    })
+    assert r["pass"] is True
+    assert r["label"] == "robust"
+
+
+def test_gate_sensitivity_inconsistent():
+    """T13.2b: 两档不一致→降级 exploratory 标依赖退市 return 假设。"""
+    r = gate_sensitivity_consistency({
+        "consistent": False, "sensitive_flag": True, "data_status": "ok",
+    })
+    assert r["pass"] is False
+    assert r["label"] == "exploratory"
+    assert "依赖退市" in r["note"]
+
+
+def test_gate_sensitivity_empty_skip():
+    """T13.2b: sensitivity 无数据→skip。"""
+    r = gate_sensitivity_consistency({"data_status": "empty"})
+    assert r["pass"] is True
+    assert r["label"] == "skip"
+
+
+def test_gate_delisting_coverage_high():
+    """T13.2c: 覆盖率≥50%→robust。"""
+    delisting_map = {"sh.000001": "2025-06-30", "sh.000002": "2025-07-31"}
+    universe = {"2025-06-30": ["sh.000001", "sh.000002"], "2025-07-31": ["sh.000001"]}
+    r = gate_delisting_coverage(delisting_map, universe)
+    assert r["pass"] is True
+    assert r["label"] == "robust"
+    assert r["coverage"] == 1.0
+
+
+def test_gate_delisting_coverage_low():
+    """T13.2c: 覆盖率<50%→降级 exploratory（0 bars 股计分母算 0%）。"""
+    delisting_map = {"sh.000001": "2025-06-30", "sh.000002": "2025-07-31",
+                     "sh.000003": "2025-08-31", "sh.000004": "2025-09-30"}
+    # 只有 sh.000001 在 universe（覆盖率 1/4=25%<50%）
+    universe = {"2025-06-30": ["sh.000001"]}
+    r = gate_delisting_coverage(delisting_map, universe)
+    assert r["pass"] is False
+    assert r["label"] == "exploratory"
+    assert abs(r["coverage"] - 0.25) < 0.01
+
+
+def test_gate_delisting_coverage_empty_skip():
+    """T13.2c: 无退市股→skip。"""
+    r = gate_delisting_coverage({}, {"2025-06-30": ["sh.000001"]})
+    assert r["pass"] is True
+    assert r["label"] == "skip"
+
+
+def test_wire_s171_full_gate_integration(monkeypatch):
+    """T13: wire_s171_full 跑各 wire + 三 gate 互验 → 综合 verdict。"""
+    # mock 各 wire 避免真跑（只测 gate 互验逻辑）
+    monkeypatch.setattr("tools.long_value_run.wire_q1_q5_spread",
+                        lambda **kw: {"status": "robust_edge"})
+    monkeypatch.setattr("tools.long_value_run.wire_q1_excess_universe",
+                        lambda months=None: {"status": "robust_edge"})
+    monkeypatch.setattr("tools.long_value_run.wire_auxiliary_low_high",
+                        lambda **kw: {"status": "exploratory"})
+    monkeypatch.setattr("tools.long_value_run.wire_secondary_q1_hs300",
+                        lambda **kw: {"status": "exploratory"})
+    monkeypatch.setattr("tools.long_value_run.run_sensitivity_two_tier",
+                        lambda months=None: {"consistent": True, "sensitive_flag": False,
+                                             "data_status": "ok"})
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache",
+                        lambda: {"stock_basic": {}, "universe": {}, "kline_raw": {},
+                                 "profit": {}, "kline_qfq": {}})
+    monkeypatch.setattr("tools.long_value_run._build_delisting_map", lambda sb: {})
+
+    r = wire_s171_full(months=["2025-12-31", "2026-01-31"])
+
+    # 综合 status：三 gate 全 PASS + ①② 一致 → robust_edge
+    assert r["status"] == "robust_edge"
+    assert r["primary_1_q1_q5_spread"] == "robust_edge"
+    assert r["primary_2_q1_excess_universe"] == "robust_edge"
+    assert r["gate_cross_primary"]["pass"] is True
+    assert r["gate_sensitivity"]["pass"] is True
+    assert r["gate_delisting_coverage"]["pass"] is True
+    assert "三 gate" in r["caveat"]
+
+
+def test_wire_s171_full_degrades_when_primary_inconsistent(monkeypatch):
+    """T13: ①② 矛盾→综合 status 降级 exploratory。"""
+    monkeypatch.setattr("tools.long_value_run.wire_q1_q5_spread",
+                        lambda **kw: {"status": "robust_edge"})
+    monkeypatch.setattr("tools.long_value_run.wire_q1_excess_universe",
+                        lambda months=None: {"status": "falsified"})  # 矛盾
+    monkeypatch.setattr("tools.long_value_run.wire_auxiliary_low_high",
+                        lambda **kw: {"status": "exploratory"})
+    monkeypatch.setattr("tools.long_value_run.wire_secondary_q1_hs300",
+                        lambda **kw: {"status": "exploratory"})
+    monkeypatch.setattr("tools.long_value_run.run_sensitivity_two_tier",
+                        lambda months=None: {"consistent": True, "sensitive_flag": False,
+                                             "data_status": "ok"})
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache",
+                        lambda: {"stock_basic": {}, "universe": {}, "kline_raw": {},
+                                 "profit": {}, "kline_qfq": {}})
+    monkeypatch.setattr("tools.long_value_run._build_delisting_map", lambda sb: {})
+
+    r = wire_s171_full(months=["2025-12-31", "2026-01-31"])
+    # ①② 矛盾 → gate_a fail → 综合 exploratory
+    assert r["status"] == "exploratory"
+    assert r["gate_cross_primary"]["pass"] is False
+    assert "不一致" in r["gate_cross_primary"]["note"]

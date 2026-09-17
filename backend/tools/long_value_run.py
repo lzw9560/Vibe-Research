@@ -851,3 +851,129 @@ def wire_secondary_q1_hs300(
         "n": len(returns),
         "caveat": "size-confounded + BH m=1 latent——SECONDARY benchmark 对比降级标注",
     }
+
+
+# ---------- T13: wire_verdict 5 参数验收 + 三 gate 互验 ----------
+
+# edge status（有选股力）vs 无 edge status（spec §0 双 co-PRIMARY 互验）
+_EDGE_STATUSES = frozenset({"robust_edge", "exploratory"})
+_NO_EDGE_STATUSES = frozenset({"falsified", "not_validated", "underpowered"})
+
+
+def gate_cross_primary_consistency(status1: str, status2: str) -> dict:
+    """T13.2a: co-PRIMARY ①② status 一致→PASS，矛盾→降级 exploratory 标"双 PRIMARY 不一致"。
+
+    都 edge（robust_edge/exploratory）或都无 edge（falsified/not_validated/underpowered）才 PASS。
+    矛盾（一有一无）→降级 exploratory。R5 skip 时 status=None/unknown→skip。
+    """
+    if status1 in (None, "unknown") or status2 in (None, "unknown"):
+        return {"pass": True, "label": "skip", "note": f"①② status 未定（{status1} vs {status2}）"}
+    if status1 == status2:
+        return {"pass": True, "label": "consistent", "note": f"①② status 一致={status1}"}
+    s1_edge = status1 in _EDGE_STATUSES
+    s2_edge = status2 in _EDGE_STATUSES
+    if s1_edge == s2_edge:
+        return {"pass": True, "label": "consistent",
+                "note": f"①② 都{'有' if s1_edge else '无'}edge（{status1} vs {status2}）"}
+    return {"pass": False, "label": "exploratory",
+            "note": f"双 PRIMARY 不一致（{status1} vs {status2}）→降级"}
+
+
+def gate_sensitivity_consistency(sensitivity_result: dict) -> dict:
+    """T13.2b: 退市 -0.5/-1.0 两档 status 一致→稳，不一致→降级 exploratory 标"依赖退市 return 假设"。
+
+    复用 T12 run_sensitivity_two_tier 返 {consistent, sensitive_flag, data_status}。
+    lift 差值 |lift_-0.5 - lift_-1.0|>0.3 标敏感 flag（T12 已算 sensitive_flag）。
+    """
+    if not isinstance(sensitivity_result, dict):
+        return {"pass": True, "label": "skip", "note": "sensitivity 无结果（skip）"}
+    if sensitivity_result.get("data_status") == "empty":
+        return {"pass": True, "label": "skip", "note": "sensitivity 无数据（skip）"}
+    consistent = sensitivity_result.get("consistent", False)
+    sensitive_flag = sensitivity_result.get("sensitive_flag", False)
+    if consistent:
+        note = "两档 status 一致→稳" + ("（但 lift 敏感 flag）" if sensitive_flag else "")
+        return {"pass": True, "label": "robust", "note": note}
+    return {"pass": False, "label": "exploratory",
+            "note": "依赖退市 return 假设（两档不一致）→降级"}
+
+
+def gate_delisting_coverage(delisting_map: dict, universe_cache: dict) -> dict:
+    """T13.2c: 退市覆盖率≥50% 才 robust，<50% 降级 exploratory（0 bars 股计分母算 0%）。
+
+    覆盖率 = 有 bars 的退市股（在 universe 某月出现）/ 总退市股。
+    bug 4：0 bars 股计入分母算 0% 覆盖（不臆造）。
+    """
+    if not delisting_map:
+        return {"pass": True, "label": "skip", "note": "无退市股（skip）", "coverage": 1.0}
+    all_universe_codes: set[str] = set()
+    for codes in universe_cache.values():
+        if isinstance(codes, (list, set)):
+            all_universe_codes.update(codes)
+    total = len(delisting_map)
+    covered = sum(1 for code in delisting_map if code in all_universe_codes)
+    coverage = covered / total if total else 1.0
+    if coverage >= 0.5:
+        return {"pass": True, "label": "robust",
+                "note": f"退市覆盖率 {coverage:.0%}≥50%", "coverage": coverage}
+    return {"pass": False, "label": "exploratory",
+            "note": f"退市覆盖率 {coverage:.0%}<50%→降级（0 bars 股计分母）", "coverage": coverage}
+
+
+def _status_of(verdict: object) -> str:
+    """兼容取 status（dict 或 verdict 对象）。"""
+    if isinstance(verdict, dict):
+        return verdict.get("status", "unknown")
+    return getattr(verdict, "status", "unknown")
+
+
+def wire_s171_full(months: list[str] | None = None) -> dict:
+    """T13: 跑 T9+T10+T11+T12 → 三 gate 互验 → 综合 verdict。
+
+    T13.1 验收：各 wire 已传 5 月度参数（walk_train=36/walk_test=12/step=12/
+    event_materiality_floor=0.001）+ window_sanity（T10 path）。
+    T13.2 三 gate：①② 互验 + sensitivity 一致性 + 退市覆盖率。
+    综合 status：三 gate 全 PASS→取 ① status；任一降级→exploratory。
+    §44 关联只接线落 Recorder，不改守护区。
+    """
+    cache = load_r1_cache()
+    stock_basic = cache.get("stock_basic", {})
+    universe_cache = cache.get("universe", {})
+    delisting_map = _build_delisting_map(stock_basic)
+
+    # 跑各 wire（T9 传 r1_cache 避免 reload，其他传 months）
+    verdict_1 = wire_q1_q5_spread(
+        line_id="S171_Q1_Q5_spread", frozen_commit="scratch", r1_cache=cache,
+    )
+    verdict_2 = wire_q1_excess_universe(months=months)
+    verdict_aux = wire_auxiliary_low_high(months=months)
+    verdict_sec = wire_secondary_q1_hs300(months=months)
+    sensitivity = run_sensitivity_two_tier(months=months)
+
+    status_1 = _status_of(verdict_1)
+    status_2 = _status_of(verdict_2)
+
+    # 三 gate
+    gate_a = gate_cross_primary_consistency(status_1, status_2)
+    gate_b = gate_sensitivity_consistency(sensitivity)
+    gate_c = gate_delisting_coverage(delisting_map, universe_cache)
+
+    gates_pass = gate_a["pass"] and gate_b["pass"] and gate_c["pass"]
+    if gates_pass:
+        overall_status = status_1 if status_1 == status_2 else "exploratory"
+    else:
+        overall_status = "exploratory"
+
+    return {
+        "line_id": "S171_full",
+        "status": overall_status,
+        "primary_1_q1_q5_spread": status_1,
+        "primary_2_q1_excess_universe": status_2,
+        "auxiliary_low_high": _status_of(verdict_aux),
+        "secondary_q1_hs300": _status_of(verdict_sec),
+        "gate_cross_primary": gate_a,
+        "gate_sensitivity": gate_b,
+        "gate_delisting_coverage": gate_c,
+        "sensitivity": sensitivity,
+        "caveat": "双 co-PRIMARY 互验 + sensitivity 一致性 + 退市覆盖率三 gate（T13）",
+    }
