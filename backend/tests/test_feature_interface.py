@@ -54,9 +54,9 @@ def test_list_for_stage_s2_count(registry):
 
 
 def test_list_for_stage_s3_count(registry):
-    # s3: s2 35 + auction_signal (s3) = 36
+    # s3: s2 36 + auction_signal (s3) = 37  (S215 us_vix s2→s3 含)
     s3_features = registry.list_for_stage("s3")
-    assert len(s3_features) == 36
+    assert len(s3_features) == 37
 
 
 # ── (c) HEAD_FEATURE_SUBSETS definitions ────────────────────────────
@@ -65,7 +65,7 @@ def test_list_for_stage_s3_count(registry):
 def test_short_sector_subset_has_28_features():
     from predict.feature_interface import HEAD_FEATURE_SUBSETS
 
-    assert len(HEAD_FEATURE_SUBSETS["short_sector"]) == 28
+    assert len(HEAD_FEATURE_SUBSETS["short_sector"]) == 29  # S215 us_vix 加入 +1（原 28）
 
 
 def test_mid_long_subset_has_7_features():
