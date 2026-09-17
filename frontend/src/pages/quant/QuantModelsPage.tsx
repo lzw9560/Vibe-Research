@@ -9,6 +9,8 @@ import { FocusDayStrip } from "@/components/ui/FocusDayStrip";
 import { NextStepBar } from "@/components/ui/NextStepBar";
 import { QUANT_MODULES, type QuantModule } from "./modules";
 import { useDateTriplet, useIntradayOfi } from "@/lib/query";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function StatusBadge({ status }: { status: QuantModule["status"] }) {
@@ -44,9 +46,49 @@ function OfiLiveChip() {
   );
 }
 
+// M4 em_get 防封健康度：circuit_breaker 各 breaker 状态
+function EmHealthChip() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["quant", "emHealth"] as const,
+    queryFn: () => api.emHealth(),
+    refetchInterval: 30 * 1000,
+  });
+  if (isLoading) return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+  if (isError || !data) return <span className="text-[10px] text-muted-foreground">数据待接线</span>;
+  const n = Object.keys(data.breakers || {}).length;
+  if (data.data_status === "empty" || n === 0) return <span className="text-[10px] text-muted-foreground">无 breaker</span>;
+  return (
+    <span className={cn("text-[10px]", data.all_healthy ? "text-emerald-600" : "text-red-500")}>
+      {data.all_healthy ? "全熔断器正常" : "有熔断器 OPEN"} · {n} 路
+    </span>
+  );
+}
+
+// M2 预期差：T-1 close + T open 高开% + 量比（用默认 600519 演示，选股后看详情）
+function ExpectationGapChip() {
+  const { data: triplet } = useDateTriplet();
+  const today = triplet?.today ?? "";
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["quant", "expectationGap", today] as const,
+    queryFn: () => api.expectationGap("600519", today || undefined),
+    enabled: !!today,
+  });
+  if (!today) return <span className="text-[10px] text-muted-foreground">数据待接线</span>;
+  if (isLoading) return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+  if (isError || !data) return <span className="text-[10px] text-muted-foreground">数据待接线</span>;
+  if (data.data_status === "empty") return <span className="text-[10px] text-muted-foreground">无数据</span>;
+  return (
+    <span className="text-[10px] text-muted-foreground">
+      score {data.score.toFixed(2)} · 高开 {data.gap_pct ?? "—"}%
+    </span>
+  );
+}
+
 function LiveDataChip({ mod }: { mod: QuantModule }) {
   // liveSource 决定拉哪个真实数据；null → honest "数据待接线"（不臆造）
   if (mod.liveSource === "ofi") return <OfiLiveChip />;
+  if (mod.liveSource === "emHealth") return <EmHealthChip />;
+  if (mod.liveSource === "expectationGap") return <ExpectationGapChip />;
   return <span className="text-[10px] text-muted-foreground">数据待接线</span>;
 }
 

@@ -11,7 +11,7 @@ export interface QuantModule {
   note: string;       // 诚实描述（实现状态/边界）
   link?: string;      // 路由（live 且有页面时）
   /** live 卡尝试拉的真实数据源；null=无前端 endpoint（标"数据待接线"） */
-  liveSource?: "ofi" | null;
+  liveSource?: "ofi" | "expectationGap" | "emHealth" | null;
 }
 
 export const QUANT_MODULES: readonly QuantModule[] = [
@@ -29,8 +29,8 @@ export const QUANT_MODULES: readonly QuantModule[] = [
     title: "预期差",
     subtitle: "公告/财报预期差度量",
     status: "live",
-    note: "后端模块已实现（S200）；前端数据 endpoint 待接线。",
-    liveSource: null,
+    note: "GET /api/expectation-gap（S216 P2）。T-1 close + T open 差（高开%）+ 量比代理，复用 S205 compute_expectation_gap_reversal。",
+    liveSource: "expectationGap",
   },
   {
     key: "M3",
@@ -44,8 +44,8 @@ export const QUANT_MODULES: readonly QuantModule[] = [
     title: "em_get 防封",
     subtitle: "东财端点限流/熔断/代理探测",
     status: "live",
-    note: "后端 transport.py + circuit_breaker 已实现（em_get 限流/降级/熔断）；前端状态 endpoint 待接线。",
-    liveSource: null,
+    note: "GET /api/transport/em-health（S216 P2）。circuit_breaker 各 breaker 状态（state + failure_count），em_get 防封底线。",
+    liveSource: "emHealth",
   },
   {
     key: "M5",

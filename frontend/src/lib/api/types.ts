@@ -1778,3 +1778,27 @@ export interface KgInboxResponse {
   data_status: "ok" | "empty";
   note: string;
 }
+
+// S216 P2: 量化模型 M2/M4
+export interface ExpectationGapResult {
+  code: string;
+  date: string;
+  score: number;  // ∈ [0,1]
+  gap_pct: number | null;
+  vol_ratio: number | null;
+  data_status: "ok" | "empty" | "error";
+  note?: string;
+}
+
+export interface EmHealthBreaker {
+  state: "closed" | "open" | "half_open";
+  failure_count: number;
+}
+
+export interface EmHealthResult {
+  breakers: Record<string, EmHealthBreaker>;
+  em_breakers?: Record<string, EmHealthBreaker> | null;
+  all_healthy: boolean;
+  data_status: "ok" | "empty" | "error";
+  note?: string;
+}
