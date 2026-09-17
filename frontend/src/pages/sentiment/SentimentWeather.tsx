@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { RefreshCw, Settings, Cloud, History, Lightbulb, Zap } from "lucide-react";
+import { RefreshCw, Settings, Cloud, History, Lightbulb, Zap, Globe } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -21,9 +21,10 @@ import { WeatherHero } from "@/components/sentiment-weather/WeatherHero";
 import { AuctionMetricsCard } from "@/components/sentiment-weather/AuctionMetricsCard";
 import { SealRiskCard } from "@/components/sentiment-weather/SealRiskCard";
 import { PardonManagement } from "@/components/sentiment-weather/PardonManagement";
+import { MacroPanel } from "@/components/sentiment-weather/MacroPanel";
 import { STITimelineChart } from "@/components/sti/STITimelineChart";
 
-type TabId = "realtime" | "history" | "strategy" | "fuse";
+type TabId = "realtime" | "history" | "strategy" | "fuse" | "macro";
 
 // S179 R3.5: 页内 TabBar 替代 Layout 二级 SUB_TABS（4 子路由切换）
 const SENTIMENT_TABS: { key: TabId; label: string; icon: ReactNode }[] = [
@@ -31,6 +32,7 @@ const SENTIMENT_TABS: { key: TabId; label: string; icon: ReactNode }[] = [
   { key: "history", label: "历史趋势", icon: <History className="h-3.5 w-3.5" /> },
   { key: "strategy", label: "策略建议", icon: <Lightbulb className="h-3.5 w-3.5" /> },
   { key: "fuse", label: "熔断规则", icon: <Zap className="h-3.5 w-3.5" /> },
+  { key: "macro", label: "宏观", icon: <Globe className="h-3.5 w-3.5" /> },
 ];
 
 const TAB_ROUTE: Record<TabId, string> = {
@@ -38,6 +40,7 @@ const TAB_ROUTE: Record<TabId, string> = {
   history: "/sentiment/weather/history",
   strategy: "/sentiment/weather/strategy",
   fuse: "/sentiment/weather/fuse",
+  macro: "/sentiment/weather/macro",
 };
 
 // 5 分钟自动刷新——原 loadData 每 5 分钟 Promise.all 全量重拉，现拆为 7 个 hook
@@ -50,6 +53,7 @@ export default function SentimentWeather() {
     if (location.pathname.includes("/history")) return "history" as TabId;
     if (location.pathname.includes("/strategy")) return "strategy" as TabId;
     if (location.pathname.includes("/fuse")) return "fuse" as TabId;
+    if (location.pathname.includes("/macro")) return "macro" as TabId;
     return "realtime" as TabId;
   })();
 
@@ -314,6 +318,9 @@ export default function SentimentWeather() {
             </GlassCard>
           </div>
         );
+
+      case "macro":
+        return <MacroPanel />;
 
       default:
         return null;

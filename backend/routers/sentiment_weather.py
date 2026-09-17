@@ -1260,4 +1260,68 @@ async def get_storm_predict(date: Optional[str] = Query(None, description="T 日
         raise HTTPException(502, f"暴风雨预测异常：{e}") from e
 
 
+@router.get("/api/macro/snapshot")
+def macro_snapshot() -> Dict[str, Any]:
+    """S215 宏观快照——FRED 8 因子最新值 + FOMC 日历（今日/下次）。
+
+    前后端闭环：FRED 因子（macro.py 8 因子 commit 94ba317）+ FOMC 日历（.vibe-research/fomc_calendar.json）
+    后端已通但前端无展示，此 endpoint 暴露给前端 MacroPanel。
+    宏观展示是参考层（非 sizing 杠杆，不碰 §44v2/lift_for_arm）。
+    """
+    import json  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    from predict.features.macro import (  # noqa: PLC0415
+        MACRO_SPECS, FRED_SERIES, get_fred_api_key, fetch_fred_series, parse_fred_observations,
+    )
+    from vr_paths import resolve_data_dir  # noqa: PLC0415
+
+    key = get_fred_api_key()
+    factors: dict = {}
+    if key:
+        for spec in MACRO_SPECS:
+            sid = FRED_SERIES.get(spec.name)
+            if not sid:
+                continue
+            try:
+                data = fetch_fred_series(sid, key)
+                obs = parse_fred_observations(data) if data else []
+                latest = obs[-1] if obs else None
+                factors[spec.name] = {
+                    "series_id": sid,
+                    "description": spec.description,
+                    "latest_date": latest.get("date") if latest else None,
+                    "latest_value": latest.get("value") if latest else None,
+                    "n_obs": len(obs),
+                }
+            except Exception:  # noqa: BLE001
+                factors[spec.name] = {"series_id": sid, "error": "fetch failed"}
+    # FOMC 日历
+    fomc_path = resolve_data_dir() / "fomc_calendar.json"
+    fomc: dict = {}
+    if fomc_path.exists():
+        try:
+            cal = json.loads(fomc_path.read_bytes())
+            today = datetime.now().strftime("%Y-%m-%d")
+            meetings = cal.get("meetings", [])
+            today_meeting = [m for m in meetings if m.get("date") == today]
+            future = [m for m in meetings if m.get("date", "") > today]
+            fomc = {
+                "last_verified": cal.get("last_verified"),
+                "today": today_meeting[0] if today_meeting else None,
+                "next": future[0] if future else None,
+                "total": len(meetings),
+            }
+        except Exception:  # noqa: BLE001
+            fomc = {"error": "fomc_calendar.json 解析失败"}
+    else:
+        fomc = {"error": "fomc_calendar.json 未建"}
+    return {
+        "data": {
+            "fred_factors": factors,
+            "fred_key_loaded": bool(key),
+            "fomc": fomc,
+        }
+    }
+
+
 __all__ = ["router"]

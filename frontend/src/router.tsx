@@ -63,6 +63,7 @@ export const router = createBrowserRouter([
       { path: "/market", element: lazyEl(() => import("@/pages/market/MarketPage"), "MarketPage") },
       { path: "/intraday", element: lazyEl(() => import("@/pages/intraday/IntradayCockpit"), "IntradayCockpit") },
       { path: "/sentiment/weather", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
+      { path: "/sentiment/weather/macro", element: lazyEl(() => import("@/pages/sentiment/SentimentWeather")) },
       { path: "/sectors/:key", element: lazyEl(() => import("@/pages/SectorDetail"), "SectorDetail") },
 
       // 选股域
