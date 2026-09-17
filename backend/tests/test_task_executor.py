@@ -62,6 +62,10 @@ _EXPECTED_TASK_TYPES = {
     "monthly_vacuum",
     "kline_refresh",
     "daily_ai_summary",
+    # S211 通电收尾——regime cache 刷新防 consecutive_relay regime=None
+    "regime_cache_fetch",
+    # S216 FRED 8 因子每日刷新 → macro_snapshot.json
+    "macro_fetch",
     # S101 飞书多点通知
     "premarket_auction_notify",
     "premarket_open_notify",
@@ -76,6 +80,8 @@ _EXPECTED_TASK_TYPES = {
     "daily_kg_sync",
     # S175 模拟盘闭环盘后跑（journal_recorder.run_daily 接 scheduler 点火）
     "trade_journal_daily",
+    # S203 T6 吃大面 enforce gate（block_add/block_new+cooldown，不碰 final_size sizing）
+    "loss_breaker_enforce",
     # S176 盘中 OFI 五档收集（conditioning 数据收集器）
     "ofi_collect",
     # S185 Turso 云同步（VR_TURSO_URL 未设跳过）
