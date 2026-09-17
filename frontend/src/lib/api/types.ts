@@ -1802,3 +1802,32 @@ export interface EmHealthResult {
   data_status: "ok" | "empty" | "error";
   note?: string;
 }
+
+// S216 P2 EarningsCalendar
+export interface EarningsDangerMonth {
+  month: number;
+  label: string;
+  reason: string;
+  deadline: string;
+}
+
+export interface EarningsPerCode {
+  code: string;
+  announcements: { date?: string; title?: string; type?: string }[];
+  lockup_expiries: {
+    date?: string;
+    type?: string;
+    shares?: number;
+    able_shares?: number;
+    ratio?: number;
+  }[];
+  data_status: "ok" | "partial" | "missing";
+  errors: string[];
+}
+
+export interface EarningsCalendarResponse {
+  danger_months: EarningsDangerMonth[];
+  per_code: EarningsPerCode[] | null;
+  data_status: "ok" | "partial" | "missing" | "empty";
+  note: string;
+}

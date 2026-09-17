@@ -1,116 +1,186 @@
-// Track E A3: 财报季日历 view — honest-empty shell。
-// 后端无 /api/earnings-calendar 聚合 endpoint（grep 确认 stock_financial.py /
-// stock_data.py 仅有 per-code /api/financials、/api/dragon-tiger、/api/disclosure、
-// /api/lockup 等散端点，无全市场财报季日历聚合）。不臆造数据，标"待接线"。
-// 排雷规则（1/4/8 月雷区标红 + 未披露预警 + 财报异常防一字跌停）待 M5
-// ReportSeasonCircuitBreaker 实现。
+// S216 P2 接线：财报季日历接 /api/earnings-calendar 聚合 endpoint。
+// DANGER_MONTHS 从后端来（监管强制披露窗口公开知识非硬编码臆造），
+// 可选 codes 参数聚合 per-code 披露/解禁。缺数据 HonestEmptyState。
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { CalendarDays, AlertTriangle, ArrowLeft, Search } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Link } from "react-router-dom";
-import { CalendarDays, AlertTriangle, ArrowLeft } from "lucide-react";
-
-// A 股财报披露窗口：1/4/8 月为强制披露雷区（业绩预告/快报 + 定期报告集中披露期）。
-// 1 月：三季报 + 年度业绩预告/快报 deadline（1.31）
-// 4 月：年报 deadline（4.30）+ 一季报
-// 8 月：中报 deadline（8.31）
-const DANGER_MONTHS = [
-  { month: 1, label: "1 月", reason: "三季报 + 年度业绩预告/快报（1.31 deadline）" },
-  { month: 4, label: "4 月", reason: "年报（4.30 deadline）+ 一季报" },
-  { month: 8, label: "8 月", reason: "中报（8.31 deadline）" },
-];
+import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
+import { api } from "@/lib/api";
+import type { EarningsCalendarResponse } from "@/lib/api";
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-function isDangerMonth(m: number): boolean {
-  return DANGER_MONTHS.some((d) => d.month === m);
-}
-
 export function EarningsCalendarPage() {
+  const [codesInput, setCodesInput] = useState("");
+  const [codesQuery, setCodesQuery] = useState("");
+
+  const { data, isLoading, error, refetch } = useQuery<EarningsCalendarResponse>({
+    queryKey: ["earnings-calendar", codesQuery] as const,
+    queryFn: () => api.earningsCalendar(codesQuery || undefined),
+    refetchInterval: 30 * 60 * 1000, // 30min
+  });
+
+  const dangerMonths = data?.danger_months ?? [];
+  const perCode = data?.per_code;
+  const status = data?.data_status;
+
+  const submitCodes = () => {
+    const trimmed = codesInput.trim().replace(/[，\s]+/g, ",");
+    setCodesQuery(trimmed);
+    void refetch();
+  };
+
   return (
     <div>
       <PageHeader
         title="财报季日历"
-        subtitle="1/4/8 月雷区标红 · 披露日历 + 未披露预警 · 排雷规则待 M5 实现"
+        subtitle="1/4/8 月雷区标红 · 披露日历 + 未披露预警 · 聚合 /api/earnings-calendar"
       />
 
-      {/* honest-empty：后端无 earnings-calendar 聚合 endpoint */}
-      <GlassCard tier="sub" className="mb-4 border-amber-500/30">
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-          <div className="text-sm text-muted-foreground">
-            <p className="font-medium text-amber-600">待接线 earnings-calendar endpoint</p>
-            <p className="mt-1">
-              后端无全市场财报季日历聚合 API（仅有 per-code <code className="font-mono text-xs">/api/financials</code>、
-              <code className="font-mono text-xs">/api/disclosure</code>、
-              <code className="font-mono text-xs">/api/lockup</code> 等散端点）。
-              日历数据待后端建 <code className="font-mono text-xs">/api/earnings-calendar</code> 聚合后填充。
-            </p>
-          </div>
+      {/* codes 输入 */}
+      <GlassCard tier="sub" className="mb-4 p-4">
+        <h2 className="mb-2 text-sm font-semibold">个股聚合查询（可选）</h2>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={codesInput}
+            onChange={(e) => setCodesInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitCodes()}
+            placeholder="逗号分隔 6 位代码，如 600519,000001"
+            className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
+          />
+          <button
+            onClick={submitCodes}
+            className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1 text-sm text-primary-foreground hover:opacity-90"
+          >
+            <Search className="h-3 w-3" /> 查询
+          </button>
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          留空只看监管雷区日历；填代码聚合 per-code 公告 + 解禁。
+        </p>
       </GlassCard>
+
+      {isLoading && (
+        <GlassCard className="mb-4 p-4 text-sm text-muted-foreground">加载中…</GlassCard>
+      )}
+      {error && !isLoading && (
+        <GlassCard className="mb-4 border-red-500/30 p-4 text-sm text-red-500">
+          加载失败：{error instanceof Error ? error.message : "未知错误"}
+        </GlassCard>
+      )}
 
       {/* 雷区月份标注 */}
-      <GlassCard tier="primary" className="mb-4">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          财报季雷区（强制披露窗口）
-        </h2>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-12">
-          {ALL_MONTHS.map((m) => {
-            const danger = isDangerMonth(m);
-            const meta = DANGER_MONTHS.find((d) => d.month === m);
-            return (
+      {dangerMonths.length > 0 && (
+        <GlassCard tier="primary" className="mb-4">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            财报季雷区（强制披露窗口）
+          </h2>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-12">
+            {ALL_MONTHS.map((m) => {
+              const danger = dangerMonths.find((d) => d.month === m);
+              return (
+                <div
+                  key={m}
+                  title={danger ? `${danger.label}：${danger.reason}` : `${m} 月`}
+                  className={`flex flex-col items-center rounded-lg border p-2 text-center ${
+                    danger ? "border-red-500/40 bg-red-500/10" : "border-border/40 bg-muted/10"
+                  }`}
+                >
+                  <span
+                    className={`text-xs font-medium ${danger ? "text-red-500" : "text-muted-foreground"}`}
+                  >
+                    {m}月
+                  </span>
+                  {danger && <span className="mt-0.5 text-[9px] text-red-500/70">雷区</span>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 space-y-1">
+            {dangerMonths.map((d) => (
               <div
-                key={m}
-                title={meta ? `${meta.label}：${meta.reason}` : `${m} 月`}
-                className={`flex flex-col items-center rounded-lg border p-2 text-center ${
-                  danger
-                    ? "border-red-500/40 bg-red-500/10"
-                    : "border-border/40 bg-muted/10"
-                }`}
+                key={d.month}
+                className="flex items-center gap-2 text-xs text-muted-foreground"
               >
-                <span className={`text-xs font-medium ${danger ? "text-red-500" : "text-muted-foreground"}`}>
-                  {m}月
-                </span>
-                {danger && (
-                  <span className="mt-0.5 text-[9px] text-red-500/70">雷区</span>
-                )}
+                <span className="h-2 w-2 shrink-0 rounded-full bg-red-500/60" />
+                <span className="font-medium text-red-500">{d.label}</span>
+                <span>{d.reason}</span>
+                <span className="text-[10px] text-red-500/70">deadline {d.deadline}</span>
               </div>
-            );
-          })}
-        </div>
-        <div className="mt-3 space-y-1">
-          {DANGER_MONTHS.map((d) => (
-            <div key={d.month} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-red-500/60" />
-              <span className="font-medium text-red-500">{d.label}</span>
-              <span>{d.reason}</span>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
+            ))}
+          </div>
+        </GlassCard>
+      )}
 
-      {/* 披露日历 + 未披露预警（honest-empty） */}
-      <GlassCard className="mb-4 p-4">
-        <h2 className="mb-2 text-sm font-semibold">披露日历 + 未披露预警</h2>
-        <p className="text-sm text-muted-foreground">
-          持仓股 / 自选股 的财报披露日期 + 未披露预警（临近 deadline 仍未披露）待
-          <code className="mx-1 font-mono text-xs">/api/earnings-calendar</code>
-          endpoint 接线后填充。当前可经
-          <Link to="/stock-data" className="ml-1 text-primary hover:underline">数据层</Link>
-          按个股查 <code className="font-mono text-xs">/api/financials</code> + <code className="font-mono text-xs">/api/disclosure</code>。
-        </p>
-      </GlassCard>
+      {/* per-code 聚合 */}
+      {perCode && perCode.length > 0 && (
+        <GlassCard className="mb-4 p-4">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            个股披露 + 解禁聚合
+            {status === "partial" && (
+              <span className="text-[10px] text-amber-600">部分源缺数据</span>
+            )}
+          </h2>
+          <ul className="space-y-2">
+            {perCode.map((p) => (
+              <li key={p.code} className="border border-border rounded-lg p-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{p.code}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      p.data_status === "ok"
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : p.data_status === "partial"
+                        ? "bg-amber-500/10 text-amber-600"
+                        : "bg-red-500/10 text-red-600"
+                    }`}
+                  >
+                    {p.data_status}
+                  </span>
+                </div>
+                {p.announcements.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {p.announcements.slice(0, 5).map((a, i) => (
+                      <li key={i} className="text-xs text-muted-foreground">
+                        {a.date} · {a.title} {a.type && `(${a.type})`}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {p.lockup_expiries.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {p.lockup_expiries.map((l, i) => (
+                      <li key={i} className="text-xs text-amber-600">
+                        解禁 {l.date} · {l.type} · {l.shares} 股
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {p.announcements.length === 0 && p.lockup_expiries.length === 0 && (
+                  <span className="text-xs text-muted-foreground">无近期公告/解禁</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </GlassCard>
+      )}
 
-      {/* M5 排雷规则标注 */}
-      <GlassCard tier="sub" className="mb-4 p-4">
-        <h2 className="mb-2 text-sm font-semibold">排雷规则</h2>
-        <p className="text-xs text-muted-foreground">
-          排雷规则待 <strong>M5 ReportSeasonCircuitBreaker</strong> 实现：
-          雷区月份（1/4/8）未披露财务报告的标的拉黑 + 财务异常防一字跌停 +
-          预披露窗口降仓。当前为占位，不阻塞交易但不提示雷区风险。
-        </p>
-      </GlassCard>
+      {perCode && perCode.length === 0 && codesQuery && !isLoading && (
+        <HonestEmptyState
+          message={`codes=${codesQuery} 无聚合数据`}
+          hint="源可能返空或全部失败，检查代码格式或重试"
+        />
+      )}
+
+      {data?.note && (
+        <p className="mb-4 text-xs text-muted-foreground">{data.note}</p>
+      )}
 
       <Link
         to="/workspace?phase=premarket"
