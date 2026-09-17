@@ -78,6 +78,7 @@ class TaskExecutor:
             "first_board_quote_probe": self._execute_first_board_quote_probe,
             "zt_history_snapshot": self._execute_zt_history_snapshot,
             "regime_cache_fetch": self._execute_regime_cache_fetch,  # S211 通电收尾——刷 regime cache 防 consecutive_relay regime=None
+            "macro_fetch": self._execute_macro_fetch,  # S216 FRED 8 因子每日刷新 → macro_snapshot.json
             "derived_precompute": self._execute_derived_precompute,
             "monthly_vacuum": self._execute_monthly_vacuum,
             "kline_refresh": self._execute_kline_refresh,
@@ -391,6 +392,10 @@ class TaskExecutor:
     def _execute_regime_cache_fetch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import regime_cache_fetch
         return regime_cache_fetch(payload)
+
+    def _execute_macro_fetch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.macro import macro_fetch
+        return macro_fetch(payload)
 
     def _execute_derived_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import derived_precompute

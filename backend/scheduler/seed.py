@@ -503,6 +503,21 @@ def _ensure_seed_tasks() -> None:
             depends_on="kline_refresh",  # S190 R5：晚 kline_refresh 后跑
         ))
         logger.info("[scheduler] seed 默认任务 regime_cache_fetch 已创建（cron 20 17 * * 0-4，depends_on=kline_refresh）")
+
+    # S216 macro_fetch——06:35 盘前（FRED T+1 数据更新后 + A 股盘前 09:30 前）。
+    # 调 macro.py fetch_fred_series 取 8 因子最新值写 .vibe-research/macro_snapshot.json。
+    # 前端 MacroPanel（/api/macro/snapshot）+ storm_predictor 读 cache。FRED 走 key 不裸调（防封底线）。
+    if "macro_fetch" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="macro_fetch",
+            description="S216 FRED 8 因子每日刷新→macro_snapshot.json（VIX/美元/美债/油/铜，前端 MacroPanel+storm 读）",
+            task_type="macro_fetch",
+            cron_expr="35 6 * * 1-5",  # 06:35 周一-周五盘前（FRED T+1 数据更新后）
+            payload={},
+            enabled=True,
+            # 独立不依赖 kline_refresh（FRED 走自己 API 非本地 cache）
+        ))
+        logger.info("[scheduler] seed 默认任务 macro_fetch 已创建（cron 35 6 * * 1-5 盘前）")
     for t in _manager.list_tasks():
         if t.name == "zt_history_snapshot" and t.cron_expr == "0 16 * * 0-4":
             old_cron = t.cron_expr
