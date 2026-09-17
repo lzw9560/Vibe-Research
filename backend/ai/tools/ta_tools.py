@@ -52,3 +52,22 @@ def query_macd_divergence(code: str, date: str) -> dict:
 )
 def query_rsi(code: str, date: str) -> dict:
     return classify_rsi(str(code), str(date))
+
+
+@register_tool(
+    "query_tech_score",
+    "查个股通用技术指标评分（S215）：MA/MACD/RSI/量能/乖离/支撑 6 维 100 分制 + 信号映射"
+    "（≥75 强买/≥60 买/≥45 持有/≥30 观望/<30 强卖）。独立通用评分，不碰打板 §44 sizing。"
+    "与 query_gap_regime/query_macd_divergence/query_rsi 互补（regime 信号 vs 综合评分）。",
+    params={"code": {"description": "6 位股票代码，如 '600519'"}},
+)
+def query_tech_score(code: str) -> dict:
+    """S215 通用技术评分——6 维 100 分 + 信号映射。"""
+    from engine.bars_provider import KlineCacheBarsProvider
+    from strategies.tech_score import compute_tech_score
+    bars = KlineCacheBarsProvider()(str(code))
+    if not bars or len(bars) < 60:
+        return {"available": False, "code": str(code),
+                "reason": f"bars 不足（{len(bars) if bars else 0} < 60）"}
+    result = compute_tech_score(bars)
+    return {"available": True, "code": str(code), **result}

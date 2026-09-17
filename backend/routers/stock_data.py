@@ -419,4 +419,17 @@ def stock_kg_summary(code: str) -> Dict[str, Any]:
     }
 
 
+@router.get("/api/stock/tech-score")
+async def tech_score_endpoint(code: str = Query(..., description="6 位股票代码")) -> Dict[str, Any]:
+    """S215 通用技术指标评分——MA/MACD/RSI/量能/乖离/支撑 6 维 100 分 + 信号映射。
+
+    独立通用评分（不碰打板 §44 sizing），与 query_gap_regime/query_macd_divergence/query_rsi
+    regime 信号互补（综合评分 vs regime 信号）。
+    """
+    def _build() -> dict:
+        from ai.tools.ta_tools import query_tech_score
+        return query_tech_score(code)
+    return await asyncio.to_thread(_build)
+
+
 __all__ = ["router"]
