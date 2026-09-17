@@ -1743,3 +1743,38 @@ export interface TrackingSnapshotsResponse {
   count: number;
   snapshots: TrackingSnapshot[];
 }
+
+// S216 P1: 知识图谱 /api/kg/*（Cognition）——复用 kg_tools 读 Obsidian Vault
+export interface KgEntity {
+  _path: string;
+  _filename: string;
+  name?: string;
+  code?: string;
+  industry?: string;
+  edge_family?: string;
+  type?: string;
+  [key: string]: string | undefined;  // frontmatter 扁平 k:v，字段不固定
+}
+export interface KgEntitiesResponse {
+  entity_type: string;
+  entities: KgEntity[];
+  count: number;
+  data_status: "ok" | "empty";
+}
+export interface KgRelation {
+  target: string;
+  link: string;
+}
+export interface KgFlowResponse {
+  entity: string;
+  entity_type: string;
+  path: string;
+  relations: KgRelation[];
+  total: number;
+}
+export interface KgInboxResponse {
+  entities: KgEntity[];
+  count: number;
+  data_status: "ok" | "empty";
+  note: string;
+}

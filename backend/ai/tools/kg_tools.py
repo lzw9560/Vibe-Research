@@ -40,6 +40,7 @@ _FOLDER_MAP: dict[str, str] = {
     "dragon_tiger": "dragon-tiger",
     "logic": "logic",
     "action": "actions",
+    "inbox": "inbox",  # M7 LLM 注入待审队列（S216 P1）
 }
 
 
@@ -117,6 +118,7 @@ def _list_entities(
                 "dragon_tiger",
                 "logic",
                 "action",
+                "inbox",
             ],
         },
         "filter_field": {

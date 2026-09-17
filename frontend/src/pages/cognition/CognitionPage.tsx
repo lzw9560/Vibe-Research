@@ -1,9 +1,11 @@
 // 多维度 IA: /graph — 认知线（M7 LLM 图谱智能体）
 // M7 读公告→JSON→inbox 待审→reference→反哺策略→新信号，图谱闭环
-// 数据源: useScheduledTasks(daily_kg_sync/daily_kg_audit) + honest-empty 21 实体 browse
-// 图谱本体在 Obsidian Vault（私有），前端看注入/同步状态 + 实体列表占位
+// S216 P1 接线：/api/kg/inbox + /api/kg/entities（tab 切换类型）+ /api/kg/flow（输入 code 查关系）
+// 复用 kg_tools 读 Obsidian Vault，只返图谱客观数据（实体 frontmatter/关系链接）
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Brain, FileSearch, Inbox, BookMarked, RefreshCw, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Brain, FileSearch, Inbox, BookMarked, RefreshCw, ArrowRight, Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { NextStepBar } from "@/components/ui/NextStepBar";
@@ -13,30 +15,18 @@ import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 import { useScheduledTasks } from "@/lib/query";
 import { LINES } from "@/components/lines/lines";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
-// 21 实体类（投研知识图谱，Obsidian Vault）
+// 实体类 tab（kg_tools _FOLDER_MAP 支持的类型）
 const ENTITY_TYPES = [
-  { key: "strategies", label: "战法", count: null as number | null },
-  { key: "data-sources", label: "数据源", count: null },
-  { key: "signals", label: "信号", count: null },
-  { key: "factors", label: "因子", count: null },
-  { key: "indicators", label: "指标", count: null },
-  { key: "regimes", label: "市场状态", count: null },
-  { key: "risks", label: "风险", count: null },
-  { key: "edges", label: "关系", count: null },
-  { key: "logic-rules", label: "逻辑规则", count: null },
-  { key: "actions", label: "动作", count: null },
-  { key: "reviews", label: "审查报告", count: null },
-  { key: "specs", label: "规范", count: null },
-  { key: "portfolios", label: "组合", count: null },
-  { key: "positions", label: "持仓", count: null },
-  { key: "sectors", label: "板块", count: null },
-  { key: "concepts", label: "概念", count: null },
-  { key: "events", label: "事件", count: null },
-  { key: "announcements", label: "公告", count: null },
-  { key: "instruments", label: "标的", count: null },
-  { key: "trades", label: "交易", count: null },
-  { key: "journals", label: "日志", count: null },
+  { key: "stock", label: "股票" },
+  { key: "strategy", label: "战法" },
+  { key: "concept", label: "概念" },
+  { key: "industry", label: "行业" },
+  { key: "spec", label: "规范" },
+  { key: "data_source", label: "数据源" },
+  { key: "event", label: "事件" },
+  { key: "analyst", label: "分析师" },
 ] as const;
 
 // kg 同步任务状态
@@ -51,14 +41,30 @@ function useKgSyncStatus() {
 export function CognitionPage() {
   const { syncTask, auditTask } = useKgSyncStatus();
   const cognitionLine = LINES[4];
+  const [selectedType, setSelectedType] = useState<string>("stock");
+  const [flowCode, setFlowCode] = useState("600519");
 
-  // 注入状态: sync task 上次成功 = ok, 失败 = alert, 无 = idle
   const syncStatus = syncTask?.last_run_status === "success" ? "ok"
     : syncTask?.last_run_status === "failed" ? "alert"
     : "idle";
   const auditStatus = auditTask?.last_run_status === "success" ? "ok"
     : auditTask?.last_run_status === "failed" ? "alert"
     : "idle";
+
+  // S216 P1: 三 endpoint 接线
+  const inboxQ = useQuery({
+    queryKey: ["kg", "inbox"] as const,
+    queryFn: () => api.kgInbox(),
+  });
+  const entitiesQ = useQuery({
+    queryKey: ["kg", "entities", selectedType] as const,
+    queryFn: () => api.kgEntities(selectedType),
+  });
+  const flowQ = useQuery({
+    queryKey: ["kg", "flow", flowCode] as const,
+    queryFn: () => api.kgFlow(flowCode),
+    enabled: !!flowCode,
+  });
 
   return (
     <div>
@@ -86,7 +92,6 @@ export function CognitionPage() {
           <h2 className="text-sm font-semibold">M7 注入状态</h2>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {/* 图谱同步 */}
           <LineStatusLight
             lineKey="kg-sync"
             label="图谱日同步"
@@ -94,7 +99,6 @@ export function CognitionPage() {
             detail={syncTask?.last_run_at ? `上次: ${new Date(syncTask.last_run_at).toLocaleString("zh-CN")}` : "待接线"}
             link="/pipeline"
           />
-          {/* 图谱审计 */}
           <LineStatusLight
             lineKey="kg-audit"
             label="图谱日审计"
@@ -111,49 +115,153 @@ export function CognitionPage() {
         </div>
       </GlassCard>
 
-      {/* inbox 待审 + reference 流转 */}
+      {/* inbox 待审 + flow 关系流 */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <GlassCard>
           <div className="mb-2 flex items-center gap-2">
             <Inbox className="h-4 w-4 text-amber-500" />
             <h3 className="text-sm font-semibold">inbox 待审</h3>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {inboxQ.data?.count ?? 0} 条
+            </span>
           </div>
-          <HonestEmptyState
-            message="M7 注入的公告 JSON 待审队列"
-            hint="需后端 /api/kg/inbox endpoint，当前无 direct API。图谱注入后 inbox 待审状态由 Obsidian Vault reviews/ 目录管理"
-          />
+          {inboxQ.isLoading && (
+            <span className="text-xs text-muted-foreground">加载中…</span>
+          )}
+          {inboxQ.error && !inboxQ.isLoading && (
+            <span className="text-xs text-red-500">inbox 加载失败</span>
+          )}
+          {!inboxQ.isLoading && !inboxQ.error &&
+            inboxQ.data && inboxQ.data.count > 0 ? (
+            <ul className="space-y-1">
+              {inboxQ.data.entities.slice(0, 10).map((e) => (
+                <li key={e._filename} className="text-xs">
+                  <span className="font-medium">{e._filename}</span>
+                  {e.name && <span className="text-muted-foreground"> {e.name}</span>}
+                </li>
+              ))}
+              {inboxQ.data.count > 10 && (
+                <li className="text-[11px] text-muted-foreground">
+                  …共 {inboxQ.data.count} 条，去 Obsidian Vault 查看
+                </li>
+              )}
+            </ul>
+          ) : (
+            !inboxQ.isLoading && !inboxQ.error && (
+              <HonestEmptyState
+                message="inbox 无待审实体"
+                hint={inboxQ.data?.note ?? "M7 注入后 inbox 待审状态由图谱管理"}
+              />
+            )
+          )}
         </GlassCard>
         <GlassCard>
           <div className="mb-2 flex items-center gap-2">
             <BookMarked className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">reference 流转</h3>
+            <h3 className="text-sm font-semibold">实体关系流</h3>
           </div>
-          <HonestEmptyState
-            message="inbox→active→reference 流转状态"
-            hint="四构件（实体/关系/逻辑规则/动作）中的动作构件管理流转，当前由 Obsidian Vault 管理"
-          />
+          <div className="mb-2 flex items-center gap-1">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              value={flowCode}
+              onChange={(e) => setFlowCode(e.target.value)}
+              placeholder="实体代码，如 600519"
+              className="w-full rounded border border-border bg-transparent px-2 py-1 text-xs"
+            />
+          </div>
+          {flowQ.isLoading && (
+            <span className="text-xs text-muted-foreground">加载中…</span>
+          )}
+          {flowQ.error && !flowQ.isLoading && (
+            <span className="text-xs text-red-500">关系流加载失败</span>
+          )}
+          {!flowQ.isLoading && !flowQ.error && flowQ.data && flowQ.data.total > 0 ? (
+            <div>
+              <p className="text-xs text-muted-foreground">
+                {flowQ.data.entity} · {flowQ.data.total} 关联
+              </p>
+              <ul className="mt-1 space-y-1">
+                {flowQ.data.relations.slice(0, 8).map((r) => (
+                  <li key={r.target} className="text-xs">
+                    <span className="text-primary">{r.target}</span>
+                  </li>
+                ))}
+                {flowQ.data.total > 8 && (
+                  <li className="text-[11px] text-muted-foreground">
+                    …共 {flowQ.data.total} 关联
+                  </li>
+                )}
+              </ul>
+            </div>
+          ) : (
+            !flowQ.isLoading && !flowQ.error && (
+              <HonestEmptyState
+                message={flowQ.data?.total === 0 ? `${flowCode} 无关联实体` : "输入实体代码查关系流"}
+                hint={flowQ.data?.path ?? "[[]] 链接列表，图谱客观关系"}
+              />
+            )
+          )}
         </GlassCard>
       </div>
 
-      {/* 21 实体 browse */}
+      {/* 实体类 browse（tab 切换 type） */}
       <GlassCard className="mb-4">
-        <h3 className="mb-3 text-sm font-semibold">21 实体类（图谱 browse）</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {ENTITY_TYPES.map(ent => (
-            <div
-              key={ent.key}
-              className="flex items-center gap-2 rounded-lg border border-border/30 bg-muted/10 px-2.5 py-2"
+        <h3 className="mb-3 text-sm font-semibold">实体类（图谱 browse）</h3>
+        <div className="mb-3 flex flex-wrap gap-1">
+          {ENTITY_TYPES.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setSelectedType(t.key)}
+              className={cn(
+                "rounded border px-2 py-0.5 text-xs",
+                selectedType === t.key
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground",
+              )}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-              <span className="text-xs font-medium">{ent.label}</span>
-              <span className="ml-auto text-[10px] text-muted-foreground">待接线</span>
-            </div>
+              {t.label}
+            </button>
           ))}
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          实体类对应 Obsidian Vault investing/ 子目录。前端 browse 需后端 /api/kg/entities endpoint（待接线），
-          当前看图谱本体去 Obsidian Vault。
-        </p>
+        {entitiesQ.isLoading && (
+          <span className="text-xs text-muted-foreground">加载中…</span>
+        )}
+        {entitiesQ.error && !entitiesQ.isLoading && (
+          <span className="text-xs text-red-500">实体列表加载失败</span>
+        )}
+        {!entitiesQ.isLoading && !entitiesQ.error &&
+          entitiesQ.data && entitiesQ.data.count > 0 ? (
+          <div>
+            <p className="mb-2 text-xs text-muted-foreground">
+              {selectedType} · {entitiesQ.data.count} 实体
+            </p>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+              {entitiesQ.data.entities.slice(0, 50).map((e) => (
+                <div
+                  key={e._filename}
+                  className="rounded border border-border/30 bg-muted/10 px-2 py-1.5"
+                >
+                  <div className="text-xs font-medium">{e.name || e._filename}</div>
+                  {e.code && (
+                    <div className="text-[10px] text-muted-foreground">{e.code}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {entitiesQ.data.count > 50 && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                …共 {entitiesQ.data.count} 实体，去 Obsidian Vault 查看
+              </p>
+            )}
+          </div>
+        ) : (
+          !entitiesQ.isLoading && !entitiesQ.error && (
+            <HonestEmptyState
+              message={`${selectedType} 无实体`}
+              hint="该类型图谱无实体或文件夹为空"
+            />
+          )
+        )}
       </GlassCard>
 
       {/* 图谱闭环状态 */}
