@@ -57,7 +57,7 @@ import myreports as mr
 import reflection as reflect_layer
 
 # Router imports
-from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics, kline_history
+from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics
 from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import intraday_ofi as intraday_ofi_router  # S178：OFI 盘中数据只读看板
@@ -65,7 +65,6 @@ from routers import coach as coach_router  # S064：盯盘教练
 from routers import debate as debate_router  # main：多空辩论 + 反思审计
 from routers import prediction_ledger_router as prediction_ledger_router_mod
 from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
-from routers import notes as notes_router  # 投研记录笔记（后端 SQLite 落盘，全局可见）
 from routers import feishu_bot as feishu_bot_router  # 飞书 Bot 双向对话（事件回调 + KG 工具）
 from routers import fusion as fusion_router  # S194 FE-6：融合研判查询（/api/fusion/{code}）
 from routers import wechat_bot as wechat_bot_router  # 微信 Bot 双向对话（企业微信回调 + KG 工具）
@@ -284,13 +283,11 @@ app.include_router(workflow.router)
 app.include_router(scheduled_tasks.router)
 app.include_router(prediction.router)
 app.include_router(prediction_ledger_router_mod.router)  # S061：预测账本
-app.include_router(kline_history.router)
 app.include_router(advisory.router)
 app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
 app.include_router(intraday_ofi_router.router)  # S178：OFI 盘中数据只读看板
 app.include_router(coach_router.router)  # S064：盯盘教练
 app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
-app.include_router(notes_router.router)  # 投研记录笔记（CRUD + SQLite 落盘）
 app.include_router(verifier_router.router)  # S165：§44 验证卡 + 实验记录
 app.include_router(journal_router.router)  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger）
 app.include_router(tracking_router.router)  # S204 T9：多日跟踪查询 API

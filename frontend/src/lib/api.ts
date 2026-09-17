@@ -4,7 +4,7 @@
 import { ApiError, authHeaders, request, get } from "./api/client";
 import type { OfiResponse } from "@/lib/intraday-ofi-contract";
 import type {
-  IndexQuote, MarketOverview, ShortTermEmotion, TurnoverTop, GlobalIndex, GlobalStock, HkCashflow,
+  IndexQuote, MarketOverview, ShortTermEmotion, TurnoverTop, GlobalIndex, GlobalStock,
   RadarData, PortfolioData, Valuation, ValPercentile, Financials, Announcement, Quote,
   Report, NewsItem, MarginRow, BlockTradeRow, HolderRow, DividendRow, FundFlowRow,
   DragonTiger, Lockup, Blocks, HotConcept, QaRow, IndustryData, MyReport, ScreenerResult,

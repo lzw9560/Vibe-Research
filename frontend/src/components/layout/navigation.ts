@@ -50,6 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/pipeline", label: "流程管线" },
       { to: "/architecture", label: "项目架构" },
       { to: "/health", label: "系统健康" },
+      { to: "/metrics", label: "采集指标" },
     ],
   },
 ];
@@ -71,6 +72,8 @@ export const LEGACY_NAV_GROUPS: NavGroup[] = [
     icon: LayoutDashboard,
     tabs: [
       { to: "/screener", label: "选股器" },
+      { to: "/candidates", label: "候选池" },
+      { to: "/recommendation", label: "今日建议" },
       { to: "/value-funnel", label: "选股漏斗" },
       { to: "/watchlist", label: "自选股" },
       { to: "/limitup", label: "打板策略" },
@@ -83,9 +86,12 @@ export const LEGACY_NAV_GROUPS: NavGroup[] = [
     icon: LayoutDashboard,
     tabs: [
       { to: "/ledger", label: "持仓日志" },
+      { to: "/journal", label: "交易日志" },
       { to: "/multiline", label: "多策略总览" },
       { to: "/strategy", label: "策略验证" },
       { to: "/fusion", label: "融合研判" },
+      { to: "/risk", label: "风险看板" },
+      { to: "/advisory", label: "AI 顾问" },
     ],
   },
   {
