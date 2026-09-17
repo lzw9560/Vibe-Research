@@ -92,6 +92,7 @@ export const LEGACY_NAV_GROUPS: NavGroup[] = [
       { to: "/fusion", label: "融合研判" },
       { to: "/risk", label: "风险看板" },
       { to: "/advisory", label: "AI 顾问" },
+      { to: "/portfolio", label: "投资管理" },
     ],
   },
   {
@@ -100,6 +101,7 @@ export const LEGACY_NAV_GROUPS: NavGroup[] = [
     tabs: [
       { to: "/topology", label: "拓扑图" },
       { to: "/industry", label: "行业研究" },
+      { to: "/tracking", label: "多日跟踪" },
     ],
   },
 ];

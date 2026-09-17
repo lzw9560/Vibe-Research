@@ -89,6 +89,7 @@ export const router = createBrowserRouter([
       // 复盘策略域
       { path: "/strategy", element: lazyEl(() => import("@/pages/strategy/StrategyPage")) },
       { path: "/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },  // FE-5: 拓扑图独立页（组件在 workflow/，旧 /workflow/topology redirect 到 /review，补独立 /topology）
+      { path: "/tracking", element: lazyEl(() => import("@/pages/tracking/TrackingPage"), "TrackingPage") },  // S204 T9: 多日跟踪只读看板（活跃 track 池 + 指标快照演进）
 
       // 系统域
       { path: "/settings", element: lazyEl(() => import("@/pages/Settings"), "Settings") },

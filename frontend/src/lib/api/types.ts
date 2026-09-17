@@ -1718,3 +1718,28 @@ export interface FirstBoardCandidatesResponse {
   note: string;                                   // §44 诚实标注
   from_cache?: boolean;                           // true = 历史快照（zt_pool_count/excluded 可能空）
 }
+
+// S204 T9: 多日跟踪查询（candidate_tracking_pool + indicator_snapshots 只读看板）。
+export interface TrackingRecord {
+  code: string;
+  first_admit_date: string;
+  admit_signal: string;
+  admit_indicators: Record<string, unknown>;
+  current_status: string;  // tracking 级 label: admit/tracking/decayed/promoted
+  tracking_age_days: number;
+}
+export interface TrackingPoolResponse {
+  status: string;
+  count: number;
+  tracks: TrackingRecord[];
+}
+export interface TrackingSnapshot {
+  trade_date: string;
+  indicators: Record<string, unknown>;
+  source: string;  // pre_market/escalation/early_admit
+}
+export interface TrackingSnapshotsResponse {
+  code: string;
+  count: number;
+  snapshots: TrackingSnapshot[];
+}

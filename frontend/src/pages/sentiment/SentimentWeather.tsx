@@ -303,8 +303,41 @@ export default function SentimentWeather() {
         return (
           <div className="space-y-4">
             <GlassCard className="p-5">
-              <h3 className="text-sm font-medium text-foreground mb-3">策略建议</h3>
-              <p className="text-sm text-foreground/60">策略建议内容 - 待实现</p>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-foreground">策略推荐</h3>
+                <Badge variant={strategyQ.data?.weather_state === "暴风雨" ? "danger" : "default"}>
+                  {strategyQ.data?.weather_state ?? "—"}
+                </Badge>
+              </div>
+              {strategyQ.isLoading ? (
+                <p className="text-sm text-muted-foreground">加载中…</p>
+              ) : strategyQ.error ? (
+                <p className="text-sm text-muted-foreground">
+                  加载失败：{strategyQ.error instanceof Error ? strategyQ.error.message : "未知"}
+                </p>
+              ) : (strategyQ.data?.strategies ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">无匹配策略。</p>
+              ) : (
+                <div className="space-y-2">
+                  {(strategyQ.data?.strategies ?? []).map((s, i) => (
+                    <div key={i} className="border border-border rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">{s.style}</span>
+                        <Badge variant={s.enabled ? "success" : "default"}>
+                          {s.enabled ? `推荐 ${s.match_score}` : "不推荐"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{s.description}</p>
+                      {s.order_config ? (
+                        <p className="text-xs text-foreground/70 mt-1">下单：{s.order_config}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {strategyQ.data?.risk_note ? (
+                <p className="text-xs text-muted-foreground mt-3">{strategyQ.data.risk_note}</p>
+              ) : null}
             </GlassCard>
           </div>
         );
@@ -313,8 +346,36 @@ export default function SentimentWeather() {
         return (
           <div className="space-y-4">
             <GlassCard className="p-5">
-              <h3 className="text-sm font-medium text-foreground mb-3">熔断规则</h3>
-              <p className="text-sm text-foreground/60">熔断规则详细配置 - 待实现</p>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-foreground">熔断规则（软 gate，只提醒不锁死）</h3>
+                <Badge variant={fuseQ.data?.data.fuse_state === "triggered" ? "danger" : "success"}>
+                  {fuseQ.data?.data.fuse_state ?? "—"}
+                </Badge>
+              </div>
+              {fuseQ.isLoading ? (
+                <p className="text-sm text-muted-foreground">加载中…</p>
+              ) : fuseQ.error ? (
+                <p className="text-sm text-muted-foreground">
+                  加载失败：{fuseQ.error instanceof Error ? fuseQ.error.message : "未知"}
+                </p>
+              ) : (fuseQ.data?.data.rules ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">无规则数据。</p>
+              ) : (
+                <div className="space-y-2">
+                  {(fuseQ.data?.data.rules ?? []).map((r) => (
+                    <div key={r.id} className="border border-border rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">{r.name}</span>
+                        <Badge variant={r.current_state === "triggered" ? "danger" : "success"}>
+                          {r.current_state}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{r.trigger_condition}</p>
+                      <p className="text-xs text-foreground/60 mt-1">{r.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </GlassCard>
           </div>
         );

@@ -321,4 +321,9 @@ export const api = {
   // S178: OFI 盘中数据只读看板（read-only，非信号）。
   intradayOfi: (date: string, code?: string, limit = 2000) =>
     get<OfiResponse>(`/intraday/ofi?date=${date}${code ? `&code=${code}` : ""}&limit=${limit}`),
+  // S204 T9: 多日跟踪查询（candidate_tracking_pool + indicator_snapshots 只读看板）。
+  trackingPool: (status = "tracking") =>
+    get<TrackingPoolResponse>(`/tracking/pool?status=${encodeURIComponent(status)}`),
+  trackingSnapshots: (code: string, upTo?: string) =>
+    get<TrackingSnapshotsResponse>(`/tracking/${code}/snapshots${upTo ? `?up_to=${upTo}` : ""}`),
 };
