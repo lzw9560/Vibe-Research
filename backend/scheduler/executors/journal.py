@@ -60,3 +60,27 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
         "settled_pending": settled, "arms": results, "floor_mtm": mtm,
         "equity": equity, "drawdown_status": drawdown_status,
     }
+
+
+def loss_breaker_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """S203 T6 — 吃大面 enforce gate 盘后跑。
+
+    读 journal 持仓浮亏 → 算 per-code block_add（单笔>5%）/ block_new（合计>8%）+冷却。
+    ⛔ 不碰 final_size sizing——只算+返 enforce 状态。生产 sizing 是否复合此
+    intraday_mult 由用户 review 决定（T6 只接 gate，memory 标涉生产仓位）。
+    """
+    from risk_rules import loss_breaker_enforce as _enforce
+    try:
+        result = _enforce()
+        return {
+            "status": "ok",
+            "is_blocked_new": result["is_blocked_new"],
+            "n_codes": result["n_codes"],
+            "n_open": result["n_open"],
+            "total_account_loss_pct": result["total_account_loss_pct"],
+            "cooldown_until": result["cooldown_until"],
+            "date": result["date"],
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[loss_breaker_enforce] failed: %s", repr(e)[:200])
+        return {"status": "error", "error": repr(e)[:200]}

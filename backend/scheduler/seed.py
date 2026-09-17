@@ -117,6 +117,19 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 st_play_radar 已创建（cron 30 17 * * 0-4）")
 
+    # S203 T6：吃大面 enforce gate 盘后跑（17:35 晚 trade_journal_daily 17:30 让 MTM 先更新）。
+    # 单笔>5% 禁加仓 / 合计>8% 禁开新仓+冷却。⛔ 不碰 final_size sizing——只算+返 enforce 状态。
+    if "loss_breaker_enforce" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="loss_breaker_enforce",
+            description="S203 T6 吃大面 enforce gate：持仓浮亏 block_add/block_new+冷却（不碰 final_size sizing）",
+            task_type="loss_breaker_enforce",
+            cron_expr="35 17 * * 0-4",
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 loss_breaker_enforce 已创建（cron 35 17 * * 0-4）")
+
     # S167：盘中微结构数据累积（"等 live" 路径）——累积实时无历史源供 §44v2 复测。
     # 周期快照：每 10min（09:00-15:00 触发，is_intraday_time 门控 09:25-11:30/13:01-15:05）。
     # 诚实：accumulation for future §44v2, prior LOW (S152/S156 refuted), no edge claim yet。

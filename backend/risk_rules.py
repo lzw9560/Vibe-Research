@@ -500,7 +500,156 @@ def render(rep: dict) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- 吃大面 enforce
+# S203 T6：从诊断（violations report）升级 enforce（block_add/block_new+cooldown）。
+# ⚠️ 不破坏 report API（新增函数，不改 violations/report）。
+# ⚠️ 不碰 final_size sizing 路径——只算+返 enforce 状态（生产 sizing 是否读此状态
+#    由用户 review 决定，memory 标「涉生产仓位要 review」）。
+#: block_new 触发后冷却 N 交易日（防刚触发就放行振荡）
+COOLDOWN_DAYS: int = 3
+
+
+def _cooldown_path() -> str:
+    """冷却状态文件 ``<VR_DATA_DIR>/risk/loss_breaker_cooldown.json``。"""
+    return os.path.join(_risk_dir(), "loss_breaker_cooldown.json")
+
+
+def _load_cooldown(today: str) -> Optional[str]:
+    """读现有 cooldown_until。
+
+    未到期（>= today）返日期；过期或无文件返 None（清除）。坏文件当无冷却（不臆造）。
+    """
+    path = _cooldown_path()
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            d = json.load(fh)
+        cu = d.get("cooldown_until")
+        if isinstance(cu, str) and cu >= today:
+            return cu
+        return None  # 过期 → 清除
+    except Exception:  # noqa: BLE001 坏了当无冷却
+        return None
+
+
+def _save_cooldown(cooldown_until: str) -> None:
+    """写冷却状态（atomic_write_json，不臆造）。"""
+    os.makedirs(_risk_dir(), exist_ok=True)
+    from datetime import datetime
+    atomic_write_json(_cooldown_path(), {
+        "cooldown_until": cooldown_until,
+        "saved_at": datetime.now().isoformat(),
+    })
+
+
+def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
+    """S203 T6：吃大面 enforce gate（单笔>5% 禁加仓 / 合计>8% 禁开新仓+冷却）。
+
+    读 journal 持仓浮亏（unrealized_pnl）→ 算 per-code 浮亏 % + 全账户合计 % →
+    调 :func:`risk.intraday_loss_breaker.evaluate_loss_breaker` 算 block_add/block_new →
+    返 enforce 状态 + 冷却管理。
+
+    口径：浮亏 % = unrealized_pnl / initial_capital × 100（占账户 %，
+    与 DrawdownBreaker.drawdown_pct 一致口径，不臆造）。
+
+    冷却 enforce：block_new 触发 → 设 cooldown_until=今日+COOLDOWN_DAYS；
+    冷却期内（cooldown_until 未到）→ 强制 is_blocked_new=True（防振荡）。
+
+    Args:
+        journal: 可选 journal（duck-typed，需 query_records(arm, is_dead_arm)）。
+            None 时 lazy import TradeJournal（避免 deflated_sharpe transitive）。
+        initial_capital: 账户初始资金（None 时 lazy import DEFAULT_INITIAL_CAPITAL，
+            import 失败 fallback 100000.0 与 trade_journal 一致）。
+
+    ⛔ 不碰 final_size sizing——只算+返 enforce 状态。生产 sizing 是否复合此
+    intraday_mult 由用户 review 决定（T6 只接 gate）。
+    """
+    from datetime import datetime, timedelta
+    from risk.intraday_loss_breaker import evaluate_loss_breaker, TOTAL_ACCOUNT_BLOCK_PCT
+
+    # lazy import：仅 journal=None 时 import TradeJournal（避 deflated_sharpe transitive）
+    if journal is None:
+        from engine.trade_journal import TradeJournal
+        journal = TradeJournal()
+    # initial_capital fallback（import 失败用 100000.0 与 trade_journal 一致）
+    if initial_capital is None:
+        try:
+            from engine.trade_journal import DEFAULT_INITIAL_CAPITAL
+            initial_capital = DEFAULT_INITIAL_CAPITAL
+        except ImportError:  # noqa: BLE001 deflated_sharpe 等可选依赖缺失
+            initial_capital = 100000.0
+
+    today = datetime.now().date().isoformat()
+
+    records = journal.query_records(arm=None, is_dead_arm=None)
+    # 只算持仓（is_realized=0）且有 unrealized_pnl 的
+    open_records = [
+        r for r in records
+        if not r.is_realized and r.unrealized_pnl is not None
+    ]
+
+    # per-code 浮亏 %（占账户，负数=亏）
+    by_code: dict[str, float] = {}
+    for r in open_records:
+        pct = (float(r.unrealized_pnl) / initial_capital * 100
+               if initial_capital > 0 else 0.0)
+        by_code[r.stock_code] = by_code.get(r.stock_code, 0.0) + pct
+
+    total_unrealized = sum(float(r.unrealized_pnl) for r in open_records)
+    total_account_loss_pct = (
+        total_unrealized / initial_capital * 100
+        if initial_capital > 0 else 0.0
+    )
+
+    # 读现有冷却（未到期返日期，过期返 None）
+    cooldown_until = _load_cooldown(today)
+
+    # per-code enforce
+    states = {
+        code: evaluate_loss_breaker(
+            code, today,
+            realized_loss_pct=loss_pct,
+            total_account_loss_pct=total_account_loss_pct,
+            cooldown_until=cooldown_until,
+        )
+        for code, loss_pct in by_code.items()
+    }
+
+    # 合计 > 8% → block_new；任一 code block_new 也触发
+    is_blocked_new = any(s.is_blocked_new for s in states.values()) or \
+        abs(total_account_loss_pct) > TOTAL_ACCOUNT_BLOCK_PCT
+    # 冷却 enforce：冷却期内 → 强制 block_new（不重置，防振荡）
+    if cooldown_until:
+        is_blocked_new = True
+
+    # block_new 新触发 → 设 cooldown（已有冷却则不覆盖）
+    new_cooldown = cooldown_until
+    if is_blocked_new and not cooldown_until:
+        new_cooldown = (datetime.now().date() + timedelta(days=COOLDOWN_DAYS)).isoformat()
+        _save_cooldown(new_cooldown)
+
+    return {
+        "available": True,
+        "date": today,
+        "per_code": {
+            c: {
+                "is_blocked_add": s.is_blocked_add,
+                "realized_loss_pct": round(s.realized_loss_pct, 2),
+            }
+            for c, s in states.items()
+        },
+        "is_blocked_new": is_blocked_new,
+        "total_account_loss_pct": round(total_account_loss_pct, 2),
+        "cooldown_until": new_cooldown,
+        "cooldown_days": COOLDOWN_DAYS,
+        "n_codes": len(states),
+        "n_open": len(open_records),
+    }
+
+
 __all__ = [
     "DEFAULT_RULES", "load_rules", "save_rules", "equity_curve", "discipline",
     "violations", "hold_days_of", "rolling", "report", "render",
+    "loss_breaker_enforce", "COOLDOWN_DAYS",
 ]

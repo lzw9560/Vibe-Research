@@ -242,4 +242,26 @@ async def seal_snapshots(
         raise HTTPException(502, f"封单时序查询异常：{e}") from e
 
 
+# =============================================================================
+# S203 T6：吃大面 enforce gate（单笔>5% 禁加仓 / 合计>8% 禁开新仓+冷却）
+# =============================================================================
+
+@router.get("/api/risk/loss-breaker")
+async def loss_breaker_status() -> Dict[str, Any]:
+    """吃大面 enforce gate 状态（基于用户持仓浮亏，客观数据）。
+
+    单笔浮亏>5% → 该 code 禁加仓；全账户合计>8% → 禁开新仓+冷却。
+    ⛔ 个人持仓数据，不接 AI prompt（守 risk_rules.py 个人数据隔离）。
+    冷却期内（cooldown_until 未到）→ 强制 block_new（防振荡）。
+    """
+    def _build():
+        from risk_rules import loss_breaker_enforce
+        return loss_breaker_enforce()
+    try:
+        result = await asyncio.to_thread(_build)
+        return {"data": result}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"吃大面 enforce 查询异常：{e}") from e
+
+
 __all__ = ["router"]

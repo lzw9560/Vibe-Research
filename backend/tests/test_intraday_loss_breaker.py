@@ -88,3 +88,71 @@ def test_positive_loss_no_block():
     s = evaluate_loss_breaker("600000", "2026-01-01", realized_loss_pct=2.0, total_account_loss_pct=1.0)
     assert s.is_blocked_add is False  # abs(2)<5
     assert s.is_blocked_new is False
+
+
+# ── S203 T6 接线验收（risk_rules enforce + cooldown）──────────────────────────
+
+
+def test_cooldown_enforce(tmp_path, monkeypatch):
+    """冷却期内 enforce 不重置（cooldown_until 未到 → 仍 block_new）。
+
+    即使当前浮亏已降到阈值以下（该清冷却），冷却未到期仍强制 block_new——
+    防止"刚触发 block 就立即放行"的振荡。
+    """
+    import json
+    from datetime import datetime, timedelta
+    from types import SimpleNamespace
+    monkeypatch.setenv("VR_DATA_DIR", str(tmp_path))
+
+    # 写未到期 cooldown（未来日期）
+    cooldown_dir = tmp_path / "risk"
+    cooldown_dir.mkdir(parents=True)
+    future = (datetime.now().date() + timedelta(days=2)).isoformat()
+    (cooldown_dir / "loss_breaker_cooldown.json").write_text(
+        json.dumps({"cooldown_until": future}))
+
+    from risk_rules import loss_breaker_enforce
+
+    # mock journal：当前无持仓浮亏（该清冷却但冷却未到 → 仍 block_new）
+    # 用 SimpleNamespace 避免 import engine.trade_journal（deflated_sharpe transitive）
+    class MockJournal:
+        def query_records(self, arm=None, is_dead_arm=None):
+            return []
+
+    result = loss_breaker_enforce(journal=MockJournal(), initial_capital=100000.0)
+    assert result["is_blocked_new"] is True  # 冷却未到 → 强制 block_new
+    assert result["cooldown_until"] == future  # cooldown 保持不重置
+
+
+def test_risk_rules_upgrade_enforce(tmp_path, monkeypatch):
+    """risk_rules.loss_breaker_enforce：从诊断升级 enforce，不破坏 report API。
+
+    - 验 loss_breaker_enforce 存在 + 返 enforce 状态（block_add/block_new/cooldown）
+    - 验 per-code 浮亏 → block_add 判定
+    - 验合计浮亏 → block_new + 设 cooldown
+    - 验 report 函数仍可 import（不破坏现有诊断 API）
+    """
+    from types import SimpleNamespace
+    monkeypatch.setenv("VR_DATA_DIR", str(tmp_path))
+
+    from risk_rules import loss_breaker_enforce, report  # noqa: F401 (report 可 import=未破坏)
+
+    # mock journal：600000 亏 -6%（-6000/100000）、600001 亏 -3%、合计 -9%
+    # 用 SimpleNamespace 避免 import engine.trade_journal（deflated_sharpe transitive）
+    class MockJournal:
+        def query_records(self, arm=None, is_dead_arm=None):
+            return [
+                SimpleNamespace(stock_code="600000", is_realized=0,
+                                unrealized_pnl=-6000.0),
+                SimpleNamespace(stock_code="600001", is_realized=0,
+                                unrealized_pnl=-3000.0),
+            ]
+
+    result = loss_breaker_enforce(journal=MockJournal(), initial_capital=100000.0)
+    assert result["available"] is True
+    assert result["per_code"]["600000"]["is_blocked_add"] is True   # 6%>5%
+    assert result["per_code"]["600001"]["is_blocked_add"] is False  # 3%<5%
+    assert result["is_blocked_new"] is True  # 合计 9%>8%
+    assert result["cooldown_until"] is not None  # block_new 触发设 cooldown
+    assert result["n_codes"] == 2
+    assert result["n_open"] == 2
