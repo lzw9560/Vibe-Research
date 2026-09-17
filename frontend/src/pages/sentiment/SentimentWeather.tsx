@@ -16,7 +16,9 @@ import {
   useSentimentWeatherAuction,
   useSentimentWeatherSealRisk,
   useSentimentWeatherPardon,
+  useExitSignals,
 } from "@/lib/query";
+import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 import { WeatherHero } from "@/components/sentiment-weather/WeatherHero";
 import { AuctionMetricsCard } from "@/components/sentiment-weather/AuctionMetricsCard";
 import { SealRiskCard } from "@/components/sentiment-weather/SealRiskCard";
@@ -77,6 +79,9 @@ export default function SentimentWeather() {
   // fuse/timeline/auction/sealRisk/pardon 端点返 { data: {...} } 信封，但页面按解包后的字段访问，
   // 故这 5 个保留 as unknown as 窄→宽 cast（api 类型为信封，页面 Iface 为解包形态，类型不一致）。
   const weather = latestQ.data;
+  // S216 B future: 次日强制离场信号（exit-signals endpoint，软 gate）
+  const _exitDate = new Date().toISOString().slice(0, 10);
+  const exitSignalsQ = useExitSignals(_exitDate);
   const strategy = strategyQ.data;
   const fuseRules = fuseQ.data as unknown as { rules: FuseRule[]; fuse_state: string; weather_state: string; updated_at: string } | undefined;
   const timeline = timelineQ.data as unknown as { timeline: WeatherTimelineItem[]; stats: WeatherStats } | undefined;
@@ -276,6 +281,58 @@ export default function SentimentWeather() {
                 onUpdate={() => { void pardonQ.refetch(); }}
               />
             )}
+
+            {/* S216 B future: 次日强制离场信号（exit-signals，软 gate） */}
+            <GlassCard className="p-4">
+              <h3 className="mb-2 text-sm font-medium text-foreground">
+                次日强制离场信号
+              </h3>
+              {exitSignalsQ.isLoading ? (
+                <span className="text-xs text-muted-foreground">加载中…</span>
+              ) : exitSignalsQ.error ? (
+                <span className="text-xs text-red-500">离场信号加载失败</span>
+              ) : !exitSignalsQ.data || exitSignalsQ.data.signals.length === 0 ? (
+                <HonestEmptyState
+                  message={exitSignalsQ.data?.note ?? "无离场信号"}
+                  hint="持仓股竞价未高开或开盘破均线触发"
+                />
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">
+                    {exitSignalsQ.data.date} · 触发{" "}
+                    {exitSignalsQ.data.summary.triggered}/
+                    {exitSignalsQ.data.summary.total}
+                  </div>
+                  <ul className="space-y-1">
+                    {exitSignalsQ.data.signals.map((s) => (
+                      <li
+                        key={s.code}
+                        className={`flex items-center gap-2 rounded border px-2 py-1 text-xs ${
+                          s.triggered
+                            ? "border-red-500/40 bg-red-500/5"
+                            : "border-border"
+                        }`}
+                      >
+                        <span className="font-medium">
+                          {s.code} {s.name}
+                        </span>
+                        {s.triggered ? (
+                          <span className="text-red-600">触发</span>
+                        ) : (
+                          <span className="text-muted-foreground">未触发</span>
+                        )}
+                        {s.reason && (
+                          <span className="text-muted-foreground">{s.reason}</span>
+                        )}
+                        {s.data_status !== "ok" && (
+                          <span className="text-amber-600">{s.data_status}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </GlassCard>
           </div>
         );
 

@@ -102,3 +102,63 @@ export function useDateTriplet(date?: string) {
     staleTime: Infinity,
   });
 }
+
+// S216 B future: workflow user-facing endpoint 接 cockpit。realtime/signals 返 not_implemented
+// 标 future 不接；win-rate + adjustments 真实数据接 StrategyPage。exit-signals 接 SentimentWeather。
+import { get as _get } from "@/lib/api/client";
+
+interface WorkflowWinRate {
+  overall: number;
+  by_strategy: Record<string, unknown> | null;
+  adjustments: Record<string, unknown> | null;
+}
+
+interface WorkflowAdjustments {
+  adjustments: Record<string, unknown> | null;
+}
+
+/** GET /api/workflow/win-rate——战法胜率统计（窗口 20）。 */
+export function useWorkflowWinRate(options?: Opts<WorkflowWinRate>) {
+  return useQuery({
+    queryKey: ["workflow", "win-rate"] as const,
+    queryFn: () => _get<WorkflowWinRate>("/workflow/win-rate"),
+    staleTime: 60 * 1000,
+    ...options,
+  });
+}
+
+/** GET /api/workflow/adjustments——战法调整建议。 */
+export function useWorkflowAdjustments(options?: Opts<WorkflowAdjustments>) {
+  return useQuery({
+    queryKey: ["workflow", "adjustments"] as const,
+    queryFn: () => _get<WorkflowAdjustments>("/workflow/adjustments"),
+    staleTime: 60 * 1000,
+    ...options,
+  });
+}
+
+interface ExitSignal {
+  code: string;
+  name: string;
+  triggered: boolean;
+  reason: string | null;
+  data_status: "ok" | "missing";
+}
+
+interface ExitSignalsResponse {
+  date: string;
+  signals: ExitSignal[];
+  summary: { total: number; triggered: number; missing: number };
+  note: string;
+}
+
+/** GET /api/sentiment/weather/exit-signals?date=——次日强制离场信号（软 gate，持仓股竞价未高开/破均线）。 */
+export function useExitSignals(date: string | null, options?: Opts<ExitSignalsResponse>) {
+  return useQuery({
+    queryKey: ["sentiment", "exit-signals", date] as const,
+    queryFn: () => _get<ExitSignalsResponse>(`/sentiment/weather/exit-signals?date=${encodeURIComponent(date!)}`),
+    enabled: !!date,
+    staleTime: 30 * 1000,
+    ...options,
+  });
+}

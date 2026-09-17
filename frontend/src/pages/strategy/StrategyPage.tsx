@@ -14,6 +14,8 @@ import { EntryCard } from "@/components/workflow/EntryCard";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/lib/api/client";
 import { useStrategyBacktest } from "@/lib/query/strategy";
+import { useWorkflowWinRate, useWorkflowAdjustments } from "@/lib/query/workflow";
+import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 
 /** 战法库注册表条目（对应后端 get_strategy_registry 返回字段）。 */
 interface StrategyRegistryItem {
@@ -39,6 +41,9 @@ export default function StrategyPage() {
 
   // 战法回测——60 日窗口各战法胜率/均收益/样本（useStrategyBacktest 已 unwrap .data）
   const { data: backtest, isLoading: backtestLoading } = useStrategyBacktest(60);
+  // S216 B future: 战法胜率 + 调整建议（workflow endpoint）
+  const { data: winRate } = useWorkflowWinRate();
+  const { data: adjustments } = useWorkflowAdjustments();
 
   const registryItems = registry ?? [];
   const backtestItems = backtest ?? [];
@@ -117,6 +122,27 @@ export default function StrategyPage() {
         subtitle="S081 阈值 + funnel config（可改）"
         icon={Layers}
       />
+
+      {/* S216 B future: 战法胜率 + 调整建议（接 /api/workflow/win-rate + /adjustments） */}
+      <GlassCard className="p-4">
+        <h3 className="mb-2 font-semibold">战法胜率 + 调整建议</h3>
+        <div className="mb-2 text-xs text-muted-foreground">
+          整体胜率：
+          {winRate?.overall != null ? `${(winRate.overall * 100).toFixed(1)}%` : "—"}
+        </div>
+        {adjustments?.adjustments && Object.keys(adjustments.adjustments).length > 0 ? (
+          <ul className="space-y-1 text-xs">
+            {Object.entries(adjustments.adjustments).slice(0, 5).map(([k, v]) => (
+              <li key={k} className="flex gap-2">
+                <span className="font-medium">{k}</span>
+                <span className="text-muted-foreground">{String(v)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <HonestEmptyState message="暂无调整建议" hint="workflow_state 待积累交易日" />
+        )}
+      </GlassCard>
 
       <p className="text-[10px] text-muted-foreground">
         参考值，非执行指令；市场有风险
