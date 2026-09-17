@@ -302,12 +302,15 @@ def fetch_max_boards(date: str) -> dict:
 def fetch_domestic_liquidity() -> dict:
     """国内流动性 gate——DR007（银行间流动性）+ QVIX（中国 VIX 恐慌）组合。
 
-    数据源约束（⚠️ 待建，不臆造）：
-    - DR007 走 akshare interest_rate（SHIBOR 系列）——akshare 裸调违反防封底线，
-      akshare_src 无 em_get wrapper（grep 确认），故本函数返 None 标 TODO，不真调。
-    - QVIX 走 akshare index_option_300etf_qvix（中国 VIX）——同上裸调违底线，返 None。
-    - 真调须先建 astock.em_get wrapper（DR007/QVIX 走东财 datacenter 限流通道）或
-      用 cache/defer。当前骨架占位，judge 该因素 None → yellow（不参与判定）。
+    数据源约束（⚠️ 待建，不臆造，2026-09-17 web 查证）：
+    - 东财 datacenter **无** DR007/SHIBOR/QVIX 端点（datacenter 是个股数据：龙虎榜/融资融券/分红）
+    - DR007/SHIBOR 源在 chinamoney.com.cn（银行间同业拆借中心，非东财 em_get 通道）
+    - QVIX 源在 optbbs.com（akshare index_option_50etf_qvix 从 optbbs，非东财；官方 iVIX 2018 停发）
+    - FRED **无** 中国 DR007（FRED 有 DFF 美联储利率非中国 DR007）
+    - akshare 裸调违反防封底线 → 不用；chinamoney/optbbs 非东财不走 em_get
+    - 真调须建新 transport（chinamoney/optbbs 限流）或 cache 手动维护（每日 macro cron 写）
+    - 对打板短线边际价值低（DR007 是银行间宏观流动性，跟打板小盘重叠低，同北向停发逻辑）
+    - 当前骨架返 None 标 TODO，judge 该因素 None → yellow（不参与判定，不臆造）
 
     Returns:
         dict 含：
