@@ -14,7 +14,7 @@ import pytest
 def test_macro_specs_valid():
     from predict.features.macro import MACRO_SPECS
 
-    assert len(MACRO_SPECS) == 7
+    assert len(MACRO_SPECS) == 8  # S215 加 us_vix（VIXCLS）
     names = {s.name for s in MACRO_SPECS}
     assert names == {
         "us_10y_yield",
@@ -24,6 +24,7 @@ def test_macro_specs_valid():
         "usd_cny",
         "wti_crude",
         "lme_copper",
+        "us_vix",
     }
     for spec in MACRO_SPECS:
         assert spec.source == "fred_api"
@@ -77,6 +78,7 @@ def test_list_for_stage_s2_includes_macro():
         "usd_cny",
         "wti_crude",
         "lme_copper",
+        "us_vix",
     }
 
 
