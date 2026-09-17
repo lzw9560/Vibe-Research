@@ -17,7 +17,7 @@
 - ✅ **T6** family_grouping：DONE（`fb2cc65`，2026-09-16 核 family_grouping.py：`EQUIVALENCE_FAMILIES` 3 族 + `effective_family_count` + `split_into_subphases`（K=12→[8,4]）+ `FrozenK` dataclass 全在）。
 
 **未做**（G3-G7）：
-- ⏸️ T4 underpowered 标注（R15/R16/R17）/ T7 DIM_ARM_MAP arm-sizing（audit: evaluation.py:241 空转）/ ✅ T8 R3 enforce DONE（`012fef3`，r3_enforce scheduler 接线——per-arm 算 current days_robust + ≥60 → lift_to_multiplier + write_override，非 arm 级 frozen，cron 0 6 * * 0-4，8 test 全绿）/ ✅ T9-T12 跟踪架构接线 DONE（`45bafca` tracking router + `30e4d9b` escalation tracking_age_days + `f3beae9` T10 adapter）/ T13 sweep harness（built `06f898a` 待 G6 验）。
+- ✅ T4 underpowered 标注（R15/R16/R17）DONE（`75368de` 2026-09-17，underpowered_label.py + 13 test passed）/ ✅ T7 DIM_ARM_MAP arm-sizing DONE（核于 2026-09-17：DIM_ARM_MAP 全臂映射 + lift_for_arm 接 lift_to_multiplier 含 override+regime + journal_recorder._arm_size 接 PaperPortfolio.final_size 4-layer，test_s180_r3_sizing 36 passed 验 lift cap 真咬仓位，memory s44-lift-cap-bypassed 已改 description 一致）/ ✅ T8 R3 enforce DONE（`012fef3`，r3_enforce scheduler 接线——per-arm 算 current days_robust + ≥60 → lift_to_multiplier + write_override，非 arm 级 frozen，cron 0 6 * * 0-4，8 test 全绿）/ ✅ T9-T12 跟踪架构接线 DONE（`45bafca` tracking router + `30e4d9b` escalation tracking_age_days + `f3beae9` T10 adapter）/ T13 sweep harness（built `06f898a` 待 G6 验）。
 
 **配套**：
 - ✅ test_e2e.py 挂起修（`3168106`，@live 标 TestRiskEndpoints 2 测试，解全量 pytest 安全网）。
