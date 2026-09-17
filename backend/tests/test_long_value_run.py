@@ -42,6 +42,8 @@ from tools.long_value_run import (  # noqa: E402
     gate_cross_primary_consistency,
     gate_sensitivity_consistency,
     gate_delisting_coverage,
+    dry_run,
+    mini_wire,
 )
 
 
@@ -815,3 +817,85 @@ def test_wire_s171_full_degrades_when_primary_inconsistent(monkeypatch):
     assert r["status"] == "exploratory"
     assert r["gate_cross_primary"]["pass"] is False
     assert "不一致" in r["gate_cross_primary"]["note"]
+
+
+# ---------- T14: dry-run + mini-wire ----------
+
+
+def test_dry_run_returns_validation_dict(monkeypatch):
+    """T14.1: dry_run 构建 survivors 不跑 wire_verdict，返验收 dict（4 项 + data_status）。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    monkeypatch.setattr("tools.long_value_run.month_end_rebalance_days", lambda: ["2025-12-31", "2026-01-31"])
+    r = dry_run()
+    assert "pit_gate_ok" in r
+    assert "delisting_injected" in r
+    assert "quintile_stability" in r
+    assert "suspended_filtered" in r
+    assert "data_status" in r
+    assert r["data_status"] in ("ok", "empty")
+    assert r["n_months"] == 2
+
+
+def test_dry_run_empty_when_months_lt_2(monkeypatch):
+    """T14.1: months<2 返 data_status=empty 不臆造。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    r = dry_run(months=["2026-01-31"])
+    assert r.get("data_status") == "empty"
+
+
+def test_mini_wire_status_consistent_reproduce(monkeypatch, tmp_path):
+    """T14.2: mini_wire 跑 wire_verdict（缩减 walk_train=3）+ Recorder.save + reproduce status 一致。"""
+    # 6 月 mock 让 walk_train=3 有 OOS 窗口
+    months = ["2025-08-31", "2025-09-30", "2025-10-31", "2025-11-30", "2025-12-31", "2026-01-31"]
+    codes = [f"sh.60000{i}" for i in range(10)]
+    kline_raw = {
+        code: [{"date": m, "close": 10.0 + i, "volume": 100} for m in months]
+        for i, code in enumerate(codes)
+    }
+    profit = {
+        code: {"2025Q4": {"pubDate": "2025-07-01", "epsTTM": 1.0 if i < 5 else 0.1}}
+        for i, code in enumerate(codes)
+    }
+    universe = {m: codes for m in months}
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", lambda: {
+        "kline_raw": kline_raw, "profit": profit, "universe": universe,
+        "stock_basic": {}, "kline_qfq": {},
+    })
+
+    captured: list = []
+
+    def fake_wire(**kwargs):
+        captured.append(kwargs)
+        return {"status": "underpowered", "line_id": kwargs.get("line_id")}
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+
+    # Recorder mock
+    class FakeRecorder:
+        def __init__(self, db_path=None):
+            pass
+
+        def save(self, **kwargs):
+            return "fake-rec-id"
+
+    monkeypatch.setattr("s44_verifier.recorder.Recorder", FakeRecorder)
+
+    r = mini_wire(months=months, recorder_db=str(tmp_path / "test.db"))
+
+    assert r["status"] == "underpowered"
+    assert r["status_reproduce"] == "underpowered"
+    assert r["reproducible"] is True
+    assert r["recorder_id"] == "fake-rec-id"
+    assert r["n_dates"] >= 4  # PurgedKFold n_splits=2 ≥4 dates
+    # wire_verdict 调 2 次（save + reproduce）
+    assert len(captured) == 2
+    # 两调都用缩减 walk_train=3
+    assert captured[0].get("walk_train") == 3
+    assert captured[1].get("walk_train") == 3
+
+
+def test_mini_wire_empty_when_months_lt_4(monkeypatch):
+    """T14.2: months<4 返 data_status=empty 不臆造（PurgedKFold n_splits=2 需 ≥4）。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    r = mini_wire(months=["2025-12-31", "2026-01-31"])
+    assert r.get("data_status") == "empty"

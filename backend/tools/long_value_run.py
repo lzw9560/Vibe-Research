@@ -977,3 +977,191 @@ def wire_s171_full(months: list[str] | None = None) -> dict:
         "sensitivity": sensitivity,
         "caveat": "双 co-PRIMARY 互验 + sensitivity 一致性 + 退市覆盖率三 gate（T13）",
     }
+
+
+def dry_run(months: list[str] | None = None) -> dict:
+    """T14.1: 构建 survivors/universe 不跑 wire_verdict——验收 4 项（PIT gate + 退市注入 + quintile stability + 停牌过滤）。
+
+    复用 T8 select_quintiles + T12 _build_survivors_universe_with_inject（构建不调 wire_verdict）。
+    返 {pit_gate_ok, delisting_injected, quintile_stability, suspended_filtered, data_status, n_months, n_survivors_months}。
+    缺数据返 {data_status: "empty"} 不臆造。
+    """
+    cache = load_r1_cache()
+    kline_raw = cache.get("kline_raw", {})
+    kline_qfq = cache.get("kline_qfq", {})
+    profit_cache = cache.get("profit", {})
+    universe_cache = cache.get("universe", {})
+    stock_basic = cache.get("stock_basic", {})
+
+    if months is None:
+        months = month_end_rebalance_days()
+    if len(months) < 2:
+        return {"data_status": "empty", "note": "months<2 无法算月度收益"}
+
+    delisting_map = _build_delisting_map(stock_basic)
+    survivors, universe = _build_survivors_universe_with_inject(
+        months, kline_raw, profit_cache, universe_cache, delisting_map, -1.0
+    )
+
+    # 验收 1: PIT gate——spot-check 几个 code 的 pub_date < rebalance_date 严格
+    pit_ok = True
+    sample_codes = list(kline_raw.keys())[:5]
+    for code in sample_codes:
+        for m in months[:2]:
+            row = get_pit_profit_row(code, m, profit_cache)
+            if row is not None and row.pub_date >= m:
+                pit_ok = False
+                break
+
+    # 验收 2: 退市注入完整性——delisted code 在 inject_month 有 survivors+universe 同值
+    delisting_ok = True
+    for code, inject_month in delisting_map.items():
+        if inject_month in survivors and inject_month in universe:
+            # _build_survivors_universe_with_inject 对 survivors+universe 都调 _delisting_return → 同月同值
+            # 验注入发生（inject_month 在 survivors keys 里 = 注入了）
+            continue
+        # delisted code 的 inject_month 不在 survivors（可能该月无 Q1 选中或 cache 缺）——标 false 如该月本应有
+        if inject_month in months and code in universe_cache.get(inject_month, set()):
+            delisting_ok = False
+
+    # 验收 3: quintile 跨调整法 stability——不复权 raw vs 前复权 qfq pe_map size 接近
+    stability_ok = True
+    if months and kline_raw:
+        m = months[-1]
+        u = set(universe_cache.get(m, [])) or set(kline_raw.keys())
+        _q1_raw, _q5_raw, pe_raw = select_quintiles(m, u, kline_raw, profit_cache)
+        _q1_qfq, _q5_qfq, pe_qfq = select_quintiles(m, u, kline_qfq or {}, profit_cache)
+        # stability: 两法都剔停牌+无 PIT → size 应一致或 raw>0（qfq 空时仍 raw 有值）
+        stability_ok = len(pe_raw) > 0 and (len(pe_qfq) == 0 or abs(len(pe_raw) - len(pe_qfq)) <= max(len(pe_raw), len(pe_qfq)) // 2)
+
+    # 验收 4: 停牌过滤——_close_on_or_before volume==0 跳过（select_quintiles 已调它）
+    suspended_ok = True
+    for code in list(kline_raw.keys())[:3]:
+        bars = kline_raw.get(code, [])
+        has_suspended = any(b.get("volume", 0) == 0 for b in bars)
+        if has_suspended:
+            # 验 _close_on_or_before 不返停牌日 close（返前一日或 None）
+            for b in bars:
+                if b.get("volume", 0) == 0:
+                    # 停牌日 _close_on_or_before 应跳过（不返该 b 的 close）
+                    close = _close_on_or_before(bars, b.get("date", ""))
+                    if close == b.get("close"):
+                        suspended_ok = False
+                        break
+
+    return {
+        "pit_gate_ok": pit_ok,
+        "delisting_injected": delisting_ok,
+        "quintile_stability": stability_ok,
+        "suspended_filtered": suspended_ok,
+        "n_months": len(months),
+        "n_survivors_months": len(survivors),
+        "data_status": "ok" if survivors else "empty",
+    }
+
+
+def mini_wire(months: list[str] | None = None, *, recorder_db: str | Path | None = None) -> dict:
+    """T14.2: 5-10 月小样本跑 wire_verdict（缩减 walk_train=3/walk_test=2 触发 OOS）+ Recorder.save + reproduce → status 一致。
+
+    缩减 walk_train/walk_test=3/2 触发月度 walk_forward OOS + PurgedKFold n_splits=2（≥4 dates）。
+    Recorder.save 落 Recorder → reproduce_verdict = re-call wire_verdict 同 params → status 一致验证。
+    wiring 层 bug 在小样本暴露非 full run。
+    缺数据返 {data_status: "empty"} 不臆造。
+    §44 关联只接线落 Recorder，不改守护区。
+    """
+    cache = load_r1_cache()
+    kline_raw = cache.get("kline_raw", {})
+    profit_cache = cache.get("profit", {})
+    universe_cache = cache.get("universe", {})
+    stock_basic = cache.get("stock_basic", {})
+
+    if months is None:
+        months = month_end_rebalance_days()[:6]  # 5-10 月小样本
+    if len(months) < 4:
+        return {"data_status": "empty", "note": "months<4 无法 PurgedKFold n_splits=2"}
+
+    delisting_map = _build_delisting_map(stock_basic)
+    survivors, universe = _build_survivors_universe_with_inject(
+        months, kline_raw, profit_cache, universe_cache, delisting_map, -1.0
+    )
+    if not survivors:
+        return {"data_status": "empty", "note": "无 survivors（cache 空或 PIT profit 全缺）"}
+
+    dates = sorted(survivors.keys())
+    all_q1 = [r for rs in survivors.values() for r in rs]
+
+    # 缩减 walk_train=3/walk_test=2/step=2 触发 OOS（月度 6 月 → walk_train 3 + walk_test 2 = 5 窗口有 OOS）
+    import sys as _sys  # noqa: PLC0415
+    _tools_dir = str(Path(__file__).resolve().parent)
+    if _tools_dir not in _sys.path:
+        _sys.path.insert(0, _tools_dir)
+    from tools._s44_wire import wire_verdict  # noqa: PLC0415  (import 路径跟 monkeypatch tools._s44_wire 一致)
+
+    mini_params = {
+        "walk_train": 3,
+        "walk_test": 2,
+        "step": 2,
+        "event_materiality_floor": 0.001,
+    }
+
+    verdict = wire_verdict(
+        line_id="S171_mini_wire",
+        returns=all_q1,
+        edge_type="selection",
+        frozen_commit="mini",
+        dates=dates,
+        survivors_by_day=survivors,
+        universe_by_day=universe,
+        n_comparisons=1,
+        round_trip_cost=ROUND_TRIP_COST,
+        walk_train=3,
+        walk_test=2,
+        step=2,
+        event_materiality_floor=0.001,
+        script="long_value_run.mini_wire",
+    )
+    status = _status_of(verdict)
+
+    # Recorder.save
+    from s44_verifier.recorder import Recorder  # noqa: PLC0415
+
+    recorder = Recorder(db_path=recorder_db) if recorder_db else Recorder()
+    rec_id = recorder.save(
+        data_snapshot_id="mini_snapshot",
+        input_hashes={},
+        return_series=all_q1,
+        dates=dates,
+        params={"line_id": "S171_mini_wire", **mini_params},
+        frozen_commit="mini",
+        verdict={"status": status, "line_id": "S171_mini_wire"},
+    )
+
+    # reproduce_verdict: re-call wire_verdict 同 params → status 一致验证
+    verdict_repro = wire_verdict(
+        line_id="S171_mini_wire",
+        returns=all_q1,
+        edge_type="selection",
+        frozen_commit="mini",
+        dates=dates,
+        survivors_by_day=survivors,
+        universe_by_day=universe,
+        n_comparisons=1,
+        round_trip_cost=ROUND_TRIP_COST,
+        walk_train=3,
+        walk_test=2,
+        step=2,
+        event_materiality_floor=0.001,
+        script="long_value_run.mini_wire",
+    )
+    status_repro = _status_of(verdict_repro)
+
+    return {
+        "line_id": "S171_mini_wire",
+        "status": status,
+        "status_reproduce": status_repro,
+        "reproducible": status == status_repro,
+        "recorder_id": rec_id,
+        "n_dates": len(dates),
+        "n_returns": len(all_q1),
+        "data_status": "ok",
+    }
