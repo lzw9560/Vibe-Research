@@ -35,7 +35,7 @@ def test_build_default_registry_returns_registry():
 def test_registry_total_features(registry):
     # Total = external 4 + fund_flow 7 + behavior 5 + sentiment 2 + calendar 3 + text 1 + macro 7 + alt 7 = 36
     all_features = registry.list_for_stage("s3")
-    assert len(all_features) == 36
+    assert len(all_features) == 37  # S215 加 us_vix（VIXCLS）+1
 
 
 # ── (b) Stage filtering (look-ahead guard) ─────────────────────────
@@ -50,7 +50,7 @@ def test_list_for_stage_s1_count(registry):
 def test_list_for_stage_s2_count(registry):
     # s2: s1 14 + external 4 + calendar 3 + macro 7 + alt 7 = 35
     s2_features = registry.list_for_stage("s2")
-    assert len(s2_features) == 35
+    assert len(s2_features) == 36  # S215 加 us_vix（VIXCLS，stage=s2）+1
 
 
 def test_list_for_stage_s3_count(registry):
