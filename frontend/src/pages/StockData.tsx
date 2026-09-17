@@ -113,8 +113,8 @@ export function StockData() {
 
     // 6 位纯数字 = A 股；否则（字母 / 港股短代码）走美股 / 港股（global-stock-data）
     if (!/^\d{6}$/.test(c)) {
-      // 港股现金流独立回填（美股返回 404 → 静默留空，卡片不渲染）
-      api.hkCashflow(c).then((cf) => { if (rid === runIdRef.current) setCashflow(cf); }).catch(() => { if (rid === runIdRef.current) setCashflow(null); });
+      // 港股现金流暂未支持（后端未建 /api/global/hk/cashflow，曾 404 静默吞）——留 null，渲染区显示提示
+      setCashflow(null);
       try {
         const g = await api.globalStock(c);
         if (rid === runIdRef.current) setGStock(g);
@@ -299,7 +299,7 @@ export function StockData() {
             </GlassCard>
           )}
 
-          {cashflow && cashflow.periods.length > 0 && (
+          {cashflow && cashflow.periods.length > 0 ? (
             <GlassCard className="mb-4">
               <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
                 <BarChart3 className="h-4 w-4 text-primary" /> 现金流量表
@@ -333,6 +333,13 @@ export function StockData() {
                   </tbody>
                 </table>
               </div>
+            </GlassCard>
+          ) : (
+            <GlassCard className="mb-4">
+              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
+                <BarChart3 className="h-4 w-4 text-primary" /> 现金流量表
+              </h3>
+              <p className="text-xs text-muted-foreground">港股资金流暂未支持（后端未建 /api/global/hk/cashflow endpoint）</p>
             </GlassCard>
           )}
 
