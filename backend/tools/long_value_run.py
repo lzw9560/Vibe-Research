@@ -216,6 +216,119 @@ def load_r1_cache() -> dict:
     }
 
 
+def _month_return(
+    code: str, prev_date: str, curr_date: str, kline_raw: dict[str, list[dict]]
+) -> float | None:
+    """单股月度收益 = (close[curr] - close[prev]) / close[prev]（不复权，停牌 None）。"""
+    bars = kline_raw.get(code, [])
+    prev_close = _close_on_or_before(bars, prev_date)
+    curr_close = _close_on_or_before(bars, curr_date)
+    if prev_close is None or curr_close is None or prev_close <= 0:
+        return None
+    return (curr_close - prev_close) / prev_close
+
+
+def _turnover(curr_codes: set[str], prev_codes: set[str]) -> float:
+    """月度换手率 = |curr Δ prev| / |curr ∪ prev|（对称差异率 0-1）。
+
+    首月 prev 空 → turnover=1.0（全换）。T9.2 双腿 turnover 异步>10% caveat 标注。
+    """
+    if not curr_codes and not prev_codes:
+        return 0.0
+    union = curr_codes.union(prev_codes)
+    sym_diff = curr_codes.symmetric_difference(prev_codes)
+    return len(sym_diff) / len(union) if union else 0.0
+
+
+def _build_q1_q5_spread_series(r1_cache: dict) -> tuple[list[float], list[str]]:
+    """T9.1: 构建 Q1-Q5 spread returns + dates（不调 wire_verdict，供 test 测）。
+
+    returns = [Q1_ret - Q5_ret per month]，dates = [month_ISO YYYY-MM]。
+    T9.2 cost 预扣双腿：spread -= ROUND_TRIP_COST × (turnover_Q1 + turnover_Q5)（非 single×2）。
+    缺数据（月度 <2 / Q1Q5 空 / 收益空）返 ([], []) 不臆造。
+    """
+    kline_raw = r1_cache.get("kline_raw", {})
+    profit = r1_cache.get("profit", {})
+    universe_cache = r1_cache.get("universe", {})
+    rebalance_days = month_end_rebalance_days()
+    if len(rebalance_days) < 2:
+        return [], []
+    returns: list[float] = []
+    dates: list[str] = []
+    prev_q1: set[str] = set()
+    prev_q5: set[str] = set()
+    for i in range(1, len(rebalance_days)):
+        curr_date = rebalance_days[i]
+        prev_date = rebalance_days[i - 1]
+        universe = set(universe_cache.get(curr_date, {}).get("active", []))
+        q1, q5, _ = select_quintiles(curr_date, universe, kline_raw, profit)
+        if not q1 and not q5:
+            continue
+        q1_rets = [r for r in (_month_return(c, prev_date, curr_date, kline_raw) for c in q1) if r is not None]
+        q5_rets = [r for r in (_month_return(c, prev_date, curr_date, kline_raw) for c in q5) if r is not None]
+        if not q1_rets or not q5_rets:
+            continue
+        spread = sum(q1_rets) / len(q1_rets) - sum(q5_rets) / len(q5_rets)
+        # T9.2 cost 预扣双腿（turnover_Q1 + turnover_Q5 异步>10% caveat）
+        spread -= ROUND_TRIP_COST * (_turnover(q1, prev_q1) + _turnover(q5, prev_q5))
+        returns.append(spread)
+        dates.append(curr_date[:7])  # month_ISO YYYY-MM
+        prev_q1, prev_q5 = q1, q5
+    return returns, dates
+
+
+def wire_q1_q5_spread(
+    *,
+    line_id: str,
+    frozen_commit: str,
+    r1_cache: dict | None = None,
+) -> dict:
+    """T9: co-PRIMARY ① Q1-Q5 long-short spread wire（event edge_type，mean t-test）。
+
+    构建 returns=[Q1_ret - Q5_ret per month]+dates=[month_ISO]，edge_type="event"。
+    cost 预扣双腿（T9.2 分腿实测非 single×2，已预扣 → wire_verdict round_trip_cost=0）。
+    不可直接交易 caveat（A 股 short 受限）——long-short beta 中性但 A 股 short 受限。
+
+    缺数据（月度 <2 / 有效 spread <2）返 {"status": "underpowered"} 不臆造。
+    调 wire_verdict 传 5 月度参数（walk_train=36/walk_test=12/step=12/event_materiality_floor=0.001）。
+    """
+    cache = r1_cache if r1_cache is not None else load_r1_cache()
+    returns, dates = _build_q1_q5_spread_series(cache)
+    if len(returns) < 2:
+        return {
+            "line_id": line_id, "status": "underpowered",
+            "note": "有效 spread <2", "returns": returns, "dates": dates,
+        }
+    import sys as _sys  # noqa: PLC0415
+    _tools_dir = str(Path(__file__).resolve().parent)
+    if _tools_dir not in _sys.path:
+        _sys.path.insert(0, _tools_dir)
+    from _s44_wire import wire_verdict  # noqa: PLC0415
+
+    verdict = wire_verdict(
+        line_id=line_id,
+        returns=returns,
+        edge_type="event",
+        frozen_commit=frozen_commit,
+        dates=dates,
+        round_trip_cost=0.0,  # 已双腿预扣（T9.2 非 single×2）
+        walk_train=36,
+        walk_test=12,
+        step=12,
+        event_materiality_floor=0.001,
+        script="long_value_run.wire_q1_q5_spread",
+        params={"cost_model": "dual_leg", "caveat": "不可直接交易（A 股 short 受限）"},
+    )
+    return {
+        "line_id": line_id,
+        "status": getattr(verdict, "status", "unknown"),
+        "returns": returns,
+        "dates": dates,
+        "n": len(returns),
+        "caveat": "不可直接交易（A 股 short 受限）——long-short beta 中性但 A 股 short 受限",
+    }
+
+
 __all__ = [
     "PitProfitRow",
     "ROUND_TRIP_COST",
@@ -225,4 +338,5 @@ __all__ = [
     "compute_exclusion_rate",
     "month_end_rebalance_days",
     "load_r1_cache",
+    "wire_q1_q5_spread",
 ]

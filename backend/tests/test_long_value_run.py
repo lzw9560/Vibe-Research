@@ -8,6 +8,7 @@ TDD 验收（tasks.md T8.1-T8.4）：
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -20,11 +21,14 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from tools.long_value_run import (  # noqa: E402
     PitProfitRow,
+    ROUND_TRIP_COST,
     compute_exclusion_rate,
     compute_pe,
     get_pit_profit_row,
     select_quintiles,
     _quarter_sort_key,
+    _build_q1_q5_spread_series,
+    wire_q1_q5_spread,
 )
 
 
@@ -214,3 +218,85 @@ def test_month_end_rebalance_days_reads_cache(monkeypatch, tmp_path):
     monkeypatch.setattr(lvr, "SCRATCH", cache.parent)
     days = lvr.month_end_rebalance_days()
     assert days == ["2026-04-30", "2026-05-29"]
+
+
+# ---------- T9: wire_q1_q5_spread（co-PRIMARY ① Q1-Q5 spread） ----------
+
+
+def _make_t9_kline(scratch: Path) -> None:
+    """构建 T9 kline_raw cache：3 股 2 日 close（供 mock select_quintiles 返 Q1/Q5）。"""
+    (scratch / "baostock_kline_raw.json").write_text(json.dumps({
+        "sh.600519": [
+            {"date": "2026-04-30", "close": 100.0, "volume": 1},
+            {"date": "2026-05-29", "close": 110.0, "volume": 1},
+        ],
+        "sz.000001": [
+            {"date": "2026-04-30", "close": 20.0, "volume": 1},
+            {"date": "2026-05-29", "close": 18.0, "volume": 1},
+        ],
+        "sz.000002": [
+            {"date": "2026-04-30", "close": 10.0, "volume": 1},
+            {"date": "2026-05-29", "close": 8.0, "volume": 1},
+        ],
+    }))
+
+
+def test_build_q1_q5_returns_dates_and_cost(monkeypatch, tmp_path):
+    """T9.1+T9.2: returns=[Q1_ret-Q5_ret per month]+dates=[month_ISO]+cost 双腿预扣。
+
+    mock select_quintiles 返 Q1={000001,000002} Q5={600519}。
+    Q1_ret = ((18-20)/20 + (8-10)/10)/2 = (-0.1+-0.2)/2 = -0.15
+    Q5_ret = (110-100)/100 = 0.10
+    spread = -0.15-0.10 = -0.25
+    cost 预扣双腿：首月 prev 空 turnover_q1=1.0 turnover_q5=1.0 → -0.25-0.0025×2 = -0.255
+    """
+    import tools.long_value_run as lvr
+
+    scratch = tmp_path / "s171_long_value"
+    scratch.mkdir(parents=True)
+    (scratch / "historical_universe_monthly.json").write_text(
+        '{"2026-04-30": {"active": []}, "2026-05-29": {"active": []}}'
+    )
+    _make_t9_kline(scratch)
+    monkeypatch.setattr(lvr, "SCRATCH", scratch)
+    # mock select_quintiles 绕过 universe<10 限制
+    monkeypatch.setattr(
+        lvr, "select_quintiles",
+        lambda d, u, k, p: ({"sz.000001", "sz.000002"}, {"sh.600519"}, {}),
+    )
+    cache = lvr.load_r1_cache()
+    returns, dates = lvr._build_q1_q5_spread_series(cache)
+    assert len(returns) == 1
+    assert dates == ["2026-05"]
+    assert abs(returns[0] - (-0.255)) < 1e-6  # spread -0.25 - cost 0.005（双腿 1.0+1.0）
+
+
+def test_build_q1_q5_underpowered_no_cache(monkeypatch, tmp_path):
+    """T9: 月度<2 返 ([], []) 不臆造（给 1 月 cache <2，走 if 不触发 baostock fallback）。"""
+    import tools.long_value_run as lvr
+
+    scratch = tmp_path / "s171_long_value"
+    scratch.mkdir(parents=True)
+    (scratch / "historical_universe_monthly.json").write_text(
+        '{"2026-04-30": {"active": []}}'
+    )  # 1 月 <2
+    monkeypatch.setattr(lvr, "SCRATCH", scratch)
+    cache = lvr.load_r1_cache()
+    returns, dates = lvr._build_q1_q5_spread_series(cache)
+    assert returns == []
+    assert dates == []
+
+
+def test_wire_q1_q5_underpowered_short_series(monkeypatch, tmp_path):
+    """T9: wire_q1_q5_spread 有效 spread<2 返 underpowered 不臆造（不调 wire_verdict）。"""
+    import tools.long_value_run as lvr
+
+    scratch = tmp_path / "s171_long_value"
+    scratch.mkdir(parents=True)
+    monkeypatch.setattr(lvr, "SCRATCH", scratch)
+    # mock _build 返 1 条（<2）
+    monkeypatch.setattr(lvr, "_build_q1_q5_spread_series", lambda c: ([-0.1], ["2026-05"]))
+    result = lvr.wire_q1_q5_spread(line_id="S171_Q1Q5", frozen_commit="abc12345")
+    assert result["status"] == "underpowered"
+    assert result["returns"] == [-0.1]
+    assert "不可直接交易" in result["note"] or "spread" in result["note"]
