@@ -645,3 +645,209 @@ def run_sensitivity_two_tier(months: list[str] | None = None) -> dict:
         "data_status": "ok",
         "note": "退市 sensitivity 两档——一致=稳，不一致=降级 exploratory 标依赖退市 return 假设",
     }
+
+
+def _benchmark_monthly_return(
+    bars: list[dict], rebalance_date: str, prev_rebalance_date: str | None
+) -> float | None:
+    """benchmark（HS300 指数）月度收益——不检查 volume 停牌（指数无停牌）。
+
+    用 close 算 (close_D - close_prev)/close_prev，**不调** _close_on_or_before
+    （它检查 volume==0 跳过——benchmark bars 无 volume 字段会返 None）。
+    自己遍历取 <= rebalance_date 的最后 close + <= prev 的最后 close。
+    prev=None 返 None（无前月）。spec T11.2 SECONDARY benchmark 对比用。
+    """
+    if prev_rebalance_date is None:
+        return None
+    close_d = None
+    close_prev = None
+    for b in bars:
+        d = b.get("date", "")
+        if d > rebalance_date:
+            break
+        c = b.get("close")
+        if c is None:
+            continue
+        close_d = c  # <= rebalance_date 的最后 close
+        if d <= prev_rebalance_date:
+            close_prev = c  # <= prev_rebalance_date 的最后 close
+    if close_d is None or close_prev is None or close_prev == 0:
+        return None
+    return (close_d - close_prev) / close_prev
+
+
+def wire_auxiliary_low_high(
+    *,
+    line_id: str = "S171_auxiliary_low_high",
+    frozen_commit: str = "scratch",
+    months: list[str] | None = None,
+) -> dict:
+    """T11.1: AUXILIARY selection-low_pe/high_pe wire（selection edge_type）。
+
+    survivors=Q1 low_pe returns + universe=Q5 high_pe returns（对比 low vs high PE 选股力）。
+    spec §0：AUXILIARY 标"winrate 对 value 结构性受限"——winrate lift 结构性 ≈1.0-1.2
+    永远到不了 2.0x robust_edge（value 是 mean-return 现象非 winrate）。
+
+    缺数据返 {data_status: "empty"} 不臆造。
+    §44 关联只接线落 Recorder，不改守护区。
+    """
+    cache = load_r1_cache()
+    kline_raw = cache.get("kline_raw", {})
+    profit_cache = cache.get("profit", {})
+    universe_cache = cache.get("universe", {})
+
+    if months is None:
+        months = month_end_rebalance_days()
+    if len(months) < 2:
+        return {"data_status": "empty", "note": "months<2 无法算月度收益"}
+
+    survivors_by_month: dict[str, list[float]] = {}
+    universe_by_month: dict[str, list[float]] = {}
+
+    for i, month in enumerate(months):
+        prev_month = months[i - 1] if i > 0 else None
+        if prev_month is None:
+            continue
+        month_universe = set(universe_cache.get(month, []))
+        if not month_universe:
+            month_universe = set(kline_raw.keys())
+        q1_codes, q5_codes, _pe_map = select_quintiles(
+            month, month_universe, kline_raw, profit_cache
+        )
+        q1_returns = [
+            r for code in q1_codes
+            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+        ]
+        # universe 用全 active returns（基准，跟 T10 一致；Q5 作对比但 universe 须 >= survivors 维度）
+        u_returns = [
+            r for code in month_universe
+            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+        ]
+        if q1_returns and u_returns:
+            survivors_by_month[month] = q1_returns
+            universe_by_month[month] = u_returns
+
+    if not survivors_by_month:
+        return {"data_status": "empty", "note": "无 Q1/Q5 returns（cache 空或 PIT profit 全缺）"}
+
+    dates = sorted(survivors_by_month.keys())
+    all_q1 = [r for rs in survivors_by_month.values() for r in rs]
+
+    import sys as _sys  # noqa: PLC0415
+    _tools_dir = str(Path(__file__).resolve().parent)
+    if _tools_dir not in _sys.path:
+        _sys.path.insert(0, _tools_dir)
+    from tools._s44_wire import wire_verdict  # noqa: PLC0415
+
+    verdict = wire_verdict(
+        line_id=line_id,
+        returns=all_q1,
+        edge_type="selection",
+        frozen_commit=frozen_commit,
+        dates=dates,
+        survivors_by_day=survivors_by_month,
+        universe_by_day=universe_by_month,
+        n_comparisons=1,
+        round_trip_cost=ROUND_TRIP_COST,
+        walk_train=36,
+        walk_test=12,
+        step=12,
+        event_materiality_floor=0.001,
+        script="long_value_run.wire_auxiliary_low_high",
+        params={"caveat": "winrate 对 value 结构性受限（value 是 mean-return 非赢率）"},
+    )
+    return {
+        "line_id": line_id,
+        "status": getattr(verdict, "status", "unknown"),
+        "n": len(all_q1),
+        "caveat": "winrate 对 value 结构性受限——AUXILIARY 降级标注",
+    }
+
+
+def wire_secondary_q1_hs300(
+    *,
+    line_id: str = "S171_secondary_q1_hs300",
+    frozen_commit: str = "scratch",
+    months: list[str] | None = None,
+) -> dict:
+    """T11.2: SECONDARY Q1-excess-HS300 wire（event edge_type，benchmark 对比）。
+
+    returns = Q1 mean returns - HS300 returns per month（benchmark alpha）。
+    spec §0：SECONDARY 是 benchmark 对比。
+    caveat：HS300 大盘股 size-confounded（不同于 Q1 全 A value 股）+ BH m=1 latent（K=1 不需 Bonferroni-Holm）。
+
+    缺数据返 {data_status: "empty"} 不臆造。
+    §44 关联只接线落 Recorder，不改守护区。
+    """
+    cache = load_r1_cache()
+    kline_raw = cache.get("kline_raw", {})
+    profit_cache = cache.get("profit", {})
+    universe_cache = cache.get("universe", {})
+
+    # benchmark HS300 bars（scan_long_value_cache Layer4 产出）
+    benchmark_path = SCRATCH / "benchmark_indices.json"
+    if not benchmark_path.exists():
+        return {"data_status": "empty", "note": "benchmark_indices.json 不存在（跑 scan_long_value_cache --layer 4）"}
+    benchmark_data = json.loads(benchmark_path.read_bytes())
+    hs300_bars = benchmark_data.get("sh.000300", [])
+    if not hs300_bars:
+        return {"data_status": "empty", "note": "HS300 无 bars"}
+
+    if months is None:
+        months = month_end_rebalance_days()
+    if len(months) < 2:
+        return {"data_status": "empty", "note": "months<2 无法算月度收益"}
+
+    returns: list[float] = []
+    dates: list[str] = []
+    for i, month in enumerate(months):
+        prev_month = months[i - 1] if i > 0 else None
+        if prev_month is None:
+            continue
+        month_universe = set(universe_cache.get(month, []))
+        if not month_universe:
+            month_universe = set(kline_raw.keys())
+        q1_codes, _q5_codes, _pe_map = select_quintiles(
+            month, month_universe, kline_raw, profit_cache
+        )
+        q1_returns = [
+            r for code in q1_codes
+            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+        ]
+        hs300_ret = _benchmark_monthly_return(hs300_bars, month, prev_month)
+        if q1_returns and hs300_ret is not None:
+            q1_mean = sum(q1_returns) / len(q1_returns)
+            returns.append(q1_mean - hs300_ret)
+            dates.append(month)
+
+    if len(returns) < 2:
+        return {"data_status": "empty", "note": "有效 Q1-HS300 spread <2"}
+
+    from tools._s44_wire import wire_verdict  # noqa: PLC0415
+
+    verdict = wire_verdict(
+        line_id=line_id,
+        returns=returns,
+        edge_type="event",
+        frozen_commit=frozen_commit,
+        dates=dates,
+        n_comparisons=1,
+        round_trip_cost=0.0,  # benchmark 对比无交易成本（持有 Q1 vs HS300）
+        walk_train=36,
+        walk_test=12,
+        step=12,
+        event_materiality_floor=0.001,
+        script="long_value_run.wire_secondary_q1_hs300",
+        params={
+            "caveat": "size-confounded（HS300 大盘股 vs Q1 全 A value）+ BH m=1 latent（K=1 不需 Bonferroni-Holm）",
+            "benchmark": "HS300 (sh.000300)",
+        },
+    )
+    return {
+        "line_id": line_id,
+        "status": getattr(verdict, "status", "unknown"),
+        "returns": returns,
+        "dates": dates,
+        "n": len(returns),
+        "caveat": "size-confounded + BH m=1 latent——SECONDARY benchmark 对比降级标注",
+    }

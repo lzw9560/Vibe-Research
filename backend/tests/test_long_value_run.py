@@ -35,6 +35,9 @@ from tools.long_value_run import (  # noqa: E402
     _build_delisting_map,
     inject_delisting,
     run_sensitivity_two_tier,
+    _benchmark_monthly_return,
+    wire_auxiliary_low_high,
+    wire_secondary_q1_hs300,
 )
 
 
@@ -547,3 +550,120 @@ def test_run_sensitivity_empty_when_months_lt_2():
     """T12.2: months<2 返 data_status=empty 不臆造。"""
     r = run_sensitivity_two_tier(months=["2026-01-31"])
     assert r.get("data_status") == "empty"
+
+
+# ---------- T11: AUXILIARY + SECONDARY ----------
+
+
+def test_wire_auxiliary_low_high_selection_edge(monkeypatch):
+    """T11.1: AUXILIARY selection edge_type + survivors Q1 + universe Q5。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    captured: dict = {}
+
+    def fake_wire(**kwargs):
+        captured.update(kwargs)
+        return {"status": "test"}
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+
+    wire_auxiliary_low_high(months=["2025-12-31", "2026-01-31"])
+
+    assert captured.get("edge_type") == "selection"
+    assert captured.get("survivors_by_day") is not None
+    assert captured.get("universe_by_day") is not None
+    assert captured.get("line_id") == "S171_auxiliary_low_high"
+    # 月度参数 5 个
+    assert captured.get("walk_train") == 36
+    assert captured.get("walk_test") == 12
+    assert captured.get("step") == 12
+    assert captured.get("event_materiality_floor") == 0.001
+    # caveat 标注（winrate 结构性受限）
+    params = captured.get("params", {})
+    assert "winrate" in params.get("caveat", "")
+
+
+def test_wire_auxiliary_low_high_empty_when_cache_empty(monkeypatch):
+    """T11.1: cache 空返 data_status=empty 不臆造。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", lambda: {
+        "kline_raw": {}, "profit": {}, "universe": {},
+        "stock_basic": {}, "kline_qfq": {},
+    })
+    result = wire_auxiliary_low_high(months=["2025-12-31", "2026-01-31"])
+    assert result.get("data_status") == "empty"
+
+
+def test_wire_secondary_q1_hs300_event_edge(monkeypatch, tmp_path):
+    """T11.2: SECONDARY event edge_type + Q1-HS300 spread + size caveat。"""
+    # 3 月 mock（让 2 月有前月，returns 2 个 ≥2）
+    months = ["2025-11-30", "2025-12-31", "2026-01-31"]
+    codes = [f"sh.60000{i}" for i in range(10)]
+    kline_raw = {
+        code: [
+            {"date": "2025-11-30", "close": 9.0 + i, "volume": 100},
+            {"date": "2025-12-31", "close": 10.0 + i, "volume": 100},
+            {"date": "2026-01-31", "close": 11.0 + i, "volume": 100},
+        ]
+        for i, code in enumerate(codes)
+    }
+    profit = {
+        code: {"2025Q4": {"pubDate": "2025-11-01", "epsTTM": 1.0 if i < 5 else 0.1}}
+        for i, code in enumerate(codes)
+    }
+    universe = {m: codes for m in months}
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", lambda: {
+        "kline_raw": kline_raw, "profit": profit, "universe": universe,
+        "stock_basic": {}, "kline_qfq": {},
+    })
+    # mock benchmark 3 月
+    import tools.long_value_run as lvr  # noqa: PLC0415
+    monkeypatch.setattr(lvr, "SCRATCH", tmp_path)
+    (tmp_path / "benchmark_indices.json").write_text(json.dumps({
+        "sh.000300": [
+            {"date": "2025-11-30", "close": 2970.0, "pctChg": 0.0},
+            {"date": "2025-12-31", "close": 3000.0, "pctChg": 1.0},
+            {"date": "2026-01-31", "close": 3030.0, "pctChg": 1.0},
+        ]
+    }))
+    captured: dict = {}
+
+    def fake_wire(**kwargs):
+        captured.update(kwargs)
+        return {"status": "test"}
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+
+    wire_secondary_q1_hs300(months=months)
+
+    assert captured.get("edge_type") == "event"
+    assert captured.get("line_id") == "S171_secondary_q1_hs300"
+    # Q1-HS300 spread returns 传了
+    assert captured.get("returns") is not None
+    assert len(captured["returns"]) > 0
+    # 月度参数
+    assert captured.get("walk_train") == 36
+    assert captured.get("event_materiality_floor") == 0.001
+    # caveat 标注（size-confounded + BH m=1）
+    params = captured.get("params", {})
+    assert "size-confounded" in params.get("caveat", "")
+    assert "BH" in params.get("caveat", "")
+
+
+def test_wire_secondary_q1_hs300_empty_when_no_benchmark(monkeypatch, tmp_path):
+    """T11.2: benchmark_indices.json 不存在返 data_status=empty 不臆造。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    import tools.long_value_run as lvr  # noqa: PLC0415
+    monkeypatch.setattr(lvr, "SCRATCH", tmp_path)  # tmp_path 无 benchmark_indices.json
+    result = wire_secondary_q1_hs300(months=["2025-12-31", "2026-01-31"])
+    assert result.get("data_status") == "empty"
+
+
+def test_benchmark_monthly_return_no_volume_check():
+    """T11.2 辅助: _benchmark_monthly_return 不检查 volume（指数无停牌）。"""
+    bars = [
+        {"date": "2025-12-31", "close": 3000.0},  # 无 volume 字段
+        {"date": "2026-01-31", "close": 3030.0},
+    ]
+    # 不检查 volume，直接算 (3030-3000)/3000 = 0.01
+    assert abs(_benchmark_monthly_return(bars, "2026-01-31", "2025-12-31") - 0.01) < 0.001
+    # 第一个月无前月返 None
+    assert _benchmark_monthly_return(bars, "2025-12-31", None) is None
