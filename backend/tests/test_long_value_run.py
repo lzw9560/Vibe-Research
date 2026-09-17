@@ -31,6 +31,10 @@ from tools.long_value_run import (  # noqa: E402
     wire_q1_q5_spread,
     _monthly_return,
     wire_q1_excess_universe,
+    _delisting_return,
+    _build_delisting_map,
+    inject_delisting,
+    run_sensitivity_two_tier,
 )
 
 
@@ -423,3 +427,123 @@ def test_monthly_return_first_month_no_prev():
     """T10 辅助: 第一个月无前月返 None。"""
     bars = [{"date": "2025-12-31", "close": 10.0, "volume": 100}]
     assert _monthly_return(bars, "2025-12-31", None) is None
+
+
+# ---------- T12: 退市 -100% inject + sensitivity 两档 ----------
+
+
+def test_delisting_return_injects_on_inject_month():
+    """T12.1: 退市股 inject_month 返 inject_return（-1.0），不调 _monthly_return。"""
+    delisting_map = {"sh.600001": "2026-01-31"}
+    bars = [{"date": "2025-12-31", "close": 10.0, "volume": 100},
+            {"date": "2026-01-31", "close": 11.0, "volume": 100}]
+    r = _delisting_return("sh.600001", "2026-01-31", "2025-12-31", {"sh.600001": bars}, delisting_map, -1.0)
+    assert r == -1.0
+
+
+def test_delisting_return_normal_when_not_inject_month():
+    """T12.1: 非注入月调 _monthly_return 正常算（退市股未到 inject 月）。"""
+    delisting_map = {"sh.600001": "2026-02-28"}
+    bars = [{"date": "2025-12-31", "close": 10.0, "volume": 100},
+            {"date": "2026-01-31", "close": 11.0, "volume": 100}]
+    r = _delisting_return("sh.600001", "2026-01-31", "2025-12-31", {"sh.600001": bars}, delisting_map, -1.0)
+    assert r == 0.1  # (11-10)/10 正常算
+
+
+def test_delisting_return_zero_bars_fallback_anchored():
+    """T12.1: 0 bars 股 inject 月 fallback outDate 锚定——delisting_map[code] 在也注入。"""
+    delisting_map = {"sh.600001": "2026-01-31"}
+    r = _delisting_return("sh.600001", "2026-01-31", "2025-12-31", {}, delisting_map, -1.0)
+    # 0 bars 但 delisting_map 锚定 → 注入 -1.0 不取 None
+    assert r == -1.0
+
+
+def test_inject_delisting_survivors_universe_consistent():
+    """T12.1 bug 4: survivors + universe 同月同值注入（一致，不能只注入 survivors）。"""
+    survivors = {"2026-01-31": [0.05]}
+    universe = {"2026-01-31": [0.05, 0.03]}
+    delisting_codes = {"2026-01-31": ["sh.600001"]}
+    new_s, new_u = inject_delisting(survivors, universe, delisting_codes, -1.0)
+    # survivors + universe 同月都加了 -1.0
+    assert -1.0 in new_s["2026-01-31"]
+    assert -1.0 in new_u["2026-01-31"]
+    # 同月同值：两边的 inject_return 值相等
+    assert new_s["2026-01-31"][-1] == new_u["2026-01-31"][-1] == -1.0
+
+
+def test_inject_delisting_immutable():
+    """T12.1: 原 dict 不被 mutate（返新 dict）。"""
+    survivors = {"2026-01-31": [0.05]}
+    universe = {"2026-01-31": [0.05]}
+    delisting_codes = {"2026-01-31": ["sh.600001"]}
+    inject_delisting(survivors, universe, delisting_codes, -1.0)
+    # 原 dict 不变
+    assert survivors == {"2026-01-31": [0.05]}
+    assert universe == {"2026-01-31": [0.05]}
+
+
+def test_build_delisting_map_from_outdate():
+    """T12.1: _build_delisting_map 从 stock_basic outDate 读，非退市不进 map。"""
+    stock_basic = {
+        "sh.600001": {"code_name": "A", "ipoDate": "2018-01-01", "outDate": "2026-01-15"},
+        "sh.600002": {"code_name": "B", "ipoDate": "2019-01-01", "outDate": ""},  # 非退市
+    }
+    m = _build_delisting_map(stock_basic)
+    assert m == {"sh.600001": "2026-01-15"}
+
+
+def test_run_sensitivity_two_tier_returns_structure(monkeypatch):
+    """T12.2: 返 status_-0.5/status_-1.0/consistent/lift_diff/sensitive_flag 结构。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    captured: dict = {}
+
+    def fake_wire(**kwargs):
+        # 两档返不同 lift 测 sensitive_flag
+        ir = kwargs.get("line_id", "")
+        lift = 1.2 if "-0.5" in ir else 1.6  # lift_diff=0.4>0.3 sensitive
+        captured[ir] = {"status": "exploratory", "lift": lift}
+        return captured[ir]
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+    r = run_sensitivity_two_tier(months=["2025-12-31", "2026-01-31"])
+    assert "status_-0.5" in r
+    assert "status_-1.0" in r
+    assert "consistent" in r
+    assert "lift_diff" in r
+    assert "sensitive_flag" in r
+    assert r["consistent"] is True  # 两档 status 同 exploratory
+    assert abs(r["lift_diff"] - 0.4) < 0.001  # 浮点精度非 ==
+    assert r["sensitive_flag"] is True  # 0.4>0.3
+
+
+def test_run_sensitivity_consistent_when_status_equal(monkeypatch):
+    """T12.2: 两档 status 同→consistent=True。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+
+    def fake_wire(**kwargs):
+        return {"status": "exploratory", "lift": 1.0}
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+    r = run_sensitivity_two_tier(months=["2025-12-31", "2026-01-31"])
+    assert r["consistent"] is True
+
+
+def test_run_sensitivity_inconsistent_when_status_diff(monkeypatch):
+    """T12.2: 两档 status 不同→consistent=False（降级 exploratory 标依赖退市假设）。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+
+    def fake_wire(**kwargs):
+        ir = kwargs.get("line_id", "")
+        return {"status": "robust_edge" if "-0.5" in ir else "falsified", "lift": 1.0}
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+    r = run_sensitivity_two_tier(months=["2025-12-31", "2026-01-31"])
+    assert r["consistent"] is False
+    assert r["status_-0.5"] == "robust_edge"
+    assert r["status_-1.0"] == "falsified"
+
+
+def test_run_sensitivity_empty_when_months_lt_2():
+    """T12.2: months<2 返 data_status=empty 不臆造。"""
+    r = run_sensitivity_two_tier(months=["2026-01-31"])
+    assert r.get("data_status") == "empty"

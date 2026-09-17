@@ -468,3 +468,180 @@ def wire_q1_excess_universe(months: list[str] | None = None) -> dict:
         event_materiality_floor=0.001,
         script="long_value_run.wire_q1_excess_universe",
     )
+
+
+# ---------- T12: 退市 -100% inject + sensitivity 两档 ----------
+
+
+def _delisting_return(
+    code: str,
+    month: str,
+    prev_month: str | None,
+    kline_raw: dict,
+    delisting_map: dict[str, str],
+    inject_return: float,
+) -> float | None:
+    """退市股注入月返 inject_return，否则调 _monthly_return。
+
+    spec T12.1：退市股最后 active 交易月→下月 return=-1.0（inject_return）。
+    delisting_map = {code: inject_month}（注入月=退市月/last_active 下月）。
+    bug 4：survivors + universe 同月同值注入（由调用方对 survivors/universe 都用此函数保证）。
+    0 bars 股 fallback：delisting_map[code] 锚定（kline 无 bar 也注入，不取 None）。
+    """
+    inject_month = delisting_map.get(code)
+    if inject_month and month == inject_month and prev_month is not None:
+        return inject_return
+    return _monthly_return(kline_raw.get(code, []), month, prev_month)
+
+
+def _build_delisting_map(stock_basic: dict) -> dict[str, str]:
+    """从 stock_basic 读 outDate，返 {code: inject_month}（注入月=outDate）。
+
+    退市股 outDate != ""（scan_long_value_cache line 175-181）。
+    非退市股（outDate==""）不进 map。
+    """
+    result: dict[str, str] = {}
+    for code, info in stock_basic.items():
+        out_date = (info or {}).get("outDate", "")
+        if out_date:
+            result[code] = out_date
+    return result
+
+
+def _build_survivors_universe_with_inject(
+    months: list[str],
+    kline_raw: dict,
+    profit_cache: dict,
+    universe_cache: dict,
+    delisting_map: dict[str, str],
+    inject_return: float,
+) -> tuple[dict[str, list[float]], dict[str, list[float]]]:
+    """构建 survivors/universe 带退市 inject（复用 T8 select_quintiles + T10 _monthly_return）。
+
+    bug 4：survivors + universe 同月同值注入（_delisting_return 对两者都用 → 一致）。
+    immutable：返新 dict 不 mutate 输入。
+    """
+    survivors_by_month: dict[str, list[float]] = {}
+    universe_by_month: dict[str, list[float]] = {}
+    for i, month in enumerate(months):
+        prev_month = months[i - 1] if i > 0 else None
+        if prev_month is None:
+            continue
+        month_universe = set(universe_cache.get(month, []))
+        if not month_universe:
+            month_universe = set(kline_raw.keys())
+        q1_codes, _q5_codes, _pe_map = select_quintiles(
+            month, month_universe, kline_raw, profit_cache
+        )
+        q1_returns = [
+            r
+            for code in q1_codes
+            if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None
+        ]
+        u_returns = [
+            r
+            for code in month_universe
+            if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None
+        ]
+        if q1_returns and u_returns:
+            survivors_by_month[month] = q1_returns
+            universe_by_month[month] = u_returns
+    return survivors_by_month, universe_by_month
+
+
+def inject_delisting(
+    survivors_by_month: dict[str, list[float]],
+    universe_by_month: dict[str, list[float]],
+    delisting_codes_by_month: dict[str, list[str]],
+    inject_return: float = -1.0,
+) -> tuple[dict[str, list[float]], dict[str, list[float]]]:
+    """post-process 注入（spec T12.1 A-test 验证用，生产用 _build_survivors_universe_with_inject）。
+
+    对 delisting_codes_by_month[month] 里的 code，survivors + universe 同月注入 inject_return。
+    bug 4：survivors + universe 同月同值（一致，不能只注入 survivors）。
+    immutable：返新 dict 不 mutate 原。
+    """
+    new_survivors: dict[str, list[float]] = {m: list(rs) for m, rs in survivors_by_month.items()}
+    new_universe: dict[str, list[float]] = {m: list(rs) for m, rs in universe_by_month.items()}
+    for month, codes in delisting_codes_by_month.items():
+        new_survivors.setdefault(month, [])
+        new_universe.setdefault(month, [])
+        for _code in codes:
+            new_survivors[month].append(inject_return)
+            new_universe[month].append(inject_return)
+    return new_survivors, new_universe
+
+
+def run_sensitivity_two_tier(months: list[str] | None = None) -> dict:
+    """T12.2: 退市 sensitivity 两档 -0.5 vs -1.0 跑两遍，返两档 status + lift 差值 flag。
+
+    spec T12.2 + T13.2b：一致性 gate（status 一致→稳，不一致→降级 exploratory 标"依赖退市 return 假设"）。
+    lift 差值 |lift_-0.5 - lift_-1.0|>0.3 标敏感 flag。
+    缺数据返 data_status=empty 不臆造。
+    §44 关联只接线落 Recorder，不改守护区（lift_for_arm/regime_caps 不动）。
+    """
+    cache = load_r1_cache()
+    kline_raw = cache.get("kline_raw", {})
+    profit_cache = cache.get("profit", {})
+    universe_cache = cache.get("universe", {})
+    stock_basic = cache.get("stock_basic", {})
+
+    if months is None:
+        months = month_end_rebalance_days()
+    if len(months) < 2:
+        return {"data_status": "empty", "note": "months<2 无法算月度收益"}
+
+    delisting_map = _build_delisting_map(stock_basic)
+
+    from tools._s44_wire import wire_verdict  # noqa: PLC0415
+
+    results: dict[float, dict] = {}
+    for inject_return in (-0.5, -1.0):
+        survivors, universe = _build_survivors_universe_with_inject(
+            months, kline_raw, profit_cache, universe_cache, delisting_map, inject_return
+        )
+        if not survivors:
+            results[inject_return] = {"status": "empty", "lift": 0.0}
+            continue
+        dates = sorted(survivors.keys())
+        all_q1 = [r for rs in survivors.values() for r in rs]
+        all_u = [r for rs in universe.values() for r in rs]
+        q1_mean = sum(all_q1) / len(all_q1) if all_q1 else 0.0
+        q1_winrate = sum(1 for r in all_q1 if r > 0) / len(all_q1) if all_q1 else 0.0
+        u_winrate = sum(1 for r in all_u if r > 0) / len(all_u) if all_u else 0.0
+        window_sanity = {"path": {"mean": q1_mean, "winrate": q1_winrate, "base_rate": u_winrate}}
+        verdict = wire_verdict(
+            line_id=f"S171_sensitivity_{inject_return}",
+            returns=all_q1,
+            edge_type="selection",
+            frozen_commit="scratch",  # TODO T14 dry-run 传真 commit
+            dates=dates,
+            survivors_by_day=survivors,
+            universe_by_day=universe,
+            n_comparisons=1,
+            round_trip_cost=ROUND_TRIP_COST,
+            window_sanity=window_sanity,
+            walk_train=36,
+            walk_test=12,
+            step=12,
+            event_materiality_floor=0.001,
+            script="long_value_run.run_sensitivity_two_tier",
+        )
+        results[inject_return] = verdict
+
+    status_05 = results[-0.5].get("status", "empty")
+    status_10 = results[-1.0].get("status", "empty")
+    lift_05 = results[-0.5].get("lift") or 0.0
+    lift_10 = results[-1.0].get("lift") or 0.0
+    lift_diff = abs(lift_05 - lift_10)
+    return {
+        "status_-0.5": status_05,
+        "status_-1.0": status_10,
+        "consistent": status_05 == status_10,
+        "lift_-0.5": lift_05,
+        "lift_-1.0": lift_10,
+        "lift_diff": lift_diff,
+        "sensitive_flag": lift_diff > 0.3,
+        "data_status": "ok",
+        "note": "退市 sensitivity 两档——一致=稳，不一致=降级 exploratory 标依赖退市 return 假设",
+    }
