@@ -375,8 +375,10 @@ def score_dim6_northbound(candidate: dict, date: str) -> tuple[float, dict]:
             score = max(0.0, 50.0 + (nb / 100.0))  # 每流出 100 万扣 1 分
             return round(max(0.0, min(100.0, score)), 1), raw
     except Exception as e:
-        _logger.debug("score_dim6_northbound 降级 50 code=%s err=%s", candidate.get("code"), e)
-        return 50.0, raw
+        # fail-closed（2026-09-17 修，workflow wxs85fzwg 风险专家发现）：
+        # 取数异常 → -1（数据缺失不参与加权），不返 50（fail-open 数据坏时放行，违不臆造底线）
+        _logger.debug("score_dim6_northbound 降级 -1 fail-closed code=%s err=%s", candidate.get("code"), e)
+        return -1.0, raw
 
 
 # ── 维度7：龙虎榜机构（权重 10%）──────────────────────────────────────
