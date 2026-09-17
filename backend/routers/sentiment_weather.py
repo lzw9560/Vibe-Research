@@ -1315,11 +1315,29 @@ def macro_snapshot() -> Dict[str, Any]:
             fomc = {"error": "fomc_calendar.json 解析失败"}
     else:
         fomc = {"error": "fomc_calendar.json 未建"}
+    # storm weather_cap level（predict_storm 取 risk_level 低中高极高 + probability + suggested_position 0.25/0.5/0.7/1.0）
+    # weather_cap×0.3 真生效压仓位（commit fe35c33），前端展示让用户看市场风险门
+    weather_cap: dict = {}
+    try:
+        from strategies.storm_predictor import predict_storm  # noqa: PLC0415
+        from datetime import datetime as _dt  # noqa: PLC0415
+        today_str = _dt.now().strftime("%Y-%m-%d")
+        storm = predict_storm(today_str)
+        weather_cap = {
+            "probability": storm.probability,  # 0-100
+            "risk_level": storm.risk_level,  # 低/中/高/极高
+            "suggested_position": storm.suggested_position,  # 0.25/0.5/0.7/1.0（weather_cap 压仓位）
+            "data_status": storm.data_status,  # ok/degraded/missing
+            "date": storm.date,
+        }
+    except Exception as e:  # noqa: BLE001
+        weather_cap = {"error": f"storm predict 失败: {e}"}
     return {
         "data": {
             "fred_factors": factors,
             "fred_key_loaded": bool(key),
             "fomc": fomc,
+            "weather_cap": weather_cap,
         }
     }
 

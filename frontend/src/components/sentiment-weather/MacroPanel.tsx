@@ -20,10 +20,20 @@ interface FomcInfo {
   error?: string;
 }
 
+interface WeatherCap {
+  probability?: number;
+  risk_level?: string;  // 低/中/高/极高
+  suggested_position?: number;  // 0.25/0.5/0.7/1.0
+  data_status?: string;
+  date?: string;
+  error?: string;
+}
+
 interface MacroSnapshot {
   fred_factors: Record<string, FredFactor>;
   fred_key_loaded: boolean;
   fomc: FomcInfo;
+  weather_cap?: WeatherCap;
 }
 
 // FRED 因子中文名 + 信号方向（用于展示）
@@ -132,6 +142,29 @@ export function MacroPanel() {
           </div>
         )}
       </GlassCard>
+
+      {data.weather_cap && !data.weather_cap.error && (
+        <GlassCard className="p-5">
+          <h3 className="text-sm font-medium text-foreground mb-3">Storm 风险门（weather_cap）</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-muted-foreground">风险等级：</span>
+            <Badge variant={
+              data.weather_cap.risk_level === "极高" || data.weather_cap.risk_level === "高" ? "danger" :
+              data.weather_cap.risk_level === "中" ? "default" :
+              "success"
+            }>
+              {data.weather_cap.risk_level ?? "—"}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              概率 {data.weather_cap.probability?.toFixed(1) ?? "—"}
+            </span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            建议仓位 {data.weather_cap.suggested_position != null ? `${(data.weather_cap.suggested_position * 100).toFixed(0)}%` : "—"}
+            （weather_cap×0.3 压仓位，{data.weather_cap.data_status ?? "—"}）
+          </div>
+        </GlassCard>
+      )}
     </div>
   );
 }
