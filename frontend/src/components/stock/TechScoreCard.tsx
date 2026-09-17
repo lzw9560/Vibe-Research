@@ -127,7 +127,7 @@ export function TechScoreCard({ code }: Props) {
   }
 
   const signal = data.signal ?? "观望";
-  const dims = data.dimensions ?? {};
+  const dims: Record<string, DimData> = data.dimensions ?? {};
   const dimKeys = ["ma", "macd", "rsi", "volume", "bias", "support"] as const;
 
   return (

@@ -64,7 +64,7 @@ def _seed_record(*, verdict=None, params=None, data_snapshot_id="abc123+def456")
 def test_dims_returns_12_records():
     resp = client.get("/api/evaluation/dims")
     assert resp.status_code == 200
-    assert len(resp.json()) == 18  # 17 + post_first_board S209 T3（探索性 ×0.5）
+    assert len(resp.json()) == 19  # 17 + post_first_board S209 T3 + consecutive_relay S211（regime-stratified）
 
 
 def test_dims_match_contract_fields():

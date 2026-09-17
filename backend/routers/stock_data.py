@@ -231,19 +231,6 @@ async def kline(code: str = Query(...), category: int = Query(4), offset: int = 
         raise HTTPException(502, f"K线源异常：{e}") from e
 
 
-@router.get("/api/finance")
-def finance(code: str = Query(...)) -> Dict[str, Any]:
-    """季报财务快照（需 mootdx）。"""
-    from routers.common import _validate
-    code = _validate(code)
-    try:
-        return {"data": astock.finance(code)}
-    except astock.DependencyMissing as e:
-        raise HTTPException(501, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"财务源异常：{e}") from e
-
-
 @router.get("/api/stock/{code}/deep")
 async def stock_deep(code: str) -> Dict[str, Any]:
     """个股深度数据聚合：行情 + K线 + 估值 + 资金流 + 龙虎榜 + 涨停分析 + 财务 + 板块 + 概念 + 公告 + 研报。"""

@@ -192,6 +192,9 @@ export const api = {
   // S215 通用技术指标评分（MA/MACD/RSI/量能/乖离/支撑 100 分 + 信号）
   techScore: (code: string) =>
     get<any>(`/stock/tech-score?code=${code}`),
+  // 个股基本面（行业/股本/上市时间，akshare，接入孤儿 /api/info 前后端闭环）
+  basicInfo: (code: string) =>
+    get<any>(`/info?code=${code}`),
   strategyRegistry: () =>
     get<any[]>("/strategy/registry"),
   // 回测

@@ -15,6 +15,7 @@ import { NewsPanel } from "@/components/stock/NewsPanel";
 import { FinancialsPanel } from "@/components/stock/FinancialsPanel";
 import { FundFlowPanel } from "@/components/stock/FundFlowPanel";
 import { TechScoreCard } from "@/components/stock/TechScoreCard";
+import { StockBasicInfoCard } from "@/components/stock/StockBasicInfoCard";
 import { useCurrentStock, useSelectStock } from "@/stores/currentStock";
 import { useStockDeep } from "@/lib/query/stock";
 import type { Quote, StockDeep as StockDeepData } from "@/lib/api";
@@ -314,6 +315,8 @@ function ChartCenter({ code, data, date, activePanel }: { code: string; data: St
       </GlassCard>
     ) : activePanel === "techScore" ? (
       <TechScoreCard code={code} />
+    ) : activePanel === "basicInfo" ? (
+      <StockBasicInfoCard code={code} />
     ) : activePanel === "watchlist" || activePanel === "notes" || activePanel === "ai" ? (
       <GlassCard className="p-4">
         <HonestEmptyState
