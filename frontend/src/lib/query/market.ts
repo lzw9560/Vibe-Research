@@ -71,6 +71,11 @@ export function useSentimentWeatherPardon(options?: Opts<Awaited<ReturnType<type
   return useQuery({ queryKey: ["market", "sentimentWeatherPardon"] as const, queryFn: () => api.sentimentWeatherPardon(), ...options });
 }
 
+// S216 B future: fuse/history（GET，POST 的 fuse/update + pardon/outcome 直接用 api 函数不包 hook）
+export function useSentimentWeatherFuseHistory(days = 30, options?: Opts<Awaited<ReturnType<typeof api.sentimentWeatherFuseHistory>>>) {
+  return useQuery({ queryKey: ["market", "sentimentWeatherFuseHistory", days] as const, queryFn: () => api.sentimentWeatherFuseHistory(days), ...options });
+}
+
 // ---- 有参 ----
 export function useGlobalStock(symbol: string, options?: Opts<Awaited<ReturnType<typeof api.globalStock>>>) {
   return useQuery({

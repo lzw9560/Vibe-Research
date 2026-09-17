@@ -162,3 +162,13 @@ export function useExitSignals(date: string | null, options?: Opts<ExitSignalsRe
     ...options,
   });
 }
+
+/** GET /api/workflow/strategies——8 战法列表（S216 B future）。 */
+export function useWorkflowStrategies(options?: Opts<{ strategies: import("@/lib/api").StrategyMatch[] }>) {
+  return useQuery({
+    queryKey: ["workflow", "strategies"] as const,
+    queryFn: () => _get<{ strategies: import("@/lib/api").StrategyMatch[] }>("/workflow/strategies"),
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+}

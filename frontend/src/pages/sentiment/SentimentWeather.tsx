@@ -17,6 +17,7 @@ import {
   useSentimentWeatherSealRisk,
   useSentimentWeatherPardon,
   useExitSignals,
+  useSentimentWeatherFuseHistory,
 } from "@/lib/query";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 import { WeatherHero } from "@/components/sentiment-weather/WeatherHero";
@@ -73,6 +74,8 @@ export default function SentimentWeather() {
   const auctionQ = useSentimentWeatherAuction({ refetchInterval: REFRESH_MS });
   const sealRiskQ = useSentimentWeatherSealRisk({ refetchInterval: REFRESH_MS });
   const pardonQ = useSentimentWeatherPardon({ refetchInterval: REFRESH_MS });
+  // S216 B future: fuse/history 熔断触发历史
+  const fuseHistoryQ = useSentimentWeatherFuseHistory(30);
 
   // 派生数据槽（保持原变量名，JSX 渲染逻辑不动）
   // latest/strategy 端点返裸类型（无信封），hook data 已类型化，无需 cast。
@@ -432,6 +435,27 @@ export default function SentimentWeather() {
                     </div>
                   ))}
                 </div>
+              )}
+            </GlassCard>
+            <GlassCard className="p-5">
+              <h3 className="text-sm font-medium text-foreground mb-3">熔断触发历史（30 天）</h3>
+              {fuseHistoryQ.isLoading ? (
+                <p className="text-sm text-muted-foreground">加载中…</p>
+              ) : fuseHistoryQ.error ? (
+                <p className="text-sm text-red-500">加载失败</p>
+              ) : (fuseHistoryQ.data?.data.history ?? []).length === 0 ? (
+                <HonestEmptyState message="无熔断触发记录" hint="fuse_history 表无数据或未触发" />
+              ) : (
+                <ul className="space-y-1">
+                  {(fuseHistoryQ.data?.data.history ?? []).map((h, i) => (
+                    <li key={i} className="text-xs border border-border rounded p-2 flex items-center gap-2">
+                      <Badge variant={h.action === "triggered" ? "danger" : "success"}>{h.action}</Badge>
+                      <span className="font-medium">{h.rule_id}</span>
+                      <span className="text-muted-foreground">{h.weather_state}</span>
+                      <span className="text-muted-foreground ml-auto">{h.triggered_at}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </GlassCard>
           </div>

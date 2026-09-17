@@ -9,10 +9,11 @@ import type {
   Report, NewsItem, MarginRow, BlockTradeRow, HolderRow, DividendRow, FundFlowRow,
   DragonTiger, Lockup, Blocks, HotConcept, QaRow, IndustryData, MyReport, ScreenerResult,
   LimitUpAnalysis, AuctionScreenerResult, DailyReviewReport, SeatProfile, ConsensusSignal,
-  StockDeep, StrategyRecommendation, WeatherState, WeatherFactor, FuseState,
+  StockDeep, StrategyRecommendation, StrategyMatch, WeatherState, WeatherFactor, FuseState,
   StockKgSummary,
   WeatherTimelineItem,
   WeatherStats, WeatherEvent, AuctionMetric, SealRiskMetric, FusePardonRecord,
+  FuseHistoryRecord, FuseUpdateRequest, PardonOutcomeRequest,
   StockRecommendation, WinRateStats, WinRateRecordInput, WinRateRecordsResponse, WinRateTrendPoint,
   WinRateAdjustment, SectorWinStats, StrategyWinStats, AuctionSignal, BacktestResult, BacktestScatterPoint,
   BacktestSnapshotRow, STIResult, STITimelineItem, FactorAnalysisResult,
@@ -158,6 +159,13 @@ export const api = {
     request<{ data: FusePardonRecord }>("/sentiment/weather/pardon/toggle", "POST", data),
   sentimentWeatherPardonRevoke: (pardonId: string) =>
     request<{ data: { success: boolean } }>(`/sentiment/weather/pardon/revoke?pardon_id=${pardonId}`, "POST"),
+  // S216 B future: fuse/history + fuse/update + pardon/outcome
+  sentimentWeatherFuseHistory: (days = 30) =>
+    get<{ data: { history: FuseHistoryRecord[] } }>(`/sentiment/weather/fuse/history?days=${days}`),
+  sentimentWeatherFuseUpdate: (data: FuseUpdateRequest) =>
+    request<{ data: { success: boolean } }>("/sentiment/weather/fuse/update", "POST", data),
+  sentimentWeatherPardonOutcome: (data: PardonOutcomeRequest) =>
+    request<{ data: { success: boolean } }>("/sentiment/weather/pardon/outcome", "POST", data),
   stockDeep: (code: string) => get<StockDeep>(`/stock/${code}/deep`),
   // K 线（多时间维度）：category 4=日 5=周 6=月 11=60min。前端切换维度调此端点。
   kline: (code: string, category: number = 4, offset: number = 60) =>
@@ -184,6 +192,13 @@ export const api = {
     get<SectorWinStats>(`/winrate/sector/${encodeURIComponent(sector)}${windowSize ? `?window_size=${windowSize}` : ""}`),
   winRateStrategy: (strategy: string, windowSize?: number) =>
     get<StrategyWinStats>(`/winrate/strategy/${encodeURIComponent(strategy)}${windowSize ? `?window_size=${windowSize}` : ""}`),
+  // S216 B future: workflow strategies + match（/api/workflow/strategies + /{name}/match）
+  workflowStrategies: () =>
+    get<{ strategies: StrategyMatch[] }>("/workflow/strategies"),
+  workflowMatch: (name: string, code: string) =>
+    request<{ strategy: string; code: string; matched: boolean; message?: string; signals?: unknown[] }>(
+      `/workflow/strategies/${encodeURIComponent(name)}/match?code=${code}`, "POST"
+    ),
   // S025-A2：录入交易记录（批量）。后端 POST /api/winrate/records 接 List[Dict]，返 {data:{added,...}}，
   // request() 自动解包 .data，故泛型为内层 WinRateRecordsResponse。
   winRateRecords: (records: WinRateRecordInput[]) =>

@@ -14,7 +14,9 @@ import { EntryCard } from "@/components/workflow/EntryCard";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/lib/api/client";
 import { useStrategyBacktest } from "@/lib/query/strategy";
-import { useWorkflowWinRate, useWorkflowAdjustments } from "@/lib/query/workflow";
+import { useWorkflowWinRate, useWorkflowAdjustments, useWorkflowStrategies } from "@/lib/query/workflow";
+import { api } from "@/lib/api";
+import { useState } from "react";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 
 /** 战法库注册表条目（对应后端 get_strategy_registry 返回字段）。 */
@@ -44,6 +46,23 @@ export default function StrategyPage() {
   // S216 B future: 战法胜率 + 调整建议（workflow endpoint）
   const { data: winRate } = useWorkflowWinRate();
   const { data: adjustments } = useWorkflowAdjustments();
+  const { data: strategiesData } = useWorkflowStrategies();
+  const [matchCode, setMatchCode] = useState("");
+  const [matchResult, setMatchResult] = useState<null | { strategy: string; matched: boolean; message?: string }>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+
+  const runMatch = async (name: string) => {
+    if (!matchCode) return;
+    setMatchLoading(true);
+    try {
+      const r = await api.workflowMatch(name, matchCode);
+      setMatchResult(r);
+    } catch {
+      setMatchResult({ strategy: name, matched: false, message: "查询失败" });
+    } finally {
+      setMatchLoading(false);
+    }
+  };
 
   const registryItems = registry ?? [];
   const backtestItems = backtest ?? [];
@@ -141,6 +160,51 @@ export default function StrategyPage() {
           </ul>
         ) : (
           <HonestEmptyState message="暂无调整建议" hint="workflow_state 待积累交易日" />
+        )}
+      </GlassCard>
+
+      <GlassCard className="p-4">
+        <h3 className="text-sm font-medium mb-3">8 战法列表 + 个股匹配（/api/workflow/strategies + /{`{name}`}/match）</h3>
+        <div className="flex gap-2 mb-3">
+          <input
+            value={matchCode}
+            onChange={(e) => setMatchCode(e.target.value)}
+            placeholder="输入股票代码（如 600519）"
+            className="flex-1 border border-border rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <ul className="space-y-1">
+          {(strategiesData?.strategies ?? []).map((s) => (
+            <li key={s.style} className="border border-border rounded p-2 flex items-center gap-2">
+              <span className="text-sm font-medium">{s.style}</span>
+              {s.enabled ? (
+                <span className="text-[10px] text-emerald-600">启用</span>
+              ) : (
+                <span className="text-[10px] text-muted-foreground">停用</span>
+              )}
+              <span className="text-xs text-muted-foreground truncate">{s.description}</span>
+              <button
+                onClick={() => runMatch(s.style)}
+                disabled={!matchCode || matchLoading}
+                className="ml-auto text-xs px-2 py-0.5 border border-border rounded disabled:opacity-50"
+              >
+                匹配
+              </button>
+            </li>
+          ))}
+        </ul>
+        {(strategiesData?.strategies ?? []).length === 0 && (
+          <HonestEmptyState message="无战法数据" hint="/api/workflow/strategies 返空" />
+        )}
+        {matchResult && (
+          <div className="mt-2 text-xs border border-border rounded p-2">
+            <span className="font-medium">{matchResult.strategy}</span>
+            {matchResult.matched ? (
+              <span className="text-emerald-600 ml-2">命中</span>
+            ) : (
+              <span className="text-muted-foreground ml-2">{matchResult.message ?? "未命中"}</span>
+            )}
+          </div>
         )}
       </GlassCard>
 

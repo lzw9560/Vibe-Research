@@ -315,6 +315,28 @@ export interface FuseState {
   updated_at: string;
 }
 
+// S216 B future: fuse/history + update + pardon/outcome
+export interface FuseHistoryRecord {
+  rule_id: string;
+  action: string;
+  weather_state: string;
+  triggered_at: string;
+  note?: string;
+}
+
+export interface FuseUpdateRequest {
+  rule_id: string;
+  action?: string;
+  threshold?: number;
+}
+
+export interface PardonOutcomeRequest {
+  pardon_id: string;
+  was_successful: boolean;
+  return_pct?: number;
+  lessons_learned?: string;
+}
+
 // S056：次日强制离场信号
 export interface ExitSignal {
   code: string;
