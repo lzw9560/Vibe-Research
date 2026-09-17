@@ -90,6 +90,55 @@ def _prev_trading_day(date: str) -> str:
         return date
 
 
+def _fred_vix_value() -> float | None:
+    """取 FRED VIXCLS 最新值（美股恐慌指数）。走 get_fred_api_key + fetch_fred_series。
+
+    S215 宏观接入：VIX>30 红灯（高风险）/ <15 绿灯（低波动）。
+    None = key 缺/网络失败，不臆造（守工程底线）。
+    """
+    try:
+        from predict.features.macro import (  # noqa: PLC0415
+            get_fred_api_key, fetch_fred_series, parse_fred_observations, FRED_SERIES,
+        )
+        key = get_fred_api_key()
+        if not key:
+            return None
+        sid = FRED_SERIES.get("us_vix", "VIXCLS")
+        data = fetch_fred_series(sid, key)
+        obs = parse_fred_observations(data) if data else []
+        if not obs:
+            return None
+        v = obs[-1].get("value")
+        return float(v) if v is not None else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fomc_day_risk(d_iso: str) -> tuple[int | None, str]:
+    """读 .vibe-research/fomc_calendar.json 判 d 是否 FOMC 日。返 (score, detail) 或 (None, "")。
+
+    S215 宏观接入：decision 日 → 90（high risk，02:00 Beijing 决议）/
+    press_conference 日 → 70（02:30 发布会）。非 FOMC 日返 (None, "") 不覆盖。
+    """
+    try:
+        import json  # noqa: PLC0415
+        from vr_paths import resolve_data_dir  # noqa: PLC0415
+        path = resolve_data_dir() / "fomc_calendar.json"
+        if not path.exists():
+            return None, ""
+        cal = json.loads(path.read_text())
+        for m in cal.get("meetings", []):
+            if m.get("date") == d_iso:
+                t = m.get("type", "decision")
+                if t == "decision":
+                    return 90, f"FOMC 决议日({d_iso}) 02:00 Beijing high risk"
+                if t == "press_conference":
+                    return 70, f"FOMC 发布会({d_iso}) 02:30 Beijing"
+        return None, ""
+    except Exception:  # noqa: BLE001
+        return None, ""
+
+
 def _collect_global_factor(date: str) -> StormFactor:
     """外围隔夜因子（美股三大+A50+港股+日经+KOSPI+SOX，T-1 夜间快照）。权重 0.35。
 
@@ -171,6 +220,20 @@ def _collect_global_factor(date: str) -> StormFactor:
     detail = f"[{src}] {' / '.join(parts)}"
     if missing_names:
         detail += f" / 缺 {','.join(missing_names)}"
+    # S215 宏观接入：FRED VIX risk gate 调制外围 score（VIX>30 红灯拉高 / <15 压低）
+    vix = _fred_vix_value()
+    if vix is not None:
+        if vix > 30:
+            score = min(100.0, score + 20.0)
+            detail += f" / VIX={vix:.1f}>30 红灯(+20)"
+        elif vix > 25:
+            score = min(100.0, score + 10.0)
+            detail += f" / VIX={vix:.1f}>25 偏高(+10)"
+        elif vix < 15:
+            score = max(0.0, score - 10.0)
+            detail += f" / VIX={vix:.1f}<15 低波动(-10)"
+        else:
+            detail += f" / VIX={vix:.1f} 中性"
     return StormFactor("外围隔夜", round(score, 1), detail, data_status)
 
 
@@ -376,6 +439,11 @@ def _collect_calendar_factor(date: str) -> StormFactor:
         is_delivery = abs((d.date() - opt_day).days) <= 1 or abs((d.date() - fut_day).days) <= 1
         is_month_end = d.day >= 28
 
+        # S215 宏观接入：FOMC 日历（decision 日 90 high risk / press 日 70，覆盖交割日/月末）
+        d_iso = d.strftime("%Y-%m-%d")
+        fomc_score, fomc_detail = _fomc_day_risk(d_iso)
+        if fomc_score is not None:
+            return StormFactor("日历事件", float(fomc_score), fomc_detail)
         if is_delivery:
             score = 80.0
             detail = f"交割日±1（期权{opt_day:%m-%d}/期货{fut_day:%m-%d}）波动加剧"
