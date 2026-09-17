@@ -26,7 +26,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
-import { api, type AdvisoryItem, type AdvisorySummary } from "@/lib/api";
+import { api, type AdvisoryItem, type AdvisorySummary, type GrillResult } from "@/lib/api";
 
 // ── 今日推荐：action/source 元数据 + AdvisoryCard（复用 S042 逻辑）──
 
@@ -193,6 +193,25 @@ export function AdvisoryPage() {
   const [summary, setSummary] = useState<AdvisorySummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [grillTopic, setGrillTopic] = useState("");
+  const [grillContext, setGrillContext] = useState("");
+  const [grillResult, setGrillResult] = useState<GrillResult | null>(null);
+  const [grillLoading, setGrillLoading] = useState(false);
+  const [grillError, setGrillError] = useState<string | null>(null);
+
+  const runGrill = useCallback(async () => {
+    if (!grillTopic.trim()) return;
+    setGrillLoading(true);
+    setGrillError(null);
+    try {
+      const data = await api.advisoryGrill(grillTopic, grillContext);
+      setGrillResult(data);
+    } catch (e: unknown) {
+      setGrillError(e instanceof Error ? e.message : "grill 失败");
+    } finally {
+      setGrillLoading(false);
+    }
+  }, [grillTopic, grillContext]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -306,25 +325,78 @@ export function AdvisoryPage() {
         )}
       </Zone>
 
-      {/* Zone 2: 顾问团（grill-me 6-lens 对抗审查，接入待落地 → honest placeholder） */}
+      {/* Zone 2: 顾问团（grill-me 6-lens 对抗审查，S216 后端集成 /api/advisory/grill） */}
       <Zone
         title="顾问团"
         icon={<Users className="h-4 w-4" />}
         badge={
-          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-            接入待落地
+          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+            6-lens
           </span>
         }
       >
-        <GlassCard className="p-4">
-          <p className="text-sm text-muted-foreground">
-            grill-me 6-lens 对抗审查——对一个标的或论点跑 ≥6 视角反驳
-            （事实核验 / 资深工程师 / 安全 / 一致性 / 冗余 / 红线），
-            逼出隐藏假设与盲点，避免 solo review 的确认偏误。
+        <GlassCard className="p-4 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            6-lens 对抗审查——方法论/数据/过拟合/执行/风险/一致性 6 视角反驳，逼出隐藏假设与盲点。
           </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            后端 grill-me 接入待落地，暂不可用。落地后此处可输入标的/论点启动一轮审查。
-          </p>
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={grillTopic}
+              onChange={(e) => setGrillTopic(e.target.value)}
+              placeholder="标的或论点（如：价值溢价在 A 股成不成立）"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+            <textarea
+              value={grillContext}
+              onChange={(e) => setGrillContext(e.target.value)}
+              placeholder="背景/数据（可选）"
+              rows={2}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+            <button
+              onClick={runGrill}
+              disabled={grillLoading || !grillTopic.trim()}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary disabled:opacity-60"
+            >
+              {grillLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+              启动 6-lens 审查
+            </button>
+          </div>
+          {grillError && (
+            <p className="text-xs text-red-500">审查失败：{grillError}</p>
+          )}
+          {grillResult?.data_status === "missing" && (
+            <p className="text-xs text-amber-600">{grillResult.note}</p>
+          )}
+          {grillResult?.data_status === "ok" && grillResult.lenses.length > 0 && (
+            <div className="space-y-2">
+              {grillResult.lenses.map((lens, i) => (
+                <div key={i} className="border border-border rounded-lg p-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      lens.verdict === "pass" ? "bg-emerald-500/10 text-emerald-600" :
+                      lens.verdict === "warn" ? "bg-amber-500/10 text-amber-600" :
+                      "bg-red-500/10 text-red-600"
+                    }`}>{lens.verdict}</span>
+                    <span className="text-sm font-medium">{lens.name}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{lens.evidence}</p>
+                </div>
+              ))}
+              {grillResult.synthesis && (
+                <p className="text-xs text-foreground bg-muted/30 rounded p-2">
+                  综合：{grillResult.synthesis}
+                </p>
+              )}
+            </div>
+          )}
+          {grillResult?.data_status === "ok" && grillResult.lenses.length === 0 && grillResult.raw_content && (
+            <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
+              <p className="font-medium mb-1">LLM 未返合法 JSON（raw 供人工核）：</p>
+              <pre className="whitespace-pre-wrap">{grillResult.raw_content}</pre>
+            </div>
+          )}
         </GlassCard>
       </Zone>
 

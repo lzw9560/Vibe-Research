@@ -1530,6 +1530,21 @@ export interface AdvisoryItem {
   status?: string;
 }
 
+export interface GrillLens {
+  name: string;  // methodology/data_quality/overfit/execution/risk/consistency
+  verdict: "pass" | "warn" | "fail";
+  evidence: string;
+}
+
+export interface GrillResult {
+  data_status: "ok" | "missing";
+  lenses: GrillLens[];
+  synthesis: string | null;
+  topic?: string;
+  note?: string;
+  raw_content?: string;  // LLM 未返合法 JSON 时供人工核
+}
+
 export interface AdvisorySummary {
   recommendations: AdvisoryItem[];
   watchlist: AdvisoryItem[];

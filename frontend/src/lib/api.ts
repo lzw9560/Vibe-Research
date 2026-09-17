@@ -20,6 +20,7 @@ import type {
   BoardLadderNode,
   GraphData,
   AdvisorySummary,
+  GrillResult,
   VerificationCardResult,
   BombAlertsResult,
   SealSnapshotsResult,
@@ -256,6 +257,8 @@ export const api = {
   // S042 建议中心：三场景建议汇总（推荐/自选/持仓）
   advisorySummary: (limit?: number) =>
     get<AdvisorySummary>(`/advisory/summary${limit ? `?limit=${limit}` : ""}`),
+  advisoryGrill: (topic: string, context: string) =>
+    request<GrillResult>(`/advisory/grill`, "POST", { topic, context }),
   // S055 炸板预警 + 封单时序
   bombAlerts: (date?: string) =>
     get<BombAlertsResult>(`/risk/bomb-alerts${date ? `?date=${date}` : ""}`),
