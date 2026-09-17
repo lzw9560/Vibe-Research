@@ -18,7 +18,7 @@ interface Props {
   height?: number;
   /** 显示 MA 均线（MA5/MA10/MA20），默认 true */
   showMA?: boolean;
-  /** K 线维度：4=日K 5=周K 6=月K 11=60min（决定 setPeriod） */
+  /** K 线维度：4=日K 5=周K 6=月K 1=5min 15=15min 30=30min 11=60min（决定 setPeriod） */
   category?: number;
 }
 
@@ -138,8 +138,9 @@ export function KLineChart({ bars, height = 460, showMA = true, category = 4 }: 
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
-    // setPeriod 按 category（必须在 setDataLoader 前——period 变触发 getBars 重新加载）
-    const period = category === 11 ? { type: "minute" as const, span: 60 }
+    // setPeriod 按 category：5min→minute:5 / 15min→minute:15 / 30min→minute:30 / 60min→minute:60 / 日→day / 周→week / 月→month
+    const _MIN_SPAN: Record<number, number> = { 1: 5, 15: 15, 30: 30, 11: 60 };
+    const period = category in _MIN_SPAN ? { type: "minute" as const, span: _MIN_SPAN[category] }
       : category === 5 ? { type: "week" as const, span: 1 }
       : category === 6 ? { type: "month" as const, span: 1 }
       : { type: "day" as const, span: 1 };

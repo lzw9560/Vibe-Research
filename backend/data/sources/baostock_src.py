@@ -15,6 +15,7 @@ DependencyMissing（复用 _common 范式，下游惯用降级）。
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 from data.sources._common import DependencyMissing
@@ -22,6 +23,9 @@ from data.sources._common import DependencyMissing
 logger = logging.getLogger("vibe-research")
 
 _BS_READY = False
+# baostock login/query 进程全局非线程安全——线程池多线程竞争 login 状态坏（HTTP 5min 返 0，
+# in-process 单线程 OK）。Lock 串行 ensure_login + query（像 mini_racer singleton+lock）
+_BS_LOCK = threading.Lock()
 
 # repo 标准日K 10 字段（refresh_kline_cache / kline_returns / scan_long_value_cache 共用）
 KLINE_FIELDS = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
@@ -32,15 +36,18 @@ _FLOAT_FIELDS = frozenset({"open", "high", "low", "close", "volume", "amount",
 
 
 def ensure_login() -> None:
-    """单次 baostock login（进程级，幂等）。失败 raise DependencyMissing/ImportError。"""
+    """单次 baostock login（进程级，幂等，线程安全——Lock 串行避免线程池竞争 login 状态坏）。"""
     global _BS_READY
     if _BS_READY:
         return
-    import baostock as bs  # noqa: PLC0415
-    rs = bs.login()
-    if rs.error_code != "0":
-        raise DependencyMissing(f"baostock login 失败: {rs.error_code} {rs.error_msg}")
-    _BS_READY = True
+    with _BS_LOCK:
+        if _BS_READY:  # double-checked
+            return
+        import baostock as bs  # noqa: PLC0415
+        rs = bs.login()
+        if rs.error_code != "0":
+            raise DependencyMissing(f"baostock login 失败: {rs.error_code} {rs.error_msg}")
+        _BS_READY = True
 
 
 def _try_login() -> bool:
@@ -98,22 +105,24 @@ def fetch_5min_bars(code: str, start: str, end: str) -> list[dict[str, Any]]:
     import baostock as bs  # noqa: PLC0415
     bc = _six_to_baostock(code)
     bars: list[dict[str, Any]] = []
-    try:
-        rs = bs.query_history_k_data_plus(
-            bc, "date,time,open,high,low,close,volume",
-            start_date=start, end_date=end, frequency="5", adjustflag="2",
-        )
-        while rs.error_code == "0" and rs.next():
-            row = rs.get_row_data()
-            bars.append({
-                "date": row[0], "time": row[1],
-                "open": float(row[2]), "high": float(row[3]),
-                "low": float(row[4]), "close": float(row[5]),
-                "volume": float(row[6]) if row[6] else 0.0,
-            })
-    except Exception as e:  # noqa: BLE001
-        logger.warning("[baostock] fetch_5min_bars %s %s~%s 失败: %s", code, start, end, e)
-        return []
+    # Lock 串行 query+fetch（baostock query 进程全局非线程安全，线程池竞争状态坏 HTTP 返 0）
+    with _BS_LOCK:
+        try:
+            rs = bs.query_history_k_data_plus(
+                bc, "date,time,open,high,low,close,volume",
+                start_date=start, end_date=end, frequency="5", adjustflag="2",
+            )
+            while rs.error_code == "0" and rs.next():
+                row = rs.get_row_data()
+                bars.append({
+                    "date": row[0], "time": row[1],
+                    "open": float(row[2]), "high": float(row[3]),
+                    "low": float(row[4]), "close": float(row[5]),
+                    "volume": float(row[6]) if row[6] else 0.0,
+                })
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[baostock] fetch_5min_bars %s %s~%s 失败: %s", code, start, end, e)
+            return []
     return bars
 
 

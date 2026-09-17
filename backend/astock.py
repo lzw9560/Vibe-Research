@@ -131,52 +131,52 @@ def _resample_daily_to_period(daily: list[dict], category: int) -> list[dict]:
     return out
 
 
-def _aggregate_5min_to_60min(bars_5min: list[dict]) -> list[dict]:
-    """5min bars → 60min bars（A 股 4 窗口/天：9:30-10:30/10:30-11:30/13:00-14:00/14:00-15:00）。
+def _baostock_5min_to_timestamp(time_str: str) -> int:
+    """baostock time "20260915093500000" (YYYYMMDDHHMMSSmmm) → ms timestamp（北京 +08:00）。"""
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    y, mo, d, hh, mm = int(time_str[:4]), int(time_str[4:6]), int(time_str[6:8]), int(time_str[8:10]), int(time_str[10:12])
+    return int(_dt(y, mo, d, hh, mm, tzinfo=_tz(_td(hours=8))).timestamp() * 1000)
 
-    baostock 5min time 格式 "20260915093500000"（YYYYMMDDHHMMSSmmm）。按 date + window 分组
-    聚合 open=首/high=max/low=min/close=末/volume=sum。返 bar 含 timestamp（ms，窗口开始）供 klinecharts。
+
+def _aggregate_5min_to_period(bars_5min: list[dict], period_min: int) -> list[dict]:
+    """5min bars → period_min 分钟 bars（5/15/30/60）。按 timestamp floor 到 period_min 窗口分组聚合。
+
+    period_min=5 → 直接返（加 timestamp，不聚合）。
+    聚合 open=首/high=max/low=min/close=末/volume=sum，返 bar 含 timestamp（窗口开始 ms）+ date。
     """
-    def _window(time_str: str) -> str:
-        if len(time_str) < 12:
-            return ""
-        hhmm = time_str[8:12]
-        h, m = int(hhmm[:2]), int(hhmm[2:4])
-        if h < 10 or (h == 10 and m <= 30):
-            return "0930"  # 9:30-10:30
-        if h == 10 or (h == 11 and m <= 30):
-            return "1030"  # 10:30-11:30
-        if h < 14 or (h == 14 and m == 0):
-            return "1300"  # 13:00-14:00
-        return "1400"  # 14:00-15:00
-
-    groups: dict[tuple[str, str], list[dict]] = {}
+    if not bars_5min:
+        return []
+    period_ms = period_min * 60 * 1000
+    # 给每个 bar 加 timestamp（如果没有）
+    enriched = []
     for b in bars_5min:
-        date = b.get("date", "")
-        win = _window(b.get("time", ""))
-        if not date or not win:
+        ts = b.get("timestamp")
+        if ts is None and b.get("time"):
+            ts = _baostock_5min_to_timestamp(b["time"])
+        if ts is None:
             continue
-        key = (date, win)
+        enriched.append({**b, "timestamp": ts})
+
+    if period_min == 5:
+        return enriched  # 5min 直接返（已加 timestamp）
+
+    # 按 floor(timestamp / period_ms) 分组
+    groups: dict[int, list[dict]] = {}
+    for b in enriched:
+        key = (b["timestamp"] // period_ms) * period_ms
         if key not in groups:
             groups[key] = []
         groups[key].append(b)
 
     out: list[dict] = []
-    for (date, win), grp in sorted(groups.items()):
-        if not grp:
-            continue
+    for key in sorted(groups):
+        grp = groups[key]
         highs = [g["high"] for g in grp if g.get("high") is not None]
         lows = [g["low"] for g in grp if g.get("low") is not None]
         vols = [g["volume"] for g in grp if g.get("volume") is not None]
-        # timestamp = 窗口开始时间（ms，北京 +08:00）
-        ts_str = f"{date.replace('-', '')}{win}00000"
-        # 解析 YYYYMMDDHHMMSS + 8h offset → ms
-        y, mo, d, hh, mm = int(ts_str[:4]), int(ts_str[4:6]), int(ts_str[6:8]), int(ts_str[8:10]), int(ts_str[10:12])
-        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
-        ts = int(_dt(y, mo, d, hh, mm, tzinfo=_tz(_td(hours=8))).timestamp() * 1000)
         out.append({
-            "date": date,
-            "timestamp": ts,
+            "date": grp[0].get("date", ""),
+            "timestamp": key,
             "open": grp[0].get("open"),
             "high": max(highs) if highs else None,
             "low": min(lows) if lows else None,
@@ -187,16 +187,16 @@ def _aggregate_5min_to_60min(bars_5min: list[dict]) -> list[dict]:
 
 
 def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
-    """K线：mootdx 优先（category 4=日/5=周/6=月/11=60min 透传 frequency），空时多源回退。
+    """K线：category 1=5min / 15=15min / 30=30min / 11=60min / 4=日 / 5=周 / 6=月。
 
-    mootdx 返空（服务器/库坏，实测 bars 0 + bestip NoneType）→ kline_multi 多源回退：
-    - category=4（日K）：fetch_kline 多源（baidu→sina→mootdx→akshare）sina/baidu 可拿到 ~1000 bars
-    - category=5/6（周/月K）：从日K回退源 resample（_resample_daily_to_period 纯函数聚合）
-    - category=11（60min）：回退源无 intraday，mootdx 坏则返 []（诚实，不臆造）
+    分钟K（1/15/30/11）: baostock 5min bars 聚合成对应周期（_aggregate_5min_to_period）。
+    日/周/月K（4/5/6）: kline_multi 并发多源（baidu→sina→mootdx→akshare）+ resample。
     """
     from data.sources.mootdx_src import kline as _mootdx_kline
-    # category=11（60min）: baostock 5min 聚合成 60min（A 股 4 窗口/天）——独立分支，不走日K kline_multi
-    if category == 11:
+    # 分钟K（category 1=5min / 15=15min / 30=30min / 11=60min）: baostock 5min 聚合——独立分支，不走日K kline_multi
+    _MIN_CATEGORY = {1: 5, 15: 15, 30: 30, 11: 60}
+    if category in _MIN_CATEGORY:
+        period_min = _MIN_CATEGORY[category]
         try:
             from data.sources.baostock_src import fetch_5min_bars
             from datetime import datetime, timedelta
@@ -204,10 +204,11 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
             start = (datetime.now() - timedelta(days=offset * 2)).strftime("%Y-%m-%d")
             bars_5min = fetch_5min_bars(code, start, end)
             if bars_5min:
-                agg = _aggregate_5min_to_60min(bars_5min)
-                return agg[-(offset * 4):] if len(agg) > offset * 4 else agg  # offset 天 × 4 根/天
+                agg = _aggregate_5min_to_period(bars_5min, period_min)
+                bars_per_day = 240 // period_min  # 4h × 60min / period_min
+                return agg[-(offset * bars_per_day):] if len(agg) > offset * bars_per_day else agg
         except Exception as e:
-            logging.getLogger("astock").warning("kline(%s) 60min baostock 5min 聚合失败: %s", code, e)
+            logging.getLogger("astock").warning("kline(%s) %dmin baostock 5min 聚合失败: %s", code, period_min, e)
         return []
     # kline_multi 并发优先（~4.6s sina 1023 bars，比 mootdx 7.6s 60 bars 快+多）
     # mootdx 不稳定（bestip 慢 + 有时返空走 baostock 回退 9s）→ 作回退
