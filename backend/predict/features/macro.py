@@ -84,6 +84,15 @@ MACRO_SPECS: tuple[FeatureSpec, ...] = (
         compliance_flag="ok",
         description="LME铜价(PCOPPUSDM，FRED原生)，日频，走Fred独立通道",
     ),
+    FeatureSpec(
+        name="us_vix",
+        source="fred_api",
+        category="macro",
+        availability_offset=1,
+        stage="s2",
+        compliance_flag="ok",
+        description="VIX恐慌指数(VIXCLS, CBOE)，日频，美股风险偏好核心指标，走Fred独立通道（akshare无美股VIX只有中国QVIX，2026-09-17 S215 宏观接入 workflow 补第8因子）",
+    ),
 )
 
 # Fred series_id 映射（固定，可复算）
@@ -97,6 +106,7 @@ FRED_SERIES = {
     "usd_cny": "DEXCHUS",
     "wti_crude": "DCOILWTICO",
     "lme_copper": "PCOPPUSDM",
+    "us_vix": "VIXCLS",  # CBOE VIX（美股恐慌指数，akshare 无美股 VIX 只有中国 QVIX）
 }
 
 
