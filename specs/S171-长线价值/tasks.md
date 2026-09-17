@@ -2,6 +2,24 @@
 
 > 状态：草案 | 日期：2026-09-08 | 关联：[spec.md](./spec.md)（822db17）+ [plan.md](./plan.md)
 
+## 实施状态（2026-09-17，主 loop 自主推进 T8-T15）
+
+**R1 数据采集（T1-T7）DONE**：
+- T1 event_materiality_floor 第 5 参数 DONE（`backend/tools/_s44_wire.py:71/78-81/122`，条件透传 verify + 存 Recorder params）
+- T2-T7 scan_long_value_cache.py DONE（`backend/tools/scan_long_value_cache.py` 462 行，Layer0.5-4 baostock 多年 cache：stock_basic/kline_raw/qfq/profit/universe/benchmark）
+
+**R2 harness（T8-T15）DONE**（`backend/tools/long_value_run.py`，58 test passed）：
+- T8 月度 rebalance + PIT + quintile（`d39fa81`，14 test）——month_end_rebalance_days + compute_pe PIT gate pubDate<D + get_pit_profit_row tie-breaking + select_quintiles + compute_exclusion_rate
+- T9 co-PRIMARY ① Q1-Q5 spread（`6aaa340`，+3 test）——wire_q1_q5_spread event edge_type + cost 双腿预扣
+- T10 co-PRIMARY ② Q1-excess-universe（`00c7ae0`，+6 test）——wire_q1_excess_universe selection + window_sanity R5 + 月度参数 5 个
+- T11 AUXILIARY + SECONDARY（`104b0d6`，+5 test）——wire_auxiliary_low_high + wire_secondary_q1_hs300 + _benchmark_monthly_return
+- T12 退市 inject + sensitivity（`6742e66`，+10 test）——inject_delisting + run_sensitivity_two_tier -0.5/-1.0 两档
+- T13 wire_s171_full + 三 gate（`f2c6081`，+12 test）——gate_cross_primary_consistency + gate_sensitivity_consistency + gate_delisting_coverage + wire_s171_full 互验
+- T14 dry-run + mini-wire（`1f3f48b`，+4 test）——dry_run 验收 4 项 + mini_wire 缩减 walk_train=3 触发 OOS + Recorder.save
+- T15 A5 reproduce（`056e93a`，+4 test）——reproduce_verdict Recorder.load + _VERIFY_PARAMS 白名单 + verify 重算 status 一致
+
+**待跑**：真跑 verdict 落 Recorder 要 R1 cache（scan_long_value_cache baostock PIT 数据，长任务）。前端 S171ValueVerdict mock 是 honest 降级（Recorder 无 S171 数据走 fallback，非"未接"）。
+
 可执行 checklist。每条带依赖 + 验收点。按依赖序勾。
 
 ## T1 R3 event_materiality_floor 第 5 参数（先做，TDD）
