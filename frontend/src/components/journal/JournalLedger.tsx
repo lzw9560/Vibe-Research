@@ -2,6 +2,11 @@
 // 读 GET /api/journal/closed-loop + /api/journal/drawdown-status。
 // 与 TradeJournalSection（手动真实成交）分离——闭环臂走 accounting 净口径。
 // 不臆造：后端未就绪 → ApiError 横幅；空数据 → 如实呈现"暂无闭环记录"。
+//
+// TODO（S211 孤儿 API）: /api/journal/arm-forward-monitor?arm=consecutive_relay
+// （commit 0fed616 报告型 forward 监控）前端未接入——该加 consecutive_relay arm
+// forward 监控卡（n_picks/n_days/days_to_60/consecutive_loss/kill_criteria）。
+// 等 consecutive_relay live data 积累（60 天 forward OOS）后接入更合适。
 import { GlassCard } from "@/components/ui/GlassCard";
 import { ApiError } from "@/lib/api";
 import { useClosedLoop, useDrawdownStatus } from "@/lib/query";

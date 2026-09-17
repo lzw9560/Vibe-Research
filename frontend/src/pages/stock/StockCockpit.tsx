@@ -14,6 +14,7 @@ import { StrategySignalsView } from "@/components/stock/StrategySignalsView";
 import { NewsPanel } from "@/components/stock/NewsPanel";
 import { FinancialsPanel } from "@/components/stock/FinancialsPanel";
 import { FundFlowPanel } from "@/components/stock/FundFlowPanel";
+import { TechScoreCard } from "@/components/stock/TechScoreCard";
 import { useCurrentStock, useSelectStock } from "@/stores/currentStock";
 import { useStockDeep } from "@/lib/query/stock";
 import type { Quote, StockDeep as StockDeepData } from "@/lib/api";
@@ -95,10 +96,13 @@ function SignalArea({ code, date }: { code: string; date: string }) {
 
 // ─── K 线卡片（多时间维度切换：日K/周K/月K/60min）──────────────────────────
 const KLINE_DIMS = [
+  { c: 1, label: "5min", src: "baostock 5min" },
+  { c: 15, label: "15min", src: "5min 聚合" },
+  { c: 30, label: "30min", src: "5min 聚合" },
+  { c: 11, label: "60min", src: "5min 聚合" },
   { c: 4, label: "日K", src: "baostock回退" },
   { c: 5, label: "周K", src: "日K resample" },
   { c: 6, label: "月K", src: "日K resample" },
-  { c: 11, label: "60min", src: "无 intraday 源" },
 ];
 
 /** 日K → 周K(5)/月K(6) resample（前端纯函数，仿后端 _resample_daily_to_period）。
@@ -143,6 +147,42 @@ function resampleDailyToPeriod(daily: any[], category: number): any[] {
   return out;
 }
 
+/** 5min bars → 15/30/60min 聚合（前端纯函数，仿后端 _aggregate_5min_to_period）。
+ * 按 timestamp floor 到 period_min 窗口分组。open=首/high=max/low=min/close=末/volume=sum。
+ * 5min 直接返（已含 timestamp）。不臆造。 */
+const _MIN_SPAN: Record<number, number> = { 1: 5, 15: 15, 30: 30, 11: 60 };
+function aggregate5minToPeriod(bars5min: any[], category: number): any[] {
+  if (!bars5min.length) return [];
+  const periodMin = _MIN_SPAN[category] ?? 5;
+  if (periodMin === 5) return bars5min; // 5min 直接返
+  const periodMs = periodMin * 60 * 1000;
+  const groups = new Map<number, any[]>();
+  for (const b of bars5min) {
+    const ts = b.timestamp ?? 0;
+    if (!ts) continue;
+    const key = Math.floor(ts / periodMs) * periodMs;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(b);
+  }
+  const out: any[] = [];
+  for (const [key, grp] of groups) {
+    if (!grp.length) continue;
+    const highs = grp.map((r) => r.high).filter((v) => v != null);
+    const lows = grp.map((r) => r.low).filter((v) => v != null);
+    const vols = grp.map((r) => r.volume).filter((v) => v != null);
+    out.push({
+      date: grp[0].date,
+      timestamp: key,
+      open: grp[0].open,
+      high: highs.length ? Math.max(...highs) : null,
+      low: lows.length ? Math.min(...lows) : null,
+      close: grp[grp.length - 1].close,
+      volume: vols.length ? vols.reduce((a: number, b: number) => a + b, 0) : null,
+    });
+  }
+  return out;
+}
+
 function KlineCard({ code, initialBars }: { code: string; initialBars: any[] }) {
   const [category, setCategory] = useState(4);
   const [bars, setBars] = useState<any[]>(initialBars);
@@ -159,25 +199,22 @@ function KlineCard({ code, initialBars }: { code: string; initialBars: any[] }) 
       setBars(resampleDailyToPeriod(initialBars, category));
       return;
     }
-    // 60min fetch
-    // eslint-disable-next-line no-console
-    console.log("[KlineCard] 60min fetch start", { code, category });
-    let cancelled = false;
-    setLoading(true);
-    api
-      .kline(code, 11, 1)
-      .then((r) => {
-        // eslint-disable-next-line no-console
-        console.log("[KlineCard] 60min fetch ok", { len: Array.isArray(r) ? r.length : "non-array", first: Array.isArray(r) ? r[0] : r });
-        if (!cancelled) setBars(Array.isArray(r) ? r : []);
-      })
-      .catch((e) => {
-        // eslint-disable-next-line no-console
-        console.log("[KlineCard] 60min fetch fail", e);
-        if (!cancelled) setBars([]);
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    // 分钟K（1/15/30/11）: fetch 5min 一次，15/30/60 前端聚合（避免 baostock 多次 login/logout 在线程池串调失败）
+    if ([1, 15, 30, 11].includes(category)) {
+      let cancelled = false;
+      setLoading(true);
+      api
+        .kline(code, 1, 1)  // 永远 fetch 5min（category=1），前端聚合到 15/30/60
+        .then((r) => {
+          if (!cancelled) {
+            const bars5min = Array.isArray(r) ? r : [];
+            setBars(aggregate5minToPeriod(bars5min, category));
+          }
+        })
+        .catch(() => { if (!cancelled) setBars([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
+    }
   }, [code, category, initialBars]);
 
   const dim = KLINE_DIMS.find((d) => d.c === category) ?? KLINE_DIMS[0];
@@ -275,6 +312,8 @@ function ChartCenter({ code, data, date, activePanel }: { code: string; data: St
         <h3 className="mb-3 text-sm font-semibold">资金</h3>
         <FundFlowPanel code={code} />
       </GlassCard>
+    ) : activePanel === "techScore" ? (
+      <TechScoreCard code={code} />
     ) : activePanel === "watchlist" || activePanel === "notes" || activePanel === "ai" ? (
       <GlassCard className="p-4">
         <HonestEmptyState

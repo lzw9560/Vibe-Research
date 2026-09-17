@@ -189,6 +189,9 @@ export const api = {
   // 战法信号
   strategySignals: (code: string, date?: string) =>
     get<any[]>(`/strategy/signals/${code}${date ? `?date=${date}` : ""}`),
+  // S215 通用技术指标评分（MA/MACD/RSI/量能/乖离/支撑 100 分 + 信号）
+  techScore: (code: string) =>
+    get<any>(`/stock/tech-score?code=${code}`),
   strategyRegistry: () =>
     get<any[]>("/strategy/registry"),
   // 回测
