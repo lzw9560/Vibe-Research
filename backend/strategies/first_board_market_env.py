@@ -59,6 +59,13 @@ MARKET_ENV_THRESHOLDS: dict = {
     # ── 因素3 连板最高板 ──────────────────────────────────────────────
     "max_boards_green": 4,     # 最高板 ≥ 4 → 绿灯因素
     "max_boards_red": 2,      # 最高板 ≤ 2 → 红灯因素
+    # ── 因素4 国内流动性 gate（DR007 + QVIX，S215 宏观接入 workflow）──────────────
+    # ⚠️ 阈值标 overfit 风险（社区阈值须 sweep 校准，当前骨架占位）
+    # DR007：银行间流动性（高紧/低松）；QVIX：中国 VIX（恐慌）
+    "dr007_green": 1.8,        # DR007 < 1.8% → 流动性宽松 → 绿灯因素
+    "dr007_red": 2.5,          # DR007 > 2.5% → 流动性紧张 → 红灯因素
+    "qvix_green": 20,          # QVIX < 20 → 低恐慌 → 绿灯因素
+    "qvix_red": 35,            # QVIX > 35 → 高恐慌 → 红灯因素
 }
 
 # 权重（spec 2.3）：沪深300 50% + 涨停家数 30% + 连板 20%
@@ -289,6 +296,35 @@ def fetch_max_boards(date: str) -> dict:
 
 
 # ===========================================================================
+# 036b 国内流动性 gate（DR007 + QVIX，S215 宏观接入第 4 因素）
+# ===========================================================================
+
+def fetch_domestic_liquidity() -> dict:
+    """国内流动性 gate——DR007（银行间流动性）+ QVIX（中国 VIX 恐慌）组合。
+
+    数据源约束（⚠️ 待建，不臆造）：
+    - DR007 走 akshare interest_rate（SHIBOR 系列）——akshare 裸调违反防封底线，
+      akshare_src 无 em_get wrapper（grep 确认），故本函数返 None 标 TODO，不真调。
+    - QVIX 走 akshare index_option_300etf_qvix（中国 VIX）——同上裸调违底线，返 None。
+    - 真调须先建 astock.em_get wrapper（DR007/QVIX 走东财 datacenter 限流通道）或
+      用 cache/defer。当前骨架占位，judge 该因素 None → yellow（不参与判定）。
+
+    Returns:
+        dict 含：
+        - dr007: float | None（DR007 利率%，低=宽松/高=紧张；None=数据源待建）
+        - qvix: float | None（QVIX 中国 VIX，低=平稳/高=恐慌；None=数据源待建）
+        - note: str（标注数据源待 em_get wrapper）
+    """
+    # TODO（S215 宏观接入 workflow）：建 astock.em_get wrapper 取 DR007/QVIX
+    #   或从 .vibe-research/ cache 读（每日 macro cron 写）。当前返 None 不臆造。
+    return {
+        "dr007": None,
+        "qvix": None,
+        "note": "数据源待建（akshare 裸调违防封底线，须 em_get wrapper 或 cache）",
+    }
+
+
+# ===========================================================================
 # 037 3因素组合判定
 # ===========================================================================
 
@@ -296,19 +332,17 @@ def judge_market_env(
     hs300_pct: float | None,
     zt_compare: dict,
     max_boards_data: dict,
+    domestic_liquidity: dict | None = None,
 ) -> dict:
-    """3因素组合判定绿/黄/红灯 + 仓位建议。
+    """4因素组合判定绿/黄/红灯 + 仓位建议。
 
-    规则（spec 2.3）：
-    - 绿灯：hs300>0.5% OR zt_ratio>0.5 OR max_boards≥4（任一绿即绿）
-    - 红灯：hs300<-0.5% AND zt_ratio<0.3 AND max_boards≤2（全红才红）
+    规则（spec 2.3 + S215 第 4 因素国内流动性）：
+    - 绿灯：hs300>0.5% OR zt_ratio>0.5 OR max_boards≥4 OR 流动性绿灯（任一绿即绿）
+    - 红灯：hs300<-0.5% AND zt_ratio<0.3 AND max_boards≤2 AND 流动性红灯（全红才红）
     - 黄灯：其他
 
-    数据缺失降级：任一因素 None → 该因素不参与判定（不因数据缺失误判红灯）。
-    具体规则修正：
-    - 若所有因素都缺失 → 黄灯（无法判定，默认中性）
-    - 若仅一个红因素 + 其他缺失 → 黄灯（不满足"全红才红"）
-    - 若一个绿因素 + 其他缺失 → 绿灯（满足"任一绿即绿"）
+    数据缺失降级：任一因素 None → 该因素 yellow（不参与判定，不因数据缺失误判红灯）。
+    domestic_liquidity=None（默认，S215 数据源待建）→ 第 4 因素 yellow，不影响 3 因素判定（backward compat）。
 
     Returns:
         dict 含：
@@ -316,13 +350,14 @@ def judge_market_env(
         - hs300_pct: float | None
         - zt_count_t1: int, zt_count_t: int | None, zt_ratio: float | None
         - max_boards: int | None, max_boards_is_t1_fallback: bool
-        - factors: {hs300/zt_count/max_boards 各自 green/yellow/red}
+        - dr007: float | None, qvix: float | None（第 4 因素）
+        - factors: {hs300/zt_count/max_boards/domestic_liquidity 各自 green/yellow/red}
         - position_advice: str（灯位 → 仓位建议文案）
     """
     # 因素1：沪深300
     hs300_factor: str
     if hs300_pct is None:
-        hs300_factor = "yellow"  # 数据缺失 → 中性
+        hs300_factor = "yellow"
     elif hs300_pct > MARKET_ENV_THRESHOLDS["hs300_green"]:
         hs300_factor = "green"
     elif hs300_pct < MARKET_ENV_THRESHOLDS["hs300_red"]:
@@ -336,7 +371,7 @@ def judge_market_env(
     zt_count_t = zt_compare.get("zt_count_t") if zt_compare else None
     zt_factor: str
     if zt_ratio is None:
-        zt_factor = "yellow"  # T日竞价数缺失 → 中性
+        zt_factor = "yellow"
     elif zt_ratio > MARKET_ENV_THRESHOLDS["zt_ratio_green"]:
         zt_factor = "green"
     elif zt_ratio < MARKET_ENV_THRESHOLDS["zt_ratio_red"]:
@@ -357,14 +392,42 @@ def judge_market_env(
     else:
         mb_factor = "yellow"
 
+    # 因素4：国内流动性 gate（DR007 + QVIX）——数据源待建，None → yellow
+    dr007 = domestic_liquidity.get("dr007") if domestic_liquidity else None
+    qvix = domestic_liquidity.get("qvix") if domestic_liquidity else None
+    dl_factor: str
+    if dr007 is None and qvix is None:
+        dl_factor = "yellow"  # 数据源待建 → 中性，不参与判定
+    else:
+        # DR007 低=宽松绿 / 高=紧张红；QVIX 低=平稳绿 / 高=恐慌红
+        # 取两者最严（任一红→红，都绿→绿，否则黄）
+        dr007_f = ("red" if dr007 is not None and dr007 > MARKET_ENV_THRESHOLDS["dr007_red"]
+                   else "green" if dr007 is not None and dr007 < MARKET_ENV_THRESHOLDS["dr007_green"]
+                   else "yellow")
+        qvix_f = ("red" if qvix is not None and qvix > MARKET_ENV_THRESHOLDS["qvix_red"]
+                  else "green" if qvix is not None and qvix < MARKET_ENV_THRESHOLDS["qvix_green"]
+                  else "yellow")
+        sub = [dr007_f, qvix_f]
+        if "red" in sub:
+            dl_factor = "red"
+        elif all(v == "green" for v in sub):
+            dl_factor = "green"
+        else:
+            dl_factor = "yellow"
+
     # 组合判定
+    # 因素4 data-missing（None）时不加入 factors——保持原 3 因素行为（backward compat），
+    # 有数据才加第 4 因素。避免 data-missing 的 yellow 破坏 all-red 判定。
     factors = {"hs300": hs300_factor, "zt_count": zt_factor, "max_boards": mb_factor}
+    dl_data_missing = dr007 is None and qvix is None
+    if not dl_data_missing:
+        factors["domestic_liquidity"] = dl_factor
     # 绿灯：任一绿即绿（数据缺失不影响绿判定）
     if "green" in factors.values():
         light = "green"
-    # 红灯：全红才红（数据缺失因素不算红，所以全红需所有非缺失因素都红 + 无缺失因素，
+    # 红灯：全红才红（数据缺失因素不算红，故全红需所有非缺失因素都红 + 无缺失因素，
     #   但若所有因素缺失则上面已判黄）。此处语义：已排除绿后，若任一因素为 yellow
-    #   （含数据缺失）→ 不能判红，判黄；仅当三因素都明确 red 才判红。
+    #   （含数据缺失）→ 不能判红，判黄；仅当所有因素都明确 red 才判红。
     elif all(v == "red" for v in factors.values()):
         light = "red"
     else:
@@ -378,6 +441,8 @@ def judge_market_env(
         "zt_ratio": zt_ratio,
         "max_boards": mb,
         "max_boards_is_t1_fallback": mb_fallback,
+        "dr007": dr007,
+        "qvix": qvix,
         "factors": factors,
         "position_advice": _POSITION_ADVICE[light],
     }
@@ -401,11 +466,12 @@ def _format_market_env_message(result: dict) -> str:
         f"",
         f"---",
         f"",
-        f"**3因素明细**：",
+        f"**4因素明细**：",
         f"",
         f"- 沪深300涨跌幅：{_fmt_pct(judge.get('hs300_pct'))} （{judge.get('factors', {}).get('hs300', '-')}）",
         f"- 涨停家数：T-1={judge.get('zt_count_t1', 0)}家 / T日={_fmt_int(judge.get('zt_count_t'))}家 / 比值={_fmt_ratio(judge.get('zt_ratio'))} （{judge.get('factors', {}).get('zt_count', '-')}）",
         f"- 连板最高板：{_fmt_int(judge.get('max_boards'))}板 {'(T-1回溯)' if judge.get('max_boards_is_t1_fallback') else ''} （{judge.get('factors', {}).get('max_boards', '-')}）",
+        f"- 国内流动性：DR007={_fmt_pct(judge.get('dr007'))} / QVIX={_fmt_pct(judge.get('qvix'))} （{judge.get('factors', {}).get('domestic_liquidity', '-')}，数据源待建）",
         f"",
         f"---",
         f"",
@@ -493,6 +559,32 @@ def notify_market_env(result: dict) -> bool:
 
 
 # ===========================================================================
+# 判定合并入口（market_env vs storm，S215 宏观接入 workflow）
+# ===========================================================================
+
+def merge_env_and_storm(market_light: str, storm_light: str) -> str:
+    """判定合并入口——first_board_market_env（A 股内部）vs storm（全球风险）两门合并。
+
+    避免 two regime gate 读同一份数据打架。规则（红灯取最严）：
+    - 任一红 → 红（全球风险或 A 股内部任一红灯 → 压仓位）
+    - 都绿 → 绿（两门都放行才绿灯）
+    - 其他 → 黄（一门黄一门绿 / 两黄）
+
+    Args:
+        market_light: first_board_market_env judge 的 light（green/yellow/red）
+        storm_light: storm_predictor 的 weather light（green/yellow/red）
+
+    Returns:
+        合并后 light（green/yellow/red）。
+    """
+    if "red" in (market_light, storm_light):
+        return "red"
+    if market_light == "green" and storm_light == "green":
+        return "green"
+    return "yellow"
+
+
+# ===========================================================================
 # 主入口
 # ===========================================================================
 
@@ -524,8 +616,11 @@ def run_market_env_check(date: str) -> dict:
     # 036 连板最高板
     max_boards_data = fetch_max_boards(compact_date)
 
-    # 037 3因素组合判定
-    judge = judge_market_env(hs300_pct, zt_compare, max_boards_data)
+    # 036b 国内流动性 gate（S215 第 4 因素，数据源待建返 None）
+    domestic_liquidity = fetch_domestic_liquidity()
+
+    # 037 4因素组合判定
+    judge = judge_market_env(hs300_pct, zt_compare, max_boards_data, domestic_liquidity)
 
     # 038 飞书通知
     result = {
@@ -533,6 +628,7 @@ def run_market_env_check(date: str) -> dict:
         "hs300_pct": hs300_pct,
         "zt_compare": zt_compare,
         "max_boards_data": max_boards_data,
+        "domestic_liquidity": domestic_liquidity,
         "judge": judge,
         "notified": False,
     }

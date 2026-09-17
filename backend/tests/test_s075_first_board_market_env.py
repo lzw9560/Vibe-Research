@@ -644,3 +644,72 @@ class TestRunMarketEnvCheck:
         assert result["judge"]["factors"]["hs300"] == "yellow"
         assert result["judge"]["factors"]["zt_count"] == "yellow"
         assert result["judge"]["factors"]["max_boards"] == "yellow"
+
+
+# ── S215 宏观接入：第 4 因素 + 判定合并入口 ──────────────────────────────
+
+
+class TestDomesticLiquidityFactor4:
+    """S215：第 4 因素国内流动性 gate（DR007+QVIX）+ 判定合并入口。"""
+
+    def test_factor4_data_missing_excluded_from_factors(self):
+        """dl 数据缺失（None）→ 不加入 factors（保持原 3 因素行为）。"""
+        from strategies.first_board_market_env import judge_market_env
+        result = judge_market_env(
+            hs300_pct=-1.0,
+            zt_compare=_make_zt_compare(ratio=0.2),
+            max_boards_data=_make_max_boards_data(max_boards=2),
+        )
+        assert "domestic_liquidity" not in result["factors"]  # 数据缺失不加入
+        assert result["light"] == "red"  # 3 因素全红 → 红
+        assert result["dr007"] is None
+        assert result["qvix"] is None
+
+    def test_factor4_red_liquidity_tight(self):
+        """dl 数据有 + 流动性紧张（DR007>2.5 + QVIX>35）→ 第 4 因素红。"""
+        from strategies.first_board_market_env import judge_market_env
+        result = judge_market_env(
+            hs300_pct=0.2,  # yellow
+            zt_compare=_make_zt_compare(ratio=0.4),  # yellow
+            max_boards_data=_make_max_boards_data(max_boards=3),  # yellow
+            domestic_liquidity={"dr007": 3.0, "qvix": 40, "note": "紧张"},
+        )
+        assert result["factors"]["domestic_liquidity"] == "red"
+        # 3 因素 yellow + dl red → 非全红 → yellow
+        assert result["light"] == "yellow"
+
+    def test_factor4_green_liquidity_loose(self):
+        """dl 数据有 + 流动性宽松（DR007<1.8 + QVIX<20）→ 第 4 因素绿 → 任一绿即绿。"""
+        from strategies.first_board_market_env import judge_market_env
+        result = judge_market_env(
+            hs300_pct=0.2,  # yellow
+            zt_compare=_make_zt_compare(ratio=0.4),  # yellow
+            max_boards_data=_make_max_boards_data(max_boards=3),  # yellow
+            domestic_liquidity={"dr007": 1.5, "qvix": 15, "note": "宽松"},
+        )
+        assert result["factors"]["domestic_liquidity"] == "green"
+        assert result["light"] == "green"  # 任一绿即绿
+
+
+class TestMergeEnvAndStorm:
+    """S215 判定合并入口——market_env vs storm 两门合并（红灯取最严）。"""
+
+    def test_any_red_wins(self):
+        """任一红 → 红（最严）。"""
+        from strategies.first_board_market_env import merge_env_and_storm
+        assert merge_env_and_storm("red", "green") == "red"
+        assert merge_env_and_storm("green", "red") == "red"
+        assert merge_env_and_storm("red", "yellow") == "red"
+        assert merge_env_and_storm("yellow", "red") == "red"
+
+    def test_both_green_pass(self):
+        """都绿 → 绿（两门都放行）。"""
+        from strategies.first_board_market_env import merge_env_and_storm
+        assert merge_env_and_storm("green", "green") == "green"
+
+    def test_other_yellow(self):
+        """一门黄一门绿 / 两黄 → 黄。"""
+        from strategies.first_board_market_env import merge_env_and_storm
+        assert merge_env_and_storm("green", "yellow") == "yellow"
+        assert merge_env_and_storm("yellow", "green") == "yellow"
+        assert merge_env_and_storm("yellow", "yellow") == "yellow"
