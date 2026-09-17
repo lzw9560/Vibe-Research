@@ -339,4 +339,132 @@ __all__ = [
     "month_end_rebalance_days",
     "load_r1_cache",
     "wire_q1_q5_spread",
+    "_monthly_return",
+    "wire_q1_excess_universe",
 ]
+
+
+def _monthly_return(
+    bars: list[dict], rebalance_date: str, prev_rebalance_date: str | None
+) -> float | None:
+    """月度收益 = (close_D - close_prev)/close_prev。停牌/无数据返 None。
+
+    复用 _close_on_or_before（停牌 volume==0 跳过，不取 stale close）。
+    prev_rebalance_date=None（第一个月）返 None（无前月，不能算收益）。
+    spec bug 9：rebalance_date 当日停牌（volume==0 或无 bar）→ 返 None（停牌股从月度收益剔除）。
+    """
+    if prev_rebalance_date is None:
+        return None
+    # 停牌检测：rebalance_date 当日 volume==0 或无 bar → 剔除（spec bug 9）
+    suspended = True
+    for b in bars:
+        d = b.get("date", "")
+        if d == rebalance_date:
+            suspended = b.get("volume", 0) == 0
+            break
+        if d > rebalance_date:
+            break
+    if suspended:
+        return None
+    close_d = _close_on_or_before(bars, rebalance_date)
+    if close_d is None:
+        return None
+    close_prev = _close_on_or_before(bars, prev_rebalance_date)
+    if close_prev is None or close_prev == 0:
+        return None
+    return (close_d - close_prev) / close_prev
+
+
+def wire_q1_excess_universe(months: list[str] | None = None) -> dict:
+    """T10: co-PRIMARY ② Q1-excess-over-universe wire（selection edge_type，long-only 可实现）。
+
+    构建 survivors_by_month={月:Q1 returns}+universe_by_month={月:all_active returns}+
+    dates=[month_ISO]，window_sanity={"path":{mean,winrate,base_rate}} R5 前置 sanity。
+    调 wire_verdict(edge_type="selection", survivors_by_day, universe_by_day, dates,
+    window_sanity)——selection 有 survivors/universe+dates → 能跑 PurgedKFold+walk-forward OOS。
+
+    spec §0：② 管 OOS（补 ① 的 OOS 缺口），但 winrate 驱动有假阴性风险
+    （value 是 mean-return 现象非 winrate，winrate lift 结构性 ≈1.0-1.2 永远到不了 2.0x robust_edge）。
+    月度参数 walk_train=36/walk_test=12/step=12（S171 R3，否则月度 walk_forward OOS 失效）+
+    event_materiality_floor=0.001（S171 T1 第 5 参数，effective_floor=max(floor, cost*0.5)）。
+
+    缺数据（cache 空/months<2/Q1 空）返 {data_status: "empty"} 不臆造。
+    §44 关联只接线落 Recorder，不改守护区（lift_for_arm/regime_caps 不动）。
+    """
+    cache = load_r1_cache()
+    kline_raw = cache.get("kline_raw", {})
+    profit_cache = cache.get("profit", {})
+    universe_cache = cache.get("universe", {})
+
+    if months is None:
+        months = month_end_rebalance_days()
+    if len(months) < 2:
+        return {"data_status": "empty", "note": "months<2 无法算月度收益"}
+
+    survivors_by_month: dict[str, list[float]] = {}
+    universe_by_month: dict[str, list[float]] = {}
+
+    for i, month in enumerate(months):
+        prev_month = months[i - 1] if i > 0 else None
+        if prev_month is None:
+            continue  # 第一个月无前月
+        month_universe = set(universe_cache.get(month, []))
+        if not month_universe:
+            month_universe = set(kline_raw.keys())
+        # T8 select_quintiles 取 Q1（低 PE value，long-only 可实现）
+        q1_codes, _q5_codes, _pe_map = select_quintiles(
+            month, month_universe, kline_raw, profit_cache
+        )
+        q1_returns = [
+            r
+            for code in q1_codes
+            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+        ]
+        u_returns = [
+            r
+            for code in month_universe
+            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+        ]
+        if q1_returns and u_returns:
+            survivors_by_month[month] = q1_returns
+            universe_by_month[month] = u_returns
+
+    if not survivors_by_month:
+        return {"data_status": "empty", "note": "无 Q1 returns（cache 空或 PIT profit 全缺）"}
+
+    dates = sorted(survivors_by_month.keys())
+
+    # T10.2: window_sanity R5 前置 sanity（value winrate≈base_rate→R5 触发 exploratory 预期）
+    all_q1 = [r for rs in survivors_by_month.values() for r in rs]
+    all_u = [r for rs in universe_by_month.values() for r in rs]
+    q1_mean = sum(all_q1) / len(all_q1) if all_q1 else 0.0
+    q1_winrate = sum(1 for r in all_q1 if r > 0) / len(all_q1) if all_q1 else 0.0
+    u_winrate = sum(1 for r in all_u if r > 0) / len(all_u) if all_u else 0.0
+    window_sanity = {
+        "path": {
+            "mean": q1_mean,
+            "winrate": q1_winrate,
+            "base_rate": u_winrate,
+        }
+    }
+
+    # 调 wire_verdict（selection edge_type + 月度参数 5 个）
+    from tools._s44_wire import wire_verdict  # noqa: PLC0415
+
+    return wire_verdict(
+        line_id="S171_Q1_excess_universe",
+        returns=all_q1,  # Q1 所有月 returns 合并（for event_metrics 双算 R8）
+        edge_type="selection",
+        frozen_commit="scratch",  # TODO T14 dry-run 传真 commit
+        dates=dates,
+        survivors_by_day=survivors_by_month,
+        universe_by_day=universe_by_month,
+        n_comparisons=1,
+        round_trip_cost=ROUND_TRIP_COST,
+        window_sanity=window_sanity,
+        walk_train=36,
+        walk_test=12,
+        step=12,
+        event_materiality_floor=0.001,
+        script="long_value_run.wire_q1_excess_universe",
+    )

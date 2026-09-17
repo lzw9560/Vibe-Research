@@ -29,6 +29,8 @@ from tools.long_value_run import (  # noqa: E402
     _quarter_sort_key,
     _build_q1_q5_spread_series,
     wire_q1_q5_spread,
+    _monthly_return,
+    wire_q1_excess_universe,
 )
 
 
@@ -300,3 +302,124 @@ def test_wire_q1_q5_underpowered_short_series(monkeypatch, tmp_path):
     assert result["status"] == "underpowered"
     assert result["returns"] == [-0.1]
     assert "不可直接交易" in result["note"] or "spread" in result["note"]
+
+
+# ---------- T10: wire_q1_excess_universe（co-PRIMARY ② selection）----------
+
+
+def _mock_r1_cache() -> dict:
+    """2 月 + 10 股 mock R1 cache：前 5 股低 PE=value Q1，后 5 股高 PE=growth Q5。"""
+    months = ["2025-12-31", "2026-01-31"]
+    codes = [f"sh.60000{i}" for i in range(10)]
+    kline_raw = {
+        code: [
+            {"date": "2025-12-31", "close": 10.0 + i, "volume": 100},
+            {"date": "2026-01-31", "close": 11.0 + i, "volume": 100},
+        ]
+        for i, code in enumerate(codes)
+    }
+    profit = {
+        code: {"2025Q4": {"pubDate": "2025-11-01", "epsTTM": 1.0 if i < 5 else 0.1}}
+        for i, code in enumerate(codes)
+    }
+    universe = {m: codes for m in months}
+    return {
+        "kline_raw": kline_raw,
+        "profit": profit,
+        "universe": universe,
+        "stock_basic": {},
+        "kline_qfq": {},
+    }
+
+
+def test_wire_q1_excess_universe_empty_when_months_lt_2():
+    """T10: months<2 返 data_status=empty 不臆造。"""
+    result = wire_q1_excess_universe(months=["2026-01-31"])
+    assert result.get("data_status") == "empty"
+
+
+def test_wire_q1_excess_universe_empty_when_cache_empty(monkeypatch):
+    """T10: cache 空（无 PIT profit）返 data_status=empty 不臆造。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", lambda: {
+        "kline_raw": {}, "profit": {}, "universe": {},
+        "stock_basic": {}, "kline_qfq": {},
+    })
+    result = wire_q1_excess_universe(months=["2025-12-31", "2026-01-31"])
+    assert result.get("data_status") == "empty"
+
+
+def test_wire_q1_excess_universe_calls_wire_with_selection(monkeypatch):
+    """T10.1+T10.2: 构建 survivors/universe + selection edge_type + window_sanity path + dates + 月度参数。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    captured: dict = {}
+
+    def fake_wire(**kwargs):
+        captured.update(kwargs)
+        return {"status": "test", "data_snapshot_id": "test"}
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+
+    months = ["2025-12-31", "2026-01-31"]
+    wire_q1_excess_universe(months=months)
+
+    # 验 selection edge_type
+    assert captured.get("edge_type") == "selection"
+    # 验 survivors_by_day + universe_by_day 传了（selection 测选股力）
+    assert captured.get("survivors_by_day") is not None
+    assert captured.get("universe_by_day") is not None
+    # 验 dates 传了（PurgedKFold 要求）——第一个月无前月跳过，只有 2026-01-31
+    assert captured.get("dates") == ["2026-01-31"]
+    # 验 window_sanity path（R5 前置 sanity：mean+winrate+base_rate）
+    ws = captured.get("window_sanity", {})
+    assert "path" in ws
+    assert {"mean", "winrate", "base_rate"} <= set(ws["path"])
+    # 验月度参数 5 个（S171 R3+T1：walk_train=36/walk_test=12/step=12/event_materiality_floor=0.001）
+    assert captured.get("walk_train") == 36
+    assert captured.get("walk_test") == 12
+    assert captured.get("step") == 12
+    assert captured.get("event_materiality_floor") == 0.001
+    # 验 line_id + round_trip_cost
+    assert captured.get("line_id") == "S171_Q1_excess_universe"
+    assert captured.get("round_trip_cost") == 0.0025
+    # 验 returns 传了（Q1 所有月 returns 合并，for event_metrics 双算 R8）
+    assert captured.get("returns") is not None
+    assert len(captured["returns"]) > 0
+
+
+def test_wire_q1_excess_universe_long_only_q1(monkeypatch):
+    """T10.1: survivors 是 Q1（低 PE value，前 5 股）非 Q5（高 PE growth）——long-only 可实现。"""
+    monkeypatch.setattr("tools.long_value_run.load_r1_cache", _mock_r1_cache)
+    captured: dict = {}
+
+    def fake_wire(**kwargs):
+        captured.update(kwargs)
+        return {"status": "test"}
+
+    monkeypatch.setattr("tools._s44_wire.wire_verdict", fake_wire)
+
+    wire_q1_excess_universe(months=["2025-12-31", "2026-01-31"])
+
+    # survivors Q1 应是前 5 股（epsTTM=1.0 PE 低=value），非后 5 股（epsTTM=0.1 PE 高=growth）
+    survivors = captured.get("survivors_by_day", {})
+    # 2026-01-31 的 survivors returns 数量 <= 5（Q1 bottom 1/5 of 10）
+    surv_returns = survivors.get("2026-01-31", [])
+    assert 0 < len(surv_returns) <= 5
+    # universe returns 应该是全 10 股
+    u_returns = captured.get("universe_by_day", {}).get("2026-01-31", [])
+    assert len(u_returns) == 10
+
+
+def test_monthly_return_suspended_stock_returns_none():
+    """T10 辅助: 停牌 volume==0 股 _monthly_return 返 None（不取 stale close）。"""
+    bars = [
+        {"date": "2025-12-31", "close": 10.0, "volume": 100},
+        {"date": "2026-01-31", "close": 11.0, "volume": 0},  # 停牌
+    ]
+    # 停牌日 close 取不到（_close_on_or_before 跳过 volume==0）→ _monthly_return None
+    assert _monthly_return(bars, "2026-01-31", "2025-12-31") is None
+
+
+def test_monthly_return_first_month_no_prev():
+    """T10 辅助: 第一个月无前月返 None。"""
+    bars = [{"date": "2025-12-31", "close": 10.0, "volume": 100}]
+    assert _monthly_return(bars, "2025-12-31", None) is None
