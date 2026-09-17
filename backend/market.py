@@ -461,26 +461,9 @@ def get_global_macro() -> dict:
     复活须先补 MCP initialize+SSE 解析。
     """
     def build():
-        try:
-            from data.sources import worldmonitor as wm  # noqa: F401 @deprecated（见上 docstring）
-        except Exception:
-            return {"commodities": [], "fx": [], "cii": {}, "hotspots": [], "updated": None,
-                    "source": "worldmonitor", "available": False}
-        # @deprecated: worldmonitor 永久不可达（MCP 握手未实现），诚实返 unavailable 不臆造。
-        # 原调用 wm.parse_market_data(wm.fetch_market_data()) 等保留在下方注释备查，不再执行。
+        # worldmonitor 已移除（2026-09-17，S206 自弃+境外付费+MCP 没写完，0 调用方）
+        # 全球宏观改走 FRED（predict/features/macro.py）+ gstock 东财 push2，本函数返空占位
         return {"commodities": [], "fx": [], "cii": {}, "hotspots": [],
                 "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
-                "source": "worldmonitor", "available": False}
-        # --- 以下原逻辑保留备查（worldmonitor 不可达时走不到）---
-        # md = wm.parse_market_data(wm.fetch_market_data())
-        # commodity_syms = ("CL", "XAU", "HG", "BRENT", "WTI", "GOLD", "COPPER")
-        # fx_syms = ("DXY", "USDCNH", "USD-CNH", "EURUSD")
-        # commodities = [m for m in md if m.get("symbol") in commodity_syms]
-        # fx = [m for m in md if m.get("symbol") in fx_syms]
-        # cii = wm.parse_country_risk(wm.fetch_country_risk())
-        # hotspots = wm.parse_hotspot_escalation(wm.fetch_hotspot_escalation())
-        # return {"commodities": commodities, "fx": fx, "cii": cii, "hotspots": hotspots,
-        #         "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
-        #         "source": "worldmonitor",
-        #         "available": bool(commodities or fx or cii.get("countries") or hotspots)}
+                "source": "worldmonitor_removed", "available": False}
     return build()
