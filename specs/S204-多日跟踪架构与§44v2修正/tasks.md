@@ -8,6 +8,7 @@
 **G1 数据地基**：
 - ✅ **T1 pctchg_injector**：模块+逻辑+接线全 DONE（`fc7397d`/`ccdb3fb`/`7e75465`）。`enrich_pctchg` 修 0.0/None 覆盖；`_load_kline_cache` 单点注入 + mtime memo；8 harness 接全（lianban/gap/index_ma20/derive_first_board/zt_pool_seal_time/miaoban/valuation_pe/multifactor）。real-cache 验证 580 一字涨停板/200 股修复（baostock pctChg=0.0/None 数据缺口，实测比审计估更广——审计只数 ==0.0 漏 None）。
 - ⏸️ **T2 enrich_isst**：**DEFERRED 需用户决策**。实测 cache isST 91% 缺失（baostock 仅近端 ~8.8% 回填），cache-LOCF 0/139 可修（isST 观测晚于误判板，LOCF 默认 0）。需外部历史 ST 源（baostock `query_stock_basic` current-only / akshare ST history / 重 fetch with isST field）——**选源是用户决策**。ST 污染 139 板/200 股（小于 pctChg 580/200 股），pctChg 修复是更大污染源已先做。
+- ✅ **T2 方案变更（2026-09-17，commit 1b9a4c2）**：用户定 ST 新规——**不查历史源**，去掉 5% ST 特殊阈值，ST 股按 board 阈值（主板 10%/创业 20%/科创 20%/北交 30%）判一字板，不读 isST 字段。根除 baostock isST 91% 缺失误判（isST='0' 非空字符串 truthy → 非 ST 误用 5% → board-aware 失效）。lbc>=2 实测 0 ST 股（1126 里 0 个），新规对 consecutive_relay no-op 但根除其他战法 139 板 ST 残留污染。实现：`bar_utils.is_unbuyable_next_bar` 去掉 isST 检测 + `5.0 if is_st` 分支，统一 `_limit_pct_for_code(code)`。test_engine.py 更新 ST 新规期望（ST 5% 不再 unbuyable，ST 10% 按 board 阈值 unbuyable）。原 T2 enrich_isst 方案（派生 isST 字段）废弃。
 - ✅ **T3 forward_test_backfill cron**：DONE（`39d6c39`）。cron `0 18 * * 0-4` 注册，long-running ~3 个月真实交易日积累 ≥60 天（不可臆造/加速）。
 
 **G2 §44v2 verifier 修正**（DONE）：
