@@ -23,6 +23,8 @@ import type {
   VerificationCardResult,
   BombAlertsResult,
   SealSnapshotsResult,
+  TrackingPoolResponse,
+  TrackingSnapshotsResponse,
 } from "./api/types";
 // S165: verifier-contract 是 UI 契约 source-of-truth（Verdict/RecorderRecord/DimensionValidationRecord）。
 import type { RecorderRecord, DimensionValidationRecord } from "./verifier-contract";
