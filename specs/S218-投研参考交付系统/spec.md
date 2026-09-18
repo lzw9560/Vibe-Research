@@ -95,10 +95,12 @@ time-triggered（D 收盘 15:00 / D+1 开盘 09:30）。**复用组件 1 shared 
 - **test_gapdown_is_honest_label_not_stop_loss**：assert「诚实标」present，「止损通知」absent。
 - **test_cap_up_gate_uses_reconciled_definition**：assert ×1.0 gate = ALL（bear 120+天 AND 60d 衰减稳 AND lbc=3 60d）。
 - **test_cap_down_triggers_on_decay_worsening**：assert 衰减>34% → cap-down 提案生成。
-- **test_falsified_retest_has_kill_criterion**：assert 一轮后无 edge → frozen 退出队列。
-- **test_component6_labeled_non_revenue**：assert「non-revenue/产验证进展非收益」present。
-- 实时：lbc≥2 涨停封板 + bull regime（regime cache 新鲜度 verified）触发 notify，标 lbc 等级 + 一字板 bias。
+- **test_falsified_retest_has_kill_criterion**（**deferred to P2**，reality-check P1-4 2026-09-18）：C6 `falsified_retest` stub（`scheduler/executors/signals.py:536` 返 "skipped"），premature 到 consecutive_relay edge 真衰减才做。assert 一轮后无 edge → frozen 退出队列。
+- **test_component6_labeled_non_revenue**（**deferred to P2**，同 C6 stub）：assert「non-revenue/产验证进展非收益」present。
+- **实时 behavioral**（**deferred to P2**，reality-check P1-4 2026-09-18）：C2 `intraday_alert` stub（`signals.py:320` 返 "skipped"），data-source-blocked（live 涨停池须 intraday 数据，spec §6 组件 2 路径 (a) live 涨停池 or (b) EOD 降级）。real-time lbc≥2 涨停封板 + bull regime（regime cache 新鲜度 verified）触发 notify，标 lbc 等级 + 一字板 bias——deferred 到 live 涨停池数据可得后。
 - 关键点位：D 收盘入场通知 + D+1 开盘出场通知 + gap-down 诚实标通知（非止损）。
+
+**§4 验收状态**（2026-09-18 reality-check `s218-reality-check` P1-4）：12/14 named test + 1/2 behavioral 满足（C1/C3/C4/C5/P0 done，63 test green）。C2 intraday_alert + C6 falsified_retest = deferred to P2（stub，非隐藏 gap——C2 data-source-blocked 须 live 涨停池，C6 premature 到 edge 真衰减）。详见 memory `s218-reality-check-2026-09-18`。
 
 ## 合规自查（弱合规——私人助理，给方向性参考+风险标注，用户最终决策）
 - 不臆造：信号来自现成 scanner+regime+lift_for_arm（2026-09-18 codegraph 核全链在），报告标 edge/胜率/衰减/风险；validation 数字来自 §44 verdict（chrono p=0.0054）。
