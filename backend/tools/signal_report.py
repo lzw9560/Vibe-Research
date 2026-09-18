@@ -67,16 +67,62 @@ def _regime_freshness() -> dict[str, Any]:
     }
 
 
+# ── hard-stop gates ──────────────────────────────────────────────────────
+
+def _check_sentiment_hardstop(target_date: str) -> tuple[bool, str]:
+    """sentiment 硬停：天气=暴风雨 → 0 tradable。
+
+    Returns:
+        (is_triggered, reason) — is_triggered=True 时所有信号进 exploratory
+    """
+    try:
+        from routers.sentiment_weather import compute_weather_snapshot  # noqa: PLC0415
+        snap = compute_weather_snapshot(target_date)
+        weather = snap.get("weather_state", "未知")
+        if weather == "暴风雨":
+            return True, f"sentiment_hardstop：天气=暴风雨（composite={snap.get('composite_score')}），0 tradable"
+    except Exception:
+        #  sentiment 服务异常时不阻塞主流程，标 degraded 但不硬停
+        logger.warning("[_check_sentiment_hardstop] sentiment 服务异常，跳过 hard-stop", exc_info=True)
+    return False, ""
+
+
+def _check_regime_cache_stale() -> tuple[bool, str]:
+    """regime cache stale 硬停：cache last-date < today-1 → 0 tradable。
+
+    Returns:
+        (is_triggered, reason) — is_triggered=True 时所有信号进 exploratory
+    """
+    freshness = _regime_freshness()
+    if freshness.get("stale") is True:
+        last = freshness.get("last_cache_date") or "unknown"
+        return True, f"regime_cache_stale_hardstop：cache last-date={last}，超过 T-1，regime label 不可信，0 tradable"
+    return False, ""
+
+
 # ── 3-bucket classification ──────────────────────────────────────────────
 
-def _classify_signal(is_unbuyable: bool, regime: str | None) -> str:
-    """3-bucket 分类。
+def _classify_signal(
+    is_unbuyable: bool,
+    regime: str | None,
+    *,
+    hardstop_reason: str = "",
+) -> str:
+    """3-bucket 分类（hard-stop 已在外层应用）。
+
+    Args:
+        is_unbuyable: 是否一字板
+        regime: bull/bear/range/unknown
+        hardstop_reason: 非空字符串 → 触发 hard-stop，返回 "exploratory"
 
     Returns:
         "tradable"     — bull regime + lbc 2-3 + 非一字板（edge validated）
         "exploratory"  — bear/range regime + lbc 2-3 + 非一字板（underpowered）
+                         或 hard-stop 触发（sentiment 退潮 / regime cache stale）
         "avoid"        — 一字板 或 lbc>=4（scanner 层已排除但留 filter 说明）
     """
+    if hardstop_reason:
+        return "exploratory"
     if is_unbuyable:
         return "avoid"
     if regime == "bull":
@@ -177,6 +223,19 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
         except Exception:
             names = {c: c for c in codes}
 
+    # Hard-stop gates (applied before classification)
+    # Gate 1: sentiment 退潮（暴风雨 → 0 tradable）
+    sentiment_triggered, sentiment_reason = _check_sentiment_hardstop(target_date)
+    # Gate 2: regime cache stale（>T-1 → 0 tradable）
+    cache_stale_triggered, cache_stale_reason = _check_regime_cache_stale()
+
+    # Compose hard-stop reason (any trigger → all signals go exploratory)
+    hardstop_reason = ""
+    if sentiment_triggered:
+        hardstop_reason = sentiment_reason
+    elif cache_stale_triggered:
+        hardstop_reason = cache_stale_reason
+
     # 5. per-candidate: reference price + unbuyable filter + 3-bucket classification
     provider = KlineCacheBarsProvider()
     signals: list[dict[str, Any]] = []
@@ -196,8 +255,11 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
                     is_unbuyable = is_unbuyable_next_bar(b, code=code)
                     break
 
-        # 3-bucket classification
-        bucket = _classify_signal(is_unbuyable, current_regime)
+        # 3-bucket classification（hard-stop 优先）
+        bucket = _classify_signal(
+            is_unbuyable, current_regime,
+            hardstop_reason=hardstop_reason,
+        )
 
         signals.append({
             "code": code,
@@ -207,6 +269,7 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
             "price_source": price_source,
             "unbuyable": is_unbuyable,
             "bucket": bucket,
+            "hardstop_reason": hardstop_reason if hardstop_reason else None,
         })
 
     # 分类统计
@@ -239,6 +302,10 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
             "regime_factor": regime_factor,
             "zuoT_factor": 1.0,
             "note": cap_note,
+        },
+        "hardstop": {
+            "active": bool(hardstop_reason),
+            "reason": hardstop_reason or None,
         },
         "filters": {
             "total_scanned": len(raw_signals),

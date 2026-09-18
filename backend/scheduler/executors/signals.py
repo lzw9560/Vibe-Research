@@ -16,6 +16,29 @@ from tools.signal_report import get_consecutive_relay_signals, render_daily_repo
 
 logger = logging.getLogger("vibe-research")
 
+
+def _actual_pnl_for_weekly_review() -> dict[str, Any]:
+    """供 weekly_review 调用：取最近实际 P&L 统计。
+
+    返回 {"mean_pnl_pct": float, "n_closed": int, "latest_leak": bool}。
+    无记录时返 None 字段。
+    """
+    from routers.signals import _load_manual_trades
+    trades = _load_manual_trades()
+    closed = [t for t in trades if (t.get("actual_pnl") or {}).get("status") == "closed"]
+    if not closed:
+        return {"mean_pnl_pct": None, "n_closed": 0, "latest_leak": False}
+
+    pnls = [t["actual_pnl"]["pnl_pct"] for t in closed if t["actual_pnl"]["pnl_pct"] is not None]
+    mean_pnl = sum(pnls) / len(pnls) if pnls else None
+    latest_leak = any(t.get("pnl_diff", {}).get("delivery_leak", False) for t in closed)
+
+    return {
+        "mean_pnl_pct": round(mean_pnl, 4) if mean_pnl is not None else None,
+        "n_closed": len(closed),
+        "latest_leak": latest_leak,
+    }
+
 #: 信号记录存储路径（.vibe-research/，不进 git）
 _SIGNAL_DIR = Path(__file__).resolve().parents[3] / ".vibe-research" / "signal_reports"
 
@@ -325,9 +348,18 @@ def _render_weekly_review(
     lines.append(f"=== {date} 周度汇总复盘 ===")
     lines.append("")
 
-    # 1. Paper P&L（诚实标注）
-    lines.append("【本周 paper P&L】")
-    lines.append("  只能看 paper 表现，没真交易收益；接券商才有真 closure")
+    # 1. Paper / Actual P&L（诚实标注）
+    actual_pnl = _actual_pnl_for_weekly_review()
+    if actual_pnl.get("mean_pnl_pct") is not None:
+        lines.append("【本周实际 P&L】（手动交易闭环反馈）")
+        lines.append(f"  实际收益均值 {actual_pnl['mean_pnl_pct']:.2f}%（n={actual_pnl['n_closed']} 笔）")
+        if actual_pnl.get("latest_leak"):
+            lines.append("  注意：检测到 delivery leak（|实际-参考| > 50%），建议复核执行偏差")
+        else:
+            lines.append("  执行偏差在可接受范围（|实际-参考| <= 50%）")
+    else:
+        lines.append("【本周 paper P&L】")
+        lines.append("  只能看 paper 表现，没真交易收益；接券商才有真 closure")
     if paper_trends:
         last = paper_trends[-1]
         lines.append(f"  最近周胜率 {last.get('win_rate', 0)*100:.1f}%（n={last.get('n_decided', 0)}，{last.get('label', '')}）")
@@ -423,8 +455,24 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     cap_down_triggered = _evaluate_cap_down_trigger(decay_pct=34)
 
     # 5. process-theater 自检：paper P&L mean<0 OR 衰减跨 negative → cap-down 提案
+    #    S218 P0: 优先用实际 P&L（手动交易记录），没有才降级 paper P&L
+    actual_pnl_stats = _actual_pnl_for_weekly_review()
     cap_down_proposal = None
-    if paper_trends:
+
+    if actual_pnl_stats.get("mean_pnl_pct") is not None:
+        # 有实际 P&L 数据 → 用实际 mean_pnl_pct
+        mean_pnl = actual_pnl_stats["mean_pnl_pct"]
+        if mean_pnl < 0:
+            cap_down_proposal = {
+                "action": "cap-down",
+                "from": effective,
+                "to": 0.5,
+                "reason": f"实际 P&L mean={mean_pnl:.2f}% < 0（n={actual_pnl_stats['n_closed']} 笔），触发 cap-down",
+            }
+        # 同时检查 delivery leak
+        if actual_pnl_stats.get("latest_leak"):
+            logger.warning("[S218] weekly_review 检测到 delivery leak（|actual-ref| > 50%）")
+    elif paper_trends:
         mean_wr = sum(t.get("win_rate", 0) for t in paper_trends) / len(paper_trends)
         if mean_wr < 0.5:  # 50% 以下视为 negative
             cap_down_proposal = {
