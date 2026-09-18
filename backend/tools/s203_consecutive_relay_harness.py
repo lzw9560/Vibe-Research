@@ -152,6 +152,9 @@ def main() -> dict:
         universe_by_day=universe_by_day,
         frozen_commit=FROZEN,
         round_trip_cost=round(mean_cost_dec, 6),
+        walk_train=20,
+        walk_test=10,
+        step=10,
     )
     print(f"\n[verdict] regime-stratified consecutive_relay (lbc>=2):")
     for tag, r in results.items():
@@ -160,7 +163,7 @@ def main() -> dict:
         print(
             f"  {tag}: n_picks={r.get('n_picks')} n_days={r.get('n_days')} "
             f"net_mean={r.get('net_mean_pct')} winrate={r.get('win_rate')} "
-            f"verdict={st} | {nt[:80]}"
+            f"verdict={st} wf={r.get('walk_forward_status')} pk={r.get('purged_kfold_status')} | {nt[:80]}"
         )
     return {
         "results": results,

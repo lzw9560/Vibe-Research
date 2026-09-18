@@ -55,6 +55,9 @@ def run(
     universe_by_day: dict[str, list[float]] | None = None,
     frozen_commit: str = FROZEN_COMMIT,
     round_trip_cost: float = 0.0,
+    walk_train: int | None = None,
+    walk_test: int | None = None,
+    step: int | None = None,
 ) -> dict[str, dict]:
     """Run per-regime S44v2 event verdict for consecutive-relay.
 
@@ -119,6 +122,9 @@ def run(
             n_comparisons=N_COMPARISONS_PER_FAMILY,
             round_trip_cost=round_trip_cost,
             script=SCRIPT_PATH,
+            walk_train=walk_train,
+            walk_test=walk_test,
+            step=step,
             params={
                 "regime": tag,
                 "strategy": STRATEGY_NAME,
@@ -129,6 +135,8 @@ def run(
             **stats,
             "verdict_status": v.status,
             "verdict_note": v.note,
+            "walk_forward_status": v.walk_forward_status,
+            "purged_kfold_status": getattr(v, "purged_kfold_status", None),
         }
 
     return results
