@@ -497,3 +497,8 @@ class TaskExecutor:
         """S218 C5 — 阶段性汇总复盘（weekly review + cap 升降 gate + process-theater 自检）。"""
         from scheduler.executors.signals import weekly_review
         return weekly_review(payload)
+
+    def _execute_keypoint_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S218 C3 — 关键点位决策通知（D 收盘入场 / D+1 开盘出场 / gap-down 诚实标）。"""
+        from scheduler.executors.signals import keypoint_notify
+        return keypoint_notify(payload)

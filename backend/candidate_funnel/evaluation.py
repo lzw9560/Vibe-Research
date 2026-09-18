@@ -132,12 +132,16 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
              "盘中封板时间无 edge；caveat: T+0 o2c+5min 粒度",
     ),
     "late_lock": DimensionValidation(
-        dimension_id="late_lock", label="盘中晚封板/尾盘突袭(>14:00)",
-        lift=1.3559, n=422, days_robust=31,             # full run robust（preliminary 1.33 n=94 → full 1.36 n=422）
-        validation_status="未validated", weight_multiplier=0.5,   # 1≤lift<2 → ×0.5（<2 不 validated）
-        source_script="tools/first_plate_h2_lift.py --full",
-        note="S152 全量唯一弱正（>null_p95=1.117 pass_filter_edge=True 但<2）；尾盘突袭 end_of_day_sneak 近似；"
-             "raw-shadow 观察，不驱动交易；caveat: T+0 o2c+5min 粒度+top15/full 一致",
+        dimension_id="late_lock", label="盘中晚封板/尾盘突袭(>14:00) [FALSIFIED]",
+        lift=1.3559, n=422, days_robust=31,             # path-window（D+1-path）1.356 是 sign-flip artifact（见 note）
+        validation_status="劣于随机", weight_multiplier=0.1,   # FALSIFIED 2026-09-18 gap-window 重跑（wh8h514qx）
+        source_script="tools/zt_pool_seal_time_lift_gap.py",
+        note="FALSIFIED 2026-09-18 gap-window 重跑（workflow wh8h514qx）：gap 窗口 lift 0.58x(em-sourced 权威 fbt)/0.89x(H2) "
+             "BOTH<1.0=劣于随机；方向错——late-seal 股 gap DOWN -0.67%~-1.57% vs universe +0.107%（晚封不携带隔夜动量反反转）；"
+             "regime-robust（em+H2 两期都 underperform）；原 1.3559 是 two-negatives sign-flip artifact（late_lock mean 负 vs universe 负→比值为正但实际更差）；"
+             "§44 v1 错窗口（D+1-path 反转段）测的，gap 窗口证否；archive consistent with milestone-2026-09-18 做减法 pivot。"
+             "realizability: late_lock 14:00 后封板→D close 已涨停封死→买不到；24-25 em-fbt 天 underpowered BUT 方向一致负非数据不够（更多天不会翻成 2.0 edge）。"
+             "原 path harness tools/first_plate_h2_lift.py --full 不动（保留 reproducibility）。",
     ),
     # 参照（非选股层，不参与降权）— S155 证伪：pooled 2.046 look-ahead，per-T 1.974<2 + net<1x cost-killed
     "vol_surge_ref": DimensionValidation(
