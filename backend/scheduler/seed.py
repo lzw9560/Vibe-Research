@@ -531,7 +531,7 @@ def _ensure_seed_tasks() -> None:
             description="S218 每日信号报告（consecutive_relay 验证信号 → 结构化 dict + 人话报告）",
             task_type="daily_report",
             cron_expr="50 14 * * 0-4",  # 14:50 盘前（regime 已知 + zt_history T-1 已知）
-            payload={"notify": False},
+            payload={"notify": True},  # S218 #5（deep-review 2026-09-18）：notify:False→True 让 daily_report 推 Feishu（信号到用户手机）
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 daily_report 已创建（cron 50 14 * * 0-4，S218）")
@@ -702,7 +702,7 @@ def _ensure_seed_tasks() -> None:
             description="S218 C5 周度汇总复盘（consecutive_relay paper P&L + cap gate + process-theater 自检）",
             task_type="weekly_review",
             cron_expr="0 18 * * 0",  # 每周日 18:00
-            payload={"notify": False},
+            payload={"notify": True},  # S218 #5（deep-review 2026-09-18）：notify:False→True 让 weekly_review 推 Feishu
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 weekly_review 已创建（cron 0 18 * * 0，S218 C5）")
