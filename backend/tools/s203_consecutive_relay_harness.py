@@ -166,19 +166,29 @@ def main() -> dict:
             f"verdict={st} wf={r.get('walk_forward_status')} pk={r.get('purged_kfold_status')} | {nt[:80]}"
         )
 
-    # S217: chronological 2/3-1/3 holdout forward-OOS on the bull regime
-    # (the only robust_edge arm; in-sample robust_edge +1.57% — does it survive
-    # held-out data? pre-registered in specs/S217, zero-tunable split).
+    # S217/S218: chronological 2/3-1/3 holdout forward-OOS per regime.
+    # bull = original robust_edge arm (S217 stage-1; in-sample robust_edge
+    # +1.57% — does it survive held-out data? pre-registered, zero-tunable split).
+    # bear = cross-regime replication (S218 #6) — the ×1.0 definitive gate:
+    # a single-regime oos_supporting is provisional x0.75; cross-regime
+    # replication with adequate power unlocks x1.0. Per §44 v2, n_test_days<30
+    # = underpowered → do NOT judge ×1.0 definitive (provisional only).
     from s44_verifier.stats import chronological_holdout_event_check  # noqa: PLC0415
 
-    bull_pairs = [(r, d) for r, d in zip(rets, dts) if regime_map.get(d) == "bull"]
-    if bull_pairs:
-        bull_rets = [p[0] for p in bull_pairs]
-        bull_dates = [p[1] for p in bull_pairs]
+    def _chrono_for_regime(tag: str) -> dict:
+        pairs = [(r, d) for r, d in zip(rets, dts) if regime_map.get(d) == tag]
+        if not pairs:
+            print(f"\n[S217 chrono-OOS] no {tag}-regime obs to hold out")
+            return {"decision": "insufficient", "n_test_days": 0, "n_train_days": 0}
+        regime_rets = [p[0] for p in pairs]
+        regime_dates = [p[1] for p in pairs]
         chrono = chronological_holdout_event_check(
-            bull_rets, bull_dates, round_trip_cost=round(mean_cost_dec, 6)
+            regime_rets, regime_dates, round_trip_cost=round(mean_cost_dec, 6)
         )
-        print("\n[S217 chrono-OOS] bull regime 2/3-1/3 chronological holdout:")
+        n_test = chrono.get("n_test_days", 0) or 0
+        # §44 v2: <30 test days = underpowered; adequate-power bar is >=60.
+        chrono["underpowered"] = n_test < 30
+        print(f"\n[S217 chrono-OOS] {tag} regime 2/3-1/3 chronological holdout:")
         print(
             f"  n_train_days={chrono['n_train_days']} n_test_days={chrono['n_test_days']} "
             f"train_day_mean={chrono['train_day_mean']}"
@@ -189,9 +199,15 @@ def main() -> dict:
         )
         print(f"  decision={chrono['decision']}")
         print(f"  note: {chrono['decision_note']}")
-    else:
-        print("\n[S217 chrono-OOS] no bull-regime obs to hold out")
-        chrono = {"decision": "insufficient", "n_test_days": 0}
+        if chrono["underpowered"]:
+            print(
+                f"  [underpowered] n_test_days={n_test}<30 -> §44 v2 不判 ×1.0 definitive "
+                f"(provisional only; adequate-power bar >=60, pursue backfill S214)"
+            )
+        return chrono
+
+    bull_chrono = _chrono_for_regime("bull")
+    bear_chrono = _chrono_for_regime("bear")
 
     return {
         "results": results,
@@ -199,7 +215,8 @@ def main() -> dict:
         "days": days,
         "net_mean_pct": round(net_mean * 100, 4),
         "net_wr": round(wr, 4),
-        "bull_chrono_oos": chrono,
+        "bull_chrono_oos": bull_chrono,
+        "bear_chrono_oos": bear_chrono,
     }
 
 
