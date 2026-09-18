@@ -17,6 +17,8 @@ regime_caps bull 0.75→1.0 零代码阻力直接全权重。
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 import candidate_funnel.evaluation as evaluation
@@ -96,4 +98,65 @@ class TestX1Dot0FreezeGuard:
                             lambda dim_id, db_path=None: _dim_with_regime_caps({"bull": 0.5}))
         mult, note = lift_for_arm("consecutive_relay", regime="bull")
         assert mult == 0.5
+        assert "freeze" not in note.lower()
+
+
+class TestX1Dot0FreezeGuardRegression:
+    """S218 #7 回归保护：防 future session 破坏 freeze guard。
+
+    与 TestX1Dot0FreezeGuard（monkeypatch 整个 get_effective_dimension）互补——这里走真实
+    get_effective_dimension → 真实 lift_for_arm 路径，仅 monkeypatch frozen registry 数据 +
+    隔离 override DB。捕获两类回归：① guard 逻辑被移除/绕过（仍走真实路径会暴露）；
+    ② frozen regime_caps 被静默改 bull 0.75→1.0 而无 fresh harness 许可。
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolate_override_db(self, monkeypatch):
+        """隔离 override DB + 清 cache：强制 fallback frozen baseline，测真实 frozen 数据。
+
+        _read_override_row→None 让 get_effective_dimension 走 frozen baseline 分支
+        （lift_override.py:189-191），不受 dev DB override 状态干扰。清 _EFFECTIVE_CACHE
+        防 stale cache 屏蔽 registry mutation。
+        """
+        monkeypatch.setattr(lift_override, "_read_override_row",
+                            lambda conn, dim_id: None)
+        lift_override._EFFECTIVE_CACHE.clear()
+        yield
+        lift_override._EFFECTIVE_CACHE.clear()
+
+    def test_freeze_guard_survives_registry_edit(self, monkeypatch):
+        # 模拟 future session 编辑 frozen regime_caps bull 0.75→1.0（无 fresh harness 许可）
+        # → freeze guard 仍生效：返 ×0.75（非 ×1.0），note 含 "freeze"
+        # 走真实 get_effective_dimension：若 guard 逻辑被移除，mult 会变 1.0 → assert 失败
+        frozen_dim = lift_override.DIMENSION_LIFT_REGISTRY["consecutive_relay"]
+        edited = replace(frozen_dim,
+                         regime_caps={"bull": 1.0, "bear": 0.5, "range": 0.5})
+        monkeypatch.setitem(lift_override.DIMENSION_LIFT_REGISTRY,
+                            "consecutive_relay", edited)
+        mult, note = lift_for_arm("consecutive_relay", regime="bull")
+        assert mult == 0.75
+        assert "freeze" in note.lower()
+
+    def test_freeze_guard_bypass_with_fresh_harness(self, monkeypatch):
+        # 合法升级路径：registry 编辑 bull→1.0 + VR_ALLOW_X1DOT0=1 +
+        # _FRESH_HARNESS_VERDICT=True（fresh harness 许可）→ 返 ×1.0
+        # 走真实 get_effective_dimension：防 guard 误挡合法升级（over-blocking 回归）
+        frozen_dim = lift_override.DIMENSION_LIFT_REGISTRY["consecutive_relay"]
+        edited = replace(frozen_dim,
+                         regime_caps={"bull": 1.0, "bear": 0.5, "range": 0.5})
+        monkeypatch.setitem(lift_override.DIMENSION_LIFT_REGISTRY,
+                            "consecutive_relay", edited)
+        monkeypatch.setenv("VR_ALLOW_X1DOT0", "1")
+        monkeypatch.setattr(evaluation, "_FRESH_HARNESS_VERDICT", True, raising=False)
+        mult, note = lift_for_arm("consecutive_relay", regime="bull")
+        assert mult == 1.0
+        assert "许可" in note
+
+    def test_freeze_guard_not_broken_by_consecutive_relay_default(self):
+        # 当前 frozen consecutive_relay bull=0.75（registry:102）→ 返 ×0.75
+        # 正常路径，guard 不守（cap!=1.0），note 无 "freeze"。
+        # 回归 alert：若 future session 改 frozen bull→1.0 而无许可，guard 会触发，
+        # note 进 "freeze" → 此 assert 失败，暴露静默升级。
+        mult, note = lift_for_arm("consecutive_relay", regime="bull")
+        assert mult == 0.75
         assert "freeze" not in note.lower()

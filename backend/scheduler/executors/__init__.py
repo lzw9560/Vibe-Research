@@ -51,6 +51,12 @@ def _resolve_run_status(result: Any) -> str:
 class TaskExecutor:
     """内置任务执行器。"""
 
+    # S218 #4: startup drift self-check once-per-process flag。
+    # 防 stale dispatch dict 静默：worktree merge + uvicorn --reload 未抓改动 →
+    # DB 新 task_type + 旧内存 dict，cron fire 才报「未知任务类型」。
+    # 首次 instantiate 核 seeded task_type 全在 dispatch dict，miss → log error（不 raise）。
+    _selfcheck_done: bool = False
+
     def __init__(self):
         self._executors = {
             "daily_data_refresh": self._execute_daily_data_refresh,
@@ -109,6 +115,45 @@ class TaskExecutor:
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
         self._thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="scheduler")
+        self._startup_selfcheck()
+
+    def _startup_selfcheck(self) -> None:
+        """S218 #4: startup task-registration drift self-check。
+
+        读 scheduled_tasks 表所有 task_type，对每个 seeded task_type 核在 dispatch dict。
+        不在 → log error（**不 raise**，防 startup crash——让 scheduler 仍跑，但 staleness
+        立即日志可见，不等 cron fire 才报「未知任务类型」）。DB 不可用 → log warning 跳过。
+
+        场景：worktree merge + uvicorn --reload 未抓改动 → DB 新 task_type（seed.py 跑过）
+        + 旧内存 dict（__init__.py 未热加载）→ cron fire 新 task_type → execute 抛 ValueError。
+        本 selfcheck 在 startup 即暴露 drift，operator 看 log 即知须重启。
+        """
+        # once-per-process：防 API GET /dispatch-types 每次 instantiate 都查 DB + log 噪声
+        if TaskExecutor._selfcheck_done:
+            return
+        TaskExecutor._selfcheck_done = True
+
+        try:
+            seeded_tasks = _manager.list_tasks()
+        except Exception as e:  # noqa: BLE001——DB 未就绪/锁住，startup 不崩
+            logger.warning("[selfcheck] scheduled_tasks 表读取失败，跳过 drift 检查: %s", e)
+            return
+
+        seeded_types = [t.task_type for t in seeded_tasks]
+        registered = set(self._executors.keys())
+        missing = [t for t in seeded_types if t not in registered]
+        for task_type in missing:
+            logger.error(
+                "[selfcheck] task_type %r seeded but not in dispatch dict"
+                "（stale __init__？worktree merge 未 reload？）",
+                task_type,
+            )
+        logger.info(
+            "[selfcheck] TaskExecutor dispatch: %d seeded, %d registered, %d missing",
+            len(seeded_types),
+            len(registered),
+            len(missing),
+        )
 
     def execute(self, task: ScheduledTask) -> TaskRun:
         run = TaskRun(task_id=task.id or 0, status="running")
