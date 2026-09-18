@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 from datetime import datetime
@@ -168,6 +169,12 @@ def _get_reference_price(code: str, target_date: str) -> tuple[float | None, str
 
 # ── consecutive_relay decay stats (S218 #2 cap gate 真衰减) ────────────────
 
+# s203 chrono holdout 须遍历 zt_history + baostock kline cache，~30-60s 正常；
+# 超 60s 视为 hang（test_s218_p0_actual_pnl 4 测已证 unmocked 真调可 hang）→
+# 返 fallback decay_stable=False source='timeout'，cap gate 保守不 fire 升 ×1.0。
+_S203_TIMEOUT_SEC = 60
+
+
 def _compute_consecutive_relay_decay() -> dict[str, Any]:
     """算 consecutive_relay 真衰减统计——替代 weekly_review 硬编码 cap gate。
 
@@ -201,10 +208,30 @@ def _compute_consecutive_relay_decay() -> dict[str, Any]:
     }
     try:
         from tools.s203_consecutive_relay_harness import main as s203_main  # noqa: PLC0415
-        result = s203_main()
     except Exception as e:  # noqa: BLE001
-        logger.warning("[_compute_consecutive_relay_decay] s203 跑失败: %s", e)
+        logger.warning("[_compute_consecutive_relay_decay] s203 import 失败: %s", e)
         return {**fallback, "source": f"error: {e}"}
+
+    # timeout wrapper：s203 chrono holdout 须遍历 zt_history，~30-60s 正常；超 60s 视为
+    # hang → fallback decay_stable=False source='timeout'（保守不 fire 升 ×1.0）。
+    # ThreadPoolExecutor 不能强杀线程——timeout 后主线程返 fallback，后台 hung 线程
+    # 继续跑（无法 kill，进程退出时清理）；shutdown(wait=False) 避免主线程被 join 阻塞。
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(s203_main)
+        try:
+            result = future.result(timeout=_S203_TIMEOUT_SEC)
+        except concurrent.futures.TimeoutError:
+            logger.warning(
+                "[_compute_consecutive_relay_decay] s203 跑超 %ds，视为 hang → timeout fallback",
+                _S203_TIMEOUT_SEC,
+            )
+            return {**fallback, "source": "timeout"}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[_compute_consecutive_relay_decay] s203 跑失败: %s", e)
+            return {**fallback, "source": f"error: {e}"}
+    finally:
+        executor.shutdown(wait=False)
 
     chrono = result.get("bull_chrono_oos") or {}
     decision = chrono.get("decision")

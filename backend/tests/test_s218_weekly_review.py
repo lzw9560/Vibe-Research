@@ -201,3 +201,24 @@ class TestComputeDecay:
         assert "error" in stats["source"]
         assert stats["bear_days"] == 0
         assert stats["lbc3_days"] == 0
+
+    def test_compute_decay_s203_timeout_fallback(self, monkeypatch):
+        """test_compute_decay_s203_timeout_fallback: s203 跑超 timeout → fallback source='timeout' decay_stable=False（不 hang）。
+
+        模拟 Sep-21 weekly_review cron 调真 s203 harness 可能 hang 的场景：
+        mock s203_main sleep > timeout，assert 主线程不被 join 阻塞，返 timeout fallback
+        （保守 decay_stable=False，cap gate 不 fire 升 ×1.0）。
+        """
+        import time
+        # 缩短 timeout 到 0.1s（测试快跑），s203_main sleep 0.3s > 0.1s → timeout
+        monkeypatch.setattr("tools.signal_report._S203_TIMEOUT_SEC", 0.1)
+        mock_main = MagicMock(side_effect=lambda: time.sleep(0.3))
+        monkeypatch.setattr("tools.s203_consecutive_relay_harness.main", mock_main)
+
+        from tools.signal_report import _compute_consecutive_relay_decay
+        stats = _compute_consecutive_relay_decay()
+
+        assert stats["decay_stable"] is False
+        assert stats["source"] == "timeout"
+        assert stats["bear_days"] == 0
+        assert stats["lbc3_days"] == 0
