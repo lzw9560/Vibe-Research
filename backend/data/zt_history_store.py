@@ -165,10 +165,21 @@ def snapshot_zt_pool(
             try:
                 ths = astock.ths_limit_up_pool(d_compact) if hasattr(astock, "ths_limit_up_pool") else []
                 if ths:
-                    pool = [{"c": t.get("code", ""), "n": t.get("name", ""),
+                    ths_pool = [{"c": t.get("code", ""), "n": t.get("name", ""),
                              "lbc": 1 if str(t.get("high_days")) == "首板" else _to_int(t.get("high_days"))}
                             for t in ths]
-                    source = "ths"
+                    # S214 fix: ths 对历史日期 high_days 常返"首板"（端点缺连板数），
+                    # 但"返了行"曾被当成功 block 了有正确 lbc>=2 的 hithink（实证
+                    # 2025-10-15 等缺口日 source=ths 全 lbc=1/None，零连板——真市场
+                    # 几乎总有 ≥1 连板股）。质量门：ths 零 lbc>=2 → 降级 hithink；
+                    # ths 有真连板 → 用 ths（保 live today 行为不变）。
+                    if any((r.get("lbc") or 0) >= 2 for r in ths_pool):
+                        pool = ths_pool
+                        source = "ths"
+                    else:
+                        _logger.info(
+                            "snapshot_zt_pool date=%s ths 全首板（零 lbc>=2，端点缺连板数）"
+                            "→ 降级 hithink", d_iso)
             except Exception as e:  # noqa: BLE001
                 _logger.warning("snapshot_zt_pool ths 失败 date=%s err=%s，降级 hithink", d_iso, e)
         if not pool:

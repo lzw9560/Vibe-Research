@@ -207,3 +207,80 @@ def test_ensure_final_column_idempotent_on_legacy_db(monkeypatch, tmp_path):
     # 二次连不报错（幂等）
     conn = zth._get_conn()
     conn.close()
+
+
+# ── S214 follow-up: ths 质量门（全首板=丢连板数→降级 hithink）──────────────────
+#
+# Bug: fallback em→ths→hithink 中，ths 对历史日期返 high_days="首板"（无连板数），
+# 但 snapshot_zt_pool 把"ths 返了行"当成功，block 了有正确 lbc≥2 的 hithink。
+# 真实市场几乎总有 ≥1 连板股，ths 全首板 = 端点对历史缺连板数，非真无连板。
+# Fix: ths 返行但零 lbc≥2 → 降级 hithink（hithink continue_day_cnt 历史可回溯）。
+
+
+def test_ths_all_shouban_falls_through_to_hithink(monkeypatch, tmp_path):
+    """ths 返全首板（零 lbc>=2）→ 降级 hithink（有正确连板数）。
+
+    修前 bug：ths 返行即"成功"，block hithink → 缺口期 zt_history 全 lbc=1/None，
+    consecutive_relay 缺 lbc>=2 picks（S214 backfill 失效根因）。
+    """
+    import astock  # noqa: PLC0415
+    import data.sources.hithink_src as hithink_mod  # noqa: PLC0415
+
+    monkeypatch.setattr(zth, "_DB_PATH", tmp_path / "zt_history.db")
+    # em 对老日期返空
+    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda *a, **k: [], raising=False)
+    # ths 返全首板（历史日期 high_days 不可靠——真无连板数的端点行为）
+    monkeypatch.setattr(
+        astock, "ths_limit_up_pool",
+        lambda d: [{"code": "000001", "high_days": "首板"},
+                   {"code": "000002", "high_days": "首板"}],
+        raising=False,
+    )
+    # hithink 返正确连板数（含 lbc=2）
+    hkp_calls: list[str] = []
+    def _fake_hkp(d):
+        hkp_calls.append(d)
+        return [{"code": "000001", "name": "A", "continue_day_cnt": 1},
+                {"code": "000003", "name": "B", "continue_day_cnt": 2}]
+    monkeypatch.setattr(hithink_mod, "limit_up_pool", _fake_hkp)
+
+    written = zth.snapshot_zt_pool("2025-10-15", is_final=True)
+
+    assert written == 2
+    assert hkp_calls == ["2025-10-15"]  # 降级到 hithink 了
+    rows = zth.load_zt_history("2025-10-15", "2025-10-15")
+    sources = {r["source"] for r in rows}
+    assert sources == {"hithink"}  # 用了 hithink 非 ths
+    lbcs = sorted(r["lbc"] for r in rows)
+    assert lbcs == [1, 2]  # 含 lbc=2 连板（修前会是全 1/None）
+
+
+def test_ths_with_real_lbc2_used_not_hithink(monkeypatch, tmp_path):
+    """ths 返真 lbc>=2（如 live 今日 fresh 数据）→ 用 ths，不调 hithink。
+
+    回归保护：质量门只在 ths 全首板时降级；ths 有真连板数时行为不变。
+    """
+    import astock  # noqa: PLC0415
+    import data.sources.hithink_src as hithink_mod  # noqa: PLC0415
+
+    monkeypatch.setattr(zth, "_DB_PATH", tmp_path / "zt_history.db")
+    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda *a, **k: [], raising=False)
+    # ths 返真连板（high_days="2" 一个）
+    monkeypatch.setattr(
+        astock, "ths_limit_up_pool",
+        lambda d: [{"code": "000001", "high_days": "首板"},
+                   {"code": "000002", "high_days": "2"}],
+        raising=False,
+    )
+    hkp_calls: list[str] = []
+    monkeypatch.setattr(
+        hithink_mod, "limit_up_pool",
+        lambda d: hkp_calls.append(d) or [{"code": "X", "continue_day_cnt": 1}],
+    )
+
+    zth.snapshot_zt_pool("2026-08-14", is_final=True)
+
+    assert hkp_calls == []  # ths 有真 lbc>=2 → 没降级 hithink
+    rows = zth.load_zt_history("2026-08-14", "2026-08-14")
+    assert {r["source"] for r in rows} == {"ths"}
+    assert any(r["lbc"] == 2 for r in rows)
