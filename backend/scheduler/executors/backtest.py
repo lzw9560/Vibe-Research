@@ -237,6 +237,7 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
     enforced: list[dict] = []
     skipped_underpowered: list[dict] = []
     skipped_non_arm: list[str] = []
+    skipped_event_edge: list[dict] = []  # S219-deep-review（2026-09-18 w1d19k2hl）：event-edge (lift=None/regime_caps) → weekly_review cap gate 管
 
     for dim_id, dim in DIMENSION_LIFT_REGISTRY.items():
         if dim_id.endswith("_ref"):
@@ -253,6 +254,19 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
             skipped_underpowered.append({
                 "dimension_id": dim_id, "arm": arm,
                 "current_days": current_days, "threshold": threshold_days,
+            })
+            continue
+        # S219-deep-review event-edge 守卫（2026-09-18 w1d19k2hl）：consecutive_relay lift=None +
+        # regime_caps 不走 lift_to_multiplier(None→×1.0) 路径——lift is None 分支返 ('探索性', 1.0)
+        # 当 days_sufficient=True，write_override 不保 regime_caps → 静默绕过 bull×0.75 cap +
+        # 34%衰减门 + bear_days≥120 + lbc3_days≥60，最该门控时刻自动升满仓。
+        # consecutive_relay cap 由 weekly_review cap gate 管（_evaluate_cap_up_gate/_evaluate_cap_down_trigger），
+        # 非 r3_enforce selection-lift 逻辑。
+        if dim.lift is None or dim.regime_caps is not None:
+            skipped_event_edge.append({
+                "dimension_id": dim_id, "arm": arm, "current_days": current_days,
+                "lift": dim.lift, "regime_caps": dim.regime_caps,
+                "reason": "event-edge (lift=None/regime_caps) → weekly_review cap gate 管，非 r3_enforce",
             })
             continue
         # ≥60 → enforce: lift_to_multiplier + write_override 刷新
@@ -274,7 +288,8 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
     summary = (
         f"R3 enforce: {len(enforced)} enforced, "
         f"{len(skipped_underpowered)} underpowered (<{threshold_days}d), "
-        f"{len(skipped_non_arm)} non-arm (frozen)"
+        f"{len(skipped_non_arm)} non-arm (frozen), "
+        f"{len(skipped_event_edge)} event-edge (→weekly_review cap gate)"
     )
     logger.warning("[r3_enforce] %s", summary)
     return {
@@ -282,6 +297,7 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
         "enforced": enforced,
         "skipped_underpowered": skipped_underpowered,
         "skipped_non_arm": skipped_non_arm,
+        "skipped_event_edge": skipped_event_edge,
         "threshold_days": threshold_days,
         "summary": summary,
     }
