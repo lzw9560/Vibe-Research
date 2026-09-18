@@ -101,6 +101,7 @@ class TaskExecutor:
             "daily_full_pull": self._execute_daily_full_pull,  # S191 RB-3 — 每日全量拉取沉淀 datalake
             "daily_report": self._execute_daily_report,  # S218: 每日信号报告（consecutive_relay）
             "keypoint_notify": self._execute_keypoint_notify,  # S218 C3: 关键点位决策通知
+            "weekly_review": self._execute_weekly_review,  # S218 C5: 周度汇总复盘
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -492,7 +493,7 @@ class TaskExecutor:
         from scheduler.executors.signals import daily_report
         return daily_report(payload)
 
-    def _execute_keypoint_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """S218 C3 — 关键点位决策通知（D 收盘入场 / D+1 开盘出场 / gap-down 诚实标）。"""
-        from scheduler.executors.signals import keypoint_notify
-        return keypoint_notify(payload)
+    def _execute_weekly_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S218 C5 — 阶段性汇总复盘（weekly review + cap 升降 gate + process-theater 自检）。"""
+        from scheduler.executors.signals import weekly_review
+        return weekly_review(payload)

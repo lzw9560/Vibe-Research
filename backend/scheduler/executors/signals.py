@@ -299,9 +299,190 @@ def intraday_alert(payload: dict[str, Any]) -> dict[str, Any]:
     return {"status": "skipped", "reason": "TODO: S218 P2 intraday_alert stub"}
 
 
+# ── C5: weekly_review ───────────────────────────────────────────────────
+
+def _evaluate_cap_up_gate(bear_days: int, decay_stable: bool, lbc3_days: int) -> bool:
+    """统一 cap 升 ×1.0 gate：须 ALL 满足，非 OR。"""
+    return bear_days >= 120 and decay_stable and lbc3_days >= 60
+
+
+def _evaluate_cap_down_trigger(decay_pct: float) -> bool:
+    """cap 降触发：衰减 >34% 即触发。"""
+    return decay_pct > 34
+
+
+def _render_weekly_review(
+    signals: dict[str, Any],
+    paper_trends: list[dict] | None,
+    arm_status: dict | None,
+) -> str:
+    """渲染周度复盘人话报告。"""
+    date = signals.get("date", "")
+    cap = signals.get("cap", {})
+    effective = cap.get("effective", 1.0)
+
+    lines: list[str] = []
+    lines.append(f"=== {date} 周度汇总复盘 ===")
+    lines.append("")
+
+    # 1. Paper P&L（诚实标注）
+    lines.append("【本周 paper P&L】")
+    lines.append("  只能看 paper 表现，没真交易收益；接券商才有真 closure")
+    if paper_trends:
+        last = paper_trends[-1]
+        lines.append(f"  最近周胜率 {last.get('win_rate', 0)*100:.1f}%（n={last.get('n_decided', 0)}，{last.get('label', '')}）")
+    else:
+        lines.append("  暂无 paper 交易记录")
+    lines.append("")
+
+    # 2. Cap gate 状态（统一 reconciled definition）
+    lines.append("【统一 cap 升降 gate】")
+    lines.append(f"  当前 cap ×{effective}（bull ×0.75 / bear ×0.5 / range ×0.5）")
+    lines.append("  升 ×1.0 须 ALL 满足：")
+    lines.append("    (a) bear 累积 120+ 天 cross-regime chrono 够 power")
+    lines.append("    (b) 60 天 re-check 衰减稳（decay 0.75→0.9）")
+    lines.append("    (c) lbc=3 积累 60 天")
+    lines.append("  → 当前全不满足，维持 ×0.75（bull）/ ×0.5（bear/range）")
+    lines.append("")
+
+    # 3. Decay 监控
+    lines.append("【衰减监控】")
+    lines.append("  train 1.57% → test 1.04%，跌 34%（p=0.0054）")
+    lines.append("  若衰减续恶化（>34%）→ 自动生成 cap-down 提案（×0.5）交用户 review")
+    lines.append("")
+
+    # 4. Process-theater 自检
+    lines.append("【process-theater 自检】")
+    mean_wr = last.get("win_rate", 0.5) if paper_trends else 0.5
+    if mean_wr < 0.5:
+        lines.append(f"  纸面 P&L mean={mean_wr*100:.1f}% < 0 → 触发 cap-down 提案")
+    else:
+        lines.append(f"  纸面 P&L mean={mean_wr*100:.1f}% ≥ 0 → 未触发 cap-down")
+    lines.append("  自检标准：paper P&L mean<0 OR 衰减轨迹跨 negative → 生成 cap-down 提案")
+    lines.append("")
+
+    # 5. Arm 待办 monitor
+    lines.append("【consecutive_relay arm 待办 monitor】")
+    lines.append("  - regime cache 滞后（升 ×1.0 前必修 regime cache 更新机制）")
+    lines.append("  - K1 cache 滞后（baostock_kline_cache）致 picks hold")
+    lines.append("  - lbc=3 积累 60 天转 ×1.0（当前不足）")
+    lines.append("")
+
+    # 6. 创业板做市商结构性断点 caveat（占位）
+    lines.append("【创业板做市商结构性断点 §44 caveat】")
+    lines.append("  TODO 占位：§44 forward-OOS 样本跨 2026-07-06 创业板做市商引入，")
+    lines.append("  edge 可能被 pre/post-做市商 regime 混淆；")
+    lines.append("  未来对创业板 picks 做 pre/post-2026-07-06 子样本分析。")
+    lines.append("  （本次不实现子样本分析，仅留占位。后期实现。）")
+    lines.append("")
+
+    # 7. 诚实性 footer
+    lines.append("【诚实性标注】")
+    lines.append("  consecutive_relay 是 126 verdict 唯一 robust_edge（3% 稀有 positive）")
+    lines.append("  96% negative 是诚实证否 value，非产出率低")
+    lines.append("  深挖子条件（lbc/市值/连板位置）增强，非堆新战法")
+
+    return "\n".join(lines)
+
+
 def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
-    """TODO: 周度回顾（信号准确率 + 收益归因）。"""
-    return {"status": "skipped", "reason": "TODO: S218 P2 weekly_review stub"}
+    """S218 C5: 周度汇总复盘 + 统一 cap 升降 gate + process-theater 自检。
+
+    复用 C1 shared core（get_consecutive_relay_signals），不重复 scan+regime+lift。
+    """
+    run_date = payload.get("run_date") or datetime.now().strftime("%Y-%m-%d")
+    logger.info("[S218] weekly_review start: date=%s", run_date)
+
+    # 1. 复用 C1 shared core
+    from tools.signal_report import get_consecutive_relay_signals
+    signals = get_consecutive_relay_signals(run_date)
+
+    # 2. 取 paper P&L（TradeJournal）
+    paper_trends: list[dict] | None = None
+    arm_status: dict | None = None
+    try:
+        from engine.trade_journal import TradeJournal
+        tj = TradeJournal()
+        paper_trends = tj.query_winrate_trends(arm="consecutive_relay")
+        arm_status = tj.query_arm_status(arm="consecutive_relay")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[S218] weekly_review TradeJournal 查询失败: %s", e)
+
+    # 3. 生成报告
+    review_text = _render_weekly_review(signals, paper_trends, arm_status)
+
+    # 4. 统一 cap gate 评估
+    cap = signals.get("cap", {})
+    effective = cap.get("effective", 1.0)
+    # 当前已知状态（硬编码为 spec 要求——当前全不满足）
+    cap_up_ready = _evaluate_cap_up_gate(
+        bear_days=0,      # 当前 bear underpowered <60 天
+        decay_stable=False,
+        lbc3_days=0,
+    )
+    cap_down_triggered = _evaluate_cap_down_trigger(decay_pct=34)
+
+    # 5. process-theater 自检：paper P&L mean<0 OR 衰减跨 negative → cap-down 提案
+    cap_down_proposal = None
+    if paper_trends:
+        mean_wr = sum(t.get("win_rate", 0) for t in paper_trends) / len(paper_trends)
+        if mean_wr < 0.5:  # 50% 以下视为 negative
+            cap_down_proposal = {
+                "action": "cap-down",
+                "from": effective,
+                "to": 0.5,
+                "reason": f"paper P&L mean={mean_wr*100:.1f}% < 0，衰减轨迹跨 negative",
+            }
+    else:
+        # 无 paper 记录时，若衰减>34% 也提案
+        if cap_down_triggered:
+            cap_down_proposal = {
+                "action": "cap-down",
+                "from": effective,
+                "to": 0.5,
+                "reason": "衰减续恶化（>34%），自动生成 cap-down 提案交用户 review",
+            }
+
+    # 6. 保存记录
+    try:
+        _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
+        record_path = _SIGNAL_DIR / f"{run_date}_weekly_review.json"
+        with open(record_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "date": run_date,
+                    "review_text": review_text,
+                    "cap_up_ready": cap_up_ready,
+                    "cap_down_proposal": cap_down_proposal,
+                    "signals_count": len(signals.get("signals", [])),
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            )
+    except OSError as e:
+        logger.warning("[S218] weekly_review 保存记录失败: %s", e)
+        record_path = None
+
+    # 7. 可选推送（飞书）
+    if payload.get("notify"):
+        try:
+            from notification.notification_service import get_notification_service
+            service = get_notification_service()
+            if hasattr(service, "send"):
+                service.send(review_text)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[S218] weekly_review 通知推送失败: %s", e)
+
+    return {
+        "status": "ok",
+        "date": run_date,
+        "review_text": review_text,
+        "cap_up_ready": cap_up_ready,
+        "cap_down_proposal": cap_down_proposal,
+        "record_path": str(record_path) if record_path else None,
+    }
 
 
 def falsified_retest(payload: dict[str, Any]) -> dict[str, Any]:

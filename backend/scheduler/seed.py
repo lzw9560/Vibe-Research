@@ -694,3 +694,15 @@ def _ensure_seed_tasks() -> None:
             depends_on="trade_journal_daily",  # S190 R5 硬门控
         ))
         logger.info("[scheduler] seed 默认任务 daily_full_pull 已创建（cron 35 17 * * 0-4，depends_on=trade_journal_daily）")
+
+    # S218 C5: 周度汇总复盘——每周日 18:00 盘后（weekly_review）
+    if "weekly_review" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="weekly_review",
+            description="S218 C5 周度汇总复盘（consecutive_relay paper P&L + cap gate + process-theater 自检）",
+            task_type="weekly_review",
+            cron_expr="0 18 * * 0",  # 每周日 18:00
+            payload={"notify": False},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 weekly_review 已创建（cron 0 18 * * 0，S218 C5）")
