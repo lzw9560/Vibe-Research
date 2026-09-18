@@ -2,7 +2,7 @@
 """S218 P0-1: 实际交易录入 + 实际 vs 参考 P&L 差异 + weekly_review 实际 P&L 闭环测试。
 
 测试目标：
-- test_manual_trade_recording: POST /api/signals/manual-trade 记录交易；record_t0_fill 接入生产调用者
+- test_manual_trade_record_t0_fill_exists_not_wired: POST /api/signals/manual-trade 记录交易；record_t0_fill **定义存在但零生产调用**（P0 用 manual_trades.jsonl path 未接入 fills_json，s218-reality-check 2026-09-18 P0-1 修正）
 - test_actual_vs_reference_pnl_diff: 差异计算正确
 - test_delivery_leak_flag: 差距 >50% 时 leak alert 触发
 - test_weekly_review_reads_actual_pnl: C5 cap-down 触发器现在使用实际 P&L，而非 paper proxy
@@ -97,16 +97,23 @@ class TestManualTradeRecording:
         assert last["entry_price"] == 10.0
         assert last["exit_price"] == 11.0
 
-    def test_manual_trade_record_t0_fill_wired(self):
-        """record_t0_fill 已接入生产调用者（通过 manual-trade 端点写入 fills_json）。
+    def test_manual_trade_record_t0_fill_exists_not_wired(self):
+        """record_t0_fill 定义存在但零生产调用——P0 用并行 manual_trades.jsonl path 未接入 fills_json。
 
-        验证：写入 manual_trades.jsonl 的记录中包含 fills_json 等字段，
-        且 record_t0_fill 能被正确调用（不抛异常）。
+        诚实标注（2026-09-18 reality-check s218-reality-check P0-1 修正）：
+        record_t0_fill（journal_recorder.py:114）grep 全仓零生产调用者。
+        P0 actual-P&L ingestion 用并行新 path（manual_trades.jsonl via POST /api/signals/manual-trade），
+        **未接入** 现有 trade_journal fills_json via record_t0_fill。
+        commit effaa99 msg "record_t0_fill wired" overstated——原 test 名"_wired"误导。
+
+        本 test 只验 JournalRecorder.record_t0_fill 方法存在（hasattr/callable）+
+        manual-trade 端点不抛异常——**不验任何生产调用者**（因为零调用）。
+        若未来真接入 fills_json，须加 assert 验 record_t0_fill 被调用 + manual_trades.jsonl 含 fills_json 字段。
         """
         from routers.signals import _post_manual_trade, ManualTradeInput
         from strategies.journal_recorder import JournalRecorder
 
-        # 确保 JournalRecorder.record_t0_fill 是 callable
+        # 只验方法存在非 wiring——record_t0_fill 零生产调用（grep 核实，s218-reality-check 2026-09-18）
         assert hasattr(JournalRecorder, "record_t0_fill")
         assert callable(getattr(JournalRecorder, "record_t0_fill"))
 
@@ -120,7 +127,7 @@ class TestManualTradeRecording:
             reference_signal_id="consecutive_relay_2026-09-18_000004",
         )
         result = _post_manual_trade(body)
-        # 成功记录交易，不抛异常即为 wired
+        # 成功记录交易（manual_trades.jsonl path），record_t0_fill 仍零调用——本 test 不验 wiring
         assert result["trade_id"].startswith("manual_")
 
 
