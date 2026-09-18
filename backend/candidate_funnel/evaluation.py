@@ -299,6 +299,21 @@ DIM_ARM_MAP: dict[str, list[str] | None] = {
 }
 
 
+# S218 #7: ×1.0 freeze 升级守卫 —— fresh harness verdict flag（默认 False，无许可）。
+# §44 v2（s44_verifier/stats.py:483 decision rule）：oos_supporting caps at ×0.75 NOT ×1.0
+# until cross-regime replication。此 flag 把诚实 gate 从 harness decision rule 接到生产
+# lift_for_arm —— 防止任何未来 session 把 frozen regime_caps bull 0.75→1.0 零代码阻力直接全权重。
+# 升级 ×1.0 须 fresh harness run 许可：env VR_ALLOW_X1DOT0=1 或此 module global True。
+_FRESH_HARNESS_VERDICT: bool = False
+
+
+def _x1dot0_upgrade_permitted() -> bool:
+    """是否许可 ×1.0 升级（fresh harness run）。env VR_ALLOW_X1DOT0=1 或 module global True。"""
+    if os.environ.get("VR_ALLOW_X1DOT0") == "1":
+        return True
+    return _FRESH_HARNESS_VERDICT
+
+
 def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
     """按臂查对应维度 lift_to_multiplier 结果（用冻结 registry，S180 R3）。
 
@@ -311,6 +326,10 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
     S211：regime 参数支持 consecutive_relay regime-stratified caps。
     regime=None（旧 caller 默认）→ 保守 weight_multiplier（不误放全权重）。
     regime 指定 → 返该 regime cap（consecutive_relay bull ×0.75 provisional / bear+range ×0.5；2026-09-18 核 registry:89-103 regime_caps）。
+
+    S218 #7：×1.0 freeze 升级守卫 —— regime_caps[regime]==1.0（升级方向）时拒绝返 ×1.0
+    除非 fresh harness verdict 许可（stats.py:483 oos_supporting caps at ×0.75 NOT ×1.0
+    until cross-regime replication）。无许可 → 保守 ×0.75。降级（<0.75）或 ×0.75 正常不守。
     """
     # S213 arm 级 kill switch（plumbing，enforce defer 60 天后）
     # arm_status override 优先于 registry：is_active=False → 返 0.0 停交易；weight_override 设值 → 优先
@@ -339,7 +358,13 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
             if regime is not None:
                 cap = d.regime_caps.get(regime)
                 if cap is not None:
-                    multipliers.append((cap, f"{dim_id} regime={regime}"))
+                    # S218 #7: ×1.0 freeze 升级守卫 —— cap==1.0 须 fresh harness 许可
+                    # （stats.py:483 oos_supporting caps at ×0.75 NOT ×1.0 until cross-regime replication）
+                    if cap == 1.0 and not _x1dot0_upgrade_permitted():
+                        multipliers.append((0.75, f"{dim_id} regime={regime} ×1.0 freeze→保守×0.75（须 fresh harness run 许可）"))
+                        continue
+                    note_suffix = " ×1.0 升级许可（fresh harness run）" if cap == 1.0 else ""
+                    multipliers.append((cap, f"{dim_id} regime={regime}{note_suffix}"))
                     continue
             # regime=None → 保守 weight_multiplier（不误放全权重，bear/range underpowered）
             multipliers.append((d.weight_multiplier, f"{dim_id} regime=None 保守"))
