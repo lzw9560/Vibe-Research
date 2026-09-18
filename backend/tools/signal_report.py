@@ -166,6 +166,95 @@ def _get_reference_price(code: str, target_date: str) -> tuple[float | None, str
     return None, "N/A"
 
 
+# ── consecutive_relay decay stats (S218 #2 cap gate 真衰减) ────────────────
+
+def _compute_consecutive_relay_decay() -> dict[str, Any]:
+    """算 consecutive_relay 真衰减统计——替代 weekly_review 硬编码 cap gate。
+
+    数字全部来自 s203 chrono forward-OOS（train vs test day-mean 衰减）+
+    trade_journal 已平仓交易记录（bear_days 累积代理）。不臆造：s203 跑失败
+    或 chrono underpowered 时返 decay_stable=False，cap gate 保守不 fire 升 ×1.0。
+
+    chrono 口径：s203 的 returns 是 decimal（如 0.0157=1.57%），故
+    train_day_mean / test_day_mean / test_day_std 均 decimal。衰减稳定义预注册：
+    test_std < 0.02（decimal，=2.0 pct-points）AND n_test>=30——非 borderline power
+    （S217 test_std≈0.0259 > 0.02 故 False，诚实标 borderline 非 stable）。
+
+    Returns:
+        decay_pct: (train_mean - test_mean) / train_mean * 100，train_mean<=0 时 0
+        decay_stable: test_std < 0.02 AND n_test_days >= 30
+        bear_days: consecutive_relay 已平仓交易 distinct exit_date 数（简化代理
+                   cross-regime 累积；lbc3 子查询 TODO，暂返 0）
+        lbc3_days: 0（TODO lbc=3 子查询，spec 标占位不实现）
+        n_test_days / train_mean / test_mean: chrono 原值（可观测性）
+        source: 's203_chrono' | 'underpowered' | 'error: {msg}'
+    """
+    fallback = {
+        "decay_pct": 0.0,
+        "decay_stable": False,
+        "bear_days": 0,
+        "lbc3_days": 0,
+        "n_test_days": 0,
+        "train_mean": None,
+        "test_mean": None,
+        "source": "error: unknown",
+    }
+    try:
+        from tools.s203_consecutive_relay_harness import main as s203_main  # noqa: PLC0415
+        result = s203_main()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[_compute_consecutive_relay_decay] s203 跑失败: %s", e)
+        return {**fallback, "source": f"error: {e}"}
+
+    chrono = result.get("bull_chrono_oos") or {}
+    decision = chrono.get("decision")
+    # chrono 空 / decision insufficient → underpowered（不 fire 升 ×1.0）
+    if not chrono or decision == "insufficient":
+        return {**fallback, "source": "underpowered"}
+
+    train_mean = chrono.get("train_day_mean")
+    test_mean = chrono.get("test_day_mean")
+    test_std = chrono.get("test_day_std")
+    n_test_days = chrono.get("n_test_days") or 0
+
+    if train_mean is not None and test_mean is not None and train_mean > 0:
+        decay_pct = (train_mean - test_mean) / train_mean * 100
+    else:
+        decay_pct = 0.0
+
+    # decay_stable：test_std < 0.02 (decimal=2.0pct) AND n_test>=30
+    decay_stable = bool(
+        test_std is not None and test_std < 0.02 and n_test_days >= 30
+    )
+
+    # bear_days / lbc3_days from trade_journal（已平仓交易 distinct exit_date）
+    bear_days = 0
+    lbc3_days = 0  # TODO lbc=3 子查询，spec 标占位不实现
+    try:
+        from engine.trade_journal import TradeJournal  # noqa: PLC0415
+        tj = TradeJournal()
+        records = tj.query_records(
+            arm="consecutive_relay", is_realized=1, is_dead_arm=None
+        )
+        exit_dates = {r.exit_date for r in records if getattr(r, "exit_date", None)}
+        bear_days = len(exit_dates)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "[_compute_consecutive_relay_decay] trade_journal 查询失败: %s", e
+        )
+
+    return {
+        "decay_pct": round(decay_pct, 4),
+        "decay_stable": decay_stable,
+        "bear_days": bear_days,
+        "lbc3_days": lbc3_days,
+        "n_test_days": n_test_days,
+        "train_mean": train_mean,
+        "test_mean": test_mean,
+        "source": "s203_chrono",
+    }
+
+
 # ── pure-fn core: get_consecutive_relay_signals ───────────────────────────
 
 def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:

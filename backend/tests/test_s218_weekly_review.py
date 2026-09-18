@@ -41,7 +41,14 @@ def _patch_deps(monkeypatch):
         "arm": "consecutive_relay", "is_active": True,
         "weight_override": None, "kill_reason": None, "killed_at": None,
     }
+    # decay 函数调 query_records——默认返 []（bear_days=0）
+    _FakeTJ.return_value.query_records.return_value = []
     monkeypatch.setattr("engine.trade_journal.TradeJournal", _FakeTJ)
+    # Mock s203 harness main（benign underpowered chrono）——防 weekly_review 跑真 harness
+    monkeypatch.setattr(
+        "tools.s203_consecutive_relay_harness.main",
+        MagicMock(return_value={"bull_chrono_oos": {"decision": "insufficient"}}),
+    )
     # Mock NotificationService
     monkeypatch.setattr(
         "scheduler.executors.signals._send_text_notification",
@@ -150,3 +157,47 @@ class TestWeeklyReview:
         assert "paper" in review_text.lower()
         assert "没真交易收益" in review_text or "无真交易" in review_text or "零真交易" in review_text
         assert "接券商" in review_text or "closure" in review_text.lower()
+
+
+# ── test: _compute_consecutive_relay_decay (S218 #2 cap gate 真衰减) ──────
+
+class TestComputeDecay:
+    """_compute_consecutive_relay_decay 真衰减 stats 测试（替 weekly_review 硬编码）。"""
+
+    def test_compute_decay_from_s203_chrono(self, monkeypatch):
+        """test_compute_decay_from_s203_chrono: s203 chrono → decay_pct≈33.8 / decay_stable=False / bear_days=0."""
+        mock_main = MagicMock(return_value={
+            "bull_chrono_oos": {
+                "train_day_mean": 0.0157,
+                "test_day_mean": 0.0104,
+                "test_day_std": 0.0259,
+                "n_test_days": 57,
+                "decision": "oos_supporting",
+            },
+        })
+        monkeypatch.setattr("tools.s203_consecutive_relay_harness.main", mock_main)
+
+        from tools.signal_report import _compute_consecutive_relay_decay
+        stats = _compute_consecutive_relay_decay()
+
+        # decay_pct = (0.0157 - 0.0104) / 0.0157 * 100 ≈ 33.76
+        assert stats["decay_pct"] == pytest.approx(33.76, abs=0.05)
+        # test_std 0.0259 > 0.02 (decimal=2.0pct) → 不稳定 → False（诚实标 borderline）
+        assert stats["decay_stable"] is False
+        assert stats["bear_days"] == 0
+        assert stats["lbc3_days"] == 0
+        assert stats["n_test_days"] == 57
+        assert stats["source"] == "s203_chrono"
+
+    def test_compute_decay_s203_error_fallback(self, monkeypatch):
+        """test_compute_decay_s203_error_fallback: s203 跑失败 → fallback decay_stable=False / source 含 'error'."""
+        mock_main = MagicMock(side_effect=RuntimeError("s203 boom"))
+        monkeypatch.setattr("tools.s203_consecutive_relay_harness.main", mock_main)
+
+        from tools.signal_report import _compute_consecutive_relay_decay
+        stats = _compute_consecutive_relay_decay()
+
+        assert stats["decay_stable"] is False
+        assert "error" in stats["source"]
+        assert stats["bear_days"] == 0
+        assert stats["lbc3_days"] == 0

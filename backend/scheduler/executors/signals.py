@@ -443,16 +443,17 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     # 3. 生成报告
     review_text = _render_weekly_review(signals, paper_trends, arm_status)
 
-    # 4. 统一 cap gate 评估
+    # 4. 统一 cap gate 评估（S218 #2: 真衰减 stats 替硬编码）
     cap = signals.get("cap", {})
     effective = cap.get("effective", 1.0)
-    # 当前已知状态（硬编码为 spec 要求——当前全不满足）
+    from tools.signal_report import _compute_consecutive_relay_decay
+    decay_stats = _compute_consecutive_relay_decay()
     cap_up_ready = _evaluate_cap_up_gate(
-        bear_days=0,      # 当前 bear underpowered <60 天
-        decay_stable=False,
-        lbc3_days=0,
+        bear_days=decay_stats["bear_days"],
+        decay_stable=decay_stats["decay_stable"],
+        lbc3_days=decay_stats["lbc3_days"],
     )
-    cap_down_triggered = _evaluate_cap_down_trigger(decay_pct=34)
+    cap_down_triggered = _evaluate_cap_down_trigger(decay_pct=decay_stats["decay_pct"])
 
     # 5. process-theater 自检：paper P&L mean<0 OR 衰减跨 negative → cap-down 提案
     #    S218 P0: 优先用实际 P&L（手动交易记录），没有才降级 paper P&L
@@ -529,6 +530,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
         "review_text": review_text,
         "cap_up_ready": cap_up_ready,
         "cap_down_proposal": cap_down_proposal,
+        "decay_stats": decay_stats,
         "record_path": str(record_path) if record_path else None,
     }
 
