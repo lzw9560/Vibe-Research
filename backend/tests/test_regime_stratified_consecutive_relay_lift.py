@@ -24,6 +24,10 @@ class _FakeVerdict:
     n: int = 50
     days_robust: int = 10
     note: str = "underpowered: days_robust=10<60 (R6 gate)"
+    # S217 fix: run() reads v.walk_forward_status directly (line 138) +
+    # v.purged_kfold_status via getattr (line 139). Mock must carry both.
+    walk_forward_status: Optional[str] = None
+    purged_kfold_status: Optional[str] = None
 
 
 def _make_synthetic_data(n_days_per_regime: int = 20, picks_per_day: int = 3):

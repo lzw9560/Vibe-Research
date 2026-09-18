@@ -16,6 +16,7 @@ Sources merged:
 """
 from __future__ import annotations
 
+import math
 import random
 import statistics
 from dataclasses import dataclass
@@ -439,3 +440,166 @@ def walk_forward_oos(
         mean_test_lift=mean_lift,
         status="oos_stable" if all_stable else "oos_unstable",
     )
+
+
+# ── S217: chronological holdout forward-OOS for event edges ────────────────
+#
+# Why this exists (NOT walk_forward_oos): walk_forward_oos is a SELECTION
+# mechanism — its per-window statistic is day_paired_lift = survivor_winrate /
+# universe_winrate (a rank-prediction lift). An event edge has no ranking
+# (binary occurrence -> next-bar return); its question is one-sample ("is
+# day-clustered mean > 0 consistently on held-out data"). Reusing
+# walk_forward_oos for events is a category error (S217 grill wb91zk9b5,
+# 6-lens unanimous). On 67 clustered bull days walk-forward also yields ~4
+# underpowered windows with a 6.25% FPR AND-gate. This pre-registered 2/3-1/3
+# chronological holdout is the minimum honest OOS test for an event edge,
+# reusing day_clustered_t_test (stats.py:139) — zero tunable parameters.
+#
+# Freeze-compliant: pure diagnostic function. Does NOT touch verifier.py /
+# Verdict dataclass / event_status gate. Gate-wiring deferred to stage-2
+# (post-backfill, S214 -> 173 days) when a powered test is possible.
+
+#: S217 pre-registered train ratio (2/3). Conventional, zero-tunable — do NOT
+#: tune this to chase significance (the exact failure mode the grill flags).
+_CHRONO_TRAIN_RATIO: float = 0.667
+
+
+def chronological_holdout_event_check(
+    returns: list[float],
+    dates: list[str],
+    round_trip_cost: float,
+    materiality_floor: float = _EVENT_MATERIALITY_FLOOR,
+    train_ratio: float = _CHRONO_TRAIN_RATIO,
+) -> dict:
+    """S217: pre-registered 2/3-1/3 chronological holdout forward-OOS.
+
+    Splits unique event-dates chronologically: first ``ceil(N*train_ratio)``
+    days = train (reference), rest = test (held-out). Runs the existing
+    ``day_clustered_t_test`` on the test third — one-sided p for day-mean > 0
+    after cost. Pure, immutable, never mutates inputs.
+
+    Decision rule (asymmetric, pre-registered in S217; NEVER falsifies on
+    ``n_test_days<60`` — biases only toward the cheap error):
+      - ``oos_supporting``: test_day_mean > floor AND p_one_sided < 0.05.
+        Edge survives unseen data (within-regime only) -> lift cap cautiously
+        x0.5 -> x0.75 (NOT x1.0 until cross-regime replication).
+      - ``strong_negative``: test_day_mean < 0 AND p_one_sided > 0.95.
+        Edge reversed on held-out data -> x0.5 -> x0.25, flag for review.
+        NOT a formal falsification until a powered test (stage 2).
+      - ``inconclusive``: positive but below floor OR not significant.
+        Cannot tell from this n -> stay x0.5, pursue backfill (S214).
+      - ``insufficient``: n_test_days < 2 (can't compute t).
+
+    ``floor = max(materiality_floor, round_trip_cost * 0.5)`` (same口径 as
+    the event_robust gate).
+
+    Returns dict: ``{n_train_days, n_test_days, test_day_mean,
+    test_p_one_sided, test_win_rate, test_day_std, train_day_mean, decision,
+    decision_note}``.
+    """
+    # Immutability: build local arrays, never touch caller lists.
+    unique_dates = sorted(set(dates))
+    n_unique = len(unique_dates)
+    if n_unique < 4:
+        return {
+            "n_train_days": 0,
+            "n_test_days": 0,
+            "test_day_mean": None,
+            "test_p_one_sided": None,
+            "test_win_rate": None,
+            "test_day_std": None,
+            "train_day_mean": None,
+            "decision": "insufficient",
+            "decision_note": f"n_unique_dates={n_unique} < 4, cannot split",
+        }
+
+    n_train = max(1, math.ceil(n_unique * train_ratio))
+    test_dates_set = set(unique_dates[n_train:])
+
+    r_arr = np.asarray(returns, dtype=float)
+    d_arr = np.asarray(dates, dtype=object)
+    mask_test = np.array([d in test_dates_set for d in d_arr.tolist()])
+    mask_train = ~mask_test
+    finite_train = mask_train & np.isfinite(r_arr)
+    n_train_days = len(set(d_arr[finite_train].tolist()))
+
+    floor = max(materiality_floor, round_trip_cost * 0.5)
+
+    # train day-mean (reference / drift comparison — NOT gated, for reporting)
+    train_returns = r_arr[mask_train]
+    train_dates_arr = d_arr[mask_train]
+    train_res = (
+        day_clustered_t_test(train_returns, train_dates_arr)
+        if len(train_returns) > 0
+        else None
+    )
+    train_day_mean = train_res.day_mean if train_res else None
+
+    test_returns = r_arr[mask_test]
+    test_dates_arr = d_arr[mask_test]
+    if len(test_returns) == 0:
+        return {
+            "n_train_days": n_train_days,
+            "n_test_days": 0,
+            "test_day_mean": None,
+            "test_p_one_sided": None,
+            "test_win_rate": None,
+            "test_day_std": None,
+            "train_day_mean": train_day_mean,
+            "decision": "insufficient",
+            "decision_note": "no test-third returns after split",
+        }
+
+    test_res = day_clustered_t_test(test_returns, test_dates_arr)
+    if test_res is None:
+        return {
+            "n_train_days": n_train_days,
+            "n_test_days": len(set(test_dates_arr.tolist())),
+            "test_day_mean": None,
+            "test_p_one_sided": None,
+            "test_win_rate": None,
+            "test_day_std": None,
+            "train_day_mean": train_day_mean,
+            "decision": "insufficient",
+            "decision_note": "test third n_days < 2, cannot compute t",
+        }
+
+    test_day_mean = test_res.day_mean
+    test_p = test_res.p_one_sided
+    test_win_rate = _winrate([float(x) for x in test_returns if not np.isnan(x)])
+    test_day_std = test_res.day_std
+
+    if test_day_mean > floor and test_p < 0.05:
+        decision = "oos_supporting"
+        note = (
+            f"test third mean={test_day_mean*100:.2f}% > floor={floor*100:.2f}% "
+            f"AND p={test_p:.4f}<0.05 -> survives unseen data (within-regime "
+            f"only, provisional; NOT x1.0 until cross-regime replication)"
+        )
+    elif test_day_mean < 0 and test_p > 0.95:
+        decision = "strong_negative"
+        note = (
+            f"test third mean={test_day_mean*100:.2f}% < 0 AND "
+            f"p={test_p:.4f}>0.95 -> reversed on held-out data (warning; "
+            f"NOT formal falsify until powered test, stage 2)"
+        )
+    else:
+        decision = "inconclusive"
+        note = (
+            f"test third mean={test_day_mean*100:.2f}%, p={test_p:.4f}, "
+            f"floor={floor*100:.2f}% -> cannot tell from n_test_days="
+            f"{test_res.n_days}; stay x0.5, pursue backfill (S214), "
+            f"do NOT falsify"
+        )
+
+    return {
+        "n_train_days": n_train_days,
+        "n_test_days": test_res.n_days,
+        "test_day_mean": test_day_mean,
+        "test_p_one_sided": test_p,
+        "test_win_rate": test_win_rate,
+        "test_day_std": test_day_std,
+        "train_day_mean": train_day_mean,
+        "decision": decision,
+        "decision_note": note,
+    }

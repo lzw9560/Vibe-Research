@@ -165,12 +165,41 @@ def main() -> dict:
             f"net_mean={r.get('net_mean_pct')} winrate={r.get('win_rate')} "
             f"verdict={st} wf={r.get('walk_forward_status')} pk={r.get('purged_kfold_status')} | {nt[:80]}"
         )
+
+    # S217: chronological 2/3-1/3 holdout forward-OOS on the bull regime
+    # (the only robust_edge arm; in-sample robust_edge +1.57% — does it survive
+    # held-out data? pre-registered in specs/S217, zero-tunable split).
+    from s44_verifier.stats import chronological_holdout_event_check  # noqa: PLC0415
+
+    bull_pairs = [(r, d) for r, d in zip(rets, dts) if regime_map.get(d) == "bull"]
+    if bull_pairs:
+        bull_rets = [p[0] for p in bull_pairs]
+        bull_dates = [p[1] for p in bull_pairs]
+        chrono = chronological_holdout_event_check(
+            bull_rets, bull_dates, round_trip_cost=round(mean_cost_dec, 6)
+        )
+        print("\n[S217 chrono-OOS] bull regime 2/3-1/3 chronological holdout:")
+        print(
+            f"  n_train_days={chrono['n_train_days']} n_test_days={chrono['n_test_days']} "
+            f"train_day_mean={chrono['train_day_mean']}"
+        )
+        print(
+            f"  test_day_mean={chrono['test_day_mean']} test_p_one_sided={chrono['test_p_one_sided']} "
+            f"test_win_rate={chrono['test_win_rate']} test_day_std={chrono['test_day_std']}"
+        )
+        print(f"  decision={chrono['decision']}")
+        print(f"  note: {chrono['decision_note']}")
+    else:
+        print("\n[S217 chrono-OOS] no bull-regime obs to hold out")
+        chrono = {"decision": "insufficient", "n_test_days": 0}
+
     return {
         "results": results,
         "n_obs": n_obs,
         "days": days,
         "net_mean_pct": round(net_mean * 100, 4),
         "net_wr": round(wr, 4),
+        "bull_chrono_oos": chrono,
     }
 
 
