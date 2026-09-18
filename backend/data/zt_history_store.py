@@ -243,6 +243,48 @@ def snapshot_zt_pool(
         conn.close()
 
 
+def backfill_fund_only(date: str, fund_map: dict[str, dict] | None) -> int:
+    """UPDATE-only fund/fundamt（S219 #11 fund 前向累积专用）。
+
+    绝不 DELETE+INSERT 整日——会毁 consecutive_relay 生产 lbc（deep-review #8 finding 3：
+    DELETE 同 date 全行再 INSERT 会丢已算好的 lbc/fbt/source）。仅 UPDATE fund/fundamt 两列，
+    绝不翻 is_final、绝不碰 lbc/fbt/zbc/zje/p/ltsz/source/name/hybk/snapshot_at。新值 None
+    时 COALESCE 保留旧值（防 em 偶尔缺字段覆盖已有值）。
+
+    Args:
+        date: YYYY-MM-DD 或 YYYYMMDD。
+        fund_map: {code: {"fund": float|None, "fundamt": float|None}}。code 不在 map、
+            或 map 值全 None 的行不变；不在 DB 的 code 不 INSERT（不新增行，只 UPDATE 命中）。
+
+    Returns:
+        命中并 UPDATE 的行数（WHERE date+code 匹配且至少一个新值非 None）。
+    """
+    d_iso = _to_iso(date)
+    if not d_iso or not fund_map:
+        return 0
+    conn = _get_conn()
+    n = 0
+    try:
+        with _DB_LOCK:
+            for code, vals in fund_map.items():
+                if not isinstance(vals, dict):
+                    continue
+                fund = _to_float(vals.get("fund"))
+                fundamt = _to_float(vals.get("fundamt"))
+                if fund is None and fundamt is None:
+                    continue  # 无新值，跳过（不覆盖已有值）
+                cur = conn.execute(
+                    "UPDATE zt_history SET fund = COALESCE(?, fund), "
+                    "fundamt = COALESCE(?, fundamt) WHERE date = ? AND code = ?",
+                    (fund, fundamt, d_iso, str(code).strip()),
+                )
+                n += cur.rowcount
+            conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def load_zt_history(start: str, end: str) -> list[dict[str, Any]]:
     """读 [start, end] 涨停历史（date, code 升序）。start/end: YYYY-MM-DD 或 YYYYMMDD。"""
     s, e = _to_iso(start), _to_iso(end)

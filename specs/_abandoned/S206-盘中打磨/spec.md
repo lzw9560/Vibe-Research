@@ -1,6 +1,7 @@
 # S206 盘中打磨 spec
 
-> 状态：草案（2026-09-15，审查 workflow `w3qjmina3` + 专家/grill/计划 workflow `wn7jczlj6` 产出）。SDD §0。
+> 状态：**abandoned**（2026-09-19，milestone-2026-09-18-pivot freeze 决议：冻结新 spec/基建 + 做减法）。盘中打磨在 freeze 前未实现；freeze 后不推进，移至 `specs/_abandoned/`（reversible git mv）。
+> 原草案（2026-09-15，审查 workflow `w3qjmina3` + 专家/grill/计划 workflow `wn7jczlj6` 产出）。SDD §0。
 > 关联：[[./plan.md]]、[[./tasks.md]]、CLAUDE.md §0 规范驱动、§44v2 应用规约。
 > 时间线：现在（盘前/非交易时段）深度分析+制定计划，**开盘后按 tasks P0_FIRST 执行**。
 

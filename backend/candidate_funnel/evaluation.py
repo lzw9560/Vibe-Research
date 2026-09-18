@@ -53,7 +53,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         dimension_id="gene_score", label="gene 综合分",
         lift=0.030, n=2332, days_robust=38,              # rho≈0.030（Spearman，无单调→视为劣于随机）
         validation_status="劣于随机", weight_multiplier=0.1,
-        source_script="tools/gene_score_directionality.py",
+        source_script="tools/_archive/gene_score_directionality.py (archived 2026-09-19, 劣于随机 ×0.1)",
         note="rho≈0.030 robust null，无方向预测力（52bedf8）",
     ),
     "breakout": DimensionValidation(
@@ -184,7 +184,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         dimension_id="sector_phase", label="板块周期相位",
         lift=None, n=2319, days_robust=25,   # winrate-based 非 lift（非单调→无方向 edge）
         validation_status="劣于随机", weight_multiplier=0.1,
-        source_script="tools/sector_phase_regression.py",
+        source_script="tools/_archive/sector_phase_regression.py (archived 2026-09-19, 劣于随机 ×0.1)",
         note="winrate 0.52-0.60 非单调(启动0.563→发酵0.565→高潮0.605→退潮0.569回落); "
              "CI 重叠; label-only(B); 修饰方向单调=False; 无 edge",
     ),

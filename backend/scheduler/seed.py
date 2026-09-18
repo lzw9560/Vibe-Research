@@ -567,6 +567,34 @@ def _ensure_seed_tasks() -> None:
             # 独立不依赖 kline_refresh（FRED 走自己 API 非本地 cache）
         ))
         logger.info("[scheduler] seed 默认任务 macro_fetch 已创建（cron 35 6 * * 1-5 盘前）")
+
+    # S219 #11 fund_accumulation——16:30 盘后（sti_post_market 15:35 已 snapshot 当日行 +
+    # em 终盘 fund/fundamt 稳定）。前向累积 fund/fundamt（em 历史日全空 + hithink/ths 不带 fund，
+    # 只能逐日累积），~60 天后 S219 un-defer 条件3（fund≥60）满足。
+    # UPDATE-only-fund（不 DELETE+INSERT，不毁 consecutive_relay 生产 lbc——deep-review #8
+    # finding 3）；不翻 is_final，不碰 lbc/fbt/source。
+    # ⚠️ dispatch 注册须等 #8 done：scheduler/executors/__init__.py _executors dict 加
+    # "fund_accumulation": self._execute_fund_accumulation + 方法。未接线前 cron 触发落
+    # failed run（未知任务类型）——预期行为，#8 接线后生效。enabled=True + notify_on_failure=
+    # False：未接线前 failed run 不刷通知（避免每周一-五 16:30 噪音），#8 接线后自动生效；
+    # 后续 em 瞬态断连也静默（daily accumulator 次日自愈，不需打扰用户）。
+    if "fund_accumulation" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="fund_accumulation",
+            description="S219 #11 fund 前向累积：每日盘后 UPDATE zt_history.fund/fundamt"
+                        "（UPDATE-only 不毁 lbc；~60 天后 S219 un-defer 条件3）",
+            task_type="fund_accumulation",
+            cron_expr="30 16 * * 0-4",  # 16:30 工作日盘后（Mon-Fri，weekday 0=周一）
+            payload={},
+            enabled=True,
+            notify_on_failure=False,  # dispatch 未接线前 + em 瞬态断连均静默（详见上注释）
+            # 独立不依赖 kline_refresh（em 自取数非本地 cache）
+        ))
+        logger.info(
+            "[scheduler] seed 默认任务 fund_accumulation 已创建（cron 30 16 * * 0-4，"
+            "dispatch 注册须等 #8 done）"
+        )
+
     for t in _manager.list_tasks():
         if t.name == "zt_history_snapshot" and t.cron_expr == "0 16 * * 0-4":
             old_cron = t.cron_expr

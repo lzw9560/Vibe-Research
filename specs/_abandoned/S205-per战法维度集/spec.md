@@ -1,6 +1,7 @@
 # Spec: S205 — per-战法维度集（5 战法扩展，龙头之外）
 
-> 状态：草案（2026-09-16）。基于 `specs/_shared/dragon-score-dimension-registry.md` §4.2 预设计 + 6 lens grill（本文 §5）。待 plan.md/tasks.md。
+> 状态：**abandoned**（2026-09-19，milestone-2026-09-18-pivot freeze 决议：冻结新 spec/基建 + 做减法）。per-战法维度集 5 战法扩展在 freeze 前未实现；freeze 后不推进，移至 `specs/_abandoned/`（reversible git mv）。
+> 原草案（2026-09-16）基于 `specs/_shared/dragon-score-dimension-registry.md` §4.2 预设计 + 6 lens grill（本文 §5）。待 plan.md/tasks.md。
 > 关联：[[../S203-龙头战法数字化改造/spec.md]]（龙头 3 sub + Dragon Score 5 维）、[[../S204-多日跟踪架构与§44v2修正/spec.md]]（§44 harness + verifier 修正）、[[_shared/dragon-score-dimension-registry.md]]（维度 registry 预设计）。
 > 上游：`wc4q5d73o`（5 战法研究 workflow，545k tokens，出 per-战法维度集映射）。
 
