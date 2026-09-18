@@ -31,6 +31,8 @@ import type {
   ExpectationGapResult, EmHealthResult,
   EarningsCalendarResponse,
   SignalsStatusResponse,
+  SignalsDailyResponse, SignalsDailyReportResponse,
+  ManualTradeInput, ManualTradeResponse, ManualTradesResponse,
 } from "./api/types";
 // S165: verifier-contract 是 UI 契约 source-of-truth（Verdict/RecorderRecord/DimensionValidationRecord）。
 import type { RecorderRecord, DimensionValidationRecord } from "./verifier-contract";
@@ -363,6 +365,18 @@ export const api = {
   // S218 C4: validated-edge 信号状态（regime 新鲜度 + arm status + decay 轨迹）
   signalsStatus: () =>
     get<SignalsStatusResponse>("/signals/status"),
+  // S218 #9: 当日结构化 consecutive_relay 信号（tradable/exploratory/avoid 三 bucket）
+  signalsDaily: () =>
+    get<SignalsDailyResponse>("/signals/daily"),
+  // S218 #9: 人话版每日信号报告（markdown）
+  signalsDailyReport: () =>
+    get<SignalsDailyReportResponse>("/signals/daily-report"),
+  // S218 #9: 记录手动真实交易 → 算 actual vs reference P&L + delivery_leak
+  signalsManualTrade: (body: ManualTradeInput) =>
+    request<ManualTradeResponse>("/signals/manual-trade", "POST", body),
+  // S218 #9: 已录手动交易历史（倒序）
+  signalsManualTrades: (limit = 50) =>
+    get<ManualTradesResponse>(`/signals/manual-trades?limit=${limit}`),
   // S216 P2: 财报季日历聚合（codes 可选，提供则聚合 per-code 披露/解禁）
   earningsCalendar: (codes?: string, forwardDays = 90) =>
     get<EarningsCalendarResponse>(`/earnings-calendar${codes ? `?codes=${codes}&forward_days=${forwardDays}` : `?forward_days=${forwardDays}`}`),

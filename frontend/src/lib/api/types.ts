@@ -1885,3 +1885,108 @@ export interface SignalsStatusResponse {
     kill_reason?: string | null;
   }>;
 }
+
+// S218 #9: /api/signals/daily response shape（结构化当日 consecutive_relay 信号）
+// 后端 source: tools/signal_report.py::get_consecutive_relay_signals。
+// 注意：daily-report 端点返 {report: string}（markdown），结构化数据走 /daily。
+export interface SignalsDailySignal {
+  code: string;
+  name: string;
+  lbc: number;
+  entry_price: number | null;
+  price_source: string;
+  unbuyable: boolean;
+  bucket: "tradable" | "exploratory" | "avoid";
+  hardstop_reason: string | null;
+}
+
+export interface SignalsDailyResponse {
+  date: string;
+  arm: string;
+  regime: {
+    current: string;
+    edge_status: string;
+    freshness: {
+      last_cache_date: string | null;
+      stale: boolean;
+      days_since: number | null;
+      n_dates: number;
+    };
+  };
+  cap: {
+    effective: number;
+    base: number;
+    decay: number;
+    regime_factor: number;
+    zuoT_factor: number;
+    note: string;
+  };
+  hardstop: {
+    active: boolean;
+    reason: string | null;
+  };
+  filters: {
+    total_scanned: number;
+    tradable: number;
+    exploratory: number;
+    avoid: number;
+  };
+  signals: SignalsDailySignal[];
+  verified_numbers: {
+    chrono_train: number;
+    chrono_test: number;
+    chrono_decay_pct: number;
+    chrono_p: number;
+    chrono_wr: number;
+    deep_dive_lbc2: number;
+    deep_dive_lbc3: number;
+  };
+  disclaimers: string[];
+}
+
+// S218 #9: /api/signals/daily-report（markdown 人话报告）
+export interface SignalsDailyReportResponse {
+  report: string;
+}
+
+// S218 #9: POST /api/signals/manual-trade 请求/响应
+export interface ManualTradeInput {
+  code: string;
+  entry_price: number;
+  entry_time: string;
+  exit_price?: number | null;
+  exit_time?: string | null;
+  followed_reference: boolean;
+  reference_signal_id?: string | null;
+  notes?: string;
+}
+
+export interface ManualTradePnl {
+  pnl_pct: number | null;
+  pnl_cny: number | null;
+  status: string;
+}
+
+export interface ManualTradeResponse {
+  trade_id: string;
+  code: string;
+  actual_pnl: ManualTradePnl;
+  reference_pnl: {
+    pnl_pct: number | null;
+    expected_return_pct?: number;
+    source: string;
+  };
+  pnl_diff: {
+    diff_pct: number | null;
+    delivery_leak: boolean;
+    leak_reason: string;
+  };
+  delivery_leak: boolean;
+  recorded_at: string;
+}
+
+// S218 #9: GET /api/signals/manual-trades 历史
+export interface ManualTradesResponse {
+  trades: ManualTradeResponse[];
+  count: number;
+}

@@ -24,6 +24,7 @@ import { cn, pctColor } from "@/lib/utils";
 import { RightPanel, type PanelKey } from "./RightPanel";
 import { StockSeatCard } from "@/components/seat/StockSeatCard";
 import { ValidatedEdgeCard } from "@/components/cockpit/ValidatedEdgeCard";
+import { TodaySignalsPanel } from "@/components/cockpit/TodaySignalsPanel";
 
 // ─── 格式化（A 股红涨绿跌，复用 StockDeep 范式）──────────────────────────
 
@@ -333,6 +334,8 @@ function ChartCenter({ code, data, date, activePanel }: { code: string; data: St
       </GlassCard>
     ) : activePanel === "validatedEdge" ? (
       <ValidatedEdgeCard />
+    ) : activePanel === "todaySignals" ? (
+      <TodaySignalsPanel />
     ) : (
       <SignalArea code={code} date={date} />
     );
