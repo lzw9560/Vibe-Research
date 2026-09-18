@@ -31,6 +31,16 @@ def _patch_deps(monkeypatch, tmp_path):
         "routers.signals._get_reference_price_from_signal",
         lambda sid: (10.0, "mock_test"),
     )
+    # Mock s203 harness main + TradeJournal——防 weekly_review 调 _compute_consecutive_relay_decay
+    # 跑真 s203 harness hang（#2 gap，#10 agent 发现）
+    from unittest.mock import MagicMock
+    monkeypatch.setattr(
+        "tools.s203_consecutive_relay_harness.main",
+        MagicMock(return_value={"bull_chrono_oos": {"decision": "insufficient"}}),
+    )
+    _FakeTJ = MagicMock()
+    _FakeTJ.return_value.query_records.return_value = []
+    monkeypatch.setattr("engine.trade_journal.TradeJournal", _FakeTJ)
     yield
 
 
