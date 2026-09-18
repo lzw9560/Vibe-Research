@@ -4,6 +4,8 @@
 >
 > **deferred 原因**（三外部 gate 未满足）：① consecutive_relay ×0.75 provisional 非 ×1.0 definitive（panel un-freeze trigger1 未达）；② delivery 未 4 周真 P&L 验证（record_t0_fill 零生产调用，trigger2 未达）；③ fund 仅 em live ~49 天 <60（§44 R6 门槛，backfill 315 天不可行——akshare em 历史日返空率 63%）。
 >
+> **Errata（effaa99 commit msg 夸大）**：effaa99 commit msg 称 "record_t0_fill wired" 为夸大——实测 `record_t0_fill` 定义于 `backend/strategies/journal_recorder.py:114` 但全仓零生产调用者（bb0362f 已将 test 名 `_wired` 改 `_exists_not_wired` 诚实标注"定义存在但零生产调用，P0 用 manual_trades.jsonl path 未接入 fills_json"）。本 spec deferred 原因 ② 引用的"record_t0_fill 零生产调用"即此事实。归档 chore commit 待 main session 执行。
+>
 > **grill 8 CRITICAL**：R1 fund 历史不可回补 / em_get vs akshare 架构互斥 / backfill 会毁 consecutive_relay 生产 lbc / realizability 盲区（>10 桶=一字板高发）/ walk-forward 是 category error（该用 chrono holdout）/ R6 baked false fact（dimension_registry.py + get_multi_arm_recommendations 都存在，真 gap 仅 register_arm()函数+臂行）/ 两结局 0 实际收益（process theater）/ window_sanity 是声称非工程化。
 >
 > **un-defer 条件**：consecutive_relay 升 ×1.0 definitive AND delivery 4 周真 P&L 验证 AND fund 累积≥60 天。当前留 R1-R4 triage（fund≥60 天前只跑窗口 sanity，verdict 强制 underpowered），R5/R6 scaling 移除。详见 memory `s219-grill-2026-09-18`。
@@ -49,7 +51,7 @@ freeze 条件 1（consecutive_relay stage-2 有答案）满足后，推进 2nd �
 | `backend/data/zt_history_store.py` | 扩 fund 回补函数（akshare zt_pool 历史日走 em_get 落 db，保 source 标注）|
 | `backend/data/transport.py` | em_get route push2ex zt_pool 端点（限流/熔断，不裸调 akshare）|
 | `backend/candidate_funnel/evaluation.py` | DIMENSION_LIFT_REGISTRY 加 seal_turnover（若过 robust_edge）|
-| `backend/candidate_funnel/dimension_registry.py` | **新建**——multi-arm registry（register_arm 落点，当前不存在，2026-09-18 grep 核实）|
+| `backend/strategies/dimension_registry.py` | **已存在**——DIMENSION_REGISTRY 在此（含"封单强度"维度）；`get_multi_arm_recommendations` 在 `backend/recommendation_engine.py`（floor/breakout/limitup/trend/gap 臂）。两者都在（2026-09-18 grill wlf43z1f9 核实，修正 solo grep 错）。真 gap 仅 `register_arm()` 函数不存在 + consecutive_relay/seal_turnover 臂行未加（R6 scope= row-add 非 new-build）|
 | `backend/tools/signal_report.py` | **重构**——支持 multi-arm（当前硬编码 consecutive_relay line 171/200/292，S219 若过须 refactor）+ 若过加 seal_turnover 维度（C1 扩）|
 
 ## 5. 设计方案
@@ -74,9 +76,9 @@ freeze 条件 1（consecutive_relay stage-2 有答案）满足后，推进 2nd �
 - §44 不每阶段参与（spec 轻 sanity + grill 只留重大方法论变更）
 
 **multi-arm view 新建（P1 seam）**：
-- 2026-09-18 grep 核实：`dimension_registry.py` + `get_multi_arm_recommendations` **都不存在**，`signal_report.py:171/200/292` 硬编码 consecutive_relay
-- 封单成交比若过，须**新建** multi-arm registry（register arm → dimension + cap + verdict）+ refactor signal_report.py 支持 multi-arm（不硬编码 consecutive_relay）
-- 这是 panel synthesis 说的"前瞻设计 scope=design seam"——非"bridge 到已有"（spec 原臆造引用 dimension_registry.py/get_multi_arm_recommendations，已修正）
+- 2026-09-18 grill wlf43z1f9 核实（修正 solo grep 错）：`strategies/dimension_registry.py` + `recommendation_engine.py:get_multi_arm_recommendations` **两者都在**，`signal_report.py:169-258` 硬编码 consecutive_relay（`_compute_consecutive_relay_decay`）。真 gap 仅 `register_arm()` 函数不存在 + consecutive_relay/seal_turnover 臂行没加
+- 封单成交比若过，须**扩展** 现有 multi-arm registry（加 `register_arm()` → dimension + cap + verdict，row-add 非 new-build）+ refactor signal_report.py 支持 multi-arm（不硬编码 consecutive_relay）
+- 这是 panel synthesis 说的"前瞻设计 scope=design seam"——**bridge 到已有** multi-arm registry（`strategies/dimension_registry.py` + `recommendation_engine.py`），非 new-build（spec 原臆造引用 dimension_registry.py/get_multi_arm_recommendations 不存在，已修正）
 - 备选：R6 defer 到"seal_turnover 过 §44 后"再做——若 grill verdict 建议 premature，R6 可从本 spec 拆出（R1-R5 先做，R6 待 2nd edge 确认后）
 
 ## 6. 验收标准

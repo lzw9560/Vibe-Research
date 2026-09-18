@@ -1,6 +1,9 @@
 # S204 — 多日跟踪状态机架构 + §44v2 修正 + 承重数据 blocker
 
-> 状态：**草案**（2026-09-14）。基于 6-lens 对抗验证（w50pptu5i 全 REVISE）+ 30 策略 §44 map（wc8g37bbx 3 验证器 REVISE）+ 实测核事实。跨战法系统 spec（不限于龙头）。待 plan.md/tasks.md。
+> 状态：**已实现（多日跟踪架构 R1-R7 + T9-T11 接线）**（2026-09-14 草案，c5e641e stage-1 + 0d411f2 T9-T11 接线 + 30e4d9b T11 fix 落地）。归档核于 2026-09-19。
+> 落地证据：`backend/escalation_engine.py` + `backend/tracking_pool_repo.py` + `backend/early_admission.py` 均存在；`backend/routers/tracking.py:18` `import tracking_pool_repo as repo`；`backend/scheduler/executors/__init__.py:75,343` 注册 `_execute_early_admission_scan` + `from early_admission import scan_early_admission`；`backend/scheduler/seed.py:359` S204 T10 seed（grep 核实）。
+> §44v2 三 CRITICAL（R8-R13 window-sanity/R3-enforce/Bonferroni）在 S159 v2 + S197 + S218 #1 af12ccf 跟进非本 spec，本 spec 仅多日跟踪架构部分落地。
+> 归档至 `specs/_archive/`（reversible git mv）。
 > 关联：[[../S203-龙头战法数字化改造/spec.md]]（战法内容 spec，依赖本 spec 的 §44v2 修正 + 多日跟踪架构）、[[../S159-§44应用规约v2/spec.md]]（§44v2 规约源）、[[../S197-r3-enforce-接线/spec.md]]（R3 enforce v2 草案，本 spec 推进落地）、[[../S201b2-carry-logic-fix/spec.md]]（path_return carry fix，§44 harness 依赖）。
 > 上游工作流：`w50pptu5i`（6 专家+6 验证器）、`wc8g37bbx`（30 策略 §44 map，跨战法 CRITICAL 喂入本 spec）。
 

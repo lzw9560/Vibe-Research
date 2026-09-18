@@ -1,6 +1,8 @@
 # S201b2 — Carry-Logic Optimism-Leak Fix (承重)
 
-> 状态：实现中（2026-09-14）。S201b stage 2 (99fe2b6) 的 stop carry 逻辑 follow-up。
+> 状态：**已实现**（2026-09-14 草案，b1d5e77 落地）。归档核于 2026-09-19。
+> 落地证据：`backend/engine/accounting.py:123` `_is_sellable_bar` + `:183-218` `pending_stop` 状态机（locked-below-stop bar 触发 stop pending → 下个 tradeable bar 填 open），grep 核实。S201b stage 2 (99fe2b6) 的 stop carry 逻辑 follow-up。
+> 归档至 `specs/_archive/`（reversible git mv）。
 
 ## 问题
 
