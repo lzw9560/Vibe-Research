@@ -74,19 +74,24 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     # verify w5d3urvxz 三重验证后 bull robust_edge 站住。2026-09-17 S214 hithink backfill
     # zt_history 33→315 天 + baostock cache backfill 更早 bars → verdict 315 天满窗口：
     # bull n=613 days=67 net_mean=+1.5677%（随样本增大更强更稳：33天+1.055%→78天+1.131%→315天+1.5677%，days=67≥60 跨门槛）。
-    # 但综合 refuted（4真/3假）+ backtest in-sample（非 forward live OOS）→ bull ×0.5 provisional 保守（待 60 天 forward live OOS 升 ×1.0）。
-    # regime_caps: bull ×0.5 provisional / bear+range ×0.5（underpowered days<60）。
+    # 但综合 refuted（4真/3假）+ backtest in-sample（非 forward live OOS）→ bull ×0.5 provisional 保守。
+    # 2026-09-18 stage-2 forward-OOS（S217 chrono 2/3-1/3 holdout，backfill 缺口期后 317 交易日/280 lbc≥2 天）：
+    # bull n=1283 days=172 robust_edge net_mean=+1.3623%。chrono n_test=57 p=0.0054 oos_supporting
+    # （edge 在没见过数据上活下来，真非噪声）但衰减 34%（train 1.57%→test 1.04%）+ 胜率薄 52.7%。
+    # 决议（用户 2026-09-18）：bull ×0.5→×0.75（信 edge 真但衰减+cross-regime 未验，不满 ×1.0；asymmetric loss）。
+    # regime_caps: bull ×0.75 / bear+range ×0.5（bear 71 天 robust 但 chrono n_test=23 underpowered；range underpowered）。
     # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
     "consecutive_relay": DimensionValidation(
         dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap)",
-        lift=None, n=613, days_robust=67,   # bull regime（315 天满窗口，baostock backfill 后，2026-09-17）
+        lift=None, n=1283, days_robust=172,   # bull regime（backfill 缺口期后 317 交易日，2026-09-18 stage-2）
         validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
         source_script="tools/s203_consecutive_relay_harness.py",
-        note="S211 regime-stratified: bull robust_edge +1.5677%（baostock backfill 315 天满窗口，n=613/days=67，"
-             "随样本增大更强更稳：33天+1.055%→78天+1.131%→315天+1.5677%，days=67≥60 跨门槛）但综合 refuted → "
-             "bull ×0.5 provisional（待 60 天 forward live OOS 升 ×1.0；backtest in-sample 即使 days≥60 仍等 forward）/ "
-             "bear+range underpowered days<60（×0.5）。overnight gap path（D收→D+1开）。",
-        regime_caps={"bull": 0.5, "bear": 0.5, "range": 0.5},
+        note="S211 regime-stratified: bull robust_edge +1.3623%（backfill 缺口期后 317 交易日，n=1283/days=172，"
+             "2026-09-18 stage-2 forward-OOS chrono holdout n_test=57 p=0.0054 oos_supporting——edge 真非噪声，"
+             "但衰减 34%（train 1.57%→test 1.04%）+ 胜率薄 52.7%+cross-regime 未验（bear 71 天 chrono n_test=23 underpowered）"
+             "→ bull ×0.5→×0.75（asymmetric loss：信 edge 真但衰减不满 ×1.0，留余地 live-monitor 衰减轨迹）/ "
+             "bear+range ×0.5（underpowered）。overnight gap path（D收→D+1开）。",
+        regime_caps={"bull": 0.75, "bear": 0.5, "range": 0.5},
     ),
     "turnover": DimensionValidation(
         dimension_id="turnover", label="换手剔除(>30%)",
