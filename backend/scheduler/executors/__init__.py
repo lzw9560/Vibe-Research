@@ -102,6 +102,7 @@ class TaskExecutor:
             "daily_report": self._execute_daily_report,  # S218: 每日信号报告（consecutive_relay）
             "keypoint_notify": self._execute_keypoint_notify,  # S218 C3: 关键点位决策通知
             "weekly_review": self._execute_weekly_review,  # S218 C5: 周度汇总复盘
+            "fund_accumulation": self._execute_fund_accumulation,  # S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt，un-defer 数据准备）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -462,6 +463,11 @@ class TaskExecutor:
         """S203 T6 — 吃大面 enforce gate 盘后跑（block_add/block_new+cooldown，不碰 final_size sizing）。"""
         from scheduler.executors.journal import loss_breaker_enforce
         return loss_breaker_enforce(payload)
+
+    def _execute_fund_accumulation(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt UPDATE-only，un-defer 数据准备）。"""
+        from scheduler.executors.fund_accum import fund_accumulation
+        return fund_accumulation(payload)
 
     def _execute_ofi_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S176 R5 — 盘中 OFI 五档收集（tencent fetch_raw → collect_ofi → save_ofi）。"""
