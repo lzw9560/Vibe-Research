@@ -106,7 +106,7 @@ specs/
 | [S070](archive/m3-strategy/S070-intraday采集管道/spec.md) | intraday 数据采集管道 | ✅已实现 | spec | 盘中 ephemeral → 盘后离线 §44 60日复验窗口 + 战法因子派生（并入原 S080） |
 | [S071](archive/m3-strategy/S071-盘前选股谨慎部署/spec.md) | 盘前选股谨慎部署（breakout 弱信号 + 风控） | ✅已实现 2026-08-16 | spec | 事后补写 spec（代码先于规范，grill 指出 §0 违规已补齐）；定位待确认未投真金 |
 | [S072](archive/m3-strategy/S072-涨停叉pipeline诚实可观测/spec.md) | 涨停叉 pipeline 诚实可观测层 | ✅已实现 | spec | weights drift 修 + 前端诚实层 + forward 基线标注（spec 先行，medium） |
-| [S074](archive/m3-strategy/S074-market_phase统一判定/spec.md) | market_phase 统一判定与盘后桩对接 | ✅已实现 | spec | 盘前盘后时段统一（当日收盘→次日开盘）+ post-market 桩对接 + 前端状态机对齐（→ S092 三视图） |
+| [S074](_abandoned/S074-market_phase统一判定/spec.md) | market_phase 统一判定与盘后桩对接 | ❌废弃 2026-09-18 | spec | backend 桩从未实现（workflow.py:800 仍 _not_implemented，trading_workflow.py:78 仍"非交易时段"未合并），被 S092 前端三视图绕过，2026-09-18 做减法 frozen → _abandoned/ |
 | [S075](archive/m3-strategy/S075-首板流/spec.md) | 首板流（首板涨停股 T+1 操作工作流） | ✅已实现 | spec | 首个战法工作流：从"找涨停中谁最好"转向"剔除首板中谁会亏"（medium） |
 | [S076](archive/m3-strategy/S076-首板流盘中多源行情实测/spec.md) | 首板流盘中多源行情实测 | ✅已实现 | spec | 多源行情盘中闭环实测（small，纯探查脚本零生产改动） |
 | [S077](archive/m3-strategy/S077-首板流剔除层lift验证/spec.md) | 首板流剔除层 §44 lift 验证（B1） | ✅已实现 | spec | 独立研究脚本 + 30天 smoke 通；剔除层 lift 1.01-1.06 待 120 天全量复验 |

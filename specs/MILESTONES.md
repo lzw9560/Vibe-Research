@@ -117,7 +117,7 @@
 | S070 | intraday 采集管管 | ✅ | |
 | S071 | 盘前选股谨慎部署 | ✅ | |
 | S072 | 涨停叉 pipeline 诚实可观测 | ✅ | |
-| S074 | market_phase 统一判定 | ✅ | → S092 三视图 |
+| S074 | market_phase 统一判定 | ❌废弃 | backend 未实现（workflow.py:800 _not_implemented），被 S092 绕过，2026-09-18 frozen → _abandoned/ |
 | S075 | 首板流 | ✅ | |
 | S076 | 首板流盘中多源行情实测 | ✅ | |
 | S077 | 首板流剔除层 lift 验证 | ✅ | |
