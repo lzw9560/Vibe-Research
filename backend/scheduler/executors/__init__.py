@@ -103,6 +103,8 @@ class TaskExecutor:
             "keypoint_notify": self._execute_keypoint_notify,  # S218 C3: 关键点位决策通知
             "weekly_review": self._execute_weekly_review,  # S218 C5: 周度汇总复盘
             "fund_accumulation": self._execute_fund_accumulation,  # S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt，un-defer 数据准备）
+            "sector_heat_reverify": self._execute_sector_heat_reverify,  # S218 #12 — sector_heat 非-arm 重验 cron（每 30 天重跑 §44，days≥60 → write_override 升降级）
+            "cron_audit": self._execute_cron_audit,  # S218 #10 — cron-fire audit（扫 cron_fire.log + last_run_at 数 missed delivery cron）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -469,6 +471,16 @@ class TaskExecutor:
         from scheduler.executors.fund_accum import fund_accumulation
         return fund_accumulation(payload)
 
+    def _execute_sector_heat_reverify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S218 #12 — sector_heat 非-arm 重验 cron（每 30 天重跑 §44，days≥60 → write_override 升降级）。
+
+        sector_heat 无 arm 映射 → r3_enforce skip_non_arm 永远冻 ×0.5。本 executor 补洞：
+        重跑 tools.sector_heat_validation.compute()（zt>=3 canonical arm），days≥60 跨阈调
+        write_override：lift≥2→×1.0 / lift<1→×0.1 / else skip×0.5（§44v2 规约④ 一致）。
+        """
+        from scheduler.executors.sector_heat_reverify import sector_heat_reverify
+        return sector_heat_reverify(payload)
+
     def _execute_ofi_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S176 R5 — 盘中 OFI 五档收集（tencent fetch_raw → collect_ofi → save_ofi）。"""
         from scheduler.executors.intraday import ofi_collect
@@ -508,3 +520,8 @@ class TaskExecutor:
         """S218 C3 — 关键点位决策通知（D 收盘入场 / D+1 开盘出场 / gap-down 诚实标）。"""
         from scheduler.executors.signals import keypoint_notify
         return keypoint_notify(payload)
+
+    def _execute_cron_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S218 #10 — cron-fire audit：扫 cron_fire.log receipt + last_run_at 数 missed delivery cron。"""
+        from scheduler.executors.audit import cron_audit
+        return cron_audit(payload)

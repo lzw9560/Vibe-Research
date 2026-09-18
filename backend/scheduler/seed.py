@@ -595,6 +595,27 @@ def _ensure_seed_tasks() -> None:
             "dispatch 注册须等 #8 done）"
         )
 
+    # S218 #12 sector_heat_reverify——每 30 天 06:00 重跑 sector_heat §44（非-arm 补救）。
+    # sector_heat（evaluation.py:175，zt≥3 lift=1.359/n=466/days=41/×0.5，note"60 天后复验"）
+    # 是全 registry 离 2.0 floor 最近的非 validated 信号（regime probe zt≥5 2.218 最近）。但
+    # r3_enforce 只处理 arm-mapped dims（breakout/trend/post_first_board/consecutive_relay via
+    # DIM_ARM_MAP），sector_heat 无 arm → skip_non_arm 永远冻 ×0.5。本 cron 补洞：每 30 天重跑
+    # tools/sector_heat_validation.compute()（真实 §44 重跑，不臆造），days_robust 跨 60 调
+    # write_override：lift≥2→×1.0 / lift<1→×0.1 / 1≤lift<2→skip×0.5（§44v2 规约④ 一致）。
+    # 06:00 盘前（同 r3_enforce 时段，enforce 类 cron 集中盘前不抢盘中）。非 event edge
+    # （lift!=None 无 regime_caps）→ lift_to_multiplier 正常路径（不像 consecutive_relay 走 weekly_review）。
+    if "sector_heat_reverify" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="sector_heat_reverify",
+            description="S218 #12：sector_heat 非-arm 重验（每 30 天重跑 §44，days≥60 → write_override 升降级）",
+            task_type="sector_heat_reverify",
+            cron_expr="0 6 */30 * *",  # 每 30 天 06:00（盘前，同 r3_enforce 时段）
+            payload={"threshold_days": 60, "heat_def": "zt>=3"},  # zt>=3 = registry canonical arm
+            enabled=True,
+            notify_on_success=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 sector_heat_reverify 已创建（cron 0 6 */30 * *，S218 #12）")
+
     for t in _manager.list_tasks():
         if t.name == "zt_history_snapshot" and t.cron_expr == "0 16 * * 0-4":
             old_cron = t.cron_expr
@@ -734,3 +755,19 @@ def _ensure_seed_tasks() -> None:
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 weekly_review 已创建（cron 0 18 * * 0，S218 C5）")
+
+    # S218 #10 cron-fire audit——每晚 20:00 扫 cron_fire.log receipt + scheduled_tasks
+    # last_run_at 数 missed delivery cron（reality-check verdict NEEDS WORK：delivery cron
+    # wired 但 last_run_at=null 从未 fire；本 audit 把 "wired" 变可观测：receipt + last_run_at
+    # 双正证，皆空=missed）。周日也跑（核一周：weekly_review 周日 18:00 是否真 fire）。
+    # cron 0-6 = 周一至周日（cron_match 用 weekday()，0=周一..6=周日，见 _ensure_seed_tasks docstring）。
+    if "cron_audit" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="cron_audit",
+            description="S218 #10 cron-fire audit（扫 cron_fire.log receipt + last_run_at 数 missed delivery cron，每晚 20:00）",
+            task_type="cron_audit",
+            cron_expr="0 20 * * 0-6",  # 每晚 20:00（0-6=周一至周日，周日也跑核一周）
+            payload={},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 cron_audit 已创建（cron 0 20 * * 0-6，S218 #10）")

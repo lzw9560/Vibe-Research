@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from scheduler.cron_fire_audit import fire_receipt
 from tools.signal_report import get_consecutive_relay_signals, render_daily_report
 
 logger = logging.getLogger("vibe-research")
@@ -53,6 +54,7 @@ def _save_signal_record(signals: dict[str, Any]) -> Path:
     return path
 
 
+@fire_receipt("daily_report")
 def daily_report(payload: dict[str, Any]) -> dict[str, Any]:
     """S218 每日信号报告 domain function。
 
@@ -258,6 +260,7 @@ def _render_gapdown_honest_label(signals: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+@fire_receipt("keypoint_notify")
 def keypoint_notify(payload: dict[str, Any]) -> dict[str, Any]:
     """S218 C3: 关键点位决策通知。
 
@@ -417,6 +420,7 @@ def _render_weekly_review(
     return "\n".join(lines)
 
 
+@fire_receipt("weekly_review")
 def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     """S218 C5: 周度汇总复盘 + 统一 cap 升降 gate + process-theater 自检。
 

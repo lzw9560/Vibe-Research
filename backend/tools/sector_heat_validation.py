@@ -41,7 +41,16 @@ def _wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
     return c - h, c + h
 
 
-def main() -> int:
+def compute() -> dict:
+    """重跑 sector_heat §44 验证，返结构化结果（不打印）。
+
+    供 sector_heat_reverify cron 调用（不解析 stdout——sector_heat 无 arm 映射，r3_enforce
+    skip_non_arm 永远冻 ×0.5，本 access 让 cron 程序化取 lift/days 调 write_override）。
+
+    D→D+1 对（eastmoney_live），5 热度定义（top1/top3/top5/zt>=3/zt>=5）；per def 算 lift +
+    hot/cold n+wins + Wilson CI + ci_overlap + verdict。days = D→D+1 对数（distinct signal_date 近似）。
+    ci_overlap: True=CI重叠(不显著) / False=CI不重叠(显著)——与 lift_override 一致。
+    """
     conn = sqlite3.connect(str(DB), timeout=10)
     # heat 定义：top-N + zt_count>=阈值
     heat_defs = [("top1", 1, 0), ("top3", 3, 0), ("top5", 5, 0), ("zt>=3", 99, 3), ("zt>=5", 99, 5)]
@@ -77,8 +86,7 @@ def main() -> int:
 
     all_inds_per_day = [{ind for ind, c in z.items() if c > 0} for _, z, _, _ in daily]
 
-    print(f"=== 板块热度 → 次日新涨停 §44 验证（多热度定义）===")
-    print(f"日数: {len(daily)}（D→D+1 对，eastmoney_live）\n")
+    results: list[dict] = []
     for name, topn, thresh in heat_defs:
         hm = hn = cm = cn = 0
         for idx, (_, zt_by_ind, d_zt_codes, d1_zt) in enumerate(daily):
@@ -100,12 +108,30 @@ def main() -> int:
         lift = hr / cr if cr else 0.0
         hlo, hhi = _wilson(hn, hm)
         clo, chi = _wilson(cn, cm)
-        sig = "CI不重叠" if hlo > chi else "CI重叠"
+        ci_overlap = not (hlo > chi)  # True=CI重叠(不显著) / False=CI不重叠(显著)
         verdict = "≥2x validated" if lift >= 2.0 else "<2x 未 validated"
-        print(f"{name:6s}: hot {hn}/{hm}={hr*100:.2f}%[{hlo*100:.2f},{hhi*100:.2f}]  "
-              f"cold {cn}/{cm}={cr*100:.2f}%[{clo*100:.2f},{chi*100:.2f}]  "
-              f"lift={lift:.3f}x → {verdict}（{sig}）")
-    print(f"\ncaveat: n={len(daily)}日{'（<30 探索性）' if len(daily) < 30 else ''}；冷=0涨停板块（基线≈市场~1%）；"
+        results.append({
+            "name": name, "lift": lift, "hot_n": hm, "hot_wins": hn,
+            "cold_n": cm, "cold_wins": cn,
+            "hot_lo": hlo, "hot_hi": hhi, "cold_lo": clo, "cold_hi": chi,
+            "ci_overlap": ci_overlap, "verdict": verdict,
+        })
+    return {"days": len(daily), "heat_defs": results}
+
+
+def main() -> int:
+    data = compute()
+    days = data["days"]
+    print(f"=== 板块热度 → 次日新涨停 §44 验证（多热度定义）===")
+    print(f"日数: {days}（D→D+1 对，eastmoney_live）\n")
+    for d in data["heat_defs"]:
+        hr = d["hot_wins"] / d["hot_n"] if d["hot_n"] else 0.0
+        cr = d["cold_wins"] / d["cold_n"] if d["cold_n"] else 0.0
+        sig = "CI不重叠" if not d["ci_overlap"] else "CI重叠"
+        print(f"{d['name']:6s}: hot {d['hot_wins']}/{d['hot_n']}={hr*100:.2f}%[{d['hot_lo']*100:.2f},{d['hot_hi']*100:.2f}]  "
+              f"cold {d['cold_wins']}/{d['cold_n']}={cr*100:.2f}%[{d['cold_lo']*100:.2f},{d['cold_hi']*100:.2f}]  "
+              f"lift={d['lift']:.3f}x → {d['verdict']}（{sig}）")
+    print(f"\ncaveat: n={days}日{'（<30 探索性）' if days < 30 else ''}；冷=0涨停板块（基线≈市场~1%）；"
           f"若全 <2x → 板块热度对次日新涨停无 §44 edge（标未 validated，不阻断接入，60日后复验）。")
     return 0
 

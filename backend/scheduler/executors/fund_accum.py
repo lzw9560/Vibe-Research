@@ -22,9 +22,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
+from scheduler.cron_fire_audit import fire_receipt
+
 logger = logging.getLogger("vibe-research")
 
 
+@fire_receipt("fund_accumulation")
 def fund_accumulation(payload: Dict[str, Any]) -> Dict[str, Any]:
     """每日盘后 UPDATE zt_history.fund/fundamt（前向累积，S219 #11）。
 
