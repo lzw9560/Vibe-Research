@@ -78,7 +78,12 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     # 2026-09-18 stage-2 forward-OOS（S217 chrono 2/3-1/3 holdout，backfill 缺口期后 317 交易日/280 lbc≥2 天）：
     # bull n=1283 days=172 robust_edge net_mean=+1.3623%。chrono n_test=57 p=0.0054 oos_supporting
     # （edge 在没见过数据上活下来，真非噪声）但衰减 34%（train 1.57%→test 1.04%）+ 胜率薄 52.7%。
-    # 决议（用户 2026-09-18）：bull ×0.5→×0.75（信 edge 真但衰减+cross-regime 未验，不满 ×1.0；asymmetric loss）。
+    # 决议（用户 2026-09-18，gap-edge-sizing grill wvnt1322y synthesis 后）：bull ×0.75 不变但理由换。
+    # 公式：×0.75 = base 1.0（robust chrono p=0.0054）× decay_haircut 0.75（34% 衰减——gap-down 左尾是
+    # 衰减 MECHANISM 非单独维度，已在 test-mean）× regime 1.0（bull validated）× zuoT_bump 1.0（中性）。
+    # 做T/补救结构性不适用（1-bar gap 无日内窗口，T+1 新仓无底仓，record_t0_fill 生产零调用）→ 中性非加非减。
+    # GATES：升 ×1.0 = 60 天 re-check 衰减稳 OR 独立 intraday-extension edge 过 §44；
+    #        降 ×0.5 = 衰减续恶化 OR 一字跌停（D+1 卖不掉，gap_net_return over-credit）量化 material。
     # regime_caps: bull ×0.75 / bear+range ×0.5（bear 71 天 robust 但 chrono n_test=23 underpowered；range underpowered）。
     # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
     "consecutive_relay": DimensionValidation(
@@ -87,10 +92,13 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
         source_script="tools/s203_consecutive_relay_harness.py",
         note="S211 regime-stratified: bull robust_edge +1.3623%（backfill 缺口期后 317 交易日，n=1283/days=172，"
-             "2026-09-18 stage-2 forward-OOS chrono holdout n_test=57 p=0.0054 oos_supporting——edge 真非噪声，"
-             "但衰减 34%（train 1.57%→test 1.04%）+ 胜率薄 52.7%+cross-regime 未验（bear 71 天 chrono n_test=23 underpowered）"
-             "→ bull ×0.5→×0.75（asymmetric loss：信 edge 真但衰减不满 ×1.0，留余地 live-monitor 衰减轨迹）/ "
-             "bear+range ×0.5（underpowered）。overnight gap path（D收→D+1开）。",
+             "2026-09-18 stage-2 forward-OOS chrono holdout n_test=57 p=0.0054 oos_supporting——edge 真非噪声。"
+             "cap 公式（gap-edge-sizing grill wvnt1322y）：×0.75 = base 1.0（robust chrono）× decay_haircut 0.75"
+             "（34% 衰减，gap-down 左尾是衰减 MECHANISM 非单独维度已在 test-mean）× regime 1.0（bull validated）"
+             "× zuoT_bump 1.0（做T/补救结构性不适用：1-bar gap 无日内窗口，T+1 新仓无底仓，record_t0_fill"
+             " 生产零调用——中性非加非减）。GATES：升 ×1.0=60 天 re-check 衰减稳 OR 独立 intraday-extension"
+             " edge 过 §44；降 ×0.5=衰减续恶化 OR 一字跌停（D+1 卖不掉，gap_net_return over-credit）量化 material。"
+             "bear+range ×0.5（chrono underpowered）。overnight gap path（D收→D+1开，gap_net_return 纯 2-price 无 stop/take）。",
         regime_caps={"bull": 0.75, "bear": 0.5, "range": 0.5},
     ),
     "turnover": DimensionValidation(
