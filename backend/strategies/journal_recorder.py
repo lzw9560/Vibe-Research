@@ -107,7 +107,7 @@ class JournalRecorder:
         arm_mult/port_mult days<60→1.0 underpowered（DrawdownBreaker H4）。
 
         S211：regime 参数支持 consecutive_relay regime-stratified caps
-        （bull ×1.0 / bear+range ×0.5）。regime=None → 保守 weight_multiplier。
+        （bull ×0.75 provisional / bear+range ×0.5；2026-09-18 核 evaluation.py:89-103 registry_caps）。regime=None → 保守 weight_multiplier。
         """
         return max(self._portfolio.final_size(arm, base, regime=regime), 0.0)
 

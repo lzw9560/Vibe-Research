@@ -1868,3 +1868,20 @@ export interface EarningsCalendarResponse {
   data_status: "ok" | "partial" | "missing" | "empty";
   note: string;
 }
+
+// S218 C4: /api/signals/status response shape
+export interface SignalsStatusResponse {
+  regime: {
+    current: string | null;
+    freshness: {
+      last_cache_date: string;
+      stale: boolean;
+      days_since: number;
+    };
+  };
+  arms: Record<string, {
+    is_active: boolean;
+    weight_override: number | null;
+    kill_reason?: string | null;
+  }>;
+}

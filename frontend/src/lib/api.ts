@@ -30,6 +30,7 @@ import type {
   KgEntitiesResponse, KgFlowResponse, KgInboxResponse,
   ExpectationGapResult, EmHealthResult,
   EarningsCalendarResponse,
+  SignalsStatusResponse,
 } from "./api/types";
 // S165: verifier-contract 是 UI 契约 source-of-truth（Verdict/RecorderRecord/DimensionValidationRecord）。
 import type { RecorderRecord, DimensionValidationRecord } from "./verifier-contract";
@@ -359,6 +360,9 @@ export const api = {
   expectationGap: (code: string, date?: string) =>
     get<ExpectationGapResult>(`/expectation-gap?code=${code}${date ? `&date=${date}` : ""}`),
   emHealth: () => get<EmHealthResult>("/transport/em-health"),
+  // S218 C4: validated-edge 信号状态（regime 新鲜度 + arm status + decay 轨迹）
+  signalsStatus: () =>
+    get<SignalsStatusResponse>("/signals/status"),
   // S216 P2: 财报季日历聚合（codes 可选，提供则聚合 per-code 披露/解禁）
   earningsCalendar: (codes?: string, forwardDays = 90) =>
     get<EarningsCalendarResponse>(`/earnings-calendar${codes ? `?codes=${codes}&forward_days=${forwardDays}` : `?forward_days=${forwardDays}`}`),

@@ -13,6 +13,7 @@ import {
   Sparkles,
   Gauge,
   Building2,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,8 @@ export type PanelKey =
   | "dragonTiger"
   | "ai"
   | "techScore"
-  | "basicInfo";
+  | "basicInfo"
+  | "validatedEdge";
 
 interface PanelDef {
   key: PanelKey;
@@ -41,6 +43,7 @@ function buildPanels(): PanelDef[] {
     { key: "financials", label: "财务", icon: <BarChart3 className="h-4 w-4" aria-hidden="true" /> },
     { key: "fundflow", label: "资金", icon: <Wallet className="h-4 w-4" aria-hidden="true" /> },
     { key: "signals", label: "信号", icon: <Activity className="h-4 w-4" aria-hidden="true" /> },
+    { key: "validatedEdge", label: "验证", icon: <ShieldAlert className="h-4 w-4" aria-hidden="true" /> },
     { key: "techScore", label: "技术", icon: <Gauge className="h-4 w-4" aria-hidden="true" /> },
     { key: "basicInfo", label: "基本面", icon: <Building2 className="h-4 w-4" aria-hidden="true" /> },
     { key: "notes", label: "笔记", icon: <StickyNote className="h-4 w-4" aria-hidden="true" /> },

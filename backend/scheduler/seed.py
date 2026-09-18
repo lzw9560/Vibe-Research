@@ -500,6 +500,42 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 zt_history_snapshot 已创建（cron 15 17 * * 0-4）")
 
+    # S218: 关键点位决策通知——D 收盘入场 (15:00) + D+1 开盘出场 (09:30)
+    # 使用单一 task_type="keypoint_notify"，payload 区分 trigger_time
+    if "keypoint_notify_entry" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="keypoint_notify_entry",
+            description="S218 C3 D 收盘入场通知（15:00：今日收盘买这些，复用 C1 shared core）",
+            task_type="keypoint_notify",
+            cron_expr="0 15 * * 0-4",  # 15:00 D 收盘
+            payload={"notify": True, "trigger": "d_close_entry"},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 keypoint_notify_entry 已创建（cron 0 15 * * 0-4，S218 C3）")
+
+    if "keypoint_notify_exit" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="keypoint_notify_exit",
+            description="S218 C3 D+1 开盘出场通知（09:30：开盘卖这些，复用 C1 shared core）",
+            task_type="keypoint_notify",
+            cron_expr="30 9 * * 0-4",  # 09:30 D+1 开盘
+            payload={"notify": True, "trigger": "d1_open_exit"},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 keypoint_notify_exit 已创建（cron 30 9 * * 0-4，S218 C3）")
+
+    # S218: 每日信号报告——14:50 盘前生成（regime 已知 + zt_history T-1 已知）
+    if "daily_report" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="daily_report",
+            description="S218 每日信号报告（consecutive_relay 验证信号 → 结构化 dict + 人话报告）",
+            task_type="daily_report",
+            cron_expr="50 14 * * 0-4",  # 14:50 盘前（regime 已知 + zt_history T-1 已知）
+            payload={"notify": False},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 daily_report 已创建（cron 50 14 * * 0-4，S218）")
+
     # S211 通电收尾（2026-09-17）：regime_cache_fetch——17:20（kline_refresh 17:15 后、
     # trade_journal_daily 17:30 前）。刷 index_ma20_regime.json 防 consecutive_relay
     # regime=None 误保守 ×0.5（升 bull ×1.0 前必须接 cron，否则 bull 被当未知误保守）。

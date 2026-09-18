@@ -99,6 +99,8 @@ class TaskExecutor:
             "healthcheck_ping": self._execute_healthcheck_ping,  # S188 RB-2 — 外部心跳防 cron 静默死（VR_HEALTHCHECKS_URL 未设跳过）
             "weekly_brainstorm_remind": self._execute_weekly_brainstorm_remind,  # S188 RB-9 — 每周头脑风暴提醒（飞书+待办）
             "daily_full_pull": self._execute_daily_full_pull,  # S191 RB-3 — 每日全量拉取沉淀 datalake
+            "daily_report": self._execute_daily_report,  # S218: 每日信号报告（consecutive_relay）
+            "keypoint_notify": self._execute_keypoint_notify,  # S218 C3: 关键点位决策通知
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -484,3 +486,13 @@ class TaskExecutor:
         """S191 RB-3 — 每日全量拉取沉淀 datalake（stoke + mootdx 分笔）。"""
         from scheduler.executors.data_ops import daily_full_pull
         return daily_full_pull(payload)
+
+    def _execute_daily_report(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S218 — 每日信号报告（consecutive_relay 验证信号 → 结构化 dict + 人话报告 + 可选推送）。"""
+        from scheduler.executors.signals import daily_report
+        return daily_report(payload)
+
+    def _execute_keypoint_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S218 C3 — 关键点位决策通知（D 收盘入场 / D+1 开盘出场 / gap-down 诚实标）。"""
+        from scheduler.executors.signals import keypoint_notify
+        return keypoint_notify(payload)

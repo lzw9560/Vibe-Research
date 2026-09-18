@@ -23,6 +23,7 @@ import { api } from "@/lib/api";
 import { cn, pctColor } from "@/lib/utils";
 import { RightPanel, type PanelKey } from "./RightPanel";
 import { StockSeatCard } from "@/components/seat/StockSeatCard";
+import { ValidatedEdgeCard } from "@/components/cockpit/ValidatedEdgeCard";
 
 // ─── 格式化（A 股红涨绿跌，复用 StockDeep 范式）──────────────────────────
 
@@ -330,6 +331,8 @@ function ChartCenter({ code, data, date, activePanel }: { code: string; data: St
           龙虎榜已在下方「席位活动」卡片展示，向下滚动查看
         </p>
       </GlassCard>
+    ) : activePanel === "validatedEdge" ? (
+      <ValidatedEdgeCard />
     ) : (
       <SignalArea code={code} date={date} />
     );

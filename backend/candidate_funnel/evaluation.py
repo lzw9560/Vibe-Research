@@ -306,7 +306,7 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
 
     S211：regime 参数支持 consecutive_relay regime-stratified caps。
     regime=None（旧 caller 默认）→ 保守 weight_multiplier（不误放全权重）。
-    regime 指定 → 返该 regime cap（如 bull ×1.0）。
+    regime 指定 → 返该 regime cap（consecutive_relay bull ×0.75 provisional / bear+range ×0.5；2026-09-18 核 registry:89-103 regime_caps）。
     """
     # S213 arm 级 kill switch（plumbing，enforce defer 60 天后）
     # arm_status override 优先于 registry：is_active=False → 返 0.0 停交易；weight_override 设值 → 优先
