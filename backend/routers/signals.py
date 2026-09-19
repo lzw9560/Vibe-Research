@@ -63,10 +63,12 @@ def _save_manual_trade(trade: dict) -> None:
         f.write(json.dumps(trade, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _get_reference_price_from_signal(signal_id: str) -> tuple[float | None, str]:
-    """从 trade_journal 取参考信号的参考价。
+def _get_reference_price_from_signal(signal_id: str) -> tuple[float | None, str, str | None]:
+    """从 trade_journal 取参考信号的参考价 + arm。
 
-    返回 (参考价, 来源说明)。
+    返回 (参考价, 来源说明, arm)。
+    arm 用于 arm-specific reference_pnl 计算（仅 consecutive_relay 有 chrono edge）。
+    arm 取 trade_journal.arm 列（权威源，不靠 parse signal_id——arm 名含下划线如 consecutive_relay）。
     """
     from strategies.journal_recorder import JournalRecorder
     try:
@@ -77,16 +79,17 @@ def _get_reference_price_from_signal(signal_id: str) -> tuple[float | None, str]
         conn = tj._conn()
         try:
             row = conn.execute(
-                "SELECT entry_price, entry_date FROM trade_journal WHERE signal_id=?",
+                "SELECT entry_price, arm FROM trade_journal WHERE signal_id=?",
                 (signal_id,),
             ).fetchone()
             if row and row["entry_price"]:
-                return float(row["entry_price"]), "trade_journal"
+                arm = row["arm"] if row["arm"] else None
+                return float(row["entry_price"]), "trade_journal", arm
         finally:
             conn.close()
     except Exception:
         pass
-    return None, "not_found"
+    return None, "not_found", None
 
 
 def _compute_actual_pnl(trade: dict) -> dict:
@@ -108,14 +111,20 @@ def _compute_actual_pnl(trade: dict) -> dict:
 
 
 def _compute_reference_implied_pnl(trade: dict) -> dict:
-    """计算参考信号隐含 P&L。
+    """计算参考信号隐含 P&L（arm-specific——F3 修）。
 
-    用 C1 reference_price + chrono edge +1.04% test mean 作为参考预期。
+    仅 consecutive_relay arm 有 chrono forward-OOS edge（test mean +1.04%，S217）。
+    其他 arm（floor/breakout/trend_swing/等）无 validated chrono edge，
+    诚实返 None（不套 consecutive_relay 的 edge 当 universal——floor/breakout 没这 edge）。
     """
     ref_price = trade.get("reference_price")
     if ref_price is None or ref_price <= 0:
         return {"pnl_pct": None, "source": "no_reference"}
-    # chrono edge test mean = +1.04% (S217 forward-OOS)
+    arm = trade.get("reference_arm")
+    if arm != "consecutive_relay":
+        # 非 consecutive_relay arm 无 chrono edge——诚实不套 +1.04%
+        return {"pnl_pct": None, "source": "no_chrono_edge_for_arm"}
+    # consecutive_relay chrono edge test mean = +1.04% (S217 forward-OOS)
     expected_return_pct = 1.04
     implied_exit = ref_price * (1 + expected_return_pct / 100.0)
     pnl_pct = (implied_exit - ref_price) / ref_price * 100.0
@@ -123,14 +132,16 @@ def _compute_reference_implied_pnl(trade: dict) -> dict:
         "pnl_pct": round(pnl_pct, 4),
         "expected_return_pct": expected_return_pct,
         "source": "chrono_test_mean_1.04pct",
+        "arm": arm,
     }
 
 
 def _compute_pnl_diff(actual: dict, reference: dict) -> dict:
-    """实际 vs 参考 P&L 差异。
+    """实际 vs 参考 P&L 差异（one-sided leak——F4 修）。
 
     返回 {diff_pct, delivery_leak, leak_reason}。
-    delivery_leak: |actual - reference| > 50% 时 True。
+    delivery_leak: actual 远低于 reference（diff < -50%）时 True——edge 没交付 = leak。
+    over-performance（actual >> reference，diff > 0）不标 leak（超预期是好事，非 leak）。
     """
     actual_pnl = actual.get("pnl_pct")
     ref_pnl = reference.get("pnl_pct")
@@ -138,11 +149,11 @@ def _compute_pnl_diff(actual: dict, reference: dict) -> dict:
         return {"diff_pct": None, "delivery_leak": False, "leak_reason": "missing_data"}
 
     diff = actual_pnl - ref_pnl
-    # 用绝对百分比差判断 leak（50% threshold）
-    delivery_leak = abs(diff) > 50.0
+    # one-sided: 仅 actual 远低于 reference（edge 没交付）才 leak
+    delivery_leak = diff < -50.0
     reason = ""
     if delivery_leak:
-        reason = f"|实际{actual_pnl:.1f}% - 参考{ref_pnl:.1f}%| = {abs(diff):.1f}% > 50%"
+        reason = f"实际{actual_pnl:.1f}% 低于参考{ref_pnl:.1f}% 达 {abs(diff):.1f}% > 50%"
 
     return {
         "diff_pct": round(diff, 4),
@@ -207,17 +218,20 @@ def _post_manual_trade(body: ManualTradeInput) -> dict[str, Any]:
 
     - 写入 .vibe-research/signal_reports/manual_trades.jsonl
     - 若 followed_reference=True 且关联了 signal_id，
-      自动计算实际 P&L vs 参考 P&L（C1 chrono edge +1.04%）
+      自动计算实际 P&L vs 参考 P&L（arm-specific：仅 consecutive_relay 套 chrono edge +1.04%，
+      其他 arm 无 chrono edge 返 None——诚实不套 universal edge）
+    - delivery_leak one-sided：仅 actual 远低于 reference（edge 没交付）才 leak
     - 返回 trade_id + actual_pnl + reference_pnl + diff + delivery_leak
     """
     trade_id = f"manual_{uuid.uuid4().hex[:16]}"
     now = datetime.now().isoformat()
 
-    # 尝试取参考价
+    # 尝试取参考价 + arm（arm 用于 arm-specific reference_pnl）
     ref_price = None
     ref_source = "none"
+    ref_arm = None
     if body.followed_reference and body.reference_signal_id:
-        ref_price, ref_source = _get_reference_price_from_signal(body.reference_signal_id)
+        ref_price, ref_source, ref_arm = _get_reference_price_from_signal(body.reference_signal_id)
 
     trade_record = {
         "trade_id": trade_id,
@@ -230,6 +244,7 @@ def _post_manual_trade(body: ManualTradeInput) -> dict[str, Any]:
         "reference_signal_id": body.reference_signal_id,
         "reference_price": ref_price,
         "reference_price_source": ref_source,
+        "reference_arm": ref_arm,
         "notes": body.notes,
         "recorded_at": now,
     }

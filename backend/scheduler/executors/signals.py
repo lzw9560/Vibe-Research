@@ -357,9 +357,9 @@ def _render_weekly_review(
         lines.append("【本周实际 P&L】（手动交易闭环反馈）")
         lines.append(f"  实际收益均值 {actual_pnl['mean_pnl_pct']:.2f}%（n={actual_pnl['n_closed']} 笔）")
         if actual_pnl.get("latest_leak"):
-            lines.append("  注意：检测到 delivery leak（|实际-参考| > 50%），建议复核执行偏差")
+            lines.append("  注意：检测到 delivery leak（实际低于参考 > 50%，edge 未交付），建议复核执行偏差")
         else:
-            lines.append("  执行偏差在可接受范围（|实际-参考| <= 50%）")
+            lines.append("  执行偏差在可接受范围（实际不低于参考 > 50%）")
     else:
         lines.append("【本周 paper P&L】")
         lines.append("  只能看 paper 表现，没真交易收益；接券商才有真 closure")
@@ -476,7 +476,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
             }
         # 同时检查 delivery leak
         if actual_pnl_stats.get("latest_leak"):
-            logger.warning("[S218] weekly_review 检测到 delivery leak（|actual-ref| > 50%）")
+            logger.warning("[S218] weekly_review 检测到 delivery leak（actual < ref - 50%，one-sided edge 未交付）")
     elif paper_trends:
         mean_wr = sum(t.get("win_rate", 0) for t in paper_trends) / len(paper_trends)
         if mean_wr < 0.5:  # 50% 以下视为 negative

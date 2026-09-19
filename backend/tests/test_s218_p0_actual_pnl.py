@@ -26,10 +26,11 @@ def _patch_deps(monkeypatch, tmp_path):
         "routers.signals._MANUAL_TRADES_FILE",
         tmp_path / "manual_trades.jsonl",
     )
-    # Mock _get_reference_price_from_signal 避免读 DB
+    # Mock _get_reference_price_from_signal 避免读 DB（3-tuple: price, source, arm）
+    # arm=consecutive_relay 让 followed_reference=True 的端点测试拿到 chrono edge +1.04%
     monkeypatch.setattr(
         "routers.signals._get_reference_price_from_signal",
-        lambda sid: (10.0, "mock_test"),
+        lambda sid: (10.0, "mock_test", "consecutive_relay"),
     )
     # Mock s203 harness main + TradeJournal——防 weekly_review 调 _compute_consecutive_relay_decay
     # 跑真 s203 harness hang（#2 gap，#10 agent 发现）
@@ -150,7 +151,7 @@ class TestActualVsReferencePnlDiff:
         from routers.signals import _compute_actual_pnl, _compute_reference_implied_pnl, _compute_pnl_diff
 
         actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 12.0})
-        reference = _compute_reference_implied_pnl({"reference_price": 10.0})
+        reference = _compute_reference_implied_pnl({"reference_price": 10.0, "reference_arm": "consecutive_relay"})
         diff = _compute_pnl_diff(actual, reference)
 
         assert diff["diff_pct"] == pytest.approx(18.96, abs=0.01)
@@ -160,7 +161,7 @@ class TestActualVsReferencePnlDiff:
         from routers.signals import _compute_actual_pnl, _compute_reference_implied_pnl, _compute_pnl_diff
 
         actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 8.0})
-        reference = _compute_reference_implied_pnl({"reference_price": 10.0})
+        reference = _compute_reference_implied_pnl({"reference_price": 10.0, "reference_arm": "consecutive_relay"})
         diff = _compute_pnl_diff(actual, reference)
 
         assert diff["diff_pct"] == pytest.approx(-21.04, abs=0.01)
@@ -180,50 +181,112 @@ class TestActualVsReferencePnlDiff:
         from routers.signals import _compute_actual_pnl, _compute_reference_implied_pnl, _compute_pnl_diff
 
         actual = _compute_actual_pnl({"entry_price": 10.0})  # 未平仓
-        reference = _compute_reference_implied_pnl({"reference_price": 10.0})
+        reference = _compute_reference_implied_pnl({"reference_price": 10.0, "reference_arm": "consecutive_relay"})
         diff = _compute_pnl_diff(actual, reference)
 
         assert diff["diff_pct"] is None
         assert diff["delivery_leak"] is False
 
 
-# ── test: delivery leak flag ───────────────────────────────────────────
+# ── test: reference_pnl arm-specific (F3) ────────────────────────────
+
+class TestReferencePnlArmSpecific:
+    """F3: reference_pnl arm-specific——仅 consecutive_relay 有 chrono edge +1.04%。
+
+    其他 arm（floor/breakout/trend_swing/等）无 validated chrono edge，
+    诚实返 None（不套 consecutive_relay 的 edge 当 universal）。
+    """
+
+    def test_consecutive_relay_arm_gets_chrono_edge(self):
+        from routers.signals import _compute_reference_implied_pnl
+
+        ref = _compute_reference_implied_pnl({
+            "reference_price": 10.0,
+            "reference_arm": "consecutive_relay",
+        })
+        assert ref["pnl_pct"] == pytest.approx(1.04, abs=0.01)
+        assert ref["source"] == "chrono_test_mean_1.04pct"
+
+    def test_floor_arm_no_chrono_edge(self):
+        from routers.signals import _compute_reference_implied_pnl
+
+        ref = _compute_reference_implied_pnl({
+            "reference_price": 10.0,
+            "reference_arm": "floor",
+        })
+        assert ref["pnl_pct"] is None
+        assert ref["source"] == "no_chrono_edge_for_arm"
+
+    def test_breakout_arm_no_chrono_edge(self):
+        from routers.signals import _compute_reference_implied_pnl
+
+        ref = _compute_reference_implied_pnl({
+            "reference_price": 10.0,
+            "reference_arm": "breakout",
+        })
+        assert ref["pnl_pct"] is None
+        assert ref["source"] == "no_chrono_edge_for_arm"
+
+    def test_no_arm_no_chrono_edge(self):
+        from routers.signals import _compute_reference_implied_pnl
+
+        # 无 arm 信息 → 诚实返 None（不默认套 +1.04%）
+        ref = _compute_reference_implied_pnl({"reference_price": 10.0})
+        assert ref["pnl_pct"] is None
+        assert ref["source"] == "no_chrono_edge_for_arm"
+
+
+# ── test: delivery leak flag (F4 one-sided) ──────────────────────────
 
 class TestDeliveryLeakFlag:
-    """测试 |actual - reference| > 50% 时 leak alert 触发。"""
+    """F4: one-sided leak——actual 远低于 reference（edge 没交付）才 leak。
 
-    def test_leak_flag_true_when_gap_exceeds_50pct(self):
+    over-performance（actual >> reference，diff > 0）不标 leak。
+    """
+
+    def test_leak_flag_true_when_under_performance_exceeds_50pct(self):
         from routers.signals import _compute_actual_pnl, _compute_reference_implied_pnl, _compute_pnl_diff
 
-        # 实际 +80%，参考 +1.04% → 差距 78.96% > 50%
-        actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 18.0})
-        reference = _compute_reference_implied_pnl({"reference_price": 10.0})
+        # 实际 -60%，参考 +1.04% → diff = -61.04 < -50 → leak（edge 没交付）
+        actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 4.0})
+        reference = _compute_reference_implied_pnl({"reference_price": 10.0, "reference_arm": "consecutive_relay"})
         diff = _compute_pnl_diff(actual, reference)
 
         assert diff["delivery_leak"] is True
-        assert abs(diff["diff_pct"]) > 50.0
-        assert "78.96" in diff["leak_reason"] or "实际" in diff["leak_reason"]
+        assert diff["diff_pct"] < -50.0
+        assert "实际" in diff["leak_reason"]
+
+    def test_leak_flag_false_when_over_performance(self):
+        from routers.signals import _compute_actual_pnl, _compute_reference_implied_pnl, _compute_pnl_diff
+
+        # 实际 +80%，参考 +1.04% → diff = +78.96，over-performance → NOT leak
+        actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 18.0})
+        reference = _compute_reference_implied_pnl({"reference_price": 10.0, "reference_arm": "consecutive_relay"})
+        diff = _compute_pnl_diff(actual, reference)
+
+        assert diff["delivery_leak"] is False
+        assert diff["diff_pct"] == pytest.approx(78.96, abs=0.01)
 
     def test_leak_flag_false_when_gap_within_50pct(self):
         from routers.signals import _compute_actual_pnl, _compute_reference_implied_pnl, _compute_pnl_diff
 
-        # 实际 +30%，参考 +1.04% → 差距 28.96% < 50%
+        # 实际 +30%，参考 +1.04% → diff = +28.96，未低于 reference → NOT leak
         actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 13.0})
-        reference = _compute_reference_implied_pnl({"reference_price": 10.0})
+        reference = _compute_reference_implied_pnl({"reference_price": 10.0, "reference_arm": "consecutive_relay"})
         diff = _compute_pnl_diff(actual, reference)
 
         assert diff["delivery_leak"] is False
 
-    def test_leak_flag_boundary_at_exactly_50pct(self):
+    def test_leak_flag_boundary_at_exactly_50_below(self):
         from routers.signals import _compute_actual_pnl, _compute_reference_implied_pnl, _compute_pnl_diff
 
-        # 差距 = 50% 时刚好不触发（> 50% 才触发）
-        # 参考 +1.04%, 要差距 = 50 → 实际 = 51.04% → exit = 15.104
-        actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 15.104})
-        reference = _compute_reference_implied_pnl({"reference_price": 10.0})
+        # 边界：diff = -50.0 刚好不触发（< -50 才触发）
+        # 参考 +1.04%，要 diff=-50 → actual = 1.04 - 50 = -48.96 → exit = 5.104
+        actual = _compute_actual_pnl({"entry_price": 10.0, "exit_price": 5.104})
+        reference = _compute_reference_implied_pnl({"reference_price": 10.0, "reference_arm": "consecutive_relay"})
         diff = _compute_pnl_diff(actual, reference)
 
-        # diff_pct = 51.04 - 1.04 = 50.0, |50.0| = 50.0 NOT > 50.0 → False
+        # diff_pct = -48.96 - 1.04 = -50.0，NOT < -50.0 → False
         assert diff["delivery_leak"] is False
 
 
@@ -352,12 +415,13 @@ class TestWeeklyReviewReadsActualPnl:
         from routers.signals import _post_manual_trade, ManualTradeInput
         from scheduler.executors.signals import weekly_review
 
-        # 录一笔差距巨大的交易（实际 +80%，参考 +1.04% → leak）
+        # 录一笔 under-performance 交易（实际 -60%，参考 +1.04% → diff=-61.04 < -50 → leak）
+        # F4 one-sided：over-performance 不 leak，只有 actual 远低于 reference 才 leak
         body = ManualTradeInput(
             code="000007",
             entry_price=10.0,
             entry_time="2026-09-18T09:30:00",
-            exit_price=18.0,
+            exit_price=4.0,
             exit_time="2026-09-18T14:00:00",
             followed_reference=True,
             reference_signal_id="consecutive_relay_2026-09-18_000007",
