@@ -108,25 +108,14 @@ class TestManualTradeRecording:
         assert last["entry_price"] == 10.0
         assert last["exit_price"] == 11.0
 
-    def test_manual_trade_record_t0_fill_exists_not_wired(self):
-        """record_t0_fill 定义存在但零生产调用——P0 用并行 manual_trades.jsonl path 未接入 fills_json。
+    def test_manual_trade_writes_to_manual_trades_jsonl(self):
+        """v3 P0-4（2026-09-20）：record_t0_fill 死代码已删，manual_trade 走 manual_trades.jsonl。
 
-        诚实标注（2026-09-18 reality-check s218-reality-check P0-1 修正）：
-        record_t0_fill（journal_recorder.py:114）grep 全仓零生产调用者。
-        P0 actual-P&L ingestion 用并行新 path（manual_trades.jsonl via POST /api/signals/manual-trade），
-        **未接入** 现有 trade_journal fills_json via record_t0_fill。
-        commit effaa99 msg "record_t0_fill wired" overstated——原 test 名"_wired"误导。
-
-        本 test 只验 JournalRecorder.record_t0_fill 方法存在（hasattr/callable）+
-        manual-trade 端点不抛异常——**不验任何生产调用者**（因为零调用）。
-        若未来真接入 fills_json，须加 assert 验 record_t0_fill 被调用 + manual_trades.jsonl 含 fills_json 字段。
+        验 _post_manual_trade 真写 manual_trades.jsonl（actual P&L ingestion 闭环）。
+        record_t0_fill 已删（零生产调用，manual_trade 不接 fills_json——原设计要求
+        signal_id 在 trade_journal 表存在但 manual_trade 的 reference_signal_id 不在该表）。
         """
-        from routers.signals import _post_manual_trade, ManualTradeInput
-        from strategies.journal_recorder import JournalRecorder
-
-        # 只验方法存在非 wiring——record_t0_fill 零生产调用（grep 核实，s218-reality-check 2026-09-18）
-        assert hasattr(JournalRecorder, "record_t0_fill")
-        assert callable(getattr(JournalRecorder, "record_t0_fill"))
+        from routers.signals import _post_manual_trade, ManualTradeInput, _load_manual_trades
 
         body = ManualTradeInput(
             code="000004",
@@ -138,8 +127,14 @@ class TestManualTradeRecording:
             reference_signal_id="consecutive_relay_2026-09-18_000004",
         )
         result = _post_manual_trade(body)
-        # 成功记录交易（manual_trades.jsonl path），record_t0_fill 仍零调用——本 test 不验 wiring
         assert result["trade_id"].startswith("manual_")
+
+        # 验真写 manual_trades.jsonl（actual P&L ingestion 闭环）
+        trades = _load_manual_trades()
+        last = trades[-1] if trades else {}
+        assert last.get("code") == "000004"
+        assert last.get("entry_price") == 10.0
+        assert last.get("actual_pnl", {}).get("status") == "closed"
 
 
 # ── test: actual vs reference P&L diff ────────────────────────────────

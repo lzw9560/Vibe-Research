@@ -232,7 +232,7 @@ def _render_gapdown_honest_label(signals: dict[str, Any]) -> str:
     lines.append("  - 无日内窗口（1-bar gap）")
     lines.append("  - T+1 禁同日卖，无底仓")
     lines.append("  - exit=D+1 开盘 gap-down 点实现，非 preempt")
-    lines.append("  - record_t0_fill 生产零调用")
+    lines.append("  - record_t0_fill 已删（v3 P0-4 死代码）—fill 走 manual_trades.jsonl 手动记")
     lines.append("")
     lines.append("【真实风控】")
     lines.append(f"  仓位 sizing（×{cap}）+ gap-down 诚实标")

@@ -81,7 +81,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     # 决议（用户 2026-09-18，gap-edge-sizing grill wvnt1322y synthesis 后）：bull ×0.75 不变但理由换。
     # 公式：×0.75 = base 1.0（robust chrono p=0.0054）× decay_haircut 0.75（34% 衰减——gap-down 左尾是
     # 衰减 MECHANISM 非单独维度，已在 test-mean）× regime 1.0（bull validated）× zuoT_bump 1.0（中性）。
-    # 做T/补救结构性不适用（1-bar gap 无日内窗口，T+1 新仓无底仓，record_t0_fill 生产零调用）→ 中性非加非减。
+    # 做T/补救结构性不适用（1-bar gap 无日内窗口，T+1 新仓无底仓，record_t0_fill 已删 v3 P0-4）→ 中性非加非减。
     # GATES：升 ×1.0 = 60 天 re-check 衰减稳 OR 独立 intraday-extension edge 过 §44；
     #        降 ×0.5 = 衰减续恶化 OR 一字跌停（D+1 卖不掉，gap_net_return over-credit）量化 material。
     # regime_caps: bull ×0.75 / bear+range ×0.5（bear 71 天 robust 但 chrono n_test=23 underpowered；range underpowered）。
@@ -102,7 +102,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
              "原 ×0.75 provisional 公式（gap-edge-sizing grill wvnt1322y）：×0.75 = base 1.0（robust chrono）"
              "× decay_haircut 0.75（34% 衰减，gap-down 左尾是衰减 MECHANISM 非单独维度已在 test-mean）× regime 1.0"
              "（bull validated）× zuoT_bump 1.0（做T/补救结构性不适用：1-bar gap 无日内窗口，T+1 新仓无底仓，"
-             "record_t0_fill 生产零调用——中性非加非减）。升 ×1.0 GATE（已 MET）：cross-regime replication"
+             "record_t0_fill 已删 v3 P0-4——中性非加非减）。升 ×1.0 GATE（已 MET）：cross-regime replication"
              "（bear chrono）+ adequate power + train bias 修。降 ×0.5=衰减续恶化 OR 一字跌停（D+1 卖不掉，"
              "gap_net_return over-credit）量化 material。bear+range ×0.5（bear in-sample exploratory；range underpowered）。"
              "overnight gap path（D收→D+1开，gap_net_return 纯 2-price 无 stop/take）。",
