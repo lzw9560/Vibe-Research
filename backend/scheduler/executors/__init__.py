@@ -109,6 +109,7 @@ class TaskExecutor:
             "keypoint_notify": self._execute_keypoint_notify,  # S218 C3: 关键点位决策通知
             "weekly_review": self._execute_weekly_review,  # S218 C5: 周度汇总复盘
             "fund_accumulation": self._execute_fund_accumulation,  # S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt，un-defer 数据准备）
+            "hot_money_seats_update": self._execute_hot_money_seats_update,  # S066 §9 通电——游资席位周更聚合（#13 follow-up，数据 prep 非 spec S220）
             "sector_heat_reverify": self._execute_sector_heat_reverify,  # S218 #12 — sector_heat 非-arm 重验 cron（每 30 天重跑 §44，days≥60 → write_override 升降级）
             "cron_audit": self._execute_cron_audit,  # S218 #10 — cron-fire audit（扫 cron_fire.log + last_run_at 数 missed delivery cron）
         }
@@ -515,6 +516,11 @@ class TaskExecutor:
         """S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt UPDATE-only，un-defer 数据准备）。"""
         from scheduler.executors.fund_accum import fund_accumulation
         return fund_accumulation(payload)
+
+    def _execute_hot_money_seats_update(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S066 §9 通电——游资席位周更聚合（拉 60 日龙虎榜 → 画像 → seat_profiles.db B 字段，#13 follow-up 数据 prep）。"""
+        from scheduler.executors.hot_money_seats import hot_money_seats_update
+        return hot_money_seats_update(payload)
 
     def _execute_sector_heat_reverify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 #12 — sector_heat 非-arm 重验 cron（每 30 天重跑 §44，days≥60 → write_override 升降级）。

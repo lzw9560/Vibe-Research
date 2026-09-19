@@ -595,6 +595,27 @@ def _ensure_seed_tasks() -> None:
             "dispatch 注册须等 #8 done）"
         )
 
+    # S066 §9 通电（#13 follow-up research note lhb-axis-a-research-2026-09-19，数据 prep 非 spec S220
+    # ——freeze 维持）：hot_money_seats_update——每周一 06:00 周更聚合 60 日龙虎榜画像 → seat_profiles.db
+    # B 字段（next_day_sell_rate/appearance_count/confidence/source/note）。
+    # 原 strategies.hot_money_seats.update_hot_money_seats() 全 backend 零调用，S066 §9 聚合器建了
+    # 从未通电，轴 A（席位类型）n=0 不够 §44。本 cron 通电 aggregator，积累后供
+    # compute_seat_risk_factor 读画像 + 轴 A §44 复测。~18 次 em_get（防封已守：0.3s 限流 + 熔断 +
+    # 代理，S079 AC6）。06:00 周一盘前低负载（macro_fetch 06:35 / r3_enforce 06:00 同窗口不抢盘中）。
+    # notify_on_failure=False：em 瞬态断连次周自愈，不刷通知（receipt + last_run_at 由 cron_audit
+    # S218 #10 审，不靠通知）。
+    if "hot_money_seats_update" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="hot_money_seats_update",
+            description="S066 §9 游资席位周更聚合（60 日龙虎榜 → 画像 → seat_profiles.db B 字段，#13 follow-up 数据 prep）",
+            task_type="hot_money_seats_update",
+            cron_expr="0 6 * * 1",  # 每周一 06:00 周更（盘前低负载）
+            payload={"days": 60},
+            enabled=True,
+            notify_on_failure=False,  # em 瞬态断连次周自愈，不刷通知（cron_audit 审 receipt+last_run_at）
+        ))
+        logger.info("[scheduler] seed 默认任务 hot_money_seats_update 已创建（cron 0 6 * * 1，S066 §9 通电）")
+
     # S218 #12 sector_heat_reverify——每 30 天 06:00 重跑 sector_heat §44（非-arm 补救）。
     # sector_heat（evaluation.py:175，zt≥3 lift=1.359/n=466/days=41/×0.5，note"60 天后复验"）
     # 是全 registry 离 2.0 floor 最近的非 validated 信号（regime probe zt≥5 2.218 最近）。但
