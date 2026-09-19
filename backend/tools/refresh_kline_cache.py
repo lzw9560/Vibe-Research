@@ -46,6 +46,30 @@ def _last_trading_date() -> str:
         return datetime.now().strftime("%Y-%m-%d")
 
 
+def _resolve_refresh_end_date(default_end: str, fetch_fn) -> tuple[str, bool]:
+    """当日 bar 就绪检：未就绪回退到前一交易日，返 (end_date, skipped_today)。
+
+    baostock 17:00+ 才更新当日 bar。kline_refresh 17:15 cron 跑时当日 bar
+    可能未就绪。未就绪时回退到 prev_trading_date 继续刷新（不跳过整轮——
+    前几天 bars 仍需补，否则 cache 停在上次成功日期越积越 stale）。
+
+    Args:
+        default_end: 默认 end_date（last_trading_date，今天交易日）
+        fetch_fn: fetch_daily_bars 签名的 callable（code, start, end）
+
+    Returns:
+        (end_date, skipped_today): end_date 用于 refresh；skipped_today=True
+        时当日 bar 未就绪（用前一天数据刷）。
+    """
+    test_bars = fetch_fn("sh.600000", default_end, default_end)
+    if not test_bars:
+        from vr_paths import prev_trading_date_str
+        prev = prev_trading_date_str()
+        print(f"[refresh] baostock 当日 bar 未就绪 end_date={default_end}，回退到 {prev}（刷前一天数据，不跳过整轮）")
+        return prev, True
+    return default_end, False
+
+
 def main(max_stocks: int | None = None) -> int:
     # T21 R20：cache 不存在时建空（首次全 A 扩容），不再 return 1
     cache: dict[str, list[dict]] = (
@@ -72,13 +96,10 @@ def main(max_stocks: int | None = None) -> int:
         print("[refresh] baostock 不可用")
         return 1
 
-    # S184 grill（方案 0）：数据就绪预检——baostock 16:30 当日 bar 可能未就绪（T+1 延迟，
-    # memory 明确 17:00 前无当日 bar）。未就绪时全量 query 返空 → retry storm 超 1200s timeout。
-    # 预检 sh.600000 当日 bar，空则跳过整轮（数据未就绪非失败，返 0；17:00+ 更新后重跑）。
-    _test_bars = fetch_daily_bars("sh.600000", end_date, end_date)
-    if not _test_bars:
-        print(f"[refresh] baostock 当日 bar 未就绪 end_date={end_date}（17:00+ 更新后重跑），跳过整轮")
-        return 0
+    # S184 grill（方案 0）：数据就绪预检——baostock 当日 bar 17:00+ 更新。
+    # 未就绪时回退到前一交易日继续刷新（不跳过整轮——前几天 bars 仍需补，
+    # 否则 cache 停在上次成功日期越积越 stale，v3 审查发现停 09-16 达 3 天）。
+    end_date, _skipped_today = _resolve_refresh_end_date(end_date, fetch_daily_bars)
 
     updated = 0
     skipped = 0

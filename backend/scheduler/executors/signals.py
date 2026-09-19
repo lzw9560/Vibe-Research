@@ -14,6 +14,7 @@ from typing import Any
 
 from scheduler.cron_fire_audit import fire_receipt
 from tools.signal_report import get_consecutive_relay_signals, render_daily_report
+from vr_paths import prev_trading_date_str
 
 logger = logging.getLogger("vibe-research")
 
@@ -65,12 +66,12 @@ def daily_report(payload: dict[str, Any]) -> dict[str, Any]:
     4. optional notify（飞书）
 
     Args:
-        payload: {"run_date": "2026-09-18"}（可选，默认今天）
+        payload: {"run_date": "2026-09-18"}（可选，默认前一交易日——盘前 04:01 cron 用昨天已收盘日，cache 有数据；原 datetime.now() 在盘前返今天但 cache 只到昨天→regime=unknown）
 
     Returns:
         {"status": "ok", "signals": int, "report_path": str, "report_text": str}
     """
-    run_date = payload.get("run_date") or datetime.now().strftime("%Y-%m-%d")
+    run_date = payload.get("run_date") or prev_trading_date_str()
     logger.info("[S218] daily_report start: date=%s", run_date)
 
     # 1. 生成信号
@@ -270,7 +271,7 @@ def keypoint_notify(payload: dict[str, Any]) -> dict[str, Any]:
       2. D+1 开盘出场（09:30 触发）
       3. gap-down 诚实标（检测到 gap-down 时触发，非止损）
     """
-    run_date = payload.get("run_date") or datetime.now().strftime("%Y-%m-%d")
+    run_date = payload.get("run_date") or prev_trading_date_str()
     logger.info("[S218] keypoint_notify start: date=%s", run_date)
 
     # 1. 复用 C1 shared core（不重复 scan+regime+lift）
@@ -426,7 +427,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
 
     复用 C1 shared core（get_consecutive_relay_signals），不重复 scan+regime+lift。
     """
-    run_date = payload.get("run_date") or datetime.now().strftime("%Y-%m-%d")
+    run_date = payload.get("run_date") or prev_trading_date_str()
     logger.info("[S218] weekly_review start: date=%s", run_date)
 
     # 1. 复用 C1 shared core
