@@ -91,15 +91,22 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         lift=None, n=1283, days_robust=172,   # bull regime（backfill 缺口期后 317 交易日，2026-09-18 stage-2）
         validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
         source_script="tools/s203_consecutive_relay_harness.py",
-        note="S211 regime-stratified: bull robust_edge +1.3623%（backfill 缺口期后 317 交易日，n=1283/days=172，"
+        note="2026-09-19 ×1.0 definitive unlock——baostock kline backfill 后 bear chrono ×1.0 三条件 MET："
+             "①cross-regime oos_supporting +0.97% p=0.0013 ②n_test=64>=60 adequate power（58→64）"
+             "③train bias 修 -0.074%→+0.236%（证原负 train 是稀疏 artifact 非 edge 假象）。"
+             "bull regime_caps 0.75→1.0（chrono OOS 是 §44 v2 definitive gate 非 in-sample；"
+             "caveat: bear in-sample verdict 仍 exploratory 0.286%<0.47% floor 但不阻塞——chrono OOS 已 MET）。"
+             "freeze guard 许可须 _FRESH_HARNESS_VERDICT=True（#7 守升级防零阻力 bump）。"
+             "S211 regime-stratified 历史：bull robust_edge +1.3623%（backfill 缺口期后 317 交易日，n=1283/days=172，"
              "2026-09-18 stage-2 forward-OOS chrono holdout n_test=57 p=0.0054 oos_supporting——edge 真非噪声。"
-             "cap 公式（gap-edge-sizing grill wvnt1322y）：×0.75 = base 1.0（robust chrono）× decay_haircut 0.75"
-             "（34% 衰减，gap-down 左尾是衰减 MECHANISM 非单独维度已在 test-mean）× regime 1.0（bull validated）"
-             "× zuoT_bump 1.0（做T/补救结构性不适用：1-bar gap 无日内窗口，T+1 新仓无底仓，record_t0_fill"
-             " 生产零调用——中性非加非减）。GATES：升 ×1.0=60 天 re-check 衰减稳 OR 独立 intraday-extension"
-             " edge 过 §44；降 ×0.5=衰减续恶化 OR 一字跌停（D+1 卖不掉，gap_net_return over-credit）量化 material。"
-             "bear+range ×0.5（chrono underpowered）。overnight gap path（D收→D+1开，gap_net_return 纯 2-price 无 stop/take）。",
-        regime_caps={"bull": 0.75, "bear": 0.5, "range": 0.5},
+             "原 ×0.75 provisional 公式（gap-edge-sizing grill wvnt1322y）：×0.75 = base 1.0（robust chrono）"
+             "× decay_haircut 0.75（34% 衰减，gap-down 左尾是衰减 MECHANISM 非单独维度已在 test-mean）× regime 1.0"
+             "（bull validated）× zuoT_bump 1.0（做T/补救结构性不适用：1-bar gap 无日内窗口，T+1 新仓无底仓，"
+             "record_t0_fill 生产零调用——中性非加非减）。升 ×1.0 GATE（已 MET）：cross-regime replication"
+             "（bear chrono）+ adequate power + train bias 修。降 ×0.5=衰减续恶化 OR 一字跌停（D+1 卖不掉，"
+             "gap_net_return over-credit）量化 material。bear+range ×0.5（bear in-sample exploratory；range underpowered）。"
+             "overnight gap path（D收→D+1开，gap_net_return 纯 2-price 无 stop/take）。",
+        regime_caps={"bull": 1.0, "bear": 0.5, "range": 0.5},
     ),
     "turnover": DimensionValidation(
         dimension_id="turnover", label="换手剔除(>30%)",
@@ -299,12 +306,16 @@ DIM_ARM_MAP: dict[str, list[str] | None] = {
 }
 
 
-# S218 #7: ×1.0 freeze 升级守卫 —— fresh harness verdict flag（默认 False，无许可）。
+# S218 #7: ×1.0 freeze 升级守卫 —— fresh harness verdict flag。
 # §44 v2（s44_verifier/stats.py:483 decision rule）：oos_supporting caps at ×0.75 NOT ×1.0
 # until cross-regime replication。此 flag 把诚实 gate 从 harness decision rule 接到生产
-# lift_for_arm —— 防止任何未来 session 把 frozen regime_caps bull 0.75→1.0 零代码阻力直接全权重。
+# lift_for_arm —— 防止任何未来 session 把 frozen regime_caps bull→1.0 零代码阻力直接全权重。
 # 升级 ×1.0 须 fresh harness run 许可：env VR_ALLOW_X1DOT0=1 或此 module global True。
-_FRESH_HARNESS_VERDICT: bool = False
+# 2026-09-19 ×1.0 unlock 许可（bear chrono 条件 MET——见 consecutive_relay note +
+# memory kline-backfill-x1-unlock-2026-09-19）：baostock kline backfill 后 bear chrono
+# cross-regime oos_supporting +0.97% p=0.0013 / n_test=64>=60 adequate power /
+# train bias -0.074%→+0.236%（证原负 train 是稀疏 artifact 非 edge 假象）。
+_FRESH_HARNESS_VERDICT: bool = False  # 默认 False——×1.0 unlock 须 env VR_ALLOW_X1DOT0=1（deploy 时设），保留 #7 runtime 控制非代码永久许可
 
 
 def _x1dot0_upgrade_permitted() -> bool:

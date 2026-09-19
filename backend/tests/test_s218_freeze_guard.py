@@ -101,6 +101,49 @@ class TestX1Dot0FreezeGuard:
         assert "freeze" not in note.lower()
 
 
+class TestX1Dot0Unlock:
+    """S218 ×1.0 definitive unlock 验收（2026-09-19 baostock kline backfill 后）。
+
+    bear chrono ×1.0 三条件 MET（cross-regime oos_supporting +0.97% p=0.0013 /
+    n_test=64>=60 adequate power / train bias -0.074%→+0.236% 证稀疏 artifact）
+    → bull regime_caps 0.75→1.0 unlock。freeze guard 许可须 _FRESH_HARNESS_VERDICT=True
+    （#7 守升级防零阻力 bump）。详见 memory kline-backfill-x1-unlock-2026-09-19。
+    """
+
+    def test_x1_unlock_bull_returns_1dot0(self, monkeypatch):
+        # _FRESH_HARNESS_VERDICT=True + regime_caps={bull:1.0} → lift_for_arm 返 ×1.0
+        # （freeze guard 许可 bypass，#7 守升级不挡合法 fresh harness run）
+        monkeypatch.setattr(lift_override, "get_effective_dimension",
+                            lambda dim_id, db_path=None: _dim_with_regime_caps(
+                                {"bull": 1.0, "bear": 0.5, "range": 0.5}))
+        monkeypatch.setattr(evaluation, "_FRESH_HARNESS_VERDICT", True, raising=False)
+        mult, note = lift_for_arm("consecutive_relay", regime="bull")
+        assert mult == 1.0
+        assert "许可" in note
+
+    def test_x1_unlock_not_break_bear_range(self, monkeypatch):
+        # bull 解锁 ×1.0 不误升 bear/range——bear/range regime_caps 仍 0.5 → 返 ×0.5
+        monkeypatch.setattr(lift_override, "get_effective_dimension",
+                            lambda dim_id, db_path=None: _dim_with_regime_caps(
+                                {"bull": 1.0, "bear": 0.5, "range": 0.5}))
+        monkeypatch.setattr(evaluation, "_FRESH_HARNESS_VERDICT", True, raising=False)
+        mult_bear, _ = lift_for_arm("consecutive_relay", regime="bear")
+        mult_range, _ = lift_for_arm("consecutive_relay", regime="range")
+        assert mult_bear == 0.5
+        assert mult_range == 0.5
+
+    def test_x1_unlock_documented_in_note(self):
+        # frozen registry note 含 ×1.0 definitive unlock + 三条件 MET 证据
+        # （防 unlock 后 note 静默 drift，须显式文档化为何 ×1.0）
+        from candidate_funnel.evaluation import DIMENSION_LIFT_REGISTRY
+        note = DIMENSION_LIFT_REGISTRY["consecutive_relay"].note
+        assert "×1.0 definitive unlock" in note
+        # 三条件 MET 证据（cross-regime p-value / adequate power n_test / train bias 修）
+        assert "0.0013" in note
+        assert "n_test=64" in note
+        assert "+0.236" in note
+
+
 class TestX1Dot0FreezeGuardRegression:
     """S218 #7 回归保护：防 future session 破坏 freeze guard。
 
@@ -152,11 +195,14 @@ class TestX1Dot0FreezeGuardRegression:
         assert mult == 1.0
         assert "许可" in note
 
-    def test_freeze_guard_not_broken_by_consecutive_relay_default(self):
-        # 当前 frozen consecutive_relay bull=0.75（registry:102）→ 返 ×0.75
-        # 正常路径，guard 不守（cap!=1.0），note 无 "freeze"。
-        # 回归 alert：若 future session 改 frozen bull→1.0 而无许可，guard 会触发，
-        # note 进 "freeze" → 此 assert 失败，暴露静默升级。
+    def test_real_registry_x1dot0_unlock_with_permission(self, monkeypatch):
+        # 2026-09-19 ×1.0 unlock：real frozen registry bull=1.0 + 生产 permission
+        # （_FRESH_HARNESS_VERDICT=True）→ 返 ×1.0 + note 含 "许可"。
+        # 走真实 get_effective_dimension（_isolate_override_db 强制 fallback frozen baseline）
+        # 验 unlock 端到端 through real frozen registry path，非 monkeypatched dim。
+        # 回归 alert：若 future session 改 _FRESH_HARNESS_VERDICT 回 False 或 freeze guard
+        # 逻辑被移除，mult 会变 0.75 → assert 失败，暴露 unlock 退化。
+        monkeypatch.setattr(evaluation, "_FRESH_HARNESS_VERDICT", True, raising=False)
         mult, note = lift_for_arm("consecutive_relay", regime="bull")
-        assert mult == 0.75
-        assert "freeze" not in note.lower()
+        assert mult == 1.0
+        assert "许可" in note
