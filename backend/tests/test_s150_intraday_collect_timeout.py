@@ -56,10 +56,10 @@ class _FakeTask:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_task_timeout_per_type():
-    """R1：_task_timeout 按 task_type 返秒数（seal=120/precompute=700/kline_refresh=1200/默认=300）。"""
+    """R1：_task_timeout 按 task_type 返秒数（seal=120/precompute=700/kline_refresh=2400/默认=300）。"""
     assert st._task_timeout(_FakeTask("seal_intraday_collect")) == 120
     assert st._task_timeout(_FakeTask("limitup_precompute")) == 700
-    assert st._task_timeout(_FakeTask("kline_refresh")) == 1200  # 审查 HIGH2: 全A baostock 稳态>300s 防误杀
+    assert st._task_timeout(_FakeTask("kline_refresh")) == 2400  # v3: 5219全A串行~1700-1900s，1200边界致超时FAILED
     assert st._task_timeout(_FakeTask("unknown_type")) == st._DEFAULT_TASK_TIMEOUT == 300
 
 
