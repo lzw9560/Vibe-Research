@@ -37,19 +37,121 @@ def profit_forecast(code: str) -> list[dict]:
 
 
 def stock_news(code: str, limit: int = 20) -> list[dict]:
-    """个股新闻（东财）。"""
-    ak = _akshare()
-    df = ak.stock_news_em(symbol=code)
-    return df.head(limit).to_dict("records") if df is not None and not df.empty else []
+    """个股新闻（东财）——S220 走 em_get 防封。
+
+    原 ``ak.stock_news_em`` 内部用 ``curl_cffi.requests`` 直连
+    ``search-api-web.eastmoney.com/search/jsonp``（JSONP），绕过 em_get 熔断器 + 0.3s
+    限流 + 代理探测。现改走 em_get 拉 JSONP，复刻 akshare 解析：剥 callback 包壳 +
+    ``json.loads`` 取 ``result.cmsArticleWebOld``，返中文键 list[dict]
+    （``关键词/新闻标题/新闻内容/发布时间/文章来源/新闻链接``，对齐 ``models/news.py`` +
+    ``mappers.news_from_raw``），``<em>`` 高亮标签清洗，``[:limit]`` 截断。
+
+    熔断 OPEN / 请求异常 / JSON 解析失败 / result 缺 → ``[]``（诚实降级，不臆造、不抛）。
+    """
+    import json as _json  # noqa: PLC0415
+    import time as _time  # noqa: PLC0415
+    from data.transport import eastmoney_get as em_get  # noqa: PLC0415 — 防封底线
+
+    url = "https://search-api-web.eastmoney.com/search/jsonp"
+    inner_param = {
+        "uid": "",
+        "keyword": code,
+        "type": ["cmsArticleWebOld"],
+        "client": "web",
+        "clientType": "web",
+        "clientVersion": "curr",
+        "param": {
+            "cmsArticleWebOld": {
+                "searchScope": "default", "sort": "default",
+                "pageIndex": 1, "pageSize": 10,
+                "preTag": "<em>", "postTag": "</em>",
+            }
+        },
+    }
+    params = {
+        "cb": "jQuery_cb",
+        "param": _json.dumps(inner_param, ensure_ascii=False),
+        "_": str(int(_time.time() * 1000)),
+    }
+    headers = {"Referer": "https://so.eastmoney.com/", "Accept": "*/*"}
+    try:
+        r = em_get(url, params=params, headers=headers, timeout=10)
+        text = r.text
+        data = _json.loads(text[text.index("(") + 1: text.rindex(")")])
+        items = (data.get("result") or {}).get("cmsArticleWebOld") or []
+    except Exception as e:
+        logging.getLogger("astock").warning("stock_news(%s) 取数失败（em_get）: %s", code, e)
+        return []
+
+    def _clean_em(s: str) -> str:
+        s = s.replace("(<em>", "").replace("</em>)", "")
+        return s.replace("<em>", "").replace("</em>", "")
+
+    out: list[dict] = []
+    for it in items:
+        c = str(it.get("code") or "")
+        content = _clean_em(str(it.get("content") or ""))
+        content = content.replace("　", "").replace("\r\n", " ")
+        out.append({
+            "关键词": code,
+            "新闻标题": _clean_em(str(it.get("title") or "")),
+            "新闻内容": content,
+            "发布时间": str(it.get("date") or ""),
+            "文章来源": str(it.get("mediaName") or ""),
+            "新闻链接": f"http://finance.eastmoney.com/a/{c}.html",
+        })
+    return out[:limit]
+
+
+# 东财 push2 端点公开 token（缺则 push2 stock/get 断连——fund_flow.py:313 实测根因）。
+# 与 fund_flow._EM_PUSH2_UT 同值（公开东财日 K token，非 secret）。
+_EM_PUSH2_UT = "fa5fd1943c7b386f172d6893dbbd1"
+_INDIV_FIELDS = "f57,f58,f84,f85,f127,f116,f117,f189,f43"
+_INDIV_CODE_NAME_MAP = {
+    "f57": "股票代码", "f58": "股票简称", "f84": "总股本", "f85": "流通股",
+    "f127": "行业", "f116": "总市值", "f117": "流通市值", "f189": "上市时间", "f43": "最新",
+}
 
 
 def individual_info(code: str) -> dict:
-    """个股基本面（东财）：行业 / 总股本 / 上市时间等。"""
-    ak = _akshare()
-    df = ak.stock_individual_info_em(symbol=code)
-    if df is None or df.empty:
+    """个股基本面（东财）：行业 / 总股本 / 上市时间等——S220 走 em_get 防封。
+
+    原 ``ak.stock_individual_info_em`` 内部裸 ``requests.get`` 命中
+    ``push2.eastmoney.com/api/qt/stock/get`` **不带 ut token**，被
+    ``predict/features/fund_flow.py:313`` `_industry_of` docstring 实测确认会断连
+    （且不走 em_get 限流）——已致 eastmoney push2 outage。
+
+    现改走 em_get + ``push2delay.eastmoney.com`` 延时镜像 + ut token（对齐
+    ``fund_flow._industry_of`` 验证过的安全形态），请求 9 个 f-code，``r.json()["data"]``
+    dict 映射中文键 ``股票代码/股票简称/总股本/流通股/行业/总市值/流通市值/上市时间/最新``
+    （对齐 ``mappers.company_info_from_individual_info`` 读 ``行业``/``上市时间``）。
+    延时~15min 对基本面静态属性可接受；实时行情不在此函数 scope。
+
+    熔断 OPEN / 请求异常 / data 非 dict / 解析失败 → ``{}``（诚实 falsy，下游走 missing
+    标记，同 ``chip_distribution`` 返 ``{}`` 范式）。
+    """
+    from data.transport import eastmoney_get as em_get  # noqa: PLC0415 — 防封底线
+
+    market = 1 if code.startswith("6") else 0
+    url = "https://push2delay.eastmoney.com/api/qt/stock/get"
+    params = {
+        "secid": f"{market}.{code}",
+        "fields": _INDIV_FIELDS,
+        "ut": _EM_PUSH2_UT,
+        "fltt": "2",
+        "invt": "2",
+    }
+    headers = {"Referer": "https://quote.eastmoney.com/"}
+    try:
+        r = em_get(url, params=params, headers=headers, timeout=8)
+        data = r.json().get("data")
+    except Exception as e:
+        logging.getLogger("astock").warning(
+            "individual_info(%s) 取数失败（em_get）: %s", code, e)
         return {}
-    return {str(row["item"]): row["value"] for _, row in df.iterrows()}
+    if not isinstance(data, dict):
+        return {}
+    return {name: data[k] for k, name in _INDIV_CODE_NAME_MAP.items() if k in data}
 
 
 def disclosure(code: str) -> list[dict]:
