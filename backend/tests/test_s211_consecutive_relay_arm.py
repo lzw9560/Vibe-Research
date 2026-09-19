@@ -35,6 +35,17 @@ def recorder(journal):
     )
 
 
+@pytest.fixture(autouse=True)
+def _x1dot0_unlock_env(monkeypatch):
+    """×1.0 unlock env 许可——bull regime_caps=1.0 须 VR_ALLOW_X1DOT0=1（deploy 时设）。
+
+    S211 测 arm 接线（overnight gap + regime cap bite）非 ×1.0 unlock verdict 本身
+    （后者在 test_s218_freeze_guard 测）。此 fixture 模拟 deploy 时 env 许可，让
+    bull=×1.0 生产路径在 test 环境（env 未设）下生效，防 freeze guard 降级 ×0.75。
+    """
+    monkeypatch.setenv("VR_ALLOW_X1DOT0", "1")
+
+
 def _make_gap_bars(signal_date: str = "2026-01-15") -> list[dict]:
     """2 天 bars: D=signal_date close=10.0, D+1 open=10.2（gap +2%, 非一字板）。"""
     return [
@@ -42,6 +53,36 @@ def _make_gap_bars(signal_date: str = "2026-01-15") -> list[dict]:
          "close": 10.0, "volume": 10000, "pctChg": 0.5},
         {"date": "2026-01-16", "open": 10.2, "high": 10.8, "low": 9.8,
          "close": 10.5, "volume": 10000, "pctChg": 5.0},
+    ]
+
+
+def _make_locked_unlock_bars(signal_date: str = "2026-01-15") -> list[dict]:
+    """3 天 bars: D close=10.0 / D+1 一字跌停封死(open=high=low=close=9.0, pct=-10%) /
+    D+2 限跌打开(open=8.5 有振幅, 非一字)。
+
+    realizability-bias 场景：naive D+1 open=9.0（gap -10%）vs 实际限跌打开日 open=8.5
+    （gap -15%）—— locked picks 须用打开日 open 重算而非 naive D+1 open。
+    """
+    return [
+        {"date": signal_date, "open": 10.0, "high": 10.5, "low": 9.5,
+         "close": 10.0, "volume": 10000, "pctChg": 0.5},
+        {"date": "2026-01-16", "open": 9.0, "high": 9.0, "low": 9.0,
+         "close": 9.0, "volume": 100, "pctChg": -10.0},  # 一字跌停封死
+        {"date": "2026-01-17", "open": 8.5, "high": 9.2, "low": 8.3,
+         "close": 8.8, "volume": 10000, "pctChg": -2.22},  # 限跌打开（有振幅）
+    ]
+
+
+def _make_locked_never_unlock_bars(signal_date: str = "2026-01-15") -> list[dict]:
+    """2 天 bars: D close=10.0 / D+1 一字跌停封死（无打开日, 到 cache 末仍 locked）。
+
+    诚实不臆造场景：卖不掉 → exit_price=None / net_pnl=None / is_realized=0。
+    """
+    return [
+        {"date": signal_date, "open": 10.0, "high": 10.5, "low": 9.5,
+         "close": 10.0, "volume": 10000, "pctChg": 0.5},
+        {"date": "2026-01-16", "open": 9.0, "high": 9.0, "low": 9.0,
+         "close": 9.0, "volume": 100, "pctChg": -10.0},  # 一字跌停封死到末
     ]
 
 
@@ -227,3 +268,100 @@ class TestRunDailyConsecutiveRelayWired:
         """DEFAULT_ARMS 含 consecutive_relay（arm 默认生产 active）。"""
         from strategies.journal_recorder import DEFAULT_ARMS
         assert "consecutive_relay" in DEFAULT_ARMS
+
+
+# ── T4 realizability-bias: D+1 一字跌停封死 → 限跌打开日 open 重算 ──────
+
+
+class TestRealizabilityBiasLockedPicks:
+    """realizability-bias 修（2026-09-19）——D+1 一字跌停封死时找限跌打开日 open
+    重算 gap_net_return，naive D+1 open 不再用。
+
+    覆盖两路径：_process_consecutive_relay（backfill）+ settle_pending_consecutive_relay
+    （live daily，D+1 bar 次日到达）。两路径同一 helper _resolve_gap_exit。
+    """
+
+    def test_d1_onesell_locked_resells_at_unlock_day_open(self, journal, recorder):
+        """D+1 一字跌停封死→限跌打开日(D+2) open 卖，exit=8.5 非 naive D+1 open=9.0。"""
+        bars = _make_locked_unlock_bars("2026-01-15")
+        recorder._bars_provider = lambda code: bars if code == "000001" else []
+        with patch("pre_limitup_scanner.scan_consecutive_relay",
+                   return_value=[{"code": "000001", "lbc": 2}]):
+            result = recorder._process_consecutive_relay("2026-01-15")
+        assert result["n_realized"] == 1
+        records = journal.query_records(arm="consecutive_relay", is_dead_arm=None)
+        assert len(records) == 1
+        r = records[0]
+        assert r.is_realized == 1
+        assert r.exit_price == 8.5  # 限跌打开日 open, 非 locked D+1 open=9.0
+        assert r.exit_date == "2026-01-17"
+        assert r.exit_reason == "locked_gap_unlocked"
+        fills = json.loads(r.fills_json) if r.fills_json else {}
+        assert fills.get("optimism_flag") == "d1_onesell_locked_resold_at_unlock"
+        assert fills.get("d1_locked_days") == 1  # 仅 D+1 一日封死
+        assert fills.get("unlock_date") == "2026-01-17"
+        assert fills.get("naive_d1_open") == 9.0  # 审计: naive 会用的错价
+
+    def test_d1_onesell_locked_never_opens_records_none(self, journal, recorder):
+        """D+1 一字跌停封死到 cache 末→卖不掉, exit_price=None/net_pnl=None/
+        is_realized=0 诚实不臆造。"""
+        bars = _make_locked_never_unlock_bars("2026-01-15")
+        recorder._bars_provider = lambda code: bars if code == "000001" else []
+        with patch("pre_limitup_scanner.scan_consecutive_relay",
+                   return_value=[{"code": "000001", "lbc": 2}]):
+            recorder._process_consecutive_relay("2026-01-15")
+        records = journal.query_records(arm="consecutive_relay", is_dead_arm=None)
+        assert len(records) == 1
+        r = records[0]
+        assert r.is_realized == 0
+        assert r.exit_price is None  # 卖不掉, 不臆造价
+        assert r.net_pnl is None
+        assert r.exit_reason == "d1_onesell_locked_unsold"
+        fills = json.loads(r.fills_json) if r.fills_json else {}
+        assert fills.get("optimism_flag") == "d1_onesell_locked_unsold"
+        # bars=[D(0), D+1 locked(1)], d_idx=0 → locked_days = len-1-d_idx = 1
+        assert fills.get("d1_locked_days") == 1
+        assert fills.get("naive_d1_open") == 9.0
+
+    def test_settle_pending_handles_d1_locked_unlock(self, journal, recorder):
+        """settle 路径(live daily): hold→D+1 到达为一字跌停→D+2 打开日 open settle。"""
+        # 先建 hold（D+1 bar 缺, T+1 guard）
+        bars_d_only = [{"date": "2026-01-15", "open": 10.0, "high": 10.5, "low": 9.5,
+                        "close": 10.0, "volume": 100, "pctChg": 0.5}]
+        recorder._bars_provider = lambda code: bars_d_only if code == "000001" else []
+        with patch("pre_limitup_scanner.scan_consecutive_relay",
+                   return_value=[{"code": "000001", "lbc": 2}]):
+            recorder._process_consecutive_relay("2026-01-15")
+        holds = journal.query_records(arm="consecutive_relay", is_realized=0, is_dead_arm=None)
+        assert len(holds) == 1 and holds[0].exit_reason == "hold"
+
+        # D+1 + D+2 bars 到达（D+1 一字跌停, D+2 打开）
+        bars_full = _make_locked_unlock_bars("2026-01-15")
+        recorder._bars_provider = lambda code: bars_full if code == "000001" else []
+        result = recorder.settle_pending_consecutive_relay()
+        assert result["n_settled"] == 1
+        realized = journal.query_records(arm="consecutive_relay", is_realized=1, is_dead_arm=None)
+        assert len(realized) == 1
+        assert realized[0].exit_price == 8.5  # 限跌打开日 open, 非 naive D+1 open=9.0
+        assert realized[0].exit_reason == "locked_gap_unlocked"
+
+    def test_settle_pending_revisits_locked_unsold_when_unlock_arrives(self, journal, recorder):
+        """locked_unsold 记录 is_realized=0→更多 bars 到达且限跌打开→re-settle at unlock open。"""
+        # 先建 locked_unsold（D+1 一字跌停, 无打开日）
+        bars_locked_only = _make_locked_never_unlock_bars("2026-01-15")
+        recorder._bars_provider = lambda code: bars_locked_only if code == "000001" else []
+        with patch("pre_limitup_scanner.scan_consecutive_relay",
+                   return_value=[{"code": "000001", "lbc": 2}]):
+            recorder._process_consecutive_relay("2026-01-15")
+        locked = journal.query_records(arm="consecutive_relay", is_realized=0, is_dead_arm=None)
+        assert len(locked) == 1 and locked[0].exit_reason == "d1_onesell_locked_unsold"
+
+        # D+2 打开日 bar 到达（cache 增长）
+        bars_with_unlock = _make_locked_unlock_bars("2026-01-15")
+        recorder._bars_provider = lambda code: bars_with_unlock if code == "000001" else []
+        result = recorder.settle_pending_consecutive_relay()
+        assert result["n_settled"] == 1
+        realized = journal.query_records(arm="consecutive_relay", is_realized=1, is_dead_arm=None)
+        assert len(realized) == 1
+        assert realized[0].exit_price == 8.5
+        assert realized[0].exit_reason == "locked_gap_unlocked"

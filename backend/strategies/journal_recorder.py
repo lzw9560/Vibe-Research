@@ -340,15 +340,79 @@ class JournalRecorder:
                 self._regime_cache = {}
         return self._regime_cache.get(date)
 
-    def settle_pending_consecutive_relay(self) -> dict:
-        """S211 — 重算昨日未平 consecutive_relay 'hold' 记录（D+1 bar 到达后 settle）。
+    def _resolve_gap_exit(
+        self, bars: list[dict], d_idx: int, code: str,
+    ) -> tuple[float | None, str | None, dict]:
+        """找 overnight gap 平仓的 exit price/date——D+1 一字跌停封死时找限跌打开日 open。
 
-        overnight gap path 需 D+1 bar（exit=open[D+1]）。_process 当日跑时 D+1 缺 → 'hold'
-        is_realized=0。次日 bars 增长后此方法重算：query is_realized=0 'hold' →
-        gap_net_return(close[D], open[D+1]) → update_settlement_v2 标 realized。
+        realizability-bias 修（2026-09-19）：原 gap 口径 naive 用 open[D+1] 作 exit。
+        但 D+1 一字跌停封死时 open[D+1] 是 locked 价（卖不掉）——实际要在限跌打开日
+        （D+1 后首个非一字跌停 bar）的 open 才能卖。naive 口径 per-pick over-credit
+        ~11%（locked picks paper -10% 但实际 -15%+）。
+
+        - 正常（D+1 非一字跌停）→ exit = open[D+1]（原 overnight gap 口径, backward compat）。
+        - D+1 一字跌停封死 + 限跌打开日存在 → exit = open[打开日]（实际可卖价）。
+        - D+1 一字跌停封死 + 一直封死到 cache 末 → (None, None, info) 卖不掉, 诚实记
+          None 不臆造（is_realized=0, exit_reason='d1_onesell_locked_unsold'）。
+
+        baostock bars 须经 KlineCacheBarsProvider（enrich_pctchg S204 T1, pctChg 已补）。
+
+        Returns (exit_price | None, exit_date_str | None, info_dict)。
+        info_dict: optimism_flag / arm_path / d1_locked_days / naive_d1_open / unlock_date(可空)。
+        """
+        from engine.bar_utils import is_onesell_locked_next_bar  # noqa: PLC0415
+
+        d1_idx = d_idx + 1
+        open_d1 = float(bars[d1_idx].get("open", 0) or 0)
+        info: dict = {
+            "naive_d1_open": round(open_d1, 4),
+            "d1_locked_days": 0,
+            "unlock_date": None,
+        }
+        # 正常：D+1 非一字跌停 → open[D+1] 可卖（backward compat 原 overnight gap 口径）
+        if not is_onesell_locked_next_bar(bars[d1_idx], code=code):
+            info["optimism_flag"] = "s211_overnight_gap_regime_stratified"
+            info["arm_path"] = "overnight_gap"
+            return open_d1, str(bars[d1_idx].get("date", ""))[:10], info
+
+        # D+1 一字跌停封死 → 找限跌打开日（首个非一字跌停且 open>0 的 bar）
+        unlock_idx = None
+        for j in range(d1_idx + 1, len(bars)):
+            if is_onesell_locked_next_bar(bars[j], code=code):
+                continue
+            open_j = float(bars[j].get("open", 0) or 0)
+            if open_j > 0:
+                unlock_idx = j
+                break
+        if unlock_idx is None:
+            # 一直封死到 cache 末 → 卖不掉, 诚实记 None（不臆造价）
+            info["optimism_flag"] = "d1_onesell_locked_unsold"
+            info["arm_path"] = "locked_unsold"
+            info["d1_locked_days"] = len(bars) - 1 - d_idx
+            return None, None, info
+        # 限跌打开日 open 可卖
+        open_unlock = float(bars[unlock_idx].get("open", 0) or 0)
+        info["optimism_flag"] = "d1_onesell_locked_resold_at_unlock"
+        info["arm_path"] = "locked_gap_unlocked"
+        info["d1_locked_days"] = unlock_idx - d1_idx
+        info["unlock_date"] = str(bars[unlock_idx].get("date", ""))[:10]
+        return open_unlock, str(bars[unlock_idx].get("date", ""))[:10], info
+
+    def settle_pending_consecutive_relay(self) -> dict:
+        """S211 — 重算昨日未平 consecutive_relay 'hold' / 'd1_onesell_locked_unsold' 记录。
+
+        overnight gap path 需 D+1 bar（exit=open[D+1] 或限跌打开日 open）。_process 当日跑时
+        D+1 缺 → 'hold' is_realized=0；D+1 一字跌停封死且限跌未打开 → 'd1_onesell_locked_unsold'
+        is_realized=0。次日 bars 增长后此方法重算：query is_realized=0 → _resolve_gap_exit
+        找 exit（D+1 非封死用 open[D+1], 封死用限跌打开日 open）→ gap_net_return →
+        update_settlement_v2 标 realized。
+
+        realizability-bias 修（2026-09-19）：原 naive 用 open[D+1] 算 gap，D+1 一字跌停时
+        locked 价卖不掉 → 现走 _resolve_gap_exit 找限跌打开日 open 重算。
         """
         pending = self._journal.query_records(arm="consecutive_relay", is_realized=0, is_dead_arm=0)
-        holds = [r for r in pending if r.exit_reason == "hold"]
+        # settle 'hold'（D+1 bar 缺）+ 'd1_onesell_locked_unsold'（限跌未打开, cache 增长后可能已打开）
+        holds = [r for r in pending if r.exit_reason in ("hold", "d1_onesell_locked_unsold")]
         n_settled = 0
         for pos in holds:
             bars = self._bars_provider(pos.stock_code)
@@ -362,26 +426,33 @@ class JournalRecorder:
             if d_idx is None or d_idx + 1 >= len(bars):
                 continue  # D+1 bar 仍缺
             close_d = float(bars[d_idx].get("close", 0) or 0)
-            open_d1 = float(bars[d_idx + 1].get("open", 0) or 0)
-            if close_d <= 0 or open_d1 <= 0:
+            if close_d <= 0:
                 continue
             entry_price = float(pos.entry_price) if pos.entry_price else close_d
+            exit_price, exit_date, info = self._resolve_gap_exit(bars, d_idx, pos.stock_code)
+            if exit_price is None or exit_price <= 0:
+                # 限跌仍封死到 cache 末 → 仍卖不掉, 留 is_realized=0（等更多 bars 到达）
+                continue
             regime = self._regime_for_date(pos.entry_date)
             size = self._arm_size("consecutive_relay", regime=regime)
             net_ratio, cost_pct, gross_ratio = gap_net_return(
-                entry_price, open_d1, entry_date=pos.entry_date, size=size,
+                entry_price, exit_price, entry_date=pos.entry_date, size=size,
             )
             position_notional = entry_price * size
             net_pnl = net_ratio * position_notional
+            exit_reason = "overnight_gap" if info["arm_path"] == "overnight_gap" else "locked_gap_unlocked"
             updated = self._journal.update_settlement_v2(
                 signal_id=pos.signal_id,
                 gross_return_v2=round(gross_ratio * 100, 4),
-                exit_price=open_d1,
-                exit_date=str(bars[d_idx + 1].get("date", ""))[:10],
-                exit_reason="overnight_gap",
+                exit_price=exit_price,
+                exit_date=exit_date,
+                exit_reason=exit_reason,
                 net_pnl=round(net_pnl, 2),
                 cost_pct=cost_pct,
-                exit_model_version="s211_overnight_gap",
+                exit_model_version=(
+                    "s211_overnight_gap" if exit_reason == "overnight_gap"
+                    else "s211_locked_gap_unlocked"
+                ),
             )
             if updated:
                 n_settled += 1
@@ -394,9 +465,11 @@ class JournalRecorder:
         2. per pick: bars 找 D_idx（target_date）+ D+1 bar
         3. D 日一字板 filter（_is_unbuyable_next_bar(bars[D_idx])，入场日 close 买不到）
         4. D+1 bar 缺 → 'hold' is_realized=0（settle_pending 次日重算）
-        5. gap_net_return(close[D], open[D+1]) → (net_ratio, cost_pct, gross_ratio)
-        6. net_pnl = net_ratio × position_notional；size = _arm_size(regime)（§44 cap bite）
-        7. trade_journal.insert(is_realized=1)
+        5. _resolve_gap_exit: D+1 非一字跌停用 open[D+1]；D+1 一字跌停封死找限跌打开日
+           open（realizability-bias 修, naive D+1 open 卖不掉）；封死到末 → None 卖不掉
+        6. gap_net_return(close[D], exit_price) → (net_ratio, cost_pct, gross_ratio)
+        7. net_pnl = net_ratio × position_notional；size = _arm_size(regime)（§44 cap bite）
+        8. trade_journal.insert(is_realized=1)；locked 未打开 → is_realized=0 'd1_onesell_locked_unsold'
 
         与 _process_post_first_board 区别：overnight gap path（非 -4/+8/3 path_return），
         entry=D 日 close（非 T+1 open），exit=D+1 open（1 天强制平，无 stop/take）。
@@ -455,24 +528,38 @@ class JournalRecorder:
                 n_unbuyable += 1
                 continue
 
-            open_d1 = float(bars[d_idx + 1].get("open", 0) or 0)
-            if close_d <= 0 or open_d1 <= 0:
+            # realizability-bias 修：D+1 一字跌停封死时找限跌打开日 open（非 naive D+1 open）
+            exit_price, exit_date, info = self._resolve_gap_exit(bars, d_idx, code)
+            if exit_price is None:
+                # D+1 一字跌停封死且限跌未打开（到 cache 末仍 locked）→ 卖不掉, 诚实记 None
+                # is_realized=0（settle 次日 cache 增长后若打开则 re-settle at 打开日 open）
+                record = JournalRecord.create(
+                    arm="consecutive_relay", stock_code=code,
+                    entry_price=close_d if close_d > 0 else None,
+                    entry_date=target_date,
+                    exit_reason="d1_onesell_locked_unsold", is_realized=0,
+                    fills_json=json.dumps({**info, "lbc": cand.get("lbc")}),
+                )
+                self._journal.insert(record)
+                continue
+            if close_d <= 0 or exit_price <= 0:
                 continue
 
             regime = self._regime_for_date(target_date)
             size = self._arm_size("consecutive_relay", regime=regime)
             net_ratio, cost_pct, gross_ratio = gap_net_return(
-                close_d, open_d1, entry_date=target_date, size=size,
+                close_d, exit_price, entry_date=target_date, size=size,
             )
             position_notional = close_d * size
             net_pnl = net_ratio * position_notional
+            exit_reason = "overnight_gap" if info["arm_path"] == "overnight_gap" else "locked_gap_unlocked"
 
             record = JournalRecord.create(
                 arm="consecutive_relay", stock_code=code,
                 entry_price=close_d, entry_date=target_date,
-                exit_price=open_d1,
-                exit_date=str(bars[d_idx + 1].get("date", ""))[:10],
-                exit_reason="overnight_gap",
+                exit_price=exit_price,
+                exit_date=exit_date,
+                exit_reason=exit_reason,
                 net_pnl=round(net_pnl, 2),
                 cost_pct=cost_pct,
                 gross_return=round(gross_ratio * 100, 4),
@@ -482,10 +569,9 @@ class JournalRecorder:
                     "gross_ratio": round(gross_ratio, 6),
                     "cost_pct": cost_pct,
                     "position_notional": round(position_notional, 2),
-                    "arm_path": "overnight_gap",
                     "regime": regime,
                     "lbc": cand.get("lbc"),
-                    "optimism_flag": "s211_overnight_gap_regime_stratified",
+                    **info,
                 }),
             )
             self._journal.insert(record)

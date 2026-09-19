@@ -16,6 +16,17 @@ if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
 
+@pytest.fixture(autouse=True)
+def _x1dot0_unlock_env(monkeypatch):
+    """×1.0 unlock env 许可——bull regime_caps=1.0 须 VR_ALLOW_X1DOT0=1（deploy 时设）。
+
+    S213 测 arm kill switch（override 优先级）非 ×1.0 unlock verdict 本身（后者在
+    test_s218_freeze_guard 测）。此 fixture 模拟 deploy 时 env 许可，让 default/db-error
+    fallback 走 registry bull=×1.0 路径在 test 环境（env 未设）下生效，防 freeze guard 降级 ×0.75。
+    """
+    monkeypatch.setenv("VR_ALLOW_X1DOT0", "1")
+
+
 # ── T1 arm_status 表 + query/set ─────────────────────────────────────────
 
 

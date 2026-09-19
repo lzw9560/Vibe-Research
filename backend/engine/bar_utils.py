@@ -81,6 +81,42 @@ def is_unbuyable_next_bar(nb: object, code: str = "") -> bool:
         return False
 
 
+def is_onesell_locked_next_bar(nb: object, code: str = "") -> bool:
+    """检测 next_bar（T+1）是否一字跌停封死（卖不掉）——board-aware 版（sell-side realizability）。
+
+    四价相等（high≈low≈open≈close）+ pctChg≤-涨停阈值 → 一字跌停 → 卖不掉。
+    与 ``is_unbuyable_next_bar`` 对称：涨停方向判买入不可（做多买不到），跌停方向判
+    卖出不可（做多卖不掉）。realizability-bias 修（2026-09-19）：原 _process_consecutive_relay
+    只过滤 D 日一字涨停（买入 survivorship），不过滤 D+1 一字跌停（卖出 realizability）→
+    locked picks 用 locked D+1 open 记录 paper -10% 但实际限跌打开日 open 卖 -15%+，
+    per-pick over-credit ~11%。此 detector 配合 journal_recorder._resolve_gap_exit 找限跌
+    打开日 open 重算 gap_net_return。
+
+    code="" → 主板 10% → 阈值 -9.8%（|pctChg|≥9.8 且 ≤0, 匹配 unbuyable 口径）。
+    code="300xxx" → 创业板 20% → 阈值 -19.8%。
+
+    用 _bar_get 统一 dict/SimpleNamespace（与 is_unbuyable_next_bar 同）。
+    """
+    nb_open = _bar_get(nb, "open", 0.0)
+    nb_high = _bar_get(nb, "high", 0.0)
+    nb_low = _bar_get(nb, "low", 0.0)
+    nb_close = _bar_get(nb, "close", 0.0)
+    nb_pct = _bar_get(nb, "pctChg", 0.0)
+    # board-specific limit（按代码板块判阈值, 不读 isST 字段——ST 新规 2026-09-17）。
+    limit_pct = _limit_pct_for_code(code)
+    threshold = limit_pct - LIMIT_TOLERANCE
+    try:
+        pct_f = float(nb_pct)
+        return (
+            abs(float(nb_high) - float(nb_low)) <= UNBUYABLE_PRICE_TOL
+            and abs(float(nb_open) - float(nb_close)) <= UNBUYABLE_PRICE_TOL
+            and pct_f <= -threshold  # 跌停方向（非 abs：涨停一字板对做多可卖）
+        )
+    except (TypeError, ValueError):
+        # high/low/open/close/pct 任一非数值（坏 bar）→ 不判 locked（保守可卖）
+        return False
+
+
 def is_halted(bar: object) -> bool:
     """检测 bar 是否停牌（volume/amount 字段存在且 ==0）。
 
