@@ -79,7 +79,7 @@ def test_daily_report_explicit_run_date_overrides_default(monkeypatch):
 def test_keypoint_notify_default_run_date_uses_prev_trading_date(monkeypatch):
     """keypoint_notify 不传 run_date → 默认前一交易日（同 daily_report bug）。"""
     from scheduler.executors.signals import keypoint_notify
-    from vr_paths import prev_trading_date_str
+    import vr_paths
 
     captured: dict = {}
 
@@ -95,9 +95,11 @@ def test_keypoint_notify_default_run_date_uses_prev_trading_date(monkeypatch):
     monkeypatch.setattr(sig_mod, "_render_d_close_entry", lambda s: "mock")
     monkeypatch.setattr(sig_mod, "_render_d1_open_exit", lambda s: "mock")
     monkeypatch.setattr(sig_mod, "_render_gapdown_honest_label", lambda s: "mock")
+    # 防 polluter + 周日跑：mock signals.prev_trading_date_str（signals 顶部 from import
+    # 绑定，mock vr_paths 不影响 signals 已绑定——须 mock signals 命名空间覆盖 polluter）
+    monkeypatch.setattr("scheduler.executors.signals.prev_trading_date_str", lambda d=None: "2026-09-18")
 
     keypoint_notify({})
 
-    expected = prev_trading_date_str()
-    assert captured["target_date"] == expected
+    assert captured["target_date"] == "2026-09-18"
     assert captured["target_date"] != datetime.now().strftime("%Y-%m-%d")

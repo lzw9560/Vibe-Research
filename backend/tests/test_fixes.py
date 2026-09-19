@@ -260,11 +260,18 @@ def test_cached_skips_empty():
 # ── akshare 未安装：market 降级返回空，不挡服务 ─────────────────────
 
 def test_market_degrades_without_akshare(monkeypatch):
+    """akshare 缺失 → _sentiment 返 {}；_sectors 走 em_get（S085 A5 换源非 akshare）源断返 []。"""
     def boom():
         raise astock.DependencyMissing("akshare 未安装")
 
     monkeypatch.setattr(astock, "_akshare", boom)
     assert market._sentiment() == {}
+
+    # _sectors 走 em_get 非 akshare（S085 A5 换源）—— mock sector_fund_flow 源断验返 []
+    import data.sources.eastmoney as em
+    def _em_boom(*a, **k):
+        raise ConnectionError("em 源断")
+    monkeypatch.setattr(em, "sector_fund_flow", _em_boom)
     assert market._sectors() == []
 
 
