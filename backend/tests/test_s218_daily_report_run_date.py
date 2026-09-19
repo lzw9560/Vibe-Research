@@ -77,9 +77,15 @@ def test_daily_report_explicit_run_date_overrides_default(monkeypatch):
 
 
 def test_keypoint_notify_default_run_date_uses_prev_trading_date(monkeypatch):
-    """keypoint_notify 不传 run_date → 默认前一交易日（同 daily_report bug）。"""
+    """keypoint_notify 不传 run_date → 默认前一交易日（同 daily_report bug）。
+
+    用真实 ``prev_trading_date_str()`` 验（非 mock signals.prev_trading_date_str）——避免
+    monkeypatch 在 full suite 里 flaky（bkgv9413r 1 failed bto663fms 0 failed，mock 时装时
+    没装）。test_daily_report_default 同方式稳定 pass，复用。测试有效性：若 keypoint_notify
+    改回 ``datetime.now()``，captured=today≠expected=prev → fail。
+    """
     from scheduler.executors.signals import keypoint_notify
-    import vr_paths
+    from vr_paths import prev_trading_date_str
 
     captured: dict = {}
 
@@ -95,11 +101,10 @@ def test_keypoint_notify_default_run_date_uses_prev_trading_date(monkeypatch):
     monkeypatch.setattr(sig_mod, "_render_d_close_entry", lambda s: "mock")
     monkeypatch.setattr(sig_mod, "_render_d1_open_exit", lambda s: "mock")
     monkeypatch.setattr(sig_mod, "_render_gapdown_honest_label", lambda s: "mock")
-    # 防 polluter + 周日跑：mock signals.prev_trading_date_str（signals 顶部 from import
-    # 绑定，mock vr_paths 不影响 signals 已绑定——须 mock signals 命名空间覆盖 polluter）
-    monkeypatch.setattr("scheduler.executors.signals.prev_trading_date_str", lambda d=None: "2026-09-18")
 
     keypoint_notify({})
 
-    assert captured["target_date"] == "2026-09-18"
+    expected = prev_trading_date_str()
+    assert captured["target_date"] == expected
+    # 确保不是今天（盘前跑时 today 的 cache 还没数据）
     assert captured["target_date"] != datetime.now().strftime("%Y-%m-%d")
