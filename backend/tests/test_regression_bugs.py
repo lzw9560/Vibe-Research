@@ -96,6 +96,17 @@ class TestScheduledTasksImports(unittest.TestCase):
             "early_admission_scan",  # S204 T10 — pre-涨停候选入池
             "escalation_run",  # S204 T11 — tracking→watching auto-promote
             "r3_enforce",  # S204 T8 — §44v2 verdict 定期 enforce 降级
+            # S218 投研参考交付系统 + 数据管道通电（2026-09-17/18/19 落地）
+            "daily_report",  # S218 C1 每日信号报告
+            "keypoint_notify",  # S218 C3 关键点位通知
+            "weekly_review",  # S218 C5 周度复盘 + cap gate
+            "fund_accumulation",  # S218 封单额前向累积 cron
+            "sector_heat_reverify",  # S218 sector_heat 30 天复验
+            "cron_audit",  # S218 cron fire 审计
+            "hot_money_seats_update",  # S218 龙虎榜席位周更
+            "regime_cache_fetch",  # S211 regime cache 刷新
+            "macro_fetch",  # S216 FRED 宏观刷新
+            "loss_breaker_enforce",  # S203 T6 吃大面 enforce gate
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

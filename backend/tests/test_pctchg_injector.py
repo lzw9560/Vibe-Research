@@ -61,16 +61,17 @@ def test_pctchg_first_day_zero():
     assert out[0]["pctChg"] == 0.0
 
 
-def test_pctchg_st_5pct_threshold():
-    """ST 股一字板 5% 阈值：isST='1' + pctChg=+5.0 → is_unbuyable True（5%-0.2=4.8）。
+def test_pctchg_st_10pct_threshold():
+    """ST 股一字板 10% 阈值（2026-09-17 新规：ST 按板块阈值非 5%）。
 
-    T2 配套：isST 派生后，ST 股一字板用 5% 阈值非 10%。
+    isST='1' + pctChg=+10.0（主板涨停）→ is_unbuyable True（10%-0.2 容差=9.8，10.0≥9.8）。
+    旧 5% 阈值已废（2026-07-06 新规主板 ST 5%→10%，2026-09-17 落地 is_unbuyable 不读 isST 用板块阈值）。
     """
     prev = {"close": 10.0}
-    st_one_word = {"open": 10.5, "high": 10.5, "low": 10.5, "close": 10.5, "isST": "1"}
+    st_one_word = {"open": 11.0, "high": 11.0, "low": 11.0, "close": 11.0, "isST": "1"}
     enriched = enrich_pctchg([prev, st_one_word])
-    assert enriched[1]["pctChg"] == 5.0  # (10.5-10)/10*100
-    assert is_unbuyable_next_bar(enriched[1], "600000") is True  # ST 5% threshold=4.8, 5.0≥4.8
+    assert enriched[1]["pctChg"] == 10.0  # (11.0-10)/10*100
+    assert is_unbuyable_next_bar(enriched[1], "600000") is True  # 主板 10% threshold=9.8
 
 
 def test_pctchg_overrides_zero_for_real_cache_shape():

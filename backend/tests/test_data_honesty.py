@@ -921,6 +921,8 @@ def test_realtime_capital_flow_today_bar_marks_ok_now(isolated_cache, monkeypatc
     ]
     monkeypatch.setattr(astock, "stock_fund_flow_120d", lambda _code: rows)
     monkeypatch.setattr(vr_paths, "last_trading_date_str", lambda d=None: "2026-08-14")
+    # 当日是交易日（防周末跑测：today=Saturday → is_trading_day=False → is_nontrading=True → 误降 degraded）
+    monkeypatch.setattr(vr_paths, "is_trading_day", lambda d=None: True)
 
     # Act
     cf = risk_models._get_realtime_capital_flow(code)

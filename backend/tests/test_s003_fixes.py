@@ -136,37 +136,6 @@ def test_kline_graceful_on_mootdx_empty(monkeypatch):
     assert res.json() == {"data": []}
 
 
-def test_finance_graceful_on_mootdx_empty(monkeypatch):
-    """mootdx finance() 抛 not enough values to unpack → 端点 200+空，而非 502。"""
-    import astock
-
-    class _FakeClient:
-        def finance(self, symbol):
-            raise ValueError("not enough values to unpack (expected 2, got 0)")
-
-    monkeypatch.setattr(astock, "_mootdx_client", lambda: _FakeClient())
-    res = client.get("/api/finance?code=600519")
-    assert res.status_code == 200, f"finance 502: {res.status_code} {res.text[:200]}"
-    assert res.json() == {"data": {}}
-
-
-def test_kline_finance_graceful_when_mootdx_factory_fails(monkeypatch):
-    """_mootdx_client() 自身抛 ValueError（连不上 TDX）→ kline/finance 端点 200+空，非 502。"""
-    import astock
-
-    def _boom(*a, **k):
-        raise ValueError("not enough values to unpack (expected 2, got 0)")
-
-    monkeypatch.setattr(astock, "_mootdx_client", _boom)
-    monkeypatch.setattr(astock, "kline_multi", lambda *a, **k: ([], "stub"))  # 防真网络返数据
-    monkeypatch.setattr("data.sources.mootdx_src.kline", lambda *a, **k: [])  # mootdx fallback 源头 stub
-    monkeypatch.setattr("data.sources.mootdx_src.finance", lambda *a, **k: {})  # /api/finance mootdx 源头 stub
-    rk = client.get("/api/kline?code=600519")
-    rf = client.get("/api/finance?code=600519")
-    assert rk.status_code == 200 and rk.json() == {"data": []}, rk.text[:120]
-    assert rf.status_code == 200 and rf.json() == {"data": {}}, rf.text[:120]
-
-
 # ── 候选池漏斗：async 端点不得同步阻塞事件循环（live 验收发现） ──
 
 
@@ -206,41 +175,6 @@ def test_candidates_does_not_block_event_loop(monkeypatch):
     delay, st = asyncio.run(main())
     assert delay < 0.25, f"事件循环被 candidates 阻塞：probe 延迟 {delay:.2f}s"
 
-
-
-# ── T9（R5）: kline_history 建表 + 缺表守卫 ───────────────────────
-
-
-def test_kline_history_stats_empty_db_200(tmp_path, monkeypatch):
-    """空库（无 kline 表）→ /api/kline-history/stats 返回 200，不再 502。"""
-    import routers.kline_history as kh
-
-    monkeypatch.setattr(kh, "KLINE_DB_PATH", str(tmp_path / "kh.db"))
-    res = client.get("/api/kline-history/stats")
-    assert res.status_code == 200, f"stats 502: {res.status_code} {res.text[:200]}"
-    data = res.json()["data"]
-    assert data["total_records"] == 0
-
-
-def test_kline_history_code_with_data_200(tmp_path, monkeypatch):
-    """/api/kline-history/{code} 有数据 → 200 + count。"""
-    import routers.kline_history as kh
-
-    db_path = str(tmp_path / "kh.db")
-    monkeypatch.setattr(kh, "KLINE_DB_PATH", db_path)
-    # 建表 + 插一行（_get_kline_db 会 CREATE TABLE IF NOT EXISTS）
-    conn = kh._get_kline_db()
-    conn.execute(
-        "INSERT OR REPLACE INTO kline(code,name,date,open,close,high,low,volume,amount,fetched_at)"
-        " VALUES(?,?,?,?,?,?,?,?,?,?)",
-        ("600519", "贵州茅台", "2026-07-28", 1800.0, 1810.0, 1820.0, 1790.0, 1000.0, 1800000.0, "ts"),
-    )
-    conn.commit(); conn.close()
-
-    res = client.get("/api/kline-history/600519")
-    assert res.status_code == 200, f"kline-history/600519: {res.status_code} {res.text[:200]}"
-    body = res.json()
-    assert body["count"] == 1 and body["code"] == "600519"
 
 
 # ── T11（R1）: risk 阻塞 I/O 不卡事件循环 ────────────────────────

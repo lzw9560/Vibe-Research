@@ -150,6 +150,8 @@ def test_r4_caller_stock_data_passes_raise_on_failure(monkeypatch):
                "hot_concepts", "announcements", "eastmoney_reports"):
         monkeypatch.setattr(astock, fn, _noop)
     monkeypatch.setattr("routers.stock_data._limitup_analysis_sync", lambda c: None)
+    from routers.stock_data import _DEEP_CACHE  # 防缓存污染下个 test（60s TTL）
+    _DEEP_CACHE.clear()
     result = asyncio.run(stock_deep("600519"))
     assert captured.get("raise_on_failure") is True
     assert result["data"]["blocks"]["boards"][0]["name"] == "白酒"
@@ -171,6 +173,8 @@ def test_r4_caller_stock_data_source_fail_returns_none(monkeypatch):
                "hot_concepts", "announcements", "eastmoney_reports"):
         monkeypatch.setattr(astock, fn, _noop)
     monkeypatch.setattr("routers.stock_data._limitup_analysis_sync", lambda c: None)
+    from routers.stock_data import _DEEP_CACHE  # 防缓存污染（test_passes 跑过同 code 60s TTL 缓存白酒数据）
+    _DEEP_CACHE.clear()
     result = asyncio.run(stock_deep("600519"))
     assert result["data"]["blocks"] is None
 
