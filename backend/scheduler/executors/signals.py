@@ -342,6 +342,9 @@ def _render_weekly_review(
     signals: dict[str, Any],
     paper_trends: list[dict] | None,
     arm_status: dict | None,
+    decay_stats: dict[str, Any] | None = None,
+    cap_up_ready: bool = False,
+    cap_down_triggered: bool = False,
 ) -> str:
     """渲染周度复盘人话报告。"""
     date = signals.get("date", "")
@@ -371,20 +374,27 @@ def _render_weekly_review(
         lines.append("  暂无 paper 交易记录")
     lines.append("")
 
-    # 2. Cap gate 状态（统一 reconciled definition）
+    # 2. Cap gate 状态（动态：runtime effective + cap_up_ready verdict，非硬编码 ×0.75）
     lines.append("【统一 cap 升降 gate】")
-    lines.append(f"  当前 cap ×{effective}（bull ×0.75 / bear ×0.5 / range ×0.5）")
+    lines.append(f"  当前 cap ×{effective}（runtime effective；registry bull=1.0 freeze-gated，bear/range=0.5）")
     lines.append("  升 ×1.0 须 ALL 满足：")
-    lines.append("    (a) bear 累积 120+ 天 cross-regime chrono 够 power")
-    lines.append("    (b) 60 天 re-check 衰减稳（decay 0.75→0.9）")
-    lines.append("    (c) lbc=3 积累 60 天")
-    lines.append("  → 当前全不满足，维持 ×0.75（bull）/ ×0.5（bear/range）")
+    ds = decay_stats or {}
+    lines.append(f"    (a) bear 累积 120+ 天 cross-regime chrono 够 power（当前 {ds.get('bear_days', 0)} 天）")
+    lines.append(f"    (b) 60 天 re-check 衰减稳（decay_stable={ds.get('decay_stable', False)}）")
+    lines.append(f"    (c) lbc=3 积累 60 天（当前 {ds.get('lbc3_days', 0)} 天，TODO 子查询占位）")
+    lines.append(f"  → cap_up_ready={cap_up_ready}（{'可升 ×1.0' if cap_up_ready else '维持当前 cap'}）")
     lines.append("")
 
-    # 3. Decay 监控
+    # 3. Decay 监控（动态：从 s203 chrono decay_stats，非硬编码 1.57→1.04）
     lines.append("【衰减监控】")
-    lines.append("  train 1.57% → test 1.04%，跌 34%（p=0.0054）")
-    lines.append("  若衰减续恶化（>34%）→ 自动生成 cap-down 提案（×0.5）交用户 review")
+    if ds and ds.get("train_mean") is not None:
+        tm = ds["train_mean"] * 100
+        te = (ds.get("test_mean") or 0) * 100
+        dp = ds.get("decay_pct", 0)
+        lines.append(f"  train {tm:.2f}% → test {te:.2f}%，跌 {dp:.1f}%（source={ds.get('source', '?')}）")
+    else:
+        lines.append(f"  decay 数据不足（source={ds.get('source', 'none')}），保守不判")
+    lines.append(f"  若衰减续恶化（>34%）→ 自动生成 cap-down 提案；当前 cap_down_triggered={cap_down_triggered}")
     lines.append("")
 
     # 4. Process-theater 自检
@@ -445,10 +455,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.warning("[S218] weekly_review TradeJournal 查询失败: %s", e)
 
-    # 3. 生成报告
-    review_text = _render_weekly_review(signals, paper_trends, arm_status)
-
-    # 4. 统一 cap gate 评估（S218 #2: 真衰减 stats 替硬编码）
+    # 3. 统一 cap gate 评估（S218 #2: 真衰减 stats 替硬编码）——移到 render 前，传 _render_weekly_review 动态用
     cap = signals.get("cap", {})
     effective = cap.get("effective", 1.0)
     from tools.signal_report import _compute_consecutive_relay_decay
@@ -459,6 +466,9 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
         lbc3_days=decay_stats["lbc3_days"],
     )
     cap_down_triggered = _evaluate_cap_down_trigger(decay_pct=decay_stats["decay_pct"])
+
+    # 4. 生成报告（传 decay_stats + cap_up_ready 动态渲染，非硬编码）
+    review_text = _render_weekly_review(signals, paper_trends, arm_status, decay_stats, cap_up_ready, cap_down_triggered)
 
     # 5. process-theater 自检：paper P&L mean<0 OR 衰减跨 negative → cap-down 提案
     #    S218 P0: 优先用实际 P&L（手动交易记录），没有才降级 paper P&L
