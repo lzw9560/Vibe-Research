@@ -134,6 +134,10 @@ def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = N
             breaker.record_success()
             return r
     except Exception:
+        # v2 P1-⑧：请求失败（direct/proxy 都失败，或已固定模式 mid-session 被 ban）→
+        # reset _em_mode='auto' 让下次重新探测（原永不 reset，direct 被 ban 后一直失败无 recovery）
+        with _em_mode_lock:
+            _em_mode[0] = "auto"
         breaker.record_failure()
         raise
     finally:

@@ -38,7 +38,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 | 文件 | 职责 | 关键函数/类 |
 |---|---|---|
-| `app.py` | FastAPI 入口；注册 27 个 router；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
+| `app.py` | FastAPI 入口；注册 46 个 router；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
 | `astock.py` | A股全栈数据层（五源分级） | `tencent_quote`、`em_get`（统一限流入口）、`eastmoney_reports`、`profit_forecast`、`kline`、`finance`、`full_valuation`、`valuation_percentile`、`em_zt_topic_pool`（涨停四池）、`dragon_tiger_board`、`margin_trading`、`block_trade`、`stock_fund_flow_120d`、`concept_blocks`… |
 | `gstock.py` | 美股/港股/韩股（东财合规子集） | `global_indices`、`resolve_symbol`、`us_hk_stock`、`_push2_stock_get`（push2→push2delay 降级） |
 | `newsradar.py` | 资讯雷达（108 RSS / 12 赛道） | `fetch_radar`、`get_radar(force)`；`ThreadPoolExecutor(40)`；原子写缓存 |
@@ -115,8 +115,8 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 ### 定时调度（`scheduled_tasks.py`）
 - CronScheduler：每 60s tick，5 段 cron 匹配，daemon 线程。
-- SQLite 持久化（`backend/data/market_data.db`）：`scheduled_tasks` + `scheduled_task_runs`。
-- TaskExecutor 内置 10 种任务：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs` / `derived_precompute`（S084 盘后 derived 异步预采集）/ `monthly_vacuum`（S089 月度 VACUUM+wal_checkpoint）/ `kline_refresh`（S090 baostock kline 日更，S184 数据就绪预检 17:00+ 当日 bar + cron 17:15）/ `daily_ai_summary`（S093 AI 盘后总结 stub，cron 15:30，S094 完整实现）。S093：`candidate_funnel_precompute` success 后调 `NotificationService.send()` 发飞书富内容卡片（前瞻选股结果）。
+- SQLite 持久化（`VR_DATA_DIR`/market_data.db，实际 `.vibe-research/market_data.db`）：`scheduled_tasks` + `scheduled_task_runs`。
+- TaskExecutor 内置 53 种任务（`scheduler/executors/__init__.py` `_executors` 注册表，含但不止）：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs` / `derived_precompute`（S084 盘后 derived 异步预采集）/ `monthly_vacuum`（S089 月度 VACUUM+wal_checkpoint）/ `kline_refresh`（S090 baostock kline 日更，S184 数据就绪预检 17:00+ 当日 bar + cron 17:15）/ `daily_ai_summary`（S093 AI 盘后总结 stub，cron 15:30，S094 完整实现）。S093：`candidate_funnel_precompute` success 后调 `NotificationService.send()` 发飞书富内容卡片（前瞻选股结果）。
 - S175/S183 模拟盘自洽：`JournalRecorder`（trade_journal.db）多臂（floor ETF/breakout/trend）+ `PaperPortfolio` equity 落盘 + `bars_provider` A 股 baostock fallback（cache miss 实时拉，S184 commit 0ac0779）+ `signal_id` 确定性 `arm_date_code`（重跑幂等，S183 commit c3e7130）+ `_wilson_ci` n=0 返 (0,1) 宽带诚实暴露（S183）+ 回补脚本 `tools/backfill_trade_journal.py`（历史日期 _process_* 快速验证）。
 - `app.py` 启动时 `_st.start_scheduler()`；另 `portfolio.py` 起 `start_scheduler(1800)`（持仓刷新，原 scheduler.py 已删，S031 R12）。
 
@@ -150,7 +150,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 ### 数据目录
 - `VR_DATA_DIR`（默认 `~/.vibe-research/`）：持仓 + 研报，**用户私有、绝不进仓、不上传**——重装项目不丢。
 - `VR_REPORTS_DIR`（默认 `VR_DATA_DIR/myreports`）：研报文件。
-- `backend/data/`：`market_data.db`（定时任务）、`winrate.db`（胜率）、`fallback/`。
+- `.vibe-research/`（`VR_DATA_DIR`，gitignored 重装不丢）：`market_data.db`（行情+定时任务）+ `trade_journal.db`（交易日志）+ `zt_history.db`（涨停历史）+ `winrate.db`（胜率）+ `gene_scores.db`（基因评分）+ `circuit_breaker_state.db`（熔断器）等。
 - `backend/.cache/radar.json`：资讯雷达缓存。
 
 ---
