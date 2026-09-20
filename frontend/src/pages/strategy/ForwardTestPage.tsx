@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ForwardTestPanel } from "@/components/workflow/ForwardTestPanel";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 
 export default function ForwardTestPage() {
   return (
@@ -19,6 +20,7 @@ export default function ForwardTestPage() {
         subtitle="每日推荐 vs 实际表现 · §44 60 日复验窗口"
       />
       <ForwardTestPanel />
+      <NextStepBar pageCtx="strategy/funnel/forward-test" />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NavGroup } from "./navigation";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
@@ -11,8 +11,9 @@ import { NAV_GROUPS, APP_VERSION, REPO_URL } from "./navigation";
 
 // Phase 2（2026-09-21）：5 线 collapsible 子组嵌套（活跃线自动展开 + 用户 toggle + localStorage 记忆）
 // 代替 Phase 1 扁平——专业 IA：hub 1 跳直达 + 子组折叠（非全平铺）
+// 前缀匹配：精确 === 优先，其次 p+"/" 子路径 + p+"?" 查询；不用裸 startsWith(p)（会误匹配 /database→/data）
 const isPathActive = (pathname: string, prefixes: string[]) =>
-  prefixes.some(p => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p + "?") || pathname.startsWith(p));
+  prefixes.some(p => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p + "?"));
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -22,9 +23,16 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // 活跃线自动展开（matchPrefix 命中）+ 用户手动 toggle + localStorage 记忆
+  // try-catch + Array.isArray：防 localStorage 损坏/非数组 JSON 致白屏
   const [expandedLines, setExpandedLines] = useState<Set<string>>(() => {
     const saved = localStorage.getItem("vr-nav-expanded");
-    const s = saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+    let s: Set<string>;
+    try {
+      const parsed = saved ? JSON.parse(saved) : [];
+      s = new Set<string>(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      s = new Set<string>();
+    }
     NAV_GROUPS.forEach(g => {
       if (isPathActive(pathname, g.matchPrefix)) s.add(g.name);
     });
@@ -39,9 +47,26 @@ export function Layout() {
     localStorage.setItem("vr-nav-expanded", JSON.stringify([...expandedLines]));
   }, [expandedLines]);
 
+  // 活跃线随导航自动展开（不只首次挂载——useState 初始化只跑一次，导航后须 effect 追）
+  useEffect(() => {
+    setExpandedLines(prev => {
+      const next = new Set(prev);
+      NAV_GROUPS.forEach(g => {
+        if (isPathActive(pathname, g.matchPrefix)) next.add(g.name);
+      });
+      return next;
+    });
+  }, [pathname]);
+
   useEffect(() => {
     document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
+  }, [mobileMenuOpen]);
+
+  // 移动 drawer 打开时焦点进入（a11y：屏幕阅读器用户知道 dialog 出现）
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (mobileMenuOpen) dialogRef.current?.focus();
   }, [mobileMenuOpen]);
 
   const isTabActive = (to: string) =>
@@ -97,12 +122,13 @@ export function Layout() {
             className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
             aria-label={expanded ? `收起 ${group.name}` : `展开 ${group.name}`}
             aria-expanded={expanded}
+            aria-controls={`line-${group.name}`}
           >
             <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} aria-hidden="true" />
           </button>
         </div>
         {expanded && (
-          <div className="ml-3 space-y-1 border-l border-border/30 pl-2">
+          <div id={`line-${group.name}`} className="ml-3 space-y-1 border-l border-border/30 pl-2">
             {group.subGroups.map(sg => (
               <div key={sg.name} className="space-y-0.5">
                 <p className="px-3 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">{sg.name}</p>
@@ -127,7 +153,7 @@ export function Layout() {
     <div className="flex h-screen">
       {/* Sidebar - 桌面可见，移动端隐藏 */}
       <aside className={cn(
-        "glass z-10 m-2 hidden shrink-0 flex-col rounded-2xl transition-all duration-200 md:flex",
+        "glass relative z-10 m-2 hidden shrink-0 flex-col rounded-2xl transition-all duration-200 md:flex",
         collapsed ? "w-14" : "w-56",
       )}>
         {/* Brand */}
@@ -162,9 +188,15 @@ export function Layout() {
                   >
                     <Icon className="h-4 w-4" aria-hidden="true" />
                   </Link>
-                  {/* hover/focus 弹 flyout（桌面 collapsed 模式专有） */}
-                  <div className="invisible absolute left-full top-0 z-50 ml-2 w-56 rounded-lg border border-border/60 bg-popover/95 p-2 opacity-0 shadow-xl backdrop-blur transition-opacity group-hover/fly:visible group-hover/fly:opacity-100 group-focus-within/fly:visible group-focus-within/fly:opacity-100">
-                    <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">{group.name}</p>
+                  {/* hover/focus 弹 flyout（桌面 collapsed 模式专有；max-h 防低视窗溢出） */}
+                  <div
+                    role="group"
+                    aria-label={`${group.name} 子组`}
+                    className="invisible absolute left-full top-0 z-50 ml-2 max-h-[calc(100vh-2rem)] w-56 overflow-auto rounded-lg border border-border/60 bg-popover/95 p-2 opacity-0 shadow-xl backdrop-blur transition-opacity group-hover/fly:visible group-hover/fly:opacity-100 group-focus-within/fly:visible group-focus-within/fly:opacity-100"
+                  >
+                    <Link to={group.hub.to} onClick={() => setMobileMenuOpen(false)} className="block px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 hover:text-foreground">
+                      {group.name}
+                    </Link>
                     {group.subGroups.map(sg => (
                       <div key={sg.name} className="space-y-0.5">
                         <p className="px-2 py-0.5 text-xs text-muted-foreground/60">{sg.name}</p>
@@ -257,7 +289,15 @@ export function Layout() {
               onClick={() => setMobileMenuOpen(false)}
               aria-hidden="true"
             />
-            <div className="fixed inset-y-0 left-0 z-50 w-64 glass md:hidden" role="dialog" aria-modal="true" aria-label="导航菜单">
+            <div
+              ref={dialogRef}
+              className="fixed inset-y-0 left-0 z-50 w-64 glass md:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="导航菜单"
+              tabIndex={-1}
+              onKeyDown={(e) => { if (e.key === "Escape") setMobileMenuOpen(false); }}
+            >
               <div className="flex h-full flex-col">
                 <div className="border-b border-border/50 p-4">
                   <Link to="/today" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">

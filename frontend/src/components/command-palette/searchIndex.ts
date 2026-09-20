@@ -1,5 +1,5 @@
 // S179 P0.2: 命令面板搜索索引——路由名 + 股票代码(stub) + 预设信号 + 模糊匹配。
-// 路由索引从 navigation.ts NAV_GROUPS 提取（fresh grep 确认 5 组 35 tabs）。
+// 路由索引从 navigation.ts NAV_GROUPS 提取（6 组含系统 35 tabs）。
 // 股票代码为前端 stub（15 支知名 A 股），完整 ~5300 代码表数据源待核实（见 notes）。
 
 import { NAV_GROUPS } from "@/components/layout/navigation";
@@ -91,6 +91,8 @@ const RESEARCH_PRESETS: { name: string; path: string; aliases: string[] }[] = [
   { name: "图谱", path: "/graph", aliases: ["图谱", "认知", "M7", "graph", "公告"] },
   { name: "数据", path: "/data", aliases: ["数据", "数据层", "采集", "data", "backfill"] },
   { name: "财报季", path: "/earnings-calendar", aliases: ["财报季", "财报日历", "雷区", "披露", "earnings", "M5"] },
+  { name: "前向测试", path: "/strategy/funnel/forward-test", aliases: ["前向测试", "forward-test", "回测", "策略验证"] },
+  { name: "策略调参", path: "/strategy/funnel/config", aliases: ["调参", "阈值", "config", "策略配置"] },
 ];
 
 const RESEARCH_INDEX: SearchItem[] = RESEARCH_PRESETS.map((s) => ({

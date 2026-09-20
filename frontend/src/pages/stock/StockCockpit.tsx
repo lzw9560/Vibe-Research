@@ -10,6 +10,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { ErrorState, PageSkeleton } from "@/components/ui/State";
 import { KLineChart } from "@/components/charts/KLineChart";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 import { StrategySignalsView } from "@/components/stock/StrategySignalsView";
 import { NewsPanel } from "@/components/stock/NewsPanel";
 import { FinancialsPanel } from "@/components/stock/FinancialsPanel";
@@ -458,6 +459,7 @@ function StockCockpitContent({ code }: { code: string }) {
           maxLeft={1280}
         />
       </div>
+      <NextStepBar pageCtx="stock" />
     </div>
   );
 }

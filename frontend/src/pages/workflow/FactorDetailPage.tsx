@@ -6,6 +6,7 @@ import { ChevronRight, ArrowLeft, Info } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Badge } from "@/components/ui/Badge";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 
 // 因子全景表（来自 factor-catalog.md，74 条因子精选 P0/P1）
 interface FactorEntry {
@@ -181,6 +182,7 @@ export function FactorDetailPage() {
           </Link>
         </GlassCard>
       )}
+      <NextStepBar pageCtx="workflow/factor" />
     </div>
   );
 }

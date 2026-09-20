@@ -57,11 +57,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: "市场全景", tabs: [
         { to: "/market", label: "市场全景" },
         { to: "/intraday", label: "盘中 cockpit" },
+        { to: "/stock-data", label: "个股数据" },
       ]},
       { name: "选股·漏斗", tabs: [
         { to: "/screener", label: "选股器" },
         { to: "/candidates", label: "候选池" },
         { to: "/value-funnel", label: "选股漏斗" },
+        { to: "/recommendation", label: "今日建议" },
       ]},
       { name: "自选·竞价", tabs: [
         { to: "/watchlist", label: "自选股" },
@@ -70,11 +72,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: "打板", tabs: [
         { to: "/limitup", label: "打板策略" },
         { to: "/limitup/premarket", label: "盘前选股" },
-        { to: "/recommendation", label: "今日建议" },
       ]},
       { name: "资讯", tabs: [
         { to: "/intel", label: "资讯雷达" },
-        { to: "/stock-data", label: "股票数据" },
       ]},
     ],
     matchPrefix: ["/workspace", "/market", "/intraday", "/screener", "/candidates", "/value-funnel", "/watchlist", "/bidding", "/limitup", "/recommendation", "/intel", "/stock-data", "/stock/", "/sectors/"],

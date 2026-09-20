@@ -53,7 +53,7 @@ const PAGE_STEPS: Record<string, NextStep[]> = {
   ],
   screener: [
     { label: "候选池", to: "/candidates", reason: "漏斗→候选", primary: true },
-    { label: "自选股", to: "/watchlist", reason: "加入自选" },
+    { label: "自选股", to: "/watchlist", reason: "查看自选股" },
   ],
   strategy: [
     { label: "验证", to: "/review?tab=validation", reason: "策略→§44 验证", primary: true },

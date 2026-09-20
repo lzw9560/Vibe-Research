@@ -5,6 +5,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 import { useBreadcrumbs } from "@/components/ui/BreadcrumbContext";
 import { ArrowLeft, Plus, Wrench } from "lucide-react";
 import sectorsData from "@/data/sectors.json";
@@ -82,6 +83,7 @@ export function SectorDetail() {
       )}
 
       <Disclaimer />
+      <NextStepBar pageCtx="sectors" />
     </div>
   );
 }

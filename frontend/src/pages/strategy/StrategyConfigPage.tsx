@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ThresholdPanel } from "@/components/candidate/ThresholdPanel";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 
 export default function StrategyConfigPage() {
   return (
@@ -19,6 +20,7 @@ export default function StrategyConfigPage() {
         subtitle="auto/suggest/manual 三模式 · S081 阈值 + funnel config"
       />
       <ThresholdPanel />
+      <NextStepBar pageCtx="strategy/funnel/config" />
     </div>
   );
 }

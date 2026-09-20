@@ -11,6 +11,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { WorkflowStateCard } from "@/components/workflow/WorkflowStateCard";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 
 /** 问 AI 上下文——注入候选诊断卡真实数据 */
 function buildCandidateContext(card: DiagnosisCard | null, code: string): string {
@@ -44,6 +45,7 @@ export default function CandidateDetail() {
         <ArrowLeft className="h-4 w-4" /> 返回
       </button>
       <CandidateDetailPanel code={code} date={date} />
+      <NextStepBar pageCtx="workflow/candidates" />
     </div>
   );
 }
