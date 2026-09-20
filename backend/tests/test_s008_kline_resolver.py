@@ -133,3 +133,90 @@ def test_adjust_with_sources_subset(monkeypatch):
     assert src == "akshare"
     bars, src = kr.fetch_kline("600519", sources=["sina"], adjust="qfq")
     assert src is None   # sina 是 none 口径，不在 qfq 筛选内
+
+
+# ── S220 P0-2 follow-up: _akshare feed eastmoney breaker（防封底线 §1.2）─────
+# 根因：ak.stock_zh_a_hist 裸连东财 push2his 不走 em_get，失败不 feed breaker
+# → breaker 永不 OPEN → :66 guard 永不触发 → 每只股都裸发东财请求加剧封禁
+# （日志 2026-09-20 akshare failed RemoteDisconnected 每只股一次）。修：exception-only
+# 契约对齐 sina.fetch_raw R7——失败 record_failure + re-raise，返 df record_success。
+
+import pytest  # noqa: E402
+
+
+class _FakeBreaker:
+    """镜像 test_s134_sina_breaker._FakeBreaker：记 success/failure 计数。"""
+
+    def __init__(self, allow: bool = True):
+        self._allow = allow
+        self.failures = 0
+        self.successes = 0
+
+    def allow_request(self) -> bool:
+        return self._allow
+
+    def record_success(self) -> None:
+        self.successes += 1
+
+    def record_failure(self) -> None:
+        self.failures += 1
+
+
+def test_akshare_failure_feeds_eastmoney_breaker(monkeypatch):
+    """_akshare 网络异常 → record_failure + re-raise（exception-only，对齐 sina R7）。
+
+    breaker 累积失败 5 次 OPEN 后 guard skip 不发请求——防裸连加剧封禁。
+    """
+    breaker = _FakeBreaker()
+    monkeypatch.setattr("circuit_breaker.get_breaker", lambda name: breaker)
+
+    class _FakeAk:
+        def stock_zh_a_hist(self, **kw):
+            raise ConnectionError("RemoteDisconnected")
+
+    monkeypatch.setattr("data.sources.akshare_src._akshare", lambda: _FakeAk())
+    with pytest.raises(ConnectionError):
+        kr._akshare("600519")
+    assert breaker.failures == 1
+    assert breaker.successes == 0
+
+
+def test_akshare_success_records_breaker_success(monkeypatch):
+    """_akshare 返空 df（东财响应无数据）→ record_success 重置 failure_count。
+
+    exception-only 契约：空 df 不是异常（东财 HTTP 200 响应了），算成功。
+    """
+    import pandas as pd  # noqa: PLC0415 — 测试 stub
+    breaker = _FakeBreaker()
+    monkeypatch.setattr("circuit_breaker.get_breaker", lambda name: breaker)
+
+    class _FakeAk:
+        def stock_zh_a_hist(self, **kw):
+            return pd.DataFrame()
+
+    monkeypatch.setattr("data.sources.akshare_src._akshare", lambda: _FakeAk())
+    bars = kr._akshare("600519")
+    assert bars == []
+    assert breaker.successes == 1
+    assert breaker.failures == 0
+
+
+def test_akshare_breaker_open_skips_no_request(monkeypatch):
+    """breaker OPEN → _akshare guard skip 返空，**不**调 stock_zh_a_hist（防封）。
+
+    guard 拦截在 stock_zh_a_hist 之前，不发东财请求——这是 feed breaker 的收益：
+    5 次失败 OPEN 后后续全 skip，不裸连。
+    """
+    breaker = _FakeBreaker(allow=False)
+    monkeypatch.setattr("circuit_breaker.get_breaker", lambda name: breaker)
+    called = []
+
+    class _FakeAk:
+        def stock_zh_a_hist(self, **kw):
+            called.append("should_not_call")
+            raise AssertionError("breaker OPEN 不应发 stock_zh_a_hist 请求")
+
+    monkeypatch.setattr("data.sources.akshare_src._akshare", lambda: _FakeAk())
+    bars = kr._akshare("600519")
+    assert bars == []
+    assert called == []

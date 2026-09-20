@@ -58,29 +58,42 @@ def _mootdx(code: str) -> list[dict]:
 def _akshare(code: str) -> list[dict]:
     """akshare stock_zh_a_hist（东财 push2his，多数公司网被封，链尾兜底）。
 
-    v2 审查 P0-2 follow-up：加 eastmoney breaker 守卫——熔断时返空跳过，
-    防裸调 akshare 触发/加剧东财封禁（RemoteDisconnected 根因）。
-    全迁移 em_get 重写 stock_zh_a_hist 解析 TODO 后续（YAGNI，baostock 回退兜底够）。
+    防封工程底线（§1.2）：akshare 裸连东财 push2his **不走 em_get**，须 feed
+    eastmoney breaker——失败 record_failure 累积 5 次 OPEN 后 :66 guard skip
+    不发请求，防每只股都裸发东财请求加剧封禁（RemoteDisconnected 根因：日志
+    2026-09-20 每只股 akshare failed = 每只股裸发一次东财请求）。exception-only
+    契约对齐 sina.fetch_raw R7：网络异常 record_failure + re-raise；返 df（含空）
+    record_success。全迁移 em_get 重写 stock_zh_a_hist 解析 TODO 后续（feed
+    breaker 已堵防封漏洞，重写为复用 em_get timeout/代理而非防封——YAGNI 暂缓）。
     """
     from circuit_breaker import get_breaker
-    if not get_breaker("eastmoney").allow_request():
+    breaker = get_breaker("eastmoney")
+    if not breaker.allow_request():
         log.info("kline _akshare(%s) skipped—eastmoney breaker OPEN", code)
         return []  # 熔断中不裸调 akshare 防雪崩，链回退 mootdx/baostock
     from data.sources.akshare_src import _akshare
     ak = _akshare()
-    df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
+    try:
+        df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
+    except Exception:
+        # akshare 裸连东财不走 em_get，失败须 feed breaker——否则 breaker 永不
+        # OPEN、guard 永不触发，每只股都裸发东财请求加剧封禁。
+        breaker.record_failure()
+        raise
+    breaker.record_success()  # 东财响应（含空 df）= 可达，重置 failure_count
     bars: list[dict] = []
-    for _, r in df.iterrows():
-        vol = r.get("成交量")
-        amt = r.get("成交额")
-        bars.append({
-            "date": str(r["日期"]),
-            "open": float(r["开盘"]), "close": float(r["收盘"]),
-            "high": float(r["最高"]), "low": float(r["最低"]),
-            "volume": int(vol) if pd_notna(vol) else None,
-            "amount": float(amt) if pd_notna(amt) else None,
-            "ma5": None, "ma10": None, "ma20": None,
-        })
+    if df is not None and not df.empty:
+        for _, r in df.iterrows():
+            vol = r.get("成交量")
+            amt = r.get("成交额")
+            bars.append({
+                "date": str(r["日期"]),
+                "open": float(r["开盘"]), "close": float(r["收盘"]),
+                "high": float(r["最高"]), "low": float(r["最低"]),
+                "volume": int(vol) if pd_notna(vol) else None,
+                "amount": float(amt) if pd_notna(amt) else None,
+                "ma5": None, "ma10": None, "ma20": None,
+            })
     return bars
 
 
