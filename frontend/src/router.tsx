@@ -4,12 +4,9 @@
 import { createBrowserRouter, Navigate, Link } from "react-router-dom";
 import { lazy, Suspense, type ComponentType } from "react";
 import { Layout } from "@/components/layout/Layout";
+import { PageSkeleton } from "@/components/ui/State";
 
-const PageFallback = (
-  <div className="flex h-[60vh] items-center justify-center text-sm text-muted-foreground">
-    加载中…
-  </div>
-);
+const PageFallback = <PageSkeleton />;
 
 /** named export：传 name；default export：省略 name（取 m.default）。 */
 function lazyEl<T extends ComponentType<any>>(
@@ -36,7 +33,7 @@ function redirect(to: string) {
 function NotFound() {
   return (
     <div className="flex h-[60vh] flex-col items-center justify-center gap-2 text-center">
-      <div className="text-2xl font-semibold text-gray-700">404 · 页面不存在 Not Found</div>
+      <div className="text-2xl font-semibold text-foreground">404 · 页面不存在 Not Found</div>
       <div className="text-sm text-muted-foreground">路由已迁移或不存在，回首页继续</div>
     <Link to="/today" className="text-primary underline">回首页 /today</Link>
     </div>

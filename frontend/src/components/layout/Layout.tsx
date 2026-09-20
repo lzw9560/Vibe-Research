@@ -11,22 +11,31 @@ import { NAV_GROUPS, APP_VERSION, REPO_URL } from "./navigation";
 
 // Phase 2（2026-09-21）：5 线 collapsible 子组嵌套（活跃线自动展开 + 用户 toggle + localStorage 记忆）
 // 代替 Phase 1 扁平——专业 IA：hub 1 跳直达 + 子组折叠（非全平铺）
-// 前缀匹配：精确 === 优先，其次 p+"/" 子路径 + p+"?" 查询；不用裸 startsWith(p)（会误匹配 /database→/data）
+// 前缀匹配：精确 === 优先，其次 p+"/" 子路径；不用裸 startsWith(p)（会误匹配 /database→/data）
 // matchPrefix 前缀不带尾 /（/stock 非 /stock/）——详情页 /stock/:code 靠 startsWith("/stock"+"/")=startsWith("/stock/") 匹配
+// pathname 不含查询串（React Router useLocation().pathname 排除 ?），故无 p+"?" 条件（原为死代码）
 export const isPathActive = (pathname: string, prefixes: string[]) =>
-  prefixes.some(p => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p + "?"));
+  prefixes.some(p => pathname === p || pathname.startsWith(p + "/"));
+
+// localStorage 安全访问：Safari 无痕/配额超限/禁用 cookie 时 getItem/setItem 抛异常致白屏，包 try-catch
+const safeGetItem = (key: string): string | null => {
+  try { return localStorage.getItem(key); } catch { return null; }
+};
+const safeSetItem = (key: string, val: string): void => {
+  try { localStorage.setItem(key, val); } catch { /* 配额/隐私模式，静默忽略 */ }
+};
 
 export function Layout() {
   const { pathname } = useLocation();
   const { theme, setTheme } = useTheme();
   const dark = theme === "dark";
   const toggle = () => setTheme(dark ? "light" : "dark");
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
+  const [collapsed, setCollapsed] = useState(() => safeGetItem("vr-sidebar") === "collapsed");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // 活跃线自动展开（matchPrefix 命中）+ 用户手动 toggle + localStorage 记忆
   // try-catch + Array.isArray：防 localStorage 损坏/非数组 JSON 致白屏
   const [expandedLines, setExpandedLines] = useState<Set<string>>(() => {
-    const saved = localStorage.getItem("vr-nav-expanded");
+    const saved = safeGetItem("vr-nav-expanded");
     let s: Set<string>;
     try {
       const parsed = saved ? JSON.parse(saved) : [];
@@ -41,11 +50,11 @@ export function Layout() {
   });
 
   useEffect(() => {
-    localStorage.setItem("vr-sidebar", collapsed ? "collapsed" : "expanded");
+    safeSetItem("vr-sidebar", collapsed ? "collapsed" : "expanded");
   }, [collapsed]);
 
   useEffect(() => {
-    localStorage.setItem("vr-nav-expanded", JSON.stringify([...expandedLines]));
+    safeSetItem("vr-nav-expanded", JSON.stringify([...expandedLines]));
   }, [expandedLines]);
 
   // 活跃线随导航自动展开（不只首次挂载——useState 初始化只跑一次，导航后须 effect 追）

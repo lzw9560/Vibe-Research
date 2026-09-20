@@ -104,7 +104,7 @@ export const NAV_GROUPS: NavGroup[] = [
         { to: "/tracking", label: "多日跟踪" },
       ]},
     ],
-    matchPrefix: ["/review", "/ledger", "/journal", "/portfolio", "/strategy", "/multiline", "/fusion", "/risk", "/advisory", "/topology", "/industry", "/tracking", "/workflow/candidates", "/workflow/factor", "/strategy/funnel"],
+    matchPrefix: ["/review", "/ledger", "/journal", "/portfolio", "/strategy", "/multiline", "/fusion", "/risk", "/advisory", "/topology", "/industry", "/tracking", "/workflow/candidates", "/workflow/factor"],
   },
   {
     name: "图谱",

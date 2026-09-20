@@ -35,10 +35,6 @@ describe("isPathActive", () => {
     expect(isPathActive("/workspace", panMian)).toBe(true);
   });
 
-  it("matches query param variant p+'?'", () => {
-    expect(isPathActive("/workspace?phase=intraday", panMian)).toBe(true);
-  });
-
   it("does not match unrelated path", () => {
     expect(isPathActive("/settings", panMian)).toBe(false);
   });
