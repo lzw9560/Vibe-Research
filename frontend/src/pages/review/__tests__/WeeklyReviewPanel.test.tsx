@@ -76,11 +76,13 @@ function setupEmpty() {
     isError: false,
     error: null,
   });
+  hooks.useWeeklyReview.mockReturnValue({ data: { status: "no_reports" } });
 }
 
 function setupLoading() {
   hooks.useSignalsManualTrades.mockReturnValue({ data: undefined, isLoading: true, isError: false, error: null });
   hooks.useSignalsStatus.mockReturnValue({ data: undefined, isLoading: true, isError: false, error: null });
+  hooks.useWeeklyReview.mockReturnValue({ data: undefined, isLoading: true, isError: false, error: null });
 }
 
 describe("WeeklyReviewPanel (S221 gap2)", () => {
@@ -108,7 +110,7 @@ describe("WeeklyReviewPanel (S221 gap2)", () => {
     render(<WeeklyReviewPanel />);
     // cap-down 提案（mean=-1.0% < 0）
     expect(screen.getByText(/cap-down 提案/)).toBeInTheDocument();
-    expect(screen.getByText(/前端推算/)).toBeInTheDocument();
+    expect(screen.getByText(/来源：前端推算/)).toBeInTheDocument();
   });
 
   it("有 closed trades mean>0 → 无 cap-down 提案，显示 P&L 趋势", () => {
