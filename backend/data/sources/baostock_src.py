@@ -170,21 +170,22 @@ def fetch_bars(
     bc = _to_bs_code(code)
     field_names = fields.split(",")
     bars: list[dict[str, Any]] = []
-    try:
-        rs = bs.query_history_k_data_plus(
-            bc, fields,
-            start_date=start, end_date=end,
-            frequency=frequency, adjustflag=adjustflag,
-        )
-        while rs.error_code == "0" and rs.next():
-            row = rs.get_row_data()
-            try:
-                bars.append(_parse_row(field_names, row))
-            except (ValueError, IndexError):
-                continue
-    except Exception as e:  # noqa: BLE001
-        logger.warning("[baostock] fetch_bars %s %s~%s 失败: %s", code, start, end, e)
-        return []
+    with _BS_LOCK:  # 串行 query（baostock 进程全局非线程安全，对齐 fetch_5min_bars:109）
+        try:
+            rs = bs.query_history_k_data_plus(
+                bc, fields,
+                start_date=start, end_date=end,
+                frequency=frequency, adjustflag=adjustflag,
+            )
+            while rs.error_code == "0" and rs.next():
+                row = rs.get_row_data()
+                try:
+                    bars.append(_parse_row(field_names, row))
+                except (ValueError, IndexError):
+                    continue
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[baostock] fetch_bars %s %s~%s 失败: %s", code, start, end, e)
+            return []
     return bars
 
 

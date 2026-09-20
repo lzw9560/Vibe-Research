@@ -55,45 +55,35 @@ def _mootdx(code: str) -> list[dict]:
     return kline(code)
 
 
-def _akshare(code: str) -> list[dict]:
-    """akshare stock_zh_a_hist（东财 push2his，多数公司网被封，链尾兜底）。
+def _baostock(code: str) -> list[dict]:
+    """baostock 日K（qfq 前复权，无 IP 限制免防封，本环境唯一可靠源）。
 
-    防封工程底线（§1.2）：akshare 裸连东财 push2his **不走 em_get**，须 feed
-    eastmoney breaker——失败 record_failure 累积 5 次 OPEN 后 :66 guard skip
-    不发请求，防每只股都裸发东财请求加剧封禁（RemoteDisconnected 根因：日志
-    2026-09-20 每只股 akshare failed = 每只股裸发一次东财请求）。exception-only
-    契约对齐 sina.fetch_raw R7：网络异常 record_failure + re-raise；返 df（含空）
-    record_success。全迁移 em_get 重写 stock_zh_a_hist 解析 TODO 后续（feed
-    breaker 已堵防封漏洞，重写为复用 em_get timeout/代理而非防封——YAGNI 暂缓）。
+    2026-09-20：本环境 baidu/sina/mootdx 返空 + akshare 东财封禁，baostock 是唯一
+    能拿到数据的源（日志 mootdx 空→baostock 回退 60 bars 证实）。作 kline 链源，
+    fetch_kline 并发直接拿 baostock bars，不再经 astock mootdx_src 二次 baostock
+    回退（消除双重调用 + akshare log 噪音 + 东财封禁风险）。singleton login
+    （baostock_src.ensure_login 进程级 + _BS_LOCK 串行 query 防线程竞争），
+    adjustflag=2 qfq，返最近 60 交易日 bars（start=now-120 天容纳周末）。
     """
-    from circuit_breaker import get_breaker
-    breaker = get_breaker("eastmoney")
-    if not breaker.allow_request():
-        log.info("kline _akshare(%s) skipped—eastmoney breaker OPEN", code)
-        return []  # 熔断中不裸调 akshare 防雪崩，链回退 mootdx/baostock
-    from data.sources.akshare_src import _akshare
-    ak = _akshare()
-    try:
-        df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
-    except Exception:
-        # akshare 裸连东财不走 em_get，失败须 feed breaker——否则 breaker 永不
-        # OPEN、guard 永不触发，每只股都裸发东财请求加剧封禁。
-        breaker.record_failure()
-        raise
-    breaker.record_success()  # 东财响应（含空 df）= 可达，重置 failure_count
+    from datetime import datetime, timedelta
+    from data.sources.baostock_src import fetch_daily_bars
+    end = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d")  # 120 天容纳周末取 60 交易日
+    bars_raw = fetch_daily_bars(code, start, end)
+    if not bars_raw:
+        return []
     bars: list[dict] = []
-    if df is not None and not df.empty:
-        for _, r in df.iterrows():
-            vol = r.get("成交量")
-            amt = r.get("成交额")
-            bars.append({
-                "date": str(r["日期"]),
-                "open": float(r["开盘"]), "close": float(r["收盘"]),
-                "high": float(r["最高"]), "low": float(r["最低"]),
-                "volume": int(vol) if pd_notna(vol) else None,
-                "amount": float(amt) if pd_notna(amt) else None,
-                "ma5": None, "ma10": None, "ma20": None,
-            })
+    for r in bars_raw[-60:]:
+        vol = r.get("volume")
+        amt = r.get("amount")
+        bars.append({
+            "date": r.get("date"),
+            "open": r.get("open"), "close": r.get("close"),
+            "high": r.get("high"), "low": r.get("low"),
+            "volume": int(vol) if vol else None,
+            "amount": float(amt) if amt else None,
+            "ma5": None, "ma10": None, "ma20": None,
+        })
     return bars
 
 
@@ -106,10 +96,12 @@ def pd_notna(v) -> bool:
         return v is not None
 
 
-# 源链注册表（策略集，按名字）。顺序：独立不封 IP 源在前，东财 push2his 兜底。
+# 源链注册表（策略集，按名字）。顺序：独立不封 IP 源在前，baostock 兜底（本环境唯一可靠）。
 # 按名查找（非绑函数引用）——可测试、可热替换：monkeypatch ``_<name>`` 即生效。
 # 增删源：写 ``_<name>(code)`` 函数 + 在此表加/删名字，消费者零变更。
-_SOURCES: list[str] = ["baidu", "sina", "mootdx", "akshare"]
+# 2026-09-20：摘 akshare（东财封禁永远失败，feed breaker 仍 log 噪音 + HALF_OPEN 间歇失败），
+# 加 baostock（本环境唯一可用源，无 IP 限制免防封，qfq 前复权）。
+_SOURCES: list[str] = ["baidu", "sina", "mootdx", "baostock"]
 
 # 各源原生复权口径（单一事实源）。消费者传 ``adjust="qfq"`` 时只走口径匹配的源——
 # 不回退到 raw 源（混用污染收益），不臆造复权因子重算（无除权日历则不可重算）。
@@ -121,7 +113,7 @@ _SOURCE_ADJUST: dict[str, str] = {
     "baidu": "qfq",
     "sina": "none",
     "mootdx": "none",
-    "akshare": "qfq",
+    "baostock": "qfq",
 }
 
 

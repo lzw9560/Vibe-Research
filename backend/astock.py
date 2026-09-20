@@ -190,7 +190,7 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
     """K线：category 1=5min / 15=15min / 30=30min / 11=60min / 4=日 / 5=周 / 6=月。
 
     分钟K（1/15/30/11）: baostock 5min bars 聚合成对应周期（_aggregate_5min_to_period）。
-    日/周/月K（4/5/6）: kline_multi 并发多源（baidu→sina→mootdx→akshare）+ resample。
+    日/周/月K（4/5/6）: kline_multi 并发多源（baidu→sina→mootdx→baostock）+ resample。
     """
     from data.sources.mootdx_src import kline as _mootdx_kline
     # 分钟K（category 1=5min / 15=15min / 30=30min / 11=60min）: baostock 5min 聚合——独立分支，不走日K kline_multi
