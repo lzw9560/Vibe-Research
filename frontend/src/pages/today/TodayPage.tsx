@@ -17,7 +17,7 @@ import { useIndices, useDateTriplet, useDailyWinReview, useBombAlerts, useSchedu
 import { useEvaluationSummary } from "@/lib/query/strategy";
 import { useStrategyBacktest } from "@/lib/query/strategy";
 import { apiWatchlist } from "@/lib/watchlist";
-import { useLiveQuotes } from "@/hooks/useLiveQuotes";
+import { useLiveQuotes, isTradingHours } from "@/hooks/useLiveQuotes";
 import type { DimensionValidation } from "@/lib/candidates";
 import { SevenLineStatus } from "@/components/lines/SevenLineStatus";
 import { LineLoopCard } from "@/components/lines/LineLoopCard";
@@ -70,7 +70,9 @@ export function TodayPage() {
   const { focusDate } = useFocusDay();
   const { open: openPalette } = useCommandPalette();
   const { data: triplet } = useDateTriplet(focusDate ?? undefined);
-  const { data: indices, isLoading: idxLoading } = useIndices();
+  const { data: indices, isLoading: idxLoading } = useIndices({
+    refetchInterval: () => (isTradingHours() ? 5000 : false),
+  });
   const { data: evaluation } = useEvaluationSummary();
   const { data: winReview } = useDailyWinReview();
   const { data: bombAlerts } = useBombAlerts();

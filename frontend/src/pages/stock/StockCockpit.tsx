@@ -18,6 +18,7 @@ import { TechScoreCard } from "@/components/stock/TechScoreCard";
 import { StockBasicInfoCard } from "@/components/stock/StockBasicInfoCard";
 import { useCurrentStock, useSelectStock } from "@/stores/currentStock";
 import { useStockDeep } from "@/lib/query/stock";
+import { isTradingHours } from "@/hooks/useLiveQuotes";
 import type { Quote, StockDeep as StockDeepData } from "@/lib/api";
 import { api } from "@/lib/api";
 import { cn, pctColor } from "@/lib/utils";
@@ -401,7 +402,9 @@ export function StockCockpit() {
  * useStockDeep 在此调用（code 非 null 保证），父组件 StockCockpit 处理无 code 空态。
  */
 function StockCockpitContent({ code }: { code: string }) {
-  const { data, isLoading, error, refetch } = useStockDeep(code);
+  const { data, isLoading, error, refetch } = useStockDeep(code, {
+    refetchInterval: () => (isTradingHours() ? 5000 : false),
+  });
   // 页面级日期：默认今日（北京时区）；影响信号区战法匹配。
   const [date, setDate] = useState(() => {
     const d = new Date(Date.now() + 8 * 3600 * 1000);
