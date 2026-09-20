@@ -143,14 +143,51 @@ export function Layout() {
         </div>
 
         {collapsed ? (
-          /* collapsed: 5 线 + 系统 icon 全可见（hover title 提示，点击直达 hub） */
-          <div className="flex flex-col items-center gap-2 py-4">
+          /* collapsed: icon 全可见 + hover/focus 弹 flyout 列子组（a11y：focus-within 键盘可达；移动用 drawer accordion） */
+          <div className="flex flex-col items-center gap-1 py-4">
             {NAV_GROUPS.map(group => {
               const Icon = group.icon;
+              const isActive = isPathActive(pathname, group.matchPrefix);
               return (
-                <Link key={group.name} to={group.hub.to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title={group.name} aria-label={group.name}>
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                </Link>
+                <div key={group.name} className="group/fly relative">
+                  <Link
+                    to={group.hub.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center justify-center rounded-lg p-2 transition-colors",
+                      isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                    )}
+                    title={group.name}
+                    aria-label={group.name}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                  {/* hover/focus 弹 flyout（桌面 collapsed 模式专有） */}
+                  <div className="invisible absolute left-full top-0 z-50 ml-2 w-56 rounded-lg border border-border/60 bg-popover/95 p-2 opacity-0 shadow-xl backdrop-blur transition-opacity group-hover/fly:visible group-hover/fly:opacity-100 group-focus-within/fly:visible group-focus-within/fly:opacity-100">
+                    <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">{group.name}</p>
+                    {group.subGroups.map(sg => (
+                      <div key={sg.name} className="space-y-0.5">
+                        <p className="px-2 py-0.5 text-xs text-muted-foreground/60">{sg.name}</p>
+                        {sg.tabs.map(tab => {
+                          const active = isTabActive(tab.to);
+                          return (
+                            <Link
+                              key={tab.to}
+                              to={tab.to}
+                              onClick={() => setMobileMenuOpen(false)}
+                              className={cn(
+                                "block rounded-md px-2 py-1 text-sm transition-colors",
+                                active ? "bg-primary/10 font-medium text-primary" : "text-foreground/90 hover:bg-muted/40",
+                              )}
+                            >
+                              {tab.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               );
             })}
           </div>

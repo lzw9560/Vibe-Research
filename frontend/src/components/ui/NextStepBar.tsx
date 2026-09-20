@@ -42,6 +42,33 @@ const PAGE_STEPS: Record<string, NextStep[]> = {
     { label: "认知图谱", to: "/graph", reason: "M7 LLM 图谱 home（注入流 spec-only）" },
     { label: "回今日", to: "/today", reason: "回今日盘面动作队列" },
   ],
+  // 闭环转换点（grill：只扩真有下一步动作的，非 18 页稀释信号）
+  market: [
+    { label: "盘中 cockpit", to: "/intraday", reason: "市场全景→盘中盯盘", primary: true },
+    { label: "回盘面", to: "/workspace", reason: "回盘面工作台" },
+  ],
+  intraday: [
+    { label: "记日志", to: "/ledger?tab=journal", reason: "盘中信号→记日志", primary: true },
+    { label: "收盘复盘", to: "/review", reason: "收盘查战绩" },
+  ],
+  screener: [
+    { label: "候选池", to: "/candidates", reason: "漏斗→候选", primary: true },
+    { label: "自选股", to: "/watchlist", reason: "加入自选" },
+  ],
+  strategy: [
+    { label: "验证", to: "/review?tab=validation", reason: "策略→§44 验证", primary: true },
+    { label: "调参", to: "/strategy/funnel/config", reason: "调战法阈值" },
+  ],
+  // 详情页 back-step（回来源页，防失路）
+  stock: [
+    { label: "回市场", to: "/market", reason: "返回市场全景", primary: true },
+    { label: "回自选", to: "/watchlist" },
+  ],
+  sectors: [{ label: "回市场", to: "/market", primary: true }],
+  "workflow/candidates": [{ label: "回候选池", to: "/candidates", primary: true }],
+  "workflow/factor": [{ label: "回复盘验证", to: "/review?tab=validation", primary: true }],
+  "strategy/funnel/forward-test": [{ label: "回策略", to: "/strategy", primary: true }],
+  "strategy/funnel/config": [{ label: "回策略", to: "/strategy", primary: true }],
 };
 
 export function NextStepBar({ pageCtx }: { pageCtx: keyof typeof PAGE_STEPS }) {
