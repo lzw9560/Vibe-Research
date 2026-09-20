@@ -1,32 +1,20 @@
 # -*- coding: utf-8 -*-
-"""S008 多源异构日K线解析器——数据总线上的解耦层。
+"""S008 日K线解析器——baostock 单源（本环境唯一可用源）。
 
-模式：**职责链 + 策略**。每个源是一个可互换的策略（实现 ``KlineSource``
-契约），解析器按链顺序尝试、首个成功且非空即返。**不硬编码任何单源策略**：
-不同网络环境（开发/家庭/VPN/远程）下不同源可达——本机公司网对东财 push2his
-IP-封禁但对百度/新浪不限流（2026-07-31 实测），其它网络可能反过来——链路按
-"独立源 + 回退"组织，哪个通用哪个。
+2026-09-20 彻底精简：本环境 baidu 403 Forbidden + sina/mootdx 返空 + akshare 东财
+封禁，baostock 是唯一可用源（无 IP 限制免防封，qfq 前复权，singleton login +
+_BS_LOCK 串行 query 防线程竞争）。pattern_scan _compute_ma 自算 MA5/10/20 from
+close（strategies/pattern_scan.py:170-199，不依赖 kline 返 ma 字段），60 bars 够
+（:177 len<20 check）。baidu 1023 bars 不必要——消费侧自算 MA，60 bars 60 交易日够。
 
-消费者（t16_panel_train 等）只调 ``astock.kline_multi(code)``，与具体源解耦：
-源增删/切换只改本模块 ``_SOURCES`` 注册表，消费者零变更（与 astock 门面契约一致）。
+保留多源框架（_SOURCES 注册表 + fetch_kline 并发 + adjust 口径）——将来其他环境
+加源只改 _SOURCES + _SOURCE_ADJUST + 写 _xxx 函数，消费者零变更。
 
-**统一复权口径（adjust 契约）**：各源原生口径不一——百度前复权（qfq，2026-07-31 实测：
-茅台 2018 收盘 413 vs 新浪 raw 730，历史价下调、最新价与 raw 收敛→qfq 签名）、akshare qfq
-（``adjust="qfq"`` 显式）、新浪/mootdx 不复权（raw）。混用口径会污染收益特征与标签（除权日
-raw 序列单日 ~-10% 假跌、历史价虚高 7-14%）。消费者传 ``adjust="qfq"`` 时，**只走能原生提供
-该口径的源**（百度+akshare），不回退 raw 源——**不臆造复权因子**（无除权日历则不可重算，
-诚实地按源能力筛选而非编造）。无 qfq 源可达即诚实返空，消费者按空剔除。
+返 tuple[list[dict], str | None]：bars + 命中源名。全失败返 ([], None)——不抛、
+不臆造，消费者按空决策（诚实无数据）。
 
-加源食谱（维护迭代）：
-1. 写 ``def _xxx(code) -> list[dict]`` 返 raw bars（字段对齐 §字段约定，失败抛异常）；
-2. 在 ``_SOURCES`` 追加 ``("xxx", _xxx)``，并在 ``_SOURCE_ADJUST`` 声明其原生口径。
-源依赖重（mootdx/akshare）用函数内 lazy import，避免 ``import astock`` 炸链。
-
-返 ``tuple[list[dict], str | None]``：bars + 命中源名（可观测、可记日志）。
-全源失败返 ``([], None)``——不抛、不臆造，消费者按空 bars 决策（诚实无数据）。
-
-字段约定（raw bar dict）：``date/open/close/high/low/volume/amount/ma5/ma10/ma20``，
-缺字段=``None``（不臆造），对齐 ``mappers.baidu_kline_from_dict`` / ``kline_from_mootdx``。
+字段约定（raw bar dict）：date/open/close/high/low/volume/amount/ma5/ma10/ma20，
+缺字段=None（baostock 无 ma，消费侧 _compute_ma 自算）。
 """
 from __future__ import annotations
 
@@ -35,35 +23,12 @@ import logging
 log = logging.getLogger(__name__)
 
 
-# ── 各源实现（lazy import 重依赖，函数即策略，name 用注册表绑定）─────────────
-
-def _baidu(code: str) -> list[dict]:
-    """百度股市通日K线（urllib，不封 IP，自带 MA5/10/20）。"""
-    from data.sources.baidu import fetch_raw
-    return fetch_raw(code)
-
-
-def _sina(code: str) -> list[dict]:
-    """新浪日K线（urllib，不封 IP，无 MA）。"""
-    from data.sources.sina import fetch_raw
-    return fetch_raw(code)
-
-
-def _mootdx(code: str) -> list[dict]:
-    """mootdx TDX 日K线（TCP 7709，惰性）。"""
-    from data.sources.mootdx_src import kline
-    return kline(code)
-
-
 def _baostock(code: str) -> list[dict]:
-    """baostock 日K（qfq 前复权，无 IP 限制免防封，本环境唯一可靠源）。
+    """baostock 日K（qfq 前复权，无 IP 限制免防封，本环境唯一可用源）。
 
-    2026-09-20：本环境 baidu/sina/mootdx 返空 + akshare 东财封禁，baostock 是唯一
-    能拿到数据的源（日志 mootdx 空→baostock 回退 60 bars 证实）。作 kline 链源，
-    fetch_kline 并发直接拿 baostock bars，不再经 astock mootdx_src 二次 baostock
-    回退（消除双重调用 + akshare log 噪音 + 东财封禁风险）。singleton login
-    （baostock_src.ensure_login 进程级 + _BS_LOCK 串行 query 防线程竞争），
-    adjustflag=2 qfq，返最近 60 交易日 bars（start=now-120 天容纳周末）。
+    singleton login（baostock_src.ensure_login 进程级 + _BS_LOCK 串行 query 防线程
+    竞争），adjustflag=2 qfq，返最近 60 交易日 bars（start=now-120 天容纳周末）。
+    baostock 无 ma5/10/20——消费侧 _compute_ma 自算（pattern_scan:170-199）。
     """
     from datetime import datetime, timedelta
     from data.sources.baostock_src import fetch_daily_bars
@@ -87,32 +52,12 @@ def _baostock(code: str) -> list[dict]:
     return bars
 
 
-def pd_notna(v) -> bool:
-    """pandas notna 的惰性版（避免顶层 import pandas 重依赖）。"""
-    try:
-        from pandas import notna
-        return bool(notna(v))
-    except Exception:
-        return v is not None
+# 源链注册表（策略集，按名字）。2026-09-20：只 baostock（本环境唯一可用源）。
+# 加源食谱：写 _xxx(code) 函数 + 在 _SOURCES 追加名字 + _SOURCE_ADJUST 声明口径。
+_SOURCES: list[str] = ["baostock"]
 
-
-# 源链注册表（策略集，按名字）。顺序：独立不封 IP 源在前，baostock 兜底（本环境唯一可靠）。
-# 按名查找（非绑函数引用）——可测试、可热替换：monkeypatch ``_<name>`` 即生效。
-# 增删源：写 ``_<name>(code)`` 函数 + 在此表加/删名字，消费者零变更。
-# 2026-09-20：摘 akshare（东财封禁永远失败，feed breaker 仍 log 噪音 + HALF_OPEN 间歇失败），
-# 加 baostock（本环境唯一可用源，无 IP 限制免防封，qfq 前复权）。
-_SOURCES: list[str] = ["baidu", "sina", "mootdx", "baostock"]
-
-# 各源原生复权口径（单一事实源）。消费者传 ``adjust="qfq"`` 时只走口径匹配的源——
-# 不回退到 raw 源（混用污染收益），不臆造复权因子重算（无除权日历则不可重算）。
-#   "qfq"  = 前复权（百度默认、akshare ``adjust="qfq"``）
-#   "none" = 不复权（新浪 getKLineData 无 adjust 参数、mootdx bars 默认 raw）
-# 2026-07-31 实测：百度对 600519 2018 收盘返 413（raw ~730），最新日与新浪 raw
-# 收敛→qfq 签名确认。akshare qfq 与百度 qfq 应一致（同前复权口径）。
+# 各源原生复权口径（单一事实源）。消费者传 adjust="qfq" 时只走口径匹配的源。
 _SOURCE_ADJUST: dict[str, str] = {
-    "baidu": "qfq",
-    "sina": "none",
-    "mootdx": "none",
     "baostock": "qfq",
 }
 
@@ -123,7 +68,7 @@ def adjust_of(name: str) -> str | None:
 
 
 def _call(name: str, code: str) -> list[dict]:
-    """按名查找源函数并调用（monkeypatch ``_<name>`` 即生效，便于测试）。"""
+    """按名查找源函数并调用（monkeypatch _<name> 即生效，便于测试）。"""
     fn = globals().get(f"_{name}")
     if fn is None:
         raise RuntimeError(f"unknown kline source: {name}")
@@ -140,38 +85,29 @@ def _chain(sources: list[str] | None, adjust: str | None) -> list[str]:
 
 def fetch_kline(code: str, sources: list[str] | None = None,
                 adjust: str | None = None) -> tuple[list[dict], str | None]:
-    """多源并发取日K线。返 (bars, source_name)；全失败/超时返 ([], None)。
+    """取日K线。返 (bars, source_name)；全失败/超时返 ([], None)。
 
-    **并发 + per-source 3s timeout**（2026-09-15 S206 优化）：
-    串行试 4 源（baidu→sina→mootdx→akshare）每源 urllib 无 timeout → 60s 超时白板。
-    改并发 ThreadPoolExecutor + 3s timeout + 首个非空即返——最快源（baidu/sina ~1s）
-    先返，慢源（akshare 东财封禁/mootdx 坏）不等。kline 子调用从 24s→~3s。
-
-    ``sources`` 可限定子集；``adjust`` 统一复权口径（只走匹配源，不回退 raw）。
+    单源 baostock（本环境唯一可用，直接用不乱试其他源）。并发框架保留——将来
+    加源时首个非空即返。timeout 8s（baostock query ~4-5s + 多股 _BS_LOCK 串行排队）。
     """
     chain = _chain(sources, adjust)
     if not chain:
         return [], None
     from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-    TIMEOUT = 8  # per-source timeout（3s→5s→8s 2026-09-20：baostock query ~4-5s singleton
-    # login 后 + 多股并发 _BS_LOCK 串行排队，5s 边缘超时致 fetch_kline 返空→astock
-    # mootdx_src 二次 baostock 回退（双重+log 噪音）；8s 让 _baostock 命中，astock
-    # 不走 mootdx_src 回退，直接用可用数据源 baostock）
+    TIMEOUT = 8
     with ThreadPoolExecutor(max_workers=len(chain)) as ex:
         futs = {ex.submit(_call, name, code): name for name in chain}
         try:
             done, not_done = wait(futs, timeout=TIMEOUT, return_when=FIRST_COMPLETED)
-            # 首批完成的里找非空
             for fut in done:
                 name = futs[fut]
                 try:
                     bars = fut.result()
                     if bars:
                         return bars, name
-                except Exception as e:  # noqa: BLE001 — 多源回退吞异常
+                except Exception as e:  # noqa: BLE001 — 源失败吞异常，诚实返空
                     log.warning("kline source %s failed for %s: %s", name, code, repr(e)[:200])
                     continue
-            # 首批都空/失败，等剩下的到 TIMEOUT
             for fut in not_done:
                 name = futs[fut]
                 try:
@@ -187,5 +123,5 @@ def fetch_kline(code: str, sources: list[str] | None = None,
 
 
 def list_sources(adjust: str | None = None) -> list[str]:
-    """可用源名（按链顺序）。传 ``adjust`` 只返该口径源，供诊断/配置。"""
+    """可用源名（按链顺序）。传 adjust 只返该口径源，供诊断/配置。"""
     return _chain(None, adjust)
