@@ -9,6 +9,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { useSignalsDaily } from "@/lib/query/signals";
 import type { EChartsOption } from "echarts";
+import type { CallbackDataParams } from "echarts/types/dist/shared";
 
 /** 返回人话状态标签（基于 regime + staleness，与后端 cap 一致） */
 function statusLabel(
@@ -84,7 +85,7 @@ export function ValidatedEdgeCard() {
           label: {
             show: true,
             position: "top",
-            formatter: (p: any) => `${p.value}%`,
+            formatter: (p: CallbackDataParams) => `${p.value}%`,
             fontSize: 12,
             fontWeight: "bold",
             color: "#475569",
