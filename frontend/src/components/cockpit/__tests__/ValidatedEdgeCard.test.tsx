@@ -125,6 +125,15 @@ function mockLoading() {
   });
 }
 
+function mockError() {
+  hooks.useSignalsDaily.mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isError: true,
+    error: new Error("fail"),
+  });
+}
+
 describe("ValidatedEdgeCard loading state", () => {
   it("shows loading spinner", () => {
     mockLoading();
@@ -184,5 +193,33 @@ describe("ValidatedEdgeCard (S218 C4, 方向2 backend cap/verified)", () => {
     mockBearStale();
     render(<ValidatedEdgeCard />);
     expect(screen.getByText(/实际 ×0\.5/)).toBeInTheDocument();
+  });
+});
+
+describe("ValidatedEdgeCard 覆盖缺口（LOW 2 补：happy-path / isError / days_since / 非 stale）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("bull fresh 显示 '衰减中' 标签（edge 真在衰减，amber tone 非 emerald 死分支）", () => {
+    mockBullFresh();
+    render(<ValidatedEdgeCard />);
+    expect(screen.getAllByText(/衰减中/).length).toBeGreaterThan(0);
+  });
+
+  it("isError 显示 '信号状态加载失败'", () => {
+    mockError();
+    render(<ValidatedEdgeCard />);
+    expect(screen.getByText(/信号状态加载失败/)).toBeInTheDocument();
+  });
+
+  it("stale 显示 'cache 滞后 X 天'（days_since 数值渲染）", () => {
+    mockBearStale();  // days_since=3
+    render(<ValidatedEdgeCard />);
+    expect(screen.getByText(/cache 滞后 3 天/)).toBeInTheDocument();
+  });
+
+  it("非 stale 显示 'regime cache 新鲜'（emerald freshness box :178）", () => {
+    mockBullFresh();  // stale=false
+    render(<ValidatedEdgeCard />);
+    expect(screen.getByText(/regime cache 新鲜/)).toBeInTheDocument();
   });
 });

@@ -14,7 +14,7 @@ import type { EChartsOption } from "echarts";
 function statusLabel(
   regime: string | null,
   stale: boolean,
-): { text: string; tone: "amber" | "red" | "emerald" } {
+): { text: string; tone: "amber" | "red" } {
   if (stale) return { text: "provisional", tone: "red" };
   if (!regime || regime === "bear" || regime === "range")
     return { text: "within-regime only", tone: "amber" };
@@ -129,9 +129,7 @@ export function ValidatedEdgeCard() {
               className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${
                 label.tone === "red"
                   ? "bg-red-50 text-red-700"
-                  : label.tone === "amber"
-                    ? "bg-amber-50 text-amber-700"
-                    : "bg-emerald-50 text-emerald-700"
+                  : "bg-amber-50 text-amber-700"
               }`}
             >
               {label.tone === "red" && <AlertTriangle className="h-3 w-3" />}
@@ -165,7 +163,7 @@ export function ValidatedEdgeCard() {
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
               <p className="text-[10px] text-muted-foreground">衰减</p>
-              <p className="text-sm font-bold text-red-500">-{decayPct ?? "—"}%</p>
+              <p className="text-sm font-bold text-red-500">{decayPct ?? "—"}%</p>
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
               <p className="text-[10px] text-muted-foreground">WR</p>

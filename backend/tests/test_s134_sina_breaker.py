@@ -5,7 +5,7 @@ mirror test_availability.py:143-163（em_get breaker-OPEN 消费侧）+
 test_s085_bids_ths.py:171-219（_FakeBreaker 传输侧）+ test_circuit_breaker.py:43-51（状态机）。
 
 覆盖：
-- sina_financial/sina_kline breaker OPEN → raise → fetch_merged_periods 吞 [] / kline_resolver 回退
+- sina_financial/sina_kline breaker OPEN → raise → fetch_merged_periods 吞 []（kline_resolver 2026-09-20 精简 baostock 单源，sina 不在 _SOURCES，不再测 kline_resolver 集成）
 - exception → record_failure + re-raise；empty-200 → record_success（exception-only 契约 R7）
 - OPEN→HALF_OPEN→CLOSED 恢复
 - anomaly endpoint data_status 诚实缝（R3）
@@ -59,24 +59,8 @@ def test_sina_financial_breaker_open_returns_empty(monkeypatch):
     assert sina_financial.fetch_merged_periods("600519") == []
 
 
-# ── A2: sina_kline breaker OPEN → fetch_raw raise → kline_resolver 回退 ──
-
-
-def test_sina_kline_breaker_open_raises_and_resolver_falls_through(monkeypatch):
-    """sina_kline breaker OPEN → sina.fetch_raw raise RuntimeError →
-    kline_resolver.catch → 回退下一源；baidu 亦失败 → ([], None)。"""
-    from data.sources import sina
-    from data.sources import kline_resolver
-
-    monkeypatch.setattr(sina, "get_breaker", lambda name: _FakeBreakerOpen())
-
-    def _baidu_boom(code):
-        raise ConnectionError("baidu down")
-
-    monkeypatch.setattr(kline_resolver, "_baidu", _baidu_boom)
-    bars, src = kline_resolver.fetch_kline("600519", sources=["baidu", "sina"])
-    assert bars == []
-    assert src is None
+# ── A2: sina_kline breaker OPEN → fetch_raw raise（sina 源本身行为；kline_resolver
+#    集成已删——2026-09-20 kline_resolver 精简 baostock 单源，sina 不在 _SOURCES）──
 
 
 # ── A3: _fetch_json raise → record_failure + re-raise ─────────────────────
