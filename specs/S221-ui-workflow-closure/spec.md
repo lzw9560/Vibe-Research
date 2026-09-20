@@ -1,8 +1,9 @@
 # Spec: S221 — 前端 3 gap 闭环（推送状态/周度复盘/delivery leak）
 
-> 状态：草案
+> 状态：已实现（2026-09-20，6 commit 3c1327b..2b79b9f：3 gap closure + 后端端点 + 测试 + LOW 修 + follow-up）
 > 作者：frontend-developer  日期：2026-09-20
 > 关联：S218（delivery 4 cron + TodaySignalsPanel + ValidatedEdgeCard）、S218-C5 weekly_review executor
+> 演进：§2 原"不改后端"，实现时加 `GET /api/signals/weekly-review` 端点读 weekly_review.json（commit 97b9c51），WeeklyReviewPanel 改读后端真值非前端推算（516142b）——比原方案更诚实，见 §2 更新
 
 ## 1. 问题 / 目标
 
@@ -23,10 +24,7 @@ v3 审查（memory audit-2026-09-20-v3）发现 UI 不达标 3 断点：信号�
   - GET /api/signals/status（返 regime + arms cap/regime）
   - weekly_review executor（scheduler/executors/signals.py:435）生成 .vibe-research/signal_reports/{date}_weekly_review.json
 
-**前提问题（已核于 code）**：weekly_review.json 无 GET 端点读取。task 称"前端调这些展示"含 weekly_review.json，
-但 grep routers/signals.py 全路由（daily/daily-report/status/manual-trade/manual-trades）无 weekly-review 读端点。
-本 spec 不改后端，cap-down 提案改由**前端从 manual-trades 数据推算**（镜像 backend weekly_review 逻辑
-executors/signals.py:478-487：mean closed actual_pnl < 0 → cap-down），诚实标注"前端推算"非读后端文件。
+**前提问题（已核于 code）**：~~weekly_review.json 无 GET 端点读取~~ **2026-09-20 演进（commit 97b9c51）**：已加 `GET /api/signals/weekly-review` 端点读 `weekly_review.json` 全文（无 date 返最近一次，无文件诚实标 not_found/no_reports）。WeeklyReviewPanel 改调该端点读后端真值（commit 516142b），cap-down 提案用 executor 实算值非前端推算——比原"前端推算"方案更诚实。原 task 约束"不改后端"在实现时被覆盖（读后端文件比前端推算 cap-down 更可靠，符合§1.2 判断须可复现底线）。
 
 ## 3. 需求清单
 
