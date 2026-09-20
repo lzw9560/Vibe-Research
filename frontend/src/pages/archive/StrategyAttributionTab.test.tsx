@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-import { StrategyAttributionTab } from "@/pages/workflow/components/StrategyAttributionTab";
+import { StrategyAttributionTab } from "@/pages/archive/StrategyAttributionTab";
 import type { FirstBoardCandidatesResponse } from "@/lib/api";
 
 const mockData: FirstBoardCandidatesResponse = {

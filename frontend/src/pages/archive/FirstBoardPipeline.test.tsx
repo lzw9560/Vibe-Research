@@ -13,7 +13,7 @@ vi.mock("@/components/ui/HonestyBanner", () => ({
   HonestyBanner: () => <div data-testid="honesty-banner">§44 诚实标注</div>,
 }));
 
-import { FirstBoardPipeline } from "@/pages/workflow/components/FirstBoardPipeline";
+import { FirstBoardPipeline } from "@/pages/archive/FirstBoardPipeline";
 import type { FirstBoardCandidatesResponse } from "@/lib/api";
 
 const mockData: FirstBoardCandidatesResponse = {
