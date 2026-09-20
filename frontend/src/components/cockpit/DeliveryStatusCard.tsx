@@ -83,7 +83,7 @@ export function DeliveryStatusCard() {
         </span>
       </div>
       <div className="flex items-center gap-1 text-muted-foreground">
-        <FeishuIcon className={`h-3 w-3 ${state.feishuOk ? "text-emerald-500" : "text-muted-foreground/60"}`} />
+        <FeishuIcon className={`h-3 w-3 ${state.feishuOk ? "text-emerald-500" : "text-muted-foreground"}`} />
         <span className={state.feishuOk ? "text-emerald-600" : "text-amber-600"}>{state.feishuLabel}</span>
       </div>
     </div>

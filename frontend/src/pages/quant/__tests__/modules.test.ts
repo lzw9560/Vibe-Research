@@ -33,12 +33,12 @@ describe("QuantModules data (M3)", () => {
     expect(m1?.link).toBe("/workflow/intraday/ofi");
   });
 
-  it("M2/M4 live 但无 liveSource（后端已实现，前端 endpoint 待接线，不臆造数据）", () => {
+  it("M2/M4 live 且有 liveSource（S216 P2 接线 endpoint：预期差 / emHealth）", () => {
     const m2 = QUANT_MODULES.find((m) => m.key === "M2");
     const m4 = QUANT_MODULES.find((m) => m.key === "M4");
     expect(m2?.status).toBe("live");
-    expect(m2?.liveSource).toBeNull();
+    expect(m2?.liveSource).toBe("expectationGap");
     expect(m4?.status).toBe("live");
-    expect(m4?.liveSource).toBeNull();
+    expect(m4?.liveSource).toBe("emHealth");
   });
 });

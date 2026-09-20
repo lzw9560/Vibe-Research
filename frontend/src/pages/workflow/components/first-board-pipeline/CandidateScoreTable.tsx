@@ -279,7 +279,7 @@ export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCand
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={15} className="px-2 py-4 text-center text-xs text-muted-foreground/60">
+                <td colSpan={15} className="px-2 py-4 text-center text-xs text-muted-foreground">
                   无候选符合总分≥{minTotal}（共 {sorted.length} 只）· 调低滑块看更多
                 </td>
               </tr>
@@ -353,7 +353,7 @@ function CandidateRowFragment({
           <td colSpan={15} className="px-2 pb-3 pt-1">
             <div className={cn(NODE, "bg-muted/5")}>
               {!hasRawValues ? (
-                <div className="py-2 text-center text-xs text-muted-foreground/60">
+                <div className="py-2 text-center text-xs text-muted-foreground">
                   ⚠ 旧快照无原始值（raw_values 未取得）· 仅显示评分，无法展示"实际值→得分"对照
                 </div>
               ) : (
@@ -373,7 +373,7 @@ function CandidateRowFragment({
                           isMissing ? "text-muted-foreground/40 line-through" : "text-foreground",
                         )}>
                           {dim.label}
-                          <span className="ml-1 text-[9px] text-muted-foreground/50">{dim.weight}</span>
+                          <span className="ml-1 text-[9px] text-muted-foreground">{dim.weight}</span>
                         </span>
                         <span className="flex-1 text-xs text-muted-foreground">
                           {isMissing ? "数据缺失（score=-1）· 后续移除或寻找替代" : rawDesc}
@@ -388,7 +388,7 @@ function CandidateRowFragment({
                       </div>
                     );
                   })}
-                  <div className="pt-1 text-xs text-muted-foreground/50">
+                  <div className="pt-1 text-xs text-muted-foreground">
                     原始值来自后端 raw_values 字段 · 缺失字段标"—" · §44 未 validated 仅参考
                   </div>
                 </div>

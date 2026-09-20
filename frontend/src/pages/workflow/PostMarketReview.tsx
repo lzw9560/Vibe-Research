@@ -312,7 +312,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
             <p className="mb-2 text-xs font-medium text-muted-foreground">教学点</p>
             <ul className="space-y-1">
               {TEACHING_POINTS.map((t) => (
-                <li key={t.slice(0, 16)} className="text-xs text-muted-foreground/80">
+                <li key={t.slice(0, 16)} className="text-xs text-muted-foreground">
                   · {t}
                 </li>
               ))}

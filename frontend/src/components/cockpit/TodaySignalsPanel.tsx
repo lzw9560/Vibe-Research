@@ -526,7 +526,7 @@ export function TodaySignalsPanel() {
 
           {/* 免责声明（spec §44 reframe 版，后端 disclaimers） */}
           {disclaimers.length > 0 && (
-            <ul className="mb-3 space-y-1 text-xs text-muted-foreground/80">
+            <ul className="mb-3 space-y-1 text-xs text-muted-foreground">
               {disclaimers.map((d, i) => (
                 <li key={i} className="leading-relaxed">
                   · {d}

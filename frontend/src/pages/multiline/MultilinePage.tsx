@@ -90,7 +90,7 @@ function StrategyColumn({ def }: { def: StrategyColumnDef }) {
 
       {/* 窗口口径标签（grill #7：§44v1 教训） */}
       <div className="rounded bg-muted/30 px-2.5 py-1.5">
-        <div className="text-xs text-muted-foreground/80">窗口口径</div>
+        <div className="text-xs text-muted-foreground">窗口口径</div>
         <div className="text-xs font-medium text-foreground mt-0.5">
           {def.windowLabel}
         </div>

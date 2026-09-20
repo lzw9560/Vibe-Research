@@ -97,7 +97,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
               API 仅返回 <code className="rounded bg-muted/30 px-1">zt_pool_count</code> 汇总数，
               不含涨停池标的明细（code/name/lbc）。明细数据需后端补 <code className="rounded bg-muted/30 px-1">zt_pool_items</code> 字段后接入。
             </p>
-            <p className="mt-1 text-xs text-muted-foreground/50">
+            <p className="mt-1 text-xs text-muted-foreground">
               此处不臆造标的列表——诚实标注数据缺失。
             </p>
           </div>
@@ -130,7 +130,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
               但不含首板过滤产出明细。下游可见的是三层剔除后的 <b className="text-foreground">候选池（{candidates.length} 只）</b>
               + <b className="text-destructive">剔除记录（{excluded.length} 只）</b>。
             </p>
-            <p className="mt-1 text-xs text-muted-foreground/50">
+            <p className="mt-1 text-xs text-muted-foreground">
               ⚠ 候选 + 剔除 ≠ 首板数（三层剔除是串联过滤，剔除记录按层累加）。
               反推不完全准确，故不展示反推列表。
             </p>
@@ -163,7 +163,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
             <ExpandIndicator open={excludedExpanded} />
           </div>
         </div>
-        <div className="mt-1 text-xs text-muted-foreground/80">
+        <div className="mt-1 text-xs text-muted-foreground">
           共剔除 {excluded.length} 只 · 点展开看每层通过数 + 分层剔除原因
         </div>
       </button>
@@ -210,7 +210,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
                         </span>
                         <span className="text-xs text-emerald-400">开</span>
                       </div>
-                      <span className="text-[9px] text-muted-foreground/50" title="后端 EXCLUDE_THRESHOLDS 常量，前端只读">
+                      <span className="text-xs text-muted-foreground" title="后端 EXCLUDE_THRESHOLDS 常量，前端只读">
                         后端常量 · 只读
                       </span>
                     </div>
@@ -425,12 +425,12 @@ function WatchbookManual() {
           <div className="flex items-center gap-2">
             <span className="text-xs">⏱</span>
             <span className="text-xs font-medium text-amber-200">盯盘手册 9:15-9:45</span>
-            <span className="text-xs text-muted-foreground/60">5 个时段</span>
+            <span className="text-xs text-muted-foreground">5 个时段</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={cn(
               "text-xs",
-              currentSlotData ? "text-emerald-400" : "text-muted-foreground/50",
+              currentSlotData ? "text-emerald-400" : "text-muted-foreground",
             )}>
               {summaryText}
             </span>
@@ -476,7 +476,7 @@ function WatchbookManual() {
             );
           })}
           {/* 诚实标注 */}
-          <p className="mt-1.5 text-xs text-muted-foreground/50">
+          <p className="mt-1.5 text-xs text-muted-foreground">
             {currentSlotData
               ? `当前时段高亮（绿底）· 时段判定用浏览器时间，后端 Phase 2 接入后改用 backend current_time 北京 tz`
               : "盘后/非交易时段，不高亮 · 时段判定用浏览器时间，后端 Phase 2 接入后改用 backend current_time 北京 tz"}
@@ -552,7 +552,7 @@ export function PositionNode({ data }: { data: FirstBoardCandidatesResponse | nu
               </tbody>
             </table>
           </div>
-          <div className="mt-1 text-xs text-muted-foreground/60">
+          <div className="mt-1 text-xs text-muted-foreground">
             ⚠ 推荐参考，不替用户做决定 · 风控：止损 −3% / 止盈 +5% / T+1 必卖
           </div>
           <div className="text-xs text-amber-200/60">
@@ -560,7 +560,7 @@ export function PositionNode({ data }: { data: FirstBoardCandidatesResponse | nu
           </div>
         </div>
       ) : (
-        <div className="mt-2 text-xs text-muted-foreground/60">
+        <div className="mt-2 text-xs text-muted-foreground">
           候选池为空
         </div>
       )}
@@ -602,7 +602,7 @@ export function SettlementNode() {
         <span>漏单对账</span>
         <span>lift 四态判定</span>
       </div>
-      <div className="mt-1 text-xs text-muted-foreground/60">
+      <div className="mt-1 text-xs text-muted-foreground">
         forward_test validation_status：validated / 未 validated / 探索性 / 劣于随机
       </div>
     </div>
@@ -621,13 +621,13 @@ export function FeishuStatusBar() {
     <div className={NODE}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">飞书通知状态</span>
-        <span className="text-xs text-muted-foreground/60">全链路推送状态展示</span>
+        <span className="text-xs text-muted-foreground">全链路推送状态展示</span>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {statuses.map((s) => (
           <div key={s.label} className="rounded bg-muted/20 px-2 py-1.5">
             <div className="text-xs text-muted-foreground">{s.label}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground/50">{s.status}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{s.status}</div>
           </div>
         ))}
       </div>

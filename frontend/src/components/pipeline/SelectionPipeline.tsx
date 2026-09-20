@@ -208,7 +208,7 @@ function HandoffNode({ count, label }: { count: number; label: string }) {
         <span className="text-[9px] leading-none text-primary/70">只</span>
       </div>
       {/* 下方标签：流向 */}
-      <span className="mt-0.5 text-xs text-muted-foreground/80">{label}</span>
+      <span className="mt-0.5 text-xs text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -242,7 +242,7 @@ function SectorRotationNode({ date }: { date: string }) {
           </div>
         )}
         {!expanded && (
-          <div className="mt-0.5 text-xs text-muted-foreground/80">
+          <div className="mt-0.5 text-xs text-muted-foreground">
             全标签 TOP10：{top.map((s) => `${s.label}(${s.zt_count_today})`).join(" · ")}
           </div>
         )}
@@ -260,16 +260,16 @@ function SectorRotationNode({ date }: { date: string }) {
               <div className="mt-1 flex flex-wrap gap-1 text-xs">
                 {(s.codes || []).slice(0, 10).map((c) => (
                   <span key={c.code} className="rounded bg-muted/30 px-1 py-0.5 text-muted-foreground">
-                    {c.name} <span className="text-muted-foreground/60">{c.code}</span>
+                    {c.name} <span className="text-muted-foreground">{c.code}</span>
                   </span>
                 ))}
-                {(s.codes || []).length > 10 && <span className="text-muted-foreground/60">…共 {s.codes.length} 只</span>}
+                {(s.codes || []).length > 10 && <span className="text-muted-foreground">…共 {s.codes.length} 只</span>}
               </div>
             </div>
           ))}
         </div>
       )}
-      <div className="mt-1 text-xs text-muted-foreground/60">
+      <div className="mt-1 text-xs text-muted-foreground">
         多维度共振（dims≥2）更可信；ths 106 全市场 + concept_map 缓存
       </div>
     </div>
@@ -358,7 +358,7 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date, evaluationSummary
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs tabular-nums text-muted-foreground">{layer.input_count}</span>
-            <span className="text-muted-foreground/50">→</span>
+            <span className="text-muted-foreground">→</span>
             <span className="text-base font-bold tabular-nums text-primary">{layer.output_count}</span>
             {filteredOut > 0 && (
               <span className="rounded bg-muted/30 px-1 text-xs tabular-nums text-muted-foreground">

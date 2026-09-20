@@ -109,7 +109,7 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
         <span className="text-muted-foreground">盈亏比</span>
         <span className="text-right font-mono">{stats.payoff_ratio != null ? stats.payoff_ratio.toFixed(2) : "—"}</span>
         <span className="text-muted-foreground">
-          Sharpe{sharpeNotAnnualized && <span className="ml-1 text-[9px] text-yellow-600">未年化</span>}
+          Sharpe{sharpeNotAnnualized && <span className="ml-1 text-xs text-yellow-600">未年化</span>}
         </span>
         <span className="text-right font-mono">{stats.sharpe != null ? stats.sharpe.toFixed(3) : "—"}</span>
         <span className="text-muted-foreground">
@@ -130,7 +130,7 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
         <span className="text-right font-mono">{stats.n_picks} / {stats.n_days}</span>
       </div>
       {/* S175 T9（C6 诚实）：cap 标签——lift cap 未接 trade_journal sizing 路径 */}
-      <div className="mt-2 text-[9px] leading-tight text-muted-foreground">
+      <div className="mt-2 text-xs leading-tight text-muted-foreground">
         ×0.5 lift cap 未接 trade_journal sizing（drawdown cap 已接但 underpowered=1.0 no-op）
       </div>
     </GlassCard>

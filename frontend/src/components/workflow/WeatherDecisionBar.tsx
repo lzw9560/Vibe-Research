@@ -114,7 +114,7 @@ export function WeatherDecisionBar({ ctx }: Props) {
                       : "bg-emerald-500/70",
                   )}
                 />
-                <span className="text-[9px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {rule.name.slice(0, 2)}
                 </span>
               </div>

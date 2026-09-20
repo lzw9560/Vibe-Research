@@ -96,7 +96,7 @@ export function EarningsCalendarPage() {
                   >
                     {m}月
                   </span>
-                  {danger && <span className="mt-0.5 text-[9px] text-red-500/70">雷区</span>}
+                  {danger && <span className="mt-0.5 text-xs text-red-500/70">雷区</span>}
                 </div>
               );
             })}

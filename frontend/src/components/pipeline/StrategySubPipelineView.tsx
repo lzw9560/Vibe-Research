@@ -113,7 +113,7 @@ function StrategyListRow({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-medium">{name}</span>
-            <span className="font-mono text-xs text-muted-foreground/60">{code}</span>
+            <span className="font-mono text-xs text-muted-foreground">{code}</span>
             {lane === "non-limitup" && (
               <span className="rounded bg-muted/30 px-1 text-[9px] text-muted-foreground">§44 未验证</span>
             )}
@@ -134,19 +134,19 @@ function StrategyListRow({
       >
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold">{name}</span>
-          <span className="font-mono text-xs text-muted-foreground/60">{code}</span>
+          <span className="font-mono text-xs text-muted-foreground">{code}</span>
           {lane === "non-limitup" && (
             <span className="rounded bg-muted/30 px-1 text-[9px] text-muted-foreground">§44 未验证</span>
           )}
           {firePct != null && (
-            <span className="text-xs text-muted-foreground/60">
+            <span className="text-xs text-muted-foreground">
               触发 {funnel!.fired_count}/{funnel!.total_count}（{firePct}%）
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
           <Badge variant="info">{hits.length} 只</Badge>
-          <span className="text-xs text-muted-foreground/60">{open ? "▼" : "▶"}</span>
+          <span className="text-xs text-muted-foreground">{open ? "▼" : "▶"}</span>
         </div>
       </button>
       {open && (
@@ -178,7 +178,7 @@ function CandidateRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-xs font-medium text-foreground">{c.name}</span>
-          <span className="shrink-0 font-mono text-xs text-muted-foreground/60">{c.code}</span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">{c.code}</span>
         </div>
         {conditionStates && conditionStates.length > 0 && (
           <div className="mt-0.5 flex flex-wrap gap-0.5">
@@ -187,7 +187,7 @@ function CandidateRow({
             ))}
           </div>
         )}
-        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-muted-foreground/50">
+        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           {sector && <span>板块 {sector}</span>}
           {confidence != null && <span>置信 {confidence.toFixed(2)}</span>}
         </div>
@@ -196,7 +196,7 @@ function CandidateRow({
         <span className="text-sm font-bold tabular-nums text-primary">
           {c.strategy_score?.toFixed(1) ?? "—"}
         </span>
-        <div className="text-[9px] text-muted-foreground/50">策略分</div>
+        <div className="text-xs text-muted-foreground">策略分</div>
       </div>
     </Link>
   );
@@ -230,12 +230,12 @@ function ConditionMarker({
 function StrategyDataHint({ code }: { code: string }) {
   const status = STRATEGY_DATA_STATUS[code];
   if (!status) {
-    return <span className="text-xs text-muted-foreground/50">无漏斗数据（历史快照或无评估）</span>;
+    return <span className="text-xs text-muted-foreground">无漏斗数据（历史快照或无评估）</span>;
   }
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-yellow-500/80">⚠ {status.reason}</span>
-      <span className="text-xs text-muted-foreground/50">修复：{status.fix}</span>
+      <span className="text-xs text-muted-foreground">修复：{status.fix}</span>
     </div>
   );
 }

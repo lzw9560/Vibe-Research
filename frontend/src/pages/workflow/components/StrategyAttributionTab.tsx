@@ -66,7 +66,7 @@ export function StrategyAttributionTab({ data }: Props) {
                 <tr>
                   <td
                     colSpan={STRATEGIES.length + 1}
-                    className="px-2 py-6 text-center text-muted-foreground/60"
+                    className="px-2 py-6 text-center text-muted-foreground"
                   >
                     候选池为空
                   </td>
@@ -84,7 +84,7 @@ export function StrategyAttributionTab({ data }: Props) {
                         <span className="text-muted-foreground">#{c.rank}</span>{" "}
                         <span className="font-mono">{c.code}</span>{" "}
                         <span className="text-foreground">{c.name}</span>
-                        <div className="text-xs text-muted-foreground/60">
+                        <div className="text-xs text-muted-foreground">
                           total {c.total.toFixed(1)}
                         </div>
                       </td>
@@ -110,7 +110,7 @@ export function StrategyAttributionTab({ data }: Props) {
           </table>
         </div>
         {candidates.length > 20 && (
-          <p className="mt-1 text-xs text-muted-foreground/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             仅显示前 20 只候选（共 {candidates.length} 只）· 完整列表见上表
           </p>
         )}

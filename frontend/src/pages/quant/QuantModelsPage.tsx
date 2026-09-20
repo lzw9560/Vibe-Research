@@ -107,7 +107,7 @@ function ModuleCard({ mod }: { mod: QuantModule }) {
         </div>
         <StatusBadge status={mod.status} />
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground/80">{mod.note}</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{mod.note}</p>
       <div className="mt-auto flex items-center justify-between pt-1">
         {mod.status === "live" ? <LiveDataChip mod={mod} /> : <span className="text-xs text-muted-foreground">未实现</span>}
         {mod.link && (

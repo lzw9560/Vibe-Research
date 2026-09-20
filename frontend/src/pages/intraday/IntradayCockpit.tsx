@@ -233,7 +233,7 @@ function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
     return (
       <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-2 text-xs">
         <span className="font-medium text-red-500">情绪数据加载失败</span>
-        <span className="text-muted-foreground/50">·</span>
+        <span className="text-muted-foreground">·</span>
         <span className="text-muted-foreground">端点未取得（盘中情绪 latest 不可用）</span>
       </div>
     );
@@ -253,7 +253,7 @@ function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
     return (
       <div className="mb-3 flex items-center gap-2 rounded-lg border border-dashed border-border/40 bg-muted/10 px-4 py-2.5 text-xs">
         <span className="text-muted-foreground">盘中情绪暂无数据</span>
-        <span className="text-muted-foreground/50">·</span>
+        <span className="text-muted-foreground">·</span>
         <span className="text-muted-foreground">非交易时段或采样未启动</span>
       </div>
     );
