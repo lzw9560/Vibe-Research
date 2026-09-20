@@ -1,6 +1,6 @@
 # Spec: S222 — regime-flip tripwire + hysteresis（等 bull 通知器）
 
-> 状态：草案
+> 状态：已实现（2026-09-20，commit e7dc331，8 test green + cron seed 10 9 * * 0-4）
 > 作者：Claude（architect persona + grill synthesis） 日期：2026-09-20
 > 关联：milestone-2026-09-18-pivot（最高杠杆=consecutive_relay live 验证）、S218 daily_report executor、memory `deep-think-synthesis-2026-09-20`
 
