@@ -165,7 +165,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 | 新订阅 CLI | `cli_runtime.py` 的 `_CLI_DEFS` + 前端 `ai-models.ts` |
 | 新页面 | 前端 `pages/` + `router.tsx`；后端 `routers/` + `app.py` `include_router` |
 | 新通知通道 | `notification/senders/` 加 sender + `config.py` 加环境变量 |
-| 新定时任务类型 | `scheduled_tasks.py` 的 `TaskExecutor._executors` |
+| 新定时任务类型 | `scheduler/executors/__init__.py` 的 `TaskExecutor._executors` 注册表（53 种，含但不止） |
 | 新战法/策略 | `strategies/` 或 `limitup_strategy.py`；需状态流转则扩 `workflow_state_machine.py` |
 | 新风险因子 | `risk_models.py` 的 `_build_risk_factors` / `OneDayRisk` |
 
