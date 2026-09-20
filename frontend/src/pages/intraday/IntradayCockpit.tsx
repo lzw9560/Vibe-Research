@@ -181,6 +181,7 @@ export function IntradayCockpit() {
               premarketError={premarketQ.error != null}
               lianbanStocks={lianbanStocks}
               lianbanLoading={emotionQ.isLoading}
+              lianbanError={emotionQ.error != null}
               selectedCode={curCode}
               onSelect={(code, name) =>
                 selectStock(code, name ?? undefined, "intraday")
@@ -338,6 +339,7 @@ interface CandidateListProps {
   premarketError: boolean;
   lianbanStocks: LianbanStock[];
   lianbanLoading: boolean;
+  lianbanError: boolean;
   selectedCode: string | null;
   onSelect: (code: string, name: string | null) => void;
   isTradingDay: boolean;
@@ -351,6 +353,7 @@ function CandidateList({
   premarketError,
   lianbanStocks,
   lianbanLoading,
+  lianbanError,
   selectedCode,
   onSelect,
   isTradingDay,
@@ -374,6 +377,7 @@ function CandidateList({
           <LianbanList
             stocks={lianbanStocks}
             loading={lianbanLoading}
+            error={lianbanError}
             selectedCode={selectedCode}
             onSelect={onSelect}
             isTradingDay={isTradingDay}
@@ -497,18 +501,28 @@ function BreakoutRow({
 function LianbanList({
   stocks,
   loading,
+  error,
   selectedCode,
   onSelect,
   isTradingDay,
 }: {
   stocks: LianbanStock[];
   loading: boolean;
+  error: boolean;
   selectedCode: string | null;
   onSelect: (code: string, name: string | null) => void;
   isTradingDay: boolean;
 }) {
   if (loading) {
     return <div className="p-4 text-center text-sm text-muted-foreground">加载中…</div>;
+  }
+  if (error) {
+    return (
+      <HonestEmptyState
+        message="涨停池数据加载失败"
+        hint="网络或后端异常，稍后重试"
+      />
+    );
   }
   if (stocks.length === 0) {
     return (

@@ -54,12 +54,14 @@ export function MarketPage() {
   const [prediction, setPrediction] = useState<PredictionEnvelope | null>(null);
   const [showIntel, setShowIntel] = useState(false);
 
+  const [predictionError, setPredictionError] = useState(false);
   const loadPrediction = useCallback(async () => {
     if (!isDisclaimerAccepted()) return;
     try {
       setPrediction(await fetchPrediction("short_sector", "s1"));
+      setPredictionError(false);
     } catch {
-      /* silent: prediction 是可选区块，失败不阻塞 cockpit */
+      setPredictionError(true);
     }
   }, []);
 
@@ -152,6 +154,16 @@ export function MarketPage() {
       </div>
 
       {/* 1b. 全球市场（隔夜外围：美股/港股指数，沿用红涨绿跌） */}
+      {globalIdx.length === 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+            <Globe className="h-4 w-4" /> 全球市场
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {globalQ.isLoading ? "加载中…" : globalQ.error ? "全球行情未接通" : "暂无数据"}
+          </p>
+        </div>
+      )}
       {globalIdx.length > 0 && (
         <div className="mb-6">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
@@ -362,6 +374,8 @@ export function MarketPage() {
                 进入预测工作台确认 →
               </Link>
             </p>
+          ) : predictionError ? (
+            <p className="text-sm text-muted-foreground">预测暂不可用（数据加载失败）</p>
           ) : !prediction || prediction.status === "no_snapshot" || !prediction.data ? (
             <p className="text-sm text-muted-foreground">
               {prediction ? "快照待生成" : "加载中…"}
