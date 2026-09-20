@@ -22,7 +22,7 @@ from tools.gap_regime_stratified import compute_regime_labels
 from tools.signal_report import get_consecutive_relay_signals, render_daily_report
 from vr_paths import resolve_data_dir
 
-router = APIRouter(prefix="/signals", tags=["signals"])
+router = APIRouter(prefix="/api/signals", tags=["signals"])
 
 # ── manual trade storage (.vibe-research/signal_reports/manual_trades.jsonl) ──
 _MANUAL_TRADES_FILE = Path(resolve_data_dir()) / "signal_reports" / "manual_trades.jsonl"
