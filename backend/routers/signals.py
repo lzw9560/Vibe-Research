@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from engine.trade_journal import TradeJournal
 from tools.gap_regime_stratified import compute_regime_labels
 from tools.signal_report import get_consecutive_relay_signals, render_daily_report
-from vr_paths import resolve_data_dir
+from vr_paths import prev_trading_date_str, resolve_data_dir
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
 
@@ -165,15 +165,13 @@ def _compute_pnl_diff(actual: dict, reference: dict) -> dict:
 @router.get("/daily")
 def _signals_daily() -> dict[str, Any]:
     """返回当日 consecutive_relay 信号报告（结构化 dict）。"""
-    today = datetime.now().strftime("%Y-%m-%d")
-    return get_consecutive_relay_signals(today)
+    return get_consecutive_relay_signals(prev_trading_date_str())
 
 
 @router.get("/daily-report")
 def _signals_daily_report() -> dict[str, str]:
     """返回人话版每日信号报告（Markdown 文本）。"""
-    today = datetime.now().strftime("%Y-%m-%d")
-    signals = get_consecutive_relay_signals(today)
+    signals = get_consecutive_relay_signals(prev_trading_date_str())
     return {"report": render_daily_report(signals)}
 
 
