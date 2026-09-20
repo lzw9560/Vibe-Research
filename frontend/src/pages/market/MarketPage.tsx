@@ -15,6 +15,7 @@ import {
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { cn, pctColor } from "@/lib/utils";
 import {
@@ -396,6 +397,7 @@ export function MarketPage() {
       </div>
 
       <Disclaimer />
+      <NextStepBar pageCtx="market" />
     </div>
   );
 }

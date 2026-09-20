@@ -10,6 +10,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SendToMenu, type SendPayload } from "@/components/common/SendToMenu";
 import { useSelectStock } from "@/stores/currentStock";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 import { FilterPanel, type ScreenerFilters, DEFAULT_FILTERS } from "./FilterPanel";
 import { SCREENER_PRESETS } from "./presets";
 
@@ -226,6 +227,7 @@ export function ScreenerPage() {
           </div>
         )}
       </GlassCard>
+      <NextStepBar pageCtx="screener" />
     </div>
   );
 }

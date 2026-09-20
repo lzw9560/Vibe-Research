@@ -10,6 +10,7 @@ import { ArrowLeft, Activity, Layers } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 import { EntryCard } from "@/components/workflow/EntryCard";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/lib/api/client";
@@ -213,6 +214,7 @@ export default function StrategyPage() {
       </p>
 
       <Disclaimer compact />
+      <NextStepBar pageCtx="strategy" />
     </div>
   );
 }

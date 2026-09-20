@@ -16,6 +16,7 @@ import { FocusDayStrip } from "@/components/ui/FocusDayStrip";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { TabBar } from "@/components/ui/TabBar";
 import { Disclaimer } from "@/components/ui/Disclaimer";
+import { NextStepBar } from "@/components/ui/NextStepBar";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { cn, pctColor } from "@/lib/utils";
 import { useCurrentStock, useSelectStock } from "@/stores/currentStock";
@@ -211,6 +212,7 @@ export function IntradayCockpit() {
       </div>
 
       <Disclaimer />
+      <NextStepBar pageCtx="intraday" />
     </div>
   );
 }
