@@ -77,7 +77,7 @@ export const NAV_GROUPS: NavGroup[] = [
         { to: "/intel", label: "资讯雷达" },
       ]},
     ],
-    matchPrefix: ["/workspace", "/market", "/intraday", "/screener", "/candidates", "/value-funnel", "/watchlist", "/bidding", "/limitup", "/recommendation", "/intel", "/stock-data", "/stock/", "/sectors/"],
+    matchPrefix: ["/workspace", "/market", "/intraday", "/screener", "/candidates", "/value-funnel", "/watchlist", "/bidding", "/limitup", "/recommendation", "/intel", "/stock-data", "/stock", "/sectors"],
   },
   {
     name: "复盘",

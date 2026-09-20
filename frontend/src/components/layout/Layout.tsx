@@ -12,7 +12,8 @@ import { NAV_GROUPS, APP_VERSION, REPO_URL } from "./navigation";
 // Phase 2（2026-09-21）：5 线 collapsible 子组嵌套（活跃线自动展开 + 用户 toggle + localStorage 记忆）
 // 代替 Phase 1 扁平——专业 IA：hub 1 跳直达 + 子组折叠（非全平铺）
 // 前缀匹配：精确 === 优先，其次 p+"/" 子路径 + p+"?" 查询；不用裸 startsWith(p)（会误匹配 /database→/data）
-const isPathActive = (pathname: string, prefixes: string[]) =>
+// matchPrefix 前缀不带尾 /（/stock 非 /stock/）——详情页 /stock/:code 靠 startsWith("/stock"+"/")=startsWith("/stock/") 匹配
+export const isPathActive = (pathname: string, prefixes: string[]) =>
   prefixes.some(p => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p + "?"));
 
 export function Layout() {
