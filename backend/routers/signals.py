@@ -288,6 +288,33 @@ def _get_manual_trades(limit: int = 50) -> dict[str, Any]:
     }
 
 
+@router.get("/weekly-review")
+def _get_weekly_review(date: str | None = None) -> dict[str, Any]:
+    """S221: 读 weekly_review.json 全文（actual P&L + cap_down 提案 + decay_stats）。
+
+    前端 WeeklyReviewPanel 之前从 manual-trades 推算 cap-down（无端点），
+    现直读后端真值（weekly_review executor 生成 {date}_weekly_review.json）。
+    无 date 返最近一次。无文件诚实标 not_found/no_reports（不臆造）。
+    """
+    import json  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    _dir = Path(resolve_data_dir()) / "signal_reports"
+    if date:
+        path = _dir / f"{date}_weekly_review.json"
+        if not path.exists():
+            return {"status": "not_found", "date": date}
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    if not _dir.exists():
+        return {"status": "no_reports"}
+    files = sorted(_dir.glob("*_weekly_review.json"), reverse=True)
+    if not files:
+        return {"status": "no_reports"}
+    with open(files[0], "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return {"status": "ok", **data, "file": files[0].name}
+
+
 # ── helper: weekly_review 用实际 P&L ──
 
 def _actual_pnl_for_weekly_review() -> dict[str, Any]:
