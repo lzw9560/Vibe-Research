@@ -6,11 +6,13 @@ import { render, screen } from "@testing-library/react";
 const hooks = vi.hoisted(() => ({
   useSignalsManualTrades: vi.fn(),
   useSignalsStatus: vi.fn(),
+  useWeeklyReview: vi.fn(),
 }));
 
 vi.mock("@/lib/query/signals", () => ({
   useSignalsManualTrades: hooks.useSignalsManualTrades,
   useSignalsStatus: hooks.useSignalsStatus,
+  useWeeklyReview: hooks.useWeeklyReview,
 }));
 
 import { WeeklyReviewPanel } from "../WeeklyReviewPanel";
@@ -58,6 +60,7 @@ function setupTrades(trades: ReturnType<typeof mockTrade>[], cap: number = 1.0) 
     isError: false,
     error: null,
   });
+  hooks.useWeeklyReview.mockReturnValue({ data: { status: "no_reports" } });
 }
 
 function setupEmpty() {
