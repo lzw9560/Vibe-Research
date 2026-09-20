@@ -22,14 +22,14 @@ vi.mock("@/lib/api", () => ({ api: mockApi }));
 
 // ---- 8 项任务假数据（对应原型 TASKS：15:30-17:15）----
 const EIGHT_TASKS: ScheduledTaskStatus[] = [
-  { id: 1, name: "基因得分", cron_expr: "30 15 * * 1-5", last_run_at: "2026-08-21T15:30:12", last_run_status: "success", today_status: "done", task_type: "daily_data_refresh", enabled: true },
-  { id: 2, name: "STI 计算", cron_expr: "35 15 * * 1-5", last_run_at: "2026-08-21T15:35:08", last_run_status: "success", today_status: "done", task_type: "sti_post_market", enabled: true },
-  { id: 3, name: "前向结算", cron_expr: "45 15 * * 1-5", last_run_at: "2026-08-21T15:45:10", last_run_status: "success", today_status: "done", task_type: "daily_backtest_run", enabled: true },
-  { id: 4, name: "R1 溢价评分", cron_expr: "50 15 * * 1-5", last_run_at: "2026-08-21T15:50:09", last_run_status: "success", today_status: "done", task_type: "limitup_precompute", enabled: true },
-  { id: 5, name: "首板9维度评分", cron_expr: "15 16 * * 1-5", last_run_at: "2026-08-21T16:15:00", last_run_status: "running", today_status: "running", task_type: "candidate_funnel_precompute", enabled: true },
-  { id: 6, name: "kline日更", cron_expr: "30 16 * * 1-5", last_run_at: null, last_run_status: null, today_status: "pending", task_type: "market_data_sync", enabled: true },
-  { id: 7, name: "derived预采集", cron_expr: "0 17 * * 1-5", last_run_at: null, last_run_status: null, today_status: "pending", task_type: "cleanup_old_runs", enabled: true },
-  { id: 8, name: "漏斗预计算", cron_expr: "15 17 * * 1-5", last_run_at: "2026-08-21T17:15:00", last_run_status: "failed", today_status: "error", task_type: "first_board_filter", enabled: true },
+  { id: 1, name: "基因得分", cron_expr: "30 15 * * 1-5", last_run_at: "2026-08-21T15:30:12", last_run_status: "success", today_status: "done", task_type: "daily_data_refresh", enabled: true, notify_on_success: true },
+  { id: 2, name: "STI 计算", cron_expr: "35 15 * * 1-5", last_run_at: "2026-08-21T15:35:08", last_run_status: "success", today_status: "done", task_type: "sti_post_market", enabled: true, notify_on_success: true },
+  { id: 3, name: "前向结算", cron_expr: "45 15 * * 1-5", last_run_at: "2026-08-21T15:45:10", last_run_status: "success", today_status: "done", task_type: "daily_backtest_run", enabled: true, notify_on_success: true },
+  { id: 4, name: "R1 溢价评分", cron_expr: "50 15 * * 1-5", last_run_at: "2026-08-21T15:50:09", last_run_status: "success", today_status: "done", task_type: "limitup_precompute", enabled: true, notify_on_success: true },
+  { id: 5, name: "首板9维度评分", cron_expr: "15 16 * * 1-5", last_run_at: "2026-08-21T16:15:00", last_run_status: "running", today_status: "running", task_type: "candidate_funnel_precompute", enabled: true, notify_on_success: true },
+  { id: 6, name: "kline日更", cron_expr: "30 16 * * 1-5", last_run_at: null, last_run_status: null, today_status: "pending", task_type: "market_data_sync", enabled: true, notify_on_success: true },
+  { id: 7, name: "derived预采集", cron_expr: "0 17 * * 1-5", last_run_at: null, last_run_status: null, today_status: "pending", task_type: "cleanup_old_runs", enabled: true, notify_on_success: true },
+  { id: 8, name: "漏斗预计算", cron_expr: "15 17 * * 1-5", last_run_at: "2026-08-21T17:15:00", last_run_status: "failed", today_status: "error", task_type: "first_board_filter", enabled: true, notify_on_success: true },
 ];
 
 function renderWithProviders(ui: ReactNode) {

@@ -15,8 +15,13 @@ import { Disclaimer } from "@/components/ui/Disclaimer";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Sheet } from "@/components/ui/Sheet";
-import { useSignalsDaily, useRecordManualTrade } from "@/lib/query/signals";
-import type { SignalsDailySignal } from "@/lib/api/types";
+import { DeliveryStatusCard } from "./DeliveryStatusCard";
+import {
+  useSignalsDaily,
+  useRecordManualTrade,
+  useSignalsManualTrades,
+} from "@/lib/query/signals";
+import type { SignalsDailySignal, ManualTradeResponse } from "@/lib/api/types";
 
 // §44 诚实性 strings（spec C1 daily report 同源，禁改软）
 const HONESTY_VALIDATED = "统计验证（非已实现收益）";
@@ -35,11 +40,13 @@ function SignalRow({
   signal,
   date,
   exploratory,
+  matchedTrade,
   onRecord,
 }: {
   signal: SignalsDailySignal;
   date: string;
   exploratory?: boolean;
+  matchedTrade?: ManualTradeResponse | null;
   onRecord: (s: SignalsDailySignal) => void;
 }) {
   const price = signal.entry_price;
@@ -59,6 +66,12 @@ function SignalRow({
               探索性
             </span>
           )}
+          {/* S221 gap3: delivery leak 标记——按 code 匹配 manual trade */}
+          {matchedTrade && matchedTrade.pnl_diff?.delivery_leak && (
+            <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600">
+              leak
+            </span>
+          )}
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           参考价 {priceStr}
@@ -69,6 +82,21 @@ function SignalRow({
                 （来源 {signal.price_source}）
               </span>
             )}
+          {/* S221 gap3: actual vs reference P&L diff（有 matchedTrade 才显示，诚实不臆造） */}
+          {matchedTrade && matchedTrade.actual_pnl?.pnl_pct != null && (
+            <span className="ml-2">
+              实际{" "}
+              <span className={matchedTrade.actual_pnl.pnl_pct >= 0 ? "text-emerald-600" : "text-red-500"}>
+                {matchedTrade.actual_pnl.pnl_pct >= 0 ? "+" : ""}
+                {matchedTrade.actual_pnl.pnl_pct.toFixed(2)}%
+              </span>
+              {matchedTrade.reference_pnl?.pnl_pct != null && (
+                <span className="text-muted-foreground/70">
+                  {" "}vs 参考 {matchedTrade.reference_pnl.pnl_pct.toFixed(2)}%
+                </span>
+              )}
+            </span>
+          )}
         </div>
       </div>
       <Button
@@ -277,6 +305,7 @@ function ManualTradeForm({
 
 export function TodaySignalsPanel() {
   const { data, isLoading, isError } = useSignalsDaily();
+  const { data: tradesResp } = useSignalsManualTrades();
   const [sheetSignal, setSheetSignal] = useState<SignalsDailySignal | null>(
     null,
   );
@@ -288,6 +317,13 @@ export function TodaySignalsPanel() {
   const filters = data?.filters;
   const verified = data?.verified_numbers;
   const disclaimers = data?.disclaimers ?? [];
+
+  // S221 gap3: 按 code 建 manual trade Map，传 SignalRow 显示 diff/leak
+  const tradeByCode = new Map<string, ManualTradeResponse>();
+  for (const t of tradesResp?.trades ?? []) {
+    // 同 code 取最新一条（倒序已按时间）
+    if (!tradeByCode.has(t.code)) tradeByCode.set(t.code, t);
+  }
 
   const tradable = (data?.signals ?? []).filter((s) => s.bucket === "tradable");
   const exploratory = (data?.signals ?? []).filter(
@@ -302,6 +338,9 @@ export function TodaySignalsPanel() {
         <h3 className="text-sm font-semibold">今日信号（可行动参考）</h3>
         <span className="text-xs text-muted-foreground">consecutive_relay</span>
       </div>
+
+      {/* S221 gap1: 推送状态灯（cron fire + 飞书配置态） */}
+      <DeliveryStatusCard />
 
       {/* Honesty banner（§44 诚实性 gate，同 C1） */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -390,6 +429,7 @@ export function TodaySignalsPanel() {
                     key={s.code}
                     signal={s}
                     date={date}
+                    matchedTrade={tradeByCode.get(s.code)}
                     onRecord={setSheetSignal}
                   />
                 ))}
@@ -417,6 +457,7 @@ export function TodaySignalsPanel() {
                     signal={s}
                     date={date}
                     exploratory
+                    matchedTrade={tradeByCode.get(s.code)}
                     onRecord={setSheetSignal}
                   />
                 ))}

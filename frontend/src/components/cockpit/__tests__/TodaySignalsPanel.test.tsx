@@ -5,11 +5,15 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 const hooks = vi.hoisted(() => ({
   useSignalsDaily: vi.fn(),
   useRecordManualTrade: vi.fn(),
+  useSignalsManualTrades: vi.fn(),
+  useDeliveryFireStatus: vi.fn(),
 }));
 
 vi.mock("@/lib/query/signals", () => ({
   useSignalsDaily: hooks.useSignalsDaily,
   useRecordManualTrade: hooks.useRecordManualTrade,
+  useSignalsManualTrades: hooks.useSignalsManualTrades,
+  useDeliveryFireStatus: hooks.useDeliveryFireStatus,
 }));
 
 // Sheet 用 createPortal——mock 掉 react-dom createPortal 让内容直接渲染到 container。
@@ -22,7 +26,7 @@ vi.mock("react-dom", () => {
 });
 
 import { TodaySignalsPanel } from "../TodaySignalsPanel";
-import type { SignalsDailyResponse } from "@/lib/api/types";
+import type { SignalsDailyResponse, ManualTradeResponse } from "@/lib/api/types";
 
 // 构造一个含 tradable + exploratory + avoid 三 bucket 的 daily 响应
 function mockDailyResponse(): SignalsDailyResponse {
@@ -115,6 +119,22 @@ describe("TodaySignalsPanel (S218 #9)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hooks.useRecordManualTrade.mockReturnValue(mockMutation());
+    // S221 gap3: 默认无回录交易（无 diff 显示）
+    hooks.useSignalsManualTrades.mockReturnValue({
+      data: { trades: [], count: 0 },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    // S221 gap1: DeliveryStatusCard 默认 pending 态
+    hooks.useDeliveryFireStatus.mockReturnValue({
+      data: [],
+      dailyReport: null,
+      weeklyReview: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
   });
 
   it("renders loading spinner", () => {
@@ -240,5 +260,74 @@ describe("TodaySignalsPanel (S218 #9)", () => {
       expect(screen.getByTestId("manual-trade-error")).toBeInTheDocument();
     });
     expect(mutation.mutate).not.toHaveBeenCalled();
+  });
+});
+
+// S221 gap3: delivery leak 标记——SignalRow 按 code 匹配 manual trade，显示 diff + leak badge。
+describe("TodaySignalsPanel delivery leak marker (S221 gap3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hooks.useRecordManualTrade.mockReturnValue(mockMutation());
+    hooks.useDeliveryFireStatus.mockReturnValue({
+      data: [],
+      dailyReport: null,
+      weeklyReview: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+  });
+
+  it("matched trade + delivery_leak=true → 红色 leak badge + diff 文本", () => {
+    setupDaily();
+    const leakTrade: ManualTradeResponse = {
+      trade_id: "t1",
+      code: "000001",
+      actual_pnl: { pnl_pct: -2.0, pnl_cny: -200, status: "closed" },
+      reference_pnl: { pnl_pct: 1.04, expected_return_pct: 1.04, source: "chrono_test_mean" },
+      pnl_diff: { diff_pct: -3.04, delivery_leak: true, leak_reason: "actual 远低于 reference -50%" },
+      delivery_leak: true,
+      recorded_at: "2026-09-19T10:00:00",
+    };
+    hooks.useSignalsManualTrades.mockReturnValue({
+      data: { trades: [leakTrade], count: 1 },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    render(<TodaySignalsPanel />);
+    // tradable 第一条 code=000001 匹配 leakTrade → 显示 leak badge
+    expect(screen.getByText(/leak/)).toBeInTheDocument();
+  });
+
+  it("matched trade + delivery_leak=false → 显示 diff 文本，无 leak badge", () => {
+    setupDaily();
+    const okTrade: ManualTradeResponse = {
+      trade_id: "t1",
+      code: "000001",
+      actual_pnl: { pnl_pct: 1.2, pnl_cny: 126.0, status: "closed" },
+      reference_pnl: { pnl_pct: 1.04, expected_return_pct: 1.04, source: "chrono_test_mean" },
+      pnl_diff: { diff_pct: 0.16, delivery_leak: false, leak_reason: "" },
+      delivery_leak: false,
+      recorded_at: "2026-09-19T10:00:00",
+    };
+    hooks.useSignalsManualTrades.mockReturnValue({
+      data: { trades: [okTrade], count: 1 },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    render(<TodaySignalsPanel />);
+    // 非 leak → 内 span 显示 +1.20%（actual_pnl），无红色 leak badge
+    expect(screen.getByText("+1.20%")).toBeInTheDocument();
+    expect(screen.queryByText(/leak/)).not.toBeInTheDocument();
+  });
+
+  it("无 matched trade → 不显示 diff（诚实不臆造）", () => {
+    setupDaily();
+    // 默认 beforeEach 已设 trades=[] → 无匹配
+    render(<TodaySignalsPanel />);
+    // 信号 000001 在 tradable，但无 manual trade → 不显示 diff/leak
+    expect(screen.queryByText(/leak/)).not.toBeInTheDocument();
   });
 });

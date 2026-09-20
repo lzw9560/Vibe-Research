@@ -4,7 +4,7 @@
 // 旧 behavior/reports/notes 折入验证 tab 子区（保兼容不丢内容）
 import { useSearchParams } from "react-router-dom";
 import { Suspense, lazy, type ReactNode, useState } from "react";
-import { FlaskConical, Layers, Activity, FileText, NotebookPen, ChevronDown } from "lucide-react";
+import { FlaskConical, Layers, Activity, FileText, NotebookPen, ChevronDown, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FocusDayStrip } from "@/components/ui/FocusDayStrip";
 import { TabBar } from "@/components/ui/TabBar";
@@ -19,6 +19,7 @@ import type { DimensionValidation } from "@/lib/candidates";
 import BehaviorLoop from "@/pages/BehaviorLoop";
 import { MyReports } from "@/pages/MyReports";
 import { Notes } from "@/pages/Notes";
+import { WeeklyReviewPanel } from "./WeeklyReviewPanel";
 import { cn } from "@/lib/utils";
 
 const StrategyPage = lazy(() =>
@@ -29,11 +30,12 @@ const Fallback = (
   <div className="flex h-[40vh] items-center justify-center text-sm text-muted-foreground">加载中…</div>
 );
 
-type ReviewTabKey = "validation" | "strategy";
+type ReviewTabKey = "validation" | "strategy" | "weekly";
 
 const REVIEW_TABS: { key: ReviewTabKey; label: string; icon: ReactNode }[] = [
   { key: "validation", label: "验证", icon: <FlaskConical className="h-3.5 w-3.5" /> },
   { key: "strategy", label: "策略", icon: <Layers className="h-3.5 w-3.5" /> },
+  { key: "weekly", label: "周度复盘", icon: <CalendarDays className="h-3.5 w-3.5" /> },
 ];
 
 // Track E A7: dimension_id → edge_type 映射（镜像 M4 backend _DIMENSION_EDGE_TYPE）。
@@ -222,7 +224,9 @@ export function ReviewPage() {
   const tabParam = searchParams.get("tab");
   // 兼容旧 tab 值: backtest/behavior/reports/notes → validation
   const active: ReviewTabKey =
-    tabParam === "strategy" ? "strategy" : "validation";
+    tabParam === "strategy" ? "strategy"
+    : tabParam === "weekly" ? "weekly"
+    : "validation";
 
   const switchTab = (k: string): void => {
     const next = new URLSearchParams(searchParams);
@@ -233,7 +237,9 @@ export function ReviewPage() {
   const subtitle =
     active === "validation"
       ? "因子→§44 verdict→信号验证态→交易/记日志→调因子（§44v2 闭环）"
-      : "战法→回测§44→模拟→前向R3→复盘→调战法（SDD+R3 闭环）";
+      : active === "strategy"
+      ? "战法→回测§44→模拟→前向R3→复盘→调战法（SDD+R3 闭环）"
+      : "实际 P&L 趋势→cap-down 提案→4 周对比（delivery 闭环）";
 
   // 线步骤环
   const validationLine = LINES[2];
@@ -325,6 +331,13 @@ export function ReviewPage() {
               days_robust &lt; 60 → provisional cap ×0.5（不全权重），60 天后 R3 复验升降级。
             </p>
           </GlassCard>
+        </div>
+      )}
+
+      {active === "weekly" && (
+        <div>
+          {/* S221 gap2: 周度复盘——实际 P&L 趋势 + cap-down 提案 + 4 周对比 */}
+          <WeeklyReviewPanel />
         </div>
       )}
 

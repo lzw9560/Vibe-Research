@@ -13,6 +13,9 @@ export interface ScheduledTaskStatus {
   today_status: "done" | "error" | "running" | "pending" | "degraded";
   task_type: string;
   enabled: boolean;
+  // S221: 后端 GET /api/scheduled-tasks 已返此字段（scheduled_tasks.py:89），类型补齐。
+  // 语义=是否配置了飞书成功推送，非"已送达"（无 webhook receipt，不臆造送达）。
+  notify_on_success: boolean;
 }
 
 /**
