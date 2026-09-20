@@ -153,9 +153,10 @@ def fetch_kline(code: str, sources: list[str] | None = None,
     if not chain:
         return [], None
     from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-    TIMEOUT = 5  # per-source timeout（3s→5s 2026-09-20：baostock query ~2-4s singleton
-    # login 后，3s 边缘超时致 fetch_kline 返空→astock mootdx_src 双重 baostock 回退；
-    # 5s 让 _baostock 在 fetch_kline 命中，省双重调用 + "mootdx 空→baostock 回退" log 噪音）
+    TIMEOUT = 8  # per-source timeout（3s→5s→8s 2026-09-20：baostock query ~4-5s singleton
+    # login 后 + 多股并发 _BS_LOCK 串行排队，5s 边缘超时致 fetch_kline 返空→astock
+    # mootdx_src 二次 baostock 回退（双重+log 噪音）；8s 让 _baostock 命中，astock
+    # 不走 mootdx_src 回退，直接用可用数据源 baostock）
     with ThreadPoolExecutor(max_workers=len(chain)) as ex:
         futs = {ex.submit(_call, name, code): name for name in chain}
         try:

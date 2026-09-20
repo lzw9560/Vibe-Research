@@ -192,7 +192,7 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
     分钟K（1/15/30/11）: baostock 5min bars 聚合成对应周期（_aggregate_5min_to_period）。
     日/周/月K（4/5/6）: kline_multi 并发多源（baidu→sina→mootdx→baostock）+ resample。
     """
-    from data.sources.mootdx_src import kline as _mootdx_kline
+    # mootdx_src 回退已删（v2 P0-2：baostock 本环境唯一可用源直接用，不走 mootdx 二次 baostock）
     # 分钟K（category 1=5min / 15=15min / 30=30min / 11=60min）: baostock 5min 聚合——独立分支，不走日K kline_multi
     _MIN_CATEGORY = {1: 5, 15: 15, 30: 30, 11: 60}
     if category in _MIN_CATEGORY:
@@ -224,10 +224,10 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
             return []
     except Exception as e:
         logging.getLogger("astock").warning(
-            "kline(%s) kline_multi failed, fallback mootdx: %s", code, e)
-    # kline_multi 空/失败 → mootdx 回退（baostock 回退在 mootdx_src 内，mootdx 返空时触发）
-    bars = _mootdx_kline(code, category=category, offset=offset)
-    return bars if bars else []
+            "kline(%s) kline_multi failed: %s", code, e)
+    # kline_multi（含 _baostock）空/失败 → 诚实返空，不走 mootdx_src 二次 baostock 回退
+    # （baostock 是本环境唯一可用源直接用；fetch_kline timeout 8s 内命中即够）
+    return []
 
 # ── 新浪财报三表源（urllib，基本面因子组数据地基）──────────────────────────
 # S108：fetch_raw/fetch_merged_periods 由 value_funnel/quality + routers/value_funnel 直接调，
