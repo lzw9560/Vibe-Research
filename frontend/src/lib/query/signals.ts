@@ -70,3 +70,14 @@ export function useDeliveryFireStatus() {
     weeklyReview,
   };
 }
+
+/** S221 gap2: 周度复盘全文（weekly_review.json 真值 cap_down_proposal + cap_up_ready + decay_stats + review_text）。
+ * 之前前端从 manual-trades 推算 cap-down（无端点），现直读后端真值。
+ * 无文件后端返 {status: "no_reports"}，前端降级推算（保留 fallback）。 */
+export function useWeeklyReview() {
+  return useQuery({
+    queryKey: ["signals", "weekly-review"] as const,
+    queryFn: () => api.signalsWeeklyReview(),
+    staleTime: SIGNALS_STALE_MS,
+  });
+}

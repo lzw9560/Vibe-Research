@@ -377,6 +377,9 @@ export const api = {
   // S218 #9: 已录手动交易历史（倒序）
   signalsManualTrades: (limit = 50) =>
     get<ManualTradesResponse>(`/signals/manual-trades?limit=${limit}`),
+  // S221: 周度复盘全文（weekly_review.json 真值：cap_down_proposal + cap_up_ready + decay_stats + review_text）
+  signalsWeeklyReview: () =>
+    get<Record<string, any>>("/signals/weekly-review"),
   // S216 P2: 财报季日历聚合（codes 可选，提供则聚合 per-code 披露/解禁）
   earningsCalendar: (codes?: string, forwardDays = 90) =>
     get<EarningsCalendarResponse>(`/earnings-calendar${codes ? `?codes=${codes}&forward_days=${forwardDays}` : `?forward_days=${forwardDays}`}`),

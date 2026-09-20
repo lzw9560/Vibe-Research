@@ -6,7 +6,7 @@ import { Loader2, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
-import { useSignalsManualTrades, useSignalsStatus } from "@/lib/query/signals";
+import { useSignalsManualTrades, useSignalsStatus, useWeeklyReview } from "@/lib/query/signals";
 import type { ManualTradeResponse } from "@/lib/api/types";
 
 /** ISO date → 周一日期 key（YYYY-MM-DD），用于按周分组。 */
@@ -56,6 +56,7 @@ function aggregateWeekly(trades: ManualTradeResponse[]) {
 export function WeeklyReviewPanel() {
   const { data: tradesResp, isLoading: tradesLoading } = useSignalsManualTrades(200);
   const { data: status } = useSignalsStatus();
+  const { data: weeklyReview } = useWeeklyReview();
 
   if (tradesLoading) {
     return (
@@ -71,9 +72,10 @@ export function WeeklyReviewPanel() {
   const agg = aggregateWeekly(trades);
   const regime = status?.regime?.current ?? "unknown";
 
-  // cap-down 提案：前端推算（镜像 backend executors/signals.py:478-487）
-  // mean closed actual_pnl < 0 → cap-down {from: cap, to: 0.5, reason}
-  const capDown =
+  // cap-down：优先读后端 weekly_review.json 真值（cap_down_proposal），
+  // 无端点数据（status=no_reports）降级前端推算（镜像 backend 逻辑）。
+  const backendCapDown = weeklyReview?.status === "ok" ? weeklyReview?.cap_down_proposal : null;
+  const fallbackCapDown =
     agg.meanAll != null && agg.meanAll < 0
       ? {
           from: status?.arms?.consecutive_relay?.weight_override ?? 1.0,
@@ -81,6 +83,8 @@ export function WeeklyReviewPanel() {
           reason: `实际 P&L mean=${agg.meanAll.toFixed(2)}% < 0（n=${agg.nAll} 笔），触发 cap-down`,
         }
       : null;
+  const capDown = backendCapDown ?? fallbackCapDown;
+  const capDownSource = backendCapDown ? "后端真值" : "前端推算";
 
   // 无数据诚实空态
   if (agg.nAll === 0) {
@@ -109,7 +113,7 @@ export function WeeklyReviewPanel() {
         </p>
       </div>
 
-      {/* cap-down 提案（前端推算） */}
+      {/* cap-down 提案（{capDownSource}） */}
       {capDown ? (
         <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           <div className="flex items-center gap-1.5 font-semibold">
@@ -120,7 +124,7 @@ export function WeeklyReviewPanel() {
             建议 ×{capDown.from} → ×{capDown.to}
           </p>
           <p className="mt-0.5 text-[10px] text-red-600/70">
-            前端推算（基于已录实际 P&L，非读 weekly_review.json）
+            来源：{capDownSource}
           </p>
         </div>
       ) : (
@@ -128,7 +132,7 @@ export function WeeklyReviewPanel() {
           <div className="flex items-center gap-1.5 font-semibold">
             <TrendingUp className="h-3.5 w-3.5" /> 实际 P&L mean={agg.meanAll?.toFixed(2)}% ≥ 0
           </div>
-          <p className="mt-0.5 text-emerald-600/70">无 cap-down 触发（前端推算）</p>
+          <p className="mt-0.5 text-emerald-600/70">无 cap-down 触发（{capDownSource}）</p>
         </div>
       )}
 
