@@ -75,6 +75,7 @@ export function Layout() {
 
   // 移动 drawer 打开时焦点进入（a11y：屏幕阅读器用户知道 dialog 出现）
   const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (mobileMenuOpen) dialogRef.current?.focus();
   }, [mobileMenuOpen]);
@@ -277,6 +278,7 @@ export function Layout() {
         {/* Mobile Header */}
         <div className="flex items-center gap-3 border-b border-border/40 bg-background/60 px-4 py-3 md:hidden">
           <button
+            ref={triggerRef}
             onClick={() => setMobileMenuOpen((p) => !p)}
             className="rounded p-2 text-muted-foreground transition-colors hover:text-foreground"
             aria-label="打开菜单"
@@ -306,7 +308,7 @@ export function Layout() {
               aria-modal="true"
               aria-label="导航菜单"
               tabIndex={-1}
-              onKeyDown={(e) => { if (e.key === "Escape") setMobileMenuOpen(false); }}
+              onKeyDown={(e) => { if (e.key === "Escape") { setMobileMenuOpen(false); triggerRef.current?.focus(); } }}
             >
               <div className="flex h-full flex-col">
                 <div className="border-b border-border/50 p-4">
