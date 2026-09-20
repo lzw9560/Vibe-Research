@@ -1,6 +1,6 @@
 # S218 — 投研参考交付系统（验证→可行动参考→收益闭环）
 
-> 状态：spec v3（2026-09-18，织入 spec-review `w5ety6ysa` 21 修订 + 2026-07-06 交易新规 caveat）。
+> 状态：已实现（2026-09-18，commit 96d9c3e/348de8f/effaa99）+ spec v3（2026-09-18，织入 spec-review `w5ety6ysa` 21 修订 + 2026-07-06 交易新规 caveat）。
 > **scope 声明**：交付层——把唯一 validated edge（consecutive_relay）包装成用户能照着做的投研参考，**不是新验证机器**。复用现有基建（S211 consecutive_relay arm + scheduled_tasks cron + Feishu notify + StockCockpit + JournalWinRateCurve 图表基建 + pre_limitup_scanner + compute_regime_labels + lift_for_arm）。是 freeze 解后「做减法优先」下唯一允许的加法。
 > 触发：用户 2026-09-18 纠正「process theater 不产收益」+ 要「研究验证→正确投研参考→照做」。
 > **cross-cutting 诚实性框架**（所有报告/通知/dashboard 必标）：consecutive_relay 是**统计 validation 非已实现收益**——edge 衰减中（train 1.57%→test 1.04% 跌 34%）、paper-only（无券商/xtquant/qmt 只有 PaperPortfolio，×0.75 咬模拟盘名义股数非真钱，零真交易）、within-regime only（bull validated，bear/range<60 test 天没法定）、照做有风险。×0.75=研究诚实性标注（统计信心）非保本；真钱仓位/止损用户手动决策。per-战法 scope：只 consecutive_relay（n=1 validated，别推广 16 战法）。

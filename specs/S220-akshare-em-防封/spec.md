@@ -1,6 +1,6 @@
 # Spec: S220 — akshare_src stock_news / individual_info 迁 em_get 防封
 
-> 状态：草案
+> 状态：已实现（2026-09-20，commit 32240d4，12 test green + live 验通过）
 > 作者：Backend Architect  日期：2026-09-20
 > 关联：v2 审查 C2 CRITICAL；S008 akshare_src；S114 chip_distribution（em_get 先例）；fund_flow.py:313 `_industry_of`（push2delay+ut 先例）
 
