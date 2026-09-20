@@ -536,6 +536,19 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 daily_report 已创建（cron 50 14 * * 0-4，S218）")
 
+    # S222: regime-flip tripwire——09:10 盘前检测（daily_report 14:50 次日、开盘前 9:30）。
+    # 连续 3 天 bull 才 alert（hysteresis 防 raw regime 天天翻误报）。
+    # consecutive_relay live 验证启动器：bull 回来时通知用户照做 4 周真 P&L。
+    if "regime_flip_notify" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="regime_flip_notify",
+            description="S222 regime→bull tripwire（连续 3 天 bull 才 alert，consecutive_relay live 验证启动器）",
+            task_type="regime_flip_notify",
+            cron_expr="10 9 * * 0-4",  # 09:10 盘前（daily_report 14:50 次日、开盘 9:30 前）
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 regime_flip_notify 已创建（cron 10 9 * * 0-4，S222）")
+
     # S211 通电收尾（2026-09-17）：regime_cache_fetch——17:20（kline_refresh 17:15 后、
     # trade_journal_daily 17:30 前）。刷 index_ma20_regime.json 防 consecutive_relay
     # regime=None 误保守 ×0.5（升 bull ×1.0 前必须接 cron，否则 bull 被当未知误保守）。

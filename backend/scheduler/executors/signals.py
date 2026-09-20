@@ -553,3 +553,82 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
 def falsified_retest(payload: dict[str, Any]) -> dict[str, Any]:
     """TODO: 已证否策略定期复测（防假阴性）。"""
     return {"status": "skipped", "reason": "TODO: S218 P2 falsified_retest stub"}
+
+
+# ── S222: regime-flip tripwire + hysteresis ───────────────────────────────
+
+
+def regime_flip_notify(payload: dict[str, Any]) -> dict[str, Any]:
+    """S222 regime-flip tripwire——consecutive_relay live 验证的 delivery 闭环启动器。
+
+    consecutive_relay stage-2 ×1.0 definitive，但 live 0 tradable（regime=range 等 bull）。
+    本 executor 监测 regime→bull，连续 3 天 bull 才 alert（hysteresis 防 raw 天天翻误报）。
+
+    hysteresis 决策 rule（grill agent codify 进代码注释，非只存 memory）：
+    - raw regime（index_ma20_regime.json strong/weak）5497/5498 天翻→几乎天天翻
+    - compute_regime_labels 转 bull/bear/range（close vs MA20 + slope）比 raw 稳定
+    - 仍须 3 天连续 bull 才 alert（防单日翻回误报）；非 bull / 未稳定 / 数据不够 → 不 alert
+    - 不做 sticky bar（grill 反对——regime=range 时永远"0 可交易"是心理打击）→ 改 notification
+
+    Args:
+        payload: {"run_date": "2026-09-18"}（可选，默认前一交易日）
+
+    Returns:
+        {"status": "alerted"|"skip", "regime": str, "tradable": int, ...}
+    """
+    run_date = payload.get("run_date") or prev_trading_date_str()
+    logger.info("[S222] regime_flip_notify start: date=%s", run_date)
+
+    # 1. 取 regime 历史（compute_regime_labels 返 {date: regime} dict[str,str]）
+    try:
+        from tools.gap_regime_stratified import compute_regime_labels
+
+        regime_map = compute_regime_labels()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[S222] compute_regime_labels 失败: %s", e)
+        return {"status": "skip", "reason": "regime_map_unavailable"}
+
+    if not regime_map or not isinstance(regime_map, dict):
+        return {"status": "skip", "reason": "regime_map_empty"}
+
+    # 2. 取最近 3 天 regime（hysteresis）
+    sorted_dates = sorted(regime_map.keys())
+    if len(sorted_dates) < 3:
+        logger.info("[S222] regime 历史不够 3 天: %d", len(sorted_dates))
+        return {"status": "skip", "reason": "insufficient_history", "n_days": len(sorted_dates)}
+    recent_dates = sorted_dates[-3:]
+    recent_regimes = [regime_map.get(d) for d in recent_dates]
+
+    # 3. hysteresis: 3 天连续 bull 才 alert
+    if not all(r == "bull" for r in recent_regimes):
+        logger.info(
+            "[S222] 近 3 天 regime 非 bull: %s",
+            dict(zip(recent_dates, recent_regimes)),
+        )
+        return {
+            "status": "skip",
+            "reason": "not_bull_or_unstable",
+            "recent_regimes": dict(zip(recent_dates, recent_regimes)),
+        }
+
+    # 4. 连续 3 天 bull → 查当日可做信号 + cap
+    signals = get_consecutive_relay_signals(run_date)
+    tradable_n = int(signals.get("filters", {}).get("tradable", 0))
+    cap = signals.get("cap", {}).get("effective", "?")
+
+    # 5. 飞书通知（复用 _send_text_notification；未设 webhook 时 no-op + log）
+    text = (
+        f"regime→bull（连续 3 天 {recent_dates[0]}~{recent_dates[-1]}），"
+        f"{tradable_n} 个可做信号，cap=×{cap}，记录成交以闭合真钱反馈"
+    )
+    _send_text_notification(text)
+    logger.info("[S222] regime→bull alert sent: %s", text)
+
+    return {
+        "status": "alerted",
+        "regime": "bull",
+        "recent_dates": recent_dates,
+        "tradable": tradable_n,
+        "cap": cap,
+        "text": text,
+    }
