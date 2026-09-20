@@ -28,6 +28,7 @@ import {
   useCoachStatus,
   useCoachTimetable,
 } from "@/lib/query";
+import { isTradingHours } from "@/hooks/useLiveQuotes";
 import { usePremarketSelection, type PremarketCandidate } from "@/lib/query/premarket";
 import type { LianbanStock, CoachTimetableSlot, CoachChecklistItem, IntradaySnapshot } from "@/lib/api";
 
@@ -84,7 +85,7 @@ export function IntradayCockpit() {
   // 候选列表数据源
   // deferred：breakout §44 naive lift=1.36x <2x 非 validated；lianban 来自 useEmotion
   const premarketQ = usePremarketSelection(today, 20, 0.9);
-  const emotionQ = useEmotion();
+  const emotionQ = useEmotion({ refetchInterval: () => (isTradingHours() ? 15000 : false) });
   const latestQ = useIntradayLatest();
   const coachStatusQ = useCoachStatus();
   const timetableQ = useCoachTimetable();
@@ -631,7 +632,7 @@ function StockPreviewContent({
   code: string;
   name: string | null;
 }) {
-  const quoteQ = useQuote(code);
+  const quoteQ = useQuote(code, { refetchInterval: () => (isTradingHours() ? 10000 : false) });
   const quote = quoteQ.data?.[code] ?? null;
 
   return (

@@ -11,7 +11,6 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { ApiError } from "@/lib/api";
 import { useClosedLoop, useDrawdownStatus } from "@/lib/query";
 import type { ArmAggregate, ClosedLoopRecord } from "@/lib/journal-contract";
-import { FollowOrderButton } from "./FollowOrderPanel";
 
 function yuan(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "—";
@@ -161,9 +160,7 @@ function RecordRow({ r }: { r: ClosedLoopRecord }) {
           : <span className="text-green-500">已平</span>}
       </td>
       <td className="px-2 py-1 text-xs">
-        {r.is_realized === 1 && r.signal_id
-          ? <FollowOrderButton signal_id={r.signal_id} />
-          : <span className="text-[10px] text-muted-foreground">—</span>}
+        <span className="text-[10px] text-muted-foreground">—</span>
       </td>
     </tr>
   );
