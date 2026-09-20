@@ -19,8 +19,14 @@ import pytest
 # ── fixtures ──────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
-def _patch_deps(monkeypatch):
+def _patch_deps(monkeypatch, tmp_path):
     """Mock 外部依赖，防真查 DB/真发通知。"""
+    # 隔离 _SIGNAL_DIR 到 tmp_path——防 weekly_review 存报告污染生产 artifact
+    # （P0 phantom 同类根因：测试数据泄漏进真实 .vibe-research/signal_reports/）
+    monkeypatch.setattr(
+        "scheduler.executors.signals._SIGNAL_DIR",
+        tmp_path / "signal_reports",
+    )
     # Mock get_consecutive_relay_signals (C1 shared core)
     monkeypatch.setattr(
         "scheduler.executors.signals.get_consecutive_relay_signals",

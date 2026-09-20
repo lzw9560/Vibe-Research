@@ -1,44 +1,54 @@
 // S218 C4: ValidatedEdgeCard——诚实呈现唯一 validated edge 的衰减状态。
 // 复用 JournalWinRateCurve 的 useECharts + GlassCard + Disclaimer pattern，
-// 数据源新写（衰减轨迹二点 bar + provisional labels + paper P&L tag）。
+// 数据源改读 useSignalsDaily（cap.effective + verified_numbers.chrono_*），
+// 与 TodaySignalsPanel 同源——不再硬编码 effectiveCap() + DECAY_* 常量。
 import { useRef, useMemo } from "react";
 import { Loader2, AlertTriangle, TrendingDown } from "lucide-react";
 import { useECharts } from "@/hooks/useECharts";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { useSignalsStatus } from "@/lib/query/signals";
+import { useSignalsDaily } from "@/lib/query/signals";
 import type { EChartsOption } from "echarts";
 
-// 静态衰减轨迹数据（§44 chrono forward-OOS，train→test）
-const DECAY_TRAIN = 1.57;
-const DECAY_TEST = 1.04;
-const DECAY_PCT = 34;
-const DECAY_P = 0.0054;
-const DECAY_WR = 52.7;
-
-/** 根据 regime 返回有效 cap 显示值 */
-function effectiveCap(regime: string | null, stale: boolean): number {
-  if (stale || !regime) return 0.5;
-  return regime === "bull" ? 0.75 : 0.5;
+/** 返回人话状态标签（基于 regime + staleness，与后端 cap 一致） */
+function statusLabel(
+  regime: string | null,
+  stale: boolean,
+): { text: string; tone: "amber" | "red" | "emerald" } {
+  if (stale) return { text: "provisional", tone: "red" };
+  if (!regime || regime === "bear" || regime === "range")
+    return { text: "within-regime only", tone: "amber" };
+  return { text: "衰减中", tone: "amber" };
 }
 
-/** 返回人话状态标签 */
-function statusLabel(regime: string | null, stale: boolean): { text: string; tone: "amber" | "red" | "emerald" } {
-  if (stale) return { text: "provisional", tone: "red" };
-  if (!regime || regime === "bear" || regime === "range") return { text: "within-regime only", tone: "amber" };
-  return { text: "衰减中", tone: "amber" };
+/** cap 格式化：整数（如 1.0）补 .0，避免 ×1；非整数原样（0.75/0.5）。 */
+function formatCap(cap: number): string {
+  return Number.isInteger(cap) ? cap.toFixed(1) : String(cap);
 }
 
 export function ValidatedEdgeCard() {
   const chartRef = useRef<HTMLDivElement>(null);
-  const { data, isLoading, isError } = useSignalsStatus();
+  const { data, isLoading, isError } = useSignalsDaily();
 
   const regime = data?.regime?.current ?? null;
   const freshness = data?.regime?.freshness;
   const stale = freshness?.stale ?? false;
   const daysSince = freshness?.days_since ?? 0;
-  const cap = effectiveCap(regime, stale);
+  // cap 单源：读后端 cap.effective（同 TodaySignalsPanel），不再 effectiveCap() 硬编码。
+  const cap = data?.cap?.effective ?? 1.0;
+  const verified = data?.verified_numbers;
   const label = statusLabel(regime, stale);
+
+  // 衰减轨迹数值（后端 verified_numbers.chrono_*，禁臆造常量）
+  const train = verified?.chrono_train;
+  const testVal = verified?.chrono_test;
+  const decayPct = verified?.chrono_decay_pct;
+  const pVal = verified?.chrono_p;
+  const wr = verified?.chrono_wr;
+
+  const capDisplay = formatCap(cap);
+  const capText = `×${capDisplay}`;
+  const capLabel = regime ?? "unknown";
 
   // 衰减轨迹图表 option（train vs test 二柱）
   const chartOption = useMemo<EChartsOption>(() => {
@@ -46,8 +56,8 @@ export function ValidatedEdgeCard() {
       tooltip: {
         trigger: "axis",
         formatter: () =>
-          `train ${DECAY_TRAIN}% → test ${DECAY_TEST}%<br/>` +
-          `衰减 ${DECAY_PCT}% · p=${DECAY_P} · WR ${DECAY_WR}%`,
+          `train ${train ?? "N/A"}% → test ${testVal ?? "N/A"}%<br/>` +
+          `衰减 ${decayPct ?? "N/A"}% · p=${pVal ?? "N/A"} · WR ${wr ?? "N/A"}%`,
       },
       grid: { left: 40, right: 16, top: 10, bottom: 24 },
       xAxis: {
@@ -67,8 +77,8 @@ export function ValidatedEdgeCard() {
           name: "均值收益",
           type: "bar",
           data: [
-            { value: DECAY_TRAIN, itemStyle: { color: "#fb923c" } },
-            { value: DECAY_TEST, itemStyle: { color: "#f59e0b" } },
+            { value: train ?? 0, itemStyle: { color: "#fb923c" } },
+            { value: testVal ?? 0, itemStyle: { color: "#f59e0b" } },
           ],
           barWidth: "40%",
           label: {
@@ -82,17 +92,11 @@ export function ValidatedEdgeCard() {
         },
       ],
     };
-  }, []);
+  }, [train, testVal, decayPct, pVal, wr]);
 
-  useECharts(
-    chartRef,
-    () => chartOption,
-    [chartOption],
-    { skip: isLoading || isError || !data },
-  );
-
-  const capText = `×${cap}`;
-  const capLabel = cap === 0.75 ? "bull" : cap === 0.5 ? "bear/range/stale" : "";
+  useECharts(chartRef, () => chartOption, [chartOption], {
+    skip: isLoading || isError || !data,
+  });
 
   return (
     <GlassCard className="p-4">
@@ -143,42 +147,44 @@ export function ValidatedEdgeCard() {
             <span className="text-xs text-muted-foreground">{capLabel}</span>
           </div>
           <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
-            ×{cap}=研究诚实性标注，非资金保护。真钱仓位/止损由你自己定。
+            ×{capDisplay}=研究诚实性标注，非资金保护。真钱仓位/止损由你自己定。
           </p>
 
           {/* 衰减轨迹图表 */}
           <div ref={chartRef} className="h-[200px] w-full mb-3" />
 
-          {/* 衰减数据行 */}
+          {/* 衰减数据行（后端 verified_numbers.chrono_*） */}
           <div className="grid grid-cols-4 gap-2 mb-3">
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
               <p className="text-[10px] text-muted-foreground">train</p>
-              <p className="text-sm font-bold text-amber-600">{DECAY_TRAIN}%</p>
+              <p className="text-sm font-bold text-amber-600">{train ?? "—"}%</p>
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
               <p className="text-[10px] text-muted-foreground">test</p>
-              <p className="text-sm font-bold text-amber-600">{DECAY_TEST}%</p>
+              <p className="text-sm font-bold text-amber-600">{testVal ?? "—"}%</p>
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
               <p className="text-[10px] text-muted-foreground">衰减</p>
-              <p className="text-sm font-bold text-red-500">-{DECAY_PCT}%</p>
+              <p className="text-sm font-bold text-red-500">-{decayPct ?? "—"}%</p>
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
               <p className="text-[10px] text-muted-foreground">WR</p>
-              <p className="text-sm font-bold">{DECAY_WR}%</p>
+              <p className="text-sm font-bold">{wr ?? "—"}%</p>
             </div>
           </div>
 
           {/* Regime 新鲜度 */}
-          <div className={`mb-3 rounded border px-3 py-2 text-xs ${stale ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+          <div
+            className={`mb-3 rounded border px-3 py-2 text-xs ${stale ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}
+          >
             {stale ? (
               <span>
-                <strong>实际 ×0.5（cache 滞后 {daysSince} 天）</strong>：
-                regime cache 到 {freshness?.last_cache_date ?? "未知"}，当前按保守 ×0.5 计算。
+                <strong>实际 ×{capDisplay}（cache 滞后 {daysSince} 天）</strong>：
+                regime cache 到 {freshness?.last_cache_date ?? "未知"}，当前按保守计算。
               </span>
             ) : (
               <span>
-                regime cache 新鲜（{freshness?.last_cache_date ?? "未知"}），当前 ×{cap}。
+                regime cache 新鲜（{freshness?.last_cache_date ?? "未知"}），当前 ×{capDisplay}。
               </span>
             )}
           </div>

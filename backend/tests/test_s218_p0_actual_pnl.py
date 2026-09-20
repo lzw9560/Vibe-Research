@@ -15,6 +15,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# 真实 _SIGNAL_DIR（模块级捕获，早于 autouse fixture patch，用于 sentinel 检测测试污染）
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REAL_SIGNAL_DIR = _REPO_ROOT / ".vibe-research" / "signal_reports"
+
 
 # ── fixtures ─────────────────────────────────────────────────────────────
 
@@ -25,6 +29,14 @@ def _patch_deps(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "routers.signals._MANUAL_TRADES_FILE",
         tmp_path / "manual_trades.jsonl",
+    )
+    # Mock _SIGNAL_DIR 到临时目录——防 weekly_review 存报告污染生产 artifact
+    # （P0 phantom 根因：测试数据 entry 10/exit 4 → -60% 泄漏进真实
+    #  .vibe-research/signal_reports/2026-09-18_weekly_review.json，
+    #  致 manual_trades.jsonl 0 字节但报告报 -60% n=1 幽灵交易）
+    monkeypatch.setattr(
+        "scheduler.executors.signals._SIGNAL_DIR",
+        tmp_path / "signal_reports",
     )
     # Mock _get_reference_price_from_signal 避免读 DB（3-tuple: price, source, arm）
     # arm=consecutive_relay 让 followed_reference=True 的端点测试拿到 chrono edge +1.04%
@@ -446,3 +458,74 @@ class TestWeeklyReviewReadsActualPnl:
         assert result["status"] == "ok"
         # review_text 中应包含 delivery leak 警告
         assert "delivery leak" in result["review_text"] or "执行偏差" in result["review_text"]
+
+
+# ── test: weekly_review artifact isolation (P0 phantom root cause) ──────
+
+class TestWeeklyReviewArtifactIsolation:
+    """P0 幽灵交易根因修复：weekly_review 测试不得污染生产报告 artifact。
+
+    根因（诊断 2026-09-20）：autouse fixture 隔离了 _MANUAL_TRADES_FILE
+    （测试交易写 tmp_path），但未隔离 _SIGNAL_DIR（weekly_review 存报告到真实
+    repo-root .vibe-research/signal_reports/）。测试数据（entry 10/exit 4 →
+    -60%）泄漏进生产 2026-09-18_weekly_review.json，造成 manual_trades.jsonl
+    0 字节但报告报 -60% n=1 的幽灵交易。生产 weekly_review 代码本身正确
+    （读 manual_trades.jsonl，空则 None/0），幽灵来自测试污染。
+    """
+
+    def test_weekly_review_saves_to_isolated_dir_not_real_signal_dir(self, monkeypatch):
+        """weekly_review 须存到隔离 tmp_path，不写真实 _SIGNAL_DIR。"""
+        from routers.signals import _post_manual_trade, ManualTradeInput
+        from scheduler.executors.signals import weekly_review
+
+        # sentinel：未来日期，保证真实 _SIGNAL_DIR 无此文件
+        sentinel_date = "2099-01-01"
+        sentinel_real_path = _REAL_SIGNAL_DIR / f"{sentinel_date}_weekly_review.json"
+        if sentinel_real_path.exists():
+            sentinel_real_path.unlink()
+        assert not sentinel_real_path.exists(), "前置：sentinel 不该存在"
+
+        # 录一笔测试交易（写隔离 tmp_path，autouse 已 patch _MANUAL_TRADES_FILE）
+        body = ManualTradeInput(
+            code="999999",
+            entry_price=10.0,
+            entry_time="2026-09-18T09:30:00",
+            exit_price=4.0,  # → -60%，复现幽灵数值
+            exit_time="2026-09-18T14:00:00",
+            followed_reference=True,
+            reference_signal_id="consecutive_relay_2026-09-18_999999",
+        )
+        _post_manual_trade(body)
+
+        monkeypatch.setattr(
+            "scheduler.executors.signals.get_consecutive_relay_signals",
+            MagicMock(return_value={
+                "date": sentinel_date,
+                "arm": "consecutive_relay",
+                "regime": {"current": "bull"},
+                "cap": {"effective": 0.75},
+                "signals": [],
+            }),
+        )
+        _FakeTJ = MagicMock()
+        _FakeTJ.return_value.query_winrate_trends.return_value = []
+        _FakeTJ.return_value.query_arm_status.return_value = {
+            "is_active": True, "weight_override": None, "kill_reason": None, "killed_at": None,
+        }
+        monkeypatch.setattr("engine.trade_journal.TradeJournal", _FakeTJ)
+        monkeypatch.setattr("scheduler.executors.signals._send_text_notification", MagicMock())
+
+        result = weekly_review({"run_date": sentinel_date})
+        assert result["status"] == "ok"
+
+        # 核心断言：真实 _SIGNAL_DIR 不得出现 sentinel（测试数据不泄漏到生产）
+        assert not sentinel_real_path.exists(), (
+            "weekly_review 污染生产报告 artifact：测试数据写进真实 _SIGNAL_DIR "
+            f"（{sentinel_real_path}），这是 -60% 幽灵交易的根因"
+        )
+
+        # 报告应写到隔离的 _SIGNAL_DIR（autouse fixture patch 后 = tmp_path）
+        from scheduler.executors.signals import _SIGNAL_DIR as isolated_dir
+        isolated_path = isolated_dir / f"{sentinel_date}_weekly_review.json"
+        assert isolated_path.exists(), "weekly_review 未存到隔离 _SIGNAL_DIR"
+
