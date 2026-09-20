@@ -56,7 +56,16 @@ def _mootdx(code: str) -> list[dict]:
 
 
 def _akshare(code: str) -> list[dict]:
-    """akshare stock_zh_a_hist（东财 push2his，多数公司网被封，链尾兜底）。"""
+    """akshare stock_zh_a_hist（东财 push2his，多数公司网被封，链尾兜底）。
+
+    v2 审查 P0-2 follow-up：加 eastmoney breaker 守卫——熔断时返空跳过，
+    防裸调 akshare 触发/加剧东财封禁（RemoteDisconnected 根因）。
+    全迁移 em_get 重写 stock_zh_a_hist 解析 TODO 后续（YAGNI，baostock 回退兜底够）。
+    """
+    from circuit_breaker import get_breaker
+    if not get_breaker("eastmoney").allow_request():
+        log.info("kline _akshare(%s) skipped—eastmoney breaker OPEN", code)
+        return []  # 熔断中不裸调 akshare 防雪崩，链回退 mootdx/baostock
     from data.sources.akshare_src import _akshare
     ak = _akshare()
     df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
