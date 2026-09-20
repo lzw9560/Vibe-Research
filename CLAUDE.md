@@ -89,13 +89,13 @@
 
 ## 2. 开发环境
 
-- **仓库**：`E:\python\projects\Vibe-Research`（develop 分支）
-- **Python**：系统默认 `python` 是 3.7（太旧）；项目用 **3.10+**，venv 在 `backend/.venv`，解释器 `backend/.venv/Scripts/python.exe`。本机 `python3` 是 shim→`python`（见 §5）。
-- **启动后端**：`cd backend && .venv/Scripts/python.exe -m uvicorn app:app --host 127.0.0.1 --port 8900 --reload`
+- **仓库**：macOS `/Users/lizhiwei/project/code/stock/Vibe-Research`（develop 分支）；Windows `E:\python\projects\Vibe-Research`
+- **Python**：项目用 **3.10+**，venv 在 `backend/.venv`。macOS 解释器 `backend/.venv/bin/python`（brew python@3.11.16，[[backend-venv-python-not-system]]）；Windows `backend/.venv/Scripts/python.exe`。
+- **启动后端**：macOS `cd backend && .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8900 --reload`（Windows 用 `Scripts/python.exe`）
 - **启动前端**：`cd frontend && npm run dev`（:5899，Vite 代理 `/api`→:8900）
-- **`dev.sh` 是 Linux 风格**（依赖 lsof、`.venv/bin/activate`），Windows Git Bash 上不通用——Windows 下用上面手动命令，或自建 `.ps1`/`.bat`。
-- 每条 bash 命令用 `cd /e/python/projects/Vibe-Research && ...` 前缀（本环境 shell 状态不跨命令持久）。
-- 测试：`cd backend && .venv/Scripts/python.exe -m pytest -m "not live"`（离线快测）。
+- **`dev.sh` 是 Linux 风格**（依赖 lsof、`.venv/bin/activate`），macOS 可用；Windows Git Bash 上不通用——用上面手动命令，或自建 `.ps1`/`.bat`。
+- 每条 bash 命令用 `cd /Users/lizhiwei/project/code/stock/Vibe-Research && ...` 前缀（macOS；Windows Git Bash `cd /e/python/projects/Vibe-Research`）。本环境 shell 状态不跨命令持久。
+- 测试：macOS `cd backend && .venv/bin/python -m pytest -m "not live"`（离线快测；Windows 用 `Scripts/python.exe`）。
 
 ---
 
@@ -131,7 +131,7 @@
 ## 6. MCP 集成
 
 - `vibe-research` MCP server 已 `claude mcp add -s user` 挂入，暴露 5 工具：`query_quote / query_valuation / query_reports / query_news / query_global_stock`。
-- 启动：`backend/.venv/Scripts/python.exe backend/mcp_server.py`（stdio JSON-RPC，纯标准库）。
+- 启动：macOS `backend/.venv/bin/python backend/mcp_server.py`（stdio JSON-RPC，纯标准库；Windows 用 `Scripts/python.exe`）。
 - 新增 MCP 工具 = 在 `chat.TOOLS` 加项（自动同步到 MCP，无需改 `mcp_server.py`）。
 
 ---
