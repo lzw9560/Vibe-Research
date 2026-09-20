@@ -2,17 +2,17 @@ import { useEffect, useState } from "react";
 import type { NavGroup } from "./navigation";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
-  LineChart, Menu, Sun, Moon, ChevronsLeft, ChevronsRight, Github, Settings,
+  LineChart, Menu, Sun, Moon, ChevronsLeft, ChevronsRight, Github, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { useTheme } from "@/hooks/useDarkMode";
 import { NAV_GROUPS, APP_VERSION, REPO_URL } from "./navigation";
 
-// Phase 1（2026-09-20）：5 线扁平 + 系统折叠，遍历 NAV_GROUPS 渲染
-// 删 LEGACY 折叠区（已合并进 NAV_GROUPS）+ 移动 drawer 全 reach + 侧边栏移动端隐藏
-const LINE_GROUPS = NAV_GROUPS.slice(0, 5);  // 5 线
-const SYS_GROUP = NAV_GROUPS[5];  // 系统
+// Phase 2（2026-09-21）：5 线 collapsible 子组嵌套（活跃线自动展开 + 用户 toggle + localStorage 记忆）
+// 代替 Phase 1 扁平——专业 IA：hub 1 跳直达 + 子组折叠（非全平铺）
+const isPathActive = (pathname: string, prefixes: string[]) =>
+  prefixes.some(p => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p + "?") || pathname.startsWith(p));
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -21,11 +21,23 @@ export function Layout() {
   const toggle = () => setTheme(dark ? "light" : "dark");
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showSystem, setShowSystem] = useState(false);
+  // 活跃线自动展开（matchPrefix 命中）+ 用户手动 toggle + localStorage 记忆
+  const [expandedLines, setExpandedLines] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem("vr-nav-expanded");
+    const s = saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+    NAV_GROUPS.forEach(g => {
+      if (isPathActive(pathname, g.matchPrefix)) s.add(g.name);
+    });
+    return s;
+  });
 
   useEffect(() => {
     localStorage.setItem("vr-sidebar", collapsed ? "collapsed" : "expanded");
   }, [collapsed]);
+
+  useEffect(() => {
+    localStorage.setItem("vr-nav-expanded", JSON.stringify([...expandedLines]));
+  }, [expandedLines]);
 
   useEffect(() => {
     document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
@@ -35,26 +47,23 @@ export function Layout() {
   const isTabActive = (to: string) =>
     pathname === to || pathname.startsWith(to + "/") || pathname.startsWith(to + "?");
 
-  // 5 线 hub active 特殊处理（/workspace?phase= 也算 /workspace active）
-  const isMainActive = (to: string) => {
-    if (to === "/today") return pathname === "/" || pathname === "/today";
-    if (to === "/workspace") return pathname.startsWith("/workspace");
-    if (to === "/review") return pathname.startsWith("/review");
-    if (to === "/graph") return pathname.startsWith("/graph");
-    if (to === "/data") return pathname.startsWith("/data");
-    return isTabActive(to);
+  const toggleLine = (name: string) => {
+    setExpandedLines(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
   };
 
-  const renderNavTab = (tab: { to: string; label: string }, isMain = false) => {
-    const active = isMain ? isMainActive(tab.to) : isTabActive(tab.to);
+  const renderNavTab = (tab: { to: string; label: string }) => {
+    const active = isTabActive(tab.to);
     return (
       <Link
         key={tab.to}
         to={tab.to}
         onClick={() => setMobileMenuOpen(false)}
         className={cn(
-          "flex items-center gap-2 rounded-lg text-sm transition-colors",
-          isMain ? "px-3 py-2 font-medium" : "px-3 py-1.5",
+          "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
           active
             ? "bg-primary/10 font-medium text-primary"
             : "text-muted-foreground/80 hover:bg-muted/40 hover:text-foreground",
@@ -65,42 +74,58 @@ export function Layout() {
     );
   };
 
-  // 5 线扁平渲染（hub tab 1 跳直达 + 其余 tab 扁平）
-  const renderLine = (group: NavGroup) => (
-    <div key={group.name} className="space-y-0.5">
-      {group.tabs.map((tab, i) => renderNavTab(tab, i === 0))}
-    </div>
-  );
+  // 线 collapsible：标题（icon + hub link + ▸ 展开）+ subGroups 折叠
+  const renderLine = (group: NavGroup) => {
+    const expanded = expandedLines.has(group.name);
+    const isActive = isPathActive(pathname, group.matchPrefix);
+    return (
+      <div key={group.name} className="space-y-0.5">
+        <div className="flex items-center">
+          <Link
+            to={group.hub.to}
+            onClick={() => setMobileMenuOpen(false)}
+            className={cn(
+              "flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              isActive ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted/40",
+            )}
+          >
+            <group.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {group.hub.label}
+          </Link>
+          <button
+            onClick={() => toggleLine(group.name)}
+            className="rounded p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label={expanded ? `收起 ${group.name}` : `展开 ${group.name}`}
+            aria-expanded={expanded}
+          >
+            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} aria-hidden="true" />
+          </button>
+        </div>
+        {expanded && (
+          <div className="ml-3 space-y-1 border-l border-border/30 pl-2">
+            {group.subGroups.map(sg => (
+              <div key={sg.name} className="space-y-0.5">
+                <p className="px-3 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">{sg.name}</p>
+                {sg.tabs.map(tab => renderNavTab(tab))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const SidebarContent = () => (
     <nav className="flex-1 overflow-auto" aria-label="主导航">
-      <div className="space-y-2">
-        {LINE_GROUPS.map(group => renderLine(group))}
-      </div>
-      {/* 系统折叠 */}
-      <div className="mt-4 mb-1">
-        <button
-          onClick={() => setShowSystem(!showSystem)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-          aria-expanded={showSystem}
-          aria-controls="sys-nav"
-        >
-          <Settings className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="flex-1 text-left">系统</span>
-          <span className={cn("text-xs transition-transform", showSystem && "rotate-90")}>›</span>
-        </button>
-        {showSystem && (
-          <div id="sys-nav" className="ml-3 space-y-0.5 border-l border-border/30 pl-2">
-            {SYS_GROUP.tabs.map(tab => renderNavTab(tab))}
-          </div>
-        )}
+      <div className="space-y-1">
+        {NAV_GROUPS.map(group => renderLine(group))}
       </div>
     </nav>
   );
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar - 桌面可见，移动端隐藏（hidden md:flex 修预存吃屏宽 bug） */}
+      {/* Sidebar - 桌面可见，移动端隐藏 */}
       <aside className={cn(
         "glass z-10 m-2 hidden shrink-0 flex-col rounded-2xl transition-all duration-200 md:flex",
         collapsed ? "w-14" : "w-56",
@@ -118,20 +143,16 @@ export function Layout() {
         </div>
 
         {collapsed ? (
-          /* collapsed: 5 线 icon 全可见（修 N1 只露今日）+ 系统 icon */
+          /* collapsed: 5 线 + 系统 icon 全可见（hover title 提示，点击直达 hub） */
           <div className="flex flex-col items-center gap-2 py-4">
-            {LINE_GROUPS.map(group => {
+            {NAV_GROUPS.map(group => {
               const Icon = group.icon;
-              const hubTab = group.tabs[0];
               return (
-                <Link key={group.name} to={hubTab.to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title={group.name} aria-label={group.name}>
+                <Link key={group.name} to={group.hub.to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title={group.name} aria-label={group.name}>
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </Link>
               );
             })}
-            <Link to={SYS_GROUP.tabs[0].to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title="系统" aria-label="系统">
-              <Settings className="h-4 w-4" aria-hidden="true" />
-            </Link>
           </div>
         ) : (
           <SidebarContent />
@@ -191,7 +212,7 @@ export function Layout() {
           </Link>
         </div>
 
-        {/* Mobile Drawer - 全 NAV_GROUPS 渲染（修 P2 移动 reach 不到旧页） */}
+        {/* Mobile Drawer - accordion（5 线 + 系统，点击展开子组，活跃线默认展开） */}
         {mobileMenuOpen && (
           <>
             <div
@@ -207,33 +228,8 @@ export function Layout() {
                     <span className="font-extrabold">Vibe-Research</span>
                   </Link>
                 </div>
-                <nav className="flex-1 overflow-auto p-4">
-                  {/* 5 线 + 子 tab 全 reach */}
-                  {LINE_GROUPS.map(group => (
-                    <div key={group.name} className="mb-3">
-                      <p className="mb-1 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{group.name}</p>
-                      <div className="space-y-0.5">
-                        {group.tabs.map((tab, i) => renderNavTab(tab, i === 0))}
-                      </div>
-                    </div>
-                  ))}
-                  {/* 系统折叠 */}
-                  <div className="mt-2">
-                    <button
-                      onClick={() => setShowSystem(!showSystem)}
-                      className="flex w-full items-center gap-2 py-2 text-sm font-medium text-foreground"
-                      aria-expanded={showSystem}
-                    >
-                      <Settings className="h-4 w-4" aria-hidden="true" />
-                      <span className="flex-1 text-left">系统</span>
-                      <span className={cn("text-xs transition-transform", showSystem && "rotate-90")}>›</span>
-                    </button>
-                    {showSystem && (
-                      <div className="ml-6 space-y-1">
-                        {SYS_GROUP.tabs.map(tab => renderNavTab(tab))}
-                      </div>
-                    )}
-                  </div>
+                <nav className="flex-1 overflow-auto p-3">
+                  {NAV_GROUPS.map(group => renderLine(group))}
                 </nav>
               </div>
             </div>

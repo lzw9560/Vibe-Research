@@ -20,9 +20,9 @@ export interface SearchItem {
   action: SearchAction;
 }
 
-// ── 路由索引：从 NAV_GROUPS 提取 {label, path} ──────────────────────────────
+// ── 路由索引：从 NAV_GROUPS hub + subGroups 提取 {label, path} ──────────────
 const ROUTE_INDEX: SearchItem[] = NAV_GROUPS.flatMap((group) =>
-  group.tabs.map((tab) => ({
+  [group.hub, ...group.subGroups.flatMap(sg => sg.tabs)].map((tab) => ({
     id: `route:${tab.to}`,
     title: tab.label,
     subtitle: tab.to,
