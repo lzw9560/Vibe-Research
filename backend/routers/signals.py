@@ -183,6 +183,12 @@ def _signals_status() -> dict[str, Any]:
     today = datetime.now().strftime("%Y-%m-%d")
     regime_map = compute_regime_labels()
     regime = regime_map.get(today)
+    if regime is None:
+        # today 休市/周末/未来 → 取最后有 label 的交易日 regime
+        # （对齐 signal_report last trading day，非今日 null 误导前端显示空）
+        labelled = [d for d in regime_map if regime_map.get(d)]
+        if labelled:
+            regime = regime_map.get(max(labelled))
 
     # regime cache freshness
     from tools.signal_report import _regime_freshness
