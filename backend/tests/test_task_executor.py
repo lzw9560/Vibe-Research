@@ -98,6 +98,7 @@ _EXPECTED_TASK_TYPES = {
     "daily_report",  # S218 C1 每日信号报告
     "keypoint_notify",  # S218 C3 关键点位通知
     "weekly_review",  # S218 C5 周度复盘 + cap gate
+    "regime_flip_notify",  # S222 regime→bull tripwire（3 天 hysteresis）
     "fund_accumulation",  # S218 封单额前向累积 cron
     "sector_heat_reverify",  # S218 sector_heat 30 天复验
     "cron_audit",  # S218 cron fire 审计
