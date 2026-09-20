@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
+import type { NavGroup } from "./navigation";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
-  LineChart, Menu, Sun, Moon, ChevronsLeft, ChevronsRight,
-  Github, Home, Settings as SettingsIcon,
+  LineChart, Menu, Sun, Moon, ChevronsLeft, ChevronsRight, Github, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { useTheme } from "@/hooks/useDarkMode";
-import {
-  NAV_GROUPS, LEGACY_NAV_GROUPS, APP_VERSION, REPO_URL,
-} from "./navigation";
+import { NAV_GROUPS, APP_VERSION, REPO_URL } from "./navigation";
 
-// flat-4 rail: 4 主入口永久可见(1跳直达), 系统折叠(2跳), 旧页折叠(兼容)
-const MAIN_NAV = NAV_GROUPS[0];   // 主入口
-const SYS_NAV = NAV_GROUPS[1];    // 系统
+// Phase 1（2026-09-20）：5 线扁平 + 系统折叠，遍历 NAV_GROUPS 渲染
+// 删 LEGACY 折叠区（已合并进 NAV_GROUPS）+ 移动 drawer 全 reach + 侧边栏移动端隐藏
+const LINE_GROUPS = NAV_GROUPS.slice(0, 5);  // 5 线
+const SYS_GROUP = NAV_GROUPS[5];  // 系统
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -22,7 +21,6 @@ export function Layout() {
   const toggle = () => setTheme(dark ? "light" : "dark");
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("vr-sidebar") === "collapsed");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showLegacy, setShowLegacy] = useState(false);
   const [showSystem, setShowSystem] = useState(false);
 
   useEffect(() => {
@@ -34,11 +32,10 @@ export function Layout() {
     return () => { document.body.style.overflow = ""; };
   }, [mobileMenuOpen]);
 
-  // active 判定：精确匹配或前缀(参数路由)
   const isTabActive = (to: string) =>
     pathname === to || pathname.startsWith(to + "/") || pathname.startsWith(to + "?");
 
-  // 主入口 active 特殊处理：/workspace?phase= 也算 /workspace active
+  // 5 线 hub active 特殊处理（/workspace?phase= 也算 /workspace active）
   const isMainActive = (to: string) => {
     if (to === "/today") return pathname === "/" || pathname === "/today";
     if (to === "/workspace") return pathname.startsWith("/workspace");
@@ -68,55 +65,44 @@ export function Layout() {
     );
   };
 
+  // 5 线扁平渲染（hub tab 1 跳直达 + 其余 tab 扁平）
+  const renderLine = (group: NavGroup) => (
+    <div key={group.name} className="space-y-0.5">
+      {group.tabs.map((tab, i) => renderNavTab(tab, i === 0))}
+    </div>
+  );
+
   const SidebarContent = () => (
-    <>
-      {/* 4 主入口 flat rail — 永久可见, 1 跳直达 */}
-      <nav className="flex-1 overflow-auto" aria-label="主导航">
-        <div className="space-y-0.5">
-          {MAIN_NAV.tabs.map(tab => renderNavTab(tab, true))}
-        </div>
-
-        {/* 系统折叠 */}
-        <div className="mt-4 mb-1">
-          <button
-            onClick={() => setShowSystem(!showSystem)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <SettingsIcon className="h-3.5 w-3.5" />
-            <span className="flex-1 text-left">系统</span>
-            <span className={cn("text-xs transition-transform", showSystem && "rotate-90")}>›</span>
-          </button>
-          {showSystem && (
-            <div className="ml-3 space-y-0.5 border-l border-border/30 pl-2">
-              {SYS_NAV.tabs.map(tab => renderNavTab(tab))}
-            </div>
-          )}
-        </div>
-
-        {/* 旧页兼容折叠 */}
-        <div className="mt-2 mb-1">
-          <button
-            onClick={() => setShowLegacy(!showLegacy)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <span className="flex-1 text-left">更多(旧页)</span>
-            <span className={cn("text-xs transition-transform", showLegacy && "rotate-90")}>›</span>
-          </button>
-          {showLegacy && !collapsed && (
-            <div className="ml-3 space-y-0.5 border-l border-border/30 pl-2">
-              {LEGACY_NAV_GROUPS.flatMap(g => g.tabs).map(tab => renderNavTab(tab))}
-            </div>
-          )}
-        </div>
-      </nav>
-    </>
+    <nav className="flex-1 overflow-auto" aria-label="主导航">
+      <div className="space-y-2">
+        {LINE_GROUPS.map(group => renderLine(group))}
+      </div>
+      {/* 系统折叠 */}
+      <div className="mt-4 mb-1">
+        <button
+          onClick={() => setShowSystem(!showSystem)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+          aria-expanded={showSystem}
+          aria-controls="sys-nav"
+        >
+          <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="flex-1 text-left">系统</span>
+          <span className={cn("text-xs transition-transform", showSystem && "rotate-90")}>›</span>
+        </button>
+        {showSystem && (
+          <div id="sys-nav" className="ml-3 space-y-0.5 border-l border-border/30 pl-2">
+            {SYS_GROUP.tabs.map(tab => renderNavTab(tab))}
+          </div>
+        )}
+      </div>
+    </nav>
   );
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar */}
+      {/* Sidebar - 桌面可见，移动端隐藏（hidden md:flex 修预存吃屏宽 bug） */}
       <aside className={cn(
-        "glass z-10 m-2 flex shrink-0 flex-col rounded-2xl transition-all duration-200",
+        "glass z-10 m-2 hidden shrink-0 flex-col rounded-2xl transition-all duration-200 md:flex",
         collapsed ? "w-14" : "w-56",
       )}>
         {/* Brand */}
@@ -132,18 +118,20 @@ export function Layout() {
         </div>
 
         {collapsed ? (
+          /* collapsed: 5 线 icon 全可见（修 N1 只露今日）+ 系统 icon */
           <div className="flex flex-col items-center gap-2 py-4">
-            <Link to="/today" className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title="今日" aria-label="今日">
-              <Home className="h-4 w-4" aria-hidden="true" />
-            </Link>
-            {SYS_NAV.tabs.slice(0, 2).map(tab => {
-              const Icon = SettingsIcon;
+            {LINE_GROUPS.map(group => {
+              const Icon = group.icon;
+              const hubTab = group.tabs[0];
               return (
-                <Link key={tab.to} to={tab.to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title={tab.label} aria-label={tab.label}>
+                <Link key={group.name} to={hubTab.to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title={group.name} aria-label={group.name}>
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </Link>
               );
             })}
+            <Link to={SYS_GROUP.tabs[0].to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title="系统" aria-label="系统">
+              <Settings className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </div>
         ) : (
           <SidebarContent />
@@ -203,7 +191,7 @@ export function Layout() {
           </Link>
         </div>
 
-        {/* Mobile Drawer */}
+        {/* Mobile Drawer - 全 NAV_GROUPS 渲染（修 P2 移动 reach 不到旧页） */}
         {mobileMenuOpen && (
           <>
             <div
@@ -211,7 +199,7 @@ export function Layout() {
               onClick={() => setMobileMenuOpen(false)}
               aria-hidden="true"
             />
-            <div className="fixed inset-y-0 left-0 z-50 w-64 glass md:hidden">
+            <div className="fixed inset-y-0 left-0 z-50 w-64 glass md:hidden" role="dialog" aria-modal="true" aria-label="导航菜单">
               <div className="flex h-full flex-col">
                 <div className="border-b border-border/50 p-4">
                   <Link to="/today" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
@@ -220,21 +208,29 @@ export function Layout() {
                   </Link>
                 </div>
                 <nav className="flex-1 overflow-auto p-4">
-                  <div className="space-y-1">
-                    {MAIN_NAV.tabs.map(tab => renderNavTab(tab, true))}
-                  </div>
-                  <div className="mt-4">
+                  {/* 5 线 + 子 tab 全 reach */}
+                  {LINE_GROUPS.map(group => (
+                    <div key={group.name} className="mb-3">
+                      <p className="mb-1 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{group.name}</p>
+                      <div className="space-y-0.5">
+                        {group.tabs.map((tab, i) => renderNavTab(tab, i === 0))}
+                      </div>
+                    </div>
+                  ))}
+                  {/* 系统折叠 */}
+                  <div className="mt-2">
                     <button
                       onClick={() => setShowSystem(!showSystem)}
                       className="flex w-full items-center gap-2 py-2 text-sm font-medium text-foreground"
+                      aria-expanded={showSystem}
                     >
-                      <SettingsIcon className="h-4 w-4" />
+                      <Settings className="h-4 w-4" aria-hidden="true" />
                       <span className="flex-1 text-left">系统</span>
                       <span className={cn("text-xs transition-transform", showSystem && "rotate-90")}>›</span>
                     </button>
                     {showSystem && (
                       <div className="ml-6 space-y-1">
-                        {SYS_NAV.tabs.map(tab => renderNavTab(tab))}
+                        {SYS_GROUP.tabs.map(tab => renderNavTab(tab))}
                       </div>
                     )}
                   </div>
