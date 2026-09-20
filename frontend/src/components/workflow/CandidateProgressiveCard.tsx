@@ -74,7 +74,7 @@ export function CandidateProgressiveCard({ candidate }: Props) {
         className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/10"
       >
         {level >= 1 ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
-        <span className="font-mono text-xs text-muted-foreground/70">{c.code}</span>
+        <span className="font-mono text-xs text-muted-foreground">{c.code}</span>
         <span className="font-medium">{c.name}</span>
         <Badge variant="primary">分{c.strategy_score.toFixed(1)}</Badge>
         <span className="flex-1 truncate text-xs text-muted-foreground">{c.one_line_reason}</span>
@@ -127,7 +127,7 @@ export function CandidateProgressiveCard({ candidate }: Props) {
               <p className="text-xs text-muted-foreground">策略分构成</p>
               <div className="mt-1 flex flex-wrap gap-1">
                 {Object.entries(c.score_breakdown).map(([k, v]) => (
-                  <span key={k} className="rounded bg-muted/20 px-1.5 py-0.5 font-mono text-[10px]">
+                  <span key={k} className="rounded bg-muted/20 px-1.5 py-0.5 font-mono text-xs">
                     {k}: {v.toFixed(1)}
                   </span>
                 ))}

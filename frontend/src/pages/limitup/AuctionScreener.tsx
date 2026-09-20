@@ -167,7 +167,7 @@ export function AuctionScreener() {
                               <div className="flex flex-wrap gap-1">
                                 {c.strategy_tags?.length > 0
                                   ? c.strategy_tags.map((tag, j) => (
-                                      <span key={j} className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{tag}</span>
+                                      <span key={j} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{tag}</span>
                                     ))
                                   : "—"}
                               </div>
@@ -185,7 +185,7 @@ export function AuctionScreener() {
           )}
 
           {result?.updated && (
-            <p className="mt-2 text-[11px] text-muted-foreground">更新时间: {result.updated}</p>
+            <p className="mt-2 text-xs text-muted-foreground">更新时间: {result.updated}</p>
           )}
         </>
       )}

@@ -589,7 +589,7 @@ export function PortfolioPage() {
                 {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} 添加
               </Button>
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               同一代码再次添加会按加权平均成本合并（加仓）。
             </p>
           </GlassCard>

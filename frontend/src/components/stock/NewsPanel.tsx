@@ -113,7 +113,7 @@ export function NewsPanel({ code }: Props) {
                   <div>{titleNode}</div>
                 )}
                 {(source || time) && (
-                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                     {source && <span>{source}</span>}
                     {time && <span>· {time}</span>}
                   </div>
@@ -162,9 +162,9 @@ export function NewsPanel({ code }: Props) {
                   {a.title || "无标题"}
                 </div>
               )}
-              <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+              <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                 {a.type && (
-                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
                     {a.type}
                   </span>
                 )}

@@ -58,7 +58,7 @@ export function SeatEngineSection() {
             {seats.slice(0, 12).map((s) => (
               <div key={s.seat_name} className="rounded-lg bg-muted/20 p-2.5">
                 <p className="truncate text-xs font-medium">{s.seat_name}</p>
-                <div className="mt-1 flex items-center justify-between text-[11px]">
+                <div className="mt-1 flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">出现 {s.total_appearances} 次</span>
                   <span className={`font-mono ${s.net_amt >= 0 ? "text-danger" : "text-success"}`}>
                     净{s.net_amt >= 0 ? "+" : ""}{(s.net_amt / 10000).toFixed(0)}万

@@ -73,7 +73,7 @@ function AdvisoryCard({ item }: { item: AdvisoryItem }) {
         <span>
           回测胜率：
           <span className="font-medium text-foreground">{winRateText(item)}</span>
-          <span className="ml-1 text-[10px]">
+          <span className="ml-1 text-xs">
             ({SOURCE_LABEL[item.win_rate_source]})
           </span>
         </span>
@@ -330,7 +330,7 @@ export function AdvisoryPage() {
         title="顾问团"
         icon={<Users className="h-4 w-4" />}
         badge={
-          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
             6-lens
           </span>
         }
@@ -374,7 +374,7 @@ export function AdvisoryPage() {
               {grillResult.lenses.map((lens, i) => (
                 <div key={i} className="border border-border rounded-lg p-2">
                   <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
                       lens.verdict === "pass" ? "bg-emerald-500/10 text-emerald-600" :
                       lens.verdict === "warn" ? "bg-amber-500/10 text-amber-600" :
                       "bg-red-500/10 text-red-600"
@@ -405,7 +405,7 @@ export function AdvisoryPage() {
         title="多空辩论"
         icon={<Swords className="h-4 w-4" />}
         badge={
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
             完整页
           </span>
         }
@@ -414,7 +414,7 @@ export function AdvisoryPage() {
           <p className="text-sm text-muted-foreground">
             同一份客观数据底稿，多方与空方各自立论、互相质疑，最后由中立主持归纳分歧点与验证清单——不给买卖结论，判断留给你自己。
           </p>
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             一轮约 100 秒 · 3 次模型调用 · 约 3.5 万字进上下文（拉底稿约 35 秒走公开数据接口，不耗 token）。
           </p>
           <Link

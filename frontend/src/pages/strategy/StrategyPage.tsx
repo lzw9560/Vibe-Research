@@ -93,7 +93,7 @@ export default function StrategyPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border/40 text-muted-foreground/70">
+                <tr className="border-b border-border/40 text-muted-foreground">
                   <th className="px-2 py-1 text-left">战法</th>
                   <th className="px-2 py-1 text-right">胜率</th>
                   <th className="px-2 py-1 text-right">均收益%</th>
@@ -116,7 +116,7 @@ export default function StrategyPage() {
                       </td>
                       <td className="px-2 py-1 text-right">{bt?.sample_size ?? "—"}</td>
                       <td className="px-2 py-1 text-right">{r.max_hold_days}</td>
-                      <td className="max-w-[16rem] truncate px-2 py-1 text-muted-foreground/70">
+                      <td className="max-w-[16rem] truncate px-2 py-1 text-muted-foreground">
                         {r.entry_condition}
                       </td>
                     </tr>
@@ -178,9 +178,9 @@ export default function StrategyPage() {
             <li key={s.style} className="border border-border rounded p-2 flex items-center gap-2">
               <span className="text-sm font-medium">{s.style}</span>
               {s.enabled ? (
-                <span className="text-[10px] text-emerald-600">启用</span>
+                <span className="text-xs text-emerald-600">启用</span>
               ) : (
-                <span className="text-[10px] text-muted-foreground">停用</span>
+                <span className="text-xs text-muted-foreground">停用</span>
               )}
               <span className="text-xs text-muted-foreground truncate">{s.description}</span>
               <button
@@ -208,7 +208,7 @@ export default function StrategyPage() {
         )}
       </GlassCard>
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         参考值，非执行指令；市场有风险
       </p>
 

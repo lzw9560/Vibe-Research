@@ -28,12 +28,12 @@ export function DimensionValidationGrid() {
             <span className="text-xs text-red-500">后端未就绪，显示 mock</span>
           )}
           {isMock && !isLoading && (
-            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600">
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600">
               MOCK
             </span>
           )}
           {!isMock && (
-            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-600">
+            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs text-emerald-600">
               LIVE
             </span>
           )}

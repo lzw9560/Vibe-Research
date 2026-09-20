@@ -155,19 +155,19 @@ export function ValidatedEdgeCard() {
           {/* 衰减数据行（后端 verified_numbers.chrono_*） */}
           <div className="grid grid-cols-4 gap-2 mb-3">
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground">train</p>
+              <p className="text-xs text-muted-foreground">train</p>
               <p className="text-sm font-bold text-amber-600">{train ?? "—"}%</p>
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground">test</p>
+              <p className="text-xs text-muted-foreground">test</p>
               <p className="text-sm font-bold text-amber-600">{testVal ?? "—"}%</p>
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground">衰减</p>
+              <p className="text-xs text-muted-foreground">衰减</p>
               <p className="text-sm font-bold text-red-500">{decayPct ?? "—"}%</p>
             </div>
             <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground">WR</p>
+              <p className="text-xs text-muted-foreground">WR</p>
               <p className="text-sm font-bold">{wr ?? "—"}%</p>
             </div>
           </div>

@@ -221,7 +221,7 @@ export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCand
     <div>
       {/* 总分筛选滑块 */}
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-[10px] text-amber-400/80">⚠ §44 未验证</span>
+        <span className="text-xs text-amber-400/80">⚠ §44 未验证</span>
         <span className="text-xs text-muted-foreground">总分≥</span>
         <input
           type="range"
@@ -279,7 +279,7 @@ export function CandidateScoreTable({ candidates }: { candidates: FirstBoardCand
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={15} className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">
+                <td colSpan={15} className="px-2 py-4 text-center text-xs text-muted-foreground/60">
                   无候选符合总分≥{minTotal}（共 {sorted.length} 只）· 调低滑块看更多
                 </td>
               </tr>
@@ -325,7 +325,7 @@ function CandidateRowFragment({
         )}
       >
         <td className="px-2 py-1.5 text-muted-foreground text-center">
-          <span className="text-[10px]">{isOpen ? "▼" : "▶"}</span>
+          <span className="text-xs">{isOpen ? "▼" : "▶"}</span>
         </td>
         <td className="px-2 py-1.5 text-muted-foreground">{c.rank}</td>
         <td className="px-2 py-1.5 font-mono">{c.code}</td>
@@ -353,7 +353,7 @@ function CandidateRowFragment({
           <td colSpan={15} className="px-2 pb-3 pt-1">
             <div className={cn(NODE, "bg-muted/5")}>
               {!hasRawValues ? (
-                <div className="py-2 text-center text-[11px] text-muted-foreground/60">
+                <div className="py-2 text-center text-xs text-muted-foreground/60">
                   ⚠ 旧快照无原始值（raw_values 未取得）· 仅显示评分，无法展示"实际值→得分"对照
                 </div>
               ) : (
@@ -369,16 +369,16 @@ function CandidateRowFragment({
                         className="flex items-start gap-2 border-b border-border/20 pb-1 last:border-0 last:pb-0"
                       >
                         <span className={cn(
-                          "w-20 shrink-0 text-[11px] font-medium",
+                          "w-20 shrink-0 text-xs font-medium",
                           isMissing ? "text-muted-foreground/40 line-through" : "text-foreground",
                         )}>
                           {dim.label}
                           <span className="ml-1 text-[9px] text-muted-foreground/50">{dim.weight}</span>
                         </span>
-                        <span className="flex-1 text-[11px] text-muted-foreground">
+                        <span className="flex-1 text-xs text-muted-foreground">
                           {isMissing ? "数据缺失（score=-1）· 后续移除或寻找替代" : rawDesc}
                         </span>
-                        <span className="text-[11px] text-muted-foreground/40">→</span>
+                        <span className="text-xs text-muted-foreground/40">→</span>
                         <span className={cn(
                           "w-12 shrink-0 text-right font-mono font-bold",
                           isMissing ? "text-muted-foreground/40" : "text-primary",
@@ -388,7 +388,7 @@ function CandidateRowFragment({
                       </div>
                     );
                   })}
-                  <div className="pt-1 text-[10px] text-muted-foreground/50">
+                  <div className="pt-1 text-xs text-muted-foreground/50">
                     原始值来自后端 raw_values 字段 · 缺失字段标"—" · §44 未 validated 仅参考
                   </div>
                 </div>

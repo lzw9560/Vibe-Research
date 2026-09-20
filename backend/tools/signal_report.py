@@ -557,6 +557,7 @@ def render_daily_report(signals: dict[str, Any]) -> str:
     lines.append("【风险提示】")
     lines.append("  • gap_net_return 假设 D+1 开盘能卖，但 lbc≥2 股 D+1 一字跌停卖不掉")
     lines.append("    → 实际收益可能比测的差，待量化")
+    lines.append("  • 连板接力股可能封涨停买不到，实际可交易性取决于开盘流动性（fill rate 尚未实测）")
     lines.append("  • 真钱仓位由用户手动决定")
     lines.append("")
 

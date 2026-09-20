@@ -233,7 +233,7 @@ export function MarketPage() {
             <Gauge className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold">情绪天气</h3>
             {weather?.data_updated && (
-              <span className="ml-auto text-[11px] text-muted-foreground">
+              <span className="ml-auto text-xs text-muted-foreground">
                 {weather.data_updated}
               </span>
             )}
@@ -289,7 +289,7 @@ export function MarketPage() {
           )}
           全球情报
           {radar && (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {radar.stats.total_sources} 源 · {radar.industries.length} 赛道
             </span>
           )}
@@ -323,7 +323,7 @@ export function MarketPage() {
                       {ind.items.length} 条
                     </span>
                     {ind.items[0] && (
-                      <span className="truncate text-xs text-muted-foreground/70">
+                      <span className="truncate text-xs text-muted-foreground">
                         {ind.items[0].zh || ind.items[0].title}
                       </span>
                     )}
@@ -347,7 +347,7 @@ export function MarketPage() {
           <div className="mb-3 flex items-center gap-1.5">
             <Sparkles className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold">涨跌预测</h3>
-            <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+            <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
               研究参考
             </span>
           </div>

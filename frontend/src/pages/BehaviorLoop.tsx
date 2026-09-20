@@ -223,7 +223,7 @@ function OverviewCard({ label, value, hint, warn }: { label: string; value: stri
     <GlassCard className="p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={"mt-1 text-2xl font-bold " + (warn ? "text-warning" : "")}>{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground/70">{hint}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
     </GlassCard>
   );
 }

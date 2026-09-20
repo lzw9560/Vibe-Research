@@ -40,7 +40,7 @@ const fmtPct = (v: number | null | undefined): string =>
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-mono text-sm">{value}</p>
     </div>
   );
@@ -229,7 +229,7 @@ function KlineCard({ code, initialBars }: { code: string; initialBars: any[] }) 
         <div className="flex items-baseline gap-2">
           <h3 className="text-sm font-semibold">K 线图</h3>
           {/* 信息密度：当前维度 + bars 数 + 数据源 */}
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {dim.label} · {bars.length} 根 · {dim.src}
           </span>
         </div>
@@ -239,7 +239,7 @@ function KlineCard({ code, initialBars }: { code: string; initialBars: any[] }) 
             type="button"
             onClick={() => setShowMA((v) => !v)}
             className={cn(
-              "rounded px-1.5 py-0.5 text-[10px] transition-colors",
+              "rounded px-1.5 py-0.5 text-xs transition-colors",
               showMA ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/40",
             )}
             title="MA5/MA10/MA20 均线显隐"
@@ -254,7 +254,7 @@ function KlineCard({ code, initialBars }: { code: string; initialBars: any[] }) 
                 type="button"
                 onClick={() => setCategory(d.c)}
                 className={cn(
-                  "rounded px-2 py-0.5 text-[11px] transition-colors",
+                  "rounded px-2 py-0.5 text-xs transition-colors",
                   category === d.c
                     ? "bg-primary/15 text-primary font-medium"
                     : "text-muted-foreground hover:text-foreground",
@@ -281,7 +281,7 @@ function KlineCard({ code, initialBars }: { code: string; initialBars: any[] }) 
           {/* empty honest：标根因非空白 */}
           <div className="text-center text-xs text-muted-foreground">
             <p className="font-medium">{dim.label} 暂无数据</p>
-            <p className="mt-1 text-[10px]">
+            <p className="mt-1 text-xs">
               {dim.c === 11
                 ? "mootdx intraday 故障 + baostock 无 60min 分时——需 mootdx 修复或换分时源"
                 : "数据源未取到，可能是非交易时段或端点未通"}
@@ -444,7 +444,7 @@ function StockCockpitContent({ code }: { code: string }) {
           onChange={(e) => setDate(e.target.value)}
           className="rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground"
         />
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           默认今日；影响下方「信号区」战法匹配
         </span>
       </div>

@@ -76,14 +76,14 @@ export function P2RiskPanel({ briefing }: P2RiskPanelProps) {
           <p className="mb-1 font-medium text-muted-foreground">现象判据：</p>
           <p className="font-mono text-foreground">{briefing.p2_fired_rule}</p>
           {briefing.p2_factors && (
-            <p className="mt-1 text-muted-foreground/70">
+            <p className="mt-1 text-muted-foreground">
               因子：zt={briefing.p2_factors.zt_count ?? "—"} big_loss={briefing.p2_factors.big_loss ?? "—"} floor={briefing.p2_factors.floor ?? "—"} ladder_success={briefing.p2_factors.ladder_success ?? "—"} ladder_height={briefing.p2_factors.ladder_height ?? "—"}
             </p>
           )}
           <p className="mt-1 text-muted-foreground">
             链：{briefing.market_phase} → {briefing.position_cap_tier} → cap {briefing.market_phase_cap != null ? `${Math.round(briefing.market_phase_cap * 100)}%` : "—"}
           </p>
-          <p className="mt-1 text-[10px] text-amber-600/70">
+          <p className="mt-1 text-xs text-amber-600/70">
             注：big_loss≥8 硬熔断未实施（_emotion 无大面股字段），仅 floor≥20 硬熔断生效
           </p>
         </div>
@@ -150,7 +150,7 @@ export function P2RiskPanel({ briefing }: P2RiskPanelProps) {
 
       {/* 合规免责声明 */}
       {disclaimer && (
-        <p className="mt-3 border-t border-border/30 pt-2 text-[10px] text-muted-foreground">
+        <p className="mt-3 border-t border-border/30 pt-2 text-xs text-muted-foreground">
           {disclaimer}
         </p>
       )}

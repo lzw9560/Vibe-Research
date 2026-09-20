@@ -29,7 +29,7 @@ export function PipelineProgressBar({ current }: Props) {
             <div className="flex flex-col items-center gap-1">
               <div
                 className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold",
+                  "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
                   isCurrent && "bg-primary text-primary-foreground animate-pulse",
                   isDone && "bg-primary/60 text-primary-foreground",
                   !isCurrent && !isDone && "bg-muted/40 text-muted-foreground",
@@ -39,7 +39,7 @@ export function PipelineProgressBar({ current }: Props) {
               </div>
               <span
                 className={cn(
-                  "text-[10px]",
+                  "text-xs",
                   isCurrent ? "font-semibold text-foreground" : "text-muted-foreground",
                 )}
               >

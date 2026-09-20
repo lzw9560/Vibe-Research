@@ -68,7 +68,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
 
   // 统一展开指示器
   const ExpandIndicator = ({ open }: { open: boolean }) => (
-    <span className="text-[10px] text-muted-foreground">{open ? "▼ 收起" : "▶ 展开"}</span>
+    <span className="text-xs text-muted-foreground">{open ? "▼ 收起" : "▶ 展开"}</span>
   );
 
   return (
@@ -81,7 +81,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">涨停股池</div>
-            <div className="text-[11px] text-muted-foreground">em_zt_topic_pool · T日涨停 → 选 T+1</div>
+            <div className="text-xs text-muted-foreground">em_zt_topic_pool · T日涨停 → 选 T+1</div>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-lg font-bold text-emerald-400">{ztPoolCount}</div>
@@ -92,12 +92,12 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
       {ztPoolExpanded && (
         <div className="ml-2 border-l-2 border-emerald-500/30 pl-3">
           <div className={cn(NODE_DASHED, "border-emerald-500/30 bg-emerald-500/5")}>
-            <div className="text-[11px] font-medium text-emerald-300">涨停池明细数据未取得</div>
-            <p className="mt-1 text-[10px] text-muted-foreground/70">
+            <div className="text-xs font-medium text-emerald-300">涨停池明细数据未取得</div>
+            <p className="mt-1 text-xs text-muted-foreground">
               API 仅返回 <code className="rounded bg-muted/30 px-1">zt_pool_count</code> 汇总数，
               不含涨停池标的明细（code/name/lbc）。明细数据需后端补 <code className="rounded bg-muted/30 px-1">zt_pool_items</code> 字段后接入。
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground/50">
+            <p className="mt-1 text-xs text-muted-foreground/50">
               此处不臆造标的列表——诚实标注数据缺失。
             </p>
           </div>
@@ -113,7 +113,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">首板过滤</div>
-            <div className="text-[11px] text-muted-foreground">连板数 lbc=1（首板涨停）</div>
+            <div className="text-xs text-muted-foreground">连板数 lbc=1（首板涨停）</div>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-lg font-bold text-emerald-400">{firstBoardCount}</div>
@@ -124,20 +124,20 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
       {firstBoardExpanded && (
         <div className="ml-2 border-l-2 border-emerald-500/30 pl-3">
           <div className={cn(NODE_DASHED, "border-emerald-500/30 bg-emerald-500/5")}>
-            <div className="text-[11px] font-medium text-emerald-300">首板明细数据未取得</div>
-            <p className="mt-1 text-[10px] text-muted-foreground/70">
+            <div className="text-xs font-medium text-emerald-300">首板明细数据未取得</div>
+            <p className="mt-1 text-xs text-muted-foreground">
               API 返回 <code className="rounded bg-muted/30 px-1">first_board_count</code> 汇总数，
               但不含首板过滤产出明细。下游可见的是三层剔除后的 <b className="text-foreground">候选池（{candidates.length} 只）</b>
               + <b className="text-destructive">剔除记录（{excluded.length} 只）</b>。
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground/50">
+            <p className="mt-1 text-xs text-muted-foreground/50">
               ⚠ 候选 + 剔除 ≠ 首板数（三层剔除是串联过滤，剔除记录按层累加）。
               反推不完全准确，故不展示反推列表。
             </p>
             <button
               type="button"
               onClick={() => { setExcludedExpanded(true); setFirstBoardExpanded(false); }}
-              className="mt-1.5 text-[10px] text-primary hover:underline"
+              className="mt-1.5 text-xs text-primary hover:underline"
             >
               → 展开三层剔除节点看候选+剔除明细
             </button>
@@ -163,7 +163,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
             <ExpandIndicator open={excludedExpanded} />
           </div>
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground/80">
+        <div className="mt-1 text-xs text-muted-foreground/80">
           共剔除 {excluded.length} 只 · 点展开看每层通过数 + 分层剔除原因
         </div>
       </button>
@@ -185,7 +185,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
                     <span className="text-xs font-medium text-foreground">
                       {layerNames[layer]}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       通过 {layerFunnel[layer].output} 只
                       <span className="text-muted-foreground/40"> / 剔除 {excludedByLayer[layer].length}</span>
                     </span>
@@ -196,19 +196,19 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
                       output={layerFunnel[layer].output}
                     />
                   </div>
-                  <div className="mt-0.5 text-[10px] text-muted-foreground">
+                  <div className="mt-0.5 text-xs text-muted-foreground">
                     {layerReasons[layer]}
                   </div>
                   {/* 层3 专属：孤板剔除开关 UI（后端常量，前端只读展示） */}
                   {layer === 3 && (
                     <div className="mt-1.5 flex items-center justify-between rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-medium text-amber-200">孤板剔除</span>
+                        <span className="text-xs font-medium text-amber-200">孤板剔除</span>
                         {/* 只读 toggle（不可交互——后端无 API 修改，仅展示当前常量状态） */}
                         <span className="inline-flex h-4 w-7 items-center rounded-full bg-emerald-500/30 px-0.5" title="后端常量 EXCLUDE_THRESHOLDS.exclude_isolated_board=true，前端只读">
                           <span className="h-3 w-3 translate-x-3 rounded-full bg-emerald-400" />
                         </span>
-                        <span className="text-[10px] text-emerald-400">开</span>
+                        <span className="text-xs text-emerald-400">开</span>
                       </div>
                       <span className="text-[9px] text-muted-foreground/50" title="后端 EXCLUDE_THRESHOLDS 常量，前端只读">
                         后端常量 · 只读
@@ -226,12 +226,12 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
                       className="flex w-full items-center justify-between text-left hover:opacity-80"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-destructive">{layerOpen ? "▼" : "▶"}</span>
-                        <span className="text-[11px] font-medium text-destructive">
+                        <span className="text-xs text-destructive">{layerOpen ? "▼" : "▶"}</span>
+                        <span className="text-xs font-medium text-destructive">
                           {layerNames[layer]} · 剔除明细
                         </span>
                       </div>
-                      <span className="text-[10px] text-destructive">
+                      <span className="text-xs text-destructive">
                         {excludedByLayer[layer].length} 只
                       </span>
                     </button>
@@ -276,7 +276,7 @@ export function FilterPipelineNode({ data }: { data: FirstBoardCandidatesRespons
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">候选池</div>
-            <div className="text-[11px] text-muted-foreground">9 维度加权评分 · 降序</div>
+            <div className="text-xs text-muted-foreground">9 维度加权评分 · 降序</div>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-lg font-bold text-primary">{candidates.length}</div>
@@ -316,8 +316,8 @@ function MarketEnvLamps({ data }: { data: FirstBoardCandidatesResponse | null })
           color === "red" && "bg-destructive",
         )}
       />
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className="text-[11px] font-mono text-foreground">{value}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs font-mono text-foreground">{value}</span>
     </div>
   );
 
@@ -423,18 +423,18 @@ function WatchbookManual() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-[11px]">⏱</span>
+            <span className="text-xs">⏱</span>
             <span className="text-xs font-medium text-amber-200">盯盘手册 9:15-9:45</span>
-            <span className="text-[10px] text-muted-foreground/60">5 个时段</span>
+            <span className="text-xs text-muted-foreground/60">5 个时段</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={cn(
-              "text-[10px]",
+              "text-xs",
               currentSlotData ? "text-emerald-400" : "text-muted-foreground/50",
             )}>
               {summaryText}
             </span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {expanded ? "▼ 收起" : "▶ 展开"}
             </span>
           </div>
@@ -445,7 +445,7 @@ function WatchbookManual() {
       {expanded && (
         <div className="mt-1.5 border-t border-amber-500/20 pt-2">
           {/* 表头 */}
-          <div className="grid grid-cols-[80px_1fr_1fr_1fr] gap-1 border-b border-border/40 pb-1 text-[10px] font-medium text-muted-foreground">
+          <div className="grid grid-cols-[80px_1fr_1fr_1fr] gap-1 border-b border-border/40 pb-1 text-xs font-medium text-muted-foreground">
             <span>时刻</span>
             <span>工具提供（自动）</span>
             <span>人工观察（盯盘）</span>
@@ -458,7 +458,7 @@ function WatchbookManual() {
               <div
                 key={slot.id}
                 className={cn(
-                  "grid grid-cols-[80px_1fr_1fr_1fr] gap-1 rounded px-1 py-1 text-[10px] transition-colors",
+                  "grid grid-cols-[80px_1fr_1fr_1fr] gap-1 rounded px-1 py-1 text-xs transition-colors",
                   isCurrent
                     ? "bg-emerald-500/15 ring-1 ring-emerald-500/40"
                     : "bg-muted/5",
@@ -476,7 +476,7 @@ function WatchbookManual() {
             );
           })}
           {/* 诚实标注 */}
-          <p className="mt-1.5 text-[10px] text-muted-foreground/50">
+          <p className="mt-1.5 text-xs text-muted-foreground/50">
             {currentSlotData
               ? `当前时段高亮（绿底）· 时段判定用浏览器时间，后端 Phase 2 接入后改用 backend current_time 北京 tz`
               : "盘后/非交易时段，不高亮 · 时段判定用浏览器时间，后端 Phase 2 接入后改用 backend current_time 北京 tz"}
@@ -496,9 +496,9 @@ export function ConfirmNode({ data }: { data: FirstBoardCandidatesResponse | nul
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium text-amber-300">② 确认</div>
-          <div className="text-[11px] text-muted-foreground">竞价 + 开盘 10 分钟 + 大盘 3 因素</div>
+          <div className="text-xs text-muted-foreground">竞价 + 开盘 10 分钟 + 大盘 3 因素</div>
         </div>
-        <span className="rounded bg-amber-500/20 px-1 text-[10px] text-amber-300">
+        <span className="rounded bg-amber-500/20 px-1 text-xs text-amber-300">
           {hasData ? "待 Phase 2" : "未运行"}
         </span>
       </div>
@@ -506,7 +506,7 @@ export function ConfirmNode({ data }: { data: FirstBoardCandidatesResponse | nul
       <MarketEnvLamps data={data} />
       {/* 盯盘手册（spec 2.3 时刻表，缩略+点开看详情） */}
       <WatchbookManual />
-      <div className="mt-2 text-[10px] text-muted-foreground/70">
+      <div className="mt-2 text-xs text-muted-foreground">
         逐只状态：待确认 → 确认中 → ✅/❌（Phase 2 竞价+开盘确认后接入）
       </div>
     </div>
@@ -521,9 +521,9 @@ export function PositionNode({ data }: { data: FirstBoardCandidatesResponse | nu
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium">③ 候选推荐</div>
-          <div className="text-[11px] text-muted-foreground">全部候选 · 评分排序 · 推荐参考不替用户做决定</div>
+          <div className="text-xs text-muted-foreground">全部候选 · 评分排序 · 推荐参考不替用户做决定</div>
         </div>
-        <span className="rounded bg-primary/20 px-1 text-[10px] text-primary">
+        <span className="rounded bg-primary/20 px-1 text-xs text-primary">
           {candidates.length > 0 ? `全部 ${candidates.length} 只` : "待 Phase 3"}
         </span>
       </div>
@@ -552,15 +552,15 @@ export function PositionNode({ data }: { data: FirstBoardCandidatesResponse | nu
               </tbody>
             </table>
           </div>
-          <div className="mt-1 text-[10px] text-muted-foreground/60">
+          <div className="mt-1 text-xs text-muted-foreground/60">
             ⚠ 推荐参考，不替用户做决定 · 风控：止损 −3% / 止盈 +5% / T+1 必卖
           </div>
-          <div className="text-[10px] text-amber-200/60">
+          <div className="text-xs text-amber-200/60">
             §44 未 validated 仅参考；阈值/权重待回测校准
           </div>
         </div>
       ) : (
-        <div className="mt-2 text-[10px] text-muted-foreground/60">
+        <div className="mt-2 text-xs text-muted-foreground/60">
           候选池为空
         </div>
       )}
@@ -575,11 +575,11 @@ export function SellNode() {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium">④ 卖出</div>
-          <div className="text-[11px] text-muted-foreground">T+1 持仓 + 止盈止损线</div>
+          <div className="text-xs text-muted-foreground">T+1 持仓 + 止盈止损线</div>
         </div>
-        <span className="rounded bg-muted/30 px-1 text-[10px] text-muted-foreground">待 Phase 3</span>
+        <span className="rounded bg-muted/30 px-1 text-xs text-muted-foreground">待 Phase 3</span>
       </div>
-      <div className="mt-1 text-[10px] text-muted-foreground/70">
+      <div className="mt-1 text-xs text-muted-foreground">
         T+1 必卖 · 冲高&gt;5% 止盈 · 跌破−3% 止损 · 默认竞价开盘卖
       </div>
     </div>
@@ -593,16 +593,16 @@ export function SettlementNode() {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium">⑤ 结算</div>
-          <div className="text-[11px] text-muted-foreground">盈亏归因 + 漏单 + forward_test</div>
+          <div className="text-xs text-muted-foreground">盈亏归因 + 漏单 + forward_test</div>
         </div>
-        <span className="rounded bg-muted/30 px-1 text-[10px] text-muted-foreground">待 Phase 4</span>
+        <span className="rounded bg-muted/30 px-1 text-xs text-muted-foreground">待 Phase 4</span>
       </div>
-      <div className="mt-1 grid grid-cols-2 gap-1 text-[10px] text-muted-foreground sm:grid-cols-3">
+      <div className="mt-1 grid grid-cols-2 gap-1 text-xs text-muted-foreground sm:grid-cols-3">
         <span>盈亏归因</span>
         <span>漏单对账</span>
         <span>lift 四态判定</span>
       </div>
-      <div className="mt-1 text-[10px] text-muted-foreground/60">
+      <div className="mt-1 text-xs text-muted-foreground/60">
         forward_test validation_status：validated / 未 validated / 探索性 / 劣于随机
       </div>
     </div>
@@ -621,13 +621,13 @@ export function FeishuStatusBar() {
     <div className={NODE}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">飞书通知状态</span>
-        <span className="text-[10px] text-muted-foreground/60">全链路推送状态展示</span>
+        <span className="text-xs text-muted-foreground/60">全链路推送状态展示</span>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {statuses.map((s) => (
           <div key={s.label} className="rounded bg-muted/20 px-2 py-1.5">
-            <div className="text-[10px] text-muted-foreground/70">{s.label}</div>
-            <div className="mt-0.5 text-[10px] text-muted-foreground/50">{s.status}</div>
+            <div className="text-xs text-muted-foreground">{s.label}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground/50">{s.status}</div>
           </div>
         ))}
       </div>

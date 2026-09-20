@@ -165,8 +165,8 @@ export function DataFoundationPage() {
                   : "bg-gray-400",
                 )} />
                 <span className="text-xs font-medium">{task.name}</span>
-                <span className="font-mono text-[10px] text-muted-foreground">{task.cron_expr}</span>
-                <span className="ml-auto text-[10px] text-muted-foreground">
+                <span className="font-mono text-xs text-muted-foreground">{task.cron_expr}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
                   {task.last_run_at ? new Date(task.last_run_at).toLocaleString("zh-CN") : "—"}
                 </span>
               </div>

@@ -141,7 +141,7 @@ export function CognitionPage() {
                 </li>
               ))}
               {inboxQ.data.count > 10 && (
-                <li className="text-[11px] text-muted-foreground">
+                <li className="text-xs text-muted-foreground">
                   …共 {inboxQ.data.count} 条，去 Obsidian Vault 查看
                 </li>
               )}
@@ -187,7 +187,7 @@ export function CognitionPage() {
                   </li>
                 ))}
                 {flowQ.data.total > 8 && (
-                  <li className="text-[11px] text-muted-foreground">
+                  <li className="text-xs text-muted-foreground">
                     …共 {flowQ.data.total} 关联
                   </li>
                 )}
@@ -243,13 +243,13 @@ export function CognitionPage() {
                 >
                   <div className="text-xs font-medium">{e.name || e._filename}</div>
                   {e.code && (
-                    <div className="text-[10px] text-muted-foreground">{e.code}</div>
+                    <div className="text-xs text-muted-foreground">{e.code}</div>
                   )}
                 </div>
               ))}
             </div>
             {entitiesQ.data.count > 50 && (
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 text-xs text-muted-foreground">
                 …共 {entitiesQ.data.count} 实体，去 Obsidian Vault 查看
               </p>
             )}
@@ -267,7 +267,7 @@ export function CognitionPage() {
       {/* 图谱闭环状态 */}
       <GlassCard tier="sub" className="mb-4">
         <h3 className="mb-2 text-xs font-semibold">图谱闭环状态</h3>
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <span className={cn("h-1.5 w-1.5 rounded-full", syncStatus === "ok" ? "bg-emerald-500" : "bg-amber-500")} />
             同步{syncStatus === "ok" ? "正常" : "待查"}

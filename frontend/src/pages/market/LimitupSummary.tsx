@@ -19,14 +19,14 @@ export function LimitupSummary({ emotion, loading }: Props) {
         <Flame className="h-4 w-4 text-primary" />
         <h3 className="text-sm font-semibold">涨停 / 炸板 / 连板</h3>
         {emotion?.date && (
-          <span className="ml-auto text-[11px] text-muted-foreground">
+          <span className="ml-auto text-xs text-muted-foreground">
             {emotion.date}
           </span>
         )}
       </div>
 
       {/* honest banner: 客观公开榜单，非推荐 */}
-      <div className="mb-3 rounded-md bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
+      <div className="mb-3 rounded-md bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
         客观公开榜单 · 非推荐 / 非预测
       </div>
 
@@ -64,7 +64,7 @@ export function LimitupSummary({ emotion, loading }: Props) {
                 key={c.k}
                 className="rounded-lg bg-muted/25 p-2.5 text-center"
               >
-                <p className="text-[11px] text-muted-foreground">{c.k}</p>
+                <p className="text-xs text-muted-foreground">{c.k}</p>
                 <p className={cn("mt-0.5 font-mono text-lg font-bold", c.cls)}>
                   {c.v}
                 </p>
@@ -98,11 +98,11 @@ export function LimitupSummary({ emotion, loading }: Props) {
                 key={c.k}
                 className="rounded-lg bg-muted/20 p-2.5 text-center"
               >
-                <p className="text-[11px] text-muted-foreground">{c.k}</p>
+                <p className="text-xs text-muted-foreground">{c.k}</p>
                 <p className={cn("mt-0.5 font-mono text-sm font-bold", c.cls)}>
                   {c.v == null ? "—" : `${(c.v * 100).toFixed(1)}%`}
                 </p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {c.hint}
                 </p>
               </div>

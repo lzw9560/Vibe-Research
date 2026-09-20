@@ -44,7 +44,7 @@ function MetricCard({
 }) {
   return (
     <div className="rounded-lg border border-border/60 bg-muted/10 px-2.5 py-1.5">
-      <p className="text-[10px] leading-tight text-muted-foreground">{label}</p>
+      <p className="text-xs leading-tight text-muted-foreground">{label}</p>
       <p
         className={cn(
           "font-mono text-sm leading-relaxed",
@@ -54,7 +54,7 @@ function MetricCard({
         {value}
       </p>
       {sub && sub !== "—" && (
-        <p className={cn("text-[10px] leading-tight", subClass ?? "text-muted-foreground")}>
+        <p className={cn("text-xs leading-tight", subClass ?? "text-muted-foreground")}>
           {sub}
         </p>
       )}
@@ -70,9 +70,9 @@ function PercentileCard({ label, m }: { label: string; m: ValMetric }) {
       : "—";
   return (
     <div className="rounded-lg border border-border/60 bg-muted/10 px-2.5 py-1.5">
-      <p className="text-[10px] leading-tight text-muted-foreground">{label}</p>
+      <p className="text-xs leading-tight text-muted-foreground">{label}</p>
       <p className="font-mono text-sm leading-relaxed text-primary">{pctStr}</p>
-      <p className="text-[10px] leading-tight text-muted-foreground">
+      <p className="text-xs leading-tight text-muted-foreground">
         当前 {fmtNum(m.current)} · 区间 {fmtNum(m.min)}~{fmtNum(m.max)}
       </p>
     </div>
@@ -181,7 +181,7 @@ export function FinancialsPanel({ code }: Props) {
             <MetricCard label="分析师" value={fmtNum(val!.analyst_count, "家", 0)} />
           </div>
           {val!.forecast_note && (
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               {val!.forecast_note}
             </p>
           )}

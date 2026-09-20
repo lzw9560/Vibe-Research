@@ -53,7 +53,7 @@ function ExcursionCard({ data }: { data: ExcursionSummary | undefined }) {
                   <td className="px-2 text-center">
                     {it.capture_rate != null ? `${(it.capture_rate * 100).toFixed(0)}%` : "—"}
                   </td>
-                  <td className="px-2 text-[10px] text-muted-foreground">{it.precision}</td>
+                  <td className="px-2 text-xs text-muted-foreground">{it.precision}</td>
                 </tr>
               ))}
             </tbody>

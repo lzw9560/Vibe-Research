@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -76,6 +77,14 @@ def daily_report(payload: dict[str, Any]) -> dict[str, Any]:
 
     # 1. 生成信号
     signals = get_consecutive_relay_signals(run_date)
+
+    # cap 透明提示：VR_ALLOW_X1DOT0 未设 → bull cap=0.75（25% 盲差）；设=1 解锁 ×1.0
+    cap_effective = signals.get("cap", {}).get("effective", "?")
+    env_val = os.environ.get("VR_ALLOW_X1DOT0", "未设")
+    logger.info(
+        "[S218] daily_report cap 状态: cap.effective=%s（VR_ALLOW_X1DOT0=%s，设=1 解锁 bull ×1.0）",
+        cap_effective, env_val,
+    )
 
     # 2. 渲染报告
     report_text = render_daily_report(signals)

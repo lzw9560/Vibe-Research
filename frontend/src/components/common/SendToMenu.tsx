@@ -96,7 +96,7 @@ export function SendToMenu({ code, name, sourcePage, onSend, className, disabled
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded border border-border/40 bg-card/30 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded border border-border/40 bg-card/30 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -115,7 +115,7 @@ export function SendToMenu({ code, name, sourcePage, onSend, className, disabled
               type="button"
               role="menuitem"
               onClick={() => handleSelect(id)}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-foreground transition-colors hover:bg-muted/40"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted/40"
             >
               <Icon className="h-3.5 w-3.5 text-muted-foreground" />
               {label}

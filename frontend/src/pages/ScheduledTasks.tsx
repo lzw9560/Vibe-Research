@@ -291,7 +291,7 @@ export function ScheduledTasks() {
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium">Cron 表达式</label>
               <Input value={formCron} onChange={(e) => setFormCron(e.target.value)} placeholder="分 时 日 月 周，例如 0 17 * * *" />
-              <p className="mt-1 text-[11px] text-muted-foreground">示例：0 17 * * * = 每天 17:00；0 18 * * 1-5 = 工作日 18:00</p>
+              <p className="mt-1 text-xs text-muted-foreground">示例：0 17 * * * = 每天 17:00；0 18 * * 1-5 = 工作日 18:00</p>
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium">描述（可选）</label>
@@ -344,11 +344,11 @@ export function ScheduledTasks() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold truncate">{task.name}</h3>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${task.enabled ? "bg-success/15 text-success" : "bg-muted/40 text-muted-foreground"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${task.enabled ? "bg-success/15 text-success" : "bg-muted/40 text-muted-foreground"}`}>
                       {task.enabled ? "已启用" : "已禁用"}
                     </span>
                     {task.last_run_status && (
-                      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                         task.last_run_status === "success" ? "bg-success/15 text-success" :
                         task.last_run_status === "failed" ? "bg-destructive/15 text-destructive" :
                         "bg-muted/40 text-muted-foreground"
@@ -362,7 +362,7 @@ export function ScheduledTasks() {
                     )}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{task.description || TASK_TYPE_LABELS[task.task_type] || task.task_type}</p>
-                  <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {formatCron(task.cron_expr)}
@@ -404,7 +404,7 @@ export function ScheduledTasks() {
                             </div>
                             {run.error && <p className="mt-1 text-destructive">{run.error}</p>}
                             {run.result && Object.keys(run.result).length > 0 && (
-                              <pre className="mt-1 overflow-x-auto rounded bg-black/20 p-2 text-[11px] text-muted-foreground">
+                              <pre className="mt-1 overflow-x-auto rounded bg-black/20 p-2 text-xs text-muted-foreground">
                                 {JSON.stringify(run.result, null, 2)}
                               </pre>
                             )}

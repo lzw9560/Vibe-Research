@@ -158,12 +158,12 @@ export function TechScoreCard({ code }: Props) {
                 <span className="text-xs text-muted-foreground">{DIM_LABEL[k]}</span>
                 <span className="text-sm font-semibold">{d.score}</span>
               </div>
-              <div className="mt-1 text-[10px] text-muted-foreground">{dimDetail(k, d)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{dimDetail(k, d)}</div>
             </div>
           );
         })}
       </div>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         通用技术面评分（MA/MACD/RSI/量能/乖离/支撑），不碰打板 §44 sizing。参考 stock-analysis。
       </p>
     </GlassCard>

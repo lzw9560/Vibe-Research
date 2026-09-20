@@ -92,7 +92,7 @@ export function FundFlowPanel({ code }: Props) {
       <div className="rounded-lg border border-border/60 bg-muted/10 p-3.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">主力净流入</span>
-          <span className="text-[10px] text-muted-foreground">{latest.date}</span>
+          <span className="text-xs text-muted-foreground">{latest.date}</span>
         </div>
         <p className={`mt-1 font-mono text-lg font-semibold ${flowColor(latest.main_net)}`}>
           {formatFlow(latest.main_net)}
@@ -106,7 +106,7 @@ export function FundFlowPanel({ code }: Props) {
             key={key}
             className="rounded-lg border border-border/60 bg-muted/10 p-2.5"
           >
-            <p className="text-[11px] text-muted-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
             <p className={`mt-0.5 font-mono text-sm font-medium ${flowColor(latest[key])}`}>
               {formatFlow(latest[key])}
             </p>
@@ -116,14 +116,14 @@ export function FundFlowPanel({ code }: Props) {
 
       {/* 近期趋势 */}
       <div className="rounded-lg border border-border/60 bg-muted/10 p-2.5">
-        <p className="mb-1.5 text-[11px] text-muted-foreground">
+        <p className="mb-1.5 text-xs text-muted-foreground">
           近 {trend.length} 日主力净流入
         </p>
         <div className="space-y-1">
           {trend.map((r) => (
             <div
               key={r.date}
-              className="flex items-center justify-between gap-2 text-[11px]"
+              className="flex items-center justify-between gap-2 text-xs"
             >
               <span className="font-mono text-muted-foreground">{r.date}</span>
               <span className={`font-mono font-medium ${flowColor(r.main_net)}`}>

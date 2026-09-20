@@ -48,21 +48,21 @@ export function FirstBoardPipeline({ data, isLoading }: Props) {
       {data && (
         <div className={NODE}>
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="text-muted-foreground/70">数据日期：{data.date}</span>
+            <span className="text-muted-foreground">数据日期：{data.date}</span>
             <span className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground/70">
+            <span className="text-muted-foreground">
               涨停池 <span className="font-mono text-foreground">{data.zt_pool_count}</span>
             </span>
             <span className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground/70">
+            <span className="text-muted-foreground">
               首板 <span className="font-mono text-foreground">{data.first_board_count}</span>
             </span>
             <span className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground/70">
+            <span className="text-muted-foreground">
               候选 <span className="font-mono text-primary">{data.candidates.length}</span>
             </span>
             <span className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground/70">
+            <span className="text-muted-foreground">
               剔除 <span className="font-mono text-destructive">{data.excluded.length}</span>
             </span>
           </div>
@@ -87,7 +87,7 @@ export function FirstBoardPipeline({ data, isLoading }: Props) {
 
       {/* §44 诚实标注脚注 */}
       {data?.note && (
-        <div className="mt-2 text-[11px] text-amber-200/70">{data.note}</div>
+        <div className="mt-2 text-xs text-amber-200/70">{data.note}</div>
       )}
     </div>
   );

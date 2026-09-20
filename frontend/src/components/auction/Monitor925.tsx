@@ -138,7 +138,7 @@ export function Monitor925() {
                     </td>
                     <td className="px-3 py-2.5 font-medium">{s.name}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-center">
-                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
                         {s.signal_type}
                       </span>
                     </td>

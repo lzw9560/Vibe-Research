@@ -51,7 +51,7 @@ export function BombAlertBanner() {
             {alerts.length > 4 ? "…" : ""}
           </div>
         )}
-        <div className="mt-1 text-[11px] opacity-50">
+        <div className="mt-1 text-xs opacity-50">
           炸板预警属风险标注，历史统计特征，市场有风险，不构成交易指令
         </div>
       </div>
@@ -102,7 +102,7 @@ export function SealAmountSparkline({ code, date }: { code: string; date?: strin
       <svg viewBox={`0 0 ${w} ${h}`} className="h-6 w-24">
         <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary" />
       </svg>
-      <span className="text-[11px] text-muted-foreground">
+      <span className="text-xs text-muted-foreground">
         {(max / 1e4).toFixed(0)}万 → {(points[points.length - 1] / 1e4).toFixed(0)}万
       </span>
     </div>

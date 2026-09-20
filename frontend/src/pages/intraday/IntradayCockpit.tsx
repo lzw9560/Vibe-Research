@@ -268,7 +268,7 @@ function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
     <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-border/60 bg-muted/10 px-4 py-2.5">
       {/* 情绪分数 + 趋势 + zone 色带 */}
       <div className="flex items-center gap-2">
-        <span className="text-[11px] text-muted-foreground">情绪分数</span>
+        <span className="text-xs text-muted-foreground">情绪分数</span>
         {latest.score != null ? (
           <>
             <span className="font-mono text-base font-bold text-primary">
@@ -278,7 +278,7 @@ function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
               <TrendIcon className="h-3.5 w-3.5" />
             </span>
             <span
-              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+              className="rounded px-1.5 py-0.5 text-xs font-medium text-white"
               style={{ background: zoneColor }}
             >
               {zoneLabel}
@@ -305,7 +305,7 @@ function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
 
       {/* 采样时间 */}
       {latest.time && (
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+        <span className="ml-auto font-mono text-xs text-muted-foreground">
           {latest.time}
         </span>
       )}
@@ -318,7 +318,7 @@ function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
       <span className="font-mono text-sm font-medium">{value}</span>
     </div>
   );
@@ -469,7 +469,7 @@ function BreakoutRow({
           {c.breakout_score.toFixed(3)}{c.breakout_binary ? " ●" : ""}
         </span>
       </div>
-      <div className="flex gap-3 text-[11px] text-muted-foreground/70">
+      <div className="flex gap-3 text-xs text-muted-foreground">
         <span>入场 {fmtPrice(c.entry_ref)}</span>
         <span className="text-red-500/70">止损 {fmtPrice(c.stop_loss)}</span>
         <span className="text-emerald-500/70">止盈 {fmtPrice(c.take_profit)}</span>
@@ -481,7 +481,7 @@ function BreakoutRow({
           tabIndex={0}
           onClick={(e) => { e.stopPropagation(); navigate("/review?tab=validation"); }}
           onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); navigate("/review?tab=validation"); } }}
-          className="cursor-pointer text-[10px] text-primary hover:underline"
+          className="cursor-pointer text-xs text-primary hover:underline"
         >
           查 §44 verdict →
         </span>
@@ -548,7 +548,7 @@ function LianbanRow({
     >
       <div className="flex items-center gap-2">
         {s.boards != null && s.boards > 0 && (
-          <span className="rounded bg-amber-500/15 px-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+          <span className="rounded bg-amber-500/15 px-1 text-xs font-bold text-amber-600 dark:text-amber-400">
             {s.boards}板
           </span>
         )}
@@ -556,7 +556,7 @@ function LianbanRow({
         <span className="truncate text-xs text-muted-foreground">{s.name ?? "—"}</span>
       </div>
       <div className="flex items-center gap-2 text-xs">
-        <span className="font-mono text-muted-foreground/70">{fmtAmount(s.amount)}</span>
+        <span className="font-mono text-muted-foreground">{fmtAmount(s.amount)}</span>
         <span className={cn("font-mono", pctColor(s.pct))}>{fmtPct(s.pct)}</span>
       </div>
     </button>
@@ -703,7 +703,7 @@ function IntradayCoachCompact({
               {currentSlot.start}–{currentSlot.end}
             </span>
             <span className="font-medium">{currentSlot.label}</span>
-            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary">
+            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary">
               {slotStatusLabel(slotStatus)}
             </span>
           </div>
@@ -733,13 +733,13 @@ function IntradayCoachCompact({
           <span className="text-muted-foreground">（观/盯/持）</span>
         </div>
         {bombCount > 0 && (
-          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-500">
+          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs text-red-500">
             炸板预警 {bombCount}
           </span>
         )}
       </div>
 
-      <p className="mt-2 text-[11px] text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         当前时间 {currentTime}
       </p>
     </GlassCard>

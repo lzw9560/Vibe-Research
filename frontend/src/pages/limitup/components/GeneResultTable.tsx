@@ -47,7 +47,7 @@ function ExpandedDetail({ row }: { row: GeneScore }) {
 
       {/* 五维明细 */}
       <div>
-        <div className="mb-1 text-muted-foreground/70">五维因子（权重）</div>
+        <div className="mb-1 text-muted-foreground">五维因子（权重）</div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
           {FACTOR_ROWS.map(({ key, weight }) => (
             <div key={key} className="flex justify-between">
@@ -62,7 +62,7 @@ function ExpandedDetail({ row }: { row: GeneScore }) {
 
       {/* 回测摘要 */}
       {bs && bs.samples > 0 && (
-        <div className="text-muted-foreground/70">
+        <div className="text-muted-foreground">
           回测：{bs.samples} 样本 · 连板率 {fmtPct(bs.lianban_rate)}
           {bs.avg_score_lianban != null && <> · 连板均分 {bs.avg_score_lianban}</>}
         </div>
@@ -70,7 +70,7 @@ function ExpandedDetail({ row }: { row: GeneScore }) {
 
       {/* 最近涨停日 */}
       {row.last_zt_dates?.length > 0 && (
-        <div className="text-muted-foreground/70">最近涨停：{row.last_zt_dates.slice(0, 5).join("、")}</div>
+        <div className="text-muted-foreground">最近涨停：{row.last_zt_dates.slice(0, 5).join("、")}</div>
       )}
 
       {/* qualified 行：看战法/仓位（跳候选详情，S028 已修 Lazy bug） */}

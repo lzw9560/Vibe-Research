@@ -125,7 +125,7 @@ export function DimensionValidationCard({
         </div>
         <div className="flex items-center gap-1.5">
           {/* R5: edge_type 主 scoping 标签旁 status */}
-          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
             {edgeLabel}
           </span>
           <span
@@ -140,7 +140,7 @@ export function DimensionValidationCard({
       </div>
 
       {/* R6 三层 reframe + R5 event verdict hypothesis 标注 */}
-      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
         <span className="rounded bg-muted/50 px-1.5 py-0.5">
           {record.layer}层 · {layerLabel}
         </span>
@@ -233,7 +233,7 @@ export function DimensionValidationCard({
             </div>
           </div>
           {record.event_status && (
-            <div className="mt-1 text-[10px] text-muted-foreground">
+            <div className="mt-1 text-xs text-muted-foreground">
               event_status: {record.event_status}
             </div>
           )}
@@ -242,7 +242,7 @@ export function DimensionValidationCard({
 
       {/* R7: selection-falsified 防外推 note */}
       {isSelFalsified && (
-        <div className="rounded bg-primary/10 px-2 py-1 text-[10px] text-primary">
+        <div className="rounded bg-primary/10 px-2 py-1 text-xs text-primary">
           {SELECTION_FALSIFIED_NOTE}
         </div>
       )}
@@ -254,7 +254,7 @@ export function DimensionValidationCard({
         </div>
         <table className="w-full">
           <thead>
-            <tr className="text-[10px] text-muted-foreground">
+            <tr className="text-xs text-muted-foreground">
               <th className="pr-2 text-left font-normal">窗口</th>
               <th className="px-2 text-right font-normal">mean</th>
               <th className="px-2 text-right font-normal">中位</th>
@@ -311,7 +311,7 @@ export function DimensionValidationCard({
       <div className="text-xs text-muted-foreground">{record.note}</div>
 
       {/* commit 追溯 — R6 field source map: updated_commit/updated_at → null + "待回溯 task 填充"灰底 */}
-      <div className="border-t border-border pt-2 text-[10px] text-muted-foreground">
+      <div className="border-t border-border pt-2 text-xs text-muted-foreground">
         <div>frozen_commit={record.frozen_commit}</div>
         <div>
           updated_commit={record.updated_commit ?? "待回溯 task 填充"}
@@ -324,7 +324,7 @@ export function DimensionValidationCard({
       {/* R5 honest_label */}
       <div className="rounded-lg bg-amber-500/10 p-2 text-xs text-amber-600">
         ⚠ {HONEST_LABEL}
-        <div className="mt-0.5 text-[10px] text-amber-500/70">
+        <div className="mt-0.5 text-xs text-amber-500/70">
           该窗口无 edge ≠ 无 edge（S159 外推禁令）
         </div>
       </div>

@@ -92,7 +92,7 @@ export function WeatherHero({ weather, onRefresh, refreshing }: WeatherHeroProps
               style={{ width: `${Math.min(100, Math.max(0, stiScore))}%` }}
             />
           </div>
-          <div className="flex justify-between mt-1 text-[10px] text-foreground/40">
+          <div className="flex justify-between mt-1 text-xs text-foreground/40">
             <span>冰点</span>
             <span>启动</span>
             <span>分歧</span>
@@ -102,7 +102,7 @@ export function WeatherHero({ weather, onRefresh, refreshing }: WeatherHeroProps
       )}
 
       {/* Subtle disclaimer */}
-      <div className="mt-3 flex items-start gap-1.5 text-[10px] text-foreground/40">
+      <div className="mt-3 flex items-start gap-1.5 text-xs text-foreground/40">
         <Info className="h-3 w-3 mt-0.5 shrink-0" />
         <span>情绪温度仅为历史统计维度之一，不构成任何操作建议。股市有风险，投资需谨慎。</span>
       </div>

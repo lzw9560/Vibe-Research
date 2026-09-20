@@ -123,7 +123,7 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
           <span className="mr-2 text-xs text-muted-foreground">{layer.layer_id}</span>
           {layer.name}
           {evaluationSummary && (
-            <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-500">
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-500">
               选股层无 validated 维度
             </span>
           )}
@@ -232,7 +232,7 @@ export function FunnelLayerCard({ layer, onPick, variant = "neutral", footer, da
                     })()}
                   </div>
                   {factors && (
-                    <div className="pl-4 text-[10px] text-muted-foreground/70">{factors}</div>
+                    <div className="pl-4 text-xs text-muted-foreground">{factors}</div>
                   )}
                 </button>
               );

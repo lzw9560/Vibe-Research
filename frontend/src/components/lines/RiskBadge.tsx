@@ -37,7 +37,7 @@ export function RiskBadge({ variant, status, detail, className }: RiskBadgeProps
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium",
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
         STATUS_STYLE[status],
         className,
       )}

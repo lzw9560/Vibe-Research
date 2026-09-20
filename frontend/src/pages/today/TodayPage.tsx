@@ -207,8 +207,9 @@ export function TodayPage() {
               onClick={openPalette}
               className="inline-flex items-center gap-1 rounded-lg border border-border/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
               title="研究深挖（Cmd+K / Ctrl+K）"
+              aria-label="研究深挖"
             >
-              <Telescope className="h-3.5 w-3.5" />
+              <Telescope className="h-3.5 w-3.5" aria-hidden="true" />
               研究深挖
               <kbd className="rounded border border-border/40 px-1 text-[9px]">⌘K</kbd>
             </button>
@@ -318,8 +319,9 @@ export function TodayPage() {
                       <Link to={`/stock/${code}`} className="text-xs text-muted-foreground hover:text-primary">{code}</Link>
                       <button
                         onClick={() => setDrawerCode(code)}
-                        className="text-[10px] text-primary/60 hover:text-primary"
+                        className="text-xs text-primary/60 hover:text-primary"
                         title="跨线视图"
+                        aria-label="跨线视图"
                       >⇄</button>
                     </div>
                     <div className={cn(

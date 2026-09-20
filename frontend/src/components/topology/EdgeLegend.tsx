@@ -23,7 +23,7 @@ export function EdgeLegend({ edges, hidden, onToggle }: EdgeLegendProps) {
   const hiddenSet = new Set(hidden ?? []);
   const items = EDGE_ORDER.filter((t) => present.has(t));
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
+    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
       {items.map((t) => {
         const isHidden = hiddenSet.has(t);
         const swatch = (

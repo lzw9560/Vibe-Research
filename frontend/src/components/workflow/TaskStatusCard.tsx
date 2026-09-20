@@ -130,7 +130,7 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
         <h3 className="flex items-center gap-2 font-serif text-[15px] font-bold">
           <span>盘后采集任务</span>
           {total > 0 && (
-            <span className="rounded-full bg-muted/40 px-2 py-0.5 font-mono text-[11px] text-muted-foreground" data-testid="task-progress">
+            <span className="rounded-full bg-muted/40 px-2 py-0.5 font-mono text-xs text-muted-foreground" data-testid="task-progress">
               {doneCount}/{total}
             </span>
           )}
@@ -200,7 +200,7 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
                       <span className="text-[13px]">{t.name}</span>
                     </div>
                     {/* 中：ETA */}
-                    <span className="hidden text-[11px] font-mono text-muted-foreground/70 sm:block">
+                    <span className="hidden text-xs font-mono text-muted-foreground sm:block">
                       {t.today_status === "pending"
                         ? `预计 ${time}`
                         : t.today_status === "running"
@@ -215,7 +215,7 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
                     <div className="flex items-center gap-2">
                       <span
                         className={cn(
-                          "rounded-full px-2 py-0.5 font-mono text-[11px]",
+                          "rounded-full px-2 py-0.5 font-mono text-xs",
                           style.pill,
                         )}
                       >
@@ -224,7 +224,7 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
                       {t.today_status === "done" && (
                         <button
                           onClick={(e) => handleLoad(e, t.name)}
-                          className="rounded bg-primary px-2 py-0.5 text-[11px] font-bold text-primary-foreground hover:shadow-[0_0_12px_hsl(15_89%_56%/0.45)]"
+                          className="rounded bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground hover:shadow-[0_0_12px_hsl(15_89%_56%/0.45)]"
                           data-testid={`load-btn-${t.id}`}
                         >
                           载入
@@ -233,7 +233,7 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
                     </div>
                     {/* 展开详情 */}
                     {isExpanded && (
-                      <div className="col-span-1 mt-1.5 rounded-md bg-muted/25 p-2 text-[11px] text-muted-foreground sm:col-span-3">
+                      <div className="col-span-1 mt-1.5 rounded-md bg-muted/25 p-2 text-xs text-muted-foreground sm:col-span-3">
                         {detailCache[t.id]?.__error ? (
                           <span className="text-[hsl(0_74%_60%)]">详情加载失败</span>
                         ) : detailCache[t.id] ? (

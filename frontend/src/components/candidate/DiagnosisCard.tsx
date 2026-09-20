@@ -174,7 +174,7 @@ function GeneScoreBlock({ data, evaluation }: { data: Record<string, unknown>; e
   const factorEntries = gs.factors ? Object.entries(gs.factors) : [];
   return (
     <div className="text-sm">
-      <div className="text-muted-foreground mb-1">涨停基因（GeneScore）<span className="text-amber-500">（§44 rho≈0，无方向性）</span>{evaluation?.demoted_dims?.includes("gene_score") && <span className="ml-1 text-[10px] text-red-500" title={evaluation.validation_note}>×{evaluation.score_weight}</span>}：</div>
+      <div className="text-muted-foreground mb-1">涨停基因（GeneScore）<span className="text-amber-500">（§44 rho≈0，无方向性）</span>{evaluation?.demoted_dims?.includes("gene_score") && <span className="ml-1 text-xs text-red-500" title={evaluation.validation_note}>×{evaluation.score_weight}</span>}：</div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-1">
         {row("基因总分", gs.total_score)}
         {row("250日涨停", gs.zt_count_250d)}

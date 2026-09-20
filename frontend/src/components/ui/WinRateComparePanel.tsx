@@ -76,13 +76,13 @@ export function WinRateComparePanel({ backtest, l2Passed, loading, onPickCandida
                       <div className="flex items-center gap-1.5">
                         <span>{b.strategy}{hits.length > 0 && (isOpen ? " ▼" : " ▶")}</span>
                         {weatherRecommended?.has(b.strategy_code) && (
-                          <span className="rounded bg-emerald-500/10 px-1 text-[10px] font-medium text-emerald-500">
+                          <span className="rounded bg-emerald-500/10 px-1 text-xs font-medium text-emerald-500">
                             推荐
                           </span>
                         )}
                       </div>
                       {b.sample_size === 0 && b.note && (
-                        <div className="text-xs text-muted-foreground/70">{b.note}</div>
+                        <div className="text-xs text-muted-foreground">{b.note}</div>
                       )}
                     </td>
                     <td className="py-1 pr-3">

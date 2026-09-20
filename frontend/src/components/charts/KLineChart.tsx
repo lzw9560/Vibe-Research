@@ -182,14 +182,14 @@ export function KLineChart({ bars, height = 460, showMA = true, category = 4 }: 
     <div className="space-y-2">
       {/* 画线投研工具栏 */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border/40 pb-1">
-        <span className="mr-1 text-[10px] text-muted-foreground">画线</span>
+        <span className="mr-1 text-xs text-muted-foreground">画线</span>
         {DRAW_TOOLS.map((t) => (
           <button
             key={t.name}
             type="button"
             onClick={() => handleTool(t.name)}
             title={t.label}
-            className="rounded border border-border/40 bg-muted/10 px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary"
+            className="rounded border border-border/40 bg-muted/10 px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary"
           >
             {t.label}
           </button>
@@ -201,7 +201,7 @@ export function KLineChart({ bars, height = 460, showMA = true, category = 4 }: 
         className="w-full"
         style={{ height: `${height}px` }}
       />
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         滚轮缩放 · 左右拖拽滚动 · hover 看十字线 + OHLCV · 点画线工具在图上画（可拖拽端点/删除）
       </p>
     </div>

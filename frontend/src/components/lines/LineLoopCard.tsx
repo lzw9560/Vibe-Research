@@ -36,7 +36,7 @@ export function LineLoopCard({
         {icon}
         <div>
           <h3 className="text-xs font-semibold">{title}</h3>
-          {subtitle && <p className="text-[10px] text-muted-foreground">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
       </div>
       {/* 步骤环——横向流，末尾箭头回指表闭环 */}
@@ -46,7 +46,7 @@ export function LineLoopCard({
           const content = (
             <span
               className={cn(
-                "inline-flex items-center gap-0.5 rounded px-2 py-1 text-[11px] transition-colors",
+                "inline-flex items-center gap-0.5 rounded px-2 py-1 text-xs transition-colors",
                 isActive
                   ? "bg-primary/15 font-medium text-primary"
                   : "text-muted-foreground hover:bg-muted/30",

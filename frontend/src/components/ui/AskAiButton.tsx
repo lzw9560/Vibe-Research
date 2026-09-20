@@ -322,7 +322,7 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
               >
                 <PanelLeftOpen className="h-4 w-4" />
                 <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-[10px] [writing-mode:vertical-lr] tracking-widest">问 AI</span>
+                <span className="text-xs [writing-mode:vertical-lr] tracking-widest">问 AI</span>
               </button>
             ) : (
               <>
@@ -365,7 +365,7 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
                 </div>
                 <div>
                   <p className="mb-1.5 text-xs font-medium text-muted-foreground">将随提问发给 AI 的本页上下文：</p>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/30 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
 {context}
                   </pre>
                 </div>
@@ -391,9 +391,9 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
                       )}>
                         {m.tools && m.tools.length > 0 && (
                           <div className="mb-1.5 flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] text-muted-foreground/70">数据来源</span>
+                            <span className="text-xs text-muted-foreground">数据来源</span>
                             {m.tools.map((t, j) => (
-                              <span key={`tool-${j}-${t.name}`} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                              <span key={`tool-${j}-${t.name}`} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                                 <Wrench className="h-2.5 w-2.5" /> {TOOL_LABEL[t.name] || t.name}{t.arg ? ` ${t.arg}` : ""}
                               </span>
                             ))}

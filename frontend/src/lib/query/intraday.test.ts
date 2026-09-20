@@ -13,7 +13,7 @@ vi.mock("@/hooks/useLiveQuotes", () => ({
   isTradingHours: () => tradingHoursMock.isTradingHours(),
 }));
 
-import { makeIntradayInterval } from "@/lib/query/intraday";
+import { makeIntradayInterval, makeMarketAwareInterval } from "@/lib/query/intraday";
 
 describe("makeIntradayInterval", () => {
   beforeEach(() => {
@@ -50,5 +50,34 @@ describe("makeIntradayInterval", () => {
     // 开盘后 isTradingHours 变 true，下一拍应恢复轮询
     tradingHoursMock.isTradingHours = (): boolean => true;
     expect(interval()).toBe(60_000);
+  });
+});
+
+describe("makeMarketAwareInterval", () => {
+  beforeEach(() => {
+    tradingHoursMock.isTradingHours = (): boolean => true;
+  });
+
+  it("returns a function (TanStack refetchInterval contract)", () => {
+    expect(typeof makeMarketAwareInterval(30_000, 5 * 60_000)).toBe("function");
+  });
+
+  it("returns intradayMs during trading hours (fast poll)", () => {
+    tradingHoursMock.isTradingHours = (): boolean => true;
+    const interval = makeMarketAwareInterval(30_000, 5 * 60_000);
+    expect(interval()).toBe(30_000);
+  });
+
+  it("returns offHoursMs outside trading hours (slow poll, NOT false)", () => {
+    tradingHoursMock.isTradingHours = (): boolean => false;
+    const interval = makeMarketAwareInterval(30_000, 5 * 60_000);
+    expect(interval()).toBe(5 * 60_000);
+  });
+
+  it("respects distinct intraday/offHours ms per hook", () => {
+    tradingHoursMock.isTradingHours = (): boolean => true;
+    expect(makeMarketAwareInterval(30_000, 300_000)()).toBe(30_000);
+    tradingHoursMock.isTradingHours = (): boolean => false;
+    expect(makeMarketAwareInterval(30_000, 300_000)()).toBe(300_000);
   });
 });

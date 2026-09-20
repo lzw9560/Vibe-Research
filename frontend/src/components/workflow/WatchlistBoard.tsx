@@ -78,7 +78,7 @@ export function WatchlistBoard({ date }: WatchlistBoardProps) {
           );
         })}
       </div>
-      <p className="mt-2 text-[10px] text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         参考值，非执行指令；市场有风险
       </p>
     </div>
@@ -113,11 +113,11 @@ function WatchlistCard({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-medium">{name}</span>
-            <span className="font-mono text-[10px] text-muted-foreground">{code}</span>
+            <span className="font-mono text-xs text-muted-foreground">{code}</span>
           </div>
           {status && (
             <span
-              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-white ${
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-white ${
                 STATUS_COLORS[status] ?? "bg-gray-300"
               }`}
             >
@@ -126,7 +126,7 @@ function WatchlistCard({
           )}
         </div>
         {/* 第二行：基因分 */}
-        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/70">
+        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           {geneScore != null && <span className="font-mono">基因 {geneScore.toFixed(1)}</span>}
         </div>
         {/* 第三行：价格 + 涨跌幅 */}
@@ -146,7 +146,7 @@ function WatchlistCard({
           )}
         </div>
         {/* 第四行：封板状态 */}
-        <div className="mt-1 text-[10px] text-muted-foreground">
+        <div className="mt-1 text-xs text-muted-foreground">
           {quote ? (isSealed ? "封板" : "未封板") : "实时价格待接入"}
           {quote?.limit_up_price ? ` · 涨停 ${quote.limit_up_price.toFixed(2)}` : ""}
         </div>

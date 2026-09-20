@@ -64,7 +64,7 @@ export function StockSeatCard({ dragonTiger, code }: { dragonTiger: DragonTiger 
             <span className={cn("font-mono font-medium", (inst.net_amt ?? 0) >= 0 ? "text-red-500" : "text-green-500")}>
               净{(inst.net_amt ?? 0) >= 0 ? "买入" : "卖出"} {fmtAmt(inst.net_amt)}
             </span>
-            <span className="ml-2 text-muted-foreground/70">
+            <span className="ml-2 text-muted-foreground">
               买 {fmtAmt(inst.buy_amt)} / 卖 {fmtAmt(inst.sell_amt)}
             </span>
           </div>
@@ -79,7 +79,7 @@ export function StockSeatCard({ dragonTiger, code }: { dragonTiger: DragonTiger 
             {dragonTiger.records.slice(0, 5).map((r, i) => (
               <div key={i} className="flex items-center justify-between text-xs">
                 <span className="font-mono text-muted-foreground">{r.date.slice(5)}</span>
-                <span className="truncate px-2 text-muted-foreground/70">{r.reason}</span>
+                <span className="truncate px-2 text-muted-foreground">{r.reason}</span>
                 <span className={cn("font-mono", r.net_buy >= 0 ? "text-red-500" : "text-green-500")}>
                   {r.net_buy >= 0 ? "+" : ""}{fmtAmt(r.net_buy)}
                 </span>
@@ -99,7 +99,7 @@ export function StockSeatCard({ dragonTiger, code }: { dragonTiger: DragonTiger 
               </p>
               <table className="w-full">
                 <thead>
-                  <tr className="text-left text-[10px] text-muted-foreground">
+                  <tr className="text-left text-xs text-muted-foreground">
                     <th className="py-0.5 pr-2">席位</th>
                     <th className="py-0.5 pr-2 text-right">买</th>
                     <th className="py-0.5 pr-2 text-right">卖</th>
@@ -119,7 +119,7 @@ export function StockSeatCard({ dragonTiger, code }: { dragonTiger: DragonTiger 
               </p>
               <table className="w-full">
                 <thead>
-                  <tr className="text-left text-[10px] text-muted-foreground">
+                  <tr className="text-left text-xs text-muted-foreground">
                     <th className="py-0.5 pr-2">席位</th>
                     <th className="py-0.5 pr-2 text-right">买</th>
                     <th className="py-0.5 pr-2 text-right">卖</th>

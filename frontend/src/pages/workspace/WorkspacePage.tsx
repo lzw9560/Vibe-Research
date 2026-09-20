@@ -110,7 +110,7 @@ export function WorkspacePage() {
                 <span className="text-muted-foreground">{fork.icon}</span>
                 <div className="min-w-0">
                   <div className="truncate text-xs font-medium">{fork.label}</div>
-                  <div className="truncate text-[10px] text-muted-foreground">{fork.desc}</div>
+                  <div className="truncate text-xs text-muted-foreground">{fork.desc}</div>
                 </div>
               </Link>
             ))}

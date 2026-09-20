@@ -135,7 +135,7 @@ function DimensionValidationCollapsible() {
         <span className="text-xs font-medium text-muted-foreground">
           §44 维度验证（12 维 verdict）
         </span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {expanded ? "▼ 收起" : "▶ 展开"}
         </span>
       </button>
@@ -154,7 +154,7 @@ function PipelineNode({ label, sub, count }: { label: string; sub?: string; coun
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium">{label}</div>
-          {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
+          {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
         </div>
         <div className="text-lg font-bold text-primary">{count ?? "—"}</div>
       </div>
@@ -172,11 +172,11 @@ function FinalCandidatesNode({ finals }: { finals: DiagnosisCard[] }) {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">终选（final_candidates）</div>
-            <div className="text-[11px] text-muted-foreground">含所有因子：gene_score/pool_item/derived/indicators</div>
+            <div className="text-xs text-muted-foreground">含所有因子：gene_score/pool_item/derived/indicators</div>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-primary">{finals.length}</span>
-            <span className="text-[10px] text-muted-foreground">{expanded ? "▼" : "▶"}</span>
+            <span className="text-xs text-muted-foreground">{expanded ? "▼" : "▶"}</span>
           </div>
         </div>
       </button>
@@ -203,12 +203,12 @@ function HandoffNode({ count, label }: { count: number; label: string }) {
     <div className="flex flex-col items-center py-1">
       {/* 胶囊形数字标签：粗箭头 + N 只 */}
       <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5">
-        <span className="text-[10px] font-semibold leading-none text-primary">↓</span>
-        <span className="text-[11px] font-bold tabular-nums leading-none text-primary">{count}</span>
+        <span className="text-xs font-semibold leading-none text-primary">↓</span>
+        <span className="text-xs font-bold tabular-nums leading-none text-primary">{count}</span>
         <span className="text-[9px] leading-none text-primary/70">只</span>
       </div>
       {/* 下方标签：流向 */}
-      <span className="mt-0.5 text-[10px] text-muted-foreground/80">{label}</span>
+      <span className="mt-0.5 text-xs text-muted-foreground/80">{label}</span>
     </div>
   );
 }
@@ -217,7 +217,7 @@ function LaneHeader({ title, sub, tone }: { title: string; sub?: string; tone?: 
   return (
     <div className={tone === "placeholder" ? "flex items-center gap-2 opacity-50" : "flex items-center gap-2"}>
       <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</span>
-      {sub && <span className="text-[10px] text-muted-foreground/70">{sub}</span>}
+      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
     </div>
   );
 }
@@ -234,7 +234,7 @@ function SectorRotationNode({ date }: { date: string }) {
       <button onClick={() => setExpanded((v) => !v)} className="w-full text-left">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">板块轮动（多维度融合）</span>
-          <span className="text-[10px] text-muted-foreground">{expanded ? "▼ 收起" : "▶ 展开"}</span>
+          <span className="text-xs text-muted-foreground">{expanded ? "▼ 收起" : "▶ 展开"}</span>
         </div>
         {dim.length > 0 && (
           <div className="mt-0.5 text-xs text-muted-foreground">
@@ -242,7 +242,7 @@ function SectorRotationNode({ date }: { date: string }) {
           </div>
         )}
         {!expanded && (
-          <div className="mt-0.5 text-[11px] text-muted-foreground/80">
+          <div className="mt-0.5 text-xs text-muted-foreground/80">
             全标签 TOP10：{top.map((s) => `${s.label}(${s.zt_count_today})`).join(" · ")}
           </div>
         )}
@@ -253,11 +253,11 @@ function SectorRotationNode({ date }: { date: string }) {
             <div key={s.label} className="rounded border border-border/30 bg-card/20 p-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium">{s.label}</span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {s.zt_count_today} 涨停 · {s.dims.join("+")}
                 </span>
               </div>
-              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+              <div className="mt-1 flex flex-wrap gap-1 text-xs">
                 {(s.codes || []).slice(0, 10).map((c) => (
                   <span key={c.code} className="rounded bg-muted/30 px-1 py-0.5 text-muted-foreground">
                     {c.name} <span className="text-muted-foreground/60">{c.code}</span>
@@ -269,7 +269,7 @@ function SectorRotationNode({ date }: { date: string }) {
           ))}
         </div>
       )}
-      <div className="mt-1 text-[10px] text-muted-foreground/60">
+      <div className="mt-1 text-xs text-muted-foreground/60">
         多维度共振（dims≥2）更可信；ths 106 全市场 + concept_map 缓存
       </div>
     </div>
@@ -353,24 +353,24 @@ function LayerStep({ layer, next, onPick, rerunHandlers, date, evaluationSummary
               const dim = dimId ? evaluationSummary?.dimensions?.find((d) => d.dimension_id === dimId) : undefined;
               return dim ? <DimensionValidationBadge validation={dim} compact /> : null;
             })()}
-            {missing && <span className="text-[10px] text-warning">未取得</span>}
-            {mismatch && next && <span className="text-[10px] text-warning">失配</span>}
+            {missing && <span className="text-xs text-warning">未取得</span>}
+            {mismatch && next && <span className="text-xs text-warning">失配</span>}
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs tabular-nums text-muted-foreground">{layer.input_count}</span>
             <span className="text-muted-foreground/50">→</span>
             <span className="text-base font-bold tabular-nums text-primary">{layer.output_count}</span>
             {filteredOut > 0 && (
-              <span className="rounded bg-muted/30 px-1 text-[10px] tabular-nums text-muted-foreground">
+              <span className="rounded bg-muted/30 px-1 text-xs tabular-nums text-muted-foreground">
                 ↓{filteredOut}
               </span>
             )}
-            <span className="ml-0.5 text-[10px] text-muted-foreground">{expanded ? "▼" : "▶"}</span>
+            <span className="ml-0.5 text-xs text-muted-foreground">{expanded ? "▼" : "▶"}</span>
           </div>
         </div>
         {/* 折叠态：过滤条件一行带过（展开态 FunnelLayerCard 内已显完整 chips） */}
         {!expanded && condsSummary && (
-          <div className="mt-1 text-[10px] text-muted-foreground/70">
+          <div className="mt-1 text-xs text-muted-foreground">
             过滤：{condsSummary}
           </div>
         )}

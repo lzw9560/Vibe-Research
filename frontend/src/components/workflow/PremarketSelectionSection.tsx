@@ -63,10 +63,10 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold">盘前选股</h3>
-          <span className="text-[10px] text-muted-foreground">S071 breakout 弱信号</span>
+          <span className="text-xs text-muted-foreground">S071 breakout 弱信号</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300/70">
+          <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-300/70">
             {data.honest_label}
           </span>
           <button
@@ -80,7 +80,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
       </div>
 
       {/* 风控参数 + 日历倍率 */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground/70">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>仓位 {data.risk_params.position_pct}%</span>
         <span>止损 {data.risk_params.stop_loss_pct}%</span>
         <span>止盈 {data.risk_params.take_profit_pct}%</span>
@@ -100,7 +100,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-border/40 text-muted-foreground/70">
+            <tr className="border-b border-border/40 text-muted-foreground">
               <th className="px-2 py-1 text-left">code</th>
               <th className="px-2 py-1 text-left">名称</th>
               <th className="px-2 py-1 text-right">breakout</th>
@@ -140,7 +140,7 @@ export function PremarketSelectionSection({ date, topN = 20, minScore = 0.9 }: P
         </table>
       </div>
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         §44 naive lift=1.36x &lt;2x 非 validated edge（4 方向特征里最弱），edge 主来自风控非对称。前向测试期间不投真金。
       </p>
     </GlassCard>

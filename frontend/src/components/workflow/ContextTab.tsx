@@ -25,7 +25,7 @@ interface Props {
 function Row({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
     <div className="flex items-center justify-between py-1.5 text-sm">
-      <span className="text-muted-foreground/70">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       <span className={ok ? "text-emerald-400" : "text-muted-foreground"}>{value}</span>
     </div>
   );
@@ -90,20 +90,20 @@ export function ContextTab({ date }: Props) {
         </div>
         <div className="flex items-baseline gap-3">
           <span className="text-3xl font-bold font-mono text-red-400">{storm?.probability ?? "—"}</span>
-          <span className="text-sm text-muted-foreground/70">/100 暴风雨概率</span>
+          <span className="text-sm text-muted-foreground">/100 暴风雨概率</span>
           <span className="ml-auto text-sm text-muted-foreground">建议仓位 {storm ? `${(storm.suggested_position * 100).toFixed(0)}%` : "—"}</span>
         </div>
         {storm?.factors && storm.factors.length > 0 && (
           <div className="mt-2 space-y-1 text-xs">
             {storm.factors.map((f) => (
               <div key={f.name} className="flex justify-between">
-                <span className="text-muted-foreground/70">{f.name}</span>
+                <span className="text-muted-foreground">{f.name}</span>
                 <span className={f.data_status === "missing" ? "text-muted-foreground" : "text-foreground"}>{f.score} ({f.detail})</span>
               </div>
             ))}
           </div>
         )}
-        {storm?.disclaimer && <p className="mt-2 text-[10px] text-muted-foreground">{storm.disclaimer}</p>}
+        {storm?.disclaimer && <p className="mt-2 text-xs text-muted-foreground">{storm.disclaimer}</p>}
       </GlassCard>
 
       <GlassCard className="p-4">
@@ -134,7 +134,7 @@ export function ContextTab({ date }: Props) {
           {sectors.slice(0, 5).map((s) => (
             <div key={s.industry} className="flex items-center justify-between py-1 text-sm border-b border-border/20 last:border-0">
               <span className="font-mono text-foreground">{s.rank}. {s.industry}</span>
-              <span className="text-muted-foreground/70">涨停{s.zt_count_today} · 强度{s.strength}</span>
+              <span className="text-muted-foreground">涨停{s.zt_count_today} · 强度{s.strength}</span>
             </div>
           ))}
           {sectors.length === 0 && <p className="text-sm text-muted-foreground">板块轮动未取得</p>}

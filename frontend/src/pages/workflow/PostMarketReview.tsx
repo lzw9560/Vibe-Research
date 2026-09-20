@@ -195,14 +195,14 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
                       <span className="ml-2 text-muted-foreground">
                         买入价 {b.entry_price ?? "—"}
                       </span>
-                      <span className="ml-2 rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      <span className="ml-2 rounded bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground">
                         {b.placeholder}
                       </span>
                     </div>
                   ))}
                 </div>
               )}
-              <p className="mt-2 text-[10px] text-muted-foreground/70">
+              <p className="mt-2 text-xs text-muted-foreground">
                 占位标签「待判定」——结算后才显真票根，避免预判误导
               </p>
               {entryCode && (
@@ -234,7 +234,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
                   ))}
                 </div>
               )}
-              <p className="mt-2 text-[10px] text-muted-foreground/70">明日盘后补账</p>
+              <p className="mt-2 text-xs text-muted-foreground">明日盘后补账</p>
             </GlassCard>
           </div>
 
@@ -261,7 +261,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
                       <span>共 {review.prev_day_missed.summary.n} 只</span>
                       <span>胜率 {fmtPct(review.prev_day_missed.summary.win_rate)}</span>
                       <span>均收益 {fmtSigned(review.prev_day_missed.summary.avg_return)}</span>
-                      <span className="text-muted-foreground/70">
+                      <span className="text-muted-foreground">
                         信号日 {review.prev_day_missed.summary.signal_date}
                       </span>
                     </div>
@@ -269,7 +269,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
                 </>
               )}
               {review.missing_kline > 0 && (
-                <p className="mt-2 text-[10px] text-muted-foreground">
+                <p className="mt-2 text-xs text-muted-foreground">
                   {review.missing_kline} 只因 K 线缺失排除
                 </p>
               )}
@@ -298,7 +298,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
                   ))}
                 </div>
               )}
-              <p className="mt-2 text-[10px] text-muted-foreground/70">
+              <p className="mt-2 text-xs text-muted-foreground">
                 跳转既有状态机流转（S033/S034），含 attention_mode 选择
               </p>
             </GlassCard>
@@ -312,7 +312,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
             <p className="mb-2 text-xs font-medium text-muted-foreground">教学点</p>
             <ul className="space-y-1">
               {TEACHING_POINTS.map((t) => (
-                <li key={t.slice(0, 16)} className="text-[11px] text-muted-foreground/80">
+                <li key={t.slice(0, 16)} className="text-xs text-muted-foreground/80">
                   · {t}
                 </li>
               ))}
@@ -325,7 +325,7 @@ export default function PostMarketReview({ date, reviewAdvanced, stage }: PostMa
           </GlassCard>
 
           {/* 风险注记 */}
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {review.disclaimer ?? "历史统计特征，市场有风险，研究参考"}
           </p>
 

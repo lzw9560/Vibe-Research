@@ -57,7 +57,7 @@ function verdictLabel(verdict: string | undefined): { text: string; cls: string 
 // S175 T9（SH）：纸面≠真盘警告横幅（静态 + 动态 gap 占位）
 function PaperNotRealBanner() {
   return (
-    <div className="rounded-lg border border-amber-300/60 bg-amber-50/80 p-2 text-[11px] leading-relaxed text-amber-800">
+    <div className="rounded-lg border border-amber-300/60 bg-amber-50/80 p-2 text-xs leading-relaxed text-amber-800">
       <span className="font-semibold">纸面 ≠ 真盘：</span>
       本页 PnL 为模拟口径（含成本 0.70%/滑点/涨停买不到/T+1 guard），但不等于真盘可执行——
       真盘滑点/流动性/注意力窗会侵蚀收益。<b>真盘交易由你决策</b>。
@@ -75,17 +75,17 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">{arm}</span>
         <div className="flex items-center gap-1">
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${verdict.cls}`}>{verdict.text}</span>
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusBadge(stats.status)}`}>{stats.status}</span>
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${verdict.cls}`}>{verdict.text}</span>
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusBadge(stats.status)}`}>{stats.status}</span>
         </div>
       </div>
       {isDormant && (
-        <div className="mb-2 rounded bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground">
+        <div className="mb-2 rounded bg-muted/30 px-2 py-0.5 text-xs text-muted-foreground">
           {stats.dormant_note ?? "dormant"}
         </div>
       )}
       {isUnderpowered && (
-        <div className="mb-2 rounded bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-700">
+        <div className="mb-2 rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700">
           样本不足·待积累（当前 {stats.n_days} 天 / 目标 60 天）——不判"劣于随机"
         </div>
       )}
@@ -95,7 +95,7 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
           {stats.execution_winrate != null ? `${(stats.execution_winrate * 100).toFixed(1)}%` : "—"}
         </span>
         <span className="text-muted-foreground">Wilson CI</span>
-        <span className="text-right font-mono text-[10px]">
+        <span className="text-right font-mono text-xs">
           [{(stats.execution_winrate_ci[0] * 100).toFixed(1)}, {(stats.execution_winrate_ci[1] * 100).toFixed(1)}]
         </span>
         <span className="text-muted-foreground">覆盖率</span>
@@ -113,7 +113,7 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
         </span>
         <span className="text-right font-mono">{stats.sharpe != null ? stats.sharpe.toFixed(3) : "—"}</span>
         <span className="text-muted-foreground">
-          DSR<span className="ml-1 text-[9px] text-muted-foreground/70">({dsrMethodLabel(stats.dsr_method)})</span>
+          DSR<span className="ml-1 text-[9px] text-muted-foreground">({dsrMethodLabel(stats.dsr_method)})</span>
         </span>
         <span className="text-right font-mono">{stats.dsr != null ? stats.dsr.toFixed(3) : "—"}</span>
         <span className="text-muted-foreground">t-stat</span>
@@ -130,7 +130,7 @@ function ArmStatCard({ arm, stats }: { arm: string; stats: ArmAggregate }) {
         <span className="text-right font-mono">{stats.n_picks} / {stats.n_days}</span>
       </div>
       {/* S175 T9（C6 诚实）：cap 标签——lift cap 未接 trade_journal sizing 路径 */}
-      <div className="mt-2 text-[9px] leading-tight text-muted-foreground/70">
+      <div className="mt-2 text-[9px] leading-tight text-muted-foreground">
         ×0.5 lift cap 未接 trade_journal sizing（drawdown cap 已接但 underpowered=1.0 no-op）
       </div>
     </GlassCard>
@@ -142,7 +142,7 @@ function RecordRow({ r }: { r: ClosedLoopRecord }) {
   return (
     <tr className={isDead ? "opacity-50" : ""}>
       <td className="px-2 py-1 text-xs">
-        <span className={`rounded px-1 py-0.5 text-[10px] ${isDead ? "bg-red-500/15 text-red-500" : "bg-primary/15 text-primary"}`}>
+        <span className={`rounded px-1 py-0.5 text-xs ${isDead ? "bg-red-500/15 text-red-500" : "bg-primary/15 text-primary"}`}>
           {r.arm}{isDead ? " (dead)" : ""}
         </span>
       </td>
@@ -160,7 +160,7 @@ function RecordRow({ r }: { r: ClosedLoopRecord }) {
           : <span className="text-green-500">已平</span>}
       </td>
       <td className="px-2 py-1 text-xs">
-        <span className="text-[10px] text-muted-foreground">—</span>
+        <span className="text-xs text-muted-foreground">—</span>
       </td>
     </tr>
   );
@@ -199,7 +199,7 @@ export function JournalLedger() {
           <p className="text-sm text-muted-foreground">
             暂无闭环交易记录。运行 <code className="rounded bg-muted px-1">journal_recorder.run_daily()</code> 后此处显示跨臂胜率闭环。
           </p>
-          <p className="mt-1 text-[10px] text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             S173 闭环账本 · 模拟/纸面臂 signal→PnL 全链路 · accounting 净口径
           </p>
         </GlassCard>
@@ -230,25 +230,25 @@ export function JournalLedger() {
           <div className="flex flex-wrap gap-2">
             {ddStatus.portfolio && (
               <GlassCard className="px-3 py-2">
-                <span className="text-[10px] text-muted-foreground">portfolio</span>
+                <span className="text-xs text-muted-foreground">portfolio</span>
                 <div className="text-xs font-mono">
                   equity {ddStatus.portfolio.equity.toFixed(0)} · DD {ddStatus.portfolio.drawdown_pct.toFixed(2)}%
                 </div>
-                <span className={`rounded px-1 py-0.5 text-[10px] ${statusBadge(ddStatus.portfolio.status)}`}>
+                <span className={`rounded px-1 py-0.5 text-xs ${statusBadge(ddStatus.portfolio.status)}`}>
                   {ddStatus.portfolio.status} ×{ddStatus.portfolio.size_multiplier}
                 </span>
                 {ddStatus.portfolio.is_bear_market && (
-                  <span className="ml-1 text-[10px] text-primary">熊市</span>
+                  <span className="ml-1 text-xs text-primary">熊市</span>
                 )}
               </GlassCard>
             )}
             {Object.entries(ddStatus.per_arm).map(([arm, s]) => (
               <GlassCard key={arm} className="px-3 py-2">
-                <span className="text-[10px] text-muted-foreground">{arm}</span>
+                <span className="text-xs text-muted-foreground">{arm}</span>
                 <div className="text-xs font-mono">
                   DD {s.drawdown_pct.toFixed(2)}% · ×{s.size_multiplier}
                 </div>
-                <span className={`rounded px-1 py-0.5 text-[10px] ${statusBadge(s.status)}`}>{s.status}</span>
+                <span className={`rounded px-1 py-0.5 text-xs ${statusBadge(s.status)}`}>{s.status}</span>
               </GlassCard>
             ))}
           </div>
@@ -261,7 +261,7 @@ export function JournalLedger() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="border-b text-left text-[10px] text-muted-foreground">
+              <tr className="border-b text-left text-xs text-muted-foreground">
                 <th className="px-2 py-1">臂</th>
                 <th className="px-2 py-1">代码</th>
                 <th className="px-2 py-1">入场日</th>

@@ -177,8 +177,8 @@ export function STITimelineChart({ className }: Props) {
       <GlassCard className={cn("mb-6", className)}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-muted-foreground">情绪温度时间线</h3>
-          <button onClick={loadData} className="text-muted-foreground hover:text-primary">
-            <RefreshCw className="h-3.5 w-3.5" />
+          <button onClick={loadData} className="text-muted-foreground hover:text-primary" aria-label="刷新">
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
         <p className="mt-3 text-sm text-destructive/80">{error}</p>
@@ -191,13 +191,13 @@ export function STITimelineChart({ className }: Props) {
       <GlassCard className={cn("mb-6", className)}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-muted-foreground">情绪温度时间线</h3>
-          <button onClick={loadData} className="text-muted-foreground hover:text-primary">
-            <RefreshCw className="h-3.5 w-3.5" />
+          <button onClick={loadData} className="text-muted-foreground hover:text-primary" aria-label="刷新">
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
         <div className="mt-3 rounded-lg border border-border/40 bg-muted/15 p-4 text-center">
           <p className="text-sm text-muted-foreground">暂无时间线数据</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">最近 60 个交易日的情绪温度走势</p>
+          <p className="mt-1 text-xs text-muted-foreground">最近 60 个交易日的情绪温度走势</p>
         </div>
       </GlassCard>
     );
@@ -213,33 +213,33 @@ export function STITimelineChart({ className }: Props) {
           <h3 className="text-sm font-semibold text-muted-foreground">情绪温度时间线（60 日）</h3>
           <span className={cn("text-xs font-medium", phaseColor)}>{latest.phase}</span>
         </div>
-        <button onClick={loadData} className="text-muted-foreground hover:text-primary" title="刷新">
-          <RefreshCw className="h-3.5 w-3.5" />
+        <button onClick={loadData} className="text-muted-foreground hover:text-primary" title="刷新" aria-label="刷新">
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
 
       {/* 摘要 */}
       <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
         <div className="rounded-lg bg-muted/20 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground">最新分数</p>
+          <p className="text-xs text-muted-foreground">最新分数</p>
           <p className={cn("font-mono text-lg font-bold", phaseColor)}>
             {latest.score?.toFixed(1) ?? "—"}
           </p>
         </div>
         <div className="rounded-lg bg-muted/20 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground">最高分</p>
+          <p className="text-xs text-muted-foreground">最高分</p>
           <p className="font-mono text-lg font-bold text-danger">
             {Math.max(...validData.map((d) => d.score ?? 0)).toFixed(1)}
           </p>
         </div>
         <div className="rounded-lg bg-muted/20 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground">最低分</p>
+          <p className="text-xs text-muted-foreground">最低分</p>
           <p className="font-mono text-lg font-bold text-success">
             {Math.min(...validData.map((d) => d.score ?? 100)).toFixed(1)}
           </p>
         </div>
         <div className="rounded-lg bg-muted/20 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground">数据天数</p>
+          <p className="text-xs text-muted-foreground">数据天数</p>
           <p className="font-mono text-lg font-bold text-foreground">{validData.length}</p>
         </div>
       </div>
@@ -247,7 +247,7 @@ export function STITimelineChart({ className }: Props) {
       <div ref={chartRef} className="h-[220px]" />
 
       {/* 图例 */}
-      <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
         {Object.entries(PHASE_LINE_COLOR).map(([phase, color]) => (
           <span key={phase} className="flex items-center gap-1">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />

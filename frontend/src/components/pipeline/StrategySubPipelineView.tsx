@@ -85,7 +85,7 @@ export function StrategySubPipelineView({ scoredCandidates = [], marketScanScore
   // 紧凑列表：每战法一行（名+触发率+命中数），点击展开候选。② PipelineStep 已包外层折叠（默认收缩）。
   return (
     <div className="space-y-1">
-      <div className="text-[10px] text-muted-foreground/70">
+      <div className="text-xs text-muted-foreground">
         {subtitle} · {hitStrategies}/{strategies.length} 战法命中 · 共 {totalHits} 只
       </div>
       {strategies.map((s) => {
@@ -113,7 +113,7 @@ function StrategyListRow({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-medium">{name}</span>
-            <span className="font-mono text-[10px] text-muted-foreground/60">{code}</span>
+            <span className="font-mono text-xs text-muted-foreground/60">{code}</span>
             {lane === "non-limitup" && (
               <span className="rounded bg-muted/30 px-1 text-[9px] text-muted-foreground">§44 未验证</span>
             )}
@@ -134,19 +134,19 @@ function StrategyListRow({
       >
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold">{name}</span>
-          <span className="font-mono text-[10px] text-muted-foreground/60">{code}</span>
+          <span className="font-mono text-xs text-muted-foreground/60">{code}</span>
           {lane === "non-limitup" && (
             <span className="rounded bg-muted/30 px-1 text-[9px] text-muted-foreground">§44 未验证</span>
           )}
           {firePct != null && (
-            <span className="text-[10px] text-muted-foreground/60">
+            <span className="text-xs text-muted-foreground/60">
               触发 {funnel!.fired_count}/{funnel!.total_count}（{firePct}%）
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
           <Badge variant="info">{hits.length} 只</Badge>
-          <span className="text-[10px] text-muted-foreground/60">{open ? "▼" : "▶"}</span>
+          <span className="text-xs text-muted-foreground/60">{open ? "▼" : "▶"}</span>
         </div>
       </button>
       {open && (
@@ -178,7 +178,7 @@ function CandidateRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-xs font-medium text-foreground">{c.name}</span>
-          <span className="shrink-0 font-mono text-[10px] text-muted-foreground/60">{c.code}</span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground/60">{c.code}</span>
         </div>
         {conditionStates && conditionStates.length > 0 && (
           <div className="mt-0.5 flex flex-wrap gap-0.5">
@@ -220,7 +220,7 @@ function ConditionMarker({
   } as const;
   const { symbol, cls } = config[state];
   return (
-    <span title={`${conditionId}: ${state}`} className={`text-[11px] leading-none ${cls}`}>
+    <span title={`${conditionId}: ${state}`} className={`text-xs leading-none ${cls}`}>
       {symbol}
     </span>
   );
@@ -230,12 +230,12 @@ function ConditionMarker({
 function StrategyDataHint({ code }: { code: string }) {
   const status = STRATEGY_DATA_STATUS[code];
   if (!status) {
-    return <span className="text-[10px] text-muted-foreground/50">无漏斗数据（历史快照或无评估）</span>;
+    return <span className="text-xs text-muted-foreground/50">无漏斗数据（历史快照或无评估）</span>;
   }
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] text-yellow-500/80">⚠ {status.reason}</span>
-      <span className="text-[10px] text-muted-foreground/50">修复：{status.fix}</span>
+      <span className="text-xs text-yellow-500/80">⚠ {status.reason}</span>
+      <span className="text-xs text-muted-foreground/50">修复：{status.fix}</span>
     </div>
   );
 }

@@ -188,7 +188,7 @@ function TimetableList({ slots, currentSlotId, mode }: { slots: CoachTimetableSl
                   <span className="text-xs font-mono text-muted-foreground">{s.start}–{s.end}</span>
                   <span className={`text-sm font-medium ${isCurrent ? "text-primary" : ""}`}>{s.label}</span>
                   {isCurrent && (
-                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary">当前</span>
+                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary">当前</span>
                   )}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -201,7 +201,7 @@ function TimetableList({ slots, currentSlotId, mode }: { slots: CoachTimetableSl
                   <Lightbulb className="h-3 w-3" />{s.teaching}
                 </p>
                 {isCurrent && s.mode_note?.[mode as "A" | "B" | "C"] && (
-                  <p className="mt-1 rounded bg-muted/30 p-1.5 text-[11px] text-muted-foreground">
+                  <p className="mt-1 rounded bg-muted/30 p-1.5 text-xs text-muted-foreground">
                     <span className="font-medium">本模式：</span>{s.mode_note[mode as "A" | "B" | "C"]}
                   </p>
                 )}
@@ -227,7 +227,7 @@ function ChecklistCard({ item }: { item: CoachChecklistItem }) {
         <div className="flex items-center gap-1.5">
           <StatusBadge status={item.status} />
           {item.strategy_name && (
-            <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{item.strategy_name}</span>
+            <span className="rounded bg-muted/40 px-1.5 py-0.5 text-xs text-muted-foreground">{item.strategy_name}</span>
           )}
         </div>
       </div>
@@ -239,7 +239,7 @@ function ChecklistCard({ item }: { item: CoachChecklistItem }) {
       {item.matched_triggers.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {item.matched_triggers.map((t) => (
-            <span key={t} className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{t}</span>
+            <span key={t} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{t}</span>
           ))}
         </div>
       )}
@@ -255,7 +255,7 @@ function ChecklistCard({ item }: { item: CoachChecklistItem }) {
         </div>
       )}
       {item.data_status === "missing" && (
-        <p className="mt-1 text-[10px] text-muted-foreground">数据缺失（不臆造）</p>
+        <p className="mt-1 text-xs text-muted-foreground">数据缺失（不臆造）</p>
       )}
       {hasWarning && (
         <p className="mt-1.5 text-xs text-red-500">{item.max_hold_warning}</p>
@@ -272,6 +272,6 @@ function StatusBadge({ status }: { status: string }) {
   };
   const cls = colors[status] ?? "bg-muted/40 text-muted-foreground";
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] ${cls}`}>{status}</span>
+    <span className={`rounded px-1.5 py-0.5 text-xs ${cls}`}>{status}</span>
   );
 }

@@ -44,7 +44,7 @@ function Metric({ k, v, sub }: { k: string; v: string; sub?: string }) {
     <div className="rounded-lg bg-muted/30 p-3">
       <p className="text-xs text-muted-foreground">{k}</p>
       <p className="mt-0.5 font-mono text-base font-bold">{v}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -70,7 +70,7 @@ function ValBand({ label, m }: { label: string; m: ValMetric }) {
         </div>
         <div className="absolute top-1/2 h-4 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded bg-foreground shadow" style={{ left: `${cur}%` }} />
       </div>
-      <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
+      <div className="mt-1 flex justify-between font-mono text-xs text-muted-foreground">
         <span>低 {m.min}</span><span>20% {m.p20}</span><span>中 {m.p50}</span><span>80% {m.p80}</span><span>高 {m.max}</span>
       </div>
     </div>
@@ -247,9 +247,9 @@ export function StockData() {
             <div className="mb-4 flex items-baseline gap-2">
               <h2 className="text-xl font-bold">{gstock.name}</h2>
               <span className="font-mono text-sm text-muted-foreground">{gstock.code}</span>
-              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">{gstock.market}</span>
+              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs text-primary">{gstock.market}</span>
               {gstock.quote.is_delayed && (
-                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground" title="行情走延时镜像（push2delay，约 15 分钟）">延时</span>
+                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-xs text-muted-foreground" title="行情走延时镜像（push2delay，约 15 分钟）">延时</span>
               )}
               <span className="ml-auto text-xs text-muted-foreground">{mktName(gstock.market)}</span>
             </div>
@@ -278,7 +278,7 @@ export function StockData() {
                 <BarChart3 className="h-4 w-4 text-primary" /> 关键财务指标
                 <span className="text-xs font-normal text-muted-foreground">· {gstock.metrics.report_date}</span>
               </h3>
-              <p className="mb-3 text-[11px] text-muted-foreground">东财 GMAININDICATOR，最新报告期。金额为原生币种。</p>
+              <p className="mb-3 text-xs text-muted-foreground">东财 GMAININDICATOR，最新报告期。金额为原生币种。</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
                   { k: "营业收入", v: bigMoney(gstock.metrics.revenue, gstock.market), yoy: gstock.metrics.revenue_yoy != null ? round2(gstock.metrics.revenue_yoy, "%") : "" },
@@ -292,7 +292,7 @@ export function StockData() {
                   <div key={m.k} className="rounded-lg bg-muted/30 p-3">
                     <p className="text-xs text-muted-foreground">{m.k}</p>
                     <p className="mt-0.5 font-mono text-base font-bold">{m.v}</p>
-                    {m.yoy && <p className="text-[11px] text-muted-foreground">同比 {m.yoy}</p>}
+                    {m.yoy && <p className="text-xs text-muted-foreground">同比 {m.yoy}</p>}
                   </div>
                 ))}
               </div>
@@ -305,7 +305,7 @@ export function StockData() {
                 <BarChart3 className="h-4 w-4 text-primary" /> 现金流量表
                 <span className="text-xs font-normal text-muted-foreground">· 单位：亿{cashflow.currency ?? ""}</span>
               </h3>
-              <p className="mb-3 text-[11px] text-muted-foreground">东财 RPT_HKSK_FN_CASHFLOW · 季度为年初至今累计 · 负数（现金流出）标绿。</p>
+              <p className="mb-3 text-xs text-muted-foreground">东财 RPT_HKSK_FN_CASHFLOW · 季度为年初至今累计 · 负数（现金流出）标绿。</p>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] text-sm">
                   <thead>
@@ -378,7 +378,7 @@ export function StockData() {
           {pctl && (pctl.metrics.pe_ttm || pctl.metrics.pb) && (
             <GlassCard glow className="mb-4">
               <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold"><LineChart className="h-4 w-4 text-primary" /> 估值历史分位 · {pctl.period}</h3>
-              <p className="mb-4 text-[11px] text-muted-foreground">绿=低估区 / 灰=合理区 / 红=高估区。只显示当前处于历史什么位置，不构成买卖建议。</p>
+              <p className="mb-4 text-xs text-muted-foreground">绿=低估区 / 灰=合理区 / 红=高估区。只显示当前处于历史什么位置，不构成买卖建议。</p>
               <div className="space-y-4">
                 {pctl.metrics.pe_ttm && <ValBand label="PE-TTM" m={pctl.metrics.pe_ttm} />}
                 {pctl.metrics.pb && <ValBand label="市净率 PB" m={pctl.metrics.pb} />}
@@ -389,7 +389,7 @@ export function StockData() {
           {fin && (fin.revenue || fin.roe) && (
             <GlassCard className="mb-4">
               <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold"><BarChart3 className="h-4 w-4 text-primary" /> 财务关键指标{fin.period && <span className="text-xs font-normal text-muted-foreground">· {fin.period}</span>}</h3>
-              <p className="mb-3 text-[11px] text-muted-foreground">同花顺财务摘要,最新报告期。</p>
+              <p className="mb-3 text-xs text-muted-foreground">同花顺财务摘要,最新报告期。</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
                   { k: "营业总收入", v: fin.revenue, yoy: fin.revenue_yoy },
@@ -404,7 +404,7 @@ export function StockData() {
                   <div key={m.k} className="rounded-lg bg-muted/30 p-3">
                     <p className="text-xs text-muted-foreground">{m.k}</p>
                     <p className="mt-0.5 font-mono text-base font-bold">{m.v ?? "—"}</p>
-                    {m.yoy && <p className="text-[11px] text-muted-foreground">同比 {m.yoy}</p>}
+                    {m.yoy && <p className="text-xs text-muted-foreground">同比 {m.yoy}</p>}
                   </div>
                 ))}
               </div>
@@ -424,7 +424,7 @@ export function StockData() {
                     ) : (
                       <span className="flex-1 truncate">{r.title}</span>
                     )}
-                    {r.emRatingName && <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{r.emRatingName}</span>}
+                    {r.emRatingName && <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{r.emRatingName}</span>}
                   </div>
                 ))}
               </div>
@@ -498,7 +498,7 @@ export function StockData() {
                   </div>
                 </div>
               )}
-              <p className="mt-3 text-[11px] text-muted-foreground">资金/筹码为公开客观数据，仅供了解该股当前状态，不构成任何买卖建议。</p>
+              <p className="mt-3 text-xs text-muted-foreground">资金/筹码为公开客观数据，仅供了解该股当前状态，不构成任何买卖建议。</p>
             </GlassCard>
           )}
 
@@ -546,7 +546,7 @@ export function StockData() {
                   ))}
                 </div>
               ) : (
-                <p className="mb-2 text-xs text-muted-foreground/70">未来 90 天无待解禁。</p>
+                <p className="mb-2 text-xs text-muted-foreground">未来 90 天无待解禁。</p>
               )}
               {lockup.history.length > 0 && (
                 <div>
@@ -590,9 +590,9 @@ export function StockData() {
               <div className="space-y-3">
                 {qa.filter((q) => q.answer).slice(0, 5).map((q, i) => (
                   <div key={i} className="border-b border-border/40 pb-3 text-sm last:border-0">
-                    <p className="text-muted-foreground"><span className="mr-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]">问</span>{q.question}</p>
-                    <p className="mt-1"><span className="mr-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">答</span>{q.answer}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{q.ask_time}</p>
+                    <p className="text-muted-foreground"><span className="mr-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-xs">问</span>{q.question}</p>
+                    <p className="mt-1"><span className="mr-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-xs text-primary">答</span>{q.answer}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{q.ask_time}</p>
                   </div>
                 ))}
               </div>

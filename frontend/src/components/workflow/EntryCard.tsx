@@ -26,7 +26,7 @@ export function EntryCard({ to, title, subtitle, icon: Icon, date }: Props) {
               <h3 className="font-semibold">{title}</h3>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground/70">{subtitle}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
           </div>
         </div>
       </GlassCard>

@@ -29,7 +29,7 @@ export function ScenarioCards() {
             className="rounded-lg border border-border/40 bg-muted/5 p-3"
           >
             <div className="mb-2 flex items-center gap-2">
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
                 IF
               </span>
               <p className="text-sm font-medium">{s.condition}</p>

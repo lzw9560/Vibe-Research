@@ -126,7 +126,7 @@ export function MyReports() {
           <p className="text-sm font-medium">
             {busy ? "上传中…" : "把研报拖到这里，或点击选择文件"}
           </p>
-          <p className="text-xs text-muted-foreground/70">
+          <p className="text-xs text-muted-foreground">
             支持 PDF / Word / txt / md / 表格 / 图片，单个 ≤ 25MB，可一次多选
           </p>
           <input
@@ -174,7 +174,7 @@ export function MyReports() {
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{r.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {fmtSize(r.size)} · {fmtDate(r.ts)}
                       </p>
                     </div>

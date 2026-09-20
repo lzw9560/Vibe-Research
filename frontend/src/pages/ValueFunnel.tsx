@@ -174,7 +174,7 @@ function QualityCard({ code, qa }: { code: string; qa: QualityAssessment }) {
       <div className="mt-2 text-xs text-muted-foreground border-t pt-1">
         护城河代理：毛利率持续{qa.moat.gross_margin_persistence ? "高" : "—"} ·
         ROE均值{qa.moat.roe_stability ?? "—"}%
-        <div className="text-[10px]">{qa.moat.note}</div>
+        <div className="text-xs">{qa.moat.note}</div>
       </div>
     </div>
   );

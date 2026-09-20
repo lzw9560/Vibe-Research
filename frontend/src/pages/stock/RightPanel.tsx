@@ -87,7 +87,7 @@ export function RightPanel({ active, onActiveChange }: RightPanelProps) {
             title={p.label}
             aria-pressed={isActive}
             className={cn(
-              "flex w-12 flex-col items-center gap-0.5 rounded-md px-1 py-2 text-[10px] transition-colors",
+              "flex w-12 flex-col items-center gap-0.5 rounded-md px-1 py-2 text-xs transition-colors",
               isActive
                 ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",

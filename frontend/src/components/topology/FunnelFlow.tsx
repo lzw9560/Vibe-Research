@@ -103,7 +103,7 @@ function PassedCandidatesPanel({ layer }: { layer: FunnelLayer }) {
       )}
 
       {layer.data_reason && (
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           {layer.data_reason}
         </p>
       )}

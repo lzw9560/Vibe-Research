@@ -208,7 +208,7 @@ function BackboneNode({ data }: NodeProps) {
       style={{ width: 160 }}
     >
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-muted-foreground" />
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
         {d.step}
       </span>
       <span className="text-sm font-bold text-primary">{d.label}</span>
@@ -230,7 +230,7 @@ function ForkNode({ data }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !border-0" style={{ background: color }} />
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-[11px] font-medium" style={{ color }}>{d.label}</span>
+      <span className="text-xs font-medium" style={{ color }}>{d.label}</span>
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !border-0" style={{ background: color }} />
     </div>
   );
@@ -248,7 +248,7 @@ function LineLegend({ activeLine, setActiveLine }: { activeLine: string | null; 
           key={line.key}
           onClick={() => setActiveLine(activeLine === line.key ? null : line.key)}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
             activeLine === line.key ? "border-foreground/30 bg-foreground/5" : "border-border/40 hover:bg-muted/20",
           )}
         >
@@ -350,16 +350,16 @@ export function PipelinePage() {
         <h3 className="mb-2 text-xs font-semibold">fork 岔路说明</h3>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
-            <p className="text-[11px] font-medium text-amber-500">§44 验证 fork</p>
-            <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+            <p className="text-xs font-medium text-amber-500">§44 验证 fork</p>
+            <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
               <li><span className="text-emerald-500">●</span> validated: lift≥2x → 模拟盘可执行</li>
               <li><span className="text-amber-500">●</span> 待验证: lift&lt;2x 或 n不足 → 记日志待复验</li>
               <li><span className="text-red-500">●</span> 已证否: 调因子回炉</li>
             </ul>
           </div>
           <div>
-            <p className="text-[11px] font-medium text-emerald-500">策略 fork</p>
-            <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+            <p className="text-xs font-medium text-emerald-500">策略 fork</p>
+            <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
               <li><span className="text-red-500">●</span> 短线打板: selection 层 S168</li>
               <li><span className="text-amber-500">●</span> 中线event: event 层 S169+S170</li>
               <li><span className="text-blue-500">●</span> 长线价值: long_value 层 S171</li>
@@ -492,7 +492,7 @@ function TaskRow({ task }: { task: ScheduledTask }) {
                       </span>
                     </div>
                     {run.error && (
-                      <pre className="mt-1 overflow-x-auto rounded bg-red-50 dark:bg-red-950/30 p-2 text-[11px] text-red-600 dark:text-red-400">
+                      <pre className="mt-1 overflow-x-auto rounded bg-red-50 dark:bg-red-950/30 p-2 text-xs text-red-600 dark:text-red-400">
                         {run.error}
                       </pre>
                     )}

@@ -50,7 +50,7 @@ export function SevenLineStatus({ items }: { items: LineStatusItem[] }) {
                 <div className="truncate text-xs font-medium">
                   {item.label}
                 </div>
-                <div className={cn("truncate text-[10px]", STATUS_TEXT[item.status])}>
+                <div className={cn("truncate text-xs", STATUS_TEXT[item.status])}>
                   {STATUS_LABEL[item.status]}
                   {item.detail && ` · ${item.detail}`}
                 </div>

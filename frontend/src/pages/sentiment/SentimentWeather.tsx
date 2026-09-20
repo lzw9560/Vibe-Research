@@ -18,6 +18,8 @@ import {
   useSentimentWeatherPardon,
   useExitSignals,
   useSentimentWeatherFuseHistory,
+  makeMarketAwareInterval,
+  isInAuctionWindow,
 } from "@/lib/query";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 import { WeatherHero } from "@/components/sentiment-weather/WeatherHero";
@@ -50,6 +52,15 @@ const TAB_ROUTE: Record<TabId, string> = {
 // 各自 refetchInterval 5min，TanStack 会并行调度，效果与原 Promise.all 等价。
 const REFRESH_MS = 5 * 60 * 1000;
 
+// 盘中提速 / 盘后降速（不停）：情绪天气派生数据盘后仍可能更新（熔断/赦免状态、
+// 当日走势尾段），故盘后回落到 5min 慢轮询而非停拉（与 makeIntradayInterval 的 false 不同）。
+// latest/sealRisk 盘中 30s；其余 4 hook（strategy/fuse/timeline/pardon）时效性弱，保持 5min。
+const marketAware30s = makeMarketAwareInterval(30_000, REFRESH_MS);
+// auction 集合竞价窗口 9:15-9:30 提速到 10s（窗口外回落到 30s/5min）。
+// TODO: isInAuctionWindow 用本地 new Date() 非 beijingNow()，海外用户时区错配
+// （v3 audit P1 备注，本任务不修，不扩大范围）。
+const auctionInterval = (): number => (isInAuctionWindow() ? 10_000 : marketAware30s());
+
 export default function SentimentWeather() {
   const location = useLocation();
   const activeTab = (() => {
@@ -67,12 +78,12 @@ export default function SentimentWeather() {
 
   // T9：原 useState/useEffect + Promise.all + setInterval → 7 个 TanStack Query hook。
   // hook data 在 v5 下退化为 {}（与 Health.tsx 同源），按 S013 T9 规约就地窄→宽 cast。
-  const latestQ = useSentimentWeatherLatest({ refetchInterval: REFRESH_MS });
+  const latestQ = useSentimentWeatherLatest({ refetchInterval: marketAware30s });
   const strategyQ = useSentimentWeatherStrategy({ refetchInterval: REFRESH_MS });
   const fuseQ = useSentimentWeatherFuse({ refetchInterval: REFRESH_MS });
   const timelineQ = useSentimentWeatherTimeline(30, { refetchInterval: REFRESH_MS });
-  const auctionQ = useSentimentWeatherAuction({ refetchInterval: REFRESH_MS });
-  const sealRiskQ = useSentimentWeatherSealRisk({ refetchInterval: REFRESH_MS });
+  const auctionQ = useSentimentWeatherAuction({ refetchInterval: auctionInterval });
+  const sealRiskQ = useSentimentWeatherSealRisk({ refetchInterval: marketAware30s });
   const pardonQ = useSentimentWeatherPardon({ refetchInterval: REFRESH_MS });
   // S216 B future: fuse/history 熔断触发历史
   const fuseHistoryQ = useSentimentWeatherFuseHistory(30);
@@ -185,7 +196,7 @@ export default function SentimentWeather() {
                         style={{ width: `${Math.min(100, Math.max(0, factor.score ?? 0))}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-foreground/50 text-right">
+                    <div className="text-xs text-foreground/50 text-right">
                       {Math.round(factor.weight * 100)}%
                     </div>
                   </div>
@@ -244,7 +255,7 @@ export default function SentimentWeather() {
                     <p className="text-xs text-foreground/60 mb-2">{s.description}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {s.conditions?.map((c, i) => (
-                        <span key={i} className="text-[10px] text-foreground/40 bg-foreground/5 px-1.5 py-0.5 rounded">
+                        <span key={i} className="text-xs text-foreground/40 bg-foreground/5 px-1.5 py-0.5 rounded">
                           {c}
                         </span>
                       ))}

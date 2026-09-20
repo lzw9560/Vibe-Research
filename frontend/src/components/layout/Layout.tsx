@@ -133,14 +133,14 @@ export function Layout() {
 
         {collapsed ? (
           <div className="flex flex-col items-center gap-2 py-4">
-            <Link to="/today" className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title="今日">
-              <Home className="h-4 w-4" />
+            <Link to="/today" className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title="今日" aria-label="今日">
+              <Home className="h-4 w-4" aria-hidden="true" />
             </Link>
             {SYS_NAV.tabs.slice(0, 2).map(tab => {
               const Icon = SettingsIcon;
               return (
-                <Link key={tab.to} to={tab.to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title={tab.label}>
-                  <Icon className="h-4 w-4" />
+                <Link key={tab.to} to={tab.to} className="rounded p-1.5 text-muted-foreground transition-colors hover:text-primary" title={tab.label} aria-label={tab.label}>
+                  <Icon className="h-4 w-4" aria-hidden="true" />
                 </Link>
               );
             })}
@@ -168,15 +168,15 @@ export function Layout() {
                   {dark ? "亮色" : "暗色"}
                 </button>
                 <div className="flex items-center gap-2">
-                  <a href={REPO_URL} target="_blank" rel="noreferrer" className="text-muted-foreground transition-colors hover:text-foreground">
-                    <Github className="h-3.5 w-3.5" />
+                  <a href={REPO_URL} target="_blank" rel="noreferrer" className="text-muted-foreground transition-colors hover:text-foreground" aria-label="GitHub 仓库">
+                    <Github className="h-3.5 w-3.5" aria-hidden="true" />
                   </a>
                   <button onClick={() => setCollapsed(true)} className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground" aria-label="收起侧边栏">
                     <ChevronsLeft className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
+              <p className="text-xs leading-relaxed text-muted-foreground">
                 {APP_VERSION} · 模拟盘跟踪 · 真盘你定
               </p>
             </>

@@ -56,7 +56,7 @@ export function EarningsSnapshot({ val, fin, pctl }: Props) {
         <ClipboardList className="h-4 w-4 text-primary" /> 财报速览
         {fin.period && <span className="text-xs font-normal text-muted-foreground">· {fin.period}</span>}
       </h3>
-      <p className="mb-3 text-[11px] text-muted-foreground">
+      <p className="mb-3 text-xs text-muted-foreground">
         最新财报 + 前向一致预期 + 估值位置一眼看全。客观数据机械分档，不构成买卖建议。
       </p>
 

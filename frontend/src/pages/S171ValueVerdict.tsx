@@ -86,12 +86,12 @@ export function S171ValueVerdict() {
             <span className="text-xs text-red-400">后端未就绪，显示 mock</span>
           )}
           {isMock && !isLoading && (
-            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400">
               MOCK · 待 long_value_run.py 跑出
             </span>
           )}
           {!isMock && (
-            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">LIVE</span>
+            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs text-emerald-400">LIVE</span>
           )}
         </div>
       </div>
@@ -183,13 +183,13 @@ export function S171ValueVerdict() {
         <GlassCard className="p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold">角度① 对冲版</span>
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-blue-400">做多低 PE + 做空高 PE</span>
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-blue-400">做多低 PE + 做空高 PE</span>
           </div>
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
             看价差收益（价值-成长，市场涨跌抵消）。正宗 Fama-French HML 测法，但 A 股做空难。
           </p>
           <EventMetricsPanel row={activeRow} record={p1} />
-          <div className="mt-3 rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-400">
+          <div className="mt-3 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-400">
             ⚠ 不能直接交易：A 股做空（融券）难又贵，这是测"价值溢价是否存在"不是"能赚多少"
           </div>
         </GlassCard>
@@ -197,7 +197,7 @@ export function S171ValueVerdict() {
         {/* 中间：第一关判定 */}
         <GlassCard className="p-3 flex flex-col items-center justify-center min-w-[140px]">
           <GateDot gate={bundle.gates.cross_check} />
-          <div className="text-[10px] text-muted-foreground text-center mt-1.5 leading-tight">
+          <div className="text-xs text-muted-foreground text-center mt-1.5 leading-tight">
             第一关<br />两角度<br />方向一致?
           </div>
         </GlassCard>
@@ -206,13 +206,13 @@ export function S171ValueVerdict() {
         <GlassCard className="p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold">角度② 只做多版</span>
-            <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] text-orange-400">低 PE 跑赢全市场</span>
+            <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-xs text-orange-400">低 PE 跑赢全市场</span>
           </div>
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
             只买低 PE，看能不能跑赢全市场平均。能实际交易，但"选股准不准"倍数对价值结构性偏低。
           </p>
           <SelectionMetricsPanel row={activeRow} record={p2} />
-          <div className="mt-3 rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-400">
+          <div className="mt-3 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-400">
             ⚠ 弱信号≠无 edge：选股倍数对价值永远到不了 2×（价值股赢的频率不高但平均赢更多）。
             把角度②"弱信号"读成"价值无 edge"是外推越界。
           </div>
@@ -227,7 +227,7 @@ export function S171ValueVerdict() {
             <span className="text-sm font-semibold">第二关：退市档不翻结论</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">{bundle.gates.sensitivity.detail}</p>
-          <div className="mt-2 text-[11px] text-muted-foreground space-y-0.5">
+          <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
             <div>亏一半 → {STATUS_HUMAN[t1.combined].label}（角度①{EVENT_STATUS_HUMAN[t1.primary_1_event_status].label}，角度②{liftHuman(t1.primary_2_lift).label}）</div>
             <div>归零 → {STATUS_HUMAN[t2.combined].label}（角度①{EVENT_STATUS_HUMAN[t2.primary_1_event_status].label}，角度②{liftHuman(t2.primary_2_lift).label}）</div>
           </div>
@@ -271,7 +271,7 @@ export function S171ValueVerdict() {
               <li key={i} className="text-xs text-muted-foreground leading-relaxed">· {f}</li>
             ))}
           </ul>
-          <div className="mt-2 text-[11px] text-muted-foreground border-t border-border pt-2">
+          <div className="mt-2 text-xs text-muted-foreground border-t border-border pt-2">
             {bundle.st_separation.verification}<br />{bundle.st_separation.capture}
           </div>
         </GlassCard>
@@ -279,7 +279,7 @@ export function S171ValueVerdict() {
 
       {/* ── footer 注明 mock ── */}
       {isMock && (
-        <div className="text-[11px] text-muted-foreground text-center pb-2">
+        <div className="text-xs text-muted-foreground text-center pb-2">
           mock 数据按 S171 spec §6 设计的代表性场景（双角度矛盾 → 不能定论）。真实 verdict 由
           backend/tools/long_value_run.py 跑出后落 Recorder，UI 经 /api/verifier/records 读真实值替换。
         </div>
@@ -298,7 +298,7 @@ function KpiTile({ title, value, tone, why, sub }: {
       <div className="text-xs text-muted-foreground">{title}</div>
       <div className={cn("text-2xl font-bold mt-1", tone)}>{value}</div>
       <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{why}</div>
-      <div className="text-[11px] text-muted-foreground mt-1.5">{sub}</div>
+      <div className="text-xs text-muted-foreground mt-1.5">{sub}</div>
     </GlassCard>
   );
 }
@@ -368,7 +368,7 @@ function MetricRow({ label, value, hint }: { label: string; value: string; hint?
     <div className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">
         {label}
-        {hint && <span className="text-[10px] text-muted-foreground ml-1">({hint})</span>}
+        {hint && <span className="text-xs text-muted-foreground ml-1">({hint})</span>}
       </span>
       <span className="font-mono text-foreground">{value}</span>
     </div>
@@ -383,7 +383,7 @@ function CoverageMeter({ audit }: { audit: S171ValueBundle["coverage_audit"] }) 
     <div className="space-y-2 mt-2">
       <MeterBar label="宽松（至少有 K 线）" pct={lenientPct} threshold={50} />
       <MeterBar label="严格（完整覆盖）" pct={strictPct} threshold={50} />
-      <div className="text-[11px] text-muted-foreground leading-relaxed pt-1">
+      <div className="text-xs text-muted-foreground leading-relaxed pt-1">
         退市股 {audit.total_delisted} 只，其中 {audit.zero_bars_count} 只（{zeroPct}%）一根 K 线都没有——
         这批是极端 value trap，缺失导致 <span className="text-amber-400">价值溢价被高估</span>。
       </div>
@@ -423,10 +423,10 @@ function BugFixCard({ bug }: { bug: S171ValueBundle["bug_fixes"][number] }) {
         <span className="text-xs font-medium">#{bug.id} {bug.title}</span>
         <span className={cn("rounded px-1 py-0.5 text-[9px]", statusBadge.tone)}>{statusBadge.label}</span>
       </div>
-      <div className="text-[10px] text-muted-foreground leading-relaxed">
+      <div className="text-xs text-muted-foreground leading-relaxed">
         <span className="text-red-400/70">错：</span>{bug.detail}
       </div>
-      <div className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+      <div className="text-xs text-muted-foreground leading-relaxed mt-0.5">
         <span className="text-emerald-400/70">修：</span>{bug.fix}
       </div>
     </div>

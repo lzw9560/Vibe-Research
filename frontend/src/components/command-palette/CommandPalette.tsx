@@ -131,7 +131,7 @@ export function CommandPalette() {
             autoComplete="off"
             spellCheck={false}
           />
-          <kbd className="rounded border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          <kbd className="rounded border border-border/50 px-1.5 py-0.5 text-xs text-muted-foreground">
             ESC
           </kbd>
         </div>

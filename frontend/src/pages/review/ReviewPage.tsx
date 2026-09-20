@@ -109,7 +109,7 @@ function VerdictSpine() {
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <span className="text-[10px] text-muted-foreground/70">
+        <span className="text-xs text-muted-foreground">
           {filtered.length}/{withEdge.length} 维度
         </span>
       </div>
@@ -133,7 +133,7 @@ function VerdictSpine() {
               <tr key={dim.dimension_id} className="border-b border-border/30">
                 <td className="py-2 pr-4 font-medium">{dim.label}</td>
                 <td className="py-2 pr-4">
-                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
                     {dim.edge_type}
                   </span>
                 </td>
@@ -179,21 +179,21 @@ function SignalValidationLegend() {
           <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
           <div>
             <div className="text-xs font-medium text-emerald-500">validated · 可执行</div>
-            <div className="text-[10px] text-muted-foreground">§44 过 lift≥2x，可记交易</div>
+            <div className="text-xs text-muted-foreground">§44 过 lift≥2x，可记交易</div>
           </div>
         </div>
         <div className="flex items-start gap-2">
           <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
           <div>
             <div className="text-xs font-medium text-amber-500">待验证 · 参考用</div>
-            <div className="text-[10px] text-muted-foreground">lift&lt;2x 或 n 不足，记日志待复验</div>
+            <div className="text-xs text-muted-foreground">lift&lt;2x 或 n 不足，记日志待复验</div>
           </div>
         </div>
         <div className="flex items-start gap-2">
           <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
           <div>
             <div className="text-xs font-medium text-red-500">已证否 · 不交易</div>
-            <div className="text-[10px] text-muted-foreground">§44 证否选股力，仅参考</div>
+            <div className="text-xs text-muted-foreground">§44 证否选股力，仅参考</div>
           </div>
         </div>
       </div>

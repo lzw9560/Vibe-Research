@@ -5,7 +5,7 @@ import { Info } from "lucide-react";
 export function Disclaimer({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
-      <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+      <p className="text-xs leading-relaxed text-muted-foreground">
         模拟盘跟踪·真盘你定。历史统计特征，市场有风险。
       </p>
     );

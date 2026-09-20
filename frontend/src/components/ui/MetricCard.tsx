@@ -38,7 +38,7 @@ export function MetricCard({ label, value, unit, trend, trendUp, sub, className,
           </span>
         )}
       </div>
-      {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }

@@ -59,7 +59,7 @@ export function OfiDashboard() {
       ) : (
         <>
           {data.truncated && (
-            <div className="mb-2 rounded bg-[hsl(38_92%_50%/0.12)] px-2 py-1 text-[11px] text-[hsl(38_92%_50%)]">
+            <div className="mb-2 rounded bg-[hsl(38_92%_50%/0.12)] px-2 py-1 text-xs text-[hsl(38_92%_50%)]">
               结果截断至 {data.count} 行（单日上界，调高 limit 或缩小 code）
             </div>
           )}
@@ -99,7 +99,7 @@ export function OfiDashboard() {
               </tbody>
             </table>
           </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">
+          <div className="mt-2 text-xs text-muted-foreground">
             共 {data.count} 条 · {data.date}
           </div>
         </>

@@ -322,7 +322,7 @@ function MarketSentimentBar({ snapshot }: { snapshot?: IntradaySnapshot | null }
           </p>
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         参考值，非执行指令；市场有风险
       </p>
     </GlassCard>

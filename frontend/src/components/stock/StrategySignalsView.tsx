@@ -54,7 +54,7 @@ export function StrategySignalsView({ code, date, variant = "full" }: Props) {
   const cardPad = compact ? "p-2.5" : "p-3.5";
   const cardGap = compact ? "space-y-2" : "space-y-3";
   const titleCls = compact ? "text-sm" : "text-base";
-  const bodyCls = compact ? "text-[11px]" : "text-xs";
+  const bodyCls = compact ? "text-xs" : "text-xs";
 
   return (
     <div className="space-y-3">
@@ -79,7 +79,7 @@ export function StrategySignalsView({ code, date, variant = "full" }: Props) {
               <span className={`${titleCls} font-semibold text-primary`}>
                 {s.strategy_name}
               </span>
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                 基因分 {s.score}
               </span>
             </div>
@@ -109,7 +109,7 @@ export function StrategySignalsView({ code, date, variant = "full" }: Props) {
                 {s.risk_notes.map((r, i) => (
                   <li
                     key={i}
-                    className="text-[10px] leading-relaxed text-muted-foreground"
+                    className="text-xs leading-relaxed text-muted-foreground"
                   >
                     ⚠ {r}
                   </li>
@@ -117,7 +117,7 @@ export function StrategySignalsView({ code, date, variant = "full" }: Props) {
               </ul>
             )}
 
-            <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border/30 pt-1.5 text-[10px] text-muted-foreground">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border/30 pt-1.5 text-xs text-muted-foreground">
               {s.entry_price != null && (
                 <span>
                   入场 <span className="font-mono text-foreground">{s.entry_price}</span>

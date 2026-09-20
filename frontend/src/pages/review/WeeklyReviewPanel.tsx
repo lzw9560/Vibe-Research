@@ -123,7 +123,7 @@ export function WeeklyReviewPanel() {
           <p className="mt-0.5">
             建议 ×{capDown.from} → ×{capDown.to}
           </p>
-          <p className="mt-0.5 text-[10px] text-red-600/70">
+          <p className="mt-0.5 text-xs text-red-600/70">
             来源：{capDownSource}
           </p>
         </div>
@@ -150,12 +150,12 @@ export function WeeklyReviewPanel() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {agg.weeks.map((w) => (
             <div key={w.week} className="rounded bg-muted/30 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground">{w.week.slice(5)}</p>
+              <p className="text-xs text-muted-foreground">{w.week.slice(5)}</p>
               <p className={`text-sm font-bold ${w.mean >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                 {w.mean >= 0 ? "+" : ""}
                 {w.mean.toFixed(2)}%
               </p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {w.n} 笔 · WR {(w.wr * 100).toFixed(0)}%
               </p>
             </div>
@@ -178,7 +178,7 @@ export function WeeklyReviewPanel() {
                 <span className="font-mono font-semibold">{t.code}</span>
                 <span className="text-muted-foreground">{t.recorded_at.slice(0, 10)}</span>
                 {t.delivery_leak && (
-                  <span className="rounded bg-red-50 px-1 py-0.5 text-[10px] text-red-600">leak</span>
+                  <span className="rounded bg-red-50 px-1 py-0.5 text-xs text-red-600">leak</span>
                 )}
               </div>
               <div className="flex items-center gap-2">

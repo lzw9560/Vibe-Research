@@ -110,7 +110,7 @@ export function EarningsCalendarPage() {
                 <span className="h-2 w-2 shrink-0 rounded-full bg-red-500/60" />
                 <span className="font-medium text-red-500">{d.label}</span>
                 <span>{d.reason}</span>
-                <span className="text-[10px] text-red-500/70">deadline {d.deadline}</span>
+                <span className="text-xs text-red-500/70">deadline {d.deadline}</span>
               </div>
             ))}
           </div>
@@ -124,7 +124,7 @@ export function EarningsCalendarPage() {
             <AlertTriangle className="h-4 w-4 text-amber-500" />
             个股披露 + 解禁聚合
             {status === "partial" && (
-              <span className="text-[10px] text-amber-600">部分源缺数据</span>
+              <span className="text-xs text-amber-600">部分源缺数据</span>
             )}
           </h2>
           <ul className="space-y-2">
@@ -133,7 +133,7 @@ export function EarningsCalendarPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">{p.code}</span>
                   <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                    className={`text-xs px-1.5 py-0.5 rounded ${
                       p.data_status === "ok"
                         ? "bg-emerald-500/10 text-emerald-600"
                         : p.data_status === "partial"

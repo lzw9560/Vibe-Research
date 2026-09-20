@@ -36,6 +36,17 @@ export function makeIntradayInterval(ms: number): () => number | false {
   return () => (isTradingHours() ? ms : false);
 }
 
+/**
+ * 构造「盘中快、盘后慢但不停」的 refetchInterval。
+ *
+ * 与 makeIntradayInterval 的区别：盘后返回 offHoursMs（继续慢轮询）而非 false，
+ * 适合盘后仍可能更新的派生数据（如情绪天气的熔断/赦免状态、当日走势趋势）。
+ * 盘中段仍用 isTradingHours() 判定（beijingNow，海外时区正确）。
+ */
+export function makeMarketAwareInterval(intradayMs: number, offHoursMs: number): () => number {
+  return () => (isTradingHours() ? intradayMs : offHoursMs);
+}
+
 /** Layer 1：最新 snapshot（4 维度+分数+趋势+色带）。交易时段 60s 刷新。 */
 export function useIntradayLatest(options?: Opts<IntradaySnapshot | null>) {
   return useQuery({

@@ -22,7 +22,7 @@ export function StateMachineDashboard({ date }: { date?: string }) {
               className="rounded-lg border border-border/40 p-2 text-center"
             >
               <div className={cn("mx-auto mb-1 h-2 w-2 rounded-full", STATUS_COLORS[status])} />
-              <p className="text-[10px] text-muted-foreground">{STATUS_LABELS[status]}</p>
+              <p className="text-xs text-muted-foreground">{STATUS_LABELS[status]}</p>
               <p className="text-lg font-bold">{count}</p>
             </div>
           );

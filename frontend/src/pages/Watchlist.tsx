@@ -165,7 +165,7 @@ export function Watchlist() {
             <Plus className="h-4 w-4" /> 添加
           </button>
         </div>
-        {hint && <p className="mt-2 text-xs text-muted-foreground/70">{hint}</p>}
+        {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
       </GlassCard>
 
       <GlassCard glow>
@@ -174,7 +174,7 @@ export function Watchlist() {
             <Star className="h-4 w-4 text-primary" /> 自选总览
             <span className="text-xs font-normal text-muted-foreground">（{codes.length}）</span>
           </h3>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {error ? (
               <span className="text-warning">{error}</span>
             ) : (

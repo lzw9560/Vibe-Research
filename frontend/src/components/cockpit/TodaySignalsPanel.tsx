@@ -58,17 +58,17 @@ function SignalRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono font-semibold">{signal.code}</span>
           <span className="truncate text-muted-foreground">{signal.name}</span>
-          <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[10px]">
+          <span className="rounded bg-muted/40 px-1.5 py-0.5 text-xs">
             连板{signal.lbc}
           </span>
           {exploratory && (
-            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">
+            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">
               探索性
             </span>
           )}
           {/* S221 gap3: delivery leak 标记——按 code 匹配 manual trade */}
           {matchedTrade && matchedTrade.pnl_diff?.delivery_leak && (
-            <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600">
+            <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600">
               leak
             </span>
           )}
@@ -78,7 +78,7 @@ function SignalRow({
           {signal.price_source &&
             signal.price_source !== "N/A" &&
             signal.price_source !== date && (
-              <span className="ml-1 text-muted-foreground/70">
+              <span className="ml-1 text-muted-foreground">
                 （来源 {signal.price_source}）
               </span>
             )}
@@ -91,7 +91,7 @@ function SignalRow({
                 {matchedTrade.actual_pnl.pnl_pct.toFixed(2)}%
               </span>
               {matchedTrade.reference_pnl?.pnl_pct != null && (
-                <span className="text-muted-foreground/70">
+                <span className="text-muted-foreground">
                   {" "}vs 参考 {matchedTrade.reference_pnl.pnl_pct.toFixed(2)}%
                 </span>
               )}
@@ -296,7 +296,7 @@ function ManualTradeForm({
           关闭
         </Button>
       </div>
-      <p className="text-[10px] text-muted-foreground/70">
+      <p className="text-xs text-muted-foreground">
         {HONESTY_PAPER}——记录的是你的真成交，不自动下单。
       </p>
     </div>
@@ -343,7 +343,7 @@ export function TodaySignalsPanel() {
       <DeliveryStatusCard />
 
       {/* Honesty banner（§44 诚实性 gate，同 C1） */}
-      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
         <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">
           {HONESTY_VALIDATED}
         </span>
@@ -480,9 +480,9 @@ export function TodaySignalsPanel() {
                     <div>
                       <span className="font-mono">{s.code}</span>{" "}
                       <span>{s.name}</span>{" "}
-                      <span className="text-[10px]">连板{s.lbc}</span>
+                      <span className="text-xs">连板{s.lbc}</span>
                     </div>
-                    <span className="text-[10px]">一字板</span>
+                    <span className="text-xs">一字板</span>
                   </div>
                 ))}
               </div>
@@ -493,25 +493,25 @@ export function TodaySignalsPanel() {
           {verified && (
             <div className="mb-3 grid grid-cols-4 gap-2">
               <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-                <p className="text-[10px] text-muted-foreground">train</p>
+                <p className="text-xs text-muted-foreground">train</p>
                 <p className="text-sm font-bold text-amber-600">
                   {verified.chrono_train}%
                 </p>
               </div>
               <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-                <p className="text-[10px] text-muted-foreground">test</p>
+                <p className="text-xs text-muted-foreground">test</p>
                 <p className="text-sm font-bold text-amber-600">
                   {verified.chrono_test}%
                 </p>
               </div>
               <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-                <p className="text-[10px] text-muted-foreground">衰减</p>
+                <p className="text-xs text-muted-foreground">衰减</p>
                 <p className="text-sm font-bold text-red-500">
                   -{verified.chrono_decay_pct}%
                 </p>
               </div>
               <div className="rounded bg-muted/30 px-2 py-1.5 text-center">
-                <p className="text-[10px] text-muted-foreground">WR</p>
+                <p className="text-xs text-muted-foreground">WR</p>
                 <p className="text-sm font-bold">{verified.chrono_wr}%</p>
               </div>
             </div>
@@ -526,7 +526,7 @@ export function TodaySignalsPanel() {
 
           {/* 免责声明（spec §44 reframe 版，后端 disclaimers） */}
           {disclaimers.length > 0 && (
-            <ul className="mb-3 space-y-1 text-[11px] text-muted-foreground/80">
+            <ul className="mb-3 space-y-1 text-xs text-muted-foreground/80">
               {disclaimers.map((d, i) => (
                 <li key={i} className="leading-relaxed">
                   · {d}

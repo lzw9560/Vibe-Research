@@ -23,7 +23,7 @@ export function HonestyBanner({ evaluationSummary }: { evaluationSummary?: Evalu
               <span>lift {d.lift != null ? d.lift.toFixed(3) : "—"}（n={d.n}）· {d.note}</span>
             </li>
           ))}
-          <li className="text-[10px] text-amber-100/50">frozen_commit={evalSummary.frozen_commit}</li>
+          <li className="text-xs text-amber-100/50">frozen_commit={evalSummary.frozen_commit}</li>
         </ul>
       ) : (
         <div className="mt-1 text-xs text-amber-100/60">选股层无 validated 维度，edge 待盘中验证（评价层数据未取得）</div>

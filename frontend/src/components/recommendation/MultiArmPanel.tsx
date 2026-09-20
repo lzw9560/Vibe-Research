@@ -95,12 +95,12 @@ export function MultiArmPanel() {
             )}
             <div className="text-xs leading-relaxed text-muted-foreground">{r.note}</div>
             {r.action_type === "batch_buy" && (
-              <div className="rounded bg-green-500/10 px-2 py-1 text-[10px] text-green-700">
+              <div className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-700">
                 actionable · 可选实盘小仓位（真盘你执行）
               </div>
             )}
             {r.action_type === "paper_track" && (
-              <div className="rounded bg-yellow-500/10 px-2 py-1 text-[10px] text-yellow-700">
+              <div className="rounded bg-yellow-500/10 px-2 py-1 text-xs text-yellow-700">
                 paper tracking · 不推荐真金（§44 证否，盘中 conditioning 未测）
               </div>
             )}

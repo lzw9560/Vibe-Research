@@ -18,7 +18,7 @@ export function SectionHeader({ title, icon, subtitle, action, className }: Sect
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       </div>
       {subtitle && (
-        <span className="text-[11px] text-muted-foreground">{subtitle}</span>
+        <span className="text-xs text-muted-foreground">{subtitle}</span>
       )}
       {action && <div className="ml-auto">{action}</div>}
     </div>

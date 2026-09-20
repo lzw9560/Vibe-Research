@@ -55,7 +55,7 @@ function DisclaimerWall({ onAccept }: { onAccept: () => void }) {
 
 function ProbChip() {
   return (
-    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
       {RESEARCH_CHIP}
     </span>
   );
@@ -121,10 +121,10 @@ function ProbabilityEvolution({ predictions }: { predictions: Record<string, Pre
                 title={p == null ? "待生成" : `${(p * 100).toFixed(1)}%`}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {p == null ? "—" : `${(p * 100).toFixed(1)}%`}
             </span>
-            <span className="text-[10px] text-muted-foreground">{STAGES[i].key}</span>
+            <span className="text-xs text-muted-foreground">{STAGES[i].key}</span>
           </div>
         ))}
       </div>

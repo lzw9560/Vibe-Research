@@ -25,7 +25,7 @@ export function Journal() {
     <div className="space-y-3 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">交易日志 + 风险账本</h1>
-        <span className="text-[10px] text-muted-foreground">S166 fresh-impl · 个人数据不接 AI prompt</span>
+        <span className="text-xs text-muted-foreground">S166 fresh-impl · 个人数据不接 AI prompt</span>
       </div>
       <div className="flex flex-wrap gap-1 border-b">
         {TABS.map((t) => (

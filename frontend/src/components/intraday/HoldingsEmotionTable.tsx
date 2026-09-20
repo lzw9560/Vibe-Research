@@ -53,7 +53,7 @@ export function HoldingsEmotionTable() {
                 <div className="flex items-center gap-1">
                   {h.dual_pressure && <AlertTriangle className="h-3 w-3 text-red-600" />}
                   <span className="font-medium">{h.name}</span>
-                  <span className="text-[10px] text-muted-foreground">{h.code}</span>
+                  <span className="text-xs text-muted-foreground">{h.code}</span>
                 </div>
               </td>
               <td className="px-2 py-1.5 text-xs text-muted-foreground">{h.status}</td>
@@ -76,7 +76,7 @@ export function HoldingsEmotionTable() {
               <td className="px-2 py-1.5">
                 <span
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px]",
+                    "rounded px-1.5 py-0.5 text-xs",
                     ZONE_BG[h.current_zone as keyof typeof ZONE_BG] ?? ZONE_BG.yellow,
                   )}
                 >

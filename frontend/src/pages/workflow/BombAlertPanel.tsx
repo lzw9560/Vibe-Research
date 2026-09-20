@@ -46,7 +46,7 @@ export default function BombAlertPanel() {
               className="border border-border rounded-lg p-2 flex items-center gap-2"
             >
               <span
-                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                className={`text-xs px-1.5 py-0.5 rounded ${
                   a.alert_level === "red"
                     ? "bg-red-500/10 text-red-600"
                     : a.alert_level === "orange"
@@ -65,7 +65,7 @@ export default function BombAlertPanel() {
                 {a.condition}
               </span>
               {a.data_status !== "ok" && (
-                <span className="text-[10px] text-amber-600">
+                <span className="text-xs text-amber-600">
                   {a.data_status}
                 </span>
               )}

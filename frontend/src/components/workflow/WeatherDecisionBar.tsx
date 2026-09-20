@@ -76,7 +76,7 @@ export function WeatherDecisionBar({ ctx }: Props) {
         ) : (
           <>
             {allowed.map((code) => (
-              <Badge key={code} variant="primary" className="text-[10px]">
+              <Badge key={code} variant="primary" className="text-xs">
                 {STRATEGY_LABELS[code] ?? code}
               </Badge>
             ))}
@@ -84,7 +84,7 @@ export function WeatherDecisionBar({ ctx }: Props) {
               <Badge
                 key={code}
                 variant="default"
-                className="text-[10px] line-through opacity-50"
+                className="text-xs line-through opacity-50"
               >
                 {STRATEGY_LABELS[code] ?? code}
               </Badge>

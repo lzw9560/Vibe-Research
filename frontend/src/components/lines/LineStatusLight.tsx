@@ -44,13 +44,13 @@ export function LineStatusLight({
       <div className="min-w-0 flex-1">
         <div className={cn("font-medium", compact ? "text-xs" : "text-sm")}>
           {label}
-          <span className={cn("ml-1.5 text-[10px]", meta.text)}>{meta.label}</span>
+          <span className={cn("ml-1.5 text-xs", meta.text)}>{meta.label}</span>
         </div>
         {detail && !compact && (
-          <div className="truncate text-[11px] text-muted-foreground">{detail}</div>
+          <div className="truncate text-xs text-muted-foreground">{detail}</div>
         )}
       </div>
-      {link && <span className="shrink-0 text-[10px] text-primary">→</span>}
+      {link && <span className="shrink-0 text-xs text-primary">→</span>}
     </div>
   );
 

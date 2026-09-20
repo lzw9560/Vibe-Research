@@ -98,12 +98,12 @@ export function Notes() {
                 <div className="flex items-center gap-2 px-4 py-3">
                   <button onClick={() => setOpenId(open ? null : n.id)} className="flex flex-1 items-center gap-2 text-left">
                     {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${KIND_COLOR[n.kind] || "bg-muted/50 text-muted-foreground"}`}>{n.kind}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${KIND_COLOR[n.kind] || "bg-muted/50 text-muted-foreground"}`}>{n.kind}</span>
                     <span className="flex-1 truncate text-sm font-medium">{n.title}</span>
-                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{fmt(n.ts)}</span>
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">{fmt(n.ts)}</span>
                   </button>
-                  <button onClick={() => setNotes(deleteNote(n.id))} className="shrink-0 text-muted-foreground hover:text-destructive" title="删除">
-                    <Trash2 className="h-3.5 w-3.5" />
+                  <button onClick={() => setNotes(deleteNote(n.id))} className="shrink-0 text-muted-foreground hover:text-destructive" title="删除" aria-label="删除">
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </div>
                 {open && (
@@ -118,7 +118,7 @@ export function Notes() {
                         <ScanSearch className="h-3.5 w-3.5" />
                         {reflecting && reflectId === n.id ? "审计中…" : "反思审计"}
                       </button>
-                      <span className="text-[11px] text-muted-foreground/70">
+                      <span className="text-xs text-muted-foreground">
                         让 AI 回头审这段推理：哪些有数据撑着、哪些是脑补、最脆弱的一环在哪
                       </span>
                     </div>
@@ -134,7 +134,7 @@ export function Notes() {
                             </div>
                             {!reflecting && (
                               <button onClick={() => saveReflection(n)} disabled={reflectSaved}
-                                className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50">
+                                className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">
                                 <Save className="h-3 w-3" /> {reflectSaved ? "已存为新记录" : "把审计结果存为新记录"}
                               </button>
                             )}

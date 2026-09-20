@@ -34,10 +34,10 @@ export function DimensionValidationBadge({
   const c = STATUS_COLOR[colorOf(validation)];
   const title = tooltipText(validation);
   if (compact) {
-    // compact（LayerStep 折叠态）：色点 + ×weight，font text-[10px]
+    // compact（LayerStep 折叠态）：色点 + ×weight，font text-xs
     return (
       <span
-        className={cn("inline-flex items-center gap-0.5 text-[10px]", c.pill, className)}
+        className={cn("inline-flex items-center gap-0.5 text-xs", c.pill, className)}
         title={title}
       >
         <span className={cn("h-1.5 w-1.5 rounded-full", c.dot)} />

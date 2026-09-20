@@ -218,7 +218,7 @@ export function Settings() {
                         {m.comingSoon && <span className="rounded bg-muted/60 px-1 py-0.5 text-[9px] text-muted-foreground">即将支持</span>}
                         {on && <Check className="h-3.5 w-3.5 text-primary" />}
                       </div>
-                      <div className="truncate text-[11px] text-muted-foreground">{m.description}</div>
+                      <div className="truncate text-xs text-muted-foreground">{m.description}</div>
                     </div>
                   </button>
                 );
@@ -338,7 +338,7 @@ export function Settings() {
           调整打板策略的筛选阈值，影响选股结果的宽松/严格程度。
         </p>
         {limitUpError && (
-          <p className="mb-2 text-[11px] text-rose-600 dark:text-rose-400">
+          <p className="mb-2 text-xs text-rose-600 dark:text-rose-400">
             读取失败：{limitUpError instanceof Error ? limitUpError.message : String(limitUpError)}
           </p>
         )}
@@ -351,7 +351,7 @@ export function Settings() {
               onChange={(e) => setLimitUpParams({ ...limitUpParams, gene_qualify_threshold: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">≥ 此分数视为合格（默认60）</p>
+            <p className="mt-1 text-xs text-muted-foreground">≥ 此分数视为合格（默认60）</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">高基因阈值</label>
@@ -361,7 +361,7 @@ export function Settings() {
               onChange={(e) => setLimitUpParams({ ...limitUpParams, gene_high_threshold: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">≥ 此分数视为高基因（默认75）</p>
+            <p className="mt-1 text-xs text-muted-foreground">≥ 此分数视为高基因（默认75）</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">回溯天数</label>
@@ -371,7 +371,7 @@ export function Settings() {
               onChange={(e) => setLimitUpParams({ ...limitUpParams, lookback_days: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">统计最近N个交易日（默认60）</p>
+            <p className="mt-1 text-xs text-muted-foreground">统计最近N个交易日（默认60）</p>
           </div>
         </div>
         <button
@@ -393,7 +393,7 @@ export function Settings() {
           调整竞价选股模块的筛选阈值，影响竞价预案候选股的严格程度。
         </p>
         {auctionError && (
-          <p className="mb-2 text-[11px] text-rose-600 dark:text-rose-400">
+          <p className="mb-2 text-xs text-rose-600 dark:text-rose-400">
             读取失败：{auctionError instanceof Error ? auctionError.message : String(auctionError)}
           </p>
         )}
@@ -406,7 +406,7 @@ export function Settings() {
               onChange={(e) => setAuctionParams({ ...auctionParams, min_gene_score: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">候选股最低基因得分（默认50）</p>
+            <p className="mt-1 text-xs text-muted-foreground">候选股最低基因得分（默认50）</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">最小涨停次数</label>
@@ -416,7 +416,7 @@ export function Settings() {
               onChange={(e) => setAuctionParams({ ...auctionParams, min_zt_count: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">近30日最少涨停次数（默认2）</p>
+            <p className="mt-1 text-xs text-muted-foreground">近30日最少涨停次数（默认2）</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">返回候选股数量</label>
@@ -426,7 +426,7 @@ export function Settings() {
               onChange={(e) => setAuctionParams({ ...auctionParams, top_n: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">竞价预案 TOP N（默认50）</p>
+            <p className="mt-1 text-xs text-muted-foreground">竞价预案 TOP N（默认50）</p>
           </div>
         </div>
         <button
@@ -448,7 +448,7 @@ export function Settings() {
           调整复盘报告中展示的涨停股和竞价回顾数量。
         </p>
         {reviewError && (
-          <p className="mb-2 text-[11px] text-rose-600 dark:text-rose-400">
+          <p className="mb-2 text-xs text-rose-600 dark:text-rose-400">
             读取失败：{reviewError instanceof Error ? reviewError.message : String(reviewError)}
           </p>
         )}
@@ -461,7 +461,7 @@ export function Settings() {
               onChange={(e) => setReviewParams({ ...reviewParams, max_zt_stocks: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">涨停股明细展示上限（默认100）</p>
+            <p className="mt-1 text-xs text-muted-foreground">涨停股明细展示上限（默认100）</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">竞价回顾数量</label>
@@ -471,7 +471,7 @@ export function Settings() {
               onChange={(e) => setReviewParams({ ...reviewParams, auction_top_n: Number(e.target.value) })}
               className="w-full rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">复盘报告中竞价回顾 TOP N（默认20）</p>
+            <p className="mt-1 text-xs text-muted-foreground">复盘报告中竞价回顾 TOP N（默认20）</p>
           </div>
         </div>
         <button

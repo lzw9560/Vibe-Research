@@ -123,7 +123,7 @@ export function Metrics() {
                   </div>
                 ))}
               </div>
-              <div className="mt-2 text-[10px] text-muted-foreground">{data.note}</div>
+              <div className="mt-2 text-xs text-muted-foreground">{data.note}</div>
             </GlassCard>
           );
         })}

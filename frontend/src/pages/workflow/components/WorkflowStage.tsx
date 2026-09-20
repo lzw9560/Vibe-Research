@@ -52,7 +52,7 @@ export function WorkflowStage({
             <span className="inline-flex items-center rounded-full bg-muted/30 px-3 py-1 text-xs font-medium text-muted-foreground">
               未实现
             </span>
-            <p className="text-sm text-muted-foreground/70">
+            <p className="text-sm text-muted-foreground">
               {notImplementedMessage ?? "此功能尚未实现"}
             </p>
           </div>

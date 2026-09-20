@@ -84,7 +84,7 @@ export function StrategyAttributionTab({ data }: Props) {
                         <span className="text-muted-foreground">#{c.rank}</span>{" "}
                         <span className="font-mono">{c.code}</span>{" "}
                         <span className="text-foreground">{c.name}</span>
-                        <div className="text-[10px] text-muted-foreground/60">
+                        <div className="text-xs text-muted-foreground/60">
                           total {c.total.toFixed(1)}
                         </div>
                       </td>
@@ -95,7 +95,7 @@ export function StrategyAttributionTab({ data }: Props) {
                         return (
                           <td key={s.code} className="px-2 py-1.5 text-center">
                             {isPlaceholder ? (
-                              <span className="text-[10px] text-muted-foreground/40">待 P4</span>
+                              <span className="text-xs text-muted-foreground/40">待 P4</span>
                             ) : (
                               <StrategyMatchBadge strategy={s.name} matched={matched} />
                             )}
@@ -110,7 +110,7 @@ export function StrategyAttributionTab({ data }: Props) {
           </table>
         </div>
         {candidates.length > 20 && (
-          <p className="mt-1 text-[11px] text-muted-foreground/60">
+          <p className="mt-1 text-xs text-muted-foreground/60">
             仅显示前 20 只候选（共 {candidates.length} 只）· 完整列表见上表
           </p>
         )}
@@ -122,7 +122,7 @@ export function StrategyAttributionTab({ data }: Props) {
           <Badge variant="info">提示</Badge>
           <span>同股多战法命中不排除</span>
         </div>
-        <p className="mt-1 text-[11px] text-muted-foreground/70">
+        <p className="mt-1 text-xs text-muted-foreground">
           一只股可能同时满足多个战法触发条件（如"首板"+"突破"双命中），
           系统不主动去重——由用户自行选择主战法。
         </p>

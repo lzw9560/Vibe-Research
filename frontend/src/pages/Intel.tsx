@@ -106,7 +106,7 @@ function InvestmentNewsPanel() {
       )}
 
       {!hasData && !err ? (
-        <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">
+        <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
           还没有抓取资讯，点上方<b className="text-foreground">「刷新」</b>拉取（约 20-40 秒）。
         </div>
       ) : (
@@ -166,7 +166,7 @@ function InvestmentNewsPanel() {
                   cur.items.map((it, i) => (
                     <a key={i} href={it.url} target="_blank" rel="noreferrer"
                       className="group flex items-baseline gap-3 border-b border-border/30 pb-2 text-sm last:border-0">
-                      <span className="w-24 shrink-0 font-mono text-xs text-muted-foreground/70">{it.time}</span>
+                      <span className="w-24 shrink-0 font-mono text-xs text-muted-foreground">{it.time}</span>
                       <span className="w-20 shrink-0 truncate text-xs text-muted-foreground">{it.source}</span>
                       <span className="flex-1 group-hover:text-primary">{it.zh || it.title}</span>
                       <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/0 group-hover:text-primary/60" />
@@ -250,7 +250,7 @@ function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
 
   if (!codes.length) {
     return (
-      <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">
+      <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
         还没有关注股票。到<Link to="/daily-review" className="text-primary">「每日复盘」</Link>加自选（6 位代码），这里会汇总它们的{kind === "filings" ? "公告" : "新闻"}。
       </div>
     );
@@ -286,7 +286,7 @@ function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
           {rows.map((r, i) => (
             <a key={i} href={r.url || undefined} target={r.url ? "_blank" : undefined} rel="noreferrer"
               className={cn("group flex items-baseline gap-3 border-b border-border/30 pb-2 text-sm last:border-0", r.url && "cursor-pointer")}>
-              <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground/70">{(r.when || "").slice(kind === "filings" ? 0 : 5, kind === "filings" ? 10 : 16)}</span>
+              <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground">{(r.when || "").slice(kind === "filings" ? 0 : 5, kind === "filings" ? 10 : 16)}</span>
               <span className="w-16 shrink-0 truncate text-xs text-primary/90" title={r.code}>{r.name}</span>
               {kind === "filings" && r.meta && <span className="hidden w-20 shrink-0 truncate text-xs text-muted-foreground sm:block">{r.meta}</span>}
               <span className="flex-1 group-hover:text-primary">{r.title}</span>
@@ -336,7 +336,7 @@ export function Intel() {
         <div className="mb-3 flex items-center gap-2">
           <cur.icon className="h-5 w-5 text-primary" />
           <h3 className="font-semibold">{cur.label}</h3>
-          {cur.integrated && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary">investment-news</span>}
+          {cur.integrated && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary">investment-news</span>}
         </div>
         {cur.key === "investment-news" ? (
           <InvestmentNewsPanel />
@@ -347,12 +347,12 @@ export function Intel() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">{cur.desc}</p>
-            <div className="mt-4 rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">该数据源规划中——可先用右侧「Investment News」看 12 赛道公开资讯，或用「A 股公告 / 公开新闻」看关注股动态。</div>
+            <div className="mt-4 rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">该数据源规划中——可先用右侧「Investment News」看 12 赛道公开资讯，或用「A 股公告 / 公开新闻」看关注股动态。</div>
           </>
         )}
       </GlassCard>
 
-      <p className="mt-3 text-[11px] text-muted-foreground">
+      <p className="mt-3 text-xs text-muted-foreground">
         只做公开信息聚合、不做推荐、不预测涨跌。公告 / 新闻均来自你关注列表里个股的公开披露与公开源；赛道资讯已按合规词表过滤。今日要点由你自己配置的 AI 提炼。
       </p>
       <Disclaimer />

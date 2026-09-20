@@ -11,6 +11,7 @@ import type {
   ManualTradesResponse,
 } from "@/lib/api/types";
 import { useScheduledTasksStatus, type ScheduledTaskStatus } from "./scheduledTasks";
+import { makeIntradayInterval } from "./intraday";
 import type { Opts } from "./types";
 
 const SIGNALS_STALE_MS = 60 * 1000;
@@ -20,6 +21,8 @@ export function useSignalsStatus(options?: Opts<SignalsStatusResponse>) {
     queryKey: ["signals", "status"] as const,
     queryFn: () => api.signalsStatus(),
     staleTime: SIGNALS_STALE_MS,
+    // 盘中 60s 刷 regime/cap（signals 路由已修，404 已消除）；盘后停拉（false）。
+    refetchInterval: makeIntradayInterval(60_000),
     ...options,
   });
 }
@@ -29,6 +32,8 @@ export function useSignalsDaily(options?: Opts<SignalsDailyResponse>) {
     queryKey: ["signals", "daily"] as const,
     queryFn: () => api.signalsDaily(),
     staleTime: SIGNALS_STALE_MS,
+    // 盘中 60s 刷当日信号；盘后信号不再变，停拉（false）省请求。
+    refetchInterval: makeIntradayInterval(60_000),
     ...options,
   });
 }

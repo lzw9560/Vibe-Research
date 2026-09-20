@@ -143,7 +143,7 @@ export function Debate() {
 
         {/* 开销提示：辩论比问答重得多，让用户在点下去之前就知道要花多久、调几次模型 */}
         {!running && !status && (
-          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground/70">
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             ⏱ {rounds === 2
               ? "两轮约 3 分钟 · 5 次模型调用 · 约 6 万字进上下文"
               : "一轮约 100 秒 · 3 次模型调用 · 约 3.5 万字进上下文"}
@@ -161,10 +161,10 @@ export function Debate() {
 
         {progress.length > 0 && (
           <div className="mt-4 border-t border-border/40 pt-3">
-            <p className="mb-2 text-[11px] text-muted-foreground">{DOSSIER_HINT}</p>
+            <p className="mb-2 text-xs text-muted-foreground">{DOSSIER_HINT}</p>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {progress.map((p) => (
-                <span key={p.title} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span key={p.title} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   {p.ok
                     ? <CheckCircle2 className="h-3 w-3 text-primary/70" />
                     : <Circle className="h-3 w-3 text-muted-foreground" />}
@@ -173,7 +173,7 @@ export function Debate() {
               ))}
             </div>
             {missing.length > 0 && (
-              <p className="mt-2 text-[11px] text-warning">
+              <p className="mt-2 text-xs text-warning">
                 未取到：{missing.join("、")}（双方立论时不得臆测这部分）
               </p>
             )}
@@ -187,7 +187,7 @@ export function Debate() {
             <div className="mb-2 flex items-center gap-2">
               <Swords className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-semibold">{s.label}</span>
-              {!s.done && <span className="animate-pulse text-[11px] text-muted-foreground">生成中…</span>}
+              {!s.done && <span className="animate-pulse text-xs text-muted-foreground">生成中…</span>}
             </div>
             <div className="prose prose-sm dark:prose-invert max-w-none text-foreground prose-table:text-sm">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.content || "…"}</ReactMarkdown>

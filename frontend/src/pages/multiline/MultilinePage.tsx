@@ -90,11 +90,11 @@ function StrategyColumn({ def }: { def: StrategyColumnDef }) {
 
       {/* 窗口口径标签（grill #7：§44v1 教训） */}
       <div className="rounded bg-muted/30 px-2.5 py-1.5">
-        <div className="text-[11px] text-muted-foreground/80">窗口口径</div>
+        <div className="text-xs text-muted-foreground/80">窗口口径</div>
         <div className="text-xs font-medium text-foreground mt-0.5">
           {def.windowLabel}
         </div>
-        <div className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+        <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
           {def.windowNote}
         </div>
       </div>
@@ -104,7 +104,7 @@ function StrategyColumn({ def }: { def: StrategyColumnDef }) {
 
       {/* 诚实标签 */}
       <div className="rounded bg-amber-500/5 px-2.5 py-1.5 border-l-2 border-amber-500/30">
-        <span className="text-[11px] text-amber-400/80">诚实标注</span>
+        <span className="text-xs text-amber-400/80">诚实标注</span>
         <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
           {def.honestLabel}
         </p>
@@ -137,7 +137,7 @@ function LongValuePlaceholder() {
       hint={
         <>
           S171 spec 已定稿（R3 done），但 R2 verdict harness（
-          <code className="text-[10px]">long_value_run.py</code>）尚未运行。当前{" "}
+          <code className="text-xs">long_value_run.py</code>）尚未运行。当前{" "}
           <Link to="/value-verdict" className="text-blue-400 hover:underline">
             价值因子验证页
           </Link>{" "}

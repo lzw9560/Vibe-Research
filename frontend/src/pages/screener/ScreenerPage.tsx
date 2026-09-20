@@ -158,7 +158,7 @@ export function ScreenerPage() {
       <GlassCard>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">筛选结果</h3>
-          <span className="text-[11px] text-muted-foreground">{rows.length} 条</span>
+          <span className="text-xs text-muted-foreground">{rows.length} 条</span>
         </div>
 
         {rows.length > 0 ? (

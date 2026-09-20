@@ -54,7 +54,7 @@ export function FocusDayStrip({ className }: { className?: string }) {
       {focusDate !== null && (
         <button
           onClick={() => setFocus(null)}
-          className="inline-flex items-center gap-0.5 rounded text-[10px] text-muted-foreground/70 hover:text-foreground"
+          className="inline-flex items-center gap-0.5 rounded text-xs text-muted-foreground hover:text-foreground"
           title="回自动模式（按时段算）"
         >
           <RotateCcw className="h-3 w-3" />

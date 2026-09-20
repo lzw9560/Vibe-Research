@@ -151,7 +151,7 @@ export function MarketTreemap({ sectors, loading, error, onRefresh }: Props) {
       </div>
 
       {/* honest banner: aggregate level + performance caveat（grill F10 / #11） */}
-      <div className="mb-3 rounded-md bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
+      <div className="mb-3 rounded-md bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
         聚合一级 30 板块 · 不裸渲染 5000 叶子 · 60fps 待 Phase 1 A6 压测确认
       </div>
 

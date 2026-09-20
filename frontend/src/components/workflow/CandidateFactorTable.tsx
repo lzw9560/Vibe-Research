@@ -33,7 +33,7 @@ export function CandidateFactorTable({ candidates }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-border/40 text-muted-foreground/70">
+            <tr className="border-b border-border/40 text-muted-foreground">
               <th className="px-2 py-1 text-left">code</th>
               <th className="px-2 py-1 text-left">名称</th>
               <th className="px-2 py-1 text-right">基因分</th>
@@ -76,7 +76,7 @@ export function CandidateFactorTable({ candidates }: Props) {
                           {/* 八项详情 */}
                           {items.length > 0 && (
                             <div>
-                              <div className="mb-1 font-semibold text-muted-foreground/70">八项标准（{failCount} 未过{c.capped ? "→封顶55" : ""}）</div>
+                              <div className="mb-1 font-semibold text-muted-foreground">八项标准（{failCount} 未过{c.capped ? "→封顶55" : ""}）</div>
                               <div className="flex flex-wrap gap-1">
                                 {items.map((it) => (
                                   <span key={it.key} className={cn("rounded px-1.5 py-0.5", statusBg(it))} title={it.expected}>

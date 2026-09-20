@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import type { Opts } from "./types";
 import type { WinRateRecordInput } from "@/lib/api";
+import { makeIntradayInterval } from "./intraday";
 import { AUCTION_START_MIN, AUCTION_END_MIN, isWeekday } from "@/lib/auction";
 
 // ---- 打板/竞价/席位 ----
@@ -159,6 +160,8 @@ export function useBombAlerts(options?: Opts<Awaited<ReturnType<typeof getBombAl
   return useQuery({
     queryKey: ["limitup", "bombAlerts"] as const,
     queryFn: () => getBombAlerts(),
+    // 炸板预警盘中最时效：交易时段 15s 轮询；盘后不发生炸板，停拉（false）省请求。
+    refetchInterval: makeIntradayInterval(15_000),
     ...options,
   });
 }

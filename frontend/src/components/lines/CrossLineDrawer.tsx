@@ -88,14 +88,14 @@ export function CrossLineDrawer({ open, onClose, stockCode, stockName }: CrossLi
               {kgSummary.concepts && kgSummary.concepts.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {kgSummary.concepts.slice(0, 8).map((c) => (
-                    <span key={c} className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                    <span key={c} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
                       {c}
                     </span>
                   ))}
                 </div>
               )}
               {kgSummary.sectors && kgSummary.sectors.length > 0 && (
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   板块: {kgSummary.sectors.join(" / ")}
                 </div>
               )}
@@ -125,7 +125,7 @@ function CrossLineFace({
     <GlassCard tier="sub" className="space-y-2">
       <div>
         <h3 className="text-xs font-semibold">{title}</h3>
-        <p className="text-[10px] text-muted-foreground">{subtitle}</p>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
       {children}
     </GlassCard>

@@ -95,7 +95,7 @@ export function EmotionTrendChart() {
           )}
           {latest?.zone && (
             <span
-              className="rounded px-1.5 py-0.5 text-[10px] text-white"
+              className="rounded px-1.5 py-0.5 text-xs text-white"
               style={{ background: ZONE_COLORS[latest.zone] }}
             >
               {latest.zone === "green" ? "一致" : latest.zone === "yellow" ? "走偏" : "背离"}
@@ -133,7 +133,7 @@ function DimensionDetails({ snapshots }: { snapshots: IntradaySnapshot[] }) {
         const latest = values[values.length - 1];
         return (
           <div key={d.key} className="rounded border border-border/40 p-2">
-            <p className="text-[10px] text-muted-foreground">{d.label}</p>
+            <p className="text-xs text-muted-foreground">{d.label}</p>
             <p className="text-sm font-semibold">{latest != null ? latest.toFixed(2) : "—"}</p>
           </div>
         );
