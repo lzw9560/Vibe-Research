@@ -398,9 +398,11 @@ class TaskExecutor:
         # T-1（caller 传 or run_date - 1 day fallback）
         previous_trade_day = payload.get("previous_trade_day")
         if not previous_trade_day:
+            # T-1 = 前一交易日（非日历日 -1，跨周末/节假日取非交易日→0 picks）
             try:
-                previous_trade_day = (datetime.strptime(run_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-            except ValueError:
+                from vr_paths import prev_trading_date_str  # lazy import
+                previous_trade_day = prev_trading_date_str(datetime.strptime(run_date, "%Y-%m-%d").date())
+            except Exception:
                 previous_trade_day = run_date
         # 候选源：manual payload.candidates 优先，否则 S208 pre_limitup_scanner（替代 funnel 错源）
         # funnel cache 是 post-涨停 lbc2-3 → 0 admits（错源）；scanner 查 zt_history T-1 lbc==1 首板（post-首板 pre-二板）。

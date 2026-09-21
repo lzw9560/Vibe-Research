@@ -83,9 +83,11 @@ def scan_pre_limitup(run_date: str, previous_trade_day: str | None = None) -> li
         喂 scan_early_admission(run_date, candidates, previous_trade_day)。
     """
     if not previous_trade_day:
+        # T-1 = 前一交易日（非日历日 -1，跨周末/节假日取非交易日→0 picks）
         try:
-            previous_trade_day = (datetime.strptime(run_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        except ValueError:
+            from vr_paths import prev_trading_date_str  # lazy import 避循环
+            previous_trade_day = prev_trading_date_str(datetime.strptime(run_date, "%Y-%m-%d").date())
+        except Exception:
             previous_trade_day = run_date
 
     candidates: list[dict[str, Any]] = []
@@ -111,10 +113,9 @@ def scan_consecutive_relay(run_date: str, previous_trade_day: str | None = None)
         list[dict]——每 dict {code, lbc}。喂 JournalRecorder._process_consecutive_relay。
         entry: D 日 close（一字板 filter），exit: D+1 open（overnight gap 捕获）。
     """
+    # signal date = previous_trade_day = run_date（注释 :107，D 日连板 entry D close exit D+1 open）
+    # 默认 = run_date 非 D-1 日历日（跨周末/节假日取非交易日→0 picks；caller 都显式传 target_date）
     if not previous_trade_day:
-        try:
-            previous_trade_day = (datetime.strptime(run_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        except ValueError:
-            previous_trade_day = run_date
+        previous_trade_day = run_date
 
     return [{"code": r["code"], "lbc": r["lbc"]} for r in _zt_history_lbc_ge2(previous_trade_day)]

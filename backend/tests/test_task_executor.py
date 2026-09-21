@@ -103,6 +103,7 @@ _EXPECTED_TASK_TYPES = {
     "sector_heat_reverify",  # S218 sector_heat 30 天复验
     "cron_audit",  # S218 cron fire 审计
     "hot_money_seats_update",  # S218 龙虎榜席位周更
+    "kg_inject",  # S226 M7 图谱注入（公告→DeepSeek JSON→inbox）
 }
 
 
