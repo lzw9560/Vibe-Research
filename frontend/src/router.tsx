@@ -121,7 +121,7 @@ export const router = createBrowserRouter([
       { path: "/my-reports", element: redirect("/review") },
       { path: "/notes", element: redirect("/review") },
       // 建议散页 → /advisory
-      { path: "/recommendation", element: lazyEl(() => import("@/pages/Recommendation"), "Recommendation") },  // 恢复建议页（MultiArm+StockRecommendation）
+      { path: "/recommendation", element: lazyEl(() => import("@/pages/Recommendation")) },  // 恢复建议页（MultiArm+StockRecommendation）；只有 default export，lazyEl 无 name 用 m.default
       // 风险 → /portfolio
       { path: "/risk-dashboard", element: redirect("/risk") },  // 路由修复: →/risk(风险看板独立页 S179) 非 /portfolio(lossy)
       // 策略散页 → /strategy

@@ -25,6 +25,16 @@ const safeSetItem = (key: string, val: string): void => {
   try { localStorage.setItem(key, val); } catch { /* 配额/隐私模式，静默忽略 */ }
 };
 
+// 子组循环色——视觉区分不同子组（text 文字色 + bg 色点同色；暗色 400 级可见）
+const SUBGROUP_COLORS = [
+  { text: "text-blue-400", bg: "bg-blue-400" },
+  { text: "text-emerald-400", bg: "bg-emerald-400" },
+  { text: "text-violet-400", bg: "bg-violet-400" },
+  { text: "text-amber-400", bg: "bg-amber-400" },
+  { text: "text-rose-400", bg: "bg-rose-400" },
+  { text: "text-cyan-400", bg: "bg-cyan-400" },
+];
+
 export function Layout() {
   const { pathname } = useLocation();
   const { theme, setTheme } = useTheme();
@@ -140,12 +150,18 @@ export function Layout() {
         </div>
         {expanded && (
           <div id={`line-${group.name}`} className="ml-3 space-y-1 border-l border-border/30 pl-2">
-            {group.subGroups.map(sg => (
-              <div key={sg.name} className="space-y-0.5">
-                <p className="px-3 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">{sg.name}</p>
-                {sg.tabs.map(tab => renderNavTab(tab))}
-              </div>
-            ))}
+            {group.subGroups.map((sg, i) => {
+              const color = SUBGROUP_COLORS[i % SUBGROUP_COLORS.length];
+              return (
+                <div key={sg.name} className="space-y-0.5">
+                  <p className={cn("flex items-center gap-1.5 px-3 py-0.5 text-xs font-medium uppercase tracking-wide", color.text)}>
+                    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", color.bg)} />
+                    {sg.name}
+                  </p>
+                  {sg.tabs.map(tab => renderNavTab(tab))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -208,9 +224,14 @@ export function Layout() {
                     <Link to={group.hub.to} onClick={() => setMobileMenuOpen(false)} className="block px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 hover:text-foreground">
                       {group.name}
                     </Link>
-                    {group.subGroups.map(sg => (
+                    {group.subGroups.map((sg, i) => {
+                      const color = SUBGROUP_COLORS[i % SUBGROUP_COLORS.length];
+                      return (
                       <div key={sg.name} className="space-y-0.5">
-                        <p className="px-2 py-0.5 text-xs text-muted-foreground/60">{sg.name}</p>
+                        <p className={cn("flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium", color.text)}>
+                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", color.bg)} />
+                          {sg.name}
+                        </p>
                         {sg.tabs.map(tab => {
                           const active = isTabActive(tab.to);
                           return (
@@ -228,7 +249,8 @@ export function Layout() {
                           );
                         })}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
