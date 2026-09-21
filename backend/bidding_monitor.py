@@ -54,13 +54,12 @@ async def build_auction_watchlist(limit: int = 20) -> list[str]:
     try:
         from limitup_screener import public_get_cache, public_get_cache_ttl, public_resolve_date, public_load_gene_scores
         from limitup_screener.service import _COMPUTING
-        from datetime import timedelta
 
         # 使用前一交易日日期
         target_date = await public_resolve_date(None)
-        # 简单回退一天（实际应使用交易日历，此处简化）
-        prev_dt = datetime.strptime(target_date, "%Y%m%d") - timedelta(days=1)
-        prev_date = prev_dt.strftime("%Y%m%d")
+        # 前一交易日（非日历日 -1，跨周末取非交易日→cache miss）
+        from vr_paths import prev_trading_date_str
+        prev_date = prev_trading_date_str(datetime.strptime(target_date, "%Y%m%d").date()).replace("-", "")
         cache_key = f"limitup_screener_{prev_date}"
         now = time.time()
 
