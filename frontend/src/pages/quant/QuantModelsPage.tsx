@@ -84,11 +84,31 @@ function ExpectationGapChip() {
   );
 }
 
+// M5 财报季排雷：DANGER_MONTHS 1/4/8 + 当前月是否财报季（拉黑未披露防一字跌停）
+function EarningsCalendarChip() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["quant", "earningsCalendar"] as const,
+    queryFn: () => api.earningsCalendar(),
+    staleTime: 60 * 60 * 1000,  // 日历结构慢变，1h cache
+  });
+  if (isLoading) return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+  if (isError || !data) return <span className="text-xs text-muted-foreground">数据待接线</span>;
+  const dangerMonths = (data as { danger_months?: { month: number; label: string }[] }).danger_months ?? [];
+  const currentMonth = new Date().getMonth() + 1;
+  const inSeason = dangerMonths.some((d) => d.month === currentMonth);
+  return (
+    <span className={cn("text-xs", inSeason ? "text-amber-500" : "text-muted-foreground")}>
+      {inSeason ? `财报季 ${currentMonth}月（雷区，拉黑未披露）` : `雷区 1/4/8月（当前非财报季）`}
+    </span>
+  );
+}
+
 function LiveDataChip({ mod }: { mod: QuantModule }) {
   // liveSource 决定拉哪个真实数据；null → honest "数据待接线"（不臆造）
   if (mod.liveSource === "ofi") return <OfiLiveChip />;
   if (mod.liveSource === "emHealth") return <EmHealthChip />;
   if (mod.liveSource === "expectationGap") return <ExpectationGapChip />;
+  if (mod.liveSource === "earningsCalendar") return <EarningsCalendarChip />;
   return <span className="text-xs text-muted-foreground">数据待接线</span>;
 }
 

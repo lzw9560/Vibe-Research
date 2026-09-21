@@ -485,6 +485,22 @@ class JournalRecorder:
                 self._journal.insert(record)
                 continue
 
+            # M5 财报季拉黑（DANGER_MONTHS 未披露 → 一字跌停风险，跳过交易）
+            from routers.earnings_calendar import is_earnings_season_unsafe  # noqa: PLC0415
+            if is_earnings_season_unsafe(code, target_date):
+                record = JournalRecord.create(
+                    arm="consecutive_relay", stock_code=code,
+                    entry_price=None, entry_date=target_date,
+                    exit_reason="earnings_season_blacklist", is_realized=1,
+                    fills_json=json.dumps({
+                        "blacklist_reason": "earnings_season_undisclosed",
+                        "lbc": cand.get("lbc"),
+                    }),
+                )
+                self._journal.insert(record)
+                n_unbuyable += 1
+                continue
+
             # D 日一字板 filter（入场日 close 买不到，survivorship 过滤）
             if _is_unbuyable_next_bar(bars[d_idx], code=code):
                 record = JournalRecord.create(

@@ -119,4 +119,25 @@ def earnings_calendar(
     }
 
 
-__all__ = ["router"]
+def is_earnings_season_unsafe(code: str, target_date: str) -> bool:
+    """M5 ReportSeasonCircuitBreaker：财报季未披露股拉黑（防一字跌停保护钱）。
+
+    判 target_date 月 in DANGER_MONTHS（1/4/8）+ 该 code 在窗口内无 announcement → 未披露 → True。
+    异常/失败 → False（不拉黑，不臆造——缺数据不拦交易，只拦确认未披露）。
+    """
+    try:
+        from datetime import datetime  # noqa: PLC0415
+        month = datetime.strptime(target_date[:10], "%Y-%m-%d").month
+    except (ValueError, TypeError):
+        return False
+    if month not in {d["month"] for d in DANGER_MONTHS}:
+        return False  # 非财报季月，不拦
+    try:
+        import astock  # noqa: PLC0415
+        announcements = astock.announcements(code, limit=15)
+    except Exception:
+        return False  # 数据取得失败不拦（不臆造）
+    return len(announcements) == 0  # 财报季月内无 announcement → 未披露 → 拉黑
+
+
+__all__ = ["router", "is_earnings_season_unsafe"]

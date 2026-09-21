@@ -11,7 +11,7 @@ export interface QuantModule {
   note: string;       // 诚实描述（实现状态/边界）
   link?: string;      // 路由（live 且有页面时）
   /** live 卡尝试拉的真实数据源；null=无前端 endpoint（标"数据待接线"） */
-  liveSource?: "ofi" | "expectationGap" | "emHealth" | null;
+  liveSource?: "ofi" | "expectationGap" | "emHealth" | "earningsCalendar" | null;
 }
 
 export const QUANT_MODULES: readonly QuantModule[] = [
@@ -51,8 +51,9 @@ export const QUANT_MODULES: readonly QuantModule[] = [
     key: "M5",
     title: "财报季排雷",
     subtitle: "ReportSeasonCircuitBreaker 1/4/8月雷区",
-    status: "planning",
-    note: "spec-only/未实现。财报季未披露/财务异常拉黑防一字跌停。",
+    status: "live",
+    note: "GET /api/earnings-calendar（S216 P2 + S225 M5）。DANGER_MONTHS 1/4/8 + is_earnings_season_unsafe 拉黑未披露，arm 跳过防一字跌停。",
+    liveSource: "earningsCalendar",
   },
   {
     key: "M6",
