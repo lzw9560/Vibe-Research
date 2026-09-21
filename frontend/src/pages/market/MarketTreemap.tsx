@@ -1,8 +1,7 @@
 // S179 Phase 1: 申万 30 板块热力图（ECharts treemap，聚合一级板块，不裸渲染叶子）。
 // 范式：useRef + useEffect + echarts.init（echarts 6 tree-shakeable import）。
-// grill F10：5000 标的 60fps 未实测 → 标"待 A6 压测"。
-// grill #11：先一级 30 板块聚合，二级 134 级待 A6 压测确认后加。
-import { useRef, useEffect } from "react";
+// 保留最近有效 sectors——API 返空/失败时显示最近（标 stale hint，非伪装实时）。
+import { useRef, useEffect, useState } from "react";
 import * as echarts from "echarts/core";
 import { TreemapChart } from "echarts/charts";
 import { TooltipComponent } from "echarts/components";
@@ -110,9 +109,30 @@ interface Props {
   onRefresh: () => void;
 }
 
+// localStorage cache 最近有效 sectors（跨刷新保留）——Safari 无痕/配额 try-catch
+const LAST_SECTORS_KEY = "vr-last-sectors";
+function loadLastSectors(): { sectors: SectorFlow[]; time: string } | null {
+  try {
+    const raw = localStorage.getItem(LAST_SECTORS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.sectors) ? parsed : null;
+  } catch { return null; }
+}
+function saveLastSectors(sectors: SectorFlow[]): void {
+  try {
+    localStorage.setItem(LAST_SECTORS_KEY, JSON.stringify({
+      sectors,
+      time: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+    }));
+  } catch { /* 配额/隐私模式，静默忽略 */ }
+}
+
 export function MarketTreemap({ sectors, loading, error, onRefresh }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
+  // 保留最近有效 sectors——API 返空/失败时显示最近（标 stale hint 非伪装实时）
+  const [lastValid, setLastValid] = useState<{ sectors: SectorFlow[]; time: string } | null>(() => loadLastSectors());
 
   // init on mount + dispose on unmount
   useEffect(() => {
@@ -127,11 +147,24 @@ export function MarketTreemap({ sectors, loading, error, onRefresh }: Props) {
     };
   }, []);
 
-  // update option when data changes
+  // cache 最近非空 sectors（localStorage 跨刷新保留）
   useEffect(() => {
-    if (!chartRef.current || sectors.length === 0) return;
-    chartRef.current.setOption(buildOption(sectors));
+    if (sectors.length > 0) {
+      const entry = { sectors, time: new Date().toLocaleTimeString("zh-CN", { hour12: false }) };
+      saveLastSectors(sectors);
+      setLastValid(entry);
+    }
   }, [sectors]);
+
+  // effectiveSectors: 当前非空用当前，否则用 cache（保留最近）
+  const effectiveSectors = sectors.length > 0 ? sectors : (lastValid?.sectors ?? []);
+  const isStale = sectors.length === 0 && lastValid !== null; // 显示 cache 标 stale
+
+  // update option when effectiveSectors changes
+  useEffect(() => {
+    if (!chartRef.current || effectiveSectors.length === 0) return;
+    chartRef.current.setOption(buildOption(effectiveSectors));
+  }, [effectiveSectors]);
 
   return (
     <GlassCard className="p-4">
@@ -155,16 +188,21 @@ export function MarketTreemap({ sectors, loading, error, onRefresh }: Props) {
         聚合一级 30 板块 · 不裸渲染 5000 叶子 · 60fps 待 Phase 1 A6 压测确认
       </div>
 
-      {error ? (
+      {effectiveSectors.length === 0 ? (
+        // 无 cache 且当前空/失败 → 显空/失败
         <div className="flex h-[400px] items-center justify-center text-sm text-destructive">
-          板块数据加载失败：{error}
-        </div>
-      ) : sectors.length === 0 ? (
-        <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
-          {loading ? "加载中…" : "暂无板块数据（可能是非交易时段）"}
+          {error ? `板块数据加载失败：${error}` : loading ? "加载中…" : "暂无板块数据（可能是非交易时段）"}
         </div>
       ) : (
-        <div ref={containerRef} className="h-[400px] w-full" />
+        <>
+          {isStale && (
+            // 显示 cache 标 stale hint（诚实标注非实时）
+            <div className="mb-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-600">
+              显示最近数据（{lastValid?.time}）· 当前 {error ? "API 失败" : "返空"}，非实时
+            </div>
+          )}
+          <div ref={containerRef} className="h-[400px] w-full" />
+        </>
       )}
     </GlassCard>
   );
