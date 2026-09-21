@@ -116,7 +116,11 @@ function loadLastSectors(): { sectors: SectorFlow[]; time: string } | null {
     const raw = localStorage.getItem(LAST_SECTORS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.sectors) ? parsed : null;
+    if (!Array.isArray(parsed?.sectors)) return null;
+    // L1 TTL：cache 超时不用（防长期 stale 误导，4h 过期）
+    const savedAt = parsed.savedAt ? new Date(parsed.savedAt).getTime() : 0;
+    if (savedAt && Date.now() - savedAt > 4 * 60 * 60 * 1000) return null;
+    return parsed;
   } catch { return null; }
 }
 function saveLastSectors(sectors: SectorFlow[]): void {
@@ -124,6 +128,7 @@ function saveLastSectors(sectors: SectorFlow[]): void {
     localStorage.setItem(LAST_SECTORS_KEY, JSON.stringify({
       sectors,
       time: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+      savedAt: new Date().toISOString(),  // L1 TTL timestamp
     }));
   } catch { /* 配额/隐私模式，静默忽略 */ }
 }
