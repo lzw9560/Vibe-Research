@@ -9,8 +9,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-# 自动加载 .env 文件（项目根目录下的 backend/.env）
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+# 自动加载 .env 文件（项目根目录 .env，统一收拢）
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
 
 
 @dataclass

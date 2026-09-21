@@ -386,7 +386,7 @@ def cross_validate_hithink(zt_by_date, dates) -> dict:
     _import_project()
     try:
         from dotenv import load_dotenv
-        load_dotenv(BACKEND / ".env")  # HITHINK_FINANCE_API_KEY（不裸读 .env 内容）
+        load_dotenv(BACKEND.parent / ".env")  # HITHINK_FINANCE_API_KEY（项目根 .env 统一）
     except Exception as e:
         log.warning(f"[xval hithink] load_dotenv 失败: {e}")
     try:

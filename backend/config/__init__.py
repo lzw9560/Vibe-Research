@@ -28,9 +28,9 @@ from config.notification import (  # noqa: F401  (re-export)
 
 _log = logging.getLogger("vibe-research.config")
 
-# 自动加载 .env 文件。本文件位于 backend/config/__init__.py，需上溯一层到 backend/。
+# 自动加载 .env 文件（项目根目录 .env，统一收拢）。
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
+load_dotenv(os.path.join(_BACKEND_DIR, "..", ".env"))
 
 
 # ── 私有数据目录 + DB 路径常量（S037）───────────────────────────
