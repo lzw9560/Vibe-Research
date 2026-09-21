@@ -43,6 +43,8 @@ export function CognitionPage() {
   const cognitionLine = LINES[4];
   const [selectedType, setSelectedType] = useState<string>("stock");
   const [flowCode, setFlowCode] = useState("600519");
+  const [injectCode, setInjectCode] = useState("");
+  const [injecting, setInjecting] = useState(false);
 
   const syncStatus = syncTask?.last_run_status === "success" ? "ok"
     : syncTask?.last_run_status === "failed" ? "alert"
@@ -124,6 +126,32 @@ export function CognitionPage() {
             <span className="ml-auto text-xs text-muted-foreground">
               {inboxQ.data?.count ?? 0} 条
             </span>
+          </div>
+          {/* M7 注入触发——输入 code 调公告→DeepSeek JSON→inbox */}
+          <div className="mb-2 flex items-center gap-1">
+            <input
+              value={injectCode}
+              onChange={(e) => setInjectCode(e.target.value)}
+              placeholder="注入 code，如 600519"
+              className="w-full rounded border border-border bg-transparent px-2 py-1 text-xs"
+            />
+            <button
+              onClick={async () => {
+                const c = injectCode.trim();
+                if (!c || injecting) return;
+                setInjecting(true);
+                try {
+                  await api.kgInject(c);
+                  await inboxQ.refetch();
+                } catch (err) {
+                  console.error("kg inject failed", err);
+                } finally {
+                  setInjecting(false);
+                }
+              }}
+              disabled={injecting || !injectCode.trim()}
+              className="shrink-0 rounded bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20 disabled:opacity-50"
+            >{injecting ? "注入中…" : "注入"}</button>
           </div>
           {inboxQ.isLoading && (
             <span className="text-xs text-muted-foreground">加载中…</span>
