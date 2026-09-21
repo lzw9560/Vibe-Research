@@ -78,3 +78,20 @@ def daily_kg_sync(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         logger.error("[daily_kg_sync] 异常: %s", e)
         return {"status": "error", "error": str(e)}
+
+
+def kg_inject(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """M7 注入流 executor：扫 payload codes 公告 → LLM 提取 → inbox/ 待审。
+
+    payload: {codes: ["600519", ...], limit: 10}。codes 缺返 error（不自动扫涨停池，
+    手动触发用 POST /api/kg/inject?code= 或 cron 传 codes）。
+    """
+    from tools.kg_inject import inject_announcements_to_inbox  # noqa: PLC0415
+    codes = payload.get("codes") or []
+    limit = int(payload.get("limit", 10))
+    if not codes:
+        return {"status": "no_codes", "error": "payload.codes 缺（手动触发用 POST /api/kg/inject?code=）"}
+    results = [inject_announcements_to_inbox(c, limit=limit) for c in codes]
+    n_injected = sum(1 for r in results if r.get("status") == "ok")
+    logger.info("[kg_inject] %d codes → %d injected", len(codes), n_injected)
+    return {"status": "ok", "n_codes": len(codes), "n_injected": n_injected, "results": results}

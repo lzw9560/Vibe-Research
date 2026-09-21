@@ -104,4 +104,30 @@ def kg_flow(
         raise HTTPException(502, f"kg flow 查询异常: {e}") from e
 
 
+@router.post("/api/kg/inject")
+def kg_inject(code: str = Query(..., description="6 位股票代码")) -> Dict[str, Any]:
+    """M7 注入流：拉 code 公告 → LLM 提取实体 JSON → 写 inbox/ markdown 待审。
+
+    不直接进正式区——inbox 待审，审过 POST /api/kg/approve 移 reference/。
+    合规：公告公开数据（em_get），LLM 输出待审非臆造进正式区。
+    """
+    from tools.kg_inject import inject_announcements_to_inbox  # noqa: PLC0415
+    try:
+        result = inject_announcements_to_inbox(code)
+        return {"data": result}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"M7 注入异常: {e}") from e
+
+
+@router.post("/api/kg/approve")
+def kg_approve(filename: str = Query(..., description="inbox 文件名")) -> Dict[str, Any]:
+    """M7 审过：inbox/{filename} → reference/{filename}（移到正式区）。"""
+    from tools.kg_inject import approve_inbox_to_reference  # noqa: PLC0415
+    try:
+        result = approve_inbox_to_reference(filename)
+        return {"data": result}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"M7 审过异常: {e}") from e
+
+
 __all__ = ["router"]

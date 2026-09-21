@@ -94,6 +94,7 @@ class TaskExecutor:
             "premarket_t1_review": self._execute_premarket_t1_review,
             "daily_kg_audit": self._execute_daily_kg_audit,
             "daily_kg_sync": self._execute_daily_kg_sync,
+            "kg_inject": self._execute_kg_inject,
             "st_play_radar": self._execute_st_play_radar,
             "intraday_microstructure_snapshot": self._execute_intraday_microstructure_snapshot,
             "intraday_auction_dense": self._execute_intraday_auction_dense,
@@ -486,6 +487,10 @@ class TaskExecutor:
     def _execute_daily_kg_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.kg import daily_kg_sync
         return daily_kg_sync(payload)
+
+    def _execute_kg_inject(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from scheduler.executors.kg import kg_inject
+        return kg_inject(payload)
 
     def _execute_st_play_radar(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import st_play_radar
