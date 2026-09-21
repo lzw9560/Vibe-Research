@@ -465,11 +465,11 @@ export function TodaySignalsPanel() {
             )}
           </div>
 
-          {/* Avoid picks（一字板，不可买） */}
+          {/* Avoid picks（一字板不可买 + 数据缺失） */}
           {avoid.length > 0 && (
             <div className="mb-3">
               <h4 className="mb-1.5 text-xs font-semibold text-muted-foreground">
-                别碰（{avoid.length} 只）— 一字板不可买
+                别碰（{avoid.length} 只）— 一字板不可买 / 数据缺失
               </h4>
               <div className="space-y-1.5">
                 {avoid.map((s) => (
@@ -482,7 +482,7 @@ export function TodaySignalsPanel() {
                       <span>{s.name}</span>{" "}
                       <span className="text-xs">连板{s.lbc}</span>
                     </div>
-                    <span className="text-xs">一字板</span>
+                    <span className="text-xs">{s.missing_bar ? "数据缺失" : "一字板"}</span>
                   </div>
                 ))}
               </div>

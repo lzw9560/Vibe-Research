@@ -1898,6 +1898,7 @@ export interface SignalsDailySignal {
   unbuyable: boolean;
   bucket: "tradable" | "exploratory" | "avoid";
   hardstop_reason: string | null;
+  missing_bar?: string | null;
 }
 
 export interface SignalsDailyResponse {
