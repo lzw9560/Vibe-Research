@@ -68,7 +68,7 @@ export function MultilinePage() {
       </header>
 
       {/* ── 三列 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         {COLUMNS.map((col) => (
           <StrategyColumn key={col.key} def={col} />
         ))}
@@ -81,7 +81,7 @@ export function MultilinePage() {
 
 function StrategyColumn({ def }: { def: StrategyColumnDef }) {
   return (
-    <GlassCard className={cn("p-4 space-y-3 border-l-2", def.accent)}>
+    <GlassCard className={cn("p-5 space-y-4 border-l-2", def.accent)}>
       {/* 列头 */}
       <div>
         <h2 className="text-base font-semibold">{def.title}</h2>

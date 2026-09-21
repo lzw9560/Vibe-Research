@@ -271,7 +271,7 @@ function SentimentStrip({ latest, isLoading, error }: SentimentStripProps) {
     <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-border/60 bg-muted/10 px-4 py-2.5">
       {/* 情绪分数 + 趋势 + zone 色带 */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">情绪分数</span>
+        <span className="text-xs text-muted-foreground" title="分数=4维度加权（涨停0.4/封板0.2/炸板0.2/涨跌比0.1，0-100高=强）；背离=偏离T-1 STI基线>15分（情绪突变，非score vs zone矛盾）">情绪分数 ⓘ</span>
         {latest.score != null ? (
           <>
             <span className="font-mono text-base font-bold text-primary">
