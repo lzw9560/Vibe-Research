@@ -498,7 +498,7 @@ function BreakoutRow({
 
 // ─── 涨停池候选列表 ─────────────────────────────────────────────────────
 
-function LianbanList({
+export function LianbanList({
   stocks,
   loading,
   error,
