@@ -70,19 +70,20 @@ def _resolve_refresh_end_date(default_end: str, fetch_fn) -> tuple[str, bool]:
     return default_end, False
 
 
-def main(max_stocks: int | None = None) -> int:
+def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
     # T21 R20：cache 不存在时建空（首次全 A 扩容），不再 return 1
     cache: dict[str, list[dict]] = (
         json.loads(CACHE.read_bytes()) if CACHE.exists() else {}
     )
     end_date = _last_trading_date()
-    # T21 R20：universe = load_industry_map() 全 A（~5540），非增量 list(cache.keys())
-    try:
-        from strategies.pattern_scan import load_industry_map
-        codes = list(load_industry_map().keys())
-    except Exception as e:
-        print(f"[refresh] load_industry_map 失败，降级增量 list(cache.keys()): {e}")
-        codes = list(cache.keys())
+    # 传 codes 优先（刷特定 picks），否则 load_industry_map 全 A（~5540）
+    if not codes:
+        try:
+            from strategies.pattern_scan import load_industry_map
+            codes = list(load_industry_map().keys())
+        except Exception as e:
+            print(f"[refresh] load_industry_map 失败，降级增量 list(cache.keys()): {e}")
+            codes = list(cache.keys())
     # S094 audit LOW: universe 空(load_industry_map 返空 + cache 空,baostock login 失败?)→ 中止不写回,避免伪装成功
     if not codes:
         print(f"[refresh] universe 空(load_industry_map+cache 均空),中止不写回(防伪装成功)")
