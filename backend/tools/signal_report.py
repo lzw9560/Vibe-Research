@@ -553,7 +553,8 @@ def render_daily_report(signals: dict[str, Any]) -> str:
     lines.append(f"【别碰】({len(avoid)} 只)")
     if avoid:
         for s in avoid:
-            lines.append(f"  {s['code']} {s['name']}（连板{s['lbc']}）— 原因：一字板")
+            reason = "数据缺失（kline cache 无 bar）" if s.get("missing_bar") else "一字板"
+            lines.append(f"  {s['code']} {s['name']}（连板{s['lbc']}）— 原因：{reason}")
     else:
         lines.append("  无")
     lines.append("")
