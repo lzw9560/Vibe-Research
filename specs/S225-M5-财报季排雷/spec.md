@@ -1,6 +1,6 @@
 # S225 · M5 财报季排雷
 
-> 状态：进行中（2026-09-21）｜分级：medium（issue 层单轮 review，免 feature 分支）
+> 状态：已实现（2026-09-21，commit 9e59910 + 8a68e99 + 72a2ee8）｜分级：medium（issue 层单轮 review，免 feature 分支）
 > 关联：S216 P2 earnings_calendar、consecutive_relay arm、§1.2 工程底线（防跌停保护钱）
 > 解冻：专家讨论 + 用户同意——earnings_calendar 已实现加 CB 是延伸非新基建，防跌停保护钱（工程底线）
 

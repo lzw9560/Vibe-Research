@@ -1,6 +1,6 @@
 # S226 · M7 图谱注入流
 
-> 状态：进行中（2026-09-21）｜分级：medium（issue 层单轮 review）
+> 状态：已实现（2026-09-21，commit 51515b6 + 3de9eb6 + fde0eb2）｜分级：medium（issue 层单轮 review）
 > 关联：S216 P1 kg.py、ai.tools.kg_tools、chat._call_llm、§1.2 工程底线
 > 解冻：专家讨论 + 用户同意——kg.py 框架在 + chat LLM 复用，注入流是延伸非新基建，认知层价值中
 
