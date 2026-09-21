@@ -681,6 +681,8 @@ def get_strategy_registry() -> list[dict]:
             "max_hold_days": s["max_hold_days"],
             "weather_regimes": s.get("weather_regimes", []),
             "aliases": s.get("aliases", []),
+            # STRATEGY_REGISTRY 注册即启用做匹配；前端读 enabled 显启用/停用
+            "enabled": True,
         }
         for s in STRATEGY_REGISTRY
     ]
