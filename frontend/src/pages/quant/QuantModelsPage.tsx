@@ -1,6 +1,6 @@
-// Track D M3: 量化模型页——M1-M7 规划态占位卡（via Cmd+K palette "量化模型"）。
-// live 卡：M1 OFI 拉真实快照数（useIntradayOfi），M2/M4 后端已实现但前端 endpoint 缺 → honest "数据待接线"。
-// planning 卡：M3/M5/M6/M7 spec-only/未实现 → 琥珀"规划中"徽章。守工程底线：不臆造数据。
+// Track D M3: 量化模型页——M1-M7 模块卡（via Cmd+K palette "量化模型"）。
+// live 卡：M1 OFI / M2 预期差 / M4 em_get / M5 财报季 / M7 图谱——拉真实数据显 live 徽章。
+// planning 卡：M3 CentralRouter / M6 国家队 spec-only/未实现 → 琥珀"规划中"徽章。守工程底线：不臆造数据。
 import { Link } from "react-router-dom";
 import { CheckCircle2, FileClock, ArrowUpRight, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -103,12 +103,30 @@ function EarningsCalendarChip() {
   );
 }
 
+// M7 LLM 图谱智能体：inbox 待审条数（公告→DeepSeek JSON→inbox→reference）
+function KgInboxChip() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["kg", "inbox"] as const,
+    queryFn: () => api.kgInbox(),
+    staleTime: 60 * 1000,
+  });
+  if (isLoading) return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+  if (isError || !data) return <span className="text-xs text-muted-foreground">数据待接线</span>;
+  const n = data.count ?? 0;
+  return (
+    <span className={cn("text-xs", n > 0 ? "text-amber-500" : "text-muted-foreground")}>
+      {n > 0 ? `inbox ${n} 待审` : "inbox 空"}
+    </span>
+  );
+}
+
 function LiveDataChip({ mod }: { mod: QuantModule }) {
   // liveSource 决定拉哪个真实数据；null → honest "数据待接线"（不臆造）
   if (mod.liveSource === "ofi") return <OfiLiveChip />;
   if (mod.liveSource === "emHealth") return <EmHealthChip />;
   if (mod.liveSource === "expectationGap") return <ExpectationGapChip />;
   if (mod.liveSource === "earningsCalendar") return <EarningsCalendarChip />;
+  if (mod.liveSource === "kgInbox") return <KgInboxChip />;
   return <span className="text-xs text-muted-foreground">数据待接线</span>;
 }
 

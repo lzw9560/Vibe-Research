@@ -11,7 +11,7 @@ export interface QuantModule {
   note: string;       // 诚实描述（实现状态/边界）
   link?: string;      // 路由（live 且有页面时）
   /** live 卡尝试拉的真实数据源；null=无前端 endpoint（标"数据待接线"） */
-  liveSource?: "ofi" | "expectationGap" | "emHealth" | "earningsCalendar" | null;
+  liveSource?: "ofi" | "expectationGap" | "emHealth" | "earningsCalendar" | "kgInbox" | null;
 }
 
 export const QUANT_MODULES: readonly QuantModule[] = [
@@ -66,9 +66,9 @@ export const QUANT_MODULES: readonly QuantModule[] = [
     key: "M7",
     title: "LLM 图谱智能体",
     subtitle: "DeepSeek 公告→JSON→图谱注入",
-    status: "planning",
-    note: "认知线 /graph 为 home；公告→JSON→inbox 待审→reference 注入流 spec-only/未实现。",
+    status: "live",
+    note: "GET /api/kg/inbox + POST /api/kg/inject + /api/kg/approve（S226 M7）。公告→DeepSeek JSON→inbox 待审→reference 注入流已通电，/graph 审核闭环。",
     link: "/graph",
-    liveSource: null,
+    liveSource: "kgInbox",
   },
 ] as const;
