@@ -123,7 +123,7 @@ class JournalRecorder:
         """每日盘后闭环管线（C1 orchestrator 顺序调用，非订阅）。
 
         arms 默认 ['floor','breakout','trend']；limitup/gap mock。
-        返 {arm: {n_candidates, n_buyable, n_unbuyable, n_realized}}。
+        返 {arm: {n_candidates, n_buyable, n_unbuyable, n_earnings_blacklist, n_realized}}。
         """
         arms = arms or DEFAULT_ARMS
         if target_date is None:
@@ -453,6 +453,7 @@ class JournalRecorder:
         n_unbuyable = 0
         n_buyable = 0
         n_realized = 0
+        n_earnings_blacklist = 0
 
         for cand in candidates:
             code = cand.get("code") or ""
@@ -498,7 +499,7 @@ class JournalRecorder:
                     }),
                 )
                 self._journal.insert(record)
-                n_unbuyable += 1
+                n_earnings_blacklist += 1
                 continue
 
             # D 日一字板 filter（入场日 close 买不到，survivorship 过滤）
@@ -570,6 +571,7 @@ class JournalRecorder:
             "n_candidates": len(candidates),
             "n_buyable": n_buyable,
             "n_unbuyable": n_unbuyable,
+            "n_earnings_blacklist": n_earnings_blacklist,
             "n_realized": n_realized,
         }
 
