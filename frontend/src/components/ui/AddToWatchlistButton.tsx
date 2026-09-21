@@ -20,15 +20,15 @@ export function AddToWatchlistButton({ code, size = "sm", className }: Props) {
     try {
       await apiWatchlist.add([code]);
       setState("added");
-      setTimeout(() => setState("idle"), 1500);
+      setTimeout(() => setState("idle"), 3000);  // L2：加长到 3s 让用户看清反馈
     } catch {
       setState("error");
-      setTimeout(() => setState("idle"), 1500);
+      setTimeout(() => setState("idle"), 3000);
     }
   };
 
   const Icon = state === "loading" ? Loader2 : state === "added" ? Check : Star;
-  const label = state === "added" ? "已加入" : state === "error" ? "失败" : "加自选";
+  const label = state === "added" ? "已加入自选" : state === "error" ? "加失败" : "加自选";
 
   return (
     <button
