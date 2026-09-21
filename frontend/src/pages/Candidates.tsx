@@ -5,6 +5,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { SelectionPipeline } from "@/components/pipeline/SelectionPipeline";
+import { CandidateFactorTable } from "@/components/workflow/CandidateFactorTable";
 import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
 import { ThresholdPanel } from "@/components/candidate/ThresholdPanel";
 import { candidatesApi, type DiagnosisCard as Card, type FunnelResult } from "@/lib/candidates";
@@ -94,6 +95,13 @@ export function Candidates() {
           onPick={openDiagnosis}
           rerunHandlers={candidatesApi}
         />
+      )}
+
+      {finalCards.length > 0 && (
+        <GlassCard className="p-2">
+          <h3 className="mb-2 px-2 text-sm font-semibold">八项标准因子表（{finalCards.length} 只）</h3>
+          <CandidateFactorTable candidates={finalCards} />
+        </GlassCard>
       )}
 
       {active && (

@@ -138,7 +138,7 @@ export const router = createBrowserRouter([
       { path: "/workflow/post-market", element: redirect("/review") },
       { path: "/workflow/topology", element: redirect("/topology") },  // 路由修复: →/topology(独立拓扑页) 非 /review(lossy)
       { path: "/workflow/first-board", element: redirect("/screener") },
-      { path: "/workflow/pre-market", element: redirect("/limitup/premarket") },  // 审计修: →盘前选股页(PreMarketBriefing)非 /screener,FactorDetailPage 回链期待
+      { path: "/workflow/pre-market", element: lazyEl(() => import("@/pages/workflow/PreMarketBriefing")) },  // 盘前简报全页（ContextTab/P2RiskPanel 接线目标，深链 dateTriplet 兜底）
       { path: "/workflow/selection", element: redirect("/screener") },
       { path: "/workflow/candidates/:code", element: lazyEl(() => import("@/pages/workflow/CandidateDetail")) },  // 保留（参数化详情页）
       { path: "/workflow/factor/:factorId", element: lazyEl(() => import("@/pages/workflow/FactorDetailPage"), "FactorDetailPage") },  // 保留
