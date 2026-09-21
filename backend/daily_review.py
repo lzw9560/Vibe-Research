@@ -22,7 +22,7 @@ from pydantic import BaseModel
 import astock
 from data.mappers import zt_pool_item_from_dict
 from utils.journal_util import atomic_write_json
-from vr_paths import is_trading_day, resolve_data_dir
+from vr_paths import is_trading_day, resolve_data_dir, prev_trading_date_str
 
 BEIJING_TZ = datetime.now().astimezone().tzinfo
 
@@ -223,8 +223,8 @@ class DailyReviewer:
             engine = STIEngine()
             result = engine.get_latest(trade_date)
             if result and result.source_ok:
-                # 获取昨日 STI 计算动量
-                yesterday = (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+                # 获取昨日 STI 计算动量（前一交易日，非日历日 -1，跨周末取非交易日→None）
+                yesterday = prev_trading_date_str(datetime.strptime(trade_date, "%Y-%m-%d").date())
                 try:
                     prev_result = engine.get_latest(yesterday)
                     change = (result.score - prev_result.score) if prev_result and prev_result.source_ok and result.score is not None else None
