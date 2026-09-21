@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { AddToWatchlistButton } from "@/components/ui/AddToWatchlistButton";
 import { authHeaders, ApiError } from "@/lib/api";
 
 interface MultiArmRec {
@@ -82,7 +83,12 @@ export function MultiArmPanel() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-base font-semibold">{r.arm}{r.name ? ` · ${r.name}` : ""}</div>
-                {r.code && <div className="text-xs text-muted-foreground">{r.code}</div>}
+                {r.code && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{r.code}</span>
+                    <AddToWatchlistButton code={r.code} />
+                  </div>
+                )}
               </div>
               <span className={`rounded-full px-2 py-1 text-xs font-medium ${verdictCls(r.honest_label)}`}>
                 {verdictText(r.honest_label)}

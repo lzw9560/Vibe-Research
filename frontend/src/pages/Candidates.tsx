@@ -9,6 +9,7 @@ import { DiagnosisCardView } from "@/components/candidate/DiagnosisCard";
 import { ThresholdPanel } from "@/components/candidate/ThresholdPanel";
 import { candidatesApi, type DiagnosisCard as Card, type FunnelResult } from "@/lib/candidates";
 import { AskAiButton } from "@/components/ui/AskAiButton";
+import { apiWatchlist } from "@/lib/watchlist";
 
 export function Candidates() {
   const [result, setResult] = useState<FunnelResult | null>(null);
@@ -61,6 +62,21 @@ export function Candidates() {
 
       <GlassCard className="p-4 flex items-center gap-2">
         <Button onClick={() => run()} disabled={loading}>{loading ? "运行中…" : "重跑漏斗"}</Button>
+        {finalCards.length > 0 && (
+          <button
+            onClick={async () => {
+              try {
+                const r = await apiWatchlist.add(finalCards.map((c) => c.code));
+                window.alert(`已加入 ${r.added} 只到自选（共 ${r.total}）`);
+              } catch {
+                window.alert("加自选失败");
+              }
+            }}
+            className="rounded-lg border border-primary/30 px-3 py-1.5 text-sm text-primary hover:bg-primary/10"
+          >
+            全部加自选（{finalCards.length}）
+          </button>
+        )}
         {result && (
           <span className="text-sm text-muted-foreground">
             run_id {result.run_id} · 最终候选 {finalCards.length}

@@ -2,6 +2,7 @@
 // R:R 1:2 只设盈亏平衡门槛不创造 edge；honest 标签前置。breakout 已降级 2 级导航研究（本页为独立入口）。
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { AddToWatchlistButton } from "@/components/ui/AddToWatchlistButton";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
@@ -160,6 +161,7 @@ export function PremarketSelection() {
                       <td className="px-2 py-1.5 text-red-400">{c.stop_loss}</td>
                       <td className="px-2 py-1.5 text-emerald-400">{c.take_profit}</td>
                       <td className="px-2 py-1.5 text-gray-300">{c.position_pct}%</td>
+                      <td className="px-2 py-1.5"><AddToWatchlistButton code={c.code} /></td>
                     </tr>
                   ))}
                 </tbody>
