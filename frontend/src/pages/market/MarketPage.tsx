@@ -35,6 +35,15 @@ import type { IndexQuote, GlobalIndex, SectorFlow } from "@/lib/api";
 import { MarketTreemap } from "./MarketTreemap";
 import { LimitupSummary } from "./LimitupSummary";
 
+/** M6 全球指数状态块——空数据时诚实显状态（isLoading/error/暂无），非消失 */
+export function GlobalIndicesEmptyState({ isLoading, error }: { isLoading: boolean; error: boolean }) {
+  return (
+    <p className="text-sm text-muted-foreground">
+      {isLoading ? "加载中…" : error ? "全球行情未接通" : "暂无数据"}
+    </p>
+  );
+}
+
 export function MarketPage() {
   const indicesQ = useIndices();
   const globalQ = useGlobalIndices();
@@ -159,9 +168,7 @@ export function MarketPage() {
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
             <Globe className="h-4 w-4" /> 全球市场
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {globalQ.isLoading ? "加载中…" : globalQ.error ? "全球行情未接通" : "暂无数据"}
-          </p>
+          <GlobalIndicesEmptyState isLoading={globalQ.isLoading} error={globalQ.error != null} />
         </div>
       )}
       {globalIdx.length > 0 && (
