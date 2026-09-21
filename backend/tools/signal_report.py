@@ -55,8 +55,11 @@ def _regime_freshness() -> dict[str, Any]:
     last = dates[-1]
     try:
         last_dt = datetime.strptime(last, "%Y-%m-%d")
-        days_since = (datetime.now() - last_dt).days
-        stale = days_since > 2
+        # C2 fix：用交易日差非日历日——周一盘前用周五 cache（=prev_trading_date）
+        # fresh，日历日 days_since>2 误判周一 stale（周末休市 days_since=3）致 hardstop 0 tradable
+        from vr_paths import prev_trading_date_str  # noqa: PLC0415
+        stale = last < prev_trading_date_str()  # cache < 上一交易日 = stale（缺上一交易日数据）
+        days_since = (datetime.now() - last_dt).days  # 日历日保留供 debug
     except ValueError:
         stale = True
         days_since = None

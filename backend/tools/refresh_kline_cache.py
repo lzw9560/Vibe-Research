@@ -90,11 +90,16 @@ def main(max_stocks: int | None = None) -> int:
     if max_stocks:
         codes = codes[:max_stocks]
 
-    try:
-        ensure_login()
-    except (ImportError, DependencyMissing):
-        print("[refresh] baostock 不可用")
-        return 1
+    # C3 fix：baostock login 加 3 次重试 + backoff（17:15 登录偶发失败无重试致整轮跳过 cache degraded）
+    for attempt in range(3):
+        try:
+            ensure_login()
+            break
+        except (ImportError, DependencyMissing) as e:
+            if attempt == 2:
+                print(f"[refresh] baostock login 3 次失败: {e}")
+                return 1
+            time.sleep(2 ** attempt)  # 1s, 2s backoff
 
     # S184 grill（方案 0）：数据就绪预检——baostock 当日 bar 17:00+ 更新。
     # 未就绪时回退到前一交易日继续刷新（不跳过整轮——前几天 bars 仍需补，
