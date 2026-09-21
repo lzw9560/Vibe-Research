@@ -43,7 +43,7 @@ function liftHuman(lift: number | null): { label: string; tone: string } {
 }
 
 // 从 API records 组装 bundle（实验 ID 过滤 + 角色分组 + 退市档位分组）
-// 当前后端 long_value_run.py 未实现→空→降级 mock
+// long_value_run.py harness 存在（S171 R2）但 assembleBundle 未接线 + harness 未跑→空→降级 mock
 function assembleBundle(records: readonly RecorderRecord[]): S171ValueBundle | null {
   const s171 = records.filter((r) => r.params?.experiment_id === "S171");
   if (s171.length < 4) return null; // 至少 4 条（2 角度 × 2 档）才算真
