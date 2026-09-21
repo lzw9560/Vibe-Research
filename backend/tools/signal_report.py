@@ -307,8 +307,9 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
     from tools.gap_regime_stratified import compute_regime_labels
     from candidate_funnel.evaluation import lift_for_arm
 
-    # 1. scan
-    raw_signals = scan_consecutive_relay(target_date)
+    # 1. scan——取 target_date lbc≥2 连板股（D 日连板，entry=D close exit=D+1 open overnight gap）
+    #    同 _process_consecutive_relay:452 previous_trade_day=target_date（非默认 D-1 日历日——跨周末/节假日取非交易日→0 picks）
+    raw_signals = scan_consecutive_relay(target_date, previous_trade_day=target_date)
 
     # 2. regime
     regime_map = compute_regime_labels()
