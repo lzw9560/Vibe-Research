@@ -15,6 +15,8 @@ import { EntryCard } from "@/components/workflow/EntryCard";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/lib/api/client";
 import { useStrategyBacktest } from "@/lib/query/strategy";
+import { useFirstBoardCandidates } from "@/lib/query/workflow";
+import { StrategyAttributionTab } from "@/pages/archive/StrategyAttributionTab";
 import { useWorkflowWinRate, useWorkflowAdjustments, useWorkflowStrategies } from "@/lib/query/workflow";
 import { api } from "@/lib/api";
 import { useState } from "react";
@@ -65,6 +67,7 @@ export default function StrategyPage() {
     }
   };
 
+  const { data: firstBoard } = useFirstBoardCandidates();
   const registryItems = registry ?? [];
   const backtestItems = backtest ?? [];
 
@@ -82,6 +85,9 @@ export default function StrategyPage() {
         title="战法管理"
         subtitle="战法战绩 · 前向测试 · 阈值配置"
       />
+
+      {/* S075 首板流战法归因深看（接 /api/workflow/first-board/candidates） */}
+      <StrategyAttributionTab data={firstBoard ?? null} />
 
       {/* 战法战绩表 */}
       <GlassCard className="p-2">

@@ -12,6 +12,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useScheduledTasks, useScheduledTaskRuns } from "@/lib/query";
+import { useDateTriplet } from "@/lib/query/workflow";
+import { TaskStatusCard } from "@/components/workflow/TaskStatusCard";
 import type { ScheduledTask, TaskRun } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
@@ -265,6 +267,7 @@ function LineLegend({ activeLine, setActiveLine }: { activeLine: string | null; 
 
 export function PipelinePage() {
   const { nodes: layoutedNodes, edges: layoutedEdges } = useLayoutedNodes();
+  const { data: triplet } = useDateTriplet();
   const [activeLine, setActiveLine] = useState<string | null>(null);
   const [showTaskTable, setShowTaskTable] = useState(false);
 
@@ -305,6 +308,9 @@ export function PipelinePage() {
         title="流程管线"
         subtitle="9步骨架 + 5线横穿 + fork 岔路（§44 validated/待验证/证否 · 策略 短线/中线/长线）"
       />
+
+      {/* 盘后采集任务状态卡（过渡窗展开时间线，其他时段摘要） */}
+      <TaskStatusCard stage={triplet?.stage ?? ""} isTradingDay={triplet?.is_trading_day} />
 
       {/* 线横穿图例 */}
       <div className="mb-3">
