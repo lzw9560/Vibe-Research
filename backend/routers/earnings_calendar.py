@@ -137,7 +137,14 @@ def is_earnings_season_unsafe(code: str, target_date: str) -> bool:
         announcements = astock.announcements(code, limit=15)
     except Exception:
         return False  # 数据取得失败不拦（不臆造）
-    return len(announcements) == 0  # 财报季月内无 announcement → 未披露 → 拉黑
+    # H2 fix：过滤财报披露公告（title 含年报/中报/季报/业绩预告/快报），非任意公告
+    # 避免有回购/分红/股东大会公告但不披露财报 → 误判已披露 → 漏拉黑
+    earnings_keywords = ("年报", "中报", "季报", "一季报", "半年报", "业绩预告", "业绩快报", "年度业绩", "半年度业绩")
+    has_earnings = any(
+        any(kw in (a.get("title") or "") for kw in earnings_keywords)
+        for a in announcements
+    )
+    return not has_earnings  # 无财报披露公告 → 未披露 → 拉黑
 
 
 __all__ = ["router", "is_earnings_season_unsafe"]

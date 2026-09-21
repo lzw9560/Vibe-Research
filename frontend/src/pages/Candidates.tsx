@@ -22,7 +22,16 @@ export function Candidates() {
   const run = async (date?: string) => {
     setLoading(true); setErr(null);
     try {
-      const r = await candidatesApi.runFunnel("all", date);
+      // H1 缓存优先——readFunnelCache 秒开（S087 R10），404/空 fallback POST 实跑
+      let r: FunnelResult | null = null;
+      try {
+        r = await candidatesApi.readFunnelCache(date);
+      } catch {
+        r = null;  // 404/无缓存，fallback POST
+      }
+      if (!r || !r.final_candidates?.length) {
+        r = await candidatesApi.runFunnel("all", date);
+      }
       setResult(r);
       setFinalCards(r.final_candidates);
     } catch (e: any) { setErr(e?.message || String(e)); }
@@ -86,6 +95,13 @@ export function Candidates() {
       </GlassCard>
 
       {err && <div className="text-sm text-danger">{err}</div>}
+
+      {loading && !result && (
+        <div className="py-4 text-sm text-muted-foreground">漏斗运行中…（筛选全市场约 30 秒，首次加载请等待）</div>
+      )}
+      {!loading && !result && !err && (
+        <div className="py-4 text-sm text-muted-foreground">点击「重跑漏斗」开始筛选候选池</div>
+      )}
 
       {result && (
         <SelectionPipeline
