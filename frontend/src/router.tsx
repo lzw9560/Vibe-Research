@@ -133,7 +133,7 @@ export const router = createBrowserRouter([
       { path: "/workflow", element: redirect("/review") },
       { path: "/workflow/intraday", element: redirect("/intraday") },
       { path: "/workflow/intraday/ofi", element: lazyEl(() => import("@/pages/workflow/OfiDashboardPage")) },  // 保留（OFI 看板独立）
-      { path: "/workflow/coach", element: redirect("/intraday") },
+      { path: "/workflow/coach", element: lazyEl(() => import("@/pages/workflow/IntradayCoach")) },  // 盯盘教练全页（Compact 版嵌在 /intraday）
       { path: "/workflow/alerts", element: redirect("/intraday") },
       { path: "/workflow/post-market", element: redirect("/review") },
       { path: "/workflow/topology", element: redirect("/topology") },  // 路由修复: →/topology(独立拓扑页) 非 /review(lossy)

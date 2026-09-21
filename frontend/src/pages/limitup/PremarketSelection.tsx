@@ -11,8 +11,18 @@ export function PremarketSelection() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [topN, setTopN] = useState(20);
   const [minScore, setMinScore] = useState(0.9);
+  const [board, setBoard] = useState<"all" | "main" | "gem" | "star" | "bse">("all");
 
   const { data, isLoading, error, refetch, isFetching } = usePremarketSelection(date, topN, minScore);
+
+  // board client-side 过滤（按 code 前缀筛，不需后端改）
+  const BOARD_RULES: Record<string, (c: string) => boolean> = {
+    main: (c) => /^(60|00)/.test(c),
+    gem: (c) => /^(300|301)/.test(c),
+    star: (c) => /^(688|689)/.test(c),
+    bse: (c) => /^(8|4)/.test(c),
+  };
+  const filteredCandidates = data?.candidates.filter((c) => board === "all" || (BOARD_RULES[board]?.(c.code) ?? false)) ?? [];
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4">
@@ -57,6 +67,20 @@ export function PremarketSelection() {
               className="ml-2 w-20 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-gray-100"
             />
           </label>
+          <label className="text-sm text-gray-300">
+            板块
+            <select
+              value={board}
+              onChange={(e) => setBoard(e.target.value as typeof board)}
+              className="ml-2 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-gray-100"
+            >
+              <option value="all">全部</option>
+              <option value="main">主板</option>
+              <option value="gem">创业板</option>
+              <option value="star">科创板</option>
+              <option value="bse">北交所</option>
+            </select>
+          </label>
           <button
             onClick={() => refetch()}
             disabled={isFetching || !date}
@@ -99,7 +123,7 @@ export function PremarketSelection() {
           <GlassCard>
             <div className="overflow-x-auto p-4">
               <h3 className="mb-3 text-sm font-semibold text-gray-200">
-                候选（{data.count}）— breakout 分数降序
+                候选（{filteredCandidates.length}/{data.count}）— breakout 分数降序
               </h3>
               <table className="w-full text-left text-sm">
                 <thead className="text-muted-foreground">
@@ -115,7 +139,7 @@ export function PremarketSelection() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.candidates.map((c) => (
+                  {filteredCandidates.map((c) => (
                     <tr key={c.code} className="border-t border-gray-700/50 hover:bg-gray-800/40">
                       <td className="px-2 py-1.5">
                         <Link to={`/stock/${c.code}`} className="text-blue-400 hover:underline">

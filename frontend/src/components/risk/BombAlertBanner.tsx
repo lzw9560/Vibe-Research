@@ -2,6 +2,7 @@
 // 在打板策略页顶部挂横幅（红/黄分级 + 时间 + 依据），个股抽屉挂封单额 sparkline。
 import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api, type BombAlertItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -43,11 +44,16 @@ export function BombAlertBanner() {
           <span className="ml-2 text-xs opacity-70">（{alerts.length} 条）</span>
         </div>
         <div className="mt-1 text-xs opacity-80">
-          {topAlert.ts.slice(11, 16)} · {topAlert.name}({topAlert.code}) · {topAlert.condition}
+          {topAlert.ts.slice(11, 16)} · <Link to={`/stock/${topAlert.code}`} className="underline hover:text-foreground">{topAlert.name}({topAlert.code})</Link> · {topAlert.condition}
         </div>
         {alerts.length > 1 && (
           <div className="mt-1 text-xs opacity-60">
-            其余 {alerts.length - 1} 条：{alerts.slice(1, 4).map((a) => `${a.name}(${a.rule_id})`).join("、")}
+            其余 {alerts.length - 1} 条：{alerts.slice(1, 4).map((a, i) => (
+              <span key={a.code}>
+                {i > 0 && "、"}
+                <Link to={`/stock/${a.code}`} className="underline hover:text-foreground">{a.name}({a.code})</Link>
+              </span>
+            ))}
             {alerts.length > 4 ? "…" : ""}
           </div>
         )}
