@@ -369,17 +369,24 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
         # unbuyable: 用 target_date bar 判
         bars = provider(code)
         is_unbuyable = False
+        has_target_bar = False
         if bars:
             for b in bars:
                 if str(b.get("date", ""))[:10] == target_date:
                     is_unbuyable = is_unbuyable_next_bar(b, code=code)
+                    has_target_bar = True
                     break
 
-        # 3-bucket classification（hard-stop 优先）
-        bucket = _classify_signal(
-            is_unbuyable, current_regime,
-            hardstop_reason=hardstop_reason,
-        )
+        # 无 target_date bar → kline cache 数据缺失，标 avoid（保守不误判 tradable，防一字板买不到）
+        if not has_target_bar:
+            bucket = "avoid"
+            missing_note = "kline cache 无 target_date bar（数据缺失，不判可买）"
+        else:
+            bucket = _classify_signal(
+                is_unbuyable, current_regime,
+                hardstop_reason=hardstop_reason,
+            )
+            missing_note = None
 
         signals.append({
             "code": code,
@@ -390,6 +397,7 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
             "unbuyable": is_unbuyable,
             "bucket": bucket,
             "hardstop_reason": hardstop_reason if hardstop_reason else None,
+            "missing_bar": missing_note,
         })
 
     # 分类统计
