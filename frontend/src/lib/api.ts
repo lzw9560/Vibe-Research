@@ -358,6 +358,11 @@ export const api = {
   kgInbox: () => get<KgInboxResponse>("/kg/inbox"),
   kgFlow: (entityCode: string, entityType = "stock") =>
     get<KgFlowResponse>(`/kg/flow?entity_code=${encodeURIComponent(entityCode)}&entity_type=${encodeURIComponent(entityType)}`),
+  // M7 S226 图谱注入流——公告→DeepSeek JSON→inbox + 审过进 reference
+  kgInject: (code: string) =>
+    request<{ status: string; inbox_path: string }>(`/kg/inject?code=${encodeURIComponent(code)}`, "POST"),
+  kgApprove: (filename: string) =>
+    request<{ status: string; reference_path: string }>(`/kg/approve?filename=${encodeURIComponent(filename)}`, "POST"),
   // S216 P2: 量化模型 M2/M4
   expectationGap: (code: string, date?: string) =>
     get<ExpectationGapResult>(`/expectation-gap?code=${code}${date ? `&date=${date}` : ""}`),

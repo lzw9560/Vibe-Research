@@ -135,9 +135,21 @@ export function CognitionPage() {
             inboxQ.data && inboxQ.data.count > 0 ? (
             <ul className="space-y-1">
               {inboxQ.data.entities.slice(0, 10).map((e) => (
-                <li key={e._filename} className="text-xs">
+                <li key={e._filename} className="flex items-center gap-1 text-xs">
                   <span className="font-medium">{e._filename}</span>
                   {e.name && <span className="text-muted-foreground"> {e.name}</span>}
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.kgApprove(e._filename);
+                        await inboxQ.refetch();
+                      } catch (err) {
+                        console.error("kg approve failed", err);
+                      }
+                    }}
+                    className="ml-auto rounded bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 hover:bg-emerald-500/25"
+                    title="审过进 reference/"
+                  >审过</button>
                 </li>
               ))}
               {inboxQ.data.count > 10 && (
