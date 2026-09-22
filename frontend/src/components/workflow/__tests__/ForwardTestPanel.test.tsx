@@ -3,10 +3,17 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const mockSummary = vi.hoisted(() => ({ useForwardTestSummary: vi.fn() }));
+const mockSummary = vi.hoisted(() => ({
+  useForwardTestSummary: vi.fn(),
+  // S227：ForwardTestPanel 新增 backtest 散点 + 趋势 hook，默认返空数据（不干扰 summary 横幅 test）
+  useBacktestScatter: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useBacktestTrend: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+}));
 
 vi.mock("@/lib/query/strategy", () => ({
   useForwardTestSummary: mockSummary.useForwardTestSummary,
+  useBacktestScatter: mockSummary.useBacktestScatter,
+  useBacktestTrend: mockSummary.useBacktestTrend,
 }));
 
 import { ForwardTestPanel as Panel } from "@/components/workflow/ForwardTestPanel";

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/lib/api/client";
 import type { Opts } from "./types";
+import type { BacktestScatterPoint, BacktestSnapshotRow } from "@/lib/api/types";
 
 export interface StrategyBacktestItem {
   strategy: string;
@@ -275,6 +276,35 @@ export function useForwardTestDaily(signalDate: string, options?: Opts<ForwardTe
   return useQuery({
     queryKey: ["strategy", "funnel", "forward-test", "daily", signalDate] as const,
     queryFn: () => request<ForwardTestRecord[]>(`/strategy/funnel/forward-test/${signalDate}`),
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
+/** S227: backtest 散点（gene_score vs next_day_return）—— ScatterChart 数据源（/api/backtest/scatter）。
+ *  days 内部算 start/end（本地日期，A股口径）；staleTime 5min（日级数据）。 */
+export function useBacktestScatter(days = 90, options?: Opts<BacktestScatterPoint[]>) {
+  return useQuery({
+    queryKey: ["strategy", "backtest", "scatter", days] as const,
+    queryFn: () => {
+      const end = new Date();
+      const start = new Date(end);
+      start.setDate(start.getDate() - days);
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return request<BacktestScatterPoint[]>(`/backtest/scatter?start=${fmt(start)}&end=${fmt(end)}`);
+    },
+    staleTime: 300_000,
+    ...options,
+  });
+}
+
+/** S227: backtest 趋势（daily_backtest_run 落库快照时序）—— TrendChart 数据源（/api/backtest/trend）。
+ *  days 默认 90；staleTime 5min（日级数据）。 */
+export function useBacktestTrend(days = 90, options?: Opts<BacktestSnapshotRow[]>) {
+  return useQuery({
+    queryKey: ["strategy", "backtest", "trend", days] as const,
+    queryFn: () => request<BacktestSnapshotRow[]>(`/backtest/trend?days=${days}`),
     staleTime: 300_000,
     ...options,
   });

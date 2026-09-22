@@ -2,7 +2,9 @@
 // spec §11.4：当日候选 vs 实际表现（命中率）/ 策略分排名 vs 实际收益 / 策略衰减监控（4 周滚动胜率）。
 import { CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useForwardTestSummary } from "@/lib/query/strategy";
+import { useForwardTestSummary, useBacktestScatter, useBacktestTrend } from "@/lib/query/strategy";
+import { ScatterChart } from "@/components/charts/ScatterChart";
+import { HitRateChart, AvgReturnChart } from "@/components/charts/TrendChart";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -13,6 +15,9 @@ import { Badge } from "@/components/ui/Badge";
  */
 export function ForwardTestPanel() {
   const { data, isLoading } = useForwardTestSummary();
+  // S227：backtest 散点 + 趋势（ScatterChart/TrendChart 数据源，非 orphan 接线）
+  const { data: scatter, isLoading: scatterLoading } = useBacktestScatter();
+  const { data: trend, isLoading: trendLoading } = useBacktestTrend();
 
   if (isLoading) {
     return <Skeleton className="h-48 w-full" />;
@@ -163,6 +168,35 @@ export function ForwardTestPanel() {
                 : "（无已结算样本）"}
           </span>
         </div>
+      </GlassCard>
+
+      {/* S227：backtest 散点——基因得分 vs 次日收益（ScatterChart 接线，非 orphan） */}
+      <GlassCard className="p-4">
+        <SectionHeader
+          title="基因得分 × 次日收益散点"
+          subtitle="backtest 候选基因分 × 次日实际收益（90 日窗口）"
+        />
+        {scatterLoading ? (
+          <Skeleton className="h-[360px] w-full" />
+        ) : (
+          <ScatterChart points={scatter ?? []} />
+        )}
+      </GlassCard>
+
+      {/* S227：backtest 趋势——命中率 & 均收益时序（TrendChart 接线，非 orphan） */}
+      <GlassCard className="p-4">
+        <SectionHeader
+          title="命中率 & 均收益趋势"
+          subtitle="daily_backtest_run 快照时序（90 日，lite engine hit_rate/avg_return）"
+        />
+        {trendLoading ? (
+          <Skeleton className="h-[320px] w-full" />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <HitRateChart rows={trend ?? []} />
+            <AvgReturnChart rows={trend ?? []} />
+          </div>
+        )}
       </GlassCard>
     </div>
   );

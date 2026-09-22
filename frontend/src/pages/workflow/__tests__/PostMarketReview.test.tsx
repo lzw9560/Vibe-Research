@@ -24,6 +24,9 @@ vi.mock("@/lib/query", () => ({
 // S066 ForwardTestPanel 的 hook mock（返 undefined → 不渲染面板数据）
 vi.mock("@/lib/query/strategy", () => ({
   useForwardTestSummary: () => ({ data: undefined }),
+  // S227：ForwardTestPanel 新增 backtest 散点 + 趋势 hook（PostMarketReview 渲染 ForwardTestPanel）
+  useBacktestScatter: () => ({ data: [], isLoading: false }),
+  useBacktestTrend: () => ({ data: [], isLoading: false }),
 }));
 
 import PostMarketReview from "../PostMarketReview";

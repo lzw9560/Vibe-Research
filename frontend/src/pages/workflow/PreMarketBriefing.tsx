@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { EntryCard } from "@/components/workflow/EntryCard";
 import { WatchlistBoard } from "@/components/workflow/WatchlistBoard";
+import { PremarketSelectionSection } from "@/components/workflow/PremarketSelectionSection";
 import { CandidateDetailPanel } from "./CandidateDetail";
 import { useTransitionWorkflowState, usePreMarketBriefing, usePreMarketRefresh, useWorkflowStates, useIntradayLatest, useDateTriplet } from "@/lib/query";
 import type { TransitionRequest } from "@/lib/api";
@@ -196,6 +197,9 @@ export default function PreMarketBriefing({ date, stage }: PreMarketBriefingProp
           ⓘ 数据为今早盘前采集口径，17:15 后可刷新为最终收盘口径。
         </div>
       )}
+
+      {/* S227：盘前选股区（PremarketSelectionSection 接线，非 orphan）——自取 usePremarketSelection(date) */}
+      {status === "done" && <PremarketSelectionSection date={_date} />}
 
       {/* S093 T17：done 状态——盯盘执行台核心内容（WatchlistBoard + 持仓 chips + 市场情绪） */}
       {status === "done" && F && (
