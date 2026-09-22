@@ -92,6 +92,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 - **东财**（push2/push2ex/reportapi/datacenter-web/searchapi）：研报/龙虎榜/解禁/融资融券/大宗/股东户数/分红/资金流/行业排名/涨停四池/个股新闻。**会封 IP**，统一走 `em_get()`。
 - **akshare/mootdx**（惰性导入）：缺失时 `DependencyMissing` 优雅报错，不挡启动。
 - **新浪/巨潮/同花顺**：财报三表/公告/一致预期。
+- **baostock**（免防封，匿名 login）：日 K 历史 + 行业分类 + 财报 + 交易日历；`engine/kline_cache_store.py` SQLite（`baostock_kline_cache.db` WAL + WITHOUT ROWID，`code TEXT PK + bars_json TEXT`）per-code `get_bars()` ~2ms ~0 常驻（2026-09-22 内存优化，替代旧 `baostock_kline_cache.json` 482MB 全量 load 2.19GB 常驻 ×7 处模块级 cache）；`refresh_kline_cache` 日更 `upsert_many` 增量；`migrate_kline_cache_to_sqlite` 一次性迁移。
 
 ### `em_get` 限流/降级策略（核心）
 1. 串行限流：默认 1.0s + 抖动 0.1~0.5s，QPS≤2。
@@ -117,6 +118,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 - CronScheduler：每 60s tick，5 段 cron 匹配，daemon 线程。
 - SQLite 持久化（`VR_DATA_DIR`/market_data.db，实际 `.vibe-research/market_data.db`）：`scheduled_tasks` + `scheduled_task_runs`。
 - TaskExecutor 内置 53 种任务（`scheduler/executors/__init__.py` `_executors` 注册表，含但不止）：`daily_data_refresh` / `daily_review_notify` / `limitup_precompute`（盘后预计算基因+STI+竞价+复盘）/ `portfolio_refresh` / `market_data_sync` / `cleanup_old_runs` / `derived_precompute`（S084 盘后 derived 异步预采集）/ `monthly_vacuum`（S089 月度 VACUUM+wal_checkpoint）/ `kline_refresh`（S090 baostock kline 日更，S184 数据就绪预检 17:00+ 当日 bar + cron 17:15）/ `daily_ai_summary`（S093 AI 盘后总结 stub，cron 15:30，S094 完整实现）。S093：`candidate_funnel_precompute` success 后调 `NotificationService.send()` 发飞书富内容卡片（前瞻选股结果）。
+- **consecutive_relay 战法**（主战法，§44v2 stage-2 终判 ×1.0）：`scan_consecutive_relay` D 日 lbc≥2 连板 entry D close / exit D+1 open overnight gap；`candidate_funnel/evaluation.py` cap regime-stratified（bull ×1.0 / bear+range ×0.5，×1.0 freeze guard `_x1dot0_upgrade_permitted` 需 env `VR_ALLOW_X1DOT0=1` + fresh harness run）；daily_report 14:50 cron fire 输出 18 picks（17 tradable + 1 avoid 一字板）+ cap.effective + verified_numbers（chrono train 1.57%→test 1.04%, p=0.0054）。
 - S175/S183 模拟盘自洽：`JournalRecorder`（trade_journal.db）多臂（floor ETF/breakout/trend）+ `PaperPortfolio` equity 落盘 + `bars_provider` A 股 baostock fallback（cache miss 实时拉，S184 commit 0ac0779）+ `signal_id` 确定性 `arm_date_code`（重跑幂等，S183 commit c3e7130）+ `_wilson_ci` n=0 返 (0,1) 宽带诚实暴露（S183）+ 回补脚本 `tools/backfill_trade_journal.py`（历史日期 _process_* 快速验证）。
 - `app.py` 启动时 `_st.start_scheduler()`；另 `portfolio.py` 起 `start_scheduler(1800)`（持仓刷新，原 scheduler.py 已删，S031 R12）。
 
