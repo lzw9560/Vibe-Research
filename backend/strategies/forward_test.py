@@ -204,23 +204,19 @@ def record_daily_recommendations(
     if not recommendations:
         return 0
     conn = sqlite3.connect(_DB, timeout=10)
-    inserted = 0
     try:
-        for rec in recommendations:
-            try:
-                conn.execute(
-                    """INSERT OR IGNORE INTO forward_test_records
-                    (signal_date, code, name, strategy_code, strategy_score,
-                     weather_state, position_multiplier, recommended_position)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (rec.signal_date, rec.code, rec.name, rec.strategy_code,
-                     rec.strategy_score, rec.weather_state, rec.position_multiplier,
-                     rec.recommended_position),
-                )
-                inserted += 1
-            except Exception:
-                continue
+        before = conn.total_changes
+        conn.executemany(
+            """INSERT OR IGNORE INTO forward_test_records
+            (signal_date, code, name, strategy_code, strategy_score,
+             weather_state, position_multiplier, recommended_position)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            [(rec.signal_date, rec.code, rec.name, rec.strategy_code,
+              rec.strategy_score, rec.weather_state, rec.position_multiplier,
+              rec.recommended_position) for rec in recommendations],
+        )
         conn.commit()
+        inserted = conn.total_changes - before
     finally:
         conn.close()
     return inserted

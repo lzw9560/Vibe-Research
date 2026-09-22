@@ -360,13 +360,14 @@ def aggregate_multi(date: str) -> list[dict]:
 
     # 行业维度（code → code_industry 查）
     industry_map: dict[str, str] = {}
+    conn = sqlite3.connect(str(_DB))
     try:
-        conn = sqlite3.connect(str(_DB))
         rows = conn.execute("SELECT code, industry FROM code_industry").fetchall()
         industry_map = {r[0]: r[1] for r in rows if r[1]}
-        conn.close()
     except Exception:
         pass
+    finally:
+        conn.close()
 
     label_count: dict[str, dict] = {}  # label → {count, dims: set, codes: list}
     # concept_blocks/hot_concepts per 股太慢（106×2 slist），用预构建 concept_map 缓存（不阻塞）
