@@ -223,9 +223,9 @@ class AssistantDefaultConfig(NotificationConfig):
     # === S055 盘中封单时序采集 + 炸板预警 ===
     SEAL_INTRADAY_COLLECT_INTERVAL: int = 60   # 采集间隔秒（下限 30）
     SEAL_INTRADAY_RETENTION_DAYS: int = 30     # 快照保留天数
-    SEAL_INTRADAY_ENABLE: bool = False          # 采集开关（默认关，避免非交易时段空跑）
+    SEAL_INTRADAY_ENABLE: bool = True           # 采集开关（盘中盯盘开启，交易时段采集封单/微结构）
     BOMB_ALERT_COOLDOWN_MINUTES: int = 10       # 同股同规则冷却去重
-    BOMB_ALERT_NOTIFY_ENABLE: bool = False       # 通知开关（默认关）
+    BOMB_ALERT_NOTIFY_ENABLE: bool = True        # 通知开关（盘中盯盘开启，炸板/封单异动通知）
     # S056 R2 撤单熔断：封单额阈值（元）；盘中封单 < 此值 → 触发提醒
     SEAL_CANCEL_FUSE_AMOUNT: float = 30_000_000.0  # 3000 万
 

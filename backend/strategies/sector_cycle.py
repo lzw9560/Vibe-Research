@@ -235,22 +235,45 @@ def sector_breadth(up_count: int, down_count: int) -> float:
 
 def aggregate_sectors(date: str) -> list[dict]:
     """聚合当日 all industries → sectors（§5.4.1/5.4.3 输入）。
-    zt_count_today + zt_momentum 从 gene_scores；fund_flow 阻断降级 0（§44 数据阻断 push2his IP限流）。"""
+    zt_count_today + zt_momentum 从 gene_scores；fund_flow 阻断降级 0（§44 数据阻断 push2his IP限流）。
+
+    批量查询（单连接 GROUP BY，替代 N+1 per-industry 循环——原 ~50-100 板块 × 5 连接 =
+    250-500 连接+查询；prev_dates 与 industry 无关移出循环算一次）。"""
     conn = sqlite3.connect(str(_DB))
     try:
-        industries = [r[0] for r in conn.execute(
-            "SELECT DISTINCT industry FROM gene_scores WHERE date = ? AND industry IS NOT NULL",
+        # 1. 前 3 个交易日（与 industry 无关，算一次，移出循环）
+        prev_dates = [r[0] for r in conn.execute(
+            "SELECT DISTINCT date FROM gene_scores WHERE date < ? ORDER BY date DESC LIMIT 3",
             (date,),
         ).fetchall()]
+        # 2. 当日各板块涨停数（单条 GROUP BY，替代 per-industry COUNT）
+        today_counts = dict(conn.execute(
+            "SELECT industry, COUNT(DISTINCT code) FROM gene_scores "
+            "WHERE date = ? AND industry IS NOT NULL GROUP BY industry",
+            (date,),
+        ).fetchall())
+        # 3. 前 3 日各板块涨停数（按 industry,date GROUP，Python 聚合 sum per industry；
+        # DISTINCT code per (industry,date) 再 sum，等价原 sum(_get_zt_count_by_date_industry(d, ind)))
+        prev_counts: dict[str, int] = {}
+        if prev_dates:
+            placeholders = ",".join("?" * len(prev_dates))
+            rows = conn.execute(
+                f"SELECT industry, COUNT(DISTINCT code) FROM gene_scores "
+                f"WHERE date IN ({placeholders}) AND industry IS NOT NULL "
+                f"GROUP BY industry, date",
+                prev_dates,
+            ).fetchall()
+            for ind, cnt in rows:
+                prev_counts[ind] = prev_counts.get(ind, 0) + cnt
     except Exception:
         return []
     finally:
         conn.close()
+
+    n_prev = max(len(prev_dates), 1)
     sectors: list[dict] = []
-    for ind in industries:
-        count_today = _get_zt_count_by_date_industry(date, ind)
-        prev_dates = _get_prev_trading_dates(date, 3)
-        count_avg_3d = sum(_get_zt_count_by_date_industry(d, ind) for d in prev_dates) / max(len(prev_dates), 1)
+    for ind, count_today in today_counts.items():
+        count_avg_3d = prev_counts.get(ind, 0) / n_prev
         sectors.append({
             "industry": ind,
             "zt_count_today": count_today,
