@@ -127,8 +127,8 @@ class EmailSender:
         except Exception:
             try:
                 server.close()
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                logger.warning("email server.close 失败（teardown，不阻塞）: %s", e)
     
     def send_to_email(
         self,

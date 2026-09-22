@@ -39,8 +39,9 @@ def _migrate_schema() -> None:
 # 模块 import 时自动建表（幂等），镜像 limitup_sti/__init__.py 模式
 try:
     _migrate_schema()
-except Exception:
-    pass
+except Exception as e:  # noqa: BLE001
+    import logging
+    logging.getLogger(__name__).warning("seat_engine schema 迁移失败（继续，首次 import 可能无表）: %s", e)
 
 
 def _get_conn() -> sqlite3.Connection:
