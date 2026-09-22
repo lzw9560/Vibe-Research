@@ -200,7 +200,7 @@ class TestActivityNewFields(unittest.TestCase):
         self.assertAlmostEqual(e["mcap_yi"], 22600.0)
         self.assertAlmostEqual(e["pb"], 10.0)
         self.assertIsNone(e["prev_amount_yi"])  # 当日路径无前日 K线
-        self.assertIn("prev_amount_yi", e.get("missing", {}))
+        self.assertIn("kline_derived", e.get("missing", {}))  # S084: missing key 通用 kline_derived（涵盖 prev_amount_yi 等 kline 派生）
 
     def test_kline_path_recomputes_fields_and_marks_valuation_missing(self):
         bars = [

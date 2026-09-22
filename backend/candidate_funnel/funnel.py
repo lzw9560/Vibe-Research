@@ -399,6 +399,8 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         )
     except Exception as exc:  # noqa: BLE001 — 采集失败不阻断，诊断卡降级 missing
         logger.warning("activity/fund 采集失败 %s: %s", date, exc)
+        r2.data_status = "未取得"
+        r2.data_reason = f"activity/fund 采集失败: {exc}"
     # R2 passed 补齐 activity 字段（矩阵展示换手/量比/成交额/振幅）
     if activity:
         for _p in r2.passed:
