@@ -136,8 +136,8 @@ def get_with_fallback(
             save_cache(key, data, ttl)
             return data
         # 空数据（限流返空）——不写覆盖，降级到缓存，保护既有好数据
-    except Exception:
-        pass  # 实时获取失败，降级到缓存
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("fallback").warning("实时获取失败 key=%s（降级到缓存）: %s", key, e)
 
     # 2. 降级到缓存
     cached = load_cache(key, ttl)

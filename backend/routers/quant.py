@@ -64,8 +64,9 @@ def expectation_gap(
                         if prev_vol and float(prev_vol) > 0
                         else None
                     )
-                except (TypeError, ValueError, ZeroDivisionError):
-                    pass
+                except (TypeError, ValueError, ZeroDivisionError) as e:  # noqa: BLE001
+                    import logging
+                    logging.getLogger(__name__).debug("quant gap_pct/vol_ratio 计算失败 code=%s: %s", code, e)
         return {
             "data": {
                 "code": code,

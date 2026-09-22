@@ -87,8 +87,9 @@ def _get_reference_price_from_signal(signal_id: str) -> tuple[float | None, str,
                 return float(row["entry_price"]), "trade_journal", arm
         finally:
             conn.close()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("signals trade_journal entry_price/arm 查询失败 signal_id=%s: %s", signal_id, e)
     return None, "not_found", None
 
 

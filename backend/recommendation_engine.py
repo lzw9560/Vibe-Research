@@ -138,8 +138,9 @@ async def get_recommendation(code: str, date: str | None = None) -> StockRecomme
         ).fetchone()
         if row:
             sti_phase = row["phase"]
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("recommendation STI phase DB 查询失败（降级 sti_phase=None，影响 AVOID 判定）: %s", e)
 
     # 检查 AVOID 条件
     avoid, reason = _check_avoid_conditions(gene, sti_phase)
