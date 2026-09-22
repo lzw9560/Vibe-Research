@@ -213,13 +213,13 @@ def _fbt_to_hhmm(fbt: float | None) -> str | None:
     东财 fbt 格式：92500=09:25:00, 093000=09:30:00, 145000=14:50:00。
     用于剔除原因 reason 人话展示。
     """
-    if fbt is None or fbt <= 0:
+    if fbt is None:
         return None
     try:
         n = int(fbt)
     except (TypeError, ValueError):
         return None
-    if n < 0 or n > 235959:
+    if n <= 0 or n > 235959:
         return None
     hh = n // 10000
     mm = (n // 100) % 100
