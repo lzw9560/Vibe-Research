@@ -306,13 +306,26 @@ _SECTOR_MAX_PAGES = 8     # 496 板块 ≈ 5 页，留余量防异常翻页
 _sector_cache: dict[str, tuple[float, dict]] = {}  # "flows" → (ts, {归一化板块名: f62(元)})
 
 
-def _industry_of(code: str) -> str:
-    """个股所属行业（东财二级行业，如「白酒Ⅱ」）——push2delay stock/get + ut 取 f127。
+_INDUSTRY_CACHE: dict[str, str] | None = None  # code → industry（gene_scores code_industry 表，静态，进程内缓存）
 
-    不用 akshare individual_info：其 push2 stock/get 缺 ut 被断连（且不走 em_get 限流）。
-    不走 push2 主host：stock/get 路径限流未恢复（2026-08-10 live 实测），delay host 可用；
-    行业为静态属性，延迟行情足够。取不到 → ""。
-    """
+
+def _load_industry_map() -> dict[str, str]:
+    """从 gene_scores.db code_industry 表 load {code: industry}（静态映射，5896 行全 A）。"""
+    import sqlite3
+    from vr_paths import resolve_data_dir
+    try:
+        conn = sqlite3.connect(str(resolve_data_dir() / "gene_scores.db"))
+        try:
+            rows = conn.execute("SELECT code, industry FROM code_industry").fetchall()
+            return {r[0]: r[1] for r in rows if r[0] and r[1]}
+        finally:
+            conn.close()
+    except Exception:
+        return {}
+
+
+def _industry_of_em_get(code: str) -> str:
+    """em_get fallback（新股/未填表）——push2delay stock/get f127，延迟行情足够。"""
     market = 1 if code.startswith("6") else 0
     try:
         r = astock.em_get(
@@ -323,6 +336,26 @@ def _industry_of(code: str) -> str:
         return str((r.json().get("data") or {}).get("f127") or "").strip()
     except Exception:
         return ""
+
+
+def _industry_of(code: str) -> str:
+    """个股所属行业（东财二级行业，如「白酒Ⅱ」）——优先查 code_industry 表（静态，无 em_get
+    防封），缺失 em_get fallback + 填内存缓存。
+
+    原 per-candidate em_get 无缓存（~88 串行，封 IP 风险——decision-log fund_flow>60s 主因残余）。
+    改查 code_industry 表（5896 行权威源）+ 进程内缓存，命中表不走 em_get。表无（新股/未填）
+    才 em_get fallback 并填缓存（同进程内不重复 em_get 同 code）。
+    """
+    global _INDUSTRY_CACHE
+    if _INDUSTRY_CACHE is None:
+        _INDUSTRY_CACHE = _load_industry_map()
+    cached = _INDUSTRY_CACHE.get(code)
+    if cached:
+        return cached
+    industry = _industry_of_em_get(code)
+    if industry:
+        _INDUSTRY_CACHE[code] = industry
+    return industry
 
 
 def _normalize_board_name(name: str) -> str:
