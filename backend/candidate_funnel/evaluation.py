@@ -353,8 +353,9 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
             wo = status.get("weight_override")
             if wo is not None:
                 return (float(wo), f"arm override: {status.get('kill_reason') or 'manual'}")
-    except Exception:
-        pass  # arm_status 读失败（表未建/db 缺）→ 走 registry fallback（不阻塞，backward compat）
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("arm_status 读失败→registry fallback（不阻塞）: %s", e)  # arm_status 读失败（表未建/db 缺）→ 走 registry fallback（不阻塞，backward compat）
     from candidate_funnel.lift_override import get_effective_dimension
     dims = DIM_ARM_MAP.get(arm)
     if not dims:

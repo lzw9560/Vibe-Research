@@ -88,8 +88,9 @@ def load_fees() -> dict:
                         cfg[k] = float(saved[k])
                 cfg["is_default"] = False
                 return cfg
-    except Exception:  # noqa: BLE001  配置坏了退回初值，但要标出来
-        pass
+    except Exception as e:  # noqa: BLE001  配置坏了退回初值，但要标出来
+        import logging
+        logging.getLogger(__name__).warning("journal 配置坏了退回初值: %s", e)
     cfg["is_default"] = True
     return cfg
 
@@ -463,8 +464,9 @@ def _settle(fills: list[dict], fees_cfg: Optional[dict] = None) -> dict:
             d1 = datetime.datetime.strptime(sells[-1]["date"], "%Y-%m-%d")
             out["hold_days"] = (d1 - d0).days
             out["is_t0"] = out["hold_days"] == 0      # 当日买卖 = 做 T
-        except ValueError:
-            pass
+        except ValueError as e:
+            import logging
+            logging.getLogger(__name__).debug("journal parse 失败（降级，不阻塞）: %s", e)
     return out
 
 

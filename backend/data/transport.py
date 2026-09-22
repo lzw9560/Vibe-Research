@@ -76,8 +76,9 @@ def _em_session(direct: bool):
         adapter = HTTPAdapter(max_retries=retry)
         s.mount("https://", adapter)
         s.mount("http://", adapter)
-    except Exception:
-        pass  # 老版本 urllib3 缺参数时降级为无重试
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).debug("urllib3 老版本缺参数→降级无重试: %s", e)
     _EM_SESSIONS[direct] = s
     return s
 

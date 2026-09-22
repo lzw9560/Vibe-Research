@@ -277,14 +277,14 @@ class DiscordSender:
             retry_after = response.json().get('retry_after')
             if retry_after is not None:
                 return max(0.0, float(retry_after))
-        except (AttributeError, TypeError, ValueError):
-            pass
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.debug("discord sender 解析失败（降级，不阻塞）: %s", e)
 
         try:
             retry_after = response.headers.get('Retry-After')
             if retry_after is not None:
                 return max(0.0, float(retry_after))
-        except AttributeError:
-            pass
+        except AttributeError as e:
+            logger.debug("discord sender 属性缺失（降级，不阻塞）: %s", e)
 
         return float(2 ** attempt)

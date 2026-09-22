@@ -68,8 +68,9 @@ def _aggregate_sector_bars(stock_bars_list: list[list[dict]]) -> list[dict]:
                 if v is not None:
                     try:
                         by_date[d].setdefault(field, []).append(float(v))
-                    except (ValueError, TypeError):
-                        pass
+                    except (ValueError, TypeError) as e:
+                        import logging
+                        logging.getLogger(__name__).debug("non_limitup_funnel parse 失败（降级，不阻塞）: %s", e)
     result: list[dict] = []
     for d in sorted(by_date.keys()):
         agg = by_date[d]

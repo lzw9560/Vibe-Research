@@ -109,14 +109,16 @@ def collect_forecast_reports() -> list[dict]:
         if (i + 1) % 500 == 0:
             try:
                 bs.logout()
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).warning("pead_event_study 失败（降级，不阻塞）: %s", e)
             bs.login()
 
     try:
         bs.logout()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("pead_event_study 失败（降级，不阻塞）: %s", e)
     print(f"[PEAD] collected {len(events)} events in {time.time()-t0:.0f}s")
     FORECAST_CACHE.parent.mkdir(parents=True, exist_ok=True)
     FORECAST_CACHE.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")

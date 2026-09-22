@@ -90,8 +90,8 @@ def _ensure_tables() -> None:
         try:
             conn.execute("ALTER TABLE scheduled_tasks ADD COLUMN depends_on TEXT")
             logger.info("[scheduler] 迁移：scheduled_tasks 加 depends_on 列")
-        except sqlite3.OperationalError:
-            pass  # 列已存在（Duplicate column）——幂等
+        except sqlite3.OperationalError as e:
+            logger.debug("Duplicate column（幂等，不阻塞）: %s", e)
         conn.commit()
     finally:
         conn.close()

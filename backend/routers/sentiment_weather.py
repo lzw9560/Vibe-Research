@@ -970,8 +970,9 @@ def get_weather_pardon() -> Dict[str, Any]:
         # Clean up expired pardons first
         try:
             cleanup_expired_pardons()
-        except Exception:
-            pass  # Don't fail the request if cleanup fails
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("sentiment_weather cleanup 失败（降级，不阻塞）: %s", e)
 
         pardon_records = get_all_pardon_records(limit=100)
 

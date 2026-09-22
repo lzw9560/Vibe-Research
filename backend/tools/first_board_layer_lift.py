@@ -338,10 +338,12 @@ def _trading_dates_from_baostock(days_back: int, end_date: str) -> list[str]:
                     dates.append(d[0])
         try:
             bs.logout()
-        except Exception:
-            pass
+        except Exception as e_logout:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e_logout)
     except Exception as e:  # noqa: BLE001
-        print(f"[B1] baostock query_trade_dates 失败: {e}")
+        import logging
+        logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e)
     return sorted(dates)
 
 
@@ -425,8 +427,9 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
                         if i and i % 50 == 0:
                             try:
                                 bs.logout()
-                            except Exception:
-                                pass
+                            except Exception as e:  # noqa: BLE001
+                                import logging
+                                logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e)
                             bs.login()
                         start = (datetime.strptime(d_date, "%Y-%m-%d") - timedelta(days=5)).strftime("%Y-%m-%d")
                         end = (datetime.strptime(d_date, "%Y-%m-%d") + timedelta(days=10)).strftime("%Y-%m-%d")
@@ -438,8 +441,9 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
                                     fb["turnover_pct"] = _turn_for_date(bars, d_date)
                     try:
                         bs.logout()
-                    except Exception:
-                        pass
+                    except Exception as e:  # noqa: BLE001
+                        import logging
+                        logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e)
             except ImportError:
                 print("[B1] baostock 未装，cache_miss 股跳过 turn/D+2")
 

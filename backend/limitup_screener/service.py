@@ -554,8 +554,8 @@ def precompute_daily(date: str | None = None) -> ScreenerResult:
                 date_fmt,
             )
             return _empty_screener_result(date_fmt, reason="非交易日不预计算")
-    except (ValueError, TypeError):
-        pass
+    except (ValueError, TypeError) as e:
+        _logger.debug("limitup_screener service parse 失败（降级，不阻塞）: %s", e)
 
     # S095 R2：未来日期硬闸门（同步通道），同 precompute_daily_async。
     if not _assert_not_future_date(date_fmt):

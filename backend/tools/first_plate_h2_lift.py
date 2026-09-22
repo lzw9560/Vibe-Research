@@ -323,13 +323,15 @@ def main() -> int:
         try:
             import baostock as bs
             bs.logout()
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("first_plate_h2_lift 失败（降级，不阻塞）: %s", e)
         try:
             cache_path.write_text(json.dumps(features, ensure_ascii=False), encoding="utf-8")
             print(f"cached {len(features)} features → {cache_path.name}", flush=True)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("first_plate_h2_lift cache 写入失败（降级，不阻塞）: %s", e)
 
     if len(features) < 30:
         print(f"n={len(features)} < 30 → 探索性，不足 verdict")

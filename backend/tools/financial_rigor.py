@@ -24,8 +24,9 @@ getcontext().prec = 28
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+except Exception as e:  # noqa: BLE001
+    import logging
+    logging.getLogger(__name__).warning("financial_rigor 失败（降级，不阻塞）: %s", e)
 
 # ---------- 工具函数 ----------
 

@@ -36,8 +36,9 @@ def _load_holidays() -> set[str]:
         cal_file = Path(__file__).resolve().parent / "data" / "trading_calendar.json"
         if cal_file.exists():
             return set(json.loads(cal_file.read_text(encoding="utf-8")).get("holidays", []))
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("backfill_history 失败（降级，不阻塞）: %s", e)
     return set()
 
 

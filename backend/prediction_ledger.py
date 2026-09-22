@@ -136,8 +136,8 @@ def _compute_due_date(stated_at: str, horizon: int, db_path: str = WINRATE_DB_PA
         conn.close()
         if len(rows) >= horizon:
             return rows[horizon - 1][0]
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("gene_scores 查询失败→工作日推算（降级，不阻塞）: %s", e)
     # 兜底：按工作日推算（周一到周五）
     try:
         base = datetime.strptime(stated_at, "%Y-%m-%d").date()

@@ -165,8 +165,8 @@ def _get_kline_bars(code: str, end_date: str, lookback_days: int = LOOKBACK_DAYS
         result = [b for b in bars if (b.date or "")[:10] <= end_date]
         if result:
             return result
-    except Exception:
-        pass  # mootdx 失败，fallback TickFlow
+    except Exception as e:  # noqa: BLE001
+        logger.warning("kline_rebuild mootdx 失败，fallback TickFlow: %s", e)
 
     # 备用源：TickFlow
     try:
@@ -175,8 +175,8 @@ def _get_kline_bars(code: str, end_date: str, lookback_days: int = LOOKBACK_DAYS
         result = [b for b in bars if (b.date or "")[:10] <= end_date]
         if result:
             return result
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("kline_rebuild fallback 失败（降级，不阻塞）: %s", e)
 
     # S187 终端 fallback：baostock（mootdx/TickFlow 全空，历史日期必需）
     bars = _baostock_bars_to_bars(code, end_date)

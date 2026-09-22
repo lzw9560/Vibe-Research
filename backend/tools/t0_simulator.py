@@ -139,14 +139,16 @@ def _load_or_fetch_ofi_series(code: str, date_compact: str) -> list[list]:
     if cache.exists():
         try:
             return json.loads(cache.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            import logging
+            logging.getLogger(__name__).debug("t0_simulator 文件读取失败（降级，不阻塞）: %s", e)
     ticks = _fetch_raw_ticks(code, date_compact)
     series = _ofi_proxy_minute_series(ticks)
     try:
         cache.write_text(json.dumps(series, ensure_ascii=False), encoding="utf-8")
-    except OSError:
-        pass
+    except OSError as e:
+        import logging
+        logging.getLogger(__name__).debug("t0_simulator 文件操作失败（降级，不阻塞）: %s", e)
     return series
 
 

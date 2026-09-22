@@ -141,8 +141,9 @@ def wire_verdict(
                 if os.path.exists(path):
                     with open(path, "rb") as f:
                         input_hashes[name] = _sha256(f.read())[:12]
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).warning("_s44_wire 失败（降级，不阻塞）: %s", e)
 
     # ── Recorder.save (R4) ──
     # params 存 round_trip_cost + n_comparisons（reproduce_verdict 重算 verify 要，

@@ -115,8 +115,8 @@ def _ensure_table() -> None:
             _ensure_column(conn, "universe_returns", col, defn)
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("vibe-research").warning("forward_test DB 列 ensure 失败（降级，不阻塞）: %s", e)
 
 
 def _wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:

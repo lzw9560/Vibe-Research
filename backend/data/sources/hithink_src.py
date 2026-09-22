@@ -91,8 +91,8 @@ def _resolve_api_key() -> str:
         )
         if r.returncode == 0 and r.stdout.strip():
             return r.stdout.strip()
-    except (subprocess.SubprocessError, OSError):
-        pass
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.warning("hithink subprocess 失败（降级，不阻塞）: %s", e)
     raise DependencyMissing(
         "hithink API Key 未配置：设 HITHINK_FINANCE_API_KEY（.env）或 hithink-finance auth login"
     )
@@ -106,8 +106,8 @@ def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
     if retry_after:
         try:
             return min(float(retry_after), _MAX_RETRY_AFTER_S)
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as e:
+            logger.debug("hithink parse 失败（降级，不阻塞）: %s", e)
     base = min(1000 * (2 ** attempt), 8000) / 1000.0  # 秒
     return base + base * 0.2 * random.random()
 

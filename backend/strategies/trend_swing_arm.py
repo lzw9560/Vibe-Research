@@ -124,8 +124,8 @@ def select_trend_candidates(date: str | None = None) -> list[dict]:
             if keep:
                 kept.append({**c, "st_play": st_play} if st_play else c)
         candidates = kept
-    except Exception:
-        pass  # tradability 不可用 → 不过滤（降级不阻塞）
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.warning("trend_swing_arm tradability 不可用（降级不阻塞）: %s", e)  # tradability 不可用 → 不过滤（降级不阻塞）
 
     score_map = {s["industry"]: s["composite_score"] for s in top}
     candidates.sort(key=lambda c: c.get("sector_rank") or 999)

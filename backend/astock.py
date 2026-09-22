@@ -308,8 +308,8 @@ def full_valuation(code: str) -> dict:
                     })  # CONSISTENT/SINGLE_SOURCE 不标（不打扰）
         if discrepancies:
             out["discrepancy"] = discrepancies
-    except Exception:  # noqa: BLE001 — cross_validate 故障不阻塞估值
-        pass
+    except Exception as e:  # noqa: BLE001 — cross_validate 故障不阻塞估值
+        logging.getLogger("astock").warning("cross_validate 故障不阻塞估值: %s", e)
 
     try:
         rows = profit_forecast(code)
@@ -336,8 +336,8 @@ def full_valuation(code: str) -> dict:
             eps_26 = _eps(row)
             try:
                 out["analyst_count"] = int(float(row.get("预测机构数") or 0))
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as e:
+                logging.getLogger("astock").debug("analyst_count int parse 失败（降级，不阻塞）: %s", e)
         elif "2027" in y:
             eps_27 = _eps(row)
 

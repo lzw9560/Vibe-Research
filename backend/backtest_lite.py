@@ -33,8 +33,8 @@ def _load_cache() -> dict[str, dict[str, Any]]:
     try:
         if _CACHE_FILE.exists():
             return json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("backtest_lite").warning("backtest_lite 失败（降级，不阻塞）: %s", e)
     return {}
 
 
@@ -43,8 +43,8 @@ def _save_cache(cache: dict[str, dict[str, Any]]) -> None:
     try:
         _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         _CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("backtest_lite").warning("backtest_lite 失败（降级，不阻塞）: %s", e)
 
 
 @dataclass
@@ -150,8 +150,8 @@ async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
                     "data_source": getattr(g, "data_source", "eastmoney_live"),
                     "missing_factors": getattr(g, "missing_factors", []),
                 })
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("backtest_lite").warning("backtest_lite 失败（降级，不阻塞）: %s", e)
         current = _next_trading_day(current)
 
     return points
@@ -170,8 +170,8 @@ def _next_trading_day(date_str: str) -> str:
         if cal_file.exists():
             with open(cal_file, "r", encoding="utf-8") as f:
                 _holidays = set(json.load(f).get("holidays", []))
-    except Exception:
-        pass  # 加载失败则跳过节假日过滤
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("backtest_lite").warning("节假日过滤加载失败→跳过: %s", e)
 
     d = datetime.strptime(date_str, "%Y-%m-%d")
     while True:
@@ -236,8 +236,8 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
                     "data_source": getattr(g, "data_source", "eastmoney_live"),
                     "missing_factors": getattr(g, "missing_factors", []),
                 })
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("backtest_lite").warning("backtest_lite 失败（降级，不阻塞）: %s", e)
         current = _next_trading_day(current)
 
     hit_rate = hit_count / total_signals if total_signals else 0.0

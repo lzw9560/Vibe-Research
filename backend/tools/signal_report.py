@@ -165,8 +165,8 @@ def _get_reference_price(code: str, target_date: str) -> tuple[float | None, str
             price = info.get("price") or info.get("close")
             if price is not None and float(price) > 0:
                 return float(price), "live"
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("signal_report 失败（降级，不阻塞）: %s", e)
     return None, "N/A"
 
 

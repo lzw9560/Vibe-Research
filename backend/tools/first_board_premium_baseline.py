@@ -353,8 +353,9 @@ def main(days_back: int = 120):
                     if i and i % RELOGIN_BATCH == 0:
                         try:
                             bs.logout()
-                        except Exception:
-                            pass
+                        except Exception as e:  # noqa: BLE001
+                            import logging
+                            logging.getLogger(__name__).warning("first_board_premium_baseline 失败（降级，不阻塞）: %s", e)
                         if not _login():
                             print(f"[baseline] re-login 失败 @ {i}")
                             break
@@ -384,8 +385,9 @@ def main(days_back: int = 120):
                             fb["source"] = "baostock"
                 try:
                     bs.logout()
-                except Exception:
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    import logging
+                    logging.getLogger(__name__).warning("first_board_premium_baseline 失败（降级，不阻塞）: %s", e)
 
     # ---------- 计算溢价 ----------
     premiums: list[float] = []

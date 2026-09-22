@@ -85,8 +85,8 @@ def build_pool(sample: int = 30) -> list[str]:
     print(f"[proxy_pool] working（能到 push2his）: {len(working)}")
     try:
         _POOL_CACHE.write_text(json.dumps(working, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("proxy_pool 失败（降级，不阻塞）: %s", e)
     return working
 
 

@@ -67,8 +67,9 @@ def watchlist_add(body: WatchlistCodesIn) -> Dict[str, Any]:
                 try:
                     db.execute("INSERT INTO watchlist (code) VALUES (?)", (code,))
                     added += 1
-                except sqlite3.IntegrityError:
-                    pass  # 已存在，跳过
+                except sqlite3.IntegrityError as e:
+                    import logging
+                    logging.getLogger(__name__).debug("watchlist 已存在，跳过: %s", e)
             db.commit()
             total = db.execute("SELECT COUNT(*) AS cnt FROM watchlist").fetchone()["cnt"]
             return {"added": added, "total": total}

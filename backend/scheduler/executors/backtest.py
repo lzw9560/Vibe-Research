@@ -107,8 +107,8 @@ def s066_validation_checkpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         ckpt_path = Path(resolve_data_dir()) / "s066_60day_due.json"
         ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("backtest executor 失败（降级，不阻塞）: %s", e)
     logger.warning(
         "[s066_checkpoint] §44 60 天复验 DUE：eastmoney_live=%d 日 → 跑 backfill --weather 查 lift", days)
     return ckpt
@@ -194,8 +194,8 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         ckpt_path = Path(resolve_data_dir()) / "s151_evaluation_backtest_due.json"
         ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("backtest executor 失败（降级，不阻塞）: %s", e)
     if written_back:
         logger.warning(
             "[evaluation_backtest] S151 回溯 DUE（%s）自动写回 %d 维度：%s；signal_days=%d picks_n=%d",
@@ -429,6 +429,6 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         stuck_path.write_text(json.dumps(stuck, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("backtest executor 失败（降级，不阻塞）: %s", e)
     return {"today": today, "dates_processed": summary, "stuck": len(stuck)}

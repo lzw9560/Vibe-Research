@@ -128,8 +128,9 @@ def _count_new(buckets: dict[tuple[str, str], list[dict]]) -> int:
             for table in tables:
                 try:
                     total += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                except sqlite3.OperationalError:
-                    pass  # 表不存在 → 0
+                except sqlite3.OperationalError as e:
+                    import logging
+                    logging.getLogger(__name__).debug("migrate 表不存在→0（幂等，不阻塞）: %s", e)
         finally:
             conn.close()
     return total
