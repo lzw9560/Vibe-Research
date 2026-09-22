@@ -574,8 +574,8 @@ def _get_recent_bars(code: str) -> list[dict] | None:
     （诚实降级，反包 C2/C3/C4 + 接力 C2 data_unavailable，不臆造）。
     """
     try:
-        from engine.bars_provider import _load_cache
-        bars = _load_cache().get(code, [])
+        from engine.kline_cache_store import get_bars
+        bars = get_bars(code)
     except Exception:  # noqa: BLE001 — cache 加载失败降级 None（不崩）
         return None
     if not bars or len(bars) < 2:

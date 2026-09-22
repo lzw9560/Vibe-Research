@@ -22,38 +22,8 @@ from candidate_funnel.models import (
 )
 from candidate_funnel.eight_standards import check_eight_standards
 
-# S094 修复：baostock_kline_cache.json（147MB）模块级缓存——首次读一次解析，
-# 后续从内存 dict 按 code 取。原 per-code read_bytes+json.loads 52 次 = 7.6GB IO，
-# 每只 13-15s × 52 = 780s 卡死 _collect。
-_KLINE_CACHE: dict | None = None
-_KLINE_CACHE_MTIME: float = 0.0  # S184 w3pvh9q8f P1: mtime 检测（kline_refresh 写新 bar 后自动失效重读）
-
-
-def _get_kline_cache() -> dict:
-    """惰性加载 baostock_kline_cache.json + mtime 检测（kline_refresh 写新 bar 后自动失效重读）。
-
-    w3pvh9q8f grill：原 _KLINE_CACHE_LOADED 永不 reset，17:15 kline_refresh 写新 bar 但
-    diagnosis 仍读旧内存 cache。改 mtime 检测——文件更新自动失效重读。
-    """
-    global _KLINE_CACHE, _KLINE_CACHE_MTIME
-    try:
-        import json as _json
-        from vr_paths import resolve_data_dir as _resolve_data_dir
-        _kc = _resolve_data_dir() / "baostock_kline_cache.json"
-        if not _kc.exists():
-            return {}
-        try:
-            mtime = _kc.stat().st_mtime
-        except OSError:
-            mtime = 0.0
-        if _KLINE_CACHE is not None and mtime == _KLINE_CACHE_MTIME:
-            return _KLINE_CACHE
-        _KLINE_CACHE = _json.loads(_kc.read_bytes())
-        _KLINE_CACHE_MTIME = mtime
-        return _KLINE_CACHE
-    except Exception:
-        _KLINE_CACHE = None
-        return {}
+# baostock kline cache 已迁 SQLite（engine.kline_cache_store），模块级 _KLINE_CACHE 删除——
+# per-code 走 get_bars(code)（~0 常驻，~2ms/查），全量走 load_all()（一次性 spike 非常驻）。
 
 
 def assess_activity(ind: IndicatorSet, eff: BaseThreshold) -> ActivityAssessment:
@@ -210,7 +180,8 @@ def build_indicator_set(
     # S094 修复：模块级缓存——147MB JSON 首次读一次，后续从内存按 code 取（原 per-code
     # 重复 read_bytes + json.loads 52 次 = 7.6GB IO，每只 13-15s × 52 = 780s 卡死 _collect）
     try:
-        _bars = _get_kline_cache().get(code, [])
+        from engine.kline_cache_store import get_bars
+        _bars = get_bars(code)
         if _bars:
             _closes = [b.get("close", 0) for b in _bars if b.get("close")]
             if len(_closes) >= 20:

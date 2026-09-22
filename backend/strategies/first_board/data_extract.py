@@ -19,10 +19,8 @@ from strategies.first_board.universe import _to_float  # noqa: E402
 
 _logger = logging.getLogger(__name__)
 
-# baostock_kline_cache 模块级缓存（code → bars list）。
-# 31MB JSON 只读一次到内存，extract_chip_structure 复用，避免每只候选重读全文件（2s/只 → 0ms）。
-_KLINE_CACHE: dict[str, list[dict]] | None = None
-_KLINE_CACHE_MTIME: float = 0.0  # S094 audit fix: 追踪文件 mtime，refresh 脚本重写盘后下次调用重载（防进程内 memo 吐 stale bars）
+# baostock kline cache 已迁 SQLite（engine.kline_cache_store），模块级 _KLINE_CACHE 删除——
+# per-code 走 get_bars(code)（~0 常驻，~2ms/查）。
 
 # 沪深300 涨跌幅模块级缓存（date → pct%），避免 _market_drop_pct 重复 baostock login。
 # baostock 查历史指数不入 kline_cache（缓存只含个股），故用 baostock 库实时查历史。
@@ -62,7 +60,8 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
     # 归一 date 为 YYYY-MM-DD（baostock 缓存用此格式）
     d = date if "-" in date else f"{date[:4]}-{date[4:6]}-{date[6:8]}"
     try:
-        bars = _get_kline_cache().get(code, [])
+        from engine.kline_cache_store import get_bars
+        bars = get_bars(code)
         if not bars:
             return {}
         # 精确匹配 date 当日 bar（对齐 _bar_close: scheduled_tasks.py:1885 == 范式）。
@@ -104,33 +103,12 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
 
 
 def _get_kline_cache() -> dict[str, list[dict]]:
-    """模块级懒加载 baostock_kline_cache.json（只读一次，后续复用）。
+    """deprecated 全量 load（offline 兼容）；per-code 走 engine.kline_cache_store.get_bars。
 
-    31MB JSON 首次读约 2s，后续 0ms。run_first_board_filter 跑 52 只首板
-    时只读一次，避免每只重读全文件（旧实现 52×2s=100s+ 卡死）。
+    保留接口防 break 外部 import。从 SQLite 全量读（2.19GB 峰值一次性 local，非常驻）。
     """
-    global _KLINE_CACHE, _KLINE_CACHE_MTIME
-    from vr_paths import resolve_data_dir
-    cache_path = resolve_data_dir() / "baostock_kline_cache.json"
-    # S094 audit fix: 文件 mtime 变（refresh 脚本原子重写盘）→ 重载，防进程内 memo 吐 stale bars
-    try:
-        cur_mtime = cache_path.stat().st_mtime if cache_path.exists() else 0.0
-    except Exception:
-        cur_mtime = 0.0
-    if _KLINE_CACHE is not None and cur_mtime == _KLINE_CACHE_MTIME:
-        return _KLINE_CACHE  # memo 新鲜（mtime 未变）
-    try:
-        if not cache_path.exists():
-            _KLINE_CACHE = {}
-            _KLINE_CACHE_MTIME = 0.0
-            return _KLINE_CACHE
-        cache = json.loads(cache_path.read_bytes())
-    except Exception as e:
-        _logger.warning("_get_kline_cache 读取失败 err=%s", e)
-        cache = {}
-    _KLINE_CACHE = cache
-    _KLINE_CACHE_MTIME = cur_mtime
-    return cache
+    from engine.kline_cache_store import load_all
+    return load_all()
 
 
 def extract_sector(code: str) -> dict:

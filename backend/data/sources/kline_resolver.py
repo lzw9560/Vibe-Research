@@ -136,39 +136,14 @@ def _eastmoney(code: str) -> list[dict]:
 
 # --- cache fallback（两源都失败时的最后兜底）---
 
-_CACHE: dict | None = None  # lazy load（482MB JSON，首次两源都失败时 load 一次，进程内复用）
-
-
-def _cache_path():
-    """cache 文件路径（baostock_kline_cache.json）。"""
-    try:
-        from vr_paths import resolve_data_dir  # noqa: PLC0415
-        return resolve_data_dir() / "baostock_kline_cache.json"
-    except Exception:  # noqa: BLE001
-        return None
-
-
 def _load_cache() -> dict:
-    """lazy load baostock_kline_cache.json（{code: [bars]}）。进程内复用。
+    """全量 load（deprecated；生产走 _cache_bars per-code 内部 get_bars）。
 
-    482MB JSON，load 约 3-5s + ~1GB 内存，但仅在两源都失败时触发（fallback 的
-    fallback，频率极低）。load 后进程内 O(1) 查。文件不存在/解析失败返 {}（不臆造、
-    不抛），标记已尝试避免反复 stat。
+    从 SQLite 全量读（2.19GB 峰值一次性 local，非常驻）。原模块级 _CACHE + mtime
+    已删——SQLite 是源，refresh upsert 增量更新。保留接口兼容 offline 工具。
     """
-    global _CACHE
-    if _CACHE is not None:
-        return _CACHE
-    p = _cache_path()
-    if p is None or not p.exists():
-        _CACHE = {}  # 标记已尝试，避免反复 stat
-        return _CACHE
-    import json  # noqa: PLC0415
-    try:
-        _CACHE = json.loads(p.read_bytes())
-    except Exception as e:  # noqa: BLE001
-        log.warning("kline cache load failed: %s", repr(e)[:200])
-        _CACHE = {}
-    return _CACHE
+    from engine.kline_cache_store import load_all
+    return load_all()
 
 
 def _cache_bars(code: str) -> list[dict]:
@@ -178,8 +153,8 @@ def _cache_bars(code: str) -> list[dict]:
     pctChg/isST），映射到 9 字段（date/open/close/high/low/volume/amount + ma=None）。
     code 不在 cache / cache 不存在返 []（不臆造）。
     """
-    cache = _load_cache()
-    bars = cache.get(code)
+    from engine.kline_cache_store import get_bars
+    bars = get_bars(code)
     if not bars:
         return []
     out: list[dict] = []

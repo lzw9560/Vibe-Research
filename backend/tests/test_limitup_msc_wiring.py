@@ -36,50 +36,50 @@ def _bar(date, close, volume, open_=None):
 
 def test_get_recent_bars_last_two(monkeypatch):
     """cache 有 3 bars → 返尾部 2 bars（T-1+T，date asc）。"""
-    import engine.bars_provider as bp
+    import engine.kline_cache_store as kcs
     bars = [_bar("2026-09-10", 9.0, 100), _bar("2026-09-11", 9.5, 120), _bar("2026-09-12", 10.0, 150)]
-    monkeypatch.setattr(bp, "_load_cache", lambda: {"000001": bars})
+    monkeypatch.setattr(kcs, "get_bars", lambda code: bars)
     got = _get_recent_bars("000001")
     assert got == bars[-2:]
 
 
 def test_get_recent_bars_two_exactly(monkeypatch):
     """cache 恰 2 bars → 返全部 2 bars。"""
-    import engine.bars_provider as bp
+    import engine.kline_cache_store as kcs
     bars = [_bar("2026-09-11", 9.5, 120), _bar("2026-09-12", 10.0, 150)]
-    monkeypatch.setattr(bp, "_load_cache", lambda: {"000001": bars})
+    monkeypatch.setattr(kcs, "get_bars", lambda code: bars)
     got = _get_recent_bars("000001")
     assert got == bars
 
 
 def test_get_recent_bars_code_missing(monkeypatch):
     """cache 无该 code → None（诚实降级，不臆造）。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {"999999": []})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [])
     assert _get_recent_bars("000001") is None
 
 
 def test_get_recent_bars_insufficient(monkeypatch):
     """cache 仅 1 bar → None（不足 2 bars 无法算量比/吞没）。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {"000001": [_bar("2026-09-12", 10.0, 150)]})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [_bar("2026-09-12", 10.0, 150)])
     assert _get_recent_bars("000001") is None
 
 
 def test_get_recent_bars_empty(monkeypatch):
     """cache 该 code 为空 list → None。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {"000001": []})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [])
     assert _get_recent_bars("000001") is None
 
 
 def test_get_recent_bars_load_failure(monkeypatch):
     """_load_cache 异常 → None（不崩，降级）。"""
-    import engine.bars_provider as bp
+    import engine.kline_cache_store as kcs
 
-    def _boom():
+    def _boom(code):
         raise RuntimeError("disk gone")
-    monkeypatch.setattr(bp, "_load_cache", _boom)
+    monkeypatch.setattr(kcs, "get_bars", _boom)
     assert _get_recent_bars("000001") is None
 
 
@@ -89,33 +89,33 @@ def test_get_recent_bars_load_failure(monkeypatch):
 
 def test_build_msc_includes_bars(monkeypatch):
     """msc.bars = baostock cache 尾部 2 bars。"""
-    import engine.bars_provider as bp
+    import engine.kline_cache_store as kcs
     bars = [_bar("2026-09-11", 9.5, 120), _bar("2026-09-12", 10.0, 150)]
-    monkeypatch.setattr(bp, "_load_cache", lambda: {"000001": bars})
+    monkeypatch.setattr(kcs, "get_bars", lambda code: bars)
     msc = _build_limitup_msc(_gene("000001"), "2026-09-14", lbc=2)
     assert msc["bars"] == bars
 
 
 def test_build_msc_includes_lbc(monkeypatch):
     """msc.lbc 透传 lbc 参数。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [])
     msc = _build_limitup_msc(_gene("000001"), "2026-09-14", lbc=3)
     assert msc["lbc"] == 3
 
 
 def test_build_msc_lbc_default_none(monkeypatch):
     """未传 lbc → msc.lbc=None（诚实，不臆造 0）。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [])
     msc = _build_limitup_msc(_gene("000001"), "2026-09-14")
     assert msc["lbc"] is None
 
 
 def test_build_msc_bars_none_when_missing(monkeypatch):
     """cache 无该 code → msc.bars=None（反包/接力 C2 data_unavailable 降级）。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [])
     msc = _build_limitup_msc(_gene("000001"), "2026-09-14", lbc=2)
     assert msc["bars"] is None
     assert msc["lbc"] == 2  # lbc 仍有（独立来源）
@@ -123,8 +123,8 @@ def test_build_msc_bars_none_when_missing(monkeypatch):
 
 def test_build_msc_preserves_phase1_keys(monkeypatch):
     """phase 2 不破 phase 1：seal/zt_count_today/high_gene/sector_rank 仍在。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [])
     msc = _build_limitup_msc(
         _gene("000001", industry="电子", high_gene=True, seal_to_float_ratio=0.006),
         "2026-09-14", lbc=2,
@@ -137,8 +137,8 @@ def test_build_msc_preserves_phase1_keys(monkeypatch):
 
 def test_build_msc_keys_complete(monkeypatch):
     """msc 含 phase1 + phase2 全键。"""
-    import engine.bars_provider as bp
-    monkeypatch.setattr(bp, "_load_cache", lambda: {})
+    import engine.kline_cache_store as kcs
+    monkeypatch.setattr(kcs, "get_bars", lambda code: [])
     msc = _build_limitup_msc(_gene("000001"), "2026-09-14", lbc=2)
     for k in ("seal_to_float_ratio", "zt_count_today", "high_gene", "sector_rank", "bars", "lbc"):
         assert k in msc, f"missing key {k}"

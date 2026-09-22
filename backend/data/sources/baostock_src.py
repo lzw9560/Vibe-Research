@@ -71,6 +71,13 @@ def logout() -> None:
         pass
 
 
+# 进程退出时 teardown baostock session（R1 fix，2026-09-22：ensure_login singleton
+# 无 atexit，长驻 scheduler 进程持服务端 session 不释放。atexit 吞异常，不阻塞退出）
+import atexit  # noqa: E402
+
+atexit.register(logout)
+
+
 def _to_bs_code(code: str) -> str:
     """接受 6 位裸 code 或 9 位 baostock code（含 '.'）。9 位直接返。"""
     if "." in code:

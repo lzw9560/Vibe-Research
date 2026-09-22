@@ -26,40 +26,23 @@ import logging
 from typing import Any
 
 from engine.pctchg_injector import enrich_pctchg
+from engine.kline_cache_store import get_bars, invalidate, load_all
 from vr_paths import resolve_data_dir
 
 _logger = logging.getLogger(__name__)
 
-#: 模块级 raw bars cache（懒加载，reload() 清空）
-_CACHE: dict[str, list[dict]] | None = None
-
 
 def _load_cache() -> dict[str, list[dict]]:
-    """读 baostock_kline_cache.json（resolve_data_dir），缺失/损坏返空 dict 不崩。
+    """全量 load（deprecated，offline 工具兼容；生产热路径走 get_bars per-code）。
 
-    降级范式对齐 first_board_filter（memory fallback-empty-write-corrupts）：
-    cache 缺失/损坏不阻塞生产，返空让 bars_provider 调用方（journal_recorder）
-    跳过该 code（`if not bars: continue`，journal_recorder.py:137）。
+    从 SQLite 全量读（2.19GB 峰值一次性 local，非常驻）。offline 工具
+    （backfill_kline_to_2018 / verify_gap_classification / s198_gate_verify /
+    limitup_strategy）调用，峰值可接受。生产热路径（journal / quant API /
+    signal_report）走 ``get_bars(code)`` per-code（~0 常驻，~2ms/查）。
+
+    降级范式：SQLite/迁移异常返空 dict 不崩，调用方跳过该 code（不臆造）。
     """
-    global _CACHE
-    if _CACHE is not None:
-        return _CACHE
-    path = resolve_data_dir() / "baostock_kline_cache.json"
-    if not path.exists():
-        _logger.warning("bars_provider: kline cache 缺失 path=%s，A股 bars 降级返空", path)
-        _CACHE = {}
-        return _CACHE
-    try:
-        data = json.loads(path.read_bytes())
-        if not isinstance(data, dict):
-            _logger.warning("bars_provider: kline cache 非 dict (%s)，降级返空", type(data).__name__)
-            _CACHE = {}
-        else:
-            _CACHE = data
-    except (json.JSONDecodeError, OSError) as e:
-        _logger.warning("bars_provider: kline cache 损坏 %s，降级返空", e)
-        _CACHE = {}
-    return _CACHE
+    return load_all()
 
 
 def _is_etf(code: str) -> bool:
@@ -166,7 +149,7 @@ class KlineCacheBarsProvider:
     def __call__(self, code: str) -> list[dict]:
         if _is_etf(code):
             return self._etf_bars(code)
-        cached = _load_cache().get(code, [])
+        cached = get_bars(code)  # SQLite per-code 查（~2ms，~0 常驻），替代全量 load 2.19GB
         if cached:
             # S204 T1b: 注 pctChg（baostock cache 0.3% bars pctChg=0.0 含一字板 →
             # is_unbuyable 读 0.0<9.8 误判可买 → 假交易。enrich 0.0/缺失复算覆盖，非零保留）
@@ -213,9 +196,8 @@ class KlineCacheBarsProvider:
 
     @classmethod
     def reload(cls) -> None:
-        """清模块级 cache（kline_refresh 16:30 刷完 cache 后重读）。"""
-        global _CACHE
-        _CACHE = None
+        """清 SQLite connection（kline_refresh 刷完 cache 后释放 page cache）。"""
+        invalidate()
 
 
 __all__ = ["KlineCacheBarsProvider"]

@@ -263,19 +263,16 @@ def _compute_t1_returns(
     从 baostock_kline_cache 读 F 日 close + T 日 close。缺数据跳过（不臆造收益）。
     """
     try:
-        from strategies.premarket_selection import KLINE_CACHE
-        import json
-
-        cache = json.loads(KLINE_CACHE.read_bytes())
+        from engine.kline_cache_store import get_bars
     except Exception as e:  # noqa: BLE001
-        logger.warning("[S101] t1 读 kline cache 失败: %s", e)
+        logger.warning("[S101] kline_cache_store 导入失败: %s", e)
         return []
 
     out: list[dict] = []
     for c in final_cards:
         code = c.get("code", "")
         name = c.get("name", "") or code
-        bars = cache.get(code, [])
+        bars = get_bars(code)  # per-code 查（~2ms，~0 常驻），替代全量 load 2.19GB spike
         f_close = _bar_close(bars, f_date)
         t_close = _bar_close(bars, t_date)
         if f_close and t_close and f_close > 0:

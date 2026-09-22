@@ -22,7 +22,7 @@ from strategies.pattern_scan import PatternScan, _compute_ma, compute_relative_s
 
 def compute_sector_stock_rank_map(
     sector_stocks: list[str],
-    bars_map: dict[str, list[dict]],
+    bars_map,  # dict[str, list[dict]] | Callable[[str], list[dict]]（duck typing）
     days: int = 5,
 ) -> dict[str, int]:
     """板块内全部成分股的 relative_strength 降序排名表（spec R11 批量版，领涨子）。
@@ -32,6 +32,9 @@ def compute_sector_stock_rank_map(
     本函数是板块内个股排名，供 dragon_head.match 读 market_scan_ctx.sector_rank
     （板块内≤3 命中，R9）。
 
+    bars_map: {code: [bars]} **或** per-code getter（Callable[[str], list[dict]]，
+    如 engine.kline_cache_store.get_bars）——后者避免 endpoint 全量 load 2.19GB spike。
+
     口径：板块内 sector_ret 对所有成分股是恒定偏移，故相对强度排名 ≡ 绝对 5 日
     涨幅排名（精确同序，非近似）。用 compute_relative_strength(sb, None, days)
     取个股 5 日涨幅（其 sector_bars=None 分支即返个股涨幅，pattern_scan 既定语义），
@@ -40,9 +43,10 @@ def compute_sector_stock_rank_map(
     """
     if not sector_stocks:
         return {}
+    _get = bars_map if callable(bars_map) else (lambda c: bars_map.get(c) or [])
     scored: list[tuple[str, float]] = []
     for s in sector_stocks:
-        sb = bars_map.get(s) or []
+        sb = _get(s) or []
         ret = compute_relative_strength(sb, None, days)
         if ret is not None:
             scored.append((s, ret))
@@ -99,14 +103,16 @@ def _load_code_names(codes: list[str]) -> dict[str, str]:
 def build_non_limitup_candidates(
     top: list[dict],
     industry_map: dict[str, str],
-    cache: dict[str, list[dict]],
+    cache,  # dict[str, list[dict]] | Callable[[str], list[dict]]（duck typing）
     per_sector: int = 20,
 ) -> list[dict]:
     """T8：产非涨停候选（统一 shape {code,name,bars,sector,sector_rank,close}，spec R14）。
 
     top: sector_rotation 的 strength_rank 项 [{industry, zt_count_today, rank, ...}]（含板块间 rank）。
     industry_map: {code: industry}（load_industry_map）。
-    cache: baostock_kline_cache {code: [bars]}。
+    cache: baostock_kline_cache {code: [bars]} **或** per-code getter
+    (Callable[[str], list[dict]]，如 engine.kline_cache_store.get_bars)——后者避免
+    endpoint 全量 load 2.19GB spike（per-code 查 ~0 内存，~2ms/查）。
     per_sector: 每板块成分股上限（性能预算 §3.M，≤50）。
 
     - bars<20 跳过（既有口径，MA 自算需足够窗口）。
@@ -115,6 +121,7 @@ def build_non_limitup_candidates(
       market_scan_ctx/dragon_head R9 板块内≤3 命中）；注意与 top[].rank（板块间）同名不同语境。
     - close=bars[-1].close。
     """
+    _get = cache if callable(cache) else (lambda c: cache.get(c, []))
     candidates: list[dict] = []
     all_codes: list[str] = []
     sector_stocks_map: dict[str, list[str]] = {}  # ind → 板块全成分股（rank 用全成分，非采样子集）
@@ -125,7 +132,7 @@ def build_non_limitup_candidates(
         stocks = get_sector_stocks(ind, industry_map)
         sector_stocks_map[ind] = stocks
         for code in stocks[:per_sector]:
-            bars = cache.get(code, [])
+            bars = _get(code)
             if len(bars) >= 20:
                 candidates.append({"code": code, "bars": bars, "sector": ind})
                 all_codes.append(code)
@@ -133,7 +140,7 @@ def build_non_limitup_candidates(
     name_map = _load_code_names(all_codes)
     # 板块内排名（全成分，非 per_sector 采样子集）——每板块算一次
     sector_rank_intra = {
-        ind: compute_sector_stock_rank_map(stocks, cache)
+        ind: compute_sector_stock_rank_map(stocks, _get)
         for ind, stocks in sector_stocks_map.items()
     }
     for cand in candidates:
@@ -197,15 +204,14 @@ def gather_non_limitup_candidates(
     from strategies.pattern_scan import load_industry_map
     from strategies.non_limitup_funnel import run_non_limitup_funnel
     from strategies.strategy_funnel_registry import score_candidates
-    from strategies.first_board_filter import _get_kline_cache
+    from engine.kline_cache_store import get_bars
 
     rot = sector_rotation(date)
     top = [s for s in rot.get("strength_rank", []) if s.get("zt_count_today", 0) > 0][:top_sectors]
     if not top:
         return {"candidates": [], "count": 0, "sectors_scanned": 0, "candidates_input": 0}
     industry_map = load_industry_map()
-    cache = _get_kline_cache()
-    candidates = build_non_limitup_candidates(top, industry_map, cache, per_sector)
+    candidates = build_non_limitup_candidates(top, industry_map, get_bars, per_sector)
     # S148 接入点②：可交易性过滤（ST radar carve-out + 创业板/科创板/北交所 排除），与涨停叉 R1 同口径
     from candidate_funnel.sources._filters import classify_tradability  # noqa: PLC0415
     from candidate_funnel.sources.st_play_radar import load_st_play_radar  # noqa: PLC0415

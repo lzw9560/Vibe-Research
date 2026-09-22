@@ -133,13 +133,17 @@ class TestDispatch:
 
 class TestReload:
     def test_reload_rereads_cache(self, tmp_path):
+        """SQLite upsert + reload(invalidate) + get_bars 读新数据（kline_refresh 后重读）。
+
+        改 SQLite store 后：upsert_bars 直写 SQLite，reload 清 conn，get_bars 读最新。
+        """
         from engine.bars_provider import KlineCacheBarsProvider
-        _write_cache(tmp_path, {"600519": [_stock_bar()]})
+        from engine.kline_cache_store import upsert_bars
+        upsert_bars("600519", [_stock_bar()])
         prov = KlineCacheBarsProvider()
         assert len(prov("600519")) == 1
-        # 改 cache 文件 → reload → 新数据（kline_refresh 后重读）
-        _write_cache(tmp_path, {"600519": [
-            _stock_bar(), _stock_bar(date="2026-09-08", close=101.0)]})
+        # upsert 新数据（2 bars）→ reload(invalidate 清 conn）→ 读新
+        upsert_bars("600519", [_stock_bar(), _stock_bar(date="2026-09-08", close=101.0)])
         KlineCacheBarsProvider.reload()
         bars = KlineCacheBarsProvider()("600519")
         assert len(bars) == 2

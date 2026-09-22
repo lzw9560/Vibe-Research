@@ -29,44 +29,18 @@ KLINE_CACHE = ROOT.parent / ".vibe-research" / "baostock_kline_cache.json"
 
 _logger = logging.getLogger(__name__)
 
-# S184 调研（wvaq7kuod）：每次重读 156MB JSON 46s，10 周 52 天=40min 纯 IO。模块级缓存 + mtime 检测
-# （kline_refresh 写新 bar 后 mtime 变，自动失效重读）。首次 46s 后续 0ms。
-_KLINE_CACHE: dict[str, list[dict]] | None = None
-_KLINE_CACHE_MTIME: float = 0.0
-
-
 def _load_kline_cache() -> dict[str, list[dict]]:
-    """读 baostock_kline_cache.json，缺失/损坏返空 dict（降级不崩，对齐 first_board_filter 范式）。
+    """全量 load（deprecated，offline 工具兼容；生产热路径走 per-code）。
 
-    模块级缓存（S184 调研 wvaq7kuod）：首次 json.loads 46s，后续 mtime 未变直接返缓存 0ms。
-    kline_refresh 写新 bar 后文件 mtime 变，自动失效重读。
+    从 SQLite 全量读（2.19GB 峰值一次性 local，非常驻）。原模块级 _KLINE_CACHE +
+    mtime 检测已删——SQLite 是源，refresh upsert 增量更新，无需 mtime 失效。
 
-    baostock 未装或首次运行时缓存文件不存在，裸读会抛 FileNotFoundError 冒泡至 endpoint
-    返 500（违 S069"dev 无 baostock 降级不崩"契约）。此处 exists()+try 守卫，返 {} 使调用方
-    降级为空候选列表而非崩。返 {} 诚实（不臆造 kline），与 first_board_filter.py
-    ``_get_kline_cache`` / first_board_premium_baseline.py exists()+try 同范式（S113 R2）。
+    ~25 处 offline 工具 import 本函数返全量 dict（一次性脚本，峰值可接受）。
+    生产热路径（endpoint/journal）走 ``engine.kline_cache_store.get_bars(code)``
+    per-code（~0 常驻，~2ms/查）。降级范式：SQLite 异常返空 dict 不崩（不臆造）。
     """
-    global _KLINE_CACHE, _KLINE_CACHE_MTIME
-    if not KLINE_CACHE.exists():
-        _logger.warning(
-            "baostock kline cache 缺失（未装/首次运行）path=%s，盘前选股降级返空候选", KLINE_CACHE
-        )
-        return {}
-    # mtime 检测——cache 文件更新（kline_refresh 写新 bar）自动失效重读
-    try:
-        mtime = KLINE_CACHE.stat().st_mtime
-    except OSError:
-        mtime = 0.0
-    if _KLINE_CACHE is not None and mtime == _KLINE_CACHE_MTIME:
-        return _KLINE_CACHE
-    try:
-        _KLINE_CACHE = json.loads(KLINE_CACHE.read_bytes())
-        _KLINE_CACHE_MTIME = mtime
-        return _KLINE_CACHE
-    except Exception as e:  # noqa: BLE001
-        _KLINE_CACHE = None
-        _logger.warning("baostock kline cache 读取失败，降级返空候选: %s", e)
-        return {}
+    from engine.kline_cache_store import load_all
+    return load_all()
 
 
 def _load_code_name_map() -> dict[str, str]:
@@ -143,14 +117,16 @@ def select_premarket_candidates(
     target_date: T（选 T 的候选，用 T-1 kline 算 breakout）。
     返回 top-N candidates（breakout 分数降序）。
     """
-    cache = _load_kline_cache()
-    if not cache:
-        # baostock 未装/首次运行/缓存损坏 → 降级返空候选（非 500 崩，对齐 S069 降级不崩契约）
+    from engine.kline_cache_store import get_all_codes, get_bars
+    codes = get_all_codes()
+    if not codes:
+        # baostock 未装/首次运行/SQLite 空 → 降级返空候选（非 500 崩，对齐 S069 降级不崩契约）
         return []
     # spec §8 盲点 #6：baostock kline bar 无 name 字段，从 gene_scores 表补名
     code_names = _load_code_name_map()
     candidates: list[PreMarketCandidate] = []
-    for code, bars in cache.items():
+    for code in codes:
+        bars = get_bars(code)  # per-code 查（~2ms，~0 常驻），替代全量 load 2.19GB spike
         if not bars:
             continue
         r = _compute_breakout(bars, target_date)

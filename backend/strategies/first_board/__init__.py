@@ -30,8 +30,6 @@ from strategies.first_board.data_extract import (
     _get_kline_cache,
     extract_sector,
     _HS300_PCT_CACHE,
-    _KLINE_CACHE,
-    _KLINE_CACHE_MTIME,
 )
 from strategies.first_board.persistence import (
     save_scores,
@@ -84,8 +82,8 @@ __all__ = [
     # universe
     "fetch_zt_pool", "filter_first_board", "_market_phase", "_to_float",
     "_fbt_to_hhmm", "PHASE_TO_CAP_TIER", "EXCLUDE_THRESHOLDS",
-    "MARKET_PHASE_WEIGHTS", "_HS300_PCT_CACHE", "_KLINE_CACHE",
-    "_KLINE_CACHE_MTIME", "em_zt_topic_pool", "concept_blocks", "_emotion",
+    "MARKET_PHASE_WEIGHTS", "_HS300_PCT_CACHE",
+    "em_zt_topic_pool", "concept_blocks", "_emotion",
     "ROOT", "_logger",
     # data_extract
     "extract_chip_structure", "_get_kline_cache", "extract_sector",

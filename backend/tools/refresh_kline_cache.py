@@ -71,10 +71,9 @@ def _resolve_refresh_end_date(default_end: str, fetch_fn) -> tuple[str, bool]:
 
 
 def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
-    # T21 R20：cache 不存在时建空（首次全 A 扩容），不再 return 1
-    cache: dict[str, list[dict]] = (
-        json.loads(CACHE.read_bytes()) if CACHE.exists() else {}
-    )
+    # SQLite store（替代全量 json.loads 482MB→2.19GB 峰值）：per-code get_bars + 批量 upsert
+    from engine.kline_cache_store import get_bars, get_all_codes, upsert_many
+    to_upsert: list[tuple[str, list[dict]]] = []
     end_date = _last_trading_date()
     # 传 codes 优先（刷特定 picks），否则 load_industry_map 全 A（~5540）
     if not codes:
@@ -82,8 +81,8 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
             from strategies.pattern_scan import load_industry_map
             codes = list(load_industry_map().keys())
         except Exception as e:
-            print(f"[refresh] load_industry_map 失败，降级增量 list(cache.keys()): {e}")
-            codes = list(cache.keys())
+            print(f"[refresh] load_industry_map 失败，降级增量 get_all_codes(): {e}")
+            codes = get_all_codes()
     # S094 audit LOW: universe 空(load_industry_map 返空 + cache 空,baostock login 失败?)→ 中止不写回,避免伪装成功
     if not codes:
         print(f"[refresh] universe 空(load_industry_map+cache 均空),中止不写回(防伪装成功)")
@@ -124,7 +123,7 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
                     break
                 print(f"[refresh] re-login @ {i}/{len(codes)} elapsed={time.time()-t0:.0f}s")
 
-            existing = cache.get(code)
+            existing = get_bars(code)
             if existing:
                 newest = existing[-1]["date"] if existing else FULL_START
                 if newest >= end_date:
@@ -153,12 +152,12 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
                 # 只 append 严格新于 newest 的 bar
                 appended = [b for b in new_bars if b["date"] > newest]
                 if appended:
-                    cache[code] = existing + appended
+                    to_upsert.append((code, existing + appended))
                     new_bars_total += len(appended)
                     updated += 1
             else:
                 # T21 R20：新股全量插入
-                cache[code] = new_bars
+                to_upsert.append((code, new_bars))
                 new_bars_total += len(new_bars)
                 new_codes_added += 1
 
@@ -168,15 +167,16 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
     finally:
         logout()
 
-    # 原子写：temp → rename
-    tmp = CACHE.with_suffix(".json.tmp")
-    tmp.write_bytes(json.dumps(cache, ensure_ascii=False).encode("utf-8"))
-    tmp.replace(CACHE)
+    # 批量 upsert SQLite（per-code INSERT OR REPLACE，替代全量 dump 482MB→2.19GB 峰值）
+    if to_upsert:
+        upsert_many(to_upsert)
 
     print(f"[refresh] done: {updated}/{len(codes)} updated, {new_codes_added} new codes, "
           f"{new_bars_total} new bars, {skipped} already-fresh, elapsed={time.time()-t0:.0f}s")
-    print(f"[refresh] end_date={end_date} cache_size={len(cache)} "
-          f"newest now={max((b['date'] for c in cache.values() for b in c[-1:]), default='?')}")
+    # newest 取 to_upsert 最后一 bar（cache 不再全量 load，从 SQLite 算 newest）
+    newest_now = max((b['date'] for _, bars in to_upsert for b in bars[-1:]), default='?')
+    print(f"[refresh] end_date={end_date} upserted={len(to_upsert)} "
+          f"newest now={newest_now}")
     return 0
 
 

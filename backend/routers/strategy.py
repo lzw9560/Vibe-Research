@@ -265,7 +265,7 @@ async def get_non_limitup_funnel(
     # S094 T21：复用 first_board_filter._get_kline_cache 模块级 memo（只读一次后续复用），
     # 替代每请求 json.loads 全量 cache（T21 扩容到全 A ~150MB 后是 perf 悬崖）。
     # build_non_limitup_candidates 只读 cache（cache.get，不 mutate）→ 共享 memo 安全。
-    from strategies.first_board_filter import _get_kline_cache
+    from engine.kline_cache_store import get_bars
 
     rot = sector_rotation(date)
     top = [s for s in rot.get("strength_rank", []) if s.get("zt_count_today", 0) > 0][:top_sectors]
@@ -273,12 +273,12 @@ async def get_non_limitup_funnel(
         return {"data": {"candidates": [], "count": 0, "sectors_scanned": 0, "note": "无热门板块（当日无涨停板块）"}}
 
     industry_map = load_industry_map()
-    cache = _get_kline_cache()
+    # per-code getter 替代 cache = _get_kline_cache()（全量 load 2.19GB spike）
 
     # S094 T8：候选生产抽到 market_scan.build_non_limitup_candidates——统一 shape
     # {code,name,bars,sector,sector_rank,close}（name 从 code_industry 反查，sector_rank=板块内 T7，
     # close=bars[-1]）。S3 R26 gather_non_limitup_candidates(date) 会在此外包 sector_rotation。
-    candidates = build_non_limitup_candidates(top, industry_map, cache, per_sector)
+    candidates = build_non_limitup_candidates(top, industry_map, get_bars, per_sector)
 
     sector_rank_map = {s["industry"]: s.get("rank", 99) for s in top}  # 板块间
     # S094 T16: run_non_limitup_funnel 只产候选(with pattern) → score_candidates(market_scan) 打分+check_quality 闸

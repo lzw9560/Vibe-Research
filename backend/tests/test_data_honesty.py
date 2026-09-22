@@ -210,7 +210,7 @@ def test_extract_chip_structure_missing_day_bar_returns_empty_not_yesterday(monk
             {"date": "2026-08-14", "turn": 8.5, "amount": 2.0e8, "volume": 120000.0},  # 昨日
         ]
     }
-    monkeypatch.setattr(fbf, "_get_kline_cache", lambda: bars)
+    monkeypatch.setattr("engine.kline_cache_store.get_bars", lambda code: bars.get(code, []))
 
     # Act：请求日 2026-08-15 不在 cache
     result = fbf.extract_chip_structure("600519", "2026-08-15")

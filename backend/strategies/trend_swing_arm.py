@@ -99,7 +99,7 @@ def select_trend_candidates(date: str | None = None) -> list[dict]:
     """
     from strategies.pattern_scan import load_industry_map  # noqa: PLC0415
     from strategies.market_scan import build_non_limitup_candidates  # noqa: PLC0415
-    from strategies.first_board_filter import _get_kline_cache  # noqa: PLC0415
+    from engine.kline_cache_store import get_bars  # noqa: PLC0415
 
     if date is None:
         from vr_paths import prev_trading_date_str  # noqa: PLC0415
@@ -110,8 +110,7 @@ def select_trend_candidates(date: str | None = None) -> list[dict]:
         return []
 
     industry_map = load_industry_map()
-    cache = _get_kline_cache()
-    candidates = build_non_limitup_candidates(top, industry_map, cache, per_sector=20)
+    candidates = build_non_limitup_candidates(top, industry_map, get_bars, per_sector=20)
 
     # tradability 过滤（非 §44 因子，实用交易约束）
     try:

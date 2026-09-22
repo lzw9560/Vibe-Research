@@ -33,8 +33,6 @@ from strategies.first_board.data_extract import (
     _get_kline_cache,
     extract_sector,
     _HS300_PCT_CACHE,
-    _KLINE_CACHE,
-    _KLINE_CACHE_MTIME,
 )
 from strategies.first_board.exclusions import (
     exclude_layer1_seal_quality,
@@ -83,7 +81,7 @@ __all__ = [
     "_logger",
     # data_extract
     "extract_chip_structure", "_get_kline_cache", "extract_sector",
-    "_HS300_PCT_CACHE", "_KLINE_CACHE", "_KLINE_CACHE_MTIME",
+    "_HS300_PCT_CACHE",
     # exclusions
     "exclude_layer1_seal_quality", "exclude_layer2_chip_structure",
     "exclude_layer3_market_env", "_sector_zt_count", "_market_drop_pct",
