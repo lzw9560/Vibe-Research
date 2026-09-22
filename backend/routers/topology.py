@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import date as _date
 from typing import Any, Callable, Protocol
 
@@ -213,6 +214,22 @@ def _pairwise_shared(code_sets: dict[str, set[str]], edge_type: str, min_shared:
     return edges
 
 
+# per-code TTL 缓存（跨 request 复用，concept/fund/dragon 半静态 → 减少 em_get N+1 封 IP 风险）
+_FETCH_CACHE: dict[tuple[str, str, str | None], tuple[float, Any]] = {}
+_FETCH_TTL = 1800  # 30min（行业/资金流/席位半静态，盘中不变）
+_FETCH_CACHE_MAX = 2000  # max-size 驱逐（防无界增长）
+
+
+def _evict_fetch_cache() -> None:
+    """驱逐过期 + 超 max-size 驱逐最老。"""
+    now = time.time()
+    for k in [k for k, (ts, _) in _FETCH_CACHE.items() if now - ts >= _FETCH_TTL]:
+        _FETCH_CACHE.pop(k, None)
+    if len(_FETCH_CACHE) > _FETCH_CACHE_MAX:
+        for k, _ in sorted(_FETCH_CACHE.items(), key=lambda kv: kv[1][0])[:len(_FETCH_CACHE) - _FETCH_CACHE_MAX]:
+            _FETCH_CACHE.pop(k, None)
+
+
 def _collect_shared_sets(
     candidates: list[dict],
     fetch_fn: "Callable[[str, str | None], Any]",
@@ -229,18 +246,31 @@ def _collect_shared_sets(
     fetch_fn 接收 (code, date)；忽略 date 的 provider 在闭包内弃用 _d 即可。
     LadderEdgeProvider 逻辑不同（同高度配对+行业加权），保持独立不并入本骨架。
     S048 R9：min_shared 透传 _pairwise_shared（sector=2 / fund_flow=3 / seat=1 默认）。
+
+    per-code TTL 缓存（30min）：原 per-candidate em_get N×3（~240 串行，阻塞事件循环 120s +
+    封 IP 风险）→ 命中缓存不走 em_get。concept/fund/dragon 半静态（盘中不变），跨 request
+    复用安全（extract_fn 只读 raw 不修改）。
     """
     code_sets: dict[str, set[str]] = {}
+    now = time.time()
     for c in candidates:
         code = c.get("code", "")
         if not code:
             continue
-        try:
-            raw = fetch_fn(code, date)
-        except Exception as exc:  # noqa: BLE001 — 单候选数据源失败不阻塞其他候选
-            logger.warning("%s provider: 取数(%s) 失败: %s", edge_type, code, exc)
-            code_sets[code] = set()
-            continue
+        key = (edge_type, code, date)
+        cached = _FETCH_CACHE.get(key)
+        if cached and now - cached[0] < _FETCH_TTL:
+            raw = cached[1]
+        else:
+            try:
+                raw = fetch_fn(code, date)
+            except Exception as exc:  # noqa: BLE001 — 单候选数据源失败不阻塞其他候选
+                logger.warning("%s provider: 取数(%s) 失败: %s", edge_type, code, exc)
+                code_sets[code] = set()
+                continue
+            _FETCH_CACHE[key] = (now, raw)
+            if len(_FETCH_CACHE) > _FETCH_CACHE_MAX:
+                _evict_fetch_cache()
         code_sets[code] = extract_fn(raw)
     return _pairwise_shared(code_sets, edge_type, min_shared=min_shared)
 

@@ -22,6 +22,15 @@ from routers.topology import (
     register_edge_provider,
 )
 
+
+@pytest.fixture(autouse=True)
+def _clear_fetch_cache():
+    """每测试清 topology per-code 缓存（防跨测串扰 mock fetch_fn）。"""
+    topology._FETCH_CACHE.clear()
+    yield
+    topology._FETCH_CACHE.clear()
+
+
 # ── 测试用候选（节点=候选标的，去重） ──
 _CANDIDATES = [
     {"code": "600519", "name": "贵州茅台"},
