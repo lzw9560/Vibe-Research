@@ -49,6 +49,7 @@ def _make_em_get(industry="电子", boards=None, clist_calls=None, pages=None):
 @pytest.fixture(autouse=True)
 def _clear_sector_cache(monkeypatch):
     monkeypatch.setattr(ff, "_sector_cache", {})
+    monkeypatch.setattr(ff, "_INDUSTRY_CACHE", {})  # perf: _industry_of 改查表，mock 空表走 em_get fallback
 
 
 class TestFetchSectorFlow:
