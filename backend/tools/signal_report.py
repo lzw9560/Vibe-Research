@@ -460,7 +460,7 @@ def _build_disclaimers(regime: str, cap_mult: float) -> list[str]:
     disclaimers = [
         "统计验证（非已实现收益）—— edge 衰减中（train 1.57%→test 1.04% 跌 34%）",
         "paper-only 无券商（零真交易）—— 接券商前所有战绩 paper，要真获益须手动在券商下单",
-        "照做有风险 —— cap（75%/50%）是统计信心不是保本，真钱仓位由你手动定",
+        f"照做有风险 —— cap ×{cap_mult} 是统计信心不是保本，真钱仓位由你手动定",
         "非自动交易 —— 本系统不自动下单，须手动在券商下单",
     ]
     if regime == "bull":
