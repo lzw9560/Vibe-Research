@@ -351,8 +351,9 @@ def _build_seat_detail(code: str, trade_date: str | None) -> dict | None:
         if seat_risk is not None:
             score_modifier = seat_risk.score_modifier
             risk_label = seat_risk.risk_label
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("compute_seat_risk_factor 失败（降级，不阻塞）: %s", e)
     return {
         "buy_one_ratio": details.get("buy_one_ratio"),
         "buy_seat_types": details.get("buy_seat_types") or [],

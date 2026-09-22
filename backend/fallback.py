@@ -79,8 +79,8 @@ def save_cache(key: str, data: Any, ttl: int = _MEM_TTL) -> None:
     try:
         path = _cache_path(key)
         path.write_text(json.dumps({"ts": now, "data": data}, ensure_ascii=False))
-    except Exception:
-        pass  # 缓存写入失败不影响主流程
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("fallback").warning("缓存写入失败（降级，不影响主流程）: %s", e)
 
 
 def load_cache(key: str, ttl: int = _MEM_TTL) -> Any | None:
@@ -105,8 +105,8 @@ def load_cache(key: str, ttl: int = _MEM_TTL) -> Any | None:
             # 下次实时取数正常时由 save_cache 重建。
             try:
                 path.unlink()
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                logging.getLogger("fallback").warning("缓存文件删除失败（降级，不阻塞）: %s", e)
             _MEM_CACHE.pop(key, None)
             return None
         _MEM_CACHE[key] = (ts, data)

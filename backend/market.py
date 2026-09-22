@@ -218,8 +218,9 @@ def _emotion_uncached(date: str | None = None) -> dict:
             _today_str = _now.strftime("%Y-%m-%d")
             if date == _today_str and _now.hour < 15:
                 return {}
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("vr_paths 取当日数据失败（降级，不阻塞）: %s", e)
 
     # S049 同花顺交叉验证 / 降级源标识（默认主源正常、未交叉验证）
     cross_source = None

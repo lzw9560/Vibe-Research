@@ -46,8 +46,9 @@ def _check_threshold_sanity(params: LimitUpParamsBody) -> List[str]:
                     f"合格阈值 {params.gene_qualify_threshold} 高于近 30 日最高分 {max_score}，"
                     f"qualify 将恒为空"
                 )
-    except Exception:
-        pass  # 查询失败不阻塞保存（无 DB / 空表等）
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("查询失败不阻塞保存（降级）: %s", e)
     return warnings
 
 

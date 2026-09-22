@@ -225,8 +225,8 @@ def _fetch_zt_next_pool(target_date: str) -> list:
             )
             if pool:
                 return [zt_pool_item_from_dict(it) for it in pool]
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            _logger.warning("em_zt_topic_pool 取数失败（降级，继续下一天）: %s", e)
         next_d += _td(days=1)
     return []
 

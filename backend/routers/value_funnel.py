@@ -173,8 +173,9 @@ def deep_ai(code: str, llm: LLMConfig):
             for k in ("baseURL", "apiKey", "model"):
                 if not cfg.get(k) and env.get(k):
                     cfg[k] = env[k]
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("LLM 配置装配失败（降级，不阻塞）: %s", e)
         if not cfg.get("apiKey") or not cfg.get("baseURL"):
             raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」配置，或用订阅接入(cli-claude)")
 

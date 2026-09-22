@@ -63,8 +63,9 @@ def build_analysis_skeleton(code: str, name: str = "") -> models.CompanyAnalysis
     try:
         info = company_info_from_individual_info(astock.individual_info(code) or {})
         industry = info.industry or ""
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("l3_analysis 行业信息取数失败（降级，不阻塞）: %s", e)
     biz = f"{name or code}（{industry}）" if industry else (name or code)
 
     return models.CompanyAnalysis(

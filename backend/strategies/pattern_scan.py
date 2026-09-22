@@ -103,8 +103,9 @@ def _save_industry_cache(mapping: dict[str, str], ts: float) -> None:
             "mapping": mapping,
         }
         _INDUSTRY_CACHE_PATH.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("行业缓存写入失败（降级，不阻塞）: %s", e)
 
 
 def get_sector_stocks(industry_name: str, industry_map: dict[str, str] | None = None) -> list[str]:

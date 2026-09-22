@@ -364,8 +364,9 @@ def aggregate_multi(date: str) -> list[dict]:
     try:
         rows = conn.execute("SELECT code, industry FROM code_industry").fetchall()
         industry_map = {r[0]: r[1] for r in rows if r[1]}
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("code_industry 表查询失败（降级，不阻塞）: %s", e)
     finally:
         conn.close()
 

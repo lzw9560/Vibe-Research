@@ -459,10 +459,10 @@ class AuctionScreener:
                     "score": result.score,
                     "phase": result.phase.value if result.phase else None,
                 }
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("STIEngine get_latest 失败（降级，不阻塞）: %s", e)
         return None
-    
+
     def precompute_daily(self, date: str) -> AuctionScreenerResult:
         """每日预计算入口 — 由 app.py 15:35 调度器触发。"""
         result = self.analyze(date)

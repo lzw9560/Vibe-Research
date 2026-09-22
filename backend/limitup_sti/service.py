@@ -369,8 +369,8 @@ class STIEngine:
             try:
                 result = self.precompute_daily(date_str)
                 results.append(result)
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                _logger.warning("precompute_daily 失败（降级，跳过该日）: %s", e)
             current += timedelta(days=1)
             time.sleep(1.2)
 

@@ -494,8 +494,8 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
                 market_context["hot_sectors"] = [
                     {"name": s.get("industry")} for s in rank[:10] if s.get("industry")
                 ]
-            except Exception:
-                pass  # hot_sectors 缺失时标准⑦降级 missing（已有逻辑）
+            except Exception as e:  # noqa: BLE001
+                logger.warning("hot_sectors 注入失败（降级 missing，不阻塞）: %s", e)
     except Exception:
         market_context = None
 

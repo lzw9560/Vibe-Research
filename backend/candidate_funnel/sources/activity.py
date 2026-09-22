@@ -191,8 +191,9 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
             try:
                 c, entry = fu.result()
                 out[c] = entry
-            except Exception:
-                pass  # per-code 异常 → 下面兜底 missing
+            except Exception as e:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).warning("per-code 历史行情取数失败（降级兜底 missing）: %s", e)
     for c in codes:
         if c not in out:
             out[c] = {"missing": {"turnover_pct": "活跃度未取得"}}
@@ -305,8 +306,9 @@ def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
                 try:
                     c, entry = fu.result()
                     out[c] = entry
-                except Exception:
-                    pass  # per-code 异常 → 下面兜底 missing
+                except Exception as e:  # noqa: BLE001
+                    import logging
+                    logging.getLogger(__name__).warning("per-code 实时行情取数失败（降级兜底 missing）: %s", e)
         for c in batch:
             if c not in out:
                 out[c] = {"missing": {"turnover_pct": "行情未取得"}}
