@@ -57,6 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: "市场全景", tabs: [
         { to: "/market", label: "市场全景" },
         { to: "/intraday", label: "盘中 cockpit" },
+        { to: "/workflow/intraday-monitor", label: "盘中监控" },  // S227
         { to: "/stock-data", label: "个股数据" },
       ]},
       { name: "选股·漏斗", tabs: [
@@ -72,12 +73,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: "打板", tabs: [
         { to: "/limitup", label: "打板策略" },
         { to: "/limitup/premarket", label: "盘前选股" },
+        { to: "/limitup/auction-screener", label: "竞价筛选" },  // S227
+        { to: "/limitup/gene-screener", label: "基因筛选" },  // S227
+        { to: "/workflow/bomb-alerts", label: "炸板预警" },  // S227
       ]},
       { name: "资讯", tabs: [
         { to: "/intel", label: "资讯雷达" },
       ]},
     ],
-    matchPrefix: ["/workspace", "/market", "/intraday", "/screener", "/candidates", "/value-funnel", "/watchlist", "/bidding", "/limitup", "/recommendation", "/intel", "/stock-data", "/stock", "/sectors"],
+    matchPrefix: ["/workspace", "/market", "/intraday", "/screener", "/candidates", "/value-funnel", "/watchlist", "/bidding", "/limitup", "/recommendation", "/intel", "/stock-data", "/stock", "/sectors", "/workflow/bomb-alerts", "/workflow/intraday-monitor"],
   },
   {
     name: "复盘",
@@ -92,6 +96,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: "策略工作台", tabs: [
         { to: "/strategy", label: "策略验证" },
         { to: "/multiline", label: "多策略总览" },
+        { to: "/workflow/post-market-review", label: "盘后复盘" },  // S227
       ]},
       { name: "研判·风险", tabs: [
         { to: "/fusion", label: "融合研判" },
@@ -102,9 +107,10 @@ export const NAV_GROUPS: NavGroup[] = [
         { to: "/topology", label: "拓扑图" },
         { to: "/industry", label: "行业研究" },
         { to: "/tracking", label: "多日跟踪" },
+        { to: "/archive/first-board-pipeline", label: "首板流水线" },  // S227
       ]},
     ],
-    matchPrefix: ["/review", "/ledger", "/journal", "/portfolio", "/strategy", "/multiline", "/fusion", "/risk", "/advisory", "/topology", "/industry", "/tracking", "/workflow/candidates", "/workflow/factor"],
+    matchPrefix: ["/review", "/ledger", "/journal", "/portfolio", "/strategy", "/multiline", "/fusion", "/risk", "/advisory", "/topology", "/industry", "/tracking", "/workflow/candidates", "/workflow/factor", "/workflow/post-market-review", "/archive/first-board-pipeline"],
   },
   {
     name: "图谱",

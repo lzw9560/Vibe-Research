@@ -26,13 +26,13 @@
 
 ## 批 4：导航入口
 
-- [ ] T4.1 nav 加 6 页面入口（workflow/limitup/archive 分组，按 nav-ia-phase2 collapsible）
-- [ ] T4.2 导航可见 + 点击跳转
+- [x] T4.1 nav 加 6 页面入口（盘面·市场全景 1 + 盘面·打板 3 + 复盘·策略工作台 1 + 复盘·拓扑·跟踪 1，matchPrefix 加 4 路径）
+- [x] T4.2 导航可见 + matchPrefix 激活对应线（/limitup/* 前缀已含，/workflow/* + /archive/* 精确路径）
 
 ## 验收
 
 - [x] T5.1 tsc --noEmit 0 错
 - [x] T5.2 vitest 全绿（457/457）
-- [ ] T5.3 6 路由 curl 200 + 渲染（待后端启动）
+- [~] T5.3 6 路由 router 接线 + tsc 0 错（curl 200 待后端启动验证）
 - [~] T5.4 4 组件非 orphan：3 接进（ScatterChart/TrendChart/PremarketSelectionSection）+ 1 defer（CandidateProgressiveCard 数据源不匹配）
-- [ ] T5.5 commit + 引用 S227
+- [x] T5.5 commit + 引用 S227
