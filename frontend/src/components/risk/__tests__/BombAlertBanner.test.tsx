@@ -1,6 +1,7 @@
 // S055：炸板预警横幅 + sparkline 测试
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { BombAlertBanner, SealAmountSparkline } from "@/components/risk/BombAlertBanner";
 
 const mockApi = vi.hoisted(() => ({
@@ -16,7 +17,7 @@ describe("BombAlertBanner (S055)", () => {
 
   it("无预警时不渲染横幅", async () => {
     mockApi.bombAlerts.mockResolvedValue({ alerts: [], count: 0 });
-    const { container } = render(<BombAlertBanner />);
+    const { container } = render(<MemoryRouter><BombAlertBanner /></MemoryRouter>);
     expect(container.firstChild).toBeNull();
   });
 
@@ -30,7 +31,7 @@ describe("BombAlertBanner (S055)", () => {
       ],
       count: 1, note: "",
     });
-    render(<BombAlertBanner />);
+    render(<MemoryRouter><BombAlertBanner /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText("炸板红色预警")).toBeInTheDocument();
       expect(screen.getByText(/封单减 40%/)).toBeInTheDocument();
@@ -47,7 +48,7 @@ describe("BombAlertBanner (S055)", () => {
       ],
       count: 1, note: "",
     });
-    render(<BombAlertBanner />);
+    render(<MemoryRouter><BombAlertBanner /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText("炸板黄色预警")).toBeInTheDocument();
     });
@@ -63,7 +64,7 @@ describe("BombAlertBanner (S055)", () => {
       ],
       count: 1, note: "",
     });
-    const { container } = render(<BombAlertBanner />);
+    const { container } = render(<MemoryRouter><BombAlertBanner /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText("炸板红色预警")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button"));
     expect(container.firstChild).toBeNull();

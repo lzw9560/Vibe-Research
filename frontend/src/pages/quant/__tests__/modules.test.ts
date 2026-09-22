@@ -10,13 +10,13 @@ describe("QuantModules data (M3)", () => {
     ]);
   });
 
-  it("恰好 3 live（M1 OFI / M2 预期差 / M4 em_get防封）+ 4 planning", () => {
+  it("恰好 5 live（M1 OFI / M2 预期差 / M4 em_get防封 / M5 财报季 / M7 图谱）+ 2 planning", () => {
     const live = QUANT_MODULES.filter((m) => m.status === "live");
     const planning = QUANT_MODULES.filter((m) => m.status === "planning");
-    expect(live).toHaveLength(3);
-    expect(planning).toHaveLength(4);
-    expect(live.map((m) => m.key).sort()).toEqual(["M1", "M2", "M4"]);
-    expect(planning.map((m) => m.key).sort()).toEqual(["M3", "M5", "M6", "M7"]);
+    expect(live).toHaveLength(5);
+    expect(planning).toHaveLength(2);
+    expect(live.map((m) => m.key).sort()).toEqual(["M1", "M2", "M4", "M5", "M7"]);
+    expect(planning.map((m) => m.key).sort()).toEqual(["M3", "M6"]);
   });
 
   it("planning 模块不含 live 数据源（不臆造 live 数据入口；null/undefined 均可）", () => {
