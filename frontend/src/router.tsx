@@ -88,6 +88,14 @@ export const router = createBrowserRouter([
       { path: "/topology", element: lazyEl(() => import("@/pages/workflow/Topology"), "Topology") },  // FE-5: 拓扑图独立页（组件在 workflow/，旧 /workflow/topology redirect 到 /review，补独立 /topology）
       { path: "/tracking", element: lazyEl(() => import("@/pages/tracking/TrackingPage"), "TrackingPage") },  // S204 T9: 多日跟踪只读看板（活跃 track 池 + 指标快照演进）
 
+      // ─── S227 待接线页面（已实现未接 router，2026-09-22）───
+      { path: "/workflow/bomb-alerts", element: lazyEl(() => import("@/pages/workflow/BombAlertPanel")) },  // S227: 炸板预警（接 /api/risk/bomb-alerts）
+      { path: "/workflow/intraday-monitor", element: lazyEl(() => import("@/pages/workflow/IntradayMonitor")) },  // S227: 盘中监控（批2 补 useQuery /api/workflow/intraday）
+      { path: "/workflow/post-market-review", element: lazyEl(() => import("@/pages/workflow/PostMarketReview")) },  // S227: 盘后复盘（批2 补 useQuery /api/workflow/post-market）
+      { path: "/limitup/auction-screener", element: lazyEl(() => import("@/pages/limitup/AuctionScreener")) },  // S227: 竞价筛选（useAuctionTop）
+      { path: "/limitup/gene-screener", element: lazyEl(() => import("@/pages/limitup/GeneScreener")) },  // S227: 基因筛选（批2 补 useQuery /api/limitup/screener）
+      { path: "/archive/first-board-pipeline", element: lazyEl(() => import("@/pages/archive/FirstBoardPipeline")) },  // S227: 首板流水线（archive，useFirstBoardCandidates）
+
       // 系统域
       { path: "/settings", element: lazyEl(() => import("@/pages/Settings"), "Settings") },
       { path: "/chat", element: lazyEl(() => import("@/pages/ChatPage")) },  // FE-3: AI 对话网页入口（不依赖飞书 bot，调 /api/chat 流式）
