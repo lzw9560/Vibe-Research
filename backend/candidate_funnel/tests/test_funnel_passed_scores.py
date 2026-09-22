@@ -67,18 +67,19 @@ def test_run_funnel_r1r2_passed_带gene_score(mock_sources):
             assert p["gene_score"] == mock_sources[p["code"]]["gene_score"]
 
 
-def test_run_funnel_r3_passed_带gene_score和matched_triggers(mock_sources):
+def test_run_funnel_r2_passed_带gene_score和matched_triggers(mock_sources):
+    # S148(b)：R3 并入 R2 tradability，matched_triggers 在 R2 passed
     funnel.clear_funnel_cache()
     result = funnel.run_funnel("pre_market", "2026-08-10", ThresholdConfig())
     layers = {l.layer_id: l for l in result.layers}
-    r3_by_code = {p["code"]: p for p in layers["R3"].passed}
-    assert r3_by_code, "R3 passed 不应为空"
+    r2_by_code = {p["code"]: p for p in layers["R2"].passed}
+    assert r2_by_code, "R2 passed 不应为空"
     # 000001 有竞价 + 公告 → 两触发
-    assert r3_by_code["000001"]["gene_score"] == 52.17
-    assert set(r3_by_code["000001"]["matched_triggers"]) == {"竞价异动", "公告催化"}
+    assert r2_by_code["000001"]["gene_score"] == 52.17
+    assert set(r2_by_code["000001"]["matched_triggers"]) == {"竞价异动", "公告催化"}
     # 000002 仅公告 → 单触发
-    assert r3_by_code["000002"]["gene_score"] == 50.38
-    assert r3_by_code["000002"]["matched_triggers"] == ["公告催化"]
+    assert r2_by_code["000002"]["gene_score"] == 50.38
+    assert r2_by_code["000002"]["matched_triggers"] == ["公告催化"]
 
 
 # ---- S049 D1：全参数 passed dict 字段契约 ----
@@ -102,16 +103,15 @@ def test_r2_passed_全参数(mock_sources):
     assert p["vol_ratio"] == 1.8
     assert p["amount_yi"] == 12.0
     assert p["amplitude_pct"] == 5.0
-    assert p["main_net_inflow"] == 5000.0
-    assert p["main_net_5d"] == 20000.0
-    assert p["northbound"] == 800.0
+    # S148(b)：fund_flow 字段（main_net_inflow/main_net_5d/northbound）移到诊断卡，R2 passed 不补
 
 
-def test_r3_passed_带auction_open_pct和catalyst_summary(mock_sources):
+def test_r2_passed_带auction_open_pct和catalyst_summary(mock_sources):
+    # S148(b)：R3 并入 R2，auction_open_pct/catalyst_summary 在 R2 passed
     funnel.clear_funnel_cache()
     result = funnel.run_funnel("pre_market", "2026-08-10", ThresholdConfig())
-    r3 = {l.layer_id: l for l in result.layers}["R3"]
-    by_code = {p["code"]: p for p in r3.passed}
+    r2 = {l.layer_id: l for l in result.layers}["R2"]
+    by_code = {p["code"]: p for p in r2.passed}
     assert by_code["000001"]["auction_open_pct"] == 2.0
     assert by_code["000001"]["catalyst_summary"] == "回购"
 
@@ -129,8 +129,9 @@ def test_r2_passed_missing源字段为None(mock_sources):
         r2 = {l.layer_id: l for l in result.layers}["R2"]
         by_code = {p["code"]: p for p in r2.passed}
         if "000002" in by_code:
-            assert by_code["000002"]["main_net_inflow"] is None
-            assert by_code["000002"]["northbound"] is None
+            # S148(b)：fund_flow 字段移到诊断卡，R2 passed 不补 main_net_inflow/northbound
+            assert "main_net_inflow" not in by_code["000002"]
+            assert "northbound" not in by_code["000002"]
     finally:
         sources.fund_flow.fetch_fund_flow = orig
     funnel.clear_funnel_cache()
