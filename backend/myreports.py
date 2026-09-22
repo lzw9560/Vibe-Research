@@ -180,7 +180,7 @@ def delete_report(rid: str) -> bool:
         fp = REPORTS_DIR / f"{rid}{hit.get('ext', '')}"
         try:
             fp.unlink(missing_ok=True)
-        except OSError:
-            pass
+        except OSError as e:
+            logging.getLogger("vibe-research").warning("myReports 文件操作失败（降级，不阻塞）: %s", e)
         _save_index([r for r in items if r.get("id") != rid])
     return True
