@@ -235,8 +235,9 @@ class DailyReviewer:
                     "phase": result.phase.value if result.phase else None,
                     "change": round(change, 2) if change is not None else None,
                 }
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("daily_review STI score+change 查询失败→返 None（日报降级）: %s", e)
         return {"score": None, "phase": None, "change": None}
     
     def _calculate_sector_heat(self, zt_pool: list) -> list[SectorHeatItem]:

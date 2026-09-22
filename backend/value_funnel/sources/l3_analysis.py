@@ -25,14 +25,16 @@ def build_analysis_skeleton(code: str, name: str = "") -> models.CompanyAnalysis
     fin = Financials()
     try:
         fin = financials_from_dict(astock.financials(code) or {})
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("l3_analysis financials 解析失败 code=%s: %s", code, e)
 
     val = ValuationPercentile()
     try:
         val = valuation_percentile_from_dict(astock.valuation_percentile(code) or {})
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("l3_analysis valuation_percentile 解析失败 code=%s: %s", code, e)
 
     # 财务摘要（客观事实）
     fin_sum = ""

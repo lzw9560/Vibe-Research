@@ -81,8 +81,9 @@ def load_industry_map(force_refresh: bool = False) -> dict[str, str]:
                     _INDUSTRY_CACHE = mapping
                     _INDUSTRY_CACHE_TS = cache_ts
                     return mapping
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("pattern_scan 行业缓存加载失败→重新拉 BaoStock: %s", e)
 
     # 从 BaoStock 拉取
     mapping = fetch_stock_industry()
