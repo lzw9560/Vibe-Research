@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""S008 kline 解析器单测：多源 fallback 链（baostock → 东方财富 → cache）。
+"""S008 kline 解析器单测：多源 fallback 链（baostock → 东方财富 → hithink → cache）。
 
 2026-09-20 恢复多源：baostock 被拉黑后 fallback 东方财富，两源都失败用 cache。
+2026-09-23 加 hithink 第三源：baostock + 东财都封时 fallback hithink（fuyao HTTP）。
 
-不依赖真实网络——monkeypatch _baostock / _eastmoney / _cache_bars 注入
+不依赖真实网络——monkeypatch _baostock / _eastmoney / _hithink / _cache_bars 注入
 成功/抛异常/返空，验证解析器的 fallback 契约（顺序降级、不抛、不臆造、空返
 ([], None)）。
 """
@@ -55,12 +56,35 @@ def test_baostock_exc_fallback_eastmoney(monkeypatch):
     assert len(bars) == 1
 
 
-# --- 两源都失败 → cache fallback ---
+# --- baostock + 东财都失败 → fallback hithink ---
 
-def test_both_sources_empty_use_cache(monkeypatch):
-    """baostock + 东财都返空 → cache fallback 成功。"""
+def test_eastmoney_empty_fallback_hithink(monkeypatch):
+    """baostock + 东财都返空 → fallback hithink 成功。"""
     monkeypatch.setattr(kr, "_baostock", _stub(bars=[]))
     monkeypatch.setattr(kr, "_eastmoney", _stub(bars=[]))
+    monkeypatch.setattr(kr, "_hithink", _stub(bars=[{"date": "d1", "close": 10.0}]))
+    bars, src = kr.fetch_kline("600519")
+    assert src == "hithink"
+    assert len(bars) == 1
+
+
+def test_eastmoney_exc_fallback_hithink(monkeypatch):
+    """baostock + 东财都抛异常 → fallback hithink 成功。"""
+    monkeypatch.setattr(kr, "_baostock", _stub(exc=ConnectionError("bs 黑名单")))
+    monkeypatch.setattr(kr, "_eastmoney", _stub(exc=ConnectionError("em 熔断")))
+    monkeypatch.setattr(kr, "_hithink", _stub(bars=[{"date": "d1", "close": 10.0}]))
+    bars, src = kr.fetch_kline("600519")
+    assert src == "hithink"
+    assert len(bars) == 1
+
+
+# --- 三源都失败 → cache fallback ---
+
+def test_both_sources_empty_use_cache(monkeypatch):
+    """baostock + 东财 + hithink 都返空 → cache fallback 成功。"""
+    monkeypatch.setattr(kr, "_baostock", _stub(bars=[]))
+    monkeypatch.setattr(kr, "_eastmoney", _stub(bars=[]))
+    monkeypatch.setattr(kr, "_hithink", _stub(bars=[]))
     monkeypatch.setattr(kr, "_cache_bars", _stub(bars=[{"date": "d1", "close": 10.0}]))
     bars, src = kr.fetch_kline("600519")
     assert src == "cache"
@@ -68,9 +92,10 @@ def test_both_sources_empty_use_cache(monkeypatch):
 
 
 def test_both_sources_fail_use_cache(monkeypatch):
-    """baostock + 东财都抛异常 → cache fallback 成功。"""
+    """baostock + 东财 + hithink 都抛异常 → cache fallback 成功。"""
     monkeypatch.setattr(kr, "_baostock", _stub(exc=RuntimeError("baostock 黑名单")))
     monkeypatch.setattr(kr, "_eastmoney", _stub(exc=RuntimeError("em_get 熔断")))
+    monkeypatch.setattr(kr, "_hithink", _stub(exc=RuntimeError("hithink 熔断")))
     monkeypatch.setattr(kr, "_cache_bars", _stub(bars=[{"date": "d1", "close": 10.0}]))
     bars, src = kr.fetch_kline("600519")
     assert src == "cache"
@@ -80,9 +105,10 @@ def test_both_sources_fail_use_cache(monkeypatch):
 # --- 全失败（含 cache）→ 诚实返空 ---
 
 def test_all_fail_including_cache_returns_empty(monkeypatch):
-    """baostock + 东财 + cache 都空/失败 → ([], None)，不抛、不臆造。"""
+    """baostock + 东财 + hithink + cache 都空/失败 → ([], None)，不抛、不臆造。"""
     monkeypatch.setattr(kr, "_baostock", _stub(bars=[]))
     monkeypatch.setattr(kr, "_eastmoney", _stub(bars=[]))
+    monkeypatch.setattr(kr, "_hithink", _stub(bars=[]))
     monkeypatch.setattr(kr, "_cache_bars", _stub(bars=[]))
     bars, src = kr.fetch_kline("600519")
     assert bars == []
@@ -90,9 +116,10 @@ def test_all_fail_including_cache_returns_empty(monkeypatch):
 
 
 def test_all_sources_exc_cache_exc_returns_empty(monkeypatch):
-    """baostock + 东财 + cache 都抛异常 → ([], None)，cache 异常也吞。"""
+    """baostock + 东财 + hithink + cache 都抛异常 → ([], None)，cache 异常也吞。"""
     monkeypatch.setattr(kr, "_baostock", _stub(exc=RuntimeError("bs down")))
     monkeypatch.setattr(kr, "_eastmoney", _stub(exc=RuntimeError("em down")))
+    monkeypatch.setattr(kr, "_hithink", _stub(exc=RuntimeError("hithink down")))
     monkeypatch.setattr(kr, "_cache_bars", _stub(exc=RuntimeError("cache corrupt")))
     bars, src = kr.fetch_kline("600519")
     assert bars == []
@@ -102,20 +129,21 @@ def test_all_sources_exc_cache_exc_returns_empty(monkeypatch):
 # --- 源链注册表 ---
 
 def test_list_sources_order():
-    """源链：baostock + 东方财富（cache 不在 _SOURCES，是最后兜底）。"""
-    assert kr.list_sources() == ["baostock", "eastmoney"]
+    """源链：baostock + 东方财富 + hithink（cache 不在 _SOURCES，是最后兜底）。"""
+    assert kr.list_sources() == ["baostock", "eastmoney", "hithink"]
 
 
 def test_list_sources_by_adjust():
-    """list_sources(adjust) 按口径筛选——qfq 返两源，none 返空。"""
-    assert kr.list_sources(adjust="qfq") == ["baostock", "eastmoney"]
+    """list_sources(adjust) 按口径筛选——qfq 返三源，none 返空。"""
+    assert kr.list_sources(adjust="qfq") == ["baostock", "eastmoney", "hithink"]
     assert kr.list_sources(adjust="none") == []
 
 
 def test_adjust_of_map():
-    """各源原生口径声明（单一事实源）。baostock + 东财均 qfq。"""
+    """各源原生口径声明（单一事实源）。baostock + 东财 + hithink 均 qfq。"""
     assert kr.adjust_of("baostock") == "qfq"
     assert kr.adjust_of("eastmoney") == "qfq"
+    assert kr.adjust_of("hithink") == "qfq"
     assert kr.adjust_of("unknown") is None
 
 

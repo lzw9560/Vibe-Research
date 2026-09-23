@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-"""S008 日K线解析器——多源 fallback 链（baostock → 东方财富 → cache）。
+"""S008 日K线解析器——多源 fallback 链（baostock → 东方财富 → hithink → cache）。
 
 2026-09-20 恢复多源：baostock 单源后 baostock 把用户 IP 拉黑
 （``10001011 黑名单用户``），单点风险显现。现改顺序 fallback：
 baostock 优先（免费匿名 login，qfq 前复权，正常最稳）→ 失败/空/黑名单
 fallback 东方财富日K（via ``em_get`` 限流/熔断/代理探测防封，复用
 ``akshare_src._fetch_cyq_klines`` 验证过的 push2his kline/get 端点）→
-两源都失败用本地 cache（``baostock_kline_cache.json`` lazy load 进程内复用）。
+东财也封 fallback hithink 日K（fuyao HTTP 独立通道，非东财/腾讯域名不共享
+封禁）→ 三源都失败用本地 cache（``baostock_kline_cache.json`` lazy load 进程内复用）。
 不再单点 baostock。
+
+2026-09-23 加 hithink 第三源：baostock 黑名单（10001011）+ 东财 push2* IP 封
+两源都封时，hithink-finance fuyao HTTP 是独立数据通道（fuyao.aicubes.cn）。
+hithink_src.fetch_kline 已有 _http_get envelope 转译 + 有界重试 + 熔断，复用之。
 
 **顺序 fallback 而非并发抢答**：baostock 黑名单报错快（非超时），顺序不拖慢
 正常情况；并发会在 baostock 正常时也调东财，浪费 em_get 限流配额且 push2his
@@ -18,7 +23,7 @@ fallback 东方财富日K（via ``em_get`` 限流/熔断/代理探测防封，�
 ``_SOURCES`` + ``_SOURCE_ADJUST`` + 写 ``_xxx`` 函数，消费者零变更。
 
 返 tuple[list[dict], str | None]：bars + 命中源名（"baostock"/"eastmoney"/
-"cache"）。全失败返 ([], None)——不抛、不臆造，消费者按空决策（诚实无数据）。
+"hithink"/"cache"）。全失败返 ([], None)——不抛、不臆造，消费者按空决策（诚实无数据）。
 
 字段约定（raw bar dict）：date/open/close/high/low/volume/amount/ma5/ma10/ma20，
 缺字段=None（baostock/东财均无 ma，消费侧 ``_compute_ma`` 自算，
@@ -134,7 +139,43 @@ def _eastmoney(code: str) -> list[dict]:
     return bars[-60:] if len(bars) > 60 else bars
 
 
-# --- cache fallback（两源都失败时的最后兜底）---
+def _hithink(code: str) -> list[dict]:
+    """hithink 日K（qfq 前复权，fallback 源——baostock+东财都封/失败时启用）。
+
+    baostock 黑名单 + 东财 push2 IP 封时，hithink 是独立通道
+    （fuyao.aicubes.cn 非 东财/腾讯域名，不共享封禁风险）。直连 fuyao HTTP
+    （hithink_src._http_get）复用 envelope 转译 + 有界重试 + 熔断，
+    adjust=forward 前复权（对齐 baostock adjustflag=2 / 东财 fqt=1）。
+
+    返最近 60 交易日 bars（start=now-120 天容纳周末取 60 交易日）。
+    hithink 无 ma5/10/20——消费侧 _compute_ma 自算（pattern_scan:170-199）。
+    失败/熔断/Key 缺/空 → 返 []（不抛、不臆造），由 fetch_kline fallback cache。
+    """
+    from datetime import datetime, timedelta  # noqa: PLC0415
+    from data.sources.hithink_src import fetch_kline  # noqa: PLC0415
+
+    now = datetime.now()
+    start_ms = int((now - timedelta(days=120)).timestamp() * 1000)
+    end_ms = int(now.timestamp() * 1000)
+    bars_raw = fetch_kline(code, start_ms, end_ms, adjust="forward")
+    if not bars_raw:
+        return []
+    bars: list[dict] = []
+    for r in bars_raw[-60:]:
+        vol = r.get("volume")
+        amt = r.get("amount")
+        bars.append({
+            "date": r.get("date"),
+            "open": r.get("open"), "close": r.get("close"),
+            "high": r.get("high"), "low": r.get("low"),
+            "volume": int(vol) if vol else None,
+            "amount": float(amt) if amt else None,
+            "ma5": None, "ma10": None, "ma20": None,
+        })
+    return bars
+
+
+# --- cache fallback（三源都失败时的最后兜底）---
 
 def _load_cache() -> dict:
     """全量 load（deprecated；生产走 _cache_bars per-code 内部 get_bars）。
@@ -173,15 +214,17 @@ def _cache_bars(code: str) -> list[dict]:
 
 
 # 源链注册表（策略集，按名字）。2026-09-20：baostock + 东方财富（fallback）。
+# 2026-09-23：加 hithink 第三源（baostock 黑名单 + 东财 push2 IP 封时独立通道）。
 # cache 不在 _SOURCES（cache 是最后兜底，非"源"，不走 sources/adjust 筛选）。
 # 加源食谱：写 _xxx(code) 函数 + 在 _SOURCES 追加名字 + _SOURCE_ADJUST 声明口径。
-_SOURCES: list[str] = ["baostock", "eastmoney"]
+_SOURCES: list[str] = ["baostock", "eastmoney", "hithink"]
 
 # 各源原生复权口径（单一事实源）。消费者传 adjust="qfq" 时只走口径匹配的源。
-# baostock adjustflag=2 = 前复权 qfq；东财 fqt=1 = 前复权 qfq。
+# baostock adjustflag=2 = 前复权 qfq；东财 fqt=1 = 前复权 qfq；hithink adjust=forward = 前复权 qfq。
 _SOURCE_ADJUST: dict[str, str] = {
     "baostock": "qfq",
     "eastmoney": "qfq",
+    "hithink": "qfq",
 }
 
 
@@ -211,8 +254,9 @@ def fetch_kline(code: str, sources: list[str] | None = None,
     """取日K线。返 (bars, source_name)；全失败/超时返 ([], None)。
 
     顺序 fallback 链：baostock 优先 → 失败/空/黑名单 fallback 东方财富（em_get
-    防封）→ 两源都失败用 cache（lazy load baostock_kline_cache.json）→ cache 也没
-    有返 ([], None)。不抛、不臆造，消费者按空决策。
+    防封）→ 东财也封 fallback hithink（fuyao HTTP 独立通道）→ 三源都失败用
+    cache（lazy load baostock_kline_cache.json）→ cache 也没有返 ([], None)。
+    不抛、不臆造，消费者按空决策。
 
     baostock 黑名单报错快（非超时），顺序 fallback 不拖慢正常情况。sources/adjust
     参数限定源链子集/口径——空链返 ([], None)。
@@ -228,7 +272,7 @@ def fetch_kline(code: str, sources: list[str] | None = None,
         except Exception as e:  # noqa: BLE001 — 源失败吞异常，试下一个源
             log.warning("kline source %s failed for %s: %s", name, code, repr(e)[:200])
             continue
-    # 两源都失败 → cache fallback（最后兜底）。仅 sources 未限定时触发——
+    # 三源都失败 → cache fallback（最后兜底）。仅 sources 未限定时触发——
     # sources 参数限定源链子集，cache 不是"源"不在 _SOURCES，限定时不走 cache
     # （sources 限定意味着调用方接受"这些源都失败就返空"）。
     if sources is not None:
@@ -248,6 +292,6 @@ def fetch_kline(code: str, sources: list[str] | None = None,
 def list_sources(adjust: str | None = None) -> list[str]:
     """可用源名（按链顺序）。传 adjust 只返该口径源，供诊断/配置。
 
-    注：返的是 _SOURCES（baostock/eastmoney），不含 cache（cache 是最后兜底非"源"）。
+    注：返的是 _SOURCES（baostock/eastmoney/hithink），不含 cache（cache 是最后兜底非"源"）。
     """
     return _chain(None, adjust)

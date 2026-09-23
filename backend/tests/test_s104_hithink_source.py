@@ -444,3 +444,87 @@ class TestAuctionSnapshot:
             codes = [f"{i:06d}" for i in range(150)]
             out = hs.auction_snapshot(codes, stage="final")
         assert len(out) == 2  # 仅首批 2 行（次批 None 跳过）
+
+
+# ── fetch_kline（历史日K线，kline_resolver 第三源 fallback）──────────────────
+
+
+class TestFetchKline:
+    """hithink fetch_kline 契约：HTTP 取日K，pctChg 自算，失败返 [] 不抛。"""
+
+    # 两个交易日的 raw item（date_ms 为 UTC ms，1789660800000=2026-09-18 UTC+8）
+    _PAYLOAD = {"item": [
+        {"date_ms": 1789660800000, "volume": 53411244, "turnover": 218565095.78,
+         "open_price": 3.95, "high_price": 4.21, "low_price": 3.95, "close_price": 4.12},
+        {"date_ms": 1790006400000, "volume": 60000000, "turnover": 240000000.0,
+         "open_price": 4.12, "high_price": 4.30, "low_price": 4.10, "close_price": 4.25},
+    ]}
+
+    def test_returns_bars_with_correct_format(self):
+        """正常取数：返 bars，字段 date/open/high/low/close/volume/amount/pctChg。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            bars = hs.fetch_kline("000607", 1789660800000, 1790092800000)
+        assert len(bars) == 2
+        b0 = bars[0]
+        assert b0["date"] == "2026-09-18"
+        assert b0["open"] == 3.95
+        assert b0["high"] == 4.21
+        assert b0["low"] == 3.95
+        assert b0["close"] == 4.12
+        assert b0["volume"] == 53411244
+        assert b0["amount"] == 218565095.78
+        assert b0["pctChg"] is None  # 首条无前收
+
+    def test_pctchg_computed_from_close_series(self):
+        """pctChg = (close[i] - close[i-1]) / close[i-1] * 100，首条 None。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD):
+            bars = hs.fetch_kline("000607", 1789660800000, 1790092800000)
+        assert bars[0]["pctChg"] is None
+        # (4.25 - 4.12) / 4.12 * 100 ≈ 3.1553
+        assert bars[1]["pctChg"] is not None
+        assert abs(bars[1]["pctChg"] - 3.1553) < 0.01
+
+    def test_thscode_conversion_sh(self):
+        """6 开头 → .SH（thscode 传参验证）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD) as mock_get:
+            hs.fetch_kline("600519", 1789660800000, 1790092800000)
+        call_kwargs = mock_get.call_args
+        assert call_kwargs.args[1]["thscode"] == "600519.SH"
+
+    def test_thscode_conversion_sz(self):
+        """0/3 开头 → .SZ（thscode 传参验证）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD) as mock_get:
+            hs.fetch_kline("000001", 1789660800000, 1790092800000)
+        assert mock_get.call_args.args[1]["thscode"] == "000001.SZ"
+
+    def test_adjust_forward_default(self):
+        """默认 adjust=forward + interval=1d（对齐 baostock qfq，HTTP 端点必传 interval）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=self._PAYLOAD) as mock_get:
+            hs.fetch_kline("600519", 1789660800000, 1790092800000)
+        q = mock_get.call_args.args[1]
+        assert q["adjust"] == "forward"
+        assert q["interval"] == "1d"
+
+    def test_failure_returns_empty_not_raise(self):
+        """_http_get None（熔断/离线/Key 缺）→ 返 [] 不抛（kline_resolver fallback cache）。"""
+        with patch("data.sources.hithink_src._http_get", return_value=None):
+            assert hs.fetch_kline("600519", 1789660800000, 1790092800000) == []
+
+    def test_empty_items_returns_empty(self):
+        """data 有 item 但空（新股/无数据）→ 返 []。"""
+        with patch("data.sources.hithink_src._http_get", return_value={"item": []}):
+            assert hs.fetch_kline("600519", 1789660800000, 1790092800000) == []
+
+    def test_skips_rows_missing_ohlc(self):
+        """关键 OHLC 缺失行跳过（不臆造数据）。"""
+        payload = {"item": [
+            {"date_ms": 1789660800000, "open_price": None,
+             "high_price": 4.21, "low_price": 3.95, "close_price": 4.12},
+            {"date_ms": 1790006400000, "open_price": 4.12,
+             "high_price": 4.30, "low_price": 4.10, "close_price": 4.25},
+        ]}
+        with patch("data.sources.hithink_src._http_get", return_value=payload):
+            bars = hs.fetch_kline("000607", 1789660800000, 1790092800000)
+        assert len(bars) == 1  # 首行 OHLC 缺跳过
+        assert bars[0]["date"] == "2026-09-22"
+        assert bars[0]["pctChg"] is None  # 前一条被跳过，无 prev_close

@@ -65,6 +65,7 @@ _EP_ANOMALY_LIST = "/api/a-share/special-data/anomaly-analysis-list"
 _EP_ANOMALY_STOCK = "/api/a-share/special-data/anomaly-analysis-stock"
 _EP_LIMIT_UP_POOL = "/api/a-share/special-data/limit-up-pool"  # 涨停池（按历史日期）
 _EP_AUCTION_SNAPSHOT = "/api/a-share/auction/snapshot"  # 集合竞价快照（今日 only，不可补历史）
+_EP_MARKET_HISTORY = "/api/a-share/prices/historical"  # 历史日K线（market history）
 
 # 估值快照 5min TTL 缓存（盘中估值不变，省请求）
 _valuation_cache: dict[tuple[str, ...], tuple[float, dict[str, dict]]] = {}
@@ -397,6 +398,73 @@ def auction_snapshot(codes: list[str], stage: str = "final") -> list[dict]:
                 "data_status": it.get("data_status") or meta.get("data_status"),
             })
     return out
+
+
+def fetch_kline(code: str, start_ms: int, end_ms: int,
+                adjust: str = "forward") -> list[dict]:
+    """历史日K线——kline_resolver 第三源 fallback（baostock→东财→hithink）。
+
+    直连 fuyao HTTP（_http_get），复用 envelope 转译 + 有界重试 + 熔断。
+    baostock 黑名单 + 东财 push2 IP 封时，hithink 是独立通道（fuyao.aicubes.cn
+    非 东财/腾讯域名），不共享封禁风险。
+
+    :param code: 6 位裸 code（600519 / 000001 / 830xxx）
+    :param start_ms: UTC ms 起始时间
+    :param end_ms: UTC ms 结束时间
+    :param adjust: none / forward（前复权，默认，对齐 baostock qfq）/ backward
+    :return: bars list[dict]，每条 ``{date, open, high, low, close, volume,
+        amount, pctChg}``。date 格式 ``YYYY-MM-DD``（date_ms UTC+8 转）。
+        pctChg 从 close 序列算（首条 None）。
+        失败/熔断/Key 缺/空 → 返 [] + log warning（不静默吞错、不臆造）。
+    """
+    from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+
+    thscode = _to_thscode(code)
+    data = _http_get(_EP_MARKET_HISTORY, {
+        "thscode": thscode,
+        "start": start_ms,
+        "end": end_ms,
+        "adjust": adjust,
+        "interval": "1d",  # 日K线（CLI market history 默认 1d，HTTP 端点必传）
+    }, _TIMEOUT_DEFAULT)
+    if data is None:
+        return []
+
+    items = _items(data)
+    if not items:
+        return []
+
+    # 确保 date_ms 升序（pctChg 依赖前一条 close）
+    items.sort(key=lambda it: it.get("date_ms", 0))
+
+    tz_bj = timezone(timedelta(hours=8))
+    bars: list[dict] = []
+    prev_close: float | None = None
+    for it in items:
+        date_ms = it.get("date_ms")
+        if date_ms is None:
+            continue
+        o = it.get("open_price")
+        h = it.get("high_price")
+        lo = it.get("low_price")
+        c = it.get("close_price")
+        if any(x is None for x in (o, h, lo, c)):
+            continue  # 关键 OHLC 缺失行跳过
+        o, h, lo, c = float(o), float(h), float(lo), float(c)
+        v = it.get("volume")
+        amt = it.get("turnover")
+        pct: float | None = None
+        if prev_close is not None and prev_close != 0:
+            pct = round((c - prev_close) / prev_close * 100, 4)
+        bars.append({
+            "date": datetime.fromtimestamp(date_ms / 1000, tz=tz_bj).strftime("%Y-%m-%d"),
+            "open": o, "high": h, "low": lo, "close": c,
+            "volume": int(v) if v else None,
+            "amount": float(amt) if amt else None,
+            "pctChg": pct,
+        })
+        prev_close = c
+    return bars
 
 
 def _normalize_rank_items(items: list[dict[str, Any]]) -> list[dict]:
