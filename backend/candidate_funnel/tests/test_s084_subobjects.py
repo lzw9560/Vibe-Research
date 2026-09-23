@@ -190,7 +190,8 @@ class TestActivityNewFields(unittest.TestCase):
     """AC5：activity 两路径新字段（batch 当日 tencent_quote + kline 历史日复算）。"""
 
     def test_batch_path_reads_tencent_quote_extended_fields(self):
-        with mock.patch.object(activity.astock, "tencent_quote", return_value=_GTIMG_SHAPE):
+        with mock.patch.object(activity.astock, "tencent_quote", return_value=_GTIMG_SHAPE), \
+             mock.patch.object(activity.astock, "kline", return_value=[]):  # hithink 刷 cache 后 kline 返 bars，mock 空保 prev_amount_yi=None
             out = activity.fetch_activity(["600519"], "2099-07-28")  # 未来日→batch 路径
         e = out["600519"]
         self.assertAlmostEqual(e["last_close"], 1714.28)
