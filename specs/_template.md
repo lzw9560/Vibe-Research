@@ -37,6 +37,16 @@
 - [ ] 用户私有数据（持仓/研报/key）未进 git、未上传
 - [ ] 新增东财端点走 `em_get()` 限流
 
+## 7.1 §44 v3 anti-fake-edge sanity（2026-09-24 S229，防 V1 假 edge 覆辙）
+
+consecutive_relay V1 +1.04% 假 edge 教训——任何 edge 验证须过 v3 sanity：
+
+- [ ] **R1 entry close 涨停价审**：close vs prev_close >= board 阈值（主板 9.8%/创业板 19.8%/科创板 19.8%/北交 29.8%）→ entry close=涨停价买不到。复用 `bar_utils.is_unbuyable_next_bar`（四价相等+涨停一字）+ close 涨停判（非一字 close 涨停）。**不只 filter open 一字——V1 entry=D close 涨停价（盘中封板收盘涨停非一字）**
+- [ ] **R3 exit 一字跌停审**（单向）：`is_onesell_locked_next_bar`（四价相等+跌停一字）→ exit 卖不掉。**一字涨停 sell-side 可成交**（巨量买盘吞卖盘）——不 filter 一字涨停（非 over-credit）
+- [ ] **R4 涨停 vs 未涨停对比**（survivorship）：filter 掉涨停股后 edge 变化？若 filter 掉的 picks 贡献 >70% → 假 edge 标志（涨停封板溢价）。+ filter 后样本量 check（n<60 / days<60 → underpowered 不出 definitive）。涨停定义预注册（收盘涨停/盘中触及/一字/炸板股 4 类分别审）
+- [ ] **R2 窗口语义标注**：edge 是什么效应？涨停封板溢价（entry close 涨停价 + exit 次日 open 高开）/ 连板接力 / 隔夜 gap（entry 市场价 close）。R5 `_EdgeType` 扩 "limit_up_premium"——不独立 classify_edge_semantic（避免三套分类打架），合并 R1+R4+R5 标注
+- [ ] **A5 回归测试**：v3 filter 重审历史 edge——若 filter 掉 >70% picks → 假 edge 证据（如 consecutive_relay V1 99.4% 涨停 entry）
+
 ## 8. 测试计划
 <pytest -m "not live" / 联网 / 手动验收步骤。>
 
