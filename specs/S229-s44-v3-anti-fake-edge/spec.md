@@ -1,118 +1,107 @@
-# Spec: S229 — §44 v3 anti-fake-edge（entry/exit 可交易性 + 窗口语义 + realizability 双向 + momentum 过滤审）
+# Spec: S229 — §44 v3 anti-fake-edge（entry close 涨停 filter + realizability 单向 + momentum survivorship 审）
 
-> 状态：草案
+> 状态：草案（grill 4 视角 synthesis 后修订 2026-09-24）
 > 作者：claude  日期：2026-09-24
-> 关联：S159（§44 v2 应用规约）、S228（consecutive_relay entry 时机 fix——废弃，V2 证否）、[[v1-fake-edge-retrospective-2026-09-24]]（复盘根因）、[[consecutive-relay-falsified-2026-09-23]]（V1 假 edge 证否）
+> 关联：S159（§44 v2）、S228（consecutive_relay entry fix——废弃）、[[v1-fake-edge-retrospective-2026-09-24]]、[[consecutive-relay-falsified-2026-09-23]]、[[ofi-edge-exploratory-2026-09-24]]、[[seal-timing-fake-edge-2026-09-24]]
 
 ## 1. 问题 / 目标
 
-consecutive_relay V1 +1.04% 假 edge 被 S217 chrono holdout 561 days + ×1.0 unlock 验证通过，但 V2 offline 量化揭示是"D 涨停封板溢价"非"连板接力 edge"——**§44 v2 验证没抓到 V1 假 edge**。
+consecutive_relay V1 +1.04% 假 edge 被 §44 v2 验证通过但 V2 offline 量化证否。盘中探索 3 edge（竞价/OFI/封板时机）全 V1 假 edge。**§44 v2 没抓到**——需 v3 改进。
 
-**根因 4 条**（见 [[v1-fake-edge-retrospective-2026-09-24]]）：
-1. entry=D close=涨停价（涨停封板溢价效应）——§44 没审 entry 价格语义
-2. exit=D+1 open over-credit D+1 一字涨停（卖不掉）——realizability-bias 单向（只修跌停）
-3. §44 v2 窗口 sanity 没审 entry/exit 可交易性 + 窗口语义（edge 是什么效应）
-4. V2 过滤 D+1 一字板揭真 edge -1.66%——filter 掉的 momentum picks 是 V1 假 edge 主要贡献者
+## 2. 背景（V1 假 edge 真根因——grill synthesis 修正）
 
-**目标**：§44 v3 改进 4 方向——防未来新 edge 验证再犯 V1 类假 edge。
+V1 假 edge 真根因**不是** realizability（一字涨停 sell 可成交——巨量买盘吞卖盘，持有人卖能立即成交）。真根因是：
+1. **R2 窗口语义**：entry=D close=**涨停价**（连板日收盘封板涨停价）——买到涨停价，次日开盘高开是"涨停封板溢价"非"连板接力 edge"
+2. **R4 survivorship**：只看涨停股（lbc≥2 连板 / price>=limit_up）——涨停股 next_open 连板高开，未涨停股无 edge（OFI 验证：涨停 +8.03% vs 未涨停 +1.05%）
 
-## 2. 背景
+**不是根因**（grill agent 2 F1 修正）：
+- ~~R3 一字涨停 sell 卖不掉 over-credit~~——一字涨停 sell-side FILLABLE（巨量买盘吞卖盘），不是 over-credit
 
-§44 v2（S159）保留方法论改 5 件事（前置窗口 sanity / 重方法论只在对窗口 / §44 不每阶段参与 / 回溯模块主场 / Bonferroni 按 n 调）。但 v2 "窗口 sanity"只审窗口时机（gap vs path），没审：
-- entry/exit 价格语义（涨停价 vs 市场价）
-- entry/exit 可交易性（一字涨停/跌停 filter 双向）
-- filter 掉的 picks 对 edge 贡献（momentum 过滤审）
+## 3. 需求清单（grill synthesis 修订）
 
-consecutive_relay V1 假 edge 正是这些没审的漏网。
+- [x] R1：entry/exit 可交易性审——**close 涨停价 filter**（V1 entry=D close 涨停价，非只 open 一字）+ 复用 bar_utils 现有 detector（board-aware pctChg）
+- [x] R2：窗口语义审——**合并 R1+R4+R5**（不独立 classify_edge_semantic，避免三套分类打架）。R5 _EdgeType 扩 "limit_up_premium"
+- [x] R3：realizability-bias **单向**（删 is_onebuy_locked——一字涨停 sell 可成交）。保留现有 is_onesell_locked（一字跌停 sell 不可，已有）
+- [x] R4：momentum survivorship 审——**R1 必要补充**（R1 不够抓盘中封板，R4 filter 涨停股）。涨停定义预注册（收盘涨停/盘中触及/一字/炸板）+ 并入 v2 窗口 sanity（4 合 1 前置审）+ filter 后样本量 check（n<60 underpowered）+ 泛化所有 momentum filter（涨停/lbc/一字/ST）
+- [x] R5：§44 spec 模板加 v3 sanity 步骤
 
-## 3. 需求清单
-
-- [ ] R1：entry/exit 可交易性审——§44 verifier 加 check：entry close 是涨停价？exit open 是涨停价？一字涨停/跌停 filter 双向
-- [ ] R2：窗口语义审——§44 verifier 加 edge 语义标注：涨停封板溢价 / 连板接力 / 隔夜 gap（基于 entry/exit 价格语义）
-- [ ] R3：realizability-bias 双向——_resolve_gap_exit 加 D+1 一字涨停 filter（卖不掉），不只 D+1 一字跌停（买不回）
-- [ ] R4：momentum picks 过滤审——§44 verifier 加 filter 前后 edge 对比：filter 掉的 picks 贡献多少 edge？若 filter 掉的 picks 贡献大部分 edge → 标"edge 是 filter 效应非剩余 picks edge"
-- [ ] R5：§44 spec 模板加 v3 sanity 步骤——`specs/_template.md` §44 自查栏加 entry/exit 可交易性 + 窗口语义 + momentum 过滤审
-
-## 4. 受影响文件
+## 4. 受影响文件（grill synthesis 修订）
 
 | 文件 | 改动 |
 |---|---|
-| `backend/s44_verifier/verifier.py` | R1+R2+R4：加 entry/exit 可交易性 check + 窗口语义标注 + filter 前后 edge 对比 |
-| `backend/strategies/journal_recorder.py` | R3：_resolve_gap_exit 加 D+1 一字涨停 filter（双向 realizability） |
-| `backend/engine/bar_utils.py` | R3：is_onesell_locked_next_bar 加 is_onebuy_locked_next_bar（一字涨停卖不掉） |
-| `specs/_template.md` | R5：§44 自查栏加 v3 sanity 步骤 |
-| `backend/candidate_funnel/evaluation.py` | R2：verdict note 加窗口语义标注 |
+| `backend/s44_verifier/verifier.py` | R5 _EdgeType 扩 "limit_up_premium" + R4 compare_filtered_vs_unfiltered_edge（filter 前后对比 + 样本量 check） |
+| `backend/strategies/journal_recorder.py` | R3 保留 is_onesell_locked（现有），**不加 is_onebuy_locked**（一字涨停 sell 可成交） |
+| `backend/engine/bar_utils.py` | **不改**（复用现有 is_unbuyable_next_bar + is_onesell_locked_next_bar，board-aware pctChg） |
+| `specs/_template.md` | R5 v3 sanity 步骤（entry close 涨停 + 涨停 vs 未涨停对比 + 样本量 check） |
+| `backend/tools/s203_consecutive_relay_harness_v3.py` | A5 回归测试（V1 + R1 close 涨停 filter + R4 对比） |
 
-## 5. 设计方案
+## 5. 设计方案（grill synthesis 修订）
 
-### R1：entry/exit 可交易性审（核心）
+### R1：entry/exit 可交易性审（close 涨停价 filter + 复用 detector）
 
-§44 verifier 加 `check_entry_exit_tradability(returns, bars, picks)`：
-- entry close 是涨停价？→ 标"涨停封板溢价窗口"警告
-- exit open 是涨停价（一字涨停）？→ filter 或标 over-credit
-- entry/exit 价格是市场价还是封板价？
+- **entry close 涨停价 filter**（V1 根因 1）：close vs prev_close 涨跌幅 >= board 阈值（主板 9.8%/创业板 19.8%/科创板 19.8%/北交 29.8%）→ entry close=涨停价买不到
+- **复用 bar_utils**（agent 2 F2）：`is_unbuyable_next_bar(bar, code)` 判 entry 一字涨停（四价相等 + pctChg>=board）；`is_onesell_locked_next_bar(bar, code)` 判 exit 一字跌停
+- **不发明新逻辑**——删 spec §5 "open vs prev_close>=9.5%" 近似（board 错：创业板 20% 股用 9.5% 漏判）
 
-### R2：窗口语义审
+### R2：窗口语义审（合并 R1+R4+R5，不独立）
 
-§44 verifier 加 `classify_edge_semantic(entry_price, exit_price, bars)`：
-- 涨停封板溢价（entry=涨停价 close, exit=次日 open）
-- 连板接力（entry=次日 close, exit=后日 open）
-- 隔夜 gap（entry=市场价 close, exit=次日 open）
-- verdict note 标窗口语义
+- **不独立 classify_edge_semantic**（agent 3 F1+F3）——避免与 R5 edge_type 三套分类打架
+- R5 `_EdgeType` 扩 "limit_up_premium"（涨停封板溢价）——R5 已有 edge_type 枚举，扩一个值，不改 verify() 签名
+- R1 filter 时标 "entry=涨停价" 警告 + R4 对比时标 "edge 集中涨停股" 警告（R1+R4 标注覆盖 R2 独立价值）
 
-### R3：realizability-bias 双向
+### R3：realizability-bias 单向（删 is_onebuy_locked）
 
-`_resolve_gap_exit` 当前只 filter D+1 一字跌停（is_onesell_locked_next_bar）。加 D+1 一字涨停 filter（is_onebuy_locked_next_bar——一字涨停 open 卖不掉）。
+- **删 is_onebuy_locked_next_bar**（agent 2 F1 CRITICAL）——一字涨停 sell-side FILLABLE（巨量买盘吞卖盘，持有人卖能立即成交），不是 over-credit
+- **保留 is_onesell_locked_next_bar**（现有，一字跌停 sell 不可）
+- _resolve_gap_exit 不加涨停 filter（一字涨停 exit=open 涨停价可成交）
 
-### R4：momentum picks 过滤审
+### R4：momentum survivorship 审（R1 必要补充 + 涨停定义 + 并入 v2 + 样本量 + 泛化）
 
-§44 verifier 加 `compare_filtered_vs_unfiltered_edge(obs, filter_fn)`：
-- filter 前后 edge 对比
-- filter 掉的 picks 贡献多少 edge？
-- 若 filter 掉的 picks 贡献大部分 edge → 标"edge 是 filter 效应非剩余 picks edge"（V2 过滤 D+1 一字板后 edge +1.04%→-1.66% 即此例）
+- **R1 必要补充**（agent 2 F3）——R1 filter entry 一字涨停不够（V1 假 edge source 是盘中封板 D close 涨停非一字），R4 filter 涨停股是唯一抓 V1 假 edge 机制
+- **涨停定义预注册**（agent 1 F1）：收盘涨停（close>=limit_up）/ 盘中触及涨停（any ts price>=limit_up）/ 一字涨停（四价=涨停价）/ 炸板股（触及涨停但收盘未涨停）——4 类分别审 edge
+- **并入 v2 窗口 sanity**（agent 1 F2）——4 合 1 前置审：窗口时机 + entry/exit 可交易性 + 窗口语义 + momentum 过滤审
+- **filter 后样本量 check**（agent 1 F3）——filter 后 n<60 或 days<60 标 underpowered，不出 definitive verdict
+- **泛化所有 momentum filter**（agent 1 F4）——涨停/lbc/一字板/ST 等任何 selection filter 都需 filter 前后 edge 对比
 
-### R5：spec 模板 v3 sanity
+### R5：spec 模板 v3 sanity 步骤
 
 `specs/_template.md` §44 自查栏加：
-- entry/exit 可交易性审（涨停价？一字板 filter 双向？）
-- 窗口语义审（edge 是什么效应？）
-- momentum 过滤审（filter 掉的 picks 贡献？）
+- entry close 涨停价审（close vs prev_close >= board 阈值？）
+- 涨停 vs 未涨停对比（R4 momentum 过滤审）
+- filter 后样本量 check（n>=60 / days>=60）
 
 ## 6. 验收标准
 
-- [ ] A1：§44 verifier 加 entry/exit 可交易性 check + 窗口语义标注
-- [ ] A2：_resolve_gap_exit 加 D+1 一字涨停 filter（双向 realizability）
-- [ ] A3：§44 verifier 加 filter 前后 edge 对比（momentum 过滤审）
-- [ ] A4：specs/_template.md §44 自查栏加 v3 sanity 步骤
-- [ ] A5：用 v3 改进重审 consecutive_relay V1——验证 v3 能抓到 V1 假 edge（回归测试）
-- [ ] A6：full suite pytest -m "not live" 0 failed
-- [ ] A7：grill workflow ≥4 视角对抗审通过（方法论变更必起）
+- [x] A1：verifier.py R5 _EdgeType 扩 "limit_up_premium" + R4 compare_filtered_vs_unfiltered_edge
+- [x] A2：_resolve_gap_exit 保留 is_onesell_locked（现有），不加 is_onebuy_locked（一字涨停 sell 可成交）
+- [x] A3：R1 复用 is_unbuyable_next_bar（entry 一字涨停 + close 涨停价 filter）
+- [x] A4：specs/_template.md v3 sanity 步骤
+- [x] A5：s203_harness_v3.py 回归测试——V1 + R1 close 涨停 filter + R3 一字跌停 + R4 对比，验收 R3+R1 filter 后 V1 edge < +0.3% + R4 标"filter 掉的 picks 贡献 >70%"
+- [x] A6：full suite 0 failed
+- [x] A7：grill 已过（4 视角 synthesis 修订）
 
 ## 7. 合规与工程底线自查
 
-- [x] 判断可复现——§44 verifier 改进是方法论层面，verifier 代码可复算
-- [x] 不臆造——v3 改进基于 V1 假 edge 根因实证（consecutive_relay 证否）
-- [x] 私有数据隔离——不涉私有数据
-- [x] 防封——不涉 em_get
+- [x] 判断可复现——verifier 代码可复算
+- [x] 不臆造——v3 改进基于 V1 假 edge 根因实证 + 3 盘中 edge 验证
+- [x] 私有数据隔离 / 防封——不涉
 
 ## 8. 测试计划
 
-- `pytest -m "not live"` full suite（0 failed）
-- 用 v3 改进重审 consecutive_relay V1——验证 v3 抓到 V1 假 edge（回归测试）
-- grill workflow ≥4 视角对抗审
+- s203_harness_v3.py 回归测试（A5）
+- full suite pytest -m "not live"（0 failed）
+- 用 v3 改进重审 OFI edge（涨停 vs 未涨停——验证 R4 抓假 edge）
 
 ## 9. 风险与回滚
 
-- R-1（中）：v3 改进可能过度过滤——entry/exit 可交易性审可能 filter 掉合理 picks（如 entry 市场价 close 非涨停价）。需审 filter 阈值。
-- R-2（低）：_resolve_gap_exit 双向 filter 可能改其他 arm verdict——需审爆炸半径。
-- 回滚：git revert + verifier.py 回旧逻辑。
+- R-1（中）：R4 filter 后样本小（OFI 未涨停 n=34）→ underpowered 标注，不出 definitive
+- R-2（低）：R3 不加 is_onebuy_locked——但一字涨停 exit 高 open 是真成交非 over-credit，R3 单向（一字跌停）够
+- R-3（低）：_resolve_gap_exit 改后 settle_pending 重算 49 条 consecutive_relay 记录（已 archive，重算诚实标注）
+- 回滚：git revert + verifier.py 回旧逻辑
 
-## 10. grill 验证（方法论变更必起）
+## 10. grill synthesis（4 视角 16 finding 修订）
 
-按 CLAUDE.md §1.3 + 自动复盘 2026-09-05，§44 方法论变更必起 ≥6 视角 adversarial verify workflow。本 spec 改 §44 verifier + _resolve_gap_exit——**必起 grill workflow** 验证：
-1. v3 改进 4 方向是否正确（防 V1 假 edge 根因）
-2. entry/exit 可交易性审 阈值（涨停价判定？）
-3. realizability-bias 双向 是否改其他 arm verdict
-4. momentum 过滤审 是否过度 filter
-5. spec 模板 v3 sanity 步骤是否落地
-6. 回归测试（v3 抓 V1 假 edge）
+- agent 1（R4）：涨停定义预注册（炸板股漏网）+ 并入 v2 + 样本量 check + 泛化 momentum filter ✓
+- agent 2（R1+R3）：**R3 删 is_onebuy_locked**（一字涨停 sell 可成交 F1 CRITICAL）+ 复用 bar_utils detector + R4 必要补充 ✓
+- agent 3（R2）：合并 R1+R4+R5（不独立 classify_edge_semantic，避免三套打架）✓
+- agent 4（回归）：**R1 close 涨停价 filter**（V1 entry=D close 涨停 F1 CRITICAL）+ A5 s203_harness_v3.py ✓
