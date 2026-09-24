@@ -509,3 +509,57 @@ def verify(
         data_snapshot_id=data_snapshot_id,
         note="; ".join(notes) if notes else "",
     )
+
+
+def compare_filtered_vs_unfiltered_edge(
+    obs: list[dict],
+    filter_fn,
+    dates: list[str] | None = None,
+) -> dict:
+    """S229 R4: filter 前后 edge 对比——survivorship 假 edge 检测。
+
+    防 V1 假 edge 覆辙（涨停封板溢价 + survivorship）：
+    - filter 掉的 picks 贡献 >70% → 假 edge 标志（edge 集中 filter 掉的 picks）
+    - filter 后 n<60 / days<60 → underpowered（不出 definitive verdict）
+
+    Args:
+        obs: list of dict，每 dict 含 "edge" key（decimal return）
+        filter_fn: callable(o) -> bool，True=filter 掉该 pick（如涨停股 survivorship）
+        dates: optional obs 对应日期 list（算 days）
+
+    Returns:
+        dict: n_unfiltered/mean_unfiltered/n_filtered/mean_filtered/filter_pct/
+              contrib_pct/is_fake_edge/is_underpowered
+    """
+    import statistics  # noqa: PLC0415
+
+    n_all = len(obs)
+    rets_all = [o["edge"] for o in obs] if n_all else []
+    mean_all = statistics.mean(rets_all) if rets_all else 0.0
+
+    obs_f = [o for o in obs if not filter_fn(o)]
+    n_f = len(obs_f)
+    rets_f = [o["edge"] for o in obs_f] if n_f else []
+    mean_f = statistics.mean(rets_f) if rets_f else 0.0
+
+    filter_pct = (n_all - n_f) / n_all * 100 if n_all else 0.0
+    # filter 掉的 picks 贡献比例（mean_all - mean_f）/ mean_all
+    contrib_pct = (mean_all - mean_f) / mean_all * 100 if mean_all != 0 else 0.0
+
+    days_f = 0
+    if dates and n_f:
+        # obs_f 对应 dates（假设 obs 顺序与 dates 对齐）
+        idx_f = [i for i, o in enumerate(obs) if not filter_fn(o)]
+        days_f = len(set(dates[i] for i in idx_f if i < len(dates)))
+
+    is_fake_edge = filter_pct > 70 or abs(contrib_pct) > 70
+    is_underpowered = n_f < 60 or days_f < 60
+
+    return {
+        "n_unfiltered": n_all, "mean_unfiltered_pct": round(mean_all * 100, 4),
+        "n_filtered": n_f, "mean_filtered_pct": round(mean_f * 100, 4),
+        "filter_pct": round(filter_pct, 2),
+        "contrib_pct": round(contrib_pct, 2),
+        "is_fake_edge": is_fake_edge,  # filter 掉 >70% picks 或贡献 >70% edge
+        "is_underpowered": is_underpowered,  # filter 后 n<60 或 days<60
+    }
