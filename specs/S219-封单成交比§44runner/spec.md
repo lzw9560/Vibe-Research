@@ -1,6 +1,8 @@
 # Spec: S219 — 封单成交比 §44 runner + fund 回补
 
-> 状态：**deferred**（grill `wlf43z1f9` needs_revision confidence 0.86，synth #1 = DEFER 整个 spec）
+> 状态：**已废弃（2026-09-24）——un-defer 条件依赖 consecutive_relay ×1.0，战法证否后永远不满足**
+>
+> **废弃原因**：consecutive_relay V2 offline 量化证否（真 edge -1.66% 负），un-defer 条件"consecutive_relay 升 ×1.0 definitive"永远不满足。见 [[consecutive-relay-falsified-2026-09-23]] + [[v1-fake-edge-retrospective-2026-09-24]]。S219 依赖 consecutive_relay 的部分全 stale。（grill `wlf43z1f9` needs_revision confidence 0.86，synth #1 = DEFER 整个 spec）
 >
 > **deferred 原因**（三外部 gate 未满足）：① consecutive_relay ×0.75 provisional 非 ×1.0 definitive（panel un-freeze trigger1 未达）；② delivery 未 4 周真 P&L 验证（record_t0_fill 零生产调用，trigger2 未达）；③ fund 仅 em live ~49 天 <60（§44 R6 门槛，backfill 315 天不可行——akshare em 历史日返空率 63%）。
 >
