@@ -1,5 +1,6 @@
 # S217 — consecutive_relay forward-OOS via chronological holdout
 
+> **⚠️ STALE 2026-09-24 战法证否**：consecutive_relay V2 offline 量化证否（真 edge -1.66% 负 + p=1.0 + adequate power）——本 spec verdict 基于 V1 假 edge（D 涨停封板溢价），已 archive。见 [[consecutive-relay-falsified-2026-09-23]] + [[v1-fake-edge-retrospective-2026-09-24]]
 > 状态：**spec（pre-registration）**——跑测试结果前冻结 split ratio + decision rule（lens 3 要求）。
 > §44-bearing：设计期 grill 已过（workflow `wb91zk9b5`，6 lens + synthesis，confidence 0.80，决议 C）。本 spec 即 lens 3 要求的"跑前 pre-register"文书。
 > 分级：medium（碰 stats.py 加纯函数 + harness print，不碰 verifier.py / Verdict dataclass）。

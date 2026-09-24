@@ -1,5 +1,6 @@
 # S218 — 投研参考交付系统（验证→可行动参考→收益闭环）
 
+> **⚠️ STALE 2026-09-24 战法证否**：consecutive_relay V2 offline 量化证否（真 edge -1.66% 负 + p=1.0 + adequate power）——本 spec verdict 基于 V1 假 edge（D 涨停封板溢价），已 archive。见 [[consecutive-relay-falsified-2026-09-23]] + [[v1-fake-edge-retrospective-2026-09-24]]
 > 状态：已实现（2026-09-18，commit 96d9c3e/348de8f/effaa99）+ spec v3（2026-09-18，织入 spec-review `w5ety6ysa` 21 修订 + 2026-07-06 交易新规 caveat）。
 > **scope 声明**：交付层——把唯一 validated edge（consecutive_relay）包装成用户能照着做的投研参考，**不是新验证机器**。复用现有基建（S211 consecutive_relay arm + scheduled_tasks cron + Feishu notify + StockCockpit + JournalWinRateCurve 图表基建 + pre_limitup_scanner + compute_regime_labels + lift_for_arm）。是 freeze 解后「做减法优先」下唯一允许的加法。
 > 触发：用户 2026-09-18 纠正「process theater 不产收益」+ 要「研究验证→正确投研参考→照做」。

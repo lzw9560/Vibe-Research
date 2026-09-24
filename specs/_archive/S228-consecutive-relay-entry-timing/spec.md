@@ -1,8 +1,10 @@
 # Spec: S228 — consecutive_relay entry 时机 fix（D close→D+1 open 改 D+1 close→D+2 open）
 
-> 状态：草案
+> 状态：**已废弃（2026-09-24）——战法证否，fix 不再需要**
 > 作者：claude  日期：2026-09-23
 > 关联：S218（投研参考交付系统，daily_report 时机设计）、S211（consecutive_relay arm wire）、S207（§44 成本单位 100x blocker）、S217（chrono holdout stage-1）、[[consecutive-relay-stage-2-definitive-2026-09-20]]（×1.0 终判）
+>
+> **废弃原因**：S228 grill workflow（4 视角 refute-default）+ offline 量化（s203_harness_v2.py 561 days chrono）揭示 V2 真 edge = -1.66% 负 + p=1.0 + adequate power → consecutive_relay 战法 definitive falsify。fix entry 时机无意义——战法本身证否。见 [[consecutive-relay-falsified-2026-09-23]] + [[v1-fake-edge-retrospective-2026-09-24]]。当前 +1.04% verdict 是"D 涨停封板溢价"非"连板接力 edge"，已 archive（arm kill switch + evaluation.py regime_caps ×0）。
 
 ## 1. 问题 / 目标
 

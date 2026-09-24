@@ -1,5 +1,6 @@
 # S211 · consecutive_relay arm 接线进 journal_recorder（overnight gap path）
 
+> **⚠️ STALE 2026-09-24 战法证否**：consecutive_relay V2 offline 量化证否（真 edge -1.66% 负 + p=1.0 + adequate power）——本 spec verdict 基于 V1 假 edge（D 涨停封板溢价），已 archive。见 [[consecutive-relay-falsified-2026-09-23]] + [[v1-fake-edge-retrospective-2026-09-24]]
 > 状态：**spec 草稿**（2026-09-16，方向调整：原 wire sizing → arm 接线）
 > 关联：S203 consecutive_relay harness / S209 T4 final_size 4-layer / S210 drift fix
 
