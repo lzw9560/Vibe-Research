@@ -457,6 +457,14 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
 
 def _build_disclaimers(regime: str, cap_mult: float) -> list[str]:
     """构建 spec §44 reframe 版免责声明（人话）。"""
+    if cap_mult <= 0.0:
+        # 2026-09-24 archive: V2 falsified——只返 archive disclaimer（skip 旧 V1 数字）
+        return [
+            "⚠️ 战法已 ARCHIVE（V2 证否 2026-09-24）—— consecutive_relay 真 edge -1.66% 负 "
+            "+ p=1.0 + adequate power（n_test 89/65≥60）。当前 +1.04% 是'D 日涨停封板溢价'"
+            "（D close=涨停价 D+1 高开）非'连板接力 edge'。cap ×0 不交易，参考性为零",
+            "非自动交易 —— 本系统不自动下单（archive 战法无交易）",
+        ]
     disclaimers = [
         "统计验证（非已实现收益）—— edge 衰减中（train 1.57%→test 1.04% 跌 34%）",
         "paper-only 无券商（零真交易）—— 接券商前所有战绩 paper，要真获益须手动在券商下单",
@@ -498,24 +506,31 @@ def render_daily_report(signals: dict[str, Any]) -> str:
     lines.append("")
     lines.append(f"市场状态：{regime}（{edge_status}）")
     lines.append(f"有效 cap：×{cap_eff}")
+    if cap_eff <= 0.0:
+        lines.append("⚠️ 战法已 ARCHIVE（V2 证否 2026-09-24）—— cap ×0 不交易，参考性为零")
     lines.append("")
 
-    # 验证数字（人话版）
-    lines.append("【验证情况】")
-    lines.append(f"  回测训练期收益：{verified.get('chrono_train', 'N/A')}%（train）")
-    lines.append(f"  回测测试期收益：{verified.get('chrono_test', 'N/A')}%（test，衰减 {verified.get('chrono_decay_pct', 'N/A')}%）")
-    lines.append(f"  统计显著性：p={verified.get('chrono_p', 'N/A')}（oos_supporting）")
-    lines.append(f"  胜率：{verified.get('chrono_wr', 'N/A')}%")
-    lines.append("")
-
-    # deep_dive 数字（探索性，单独标）
-    if verified.get("deep_dive_lbc2") or verified.get("deep_dive_lbc3"):
-        lines.append("【探索性参考（deep_dive，样本小，待复验）】")
-        if verified.get("deep_dive_lbc2"):
-            lines.append(f"  lbc=2 平均收益：{verified['deep_dive_lbc2']}%（探索性）")
-        if verified.get("deep_dive_lbc3"):
-            lines.append(f"  lbc=3 平均收益：{verified['deep_dive_lbc3']}%（探索性）")
+    # 验证数字（cap ×0 archive 时标 falsified，不显示旧 V1 数字）
+    if cap_eff <= 0.0:
+        lines.append("【验证情况】")
+        lines.append("  战法 falsified（V2 证否 2026-09-24）—— 旧 V1 verdict（+1.04%）是 D 涨停封板溢价非连板接力 edge")
+        lines.append("  V2 真 edge：-1.66% bull / -1.89% bear + p=1.0 + adequate power（n_test 89/65≥60）")
         lines.append("")
+    else:
+        lines.append("【验证情况】")
+        lines.append(f"  回测训练期收益：{verified.get('chrono_train', 'N/A')}%（train）")
+        lines.append(f"  回测测试期收益：{verified.get('chrono_test', 'N/A')}%（test，衰减 {verified.get('chrono_decay_pct', 'N/A')}%）")
+        lines.append(f"  统计显著性：p={verified.get('chrono_p', 'N/A')}（oos_supporting）")
+        lines.append(f"  胜率：{verified.get('chrono_wr', 'N/A')}%")
+        lines.append("")
+        # deep_dive 数字（探索性，单独标）
+        if verified.get("deep_dive_lbc2") or verified.get("deep_dive_lbc3"):
+            lines.append("【探索性参考（deep_dive，样本小，待复验）】")
+            if verified.get("deep_dive_lbc2"):
+                lines.append(f"  lbc=2 平均收益：{verified['deep_dive_lbc2']}%（探索性）")
+            if verified.get("deep_dive_lbc3"):
+                lines.append(f"  lbc=3 平均收益：{verified['deep_dive_lbc3']}%（探索性）")
+            lines.append("")
 
     # 3-bucket 信号列表
     tradable = [s for s in sig_list if s["bucket"] == "tradable"]
@@ -523,6 +538,14 @@ def render_daily_report(signals: dict[str, Any]) -> str:
     avoid = [s for s in sig_list if s["bucket"] == "avoid"]
 
     # 可做（tradable）
+    if cap_eff <= 0.0:
+        lines.append("【可做】(0 只) — 战法 ARCHIVE（V2 证否 2026-09-24），cap ×0 不交易")
+        lines.append("")
+        # archive: skip 探索性/别碰/入场/风险提示，直接 disclaimer
+        lines.append("【重要说明】")
+        for d in disclaimers:
+            lines.append(f"  {d}")
+        return "\n".join(lines)
     lines.append(f"【可做】({len(tradable)} 只) — bull validated edge")
     if tradable:
         for s in tradable:

@@ -87,26 +87,20 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     # regime_caps: bull ×0.75 / bear+range ×0.5（bear 71 天 robust 但 chrono n_test=23 underpowered；range underpowered）。
     # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
     "consecutive_relay": DimensionValidation(
-        dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap)",
-        lift=None, n=1283, days_robust=172,   # bull regime（backfill 缺口期后 317 交易日，2026-09-18 stage-2）
-        validation_status="robust_edge", weight_multiplier=0.5,  # regime=None 保守
-        source_script="tools/s203_consecutive_relay_harness.py",
-        note="2026-09-19 ×1.0 definitive unlock——baostock kline backfill 后 bear chrono ×1.0 三条件 MET："
-             "①cross-regime oos_supporting +0.97% p=0.0013 ②n_test=64>=60 adequate power（58→64）"
-             "③train bias 修 -0.074%→+0.236%（证原负 train 是稀疏 artifact 非 edge 假象）。"
-             "bull regime_caps 0.75→1.0（chrono OOS 是 §44 v2 definitive gate 非 in-sample；"
-             "caveat: bear in-sample verdict 仍 exploratory 0.286%<0.47% floor 但不阻塞——chrono OOS 已 MET）。"
-             "freeze guard 许可须 _FRESH_HARNESS_VERDICT=True（#7 守升级防零阻力 bump）。"
-             "S211 regime-stratified 历史：bull robust_edge +1.3623%（backfill 缺口期后 317 交易日，n=1283/days=172，"
-             "2026-09-18 stage-2 forward-OOS chrono holdout n_test=57 p=0.0054 oos_supporting——edge 真非噪声。"
-             "原 ×0.75 provisional 公式（gap-edge-sizing grill wvnt1322y）：×0.75 = base 1.0（robust chrono）"
-             "× decay_haircut 0.75（34% 衰减，gap-down 左尾是衰减 MECHANISM 非单独维度已在 test-mean）× regime 1.0"
-             "（bull validated）× zuoT_bump 1.0（做T/补救结构性不适用：1-bar gap 无日内窗口，T+1 新仓无底仓，"
-             "record_t0_fill 已删 v3 P0-4——中性非加非减）。升 ×1.0 GATE（已 MET）：cross-regime replication"
-             "（bear chrono）+ adequate power + train bias 修。降 ×0.5=衰减续恶化 OR 一字跌停（D+1 卖不掉，"
-             "gap_net_return over-credit）量化 material。bear+range ×0.5（bear in-sample exploratory；range underpowered）。"
-             "overnight gap path（D收→D+1开，gap_net_return 纯 2-price 无 stop/take）。",
-        regime_caps={"bull": 1.0, "bear": 0.5, "range": 0.5},
+        dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap) 【ARCHIVED 2026-09-24】",
+        lift=None, n=5228, days_robust=558,   # V2 offline 量化（s203_harness_v2.py），全 regime falsified
+        validation_status="falsified", weight_multiplier=0.0,  # 2026-09-24 archive: V2 falsified
+        source_script="tools/s203_consecutive_relay_harness_v2.py",
+        note="2026-09-24 ARCHIVE: V2 offline 量化（s203_harness_v2.py，S228 grill workflow 4 视角后）证否——"
+             "真 edge（spec 本意 D+1 close→D+2 open）= -1.66% bull / -1.89% bear + p=1.0（完全无 edge）"
+             "+ adequate power（n_test 89/65≥60）→ definitive falsify 所有 regime。"
+             "原 +1.04% verdict（V1 D close→D+1 open）是'D 日涨停封板溢价'（D close=涨停价 D+1 开盘高开）"
+             "非'连板接力 edge'——V1 未过滤 D+1 一字板（momentum 最强 picks 贡献涨停溢价）+ "
+             "D+1 一字板 exit=open 涨停价实际卖不掉（一字涨停封死无买盘）over-credit。"
+             "arm kill switch（trade_journal.arm_status is_active=False）+ regime_caps 全 ×0 兜底。"
+             "原 ×1.0 verdict（2026-09-19 unlock）基于假 edge，已撤销——VR_ALLOW_X1DOT0 不再相关。"
+             "原 S211/S217/S218 verdict 全基于 V1 假 edge，stale——见 memory consecutive-relay-falsified-2026-09-23。",
+        regime_caps={"bull": 0.0, "bear": 0.0, "range": 0.0},
     ),
     "turnover": DimensionValidation(
         dimension_id="turnover", label="换手剔除(>30%)",
