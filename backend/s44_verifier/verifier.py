@@ -17,7 +17,7 @@ from . import stats as stats_mod  # noqa: TID252  (R3 merged methodology)
 from .stats import _EVENT_MATERIALITY_FLOOR  # noqa: TID252
 from .event_drift import adjust_event_drift  # noqa: TID252  (R11 event drift fix)
 
-_EdgeType = Literal["selection", "event", "population", "overnight_gap", "path"]
+_EdgeType = Literal["selection", "event", "population", "overnight_gap", "path", "limit_up_premium"]
 _Status = Literal["robust_edge", "underpowered", "falsified", "not_validated", "exploratory"]
 _DsrMethod = Literal["cross_trial_variance", "lenient_single_estimate", "N/A"]
 _EventStatus = Literal["event_robust", "event_thin_positive", "event_falsified", "event_not_tested"]
@@ -35,6 +35,7 @@ _WINDOW_FOR_EDGE: dict[str, str] = {
     "population": "overnight_gap",
     "overnight_gap": "overnight_gap",
     "path": "path",
+    "limit_up_premium": "overnight_gap",  # S229 R5: 涨停封板溢价（entry close 涨停价→exit 次日 open 高开），window=overnight_gap
 }
 
 
