@@ -108,18 +108,21 @@ def main() -> dict:
     print(f"\n=== 全样本 T+1 edge（early OFI）===")
     print(f"n={n} days={days} net_mean={net_mean*100:.2f}% WR={wr*100:.2f}%")
 
-    # 分组 by OFI 分位
-    buckets = {"低OFI(<=0.3)": [], "中OFI(0.3-0.7)": [], "高OFI(>=0.7)": []}
+    # 分组 by OFI 分位（深挖不同阈值稳健性）
+    buckets = {"OFI 0.7-0.8": [], "OFI 0.8-0.9": [], "OFI 0.9-0.95": [], "OFI>=0.95": []}
     for o in obs:
         ofi = o["ofi"]
-        if ofi <= 0.3:
-            buckets["低OFI(<=0.3)"].append(o)
-        elif ofi < 0.7:
-            buckets["中OFI(0.3-0.7)"].append(o)
-        else:
-            buckets["高OFI(>=0.7)"].append(o)
-    print(f"\n=== 按 early OFI 分组 T+1 edge ===")
-    for name, group in buckets.items():
+        if 0.7 <= ofi < 0.8:
+            buckets["OFI 0.7-0.8"].append(o)
+        elif 0.8 <= ofi < 0.9:
+            buckets["OFI 0.8-0.9"].append(o)
+        elif 0.9 <= ofi < 0.95:
+            buckets["OFI 0.9-0.95"].append(o)
+        elif ofi >= 0.95:
+            buckets["OFI>=0.95"].append(o)
+    print(f"\n=== 按 early OFI 细分组 T+1 edge（稳健性）===")
+    for name in ["OFI 0.7-0.8", "OFI 0.8-0.9", "OFI 0.9-0.95", "OFI>=0.95"]:
+        group = buckets.get(name, [])
         if not group:
             print(f"  {name}: n=0")
             continue
