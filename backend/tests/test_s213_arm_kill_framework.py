@@ -97,15 +97,15 @@ class TestLiftForArmOverride:
         assert "arm override" in note
 
     def test_lift_for_arm_default_walks_registry(self):
-        """无 arm_status（query 返 None）→ lift_for_arm 走 registry（consecutive_relay bull ×1.0 unlock）。"""
+        """无 arm_status（query 返 None）→ lift_for_arm 走 registry（consecutive_relay ×0.0 archive falsified）。"""
         from candidate_funnel.evaluation import lift_for_arm
         with patch("engine.trade_journal.TradeJournal.query_arm_status", return_value=None):
             mult, _ = lift_for_arm("consecutive_relay", regime="bull")
-        assert mult == 1.0  # registry bull ×1.0（2026-09-19 ×1.0 unlock，bear chrono 三条件 MET）
+        assert mult == 0.0  # registry bull ×0.0（2026-09-24 archive: V2 falsified, 真 edge -1.66% 负）
 
     def test_lift_for_arm_db_error_falls_back_to_registry(self):
         """arm_status 读失败（表未建/db 异常）→ 走 registry fallback（不阻塞，backward compat）。"""
         from candidate_funnel.evaluation import lift_for_arm
         with patch("engine.trade_journal.TradeJournal.query_arm_status", side_effect=Exception("db error")):
             mult, _ = lift_for_arm("consecutive_relay", regime="bull")
-        assert mult == 1.0  # fallback registry bull ×1.0（×1.0 unlock）
+        assert mult == 0.0  # fallback registry bull ×0.0（archive falsified 兜底）

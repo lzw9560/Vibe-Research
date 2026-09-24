@@ -133,15 +133,16 @@ class TestX1Dot0Unlock:
         assert mult_range == 0.5
 
     def test_x1_unlock_documented_in_note(self):
-        # frozen registry note 含 ×1.0 definitive unlock + 三条件 MET 证据
-        # （防 unlock 后 note 静默 drift，须显式文档化为何 ×1.0）
+        # frozen registry note——2026-09-24 archive: consecutive_relay falsified（V2 证否）
+        # 原 ×1.0 unlock note 已换 archive 说明（防 stale verdict 误导）
         from candidate_funnel.evaluation import DIMENSION_LIFT_REGISTRY
         note = DIMENSION_LIFT_REGISTRY["consecutive_relay"].note
-        assert "×1.0 definitive unlock" in note
-        # 三条件 MET 证据（cross-regime p-value / adequate power n_test / train bias 修）
-        assert "0.0013" in note
-        assert "n_test=64" in note
-        assert "+0.236" in note
+        assert "ARCHIVE" in note
+        assert "falsified" in note
+        # V2 证否证据（真 edge 负 + p=1.0 + adequate power）
+        assert "-1.66%" in note
+        assert "p=1.0" in note
+        assert "n_test 89/65" in note
 
 
 class TestX1Dot0FreezeGuardRegression:
@@ -196,13 +197,11 @@ class TestX1Dot0FreezeGuardRegression:
         assert "许可" in note
 
     def test_real_registry_x1dot0_unlock_with_permission(self, monkeypatch):
-        # 2026-09-19 ×1.0 unlock：real frozen registry bull=1.0 + 生产 permission
-        # （_FRESH_HARNESS_VERDICT=True）→ 返 ×1.0 + note 含 "许可"。
-        # 走真实 get_effective_dimension（_isolate_override_db 强制 fallback frozen baseline）
-        # 验 unlock 端到端 through real frozen registry path，非 monkeypatched dim。
-        # 回归 alert：若 future session 改 _FRESH_HARNESS_VERDICT 回 False 或 freeze guard
-        # 逻辑被移除，mult 会变 0.75 → assert 失败，暴露 unlock 退化。
+        # 2026-09-24 archive: consecutive_relay falsified（V2 证否）→ mult=0.0 regardless
+        # of _FRESH_HARNESS_VERDICT（arm kill switch + regime_caps ×0 兜底，freeze guard 不
+        # 触发因 ×0 是降级非升级）。原 ×1.0 unlock test 已 stale。
         monkeypatch.setattr(evaluation, "_FRESH_HARNESS_VERDICT", True, raising=False)
         mult, note = lift_for_arm("consecutive_relay", regime="bull")
-        assert mult == 1.0
-        assert "许可" in note
+        assert mult == 0.0  # archive falsified——kill switch + regime_caps ×0
+        # note 是 lift_for_arm 生成的 regime note（"最保守" / "×0"），非 evaluation.py archive note
+        assert "最保守" in note or "×0" in note or "ARCHIVE" in note or "kill" in note

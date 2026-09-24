@@ -100,25 +100,25 @@ class TestLiftForArmRegime:
         """bull regime ×1.0（2026-09-19 ×1.0 unlock——bear chrono cross-regime 三条件 MET）。"""
         from candidate_funnel.evaluation import lift_for_arm
         mult, _ = lift_for_arm("consecutive_relay", regime="bull")
-        assert mult == 1.0, f"bull 应 ×1.0（×1.0 unlock）, got {mult}"
+        assert mult == 0.0, f"bull archive ×0（V2 falsified 2026-09-24）, got {mult}"
 
     def test_lift_for_arm_consecutive_relay_bear(self):
         """bear regime ×0.5（underpowered）。"""
         from candidate_funnel.evaluation import lift_for_arm
         mult, _ = lift_for_arm("consecutive_relay", regime="bear")
-        assert mult == 0.5, f"bear 应 ×0.5, got {mult}"
+        assert mult == 0.0, f"bear archive ×0, got {mult}"
 
     def test_lift_for_arm_consecutive_relay_range(self):
         """range regime ×0.5（underpowered）。"""
         from candidate_funnel.evaluation import lift_for_arm
         mult, _ = lift_for_arm("consecutive_relay", regime="range")
-        assert mult == 0.5, f"range 应 ×0.5, got {mult}"
+        assert mult == 0.0, f"range archive ×0, got {mult}"
 
     def test_lift_for_arm_consecutive_relay_no_regime_conservative(self):
         """regime=None → 保守 ×0.5（bear/range underpowered 不误放全权重）。"""
         from candidate_funnel.evaluation import lift_for_arm
         mult, _ = lift_for_arm("consecutive_relay")
-        assert mult == 0.5, f"regime=None 应保守 ×0.5, got {mult}"
+        assert mult == 0.0, f"regime=None archive ×0, got {mult}"
 
     def test_lift_for_arm_backward_compat_no_regime(self):
         """regime 参数 default None — 旧 caller lift_for_arm('breakout') 仍 work。"""
@@ -142,19 +142,19 @@ class TestFinalSizeRegime:
         """bull regime ×1.0（2026-09-19 ×1.0 unlock）→ final_size = 10000×1.0=10000。"""
         pp = self._make_pp(monkeypatch)
         result = pp.final_size("consecutive_relay", 10000, regime="bull")
-        assert result == 10000, f"bull ×1.0 应 10000, got {result}"
+        assert result == 0, f"bull archive ×0=0, got {result}"
 
     def test_final_size_consecutive_relay_bear(self, tmp_path, monkeypatch):
         """bear regime ×0.5 → final_size halve。"""
         pp = self._make_pp(monkeypatch)
         result = pp.final_size("consecutive_relay", 10000, regime="bear")
-        assert result == 5000, f"bear ×0.5 应 5000, got {result}"
+        assert result == 0, f"bear archive ×0=0, got {result}"
 
     def test_final_size_consecutive_relay_no_regime(self, tmp_path, monkeypatch):
         """regime=None → 保守 ×0.5。"""
         pp = self._make_pp(monkeypatch)
         result = pp.final_size("consecutive_relay", 10000)
-        assert result == 5000, f"regime=None 应保守 ×0.5=5000, got {result}"
+        assert result == 0, f"regime=None archive ×0=0, got {result}"
 
 
 # ── T3 journal_recorder: _process_consecutive_relay ─────────────────────
@@ -215,17 +215,17 @@ class TestProcessConsecutiveRelay:
     def test_arm_size_consecutive_relay_bull_bite(self, recorder):
         """_arm_size('consecutive_relay', regime='bull') → 100 股（×1.0 2026-09-19 unlock）。"""
         size = recorder._arm_size("consecutive_relay", regime="bull")
-        assert size == 100.0, f"bull ×1.0 应 100 股, got {size}"
+        assert size == 0.0, f"bull archive ×0=0 股, got {size}"
 
     def test_arm_size_consecutive_relay_bear_bite(self, recorder):
         """_arm_size('consecutive_relay', regime='bear') → 50 股（×0.5）。"""
         size = recorder._arm_size("consecutive_relay", regime="bear")
-        assert size == 50.0, f"bear ×0.5 应 50 股, got {size}"
+        assert size == 0.0, f"bear archive ×0=0 股, got {size}"
 
     def test_arm_size_consecutive_relay_no_regime_conservative(self, recorder):
         """_arm_size('consecutive_relay') regime=None → 50 股（保守 ×0.5）。"""
         size = recorder._arm_size("consecutive_relay")
-        assert size == 50.0, f"regime=None 应保守 ×0.5=50 股, got {size}"
+        assert size == 0.0, f"regime=None archive ×0=0 股, got {size}"
 
 
 class TestSettlePendingConsecutiveRelay:
