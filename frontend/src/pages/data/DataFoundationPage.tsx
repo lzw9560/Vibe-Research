@@ -1,7 +1,6 @@
 // 多维度 IA: /data — 数据底座（骨干数据层页）
 // 采集 / cache / backfill 2018 / 质控 status
 // 数据源: /api/metrics/data_fetch + useScheduledTasks(数据采集任务) + honest-empty backfill 2018
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Database, HardDrive, History, ShieldCheck, RefreshCw, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,7 +9,6 @@ import { NextStepBar } from "@/components/ui/NextStepBar";
 import { LineStatusLight } from "@/components/lines/LineStatusLight";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 import { useScheduledTasks } from "@/lib/query";
-import { request } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 // 数据采集任务类型
@@ -38,12 +36,11 @@ export function DataFoundationPage() {
   const { data: tasks } = useScheduledTasks();
   const taskList = tasks ?? [];
 
-  // 数据采集 metrics
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
-    queryKey: ["metrics", "data_fetch"] as const,
-    queryFn: () => request<DataFetchMetrics>("/metrics/data_fetch"),
-    staleTime: 60_000,
-  });
+  // metrics router 已删（2026-09-25 commit 23056de v5 H1 修复）
+  // 死 fetch /metrics/data_fetch → 404 fallback 永久"metrics 待接线"是 grep-blind（/api 前缀漏）
+  // 改：数据健康从 scheduled_tasks 推断，cache/qc 状态 fallback "idle"（诚实无数据源）
+  const metrics = undefined as DataFetchMetrics | undefined;
+  const metricsLoading = false;
 
   // 数据任务健康度
   const dataTasks = taskList.filter(t => DATA_TASK_TYPES.includes(t.task_type as typeof DATA_TASK_TYPES[number]));
