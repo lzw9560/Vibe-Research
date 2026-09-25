@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """S070/数据层加固：免费代理池（fetch + health-check + rotate）。
 
+v4 H3 注：裸调 requests 是 **intentional**（free proxy fetch proxyscrape + health check
+push2his 用代理非本机 IP，不封本机；已 lint_no_bare_requests 白名单）。非 em_get 路径
+（em_get 在 transport.py 走限流+熔断）。health_check_pool 低频（每代理 8s timeout）
+不接 breaker——高频场景才需 breaker，本模块不属高频。
+
 目的：绕过东财 push2his 的 IP-限流（限流是 IP 特定，代理是 fresh IP 可绕过）。
 免费代理 flaky + 对东财（CN 站）多数不通——health-check 过滤能到 push2his 的。
 验证可用后才接 transport.py em_get（池作 direct→系统代理 之后的 fallback）。
