@@ -96,15 +96,19 @@ def daily_report(payload: dict[str, Any]) -> dict[str, Any]:
         logger.warning("[S218] 保存信号记录失败: %s", e)
         report_path = None
 
-    # 4. 可选推送（飞书）
+    # 4. 可选推送（飞书）——cap=0 战法 archive 时不推（process theater，v4 M1 + 4 专家 Reality Checker）
     if payload.get("notify"):
-        try:
-            from notification.notification_service import get_notification_service
-            service = get_notification_service()
-            if hasattr(service, "send"):
-                service.send(report_text)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("[S218] 通知推送失败: %s", e)
+        cap_eff = signals.get("cap", {}).get("effective", 0)
+        if isinstance(cap_eff, (int, float)) and cap_eff <= 0.0:
+            logger.info("[S218] daily_report cap=%s（战法 archive），跳过飞书推送（process theater）", cap_eff)
+        else:
+            try:
+                from notification.notification_service import get_notification_service
+                service = get_notification_service()
+                if hasattr(service, "send"):
+                    service.send(report_text)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[S218] 通知推送失败: %s", e)
 
     return {
         "status": "ok",
