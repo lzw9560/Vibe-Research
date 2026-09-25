@@ -407,8 +407,10 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
 
     freshness = _regime_freshness()
 
-    # regime edge status 标注
-    if current_regime == "bull":
+    # regime edge status 标注（cap=0 archived 优先，非 V1 数字误导，v5 Reality Checker immediate 2）
+    if cap_mult <= 0.0:
+        regime_edge_status = "ARCHIVED（V2 证否 2026-09-24，cap ×0 不交易，参考性为零）"
+    elif current_regime == "bull":
         regime_edge_status = "bull validated（train 1.57%→test 1.04%，p=0.0054）"
     elif current_regime in ("bear", "range"):
         regime_edge_status = f"{current_regime} underpowered（<60 test 天没法定，×0.5 保守）"
@@ -442,7 +444,7 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
             "avoid": len(avoid),
         },
         "signals": signals,
-        "verified_numbers": {
+        "verified_numbers": {} if cap_mult <= 0.0 else {
             "chrono_train": _VERIFIED["chrono_train_pct"],
             "chrono_test": _VERIFIED["chrono_test_pct"],
             "chrono_decay_pct": _VERIFIED["chrono_decay_pct"],

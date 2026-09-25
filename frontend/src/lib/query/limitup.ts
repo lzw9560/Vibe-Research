@@ -20,7 +20,6 @@ import {
   getReviewParams,
 } from "@/lib/api";
 import type { Opts } from "./types";
-import type { WinRateRecordInput } from "@/lib/api";
 import { makeIntradayInterval } from "./intraday";
 import { AUCTION_START_MIN, AUCTION_END_MIN, isWeekday } from "@/lib/auction";
 
