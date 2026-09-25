@@ -213,6 +213,11 @@ app.add_middleware(
 # 可选鉴权：设了 VR_API_KEY 就要求所有 /api/* 带 `Authorization: Bearer <key>`
 #   （本地自托管不设=开放；公网部署务必设，否则别人能读你的持仓/调你的后端）。
 _API_KEY = os.environ.get("VR_API_KEY", "").strip()
+if not _API_KEY:
+    import logging as _logging  # noqa: PLC0415
+    _logging.getLogger("vibe-research").warning(
+        "[startup] VR_API_KEY 未设——公网部署务必设（否则别人能读持仓/调后端，v5 H2）。localhost 自托管可忽略。"
+    )
 @app.middleware("http")
 async def _require_api_key(request: Request, call_next):
     if (
