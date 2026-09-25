@@ -1,6 +1,7 @@
 # Spec: S229 — §44 v3 anti-fake-edge（entry close 涨停 filter + realizability 单向 + momentum survivorship 审）
 
-> 状态：**已通过**（2026-09-25 grill 4 视角 synthesis 修订后定稿；R1/R3/R4/R5 + A5 + spec 模板 §7.1 已落地实现）
+> 状态：**已通过**（2026-09-25 grill 4 视角 synthesis 修订后定稿；R1/R3/R4/R5 + A5 + spec 模板 §7.1 落地）
+> **诚实标注（v4 审查 M3 + S230 grill 后修订）**：R4 helper 落地但**未进 verify() 生产路径**——只被 explore_ranking_anomaly.py 调用。S230（R4 进 verify）DEFER abandoned——3 视角 grill 推翻审查 H1 的 P0（未来无新 edge 经 verify()，milestone pivot 冻结）。R4 helper 在 explore 脚本可手动调 + test_s44_v3_r4.py 进 CI，当前冻结状态够用。未来解冻新 edge 时用方案 C（不改 signature，post_hoc_analysis 字段）进 verify()，见 _abandoned/S230。
 > 作者：claude  日期：2026-09-24
 > 关联：S159（§44 v2）、S228（consecutive_relay entry fix——废弃）、[[v1-fake-edge-retrospective-2026-09-24]]、[[consecutive-relay-falsified-2026-09-23]]、[[ofi-edge-exploratory-2026-09-24]]、[[seal-timing-fake-edge-2026-09-24]]
 
