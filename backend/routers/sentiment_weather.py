@@ -798,7 +798,7 @@ def get_weather_events(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
         # Placeholder: integrate with news/event API
         # For now, return empty list
         events = []
-        return {"data": {"events": events}}
+        return {"data": {"events": events, "source": "待接线（v5 专家 A：placeholder 返空 list，非真实事件数据）"}}
     except Exception as e:
         raise HTTPException(502, f"事件查询异常：{e}") from e
 
@@ -919,7 +919,7 @@ def get_weather_auction() -> Dict[str, Any]:
             },
         ]
 
-        return {"data": {"auction_metrics": auction_metrics, "phase": phase}}
+        return {"data": {"auction_metrics": auction_metrics, "phase": phase, "source": "mock 待接线（v5 专家 A：placeholder 非真实竞价数据，硬编码 metrics）"}}
     except Exception as e:
         raise HTTPException(502, f"竞价指标查询异常：{e}") from e
 
@@ -948,7 +948,7 @@ def get_weather_seal_risk() -> Dict[str, Any]:
             }
         ]
 
-        return {"data": {"seal_risk_metrics": seal_risk_metrics}}
+        return {"data": {"seal_risk_metrics": seal_risk_metrics, "source": "mock 待接线（v5 专家 A：placeholder 非实时盘口数据，硬编码）"}}
     except Exception as e:
         raise HTTPException(502, f"封单风险查询异常：{e}") from e
 
