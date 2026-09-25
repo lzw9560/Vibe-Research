@@ -26,6 +26,19 @@ export function useTurnoverTop(options?: Opts<Awaited<ReturnType<typeof api.turn
   return useQuery({ queryKey: ["market", "turnoverTop"] as const, queryFn: () => api.turnoverTop(), ...options });
 }
 
+// ── hithink 特色榜单（skyrocket 飙升/hotStock 热股/anomaly 异动）——客观榜单数据非推荐 ──
+export function useSkyrocket(period: "day" | "hour" = "day", options?: Opts<Awaited<ReturnType<typeof api.skyrocket>>>) {
+  return useQuery({ queryKey: ["market", "skyrocket", period] as const, queryFn: () => api.skyrocket(period), ...options });
+}
+
+export function useHotStock(period: "day" | "hour" = "day", options?: Opts<Awaited<ReturnType<typeof api.hotStock>>>) {
+  return useQuery({ queryKey: ["market", "hotStock", period] as const, queryFn: () => api.hotStock(period), ...options });
+}
+
+export function useAnomaly(tagCodes?: string, options?: Opts<Awaited<ReturnType<typeof api.anomaly>>>) {
+  return useQuery({ queryKey: ["market", "anomaly", tagCodes ?? "all"] as const, queryFn: () => api.anomaly(tagCodes), ...options });
+}
+
 export function useGlobalIndices(options?: Opts<Awaited<ReturnType<typeof api.globalIndices>>>) {
   return useQuery({ queryKey: ["market", "globalIndices"] as const, queryFn: () => api.globalIndices(), ...options });
 }

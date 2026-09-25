@@ -25,6 +25,9 @@ import {
   useEmotion,
   useSentimentWeatherLatest,
   useRadar,
+  useSkyrocket,
+  useHotStock,
+  useAnomaly,
 } from "@/lib/query";
 import {
   fetchPrediction,
@@ -417,8 +420,63 @@ export function MarketPage() {
         </GlassCard>
       </div>
 
+      <HithinkRanksSection />
+
       <Disclaimer />
       <NextStepBar pageCtx="market" />
     </div>
+  );
+}
+
+/** hithink 特色榜单（飙升/热股/异动）——客观榜单数据非推荐，非 edge 验证 */
+function HithinkRanksSection() {
+  const skyrocketQ = useSkyrocket();
+  const hotStockQ = useHotStock();
+  const anomalyQ = useAnomaly();
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      <RankCard title="飙升榜" query={skyrocketQ} />
+      <RankCard title="热股榜" query={hotStockQ} />
+      <RankCard title="异动榜" query={anomalyQ} />
+    </div>
+  );
+}
+
+interface RankCardProps {
+  title: string;
+  query: { isLoading: boolean; isError: boolean; data?: { data: unknown[]; source: string } };
+}
+
+function RankCard({ title, query }: RankCardProps) {
+  const items = (query.data?.data ?? []) as Array<Record<string, unknown>>;
+  return (
+    <GlassCard className="p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="text-xs text-muted-foreground">同花顺·客观榜单</span>
+      </div>
+      {query.isLoading ? (
+        <p className="text-sm text-muted-foreground">加载中…</p>
+      ) : query.isError ? (
+        <p className="text-sm text-red-500">数据未接通</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">暂无数据</p>
+      ) : (
+        <ul className="space-y-1 text-xs">
+          {items.slice(0, 8).map((it, i) => {
+            const name = String(it.name ?? it.code ?? `项${i + 1}`);
+            const heat = Number(it.heat ?? 0);
+            const trend = String(it.rank_trend ?? "");
+            const trendIcon = trend === "up" ? "↑" : trend === "down" ? "↓" : "";
+            return (
+              <li key={i} className="flex justify-between">
+                <span className="truncate pr-2">{i + 1}. {name}</span>
+                <span className="text-muted-foreground">热度 {heat.toFixed(0)}{trendIcon}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </GlassCard>
   );
 }
