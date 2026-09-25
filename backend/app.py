@@ -57,7 +57,7 @@ import myreports as mr
 import reflection as reflect_layer
 
 # Router imports
-from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti, metrics
+from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti
 from routers import recommendation, win_rate, feishu, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import intraday_ofi as intraday_ofi_router  # S178：OFI 盘中数据只读看板
@@ -269,7 +269,7 @@ app.include_router(stock_financial.router)
 app.include_router(limitup.router)
 app.include_router(review.router)
 app.include_router(sti.router)
-app.include_router(metrics.router)
+# app.include_router(metrics.router)  # 2026-09-25 removed: dead router（前端无调用+后端零引用，metrics_collector 仍被 middleware import）
 app.include_router(recommendation.router)
 app.include_router(win_rate.router)
 app.include_router(feishu.router)

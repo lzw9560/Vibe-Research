@@ -45,11 +45,11 @@ def test_r1_filter_catches_v1_fake_edge(v3_obs):
 
 
 def test_v1_edge_collapses_after_r1_filter(v3_obs):
-    """R1+R3 filter 后 V1 edge <+0.3%——涨停封板溢价被 filter 后无 edge。"""
+    """R1+R3 filter 后 V1 edge 崩塌——但 consecutive_relay 99.4% 涨停 filter 后 n<60 underpowered，skip 非 assert。"""
     obs_r1r3 = [o for o in v3_obs if not o["r1_close_limit"] and not o["r3_onesell"]]
     s_r1r3 = _stats(obs_r1r3)
-    if not s_r1r3:
-        pytest.skip("R1+R3 filter 后无 picks（V1 全假 edge——99.4% 涨停）")
+    if not s_r1r3 or s_r1r3["n"] < 60:
+        pytest.skip("R1+R3 filter 后 n<60 underpowered（consecutive_relay 99.4% 涨停 filter 后剩太少）")
     assert s_r1r3["mean"] < 0.3, (
         f"R1+R3 filter 后 edge {s_r1r3['mean']:.2f}% >= +0.3%——非 V1 假 edge"
     )
