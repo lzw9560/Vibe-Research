@@ -127,12 +127,15 @@ def register_macro(registry: Registry) -> None:
 
 
 def get_fred_api_key() -> str | None:
-    """Read Fred API key from ``$VR_DATA_DIR/fred_api_key``.
+    """Read Fred API key——优先 env ``FRED_API_KEY``，fallback ``$VR_DATA_DIR/fred_api_key`` 文件。
 
-    Returns ``None`` if the env var is unset or the file is absent.
-    The key is never printed or logged. 默认项目内 .vibe-research/
-    （vr_paths，gitignored；旧版 ~/.vibe-research/）。
+    Returns ``None`` if both unset/absent. The key is never printed or logged.
+    v4 H3 安全卫生：env 变量优先（明文文件级隔离弱），文件 fallback 兼容现有。
     """
+    import os  # noqa: PLC0415
+    env_key = os.environ.get("FRED_API_KEY")
+    if env_key:
+        return env_key.strip() or None
     key_file = resolve_data_dir() / "fred_api_key"
     if not key_file.is_file():
         return None
