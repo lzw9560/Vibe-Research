@@ -38,7 +38,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 | 文件 | 职责 | 关键函数/类 |
 |---|---|---|
-| `app.py` | FastAPI 入口；注册 53 个 router；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
+| `app.py` | FastAPI 入口；注册 43 个 router（v5 核 2026-09-26，删 metrics/coach/review/feishu 4 后）；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
 | `astock.py` | A股全栈数据层（五源分级） | `tencent_quote`、`em_get`（统一限流入口）、`eastmoney_reports`、`profit_forecast`、`kline`、`finance`、`full_valuation`、`valuation_percentile`、`em_zt_topic_pool`（涨停四池）、`dragon_tiger_board`、`margin_trading`、`block_trade`、`stock_fund_flow_120d`、`concept_blocks`… |
 | `gstock.py` | 美股/港股/韩股（东财合规子集） | `global_indices`、`resolve_symbol`、`us_hk_stock`、`_push2_stock_get`（push2→push2delay 降级） |
 | `newsradar.py` | 资讯雷达（108 RSS / 12 赛道） | `fetch_radar`、`get_radar(force)`；`ThreadPoolExecutor(40)`；原子写缓存 |
