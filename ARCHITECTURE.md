@@ -2,7 +2,7 @@
 
 > 个人 AI 投研看板（A股 / 美股 / 港股 / 韩股）。本地自托管，FastAPI 后端(:8900) + React 19/Vite 前端(:5899)。
 > 定位：**把客观数据配齐摆好看板，三条出口接用户自己的 AI 做分析。** 研判/推荐/买卖时机属系统能力（CLAUDE.md §1.1，2026-07-30），仅挂轻量风险提醒「历史统计特征，市场有风险」。
-> 文档基准：仓库 develop 分支，2026-07-28。
+> 文档基准：仓库 develop 分支，2026-09-25（v4 审查后更新；前基准 2026-07-28）。
 
 ---
 
@@ -38,7 +38,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 | 文件 | 职责 | 关键函数/类 |
 |---|---|---|
-| `app.py` | FastAPI 入口；注册 46 个 router；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
+| `app.py` | FastAPI 入口；注册 53 个 router；启动调度器；CORS/API Key 鉴权/性能指标中间件；路由级缓存 | `app`、`_require_api_key`、`_metrics_middleware`、`cache_response(ttl)`；启动 `start_portfolio_scheduler(1800)`、`start_limitup_scheduler()`、`_st.start_scheduler()` |
 | `astock.py` | A股全栈数据层（五源分级） | `tencent_quote`、`em_get`（统一限流入口）、`eastmoney_reports`、`profit_forecast`、`kline`、`finance`、`full_valuation`、`valuation_percentile`、`em_zt_topic_pool`（涨停四池）、`dragon_tiger_board`、`margin_trading`、`block_trade`、`stock_fund_flow_120d`、`concept_blocks`… |
 | `gstock.py` | 美股/港股/韩股（东财合规子集） | `global_indices`、`resolve_symbol`、`us_hk_stock`、`_push2_stock_get`（push2→push2delay 降级） |
 | `newsradar.py` | 资讯雷达（108 RSS / 12 赛道） | `fetch_radar`、`get_radar(force)`；`ThreadPoolExecutor(40)`；原子写缓存 |
@@ -47,7 +47,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 | `mcp_server.py` | MCP server（stdio JSON-RPC） | `MCP_TOOLS`、`_handle`、`main` |
 | `cli_runtime.py` | 订阅接入：调本机 CLI | `_CLI_DEFS`、`detect_cli`、`run_cli[_stream]`；三种投递 system-file/stdin/arg；禁 CLI 内置工具防越权；subprocess `encoding="utf-8"`（Windows cp936 locale 防护，HIGH-5） |
 | `config.py` | 配置（dataclass + .env） | `AssistantDefaultConfig`、`load_config()`、`default_config` |
-| `portfolio.py` | 持仓（存 `~/.vibe-research/`） | `refresh_all`、`CACHE_DIR` |
+| `portfolio.py` | 持仓（存 `VR_DATA_DIR`=repo-root `.vibe-research/`，CLAUDE.md §1.2 私有数据隔离） | `refresh_all`、`CACHE_DIR` |
 | `myreports.py` | 研报文件存储（用户私有） | `_DATA_DIR`（VR_DATA_DIR/VR_REPORTS_DIR） |
 | `risk_models.py` | 一日风险量化 | `OneDayRisk`、`get_dynamic_thresholds(sti_phase)`、`_build_risk_factors` |
 | `risk/bomb_alert_system.py` | 炸板预警 | `BombAlertSystem.check` |
@@ -178,7 +178,7 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 ---
 
-## 已知问题（develop 分支，2026-07-29 复核）
+## 已知问题（develop 分支，2026-09-25 v4 审查复核：S001 已修复，本节保留历史）
 
 ### ✅ 已修复：`chat._get_env_llm_config` 缺失 → "问 AI" 500（S001，2026-07-29）
 
@@ -195,8 +195,8 @@ AI 三条出口（共用 chat.TOOLS 5工具 + SYSTEM_PROMPT 投研五维框架�
 
 ## 部署状态（本机）
 
-- 仓库：`E:\python\projects\Vibe-Research`（develop 分支）
-- 后端：`backend/.venv`（Python 3.10.1），uvicorn :8900 运行中，定时调度器已启动
+- 仓库：`/Users/lizhiwei/project/code/stock/Vibe-Research`（develop 分支，macOS；Windows 镜像 `E:\python\projects\Vibe-Research`）
+- 后端：`backend/.venv`（Python 3.11.16，brew python@3.11.16），uvicorn :8900 运行中，定时调度器已启动
 - 前端：`frontend` node_modules 已装，vite :5899 运行中
 - MCP：`vibe-research` 已 `claude mcp add -s user`，健康检查 ✔ Connected，5 工具 stdio 实测可取真实 A 股数据（query_quote 600519/000858 返回正确）
-- 注：dev.sh 为 Linux 风格（lsof + `.venv/bin/activate`），Windows 下改用手动 `.venv/Scripts/python.exe -m uvicorn` + `npm run dev`
+- 注：dev.sh 为 Linux 风格（lsof + `.venv/bin/activate`），macOS 可用；Windows Git Bash 下改用手动 `.venv/Scripts/python.exe -m uvicorn` + `npm run dev`
