@@ -5,7 +5,6 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 
 interface TierMetrics {
@@ -31,37 +30,15 @@ interface BreakdownResponse {
 }
 
 export function Metrics() {
-  const [breakdown, setBreakdown] = useState<BreakdownResponse | null>(null);
+  const [breakdown] = useState<BreakdownResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // metrics router 已删（2026-09-25 commit 23056de）——4 端点全死 fetch（v5 H1 漏修，本会话补）
+  // 改 honest empty：页面保留但无数据源，未来恢复 metrics router 再接线
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    Promise.all([
-      api.metricsDataFetch(),
-      api.metricsCompute(),
-      api.metricsApiResponse(),
-      api.metricsBreakdown(),
-    ])
-      .then(([, , , breakdownData]) => {
-        if (cancelled) return;
-        setBreakdown(breakdownData);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "加载失败");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    setLoading(false);
+    setError("metrics 端点已下线（router 删 commit 23056de）");
   }, []);
 
   if (loading) {
