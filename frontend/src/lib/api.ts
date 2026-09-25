@@ -187,17 +187,6 @@ export const api = {
   // 推荐引擎
   recommendationToday: (limit?: number) =>
     get<StockRecommendation[]>(`/recommendation/today${limit ? `?limit=${limit}` : ""}`),
-  // 胜率追踪
-  winRateStats: (windowSize?: number) =>
-    get<WinRateStats>(`/winrate/stats${windowSize ? `?window_size=${windowSize}` : ""}`),
-  winRateAdjustments: (windowSize?: number) =>
-    get<WinRateAdjustment[]>(`/winrate/adjustments${windowSize ? `?window_size=${windowSize}` : ""}`),
-  winRateTrends: (windowSize?: number) =>
-    get<WinRateTrendPoint[]>(`/winrate/trends${windowSize ? `?window_size=${windowSize}` : ""}`),
-  winRateSector: (sector: string, windowSize?: number) =>
-    get<SectorWinStats>(`/winrate/sector/${encodeURIComponent(sector)}${windowSize ? `?window_size=${windowSize}` : ""}`),
-  winRateStrategy: (strategy: string, windowSize?: number) =>
-    get<StrategyWinStats>(`/winrate/strategy/${encodeURIComponent(strategy)}${windowSize ? `?window_size=${windowSize}` : ""}`),
   // S216 B future: workflow strategies + match（/api/workflow/strategies + /{name}/match）
   workflowStrategies: () =>
     get<{ strategies: StrategyMatch[] }>("/workflow/strategies"),
@@ -205,10 +194,6 @@ export const api = {
     request<{ strategy: string; code: string; matched: boolean; message?: string; signals?: unknown[] }>(
       `/workflow/strategies/${encodeURIComponent(name)}/match?code=${code}`, "POST"
     ),
-  // S025-A2：录入交易记录（批量）。后端 POST /api/winrate/records 接 List[Dict]，返 {data:{added,...}}，
-  // request() 自动解包 .data，故泛型为内层 WinRateRecordsResponse。
-  winRateRecords: (records: WinRateRecordInput[]) =>
-    request<WinRateRecordsResponse>("/winrate/records", "POST", records),
   // 竞价监控
   auctionMonitor: () => get<AuctionSignal[]>("/auction/monitor"),
   auctionWatchlist: () => get<string[]>("/auction/watchlist"),
