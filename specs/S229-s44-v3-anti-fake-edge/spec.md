@@ -1,6 +1,6 @@
 # Spec: S229 — §44 v3 anti-fake-edge（entry close 涨停 filter + realizability 单向 + momentum survivorship 审）
 
-> 状态：草案（grill 4 视角 synthesis 后修订 2026-09-24）
+> 状态：**已通过**（2026-09-25 grill 4 视角 synthesis 修订后定稿；R1/R3/R4/R5 + A5 + spec 模板 §7.1 已落地实现）
 > 作者：claude  日期：2026-09-24
 > 关联：S159（§44 v2）、S228（consecutive_relay entry fix——废弃）、[[v1-fake-edge-retrospective-2026-09-24]]、[[consecutive-relay-falsified-2026-09-23]]、[[ofi-edge-exploratory-2026-09-24]]、[[seal-timing-fake-edge-2026-09-24]]
 

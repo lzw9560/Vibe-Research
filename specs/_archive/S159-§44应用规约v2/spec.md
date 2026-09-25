@@ -1,6 +1,6 @@
 # Spec: S159 — §44 应用规约 v2（保留方法论，改应用方式）
 
-> 状态：草案（方向已接受 2026-09-06，evidence 待 6 专家+8 域 workflow 回来补充）
+> 状态：**已废弃（2026-09-25）——被 S229 §44 v3 取代**。v2 方向已接受但 evidence 未补；S229 v3（anti-fake-edge）已落地 v3 改进（R1/R3/R4/R5 + A5 + spec 模板 §7.1），取代 v2。v2 错窗口（D+1-path 非 gap）已由 v3 修正。归档保留方法论参考。
 > 作者：Claude  日期：2026-09-06
 > 关联：[s44-quant-validation-loop memory]、[methodology-window-before-no-edge-conclusion memory]、S153/S155-S158（§44 v1 各 harness，结论窗口偏差待修）
 

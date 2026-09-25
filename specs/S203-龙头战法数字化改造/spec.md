@@ -1,7 +1,7 @@
 # S203 — 龙头战法数字化改造（首板/接力/反包 + Dragon Score + 风控）
 
 > **⚠️ STALE 2026-09-24 接力部分**：S203 接力（consecutive_relay）部分战法证否（V2 真 edge -1.66% 负），见 [[consecutive-relay-falsified-2026-09-23]]。首板/反包部分待独立验证（不依赖 consecutive_relay edge）。
-> 状态：**草案**（2026-09-14）。基于 6 领域专家 deep-analysis workflow + 6-lens 对抗验证（全 REVISE）+ 实测核事实。待 plan.md/tasks.md。
+> 状态：**草案，冻结**（2026-09-25 milestone pivot 冻结新 spec；接力部分 stale——consecutive_relay falsified 2026-09-24；首板/反包部分待解冻但 milestone pivot 冻结新 spec 长期不解）。基于 6 领域专家 deep-analysis workflow + 6-lens 对抗验证（全 REVISE）+ 实测核事实。待 plan.md/tasks.md（冻结中不做）。
 > 关联：[[../S201b2-carry-logic-fix/spec.md]]（path_return carry fix，本 spec 的 §44 harness 依赖）、[[../S198-衰竭regime条件翻转/spec.md]]（regime-stratified 先例，本 spec 周期胜率复用）、[[../S199-S194方向感知重测/spec.md]]（gap edge 外推禁令先例）。
 > 上游工作流：`w50pptu5i`（6 专家+6 验证器，1M tokens）、`wc8g37bbx`（30 策略 §44 map，跨战法 CRITICAL 喂入 S204）。
 

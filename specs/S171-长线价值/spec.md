@@ -1,6 +1,6 @@
 # Spec: S171 — 价值因子月度 §44v2 验证
 
-> 状态：草案 | 日期：2026-09-08 | 分级：medium | 关联：S168/S169/S170/S159/multiline-strategy-direction
+> 状态：**草案，冻结**（2026-09-25 milestone pivot 冻结新 spec/基建——consecutive_relay 已 falsified，探索阶段结束，不开新方向） | 日期：2026-09-08 | 分级：medium | 关联：S168/S169/S170/S159(已废弃)/multiline-strategy-direction
 
 ## 0. 问题/目标
 
