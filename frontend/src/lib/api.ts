@@ -178,11 +178,6 @@ export const api = {
   // ora-3 §1.5：图谱关联摘要（替代节点数徽标，前端做外链跳 Obsidian）
   stockKgSummary: (code: string) =>
     get<{ data: StockKgSummary }>(`/stock/${code}/kg-summary`),
-  // 性能监控（PRD V2.0.2 三层拆分）
-  metricsDataFetch: () => get<any>("/metrics/data_fetch"),
-  metricsCompute: () => get<any>("/metrics/compute"),
-  metricsApiResponse: () => get<any>("/metrics/api_response"),
-  metricsBreakdown: () => get<any>("/metrics/breakdown"),
   // 推荐引擎
   recommendationToday: (limit?: number) =>
     get<StockRecommendation[]>(`/recommendation/today${limit ? `?limit=${limit}` : ""}`),
