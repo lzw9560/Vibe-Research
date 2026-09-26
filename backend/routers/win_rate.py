@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
+import anyio
 from fastapi import APIRouter, HTTPException, Query
 
 from win_rate_tracker import WinRateTracker
@@ -132,7 +133,8 @@ async def shadow_comparison(window_days: int = Query(28, ge=7, le=90)) -> Dict[s
     只读本地私有库，零新外部调用。
     """
     try:
-        return _shadow_comparison_impl(window_days, _tracker)
+        # anyio.to_thread 卸载同步阻塞 _impl（含 mootdx kline 网络调用）防卡事件循环（v6 H2）
+        return await anyio.to_thread.run_sync(_shadow_comparison_impl, window_days, _tracker)
     except Exception as e:  # noqa: BLE001
         _logger.exception("影子对照异常")
         raise HTTPException(502, f"影子对照异常：{e}") from e
@@ -265,7 +267,8 @@ async def daily_review(date: Optional[str] = Query(None, description="YYYY-MM-DD
     # 非交易日（周末/节假日）回退到最近交易日——周六默认显示周五数据（语义正确）。
     target = date or last_trading_date_str()
     try:
-        return _daily_review_impl(target, _tracker)
+        # anyio.to_thread 卸载同步阻塞 _impl 防卡事件循环（v6 H2）
+        return await anyio.to_thread.run_sync(_daily_review_impl, target, _tracker)
     except Exception as e:  # noqa: BLE001
         _logger.exception("盘后三问异常")
         raise HTTPException(502, f"盘后三问异常：{e}") from e
