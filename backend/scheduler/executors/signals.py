@@ -317,11 +317,15 @@ def keypoint_notify(payload: dict[str, Any]) -> dict[str, Any]:
         logger.warning("[S218] 保存 keypoint_notify 记录失败: %s", e)
         record_path = None
 
-    # 4. 可选推送（飞书）
+    # 4. 可选推送（飞书）——cap=0 战法 archive 时不推（process theater，v6 H1 修复，同 daily_report guard）
     if payload.get("notify"):
-        for note in notifications:
-            full_text = f"{note['title']}\n\n{note['body']}"
-            _send_text_notification(full_text)
+        cap_eff = signals.get("cap", {}).get("effective", 0)
+        if isinstance(cap_eff, (int, float)) and cap_eff <= 0.0:
+            logger.info("[S218] keypoint_notify cap=%s（战法 archive），跳过飞书推送（process theater）", cap_eff)
+        else:
+            for note in notifications:
+                full_text = f"{note['title']}\n\n{note['body']}"
+                _send_text_notification(full_text)
 
     return {
         "status": "ok",

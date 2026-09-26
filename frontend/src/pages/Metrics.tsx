@@ -53,7 +53,7 @@ export function Metrics() {
     return (
       <EmptyState
         icon={<AlertCircle className="h-8 w-8 text-muted-foreground" />}
-        title="加载失败"
+        title="metrics 端点已下线"
         description={error ?? "未知错误"}
       />
     );

@@ -61,7 +61,7 @@ from routers import health, chat, portfolio, watchlist, myreports as myreports_r
 from routers import recommendation, win_rate, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import intraday_ofi as intraday_ofi_router  # S178：OFI 盘中数据只读看板
-# from routers import coach as coach_router  # 2026-09-25 removed: dead router（前端无调用+后端零引用，intraday_coach.py 保留活跃）
+from routers import coach as coach_router  # 2026-09-27 restored: v6 发现前端 IntradayCockpit/IntradayCoach 依赖（v5 grep /api/coach 漏 hook 名 useCoachStatus）
 from routers import debate as debate_router  # main：多空辩论 + 反思审计
 from routers import prediction_ledger_router as prediction_ledger_router_mod
 from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
@@ -299,7 +299,7 @@ app.include_router(prediction_ledger_router_mod.router)  # S061：预测账本
 app.include_router(advisory.router)
 app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
 app.include_router(intraday_ofi_router.router)  # S178：OFI 盘中数据只读看板
-# app.include_router(coach_router.router)  # 2026-09-25 removed: dead router（intraday_coach.py 保留活跃）
+app.include_router(coach_router.router)  # 2026-09-27 restored: v6 发现前端依赖（IntradayCockpit/IntradayCoach 调 useCoachStatus）
 app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
 app.include_router(verifier_router.router)  # S165：§44 验证卡 + 实验记录
 app.include_router(journal_router.router)  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger）
