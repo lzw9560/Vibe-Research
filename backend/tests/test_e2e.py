@@ -208,28 +208,9 @@ class TestCompliance:
 # 6. 新增端点（V2.0.2 补充）
 # ===========================================================================
 
-class TestWinRateEndpoints:
-    def test_winrate_trends(self):
-        r = client.get("/api/winrate/trends")
-        assert r.status_code in (200, 502)
-        if r.status_code == 200:
-            data = r.json()
-            assert "data" in data
-
-    def test_winrate_sector(self):
-        r = client.get("/api/winrate/sector/计算机")
-        assert r.status_code in (200, 404, 502)
-        if r.status_code == 200:
-            data = r.json()
-            assert "data" in data
-
-    def test_winrate_strategy(self):
-        r = client.get("/api/winrate/strategy/首板挖掘")
-        assert r.status_code in (200, 404, 502)
-        if r.status_code == 200:
-            data = r.json()
-            assert "data" in data
-
+# TestWinRateEndpoints removed 2026-09-27: 测删的 6 dead endpoint（trends/sector/strategy，
+# commit 0be9455 v5 P1-4）——win_rate 6 dead HTTP 删后 e2e test 死，删 class（同 v5 H1 教训：
+# 删 endpoint 后 test 没同步）。保留 2 live（shadow-comparison/daily-review）+ 2 impl。
 
 class TestRiskEndpoints:
     @pytest.mark.live
