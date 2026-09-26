@@ -1,6 +1,6 @@
 // 多维度 IA: /data — 数据底座（骨干数据层页）
 // 采集 / cache / backfill 2018 / 质控 status
-// 数据源: /api/metrics/data_fetch + useScheduledTasks(数据采集任务) + honest-empty backfill 2018
+// 数据源: useScheduledTasks(数据采集任务) + honest-empty backfill 2018（/api/metrics/data_fetch 已删 commit 23056de v5 H1）
 import { Link } from "react-router-dom";
 import { Database, HardDrive, History, ShieldCheck, RefreshCw, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -132,7 +132,7 @@ export function DataFoundationPage() {
               </div>
             </div>
           ) : (
-            <HonestEmptyState message="metrics 待接线" hint="/api/metrics/data_fetch endpoint 未返回数据" />
+            <HonestEmptyState message="metrics 已下线" hint="metrics router 删 commit 23056de（v5 H1），数据从 scheduled_tasks 推断" />
           )}
         </GlassCard>
 

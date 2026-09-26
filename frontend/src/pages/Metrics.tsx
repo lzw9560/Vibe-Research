@@ -52,7 +52,7 @@ export function Metrics() {
   if (error || !breakdown) {
     return (
       <EmptyState
-        icon={<AlertCircle className="h-8 w-8 text-muted-foreground" />}
+        icon={<AlertCircle className="h-8 w-8 text-muted-foreground" aria-hidden="true" />}
         title="metrics 端点已下线"
         description={error ?? "未知错误"}
       />
