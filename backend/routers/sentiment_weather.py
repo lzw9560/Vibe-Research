@@ -798,7 +798,7 @@ def get_weather_events(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
         # Placeholder: integrate with news/event API
         # For now, return empty list
         events = []
-        return {"data": {"events": events, "source": "待接线（v5 专家 A：placeholder 返空 list，非真实事件数据）"}}
+        return {"data": {"events": events, "source": "mock 待接线（v5 专家 A：placeholder 返空 list，非真实事件数据）"}}
     except Exception as e:
         raise HTTPException(502, f"事件查询异常：{e}") from e
 

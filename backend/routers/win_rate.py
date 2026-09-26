@@ -4,11 +4,11 @@ Win rate router.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from win_rate_tracker import WinRateTracker, WinRateRecord, generate_strategy_adjustments, get_trends, get_sector_stats, get_strategy_stats
+from win_rate_tracker import WinRateTracker
 
 router = APIRouter(tags=["winrate"])
 _logger = logging.getLogger(__name__)
