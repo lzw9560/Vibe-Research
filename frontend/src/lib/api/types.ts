@@ -596,49 +596,6 @@ export interface StockRecommendation {
   factor_breakdown: Record<string, number>;
 }
 
-// ---- 胜率统计 ----
-export interface WinRateStats {
-  window_size: number;
-  total_trades: number;
-  win_count: number;
-  win_rate: number;
-  avg_return: number;
-  max_drawdown: number;
-  sharpe_ratio: number;
-  trend: string;
-  sector_breakdown: Record<string, any>;
-  strategy_breakdown: Record<string, any>;
-  score_breakdown: Record<string, any>;
-}
-
-// ---- 胜率记录录入（S025-A1）----
-// 字段对齐后端 WinRateRecord（win_rate_tracker.py:18）+ POST /api/winrate/records
-// （routers/win_rate.py:92）。后端 rec.get(field, default) 全字段可选，但校验
-// stock_code/entry_date/exit_date 非空（router:116）。故前端 input：三者必填，其余可选。
-export interface WinRateRecordInput {
-  stock_code: string;      // 必填
-  stock_name?: string;
-  strategy_used?: string;
-  entry_date: string;      // 必填
-  entry_price?: number;
-  exit_date: string;        // 必填
-  exit_price?: number;
-  return_pct?: number;
-  is_win?: boolean;
-  gene_score?: number;
-  sti_label?: string;
-  sector?: string;
-}
-
-// POST /api/winrate/records 返回 {data:{added,added_count,errors,error_count}}；
-// request() 自动解包 .data，故本类型为内层结构（同 WinRateStats 不带 data 包装）。
-export interface WinRateRecordsResponse {
-  added: string[];
-  added_count: number;
-  errors: { index: number; error: string }[];
-  error_count: number;
-}
-
 // ---- S050 W0：影子对照（行为闭环）----
 // 对齐后端 GET /api/winrate/shadow-comparison（routers/win_rate.py:_shadow_comparison_impl）。
 // 三桶算账 + 独立性指标 + 诚实标记（sufficient/no_suggestion_days/missing_kline）。
@@ -663,38 +620,6 @@ export interface ShadowComparison {
   no_suggestion_days: number;
   sufficient: boolean;
   disclaimer: string;
-}
-
-// ---- 胜率趋势/调整/下钻（S025-A 类型收紧）----
-// 对齐后端 win_rate_tracker：get_trends / generate_strategy_adjustments /
-// get_sector_stats / get_strategy_stats 返回结构（request() 自动解包 .data）。
-export interface WinRateTrendPoint {
-  date: string;
-  total_trades: number;
-  win_count: number;
-  win_rate: number;
-}
-
-export interface WinRateAdjustment {
-  type: string;
-  reason: string;
-  action: string;
-}
-
-export interface SectorWinStats {
-  sector: string;
-  total_trades: number;
-  win_count: number;
-  win_rate: number;
-  avg_return: number;
-}
-
-export interface StrategyWinStats {
-  strategy: string;
-  total_trades: number;
-  win_count: number;
-  win_rate: number;
-  avg_return: number;
 }
 
 // ---- 竞价信号 ----
