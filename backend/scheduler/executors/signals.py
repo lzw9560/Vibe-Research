@@ -546,15 +546,18 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
         logger.warning("[S218] weekly_review 保存记录失败: %s", e)
         record_path = None
 
-    # 7. 可选推送（飞书）
+    # 7. 可选推送（飞书）——cap=0 战法 archive 时不推（process theater，v6 M1 修复，同 daily_report/keypoint_notify guard）
     if payload.get("notify"):
-        try:
-            from notification.notification_service import get_notification_service
-            service = get_notification_service()
-            if hasattr(service, "send"):
-                service.send(review_text)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("[S218] weekly_review 通知推送失败: %s", e)
+        if isinstance(effective, (int, float)) and effective <= 0.0:
+            logger.info("[S218] weekly_review cap=%s（战法 archive），跳过飞书推送（process theater）", effective)
+        else:
+            try:
+                from notification.notification_service import get_notification_service
+                service = get_notification_service()
+                if hasattr(service, "send"):
+                    service.send(review_text)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[S218] weekly_review 通知推送失败: %s", e)
 
     return {
         "status": "ok",
