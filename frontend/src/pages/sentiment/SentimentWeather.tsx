@@ -99,8 +99,10 @@ export default function SentimentWeather() {
   const strategy = strategyQ.data;
   const fuseRules = fuseQ.data as unknown as { rules: FuseRule[]; fuse_state: string; weather_state: string; updated_at: string } | undefined;
   const timeline = timelineQ.data as unknown as { timeline: WeatherTimelineItem[]; stats: WeatherStats } | undefined;
-  const auctionMetrics = auctionQ.data as unknown as { auction_metrics: AuctionMetric[]; phase: string } | undefined;
-  const sealRiskMetrics = sealRiskQ.data as unknown as { seal_risk_metrics: SealRiskMetric[] } | undefined;
+  const auctionMetrics = auctionQ.data as unknown as { auction_metrics: AuctionMetric[]; phase: string; source?: string } | undefined;
+  const sealRiskMetrics = sealRiskQ.data as unknown as { seal_risk_metrics: SealRiskMetric[]; source?: string } | undefined;
+  const auctionMockLabel = auctionMetrics?.source?.includes("mock") ? auctionMetrics.source : null;
+  const sealRiskMockLabel = sealRiskMetrics?.source?.includes("mock") ? sealRiskMetrics.source : null;
   const pardonData = pardonQ.data as unknown as { pardon_records: FusePardonRecord[]; is_admin: boolean } | undefined;
 
   // 错误处理：原 Promise.all 任一失败即整体 setError 阻断全屏。
@@ -224,11 +226,19 @@ export default function SentimentWeather() {
 
             {/* Auction Metrics */}
             {auctionMetrics && (
-              <AuctionMetricsCard metrics={auctionMetrics.auction_metrics} phase={auctionMetrics.phase} />
+              <div>
+                {auctionMockLabel && <p className="text-xs text-amber-500 mb-1">⚠️ {auctionMockLabel}</p>}
+                <AuctionMetricsCard metrics={auctionMetrics.auction_metrics} phase={auctionMetrics.phase} />
+              </div>
             )}
 
             {/* Seal Risk Metrics */}
-            {sealRiskMetrics && <SealRiskCard metrics={sealRiskMetrics.seal_risk_metrics} />}
+            {sealRiskMetrics && (
+              <div>
+                {sealRiskMockLabel && <p className="text-xs text-amber-500 mb-1">⚠️ {sealRiskMockLabel}</p>}
+                <SealRiskCard metrics={sealRiskMetrics.seal_risk_metrics} />
+              </div>
+            )}
 
             {/* Strategy Recommendation */}
             <GlassCard className="p-5">
