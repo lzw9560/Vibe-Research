@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -11,10 +11,22 @@ interface Props {
 
 // 玻璃卡：半透明填充 + 发丝边框 + 柔投影 + 顶部内高光（科技玻璃暖橙风的基础容器）。
 // tier 三档治信息过重(每页1 primary+≤3 次卡+辅 sub,非全平铺):primary=glass-glow+ring 主卡 / 默认=次卡 / sub=glass-sub 辅信息。
+// v6 H4: onClick 时加 role/tabIndex/onKeyDown 满足 WCAG 2.1.1（键盘可达，非只鼠标）
 export function GlassCard({ children, className, glow, onClick, tier }: Props) {
+  const handleKeyDown = onClick
+    ? (e: KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }
+    : undefined;
   return (
     <div
       onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={handleKeyDown}
       className={cn(
         tier === "sub" ? "glass-sub px-4 py-3" : "glass p-5",
         (tier === "primary" || glow) && "glass-glow",
