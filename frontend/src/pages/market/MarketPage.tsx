@@ -119,8 +119,9 @@ export function MarketPage() {
               onClick={refreshAll}
               className="text-muted-foreground hover:text-primary"
               title="刷新全部"
+              aria-label="刷新全部"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         }
@@ -304,11 +305,13 @@ export function MarketPage() {
         <button
           onClick={() => setShowIntel((v) => !v)}
           className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
+          aria-expanded={showIntel}
+          aria-label="全球情报折叠"
         >
           {showIntel ? (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
           ) : (
-            <ChevronUp className="h-4 w-4" />
+            <ChevronUp className="h-4 w-4" aria-hidden="true" />
           )}
           全球情报
           {radar && (
@@ -471,7 +474,7 @@ function RankCard({ title, query }: RankCardProps) {
             return (
               <li key={i} className="flex justify-between">
                 <span className="truncate pr-2">{i + 1}. {name}</span>
-                <span className="text-muted-foreground">热度 {heat.toFixed(0)}{trendIcon}</span>
+                <span className="whitespace-nowrap text-muted-foreground">热度 {heat.toFixed(0)}{trendIcon}</span>
               </li>
             );
           })}
