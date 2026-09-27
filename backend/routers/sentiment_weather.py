@@ -2,8 +2,7 @@
 Sentiment Weather Station router.
 Provides market weather state, multi-factor scoring, strategy recommendations, and fuse rules.
 
-前端未接线 endpoint 分类（2026-09-17 排查，audit-skip）：
-- admin trigger（刷新快照，非 UI，保留不删）: weather/refresh
+前端未接线 endpoint 分类（2026-09-17 排查，audit-skip；2026-09-27 删 weather/refresh 死端点）：
 - user-facing future（该接 SentimentWeather 页，标 TODO future）: weather/exit-signals（退出信号列表）
 - CRUD future（熔断/pardon 管理操作，评估接 or 删，暂保留标 future）: weather/pardon/outcome,
   weather/fuse/history, weather/fuse/update
@@ -15,7 +14,6 @@ import sqlite3
 import json
 import os
 import time
-import asyncio
 from config import GENE_SCORES_DB_PATH, STI_TIMELINE_DB_PATH, default_config
 
 router = APIRouter(tags=["sentiment-weather"])
@@ -1105,15 +1103,6 @@ def update_weather_fuse(request: Request, data: Dict[str, Any]) -> Dict[str, Any
         raise HTTPException(502, f"熔断规则更新异常：{e}") from e
 
 
-@router.post("/api/sentiment/weather/refresh")
-def refresh_weather() -> Dict[str, Any]:
-    """手动触发天气状态重新计算。"""
-    try:
-        return get_weather_latest()
-    except Exception as e:
-        raise HTTPException(502, f"天气刷新异常：{e}") from e
-
-
 # =============================================================================
 # S056：次日强制离场信号（铁律三，软 gate）
 # =============================================================================
@@ -1243,28 +1232,6 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
         }
     except Exception as e:
         raise HTTPException(502, f"离场信号查询异常：{e}") from e
-
-
-@router.get("/api/sentiment/storm-predict")
-async def get_storm_predict(date: Optional[str] = Query(None, description="T 日期 YYYY-MM-DD，默认今日")) -> Dict[str, Any]:
-    """S088 盘前暴风雨预测——外围隔夜+内部先行+新闻密度 → 概率分+仓位。
-
-    独立于事后 STI 检测（盘前预测 vs 盘后验证）。概率预测非确定，市场有风险。
-    """
-    from strategies.storm_predictor import predict_storm  # noqa: PLC0415
-    try:
-        r = await asyncio.to_thread(predict_storm, date)
-        return {
-            "date": r.date,
-            "probability": r.probability,
-            "risk_level": r.risk_level,
-            "suggested_position": r.suggested_position,
-            "factors": [{"name": f.name, "score": f.score, "detail": f.detail, "data_status": f.data_status} for f in r.factors],
-            "data_status": r.data_status,  # S125 R3：顶层 provenance（最差因子 status），前端据此标 degraded
-            "disclaimer": r.disclaimer,
-        }
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"暴风雨预测异常：{e}") from e
 
 
 @router.get("/api/macro/snapshot")

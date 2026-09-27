@@ -34,27 +34,6 @@ async def get_auction_top(date: str = Query(None, description="交易日期 YYYY
         raise HTTPException(status_code=500, detail=f"竞价选股分析失败: {str(e)}") from e
 
 
-@router.get("/api/limitup/auction/backfill")
-async def backfill_auction(start_date: str = Query(..., description="起始日期 YYYY-MM-DD"), end_date: str = Query(None, description="结束日期 YYYY-MM-DD，默认今天")) -> Dict[str, Any]:
-    """
-    竞价选股历史回填。
-    """
-    if end_date is None:
-        end_date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
-    try:
-        screener = asc.get_screener()
-        results = screener.backfill(start_date, end_date)
-        return {
-            "status": "ok",
-            "count": len(results),
-            "start_date": start_date,
-            "end_date": end_date,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"竞价选股回填失败: {str(e)}") from e
-
-
 # ---- 竞价选股参数 ----
 
 import os

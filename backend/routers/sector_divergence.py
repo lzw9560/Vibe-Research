@@ -31,16 +31,4 @@ async def sector_divergence_history(days: int = Query(30, ge=7, le=252, descript
         raise HTTPException(502, f"板块分化度历史查询异常：{e}") from e
 
 
-@router.get("/api/sector/rotation")
-async def sector_rotation_api(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
-    """获取板块轮动速度（客观数据，非行动建议）。"""
-    try:
-        result = await sector_divergence.get_sector_rotation(date)
-        if result is None:
-            return {"data": {}}
-        return {"data": result}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"板块轮动计算异常：{e}") from e
-
-
 __all__ = ["router"]

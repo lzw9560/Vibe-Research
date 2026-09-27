@@ -67,14 +67,6 @@ def run(req: RunReq):
     return result
 
 
-@router.get("/api/value-funnel/result")
-def get_result(run_id: str):
-    r = _RUNS.get(run_id)
-    if not r:
-        raise HTTPException(404, "run_id 不存在或已过期")
-    return r
-
-
 @router.get("/api/value-funnel/layers")
 def get_layers(run_id: str):
     r = _RUNS.get(run_id)

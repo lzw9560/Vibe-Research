@@ -5,7 +5,6 @@
 
 GET  /api/prediction-ledger          — 账本列表 + 命中率分桶
 POST /api/prediction-ledger           — 手动录入预测
-POST /api/prediction-ledger/ingest    — 触发系统信号入账（盘后调度用）
 POST /api/prediction-ledger/verify    — 触发到期对账
 """
 from __future__ import annotations
@@ -17,7 +16,6 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 import prediction_ledger as pl
-from prediction_ingest import ingest_all
 from prediction_verify import verify_due_predictions
 
 router = APIRouter(prefix="/api/prediction-ledger", tags=["prediction-ledger"])
@@ -99,18 +97,6 @@ async def add_prediction(body: PredictionBody) -> Dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         _logger.exception("预测录入异常")
         raise HTTPException(502, f"预测录入异常：{e}") from e
-
-
-@router.post("/ingest")
-async def trigger_ingest(date: Optional[str] = Query(None, description="YYYY-MM-DD，默认今日")) -> Dict[str, Any]:
-    """触发系统信号入账（漏斗 final + 战法命中）。盘后调度用。"""
-    try:
-        import asyncio
-        result = await asyncio.to_thread(ingest_all, date)
-        return {"status": "ok", "result": result}
-    except Exception as e:  # noqa: BLE001
-        _logger.exception("预测入账异常")
-        raise HTTPException(502, f"预测入账异常：{e}") from e
 
 
 @router.post("/verify")
