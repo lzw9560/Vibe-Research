@@ -1152,23 +1152,6 @@ export interface FunnelPassedEntry extends FactorCandidate {
   matched_triggers?: string[];
 }
 
-/** S049 D8：战法回溯交易明细（GET /api/strategy/backtest/trades）。 */
-export interface BacktestTrade {
-  date: string;
-  code: string;
-  name: string;
-  won: boolean;
-  return_pct: number;
-}
-
-export interface BacktestTradesResponse {
-  disclaimer: string;
-  strategy_code: string;
-  trades: BacktestTrade[];
-  available_days: number;
-  lookback_days: number;
-}
-
 /** S048 R6：GET /api/workflow/pre-market/dates 响应——有快照的日期降序。 */
 export interface PreMarketDates {
   dates: string[];

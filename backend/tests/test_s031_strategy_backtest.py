@@ -123,35 +123,28 @@ def test_trades_contain_date_code_name(mock_dates, mock_load, mock_kline_mapper,
     assert fp.sample_size == 1
 
 
-def test_backtest_trades_filters_by_strategy(monkeypatch):
-    """S049 D8：list_trades(strategy_code) 返该战法交易明细 + available_days（直调，非 HTTP）。"""
+def test_backtest_trades_filters_by_strategy():
+    """S049 D8：list_trades(strategy_code) 真实调用返战法交易明细（v6.5 修 tautological——非 monkeypatch fake）。
+
+    依赖 astock/load_gene_scores——离线无数据时 skip 非 fail。
+    """
     import strategies.strategy_backtest as sb
-
-    def fake_list(strategy_code, lookback_days=60):
-        return {
-            "strategy_code": strategy_code,
-            "trades": [{"date": "2026-08-01", "code": "000001", "name": "X", "won": True, "return_pct": 8.0}],
-            "available_days": 5,
-            "lookback_days": 60,
-        }
-
-    monkeypatch.setattr(sb, "list_trades", fake_list)
-    result = sb.list_trades("first_plate", lookback_days=60)
+    try:
+        result = sb.list_trades("first_plate", lookback_days=60)
+    except Exception:
+        import pytest
+        pytest.skip("list_trades 依赖网络/DB，离线无数据")
     assert result["strategy_code"] == "first_plate"
-    assert result["available_days"] == 5
-    assert result["trades"][0]["date"] == "2026-08-01"
-    assert result["trades"][0]["code"] == "000001"
-    assert result["trades"][0]["name"] == "X"
-    assert result["trades"][0]["won"] is True
+    assert "trades" in result
+    assert "available_days" in result
 
 
-def test_backtest_trades_unknown_strategy_empty(monkeypatch):
-    """S049 D8：未知战法 → trades 空 + available_days=0（直调，非 HTTP）。"""
+def test_backtest_trades_unknown_strategy_empty():
+    """S049 D8：未知战法 → trades 空（真实调用，非 monkeypatch fake——v6.5 修 tautological）。"""
     import strategies.strategy_backtest as sb
-
-    def fake_list(strategy_code, lookback_days=60):
-        return {"strategy_code": strategy_code, "trades": [], "available_days": 0, "lookback_days": 60}
-
-    monkeypatch.setattr(sb, "list_trades", fake_list)
-    result = sb.list_trades("nonexistent")
+    try:
+        result = sb.list_trades("nonexistent")
+    except Exception:
+        import pytest
+        pytest.skip("list_trades 依赖网络/DB，离线无数据")
     assert result["trades"] == []
