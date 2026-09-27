@@ -366,7 +366,7 @@ def _render_weekly_review(
     """渲染周度复盘人话报告。"""
     date = signals.get("date", "")
     cap = signals.get("cap", {})
-    effective = cap.get("effective", 1.0)
+    effective = cap.get("effective", 0.0)  # v6.5 P1: default 0 fail-safe（原 1.0 fail-open）
 
     lines: list[str] = []
     lines.append(f"=== {date} 周度汇总复盘 ===")
@@ -474,7 +474,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
 
     # 3. 统一 cap gate 评估（S218 #2: 真衰减 stats 替硬编码）——移到 render 前，传 _render_weekly_review 动态用
     cap = signals.get("cap", {})
-    effective = cap.get("effective", 1.0)
+    effective = cap.get("effective", 0.0)  # v6.5 P1: default 0 fail-safe（原 1.0 fail-open）
     from tools.signal_report import _compute_consecutive_relay_decay
     decay_stats = _compute_consecutive_relay_decay()
     cap_up_ready = _evaluate_cap_up_gate(
@@ -636,7 +636,17 @@ def regime_flip_notify(payload: dict[str, Any]) -> dict[str, Any]:
     tradable_n = int(signals.get("filters", {}).get("tradable", 0))
     cap = signals.get("cap", {}).get("effective", "?")
 
-    # 5. 飞书通知（复用 _send_text_notification；未设 webhook 时 no-op + log）
+    # 5. 飞书通知——cap=0 或未知 战法 archive 时不推（process theater，v6.5 P1 修复，同 3 cron guard）
+    if not isinstance(cap, (int, float)) or cap <= 0.0:
+        logger.info("[S222] regime→bull 但 cap=%s（战法 archive 或未知），跳过飞书推送（process theater）", cap)
+        return {
+            "status": "skipped_cap_zero",
+            "regime": "bull",
+            "recent_dates": recent_dates,
+            "tradable": tradable_n,
+            "cap": cap,
+            "reason": "战法 archive cap=0 或未知，不推飞书",
+        }
     text = (
         f"regime→bull（连续 3 天 {recent_dates[0]}~{recent_dates[-1]}），"
         f"{tradable_n} 个可做信号，cap=×{cap}，记录成交以闭合真钱反馈"
