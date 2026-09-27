@@ -4,35 +4,19 @@
 挂在 /api/prediction-ledger/* 前缀（区别于 S017 的 /api/prediction/* 级联预测）。
 
 GET  /api/prediction-ledger          — 账本列表 + 命中率分桶
-POST /api/prediction-ledger           — 手动录入预测
-POST /api/prediction-ledger/verify    — 触发到期对账
+（POST /api/prediction-ledger/verify 已删 2026-09-27 v6 H6/H7 Phase 3 #20——verify_due_predictions 函数保留在 prediction_verify.py）
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
 
 import prediction_ledger as pl
-from prediction_verify import verify_due_predictions
 
 router = APIRouter(prefix="/api/prediction-ledger", tags=["prediction-ledger"])
 _logger = logging.getLogger("vibe-research")
-
-
-class PredictionBody(BaseModel):
-    """手动录入预测。"""
-    stated_at: str = Field(..., description="预测发出日 YYYY-MM-DD")
-    code: str = Field(..., description="股票代码 6 位")
-    name: str = ""
-    source: str = Field("manual", description="funnel_candidate | strategy_hit | manual")
-    signal_ref: str = ""
-    prediction_type: str = Field("next_day_premium", description="next_day_premium | strategy_outcome")
-    baseline_price: float = 0.0
-    expected: str = ">0"
-    horizon: int = Field(1, ge=1, le=30, description="验证周期天数")
 
 
 @router.get("")
@@ -71,44 +55,6 @@ async def get_ledger(
     except Exception as e:  # noqa: BLE001
         _logger.exception("预测账本查询异常")
         raise HTTPException(502, f"预测账本异常：{e}") from e
-
-
-@router.post("")
-async def add_prediction(body: PredictionBody) -> Dict[str, Any]:
-    """手动录入预测。幂等：同日同源同股一条。"""
-    try:
-        p = pl.Prediction(
-            stated_at=body.stated_at,
-            source=body.source,
-            code=body.code,
-            name=body.name,
-            signal_ref=body.signal_ref,
-            prediction_type=body.prediction_type,
-            baseline_price=body.baseline_price,
-            expected=body.expected,
-            horizon=body.horizon,
-        )
-        new_id = pl.add_prediction(p)
-        if new_id is None:
-            return {"status": "duplicate", "msg": "同日同源同股已存在"}
-        return {"status": "ok", "id": new_id}
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        _logger.exception("预测录入异常")
-        raise HTTPException(502, f"预测录入异常：{e}") from e
-
-
-@router.post("/verify")
-async def trigger_verify(date: Optional[str] = Query(None, description="YYYY-MM-DD，默认今日")) -> Dict[str, Any]:
-    """触发到期对账：扫 pending → hit/miss/voided。"""
-    try:
-        import asyncio
-        result = await asyncio.to_thread(verify_due_predictions, date)
-        return {"status": "ok", "result": result}
-    except Exception as e:  # noqa: BLE001
-        _logger.exception("预测对账异常")
-        raise HTTPException(502, f"预测对账异常：{e}") from e
 
 
 __all__ = ["router"]

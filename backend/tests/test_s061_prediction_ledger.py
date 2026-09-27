@@ -111,38 +111,6 @@ class TestR2Ingestion:
         assert id1 is not None and id2 is not None
         assert id1 != id2
 
-    def test_manual_endpoint(self, tmp_db):
-        """POST /api/prediction-ledger 手动录入。"""
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-        from routers import prediction_ledger_router as r
-        import prediction_ledger as pl
-        r.pl.WINRATE_DB_PATH = tmp_db
-
-        app = FastAPI()
-        app.include_router(r.router)
-        client = TestClient(app)
-
-        resp = client.post("/api/prediction-ledger", json={
-            "stated_at": "2026-08-01", "code": "600519", "name": "茅台",
-            "source": "manual", "horizon": 1,
-        })
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "ok"
-
-        # 幂等
-        resp2 = client.post("/api/prediction-ledger", json={
-            "stated_at": "2026-08-01", "code": "600519", "name": "茅台",
-            "source": "manual", "horizon": 1,
-        })
-        assert resp2.json()["status"] == "duplicate"
-
-        # 非法 source
-        resp3 = client.post("/api/prediction-ledger", json={
-            "stated_at": "2026-08-01", "code": "000001", "source": "bogus",
-        })
-        assert resp3.status_code == 400
-
 
 class TestR3Verification:
     """R3：到期验证三态 + 幂等。"""
@@ -216,9 +184,9 @@ class TestR4Stats:
         app.include_router(r.router)
         client = TestClient(app)
 
-        client.post("/api/prediction-ledger", json={
-            "stated_at": "2026-08-01", "code": "600519", "source": "manual", "horizon": 1,
-        })
+        r.pl.add_prediction(
+            r.pl.Prediction(stated_at="2026-08-01", code="600519", source="manual", horizon=1),
+        )
         resp = client.get("/api/prediction-ledger?days=30")
         assert resp.status_code == 200
         body = resp.json()

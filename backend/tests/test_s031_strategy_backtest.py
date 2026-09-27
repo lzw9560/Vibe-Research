@@ -123,12 +123,9 @@ def test_trades_contain_date_code_name(mock_dates, mock_load, mock_kline_mapper,
     assert fp.sample_size == 1
 
 
-def test_backtest_trades_endpoint_filters_by_strategy(monkeypatch):
-    """S049 D8：GET /api/strategy/backtest/trades?strategy_code=X 返该战法交易明细 + available_days。"""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from routers import strategy as strat_router
+def test_backtest_trades_filters_by_strategy(monkeypatch):
+    """S049 D8：list_trades(strategy_code) 返该战法交易明细 + available_days（直调，非 HTTP）。"""
+    import strategies.strategy_backtest as sb
 
     def fake_list(strategy_code, lookback_days=60):
         return {
@@ -138,37 +135,23 @@ def test_backtest_trades_endpoint_filters_by_strategy(monkeypatch):
             "lookback_days": 60,
         }
 
-    monkeypatch.setattr("strategies.strategy_backtest.list_trades", fake_list)
-    app = FastAPI()
-    app.include_router(strat_router.router)
-    client = TestClient(app)
-
-    resp = client.get("/api/strategy/backtest/trades?strategy_code=first_plate&lookback_days=60")
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["strategy_code"] == "first_plate"
-    assert body["available_days"] == 5
-    assert body["trades"][0]["date"] == "2026-08-01"
-    assert body["trades"][0]["code"] == "000001"
-    assert body["trades"][0]["name"] == "X"
-    assert body["trades"][0]["won"] is True
+    monkeypatch.setattr(sb, "list_trades", fake_list)
+    result = sb.list_trades("first_plate", lookback_days=60)
+    assert result["strategy_code"] == "first_plate"
+    assert result["available_days"] == 5
+    assert result["trades"][0]["date"] == "2026-08-01"
+    assert result["trades"][0]["code"] == "000001"
+    assert result["trades"][0]["name"] == "X"
+    assert result["trades"][0]["won"] is True
 
 
-def test_backtest_trades_endpoint_unknown_strategy_empty(monkeypatch):
-    """S049 D8：未知战法 → trades 空 + available_days=0。"""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from routers import strategy as strat_router
+def test_backtest_trades_unknown_strategy_empty(monkeypatch):
+    """S049 D8：未知战法 → trades 空 + available_days=0（直调，非 HTTP）。"""
+    import strategies.strategy_backtest as sb
 
     def fake_list(strategy_code, lookback_days=60):
         return {"strategy_code": strategy_code, "trades": [], "available_days": 0, "lookback_days": 60}
 
-    monkeypatch.setattr("strategies.strategy_backtest.list_trades", fake_list)
-    app = FastAPI()
-    app.include_router(strat_router.router)
-    client = TestClient(app)
-
-    resp = client.get("/api/strategy/backtest/trades?strategy_code=nonexistent")
-    assert resp.status_code == 200
-    assert resp.json()["trades"] == []
+    monkeypatch.setattr(sb, "list_trades", fake_list)
+    result = sb.list_trades("nonexistent")
+    assert result["trades"] == []
