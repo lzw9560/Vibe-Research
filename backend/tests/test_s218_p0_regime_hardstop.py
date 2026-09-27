@@ -198,8 +198,11 @@ class TestRegimeCacheStaleZeroTradable:
 
     def test_regime_cache_stale_zero_tradable(self, monkeypatch, tmp_path):
         """Stale cache (>T-1): 0 tradable, all exploratory."""
-        # Create a stale cache (3 days old)
-        stale_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        # stale_date = prev_trading_date - 10 天（明确 stale，非日期依赖 flaky——v6.5 修 pre-existing fail）
+        from vr_paths import prev_trading_date_str  # noqa: PLC0415
+        from datetime import datetime as _dt, timedelta as _td
+        _prev_td = prev_trading_date_str()
+        stale_date = (_dt.strptime(_prev_td, "%Y-%m-%d") - _td(days=10)).strftime("%Y-%m-%d")
         cache_data = {stale_date: {"close": 3500.0, "ma20": 3520.0}}
 
         # Patch _load_regime_cache to return stale data
