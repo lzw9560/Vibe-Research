@@ -802,7 +802,7 @@ def get_weather_events(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
 
 
 # =============================================================================
-# S065：weather_history 持久化——compute + 查询端点
+# S065：weather_history 持久化——compute 快照计算（HTTP 查询端点已删，盘后写回仍用）
 # =============================================================================
 
 def compute_weather_snapshot(date: str) -> Dict[str, Any]:
@@ -860,17 +860,6 @@ def _get_latest_sti_for_date(date: str) -> Dict[str, Any]:
         return {"score": None, "phase": None, "date": date}
     finally:
         db.close()
-
-
-@router.get("/api/sentiment/weather/history")
-def get_weather_history_endpoint(days: int = Query(90, ge=1, le=365)) -> Dict[str, Any]:
-    """获取持久化的 weather_history 快照（S065，W1 证据层前置）。"""
-    try:
-        from weather_history import get_weather_history as _get_hist  # noqa: PLC0415
-        rows = _get_hist(days)
-        return {"data": {"history": rows, "count": len(rows)}}
-    except Exception as e:
-        raise HTTPException(502, f"weather_history 查询异常：{e}") from e
 
 
 # =============================================================================

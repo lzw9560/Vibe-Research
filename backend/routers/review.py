@@ -6,10 +6,8 @@ from pydantic import BaseModel, Field
 import os
 import json
 import asyncio
-from datetime import datetime
 from typing import Any, Dict
 
-import limitup_screener as _ls
 import daily_review as dr
 from vr_paths import last_trading_date_str
 
@@ -67,30 +65,6 @@ async def get_daily_review(date: str = Query(None, description="交易日期 YYY
         raise HTTPException(status_code=422, detail=f"复盘报告生成失败: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"复盘报告生成失败: {str(e)}")
-
-
-@router.get("/api/review/daily/backfill")
-async def backfill_review(start_date: str = Query(..., description="起始日期 YYYY-MM-DD"), end_date: str = Query(None, description="结束日期 YYYY-MM-DD，默认今天")) -> Dict[str, Any]:
-    """
-    复盘报告历史回填。
-    """
-    if end_date is None:
-        end_date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
-    try:
-        reviewer = dr.get_reviewer()
-        results = reviewer.backfill(start_date, end_date)
-        return {
-            "status": "ok",
-            "count": len(results),
-            "start_date": start_date,
-            "end_date": end_date,
-        }
-    except ValueError as e:
-        # 非交易日/日期格式错误 → 422（与 get_daily_review 一致）
-        raise HTTPException(status_code=422, detail=f"复盘报告回填失败: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"复盘报告回填失败: {str(e)}")
 
 
 @router.get("/api/review/params")

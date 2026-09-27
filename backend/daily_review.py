@@ -14,7 +14,7 @@ import os
 import time
 import threading as _threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -395,37 +395,6 @@ class DailyReviewer:
                 pass
         result = self.precompute_daily(date)
         return result.model_dump(mode="json") if result else None
-    
-    def backfill(self, start_date: str, end_date: str | None = None) -> list[ReviewReport]:
-        """
-        历史回填 — 分批执行，节流 time.sleep(0.5)。
-        """
-        if end_date is None:
-            end_date = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
-        
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-        
-        results = []
-        current_dt = start_dt
-        
-        while current_dt <= end_dt:
-            date_str = current_dt.strftime("%Y-%m-%d")
-            # 跳过非交易日（周末/节假日）——避免 generate_review 守门抛 ValueError
-            # + 避免东财静默回退造成日期错位。
-            if not is_trading_day(current_dt.date()):
-                current_dt += timedelta(days=1)
-                continue
-            try:
-                result = self.precompute_daily(date_str)
-                results.append(result)
-            except Exception as e:
-                logging.getLogger("vibe-research").warning("[%s] 复盘报告生成失败: %s", date_str, e)
-
-            current_dt += timedelta(days=1)
-            time.sleep(0.5)  # 节流
-        
-        return results
 
 
 # ===========================================================================

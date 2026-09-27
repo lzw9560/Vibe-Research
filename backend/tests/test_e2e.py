@@ -130,16 +130,6 @@ class TestLimitUpSeats:
         assert r.status_code in (200, 502)
 
 
-class TestLimitUpMetrics:
-    def test_metrics_default(self):
-        r = client.get("/api/limitup/metrics")
-        assert r.status_code in (200, 502)
-        if r.status_code == 200:
-            data = r.json()
-            assert "date" in data
-            assert "total_zt" in data
-
-
 # ===========================================================================
 # 3. 统一错误处理
 # ===========================================================================
@@ -161,26 +151,6 @@ class TestErrorHandling:
 
 
 # ===========================================================================
-# 4. 缓存装饰器
-# ===========================================================================
-
-class TestCacheDecorator:
-    @pytest.mark.live
-    def test_metrics_cache_hit(self):
-        """同一日期第二次请求应命中缓存（返回内容一致）。
-
-        注：/api/limitup/metrics 走 astock.em_zt_topic_pool（live 东财网络），
-        故标 @pytest.mark.live——离线 -m "not live" 跳过，避免 flaky 与 ~98s 拖慢。
-        原 t2<=t1*2 时序断言与「不强制」注释自相矛盾，已删（时序在 CI 上 flaky）。
-        """
-        r1 = client.get("/api/limitup/metrics")
-        if r1.status_code != 200:
-            pytest.skip("metrics 不可用，跳过缓存测试")
-        r2 = client.get("/api/limitup/metrics")
-        assert r1.json() == r2.json()
-
-
-# ===========================================================================
 # 5. 合规：免责声明检查
 # ===========================================================================
 
@@ -193,12 +163,6 @@ class TestCompliance:
 
     def test_analysis_has_disclaimer(self):
         r = client.get("/api/limitup/analysis/600519")
-        if r.status_code == 200:
-            text = r.text
-            assert "免责" in text or "声明" in text or "教育" in text or "研究" in text
-
-    def test_metrics_has_disclaimer(self):
-        r = client.get("/api/limitup/metrics")
         if r.status_code == 200:
             text = r.text
             assert "免责" in text or "声明" in text or "教育" in text or "研究" in text

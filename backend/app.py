@@ -58,7 +58,7 @@ import reflection as reflect_layer
 
 # Router imports
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti
-from routers import recommendation, win_rate, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, extreme_market, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
+from routers import recommendation, win_rate, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import intraday_ofi as intraday_ofi_router  # S178：OFI 盘中数据只读看板
 from routers import coach as coach_router  # 2026-09-27 restored: v6 发现前端 IntradayCockpit/IntradayCoach 依赖（v5 grep /api/coach 漏 hook 名 useCoachStatus）
@@ -290,7 +290,6 @@ app.include_router(strategy_router.router)
 app.include_router(premarket_router.router)  # S071：盘前选股
 app.include_router(sector_divergence.router)
 app.include_router(risk_router.router)
-app.include_router(extreme_market.router)
 app.include_router(sentiment_weather.router)
 app.include_router(workflow.router)
 app.include_router(scheduled_tasks.router)

@@ -178,16 +178,6 @@ async def risk_seats() -> Dict[str, Any]:
     return {"data": seats}
 
 
-@router.get("/api/risk/stock/{code}")
-async def stock_risk(code: str) -> Dict[str, Any]:
-    """获取个股风险详情（客观数据，非行动建议）。"""
-    try:
-        risk_data = await risk.update_one_day_risk_realtime(code)
-        return {"data": risk_data}
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"个股风险查询异常：{e}") from e
-
-
 # =============================================================================
 # S055：炸板预警 + 封单时序端点
 # =============================================================================

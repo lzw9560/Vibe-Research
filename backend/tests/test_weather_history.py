@@ -135,23 +135,6 @@ class TestComputeWeatherSnapshot(unittest.TestCase):
             self.assertIn(f, snap)
 
 
-class TestHistoryEndpoint(unittest.TestCase):
-    def test_endpoint_returns_history(self):
-        """端点可调 + 返回结构正确。"""
-        from fastapi.testclient import TestClient
-        import app as appmod
-        with mock.patch(
-            "weather_history.get_weather_history",
-            return_value=[{"date": "2026-08-13", "weather_state": "晴天"}],
-        ):
-            client = TestClient(appmod.app)
-            r = client.get("/api/sentiment/weather/history", params={"days": 30})
-        self.assertEqual(r.status_code, 200)
-        data = r.json()["data"]
-        self.assertEqual(data["count"], 1)
-        self.assertEqual(data["history"][0]["weather_state"], "晴天")
-
-
 class TestStiPostMarketWriteback(unittest.TestCase):
     def test_sti_post_market_writes_snapshot_on_ok(self):
         """STI 计算成功 → weather_history 落行（验证调用链）。"""

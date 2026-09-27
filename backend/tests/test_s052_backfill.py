@@ -3,7 +3,6 @@
 
 - _compute_backfill_gap：缺口计算（跨周末 / 无快照上限 60 / 已有快照不重复 / 无缺口不触发）
 - backfill_backtest_snapshots：幂等（连跑两次不重复）+ 单日失败不阻断
-- 端点 POST /api/backtest/backfill
 """
 from __future__ import annotations
 
@@ -104,24 +103,3 @@ def test_backfill_single_day_failure_not_blocking(monkeypatch):
     r = backfill_backtest_snapshots(60)
     assert r["backfilled"] == 2
     assert r["failed"] == 1
-
-
-def test_backfill_endpoint(monkeypatch):
-    """POST /api/backtest/backfill 端点响应结构。"""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-    from routers import scheduled_tasks as strat_router
-
-    monkeypatch.setattr("backfill_snapshots._compute_historical_gap", lambda days=60: ["2026-08-06"])
-    monkeypatch.setattr("scheduled_tasks.TaskExecutor._execute_daily_backtest_run",
-                        lambda self, p: {"snapshot_date": p["as_of_date"], "_status": "ok"})
-
-    app = FastAPI()
-    app.include_router(strat_router.router)
-    client = TestClient(app)
-
-    resp = client.post("/api/backtest/backfill?days=60")
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["backfilled"] == 1
-    assert len(body["days"]) == 1

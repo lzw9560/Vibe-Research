@@ -62,46 +62,6 @@ def test_recommendation_stock_missing_returns_200_null(monkeypatch):
     assert res.json() == {"data": None}
 
 
-# ── T2（R3）: limitup/metrics 用对 ScreenerResult 字段 ─────────────
-
-
-def test_limitup_metrics_returns_200(monkeypatch):
-    """/api/limitup/metrics 不再因 .candidates AttributeError 502。"""
-    import astock
-    import limitup_screener as ls
-    from limitup_screener.models import GeneScore, ScreenerResult
-
-    # 清模块级缓存，避免别的用例残留
-    import routers.limitup.metrics as m
-    m._METRICS_CACHE.clear()
-
-    g = GeneScore(
-        code="600519", name="贵州茅台", total_score=85.0,
-        factors={}, wilson_adjusted=85.0, qualify=True, high_gene=True,
-        last_zt_dates=[], zt_count_250d=3,
-    )
-
-    async def _fake_screener(date):
-        return ScreenerResult(
-            date=date or "2026-07-29",
-            gene_scores=[g], qualified=[g], high_gene=[g],
-            updated="2026-07-29 10:00", disclaimer="客观公开数据",
-        )
-
-    monkeypatch.setattr(ls, "get_screener_result", _fake_screener)
-    monkeypatch.setattr(astock, "em_zt_topic_pool", lambda *a, **k: [])
-    # 交易日守卫（日期语义完整性 P2）：测试在非交易日跑会被守卫拦截返空，
-    # 但本测验证 ScreenerResult 字段映射逻辑，须放行（mock is_trading_day=True）。
-    import routers.limitup.metrics as _metrics_mod
-    monkeypatch.setattr(_metrics_mod, "is_trading_day", lambda d=None: True)
-
-    res = client.get("/api/limitup/metrics")
-    assert res.status_code == 200, f"metrics 502: {res.status_code} {res.text[:300]}"
-    body = res.json()
-    assert "gene_distribution" in body, f"缺 gene_distribution: {body}"
-    assert body["avg_gene_score"] == 85.0
-
-
 # ── T5–T7（R6）: astock disclosure/kline/finance 空返回守卫 ─────────
 
 

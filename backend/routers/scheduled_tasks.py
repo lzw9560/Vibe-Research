@@ -5,7 +5,6 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from datetime import date, datetime
-import asyncio
 
 from vr_paths import BEIJING_TZ
 
@@ -200,17 +199,6 @@ async def run_scheduled_task_now(task_id: int) -> Dict[str, Any]:
             "error": run.error,
         }
     }
-
-
-@router.post("/api/backtest/backfill")
-async def backfill_backtest(days: int = Query(60, ge=1, le=90)) -> Dict[str, Any]:
-    """S052 D2：一次性回测快照回填——逐日补跑缺口日（point-in-time，只读 gene_scores + 本地 K 线）。
-
-    幂等：已有快照日自动排除；单日失败不阻断整批。
-    """
-    from backfill_snapshots import backfill_backtest_snapshots  # noqa: PLC0415
-    result = await asyncio.to_thread(backfill_backtest_snapshots, days)
-    return {"data": result}
 
 
 @router.get("/api/scheduled-tasks/{task_id}/runs")
