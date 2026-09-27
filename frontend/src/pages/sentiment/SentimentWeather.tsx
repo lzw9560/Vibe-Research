@@ -429,8 +429,8 @@ export default function SentimentWeather() {
             <GlassCard className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-foreground">熔断规则（软 gate，只提醒不锁死）</h3>
-                <Badge variant={fuseQ.data?.data.fuse_state === "triggered" ? "danger" : "success"}>
-                  {fuseQ.data?.data.fuse_state ?? "—"}
+                <Badge variant={fuseRules?.fuse_state === "triggered" ? "danger" : "success"}>
+                  {fuseRules?.fuse_state ?? "—"}
                 </Badge>
               </div>
               {fuseQ.isLoading ? (
