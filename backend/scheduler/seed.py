@@ -548,6 +548,19 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 discipline_gate_morning 已创建（cron 15 9 * * 0-4，S231）")
 
+    # S232: T+1 涨停预测 watchlist——15:10 收盘后（T 日全量数据确认）
+    # 观察池非买入信号：turn>20%+vr5>2 信号 lift 5.28x 真但 EV -0.87% 负，二次确认累积 60 天验证
+    if "t1_watchlist_generate" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="t1_watchlist_generate",
+            description="S232 T+1 涨停预测 watchlist（观察池非买入信号，turn>20%+vr5>2 lift 5.28x EV 负）",
+            task_type="t1_watchlist_generate",
+            cron_expr="10 15 * * 0-4",  # 15:10 收盘后（避收盘高峰，T 日全量数据确认）
+            payload={"notify": True},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 t1_watchlist_generate 已创建（cron 10 15 * * 0-4，S232）")
+
     # S222: regime-flip tripwire——09:10 盘前检测（daily_report 14:50 次日、开盘前 9:30）。
     # 连续 3 天 bull 才 alert（hysteresis 防 raw regime 天天翻误报）。
     # consecutive_relay live 验证启动器：bull 回来时通知用户照做 4 周真 P&L。

@@ -105,6 +105,7 @@ _EXPECTED_TASK_TYPES = {
     "hot_money_seats_update",  # S218 龙虎榜席位周更
     "kg_inject",  # S226 M7 图谱注入（公告→DeepSeek JSON→inbox）
     "discipline_gate_morning",  # S231 打板纪律门禁 09:15 工作日（风控工具非 edge）
+    "t1_watchlist_generate",  # S232 T+1 涨停预测 watchlist 15:10 收盘后（观察池非买入信号）
 }
 
 

@@ -59,6 +59,7 @@ import reflection as reflect_layer
 # Router imports
 from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti
 from routers import discipline_gate as discipline_gate_router  # S231: 打板纪律门禁看板
+from routers import t1_forecast as t1_forecast_router  # S232: T+1 涨停预测 watchlist（观察池非买入信号）
 from routers import recommendation, win_rate, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import intraday_ofi as intraday_ofi_router  # S178：OFI 盘中数据只读看板
@@ -275,6 +276,7 @@ app.include_router(stock_financial.router)
 app.include_router(limitup.router)
 app.include_router(review.router)  # 2026-09-27 restored: v6 发现 Settings.tsx 依赖（useReviewParams/saveReviewParams 调 /api/review/params）
 app.include_router(discipline_gate_router.router)  # S231: 打板纪律门禁看板 /api/discipline-gate/*
+app.include_router(t1_forecast_router.router)  # S232: T+1 涨停预测 watchlist /api/t1-forecast/*
 app.include_router(sti.router)
 # app.include_router(metrics.router)  # 2026-09-25 removed: dead router（前端无调用+后端零引用，metrics_collector 仍被 middleware import）
 app.include_router(recommendation.router)
