@@ -109,6 +109,7 @@ class TaskExecutor:
             "daily_report": self._execute_daily_report,  # S218: 每日信号报告（consecutive_relay）
             "keypoint_notify": self._execute_keypoint_notify,  # S218 C3: 关键点位决策通知
             "weekly_review": self._execute_weekly_review,  # S218 C5: 周度汇总复盘
+            "discipline_gate_morning": self._execute_discipline_gate_morning,  # S231: 打板纪律门禁 09:15 工作日盘前
             "regime_flip_notify": self._execute_regime_flip_notify,  # S222: regime→bull tripwire（3 天 hysteresis）
             "fund_accumulation": self._execute_fund_accumulation,  # S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt，un-defer 数据准备）
             "hot_money_seats_update": self._execute_hot_money_seats_update,  # S066 §9 通电——游资席位周更聚合（#13 follow-up，数据 prep 非 spec S220）
@@ -579,6 +580,11 @@ class TaskExecutor:
         """S218 C3 — 关键点位决策通知（D 收盘入场 / D+1 开盘出场 / gap-down 诚实标）。"""
         from scheduler.executors.signals import keypoint_notify
         return keypoint_notify(payload)
+
+    def _execute_discipline_gate_morning(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S231 — 打板纪律门禁（09:15 工作日盘前 7 条件门禁 + 飞书通知，风控工具非 edge）。"""
+        from scheduler.executors.discipline_gate import discipline_gate_morning
+        return discipline_gate_morning(payload)
 
     def _execute_regime_flip_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S222 — regime→bull tripwire（3 天 hysteresis，consecutive_relay live 验证启动器）。"""

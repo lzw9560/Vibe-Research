@@ -536,6 +536,18 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 daily_report 已创建（cron 50 14 * * 0-4，S218）")
 
+    # S231: 打板纪律门禁——09:15 工作日盘前（7 条件 C1-C7 + 飞书通知，风控工具非 edge 基建）
+    if "discipline_gate_morning" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="discipline_gate_morning",
+            description="S231 打板纪律门禁（7 条件 C1-C7 + 飞书通知，风控工具非 edge 基建）",
+            task_type="discipline_gate_morning",
+            cron_expr="15 9 * * 0-4",  # 09:15 盘前（sentiment/sti 已知）
+            payload={"notify": True},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 discipline_gate_morning 已创建（cron 15 9 * * 0-4，S231）")
+
     # S222: regime-flip tripwire——09:10 盘前检测（daily_report 14:50 次日、开盘前 9:30）。
     # 连续 3 天 bull 才 alert（hysteresis 防 raw regime 天天翻误报）。
     # consecutive_relay live 验证启动器：bull 回来时通知用户照做 4 周真 P&L。
