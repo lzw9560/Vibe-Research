@@ -7,6 +7,15 @@
 7 条件门禁（C1-C7）OR-BLOCK：任一红线 fail → BLOCK；全绿 → PASS；其余 → CAUTION。
 terminal master switch: cap=0（consecutive_relay falsified）→ 短路 BLOCK。
 
+实现状态（2026-09-30 对抗审查降标，详见 specs/S231-discipline-gate-workflow/spec.md §5）：
+- Stage 1 门禁判断 ✅ DONE——唯一端到端通电环节（evaluate_discipline_gate + cron 09:15 + 飞书 + 持久化 + router + 前端）。
+- C1-C7 分支（见下 evaluate_discipline_gate :120-218）⚠️ 永久 dead code——cap=0 terminal 短路在 :108-118 先返回，C1-C7 永不执行。保留作"cap>0 解冻备用骨架"，但解冻结构性不可能（cap=0 三重锁死 + 5 批穷尽 300+ 候选 0 alpha）。
+- Stage 2 仓位 discipline_mult 第5层 ❌ 未建——违 risk_rules.py:565 "⛔ 不碰 final_size sizing"，DEFERRED。
+- Stage 3 入场 journal.add_trade ⚠️ 设计本就不自动（spec"用户手动不自动下单"），非断线。
+- Stage 4 退出 keypoint_notify ❌ 不读门禁 verdict（读已证否 consecutive_relay），独立 cron。
+- Stage 5 归因回灌 ❌ 闭环断裂——loss_breaker 产出 cooldown（risk_rules._load_cooldown:517）但本模块不读它。回灌本身不违冻结（spec §4 risk_rules.py 列"复用只读"），延后因 cap=0 下 moot + 解冻不可能。
+- verdict 产出后无下游消费者——verdict 产出即终点。这是"为什么只有门禁"的物理根因。
+
 跑法：cd backend && .venv/bin/python -c "from tools.discipline_gate import evaluate_discipline_gate; print(evaluate_discipline_gate('2026-09-29'))"
 """
 from __future__ import annotations
