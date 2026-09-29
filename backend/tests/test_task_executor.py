@@ -104,6 +104,7 @@ _EXPECTED_TASK_TYPES = {
     "cron_audit",  # S218 cron fire 审计
     "hot_money_seats_update",  # S218 龙虎榜席位周更
     "kg_inject",  # S226 M7 图谱注入（公告→DeepSeek JSON→inbox）
+    "discipline_gate_morning",  # S231 打板纪律门禁 09:15 工作日（风控工具非 edge）
 }
 
 

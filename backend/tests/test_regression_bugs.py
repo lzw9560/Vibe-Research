@@ -109,6 +109,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "macro_fetch",  # S216 FRED 宏观刷新
             "loss_breaker_enforce",  # S203 T6 吃大面 enforce gate
             "kg_inject",  # S226 M7 图谱注入（公告→DeepSeek JSON→inbox）
+            "discipline_gate_morning",  # S231 打板纪律门禁 09:15 工作日
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")
