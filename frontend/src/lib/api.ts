@@ -181,6 +181,9 @@ export const api = {
   // 推荐引擎
   recommendationToday: (limit?: number) =>
     get<StockRecommendation[]>(`/recommendation/today${limit ? `?limit=${limit}` : ""}`),
+  // S231 打板纪律门禁（风控工具非 edge，cap=0 terminal BLOCK）
+  disciplineGateVerdict: (date?: string) =>
+    get<{ date: string; status: string; cap: number; terminal: boolean; conditions: unknown[]; merged_light: string; reasons: string[] } & Record<string, unknown>>(`/discipline-gate/verdict${date ? `?date=${date}` : ""}`),
   // S216 B future: workflow strategies + match（/api/workflow/strategies + /{name}/match）
   workflowStrategies: () =>
     get<{ strategies: StrategyMatch[] }>("/workflow/strategies"),

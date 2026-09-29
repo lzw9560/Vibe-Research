@@ -51,6 +51,7 @@ export const router = createBrowserRouter([
       { path: "/workspace", element: lazyEl(() => import("@/pages/workspace/WorkspacePage"), "WorkspacePage") },
       { path: "/review", element: lazyEl(() => import("@/pages/review/ReviewPage"), "ReviewPage") },
       { path: "/graph", element: lazyEl(() => import("@/pages/cognition/CognitionPage"), "CognitionPage") },
+      { path: "/discipline-gate", element: lazyEl(() => import("@/pages/discipline-gate/DisciplineGatePage"), "DisciplineGatePage") },
       { path: "/data", element: lazyEl(() => import("@/pages/data/DataFoundationPage"), "DataFoundationPage") },
       { path: "/quant-models", element: lazyEl(() => import("@/pages/quant/QuantModelsPage"), "QuantModelsPage") },  // Track D M3: 量化模型 M1-M7（via Cmd+K palette）
       { path: "/earnings-calendar", element: lazyEl(() => import("@/pages/workspace/EarningsCalendarPage"), "EarningsCalendarPage") },  // Track E A3: 财报季日历（honest-empty，待接线 earnings-calendar endpoint）
