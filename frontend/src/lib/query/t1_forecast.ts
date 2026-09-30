@@ -36,7 +36,8 @@ export interface T1Watchlist {
 export function useT1Watchlist(date?: string) {
   return useQuery({
     queryKey: ["t1-forecast", "watchlist", date ?? "latest"],
-    queryFn: () => api.t1ForecastWatchlist(date).then((r) => r.data as T1Watchlist),
+    // client.ts request 自动解包 payload.data（返 watchlist 非 {status,data} 包装），勿二次取 .data
+    queryFn: () => api.t1ForecastWatchlist(date) as Promise<T1Watchlist>,
     staleTime: 5 * 60 * 1000,
   });
 }
