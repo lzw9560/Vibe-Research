@@ -428,3 +428,123 @@ def render_hit_report(hit_result: dict[str, Any]) -> str:
     lines.append("")
     lines.append("⚠️ 历史统计特征，市场有风险，累积 60 天后验证二次确认信号。")
     return "\n".join(lines)
+
+
+def t1_gap_analysis(end_date: str, days: int = 180) -> dict[str, Any]:
+    """T+1 gap 二次确认分析——按 T+1 开盘 gap 分组验证命中率 + EV。
+
+    二次确认逻辑：T 日 watchlist 信号股（turn>20%+vr5>2 未涨停），T+1 开盘 gap
+    已知后决定买入。按 gap 分组（低开/平开/高开），每组命中率 + EV（涨停价卖 vs
+    T+1 open 买）。若某组 EV > 0 或命中率 >8.5%（盈亏平衡），找到正 EV 择时——
+    把 blanket 负 EV（-0.87%）转正。
+
+    Args:
+        end_date: 回填最后 T 日
+        days: 回填天数（默认 180）
+
+    Returns:
+        {baseline, buckets: [{bucket, n, hit, rate, ev}], total_records}
+    """
+    all_bars = _load_kline_bars()
+    zt_db = _zt_db_path()
+    zt_by_date: dict[str, set[str]] = {}
+    if zt_db.exists():
+        conn = sqlite3.connect(str(zt_db))
+        try:
+            for d, c in conn.execute("SELECT date, code FROM zt_history"):
+                zt_by_date.setdefault(d, set()).add(c)
+        finally:
+            conn.close()
+
+    cal = sorted(zt_by_date.keys())
+    if end_date not in cal:
+        return {"status": "no_end_date", "end_date": end_date}
+    end_idx = cal.index(end_date)
+    pairs = [(cal[i], cal[i + 1]) for i in range(max(0, end_idx - days), end_idx) if i + 1 < len(cal)]
+
+    date_idx = {d: i for i, d in enumerate(cal)}
+    records: list[dict[str, Any]] = []
+    for t, t1 in pairs:
+        zt_t = zt_by_date.get(t, set())
+        zt_t1 = zt_by_date.get(t1, set())
+        # T+2（A 股 T+1 制度：T+1 open 买当日不能卖，最早 T+2 卖）
+        t1_idx = date_idx.get(t1)
+        if t1_idx is None or t1_idx + 1 >= len(cal):
+            continue
+        t2 = cal[t1_idx + 1]
+        zt_t2 = zt_by_date.get(t2, set())
+        wl = _generate_from_preloaded(t, all_bars, zt_t)
+        for s in wl["stocks"]:
+            code = s["code"]
+            t_close = s["close"]
+            if t_close is None:
+                continue
+            bars = all_bars.get(code, [])
+            t1_bar = next((b for b in bars if b.get("date") == t1), None)
+            if not t1_bar:
+                continue
+            t1_open = t1_bar.get("open")
+            t1_close = t1_bar.get("close")
+            if t1_open is None or t1_close is None or t1_open == 0:
+                continue
+            t2_bar = next((b for b in bars if b.get("date") == t2), None)
+            if not t2_bar or t2_bar.get("open") is None:
+                continue
+            t2_open = t2_bar["open"]
+            gap = (t1_open - t_close) / t_close * 100
+            was_zt_t1 = code in zt_t1
+            was_zt_t2 = code in zt_t2
+            # 涨停价：主板 10%，创业板/科创板 20%（A 股涨停相对前日 close）
+            zt_limit = 0.2 if code.startswith(("sz30", "sh68")) else 0.1
+            zt_price_t2 = t1_close * (1 + zt_limit)  # T+2 涨停价相对 T+1 close
+            # 真实收益（T+1 open 买，T+2 卖——A 股 T+1 制度合规）：
+            # T+2 涨停=（zt_price_t2 - t1_open）/ t1_open；不涨停=（t2_open - t1_open）/ t1_open
+            ret = ((zt_price_t2 - t1_open) / t1_open * 100) if was_zt_t2 else ((t2_open - t1_open) / t1_open * 100)
+            records.append({
+                "code": code, "t": t, "t1": t1, "t2": t2, "gap": round(gap, 2),
+                "was_zt_t1": was_zt_t1, "was_zt_t2": was_zt_t2, "ret": round(ret, 2),
+            })
+
+    # 分组（gap buckets）
+    bucket_defs = [
+        ("低开<-5%", lambda g: g < -5),
+        ("低开-5%~-2%", lambda g: -5 <= g < -2),
+        ("平开-2%~+2%", lambda g: -2 <= g <= 2),
+        ("高开+2%~+5%", lambda g: 2 < g <= 5),
+        ("高开>+5%", lambda g: g > 5),
+    ]
+    buckets: list[dict[str, Any]] = []
+    for name, fn in bucket_defs:
+        sub = [r for r in records if fn(r["gap"])]
+        n = len(sub)
+        hit = sum(1 for r in sub if r["was_zt_t2"])
+        rate = hit / n if n else 0.0
+        ev = sum(r["ret"] for r in sub) / n if n else 0.0
+        buckets.append({
+            "bucket": name, "n": n, "hit": hit,
+            "rate": round(rate, 4), "ev": round(ev, 2),
+            "positive_ev": ev > 0,
+        })
+
+    total_n = len(records)
+    total_hit = sum(1 for r in records if r["was_zt_t2"])
+    total_ev = sum(r["ret"] for r in records) / total_n if total_n else 0.0
+    baseline = {
+        "bucket": "全样本(T+1 open 买 T+2 卖, 不筛 gap)",
+        "n": total_n, "hit": total_hit,
+        "rate": round(total_hit / total_n, 4) if total_n else 0,
+        "ev": round(total_ev, 2),
+    }
+
+    _logger.info(
+        "[S232] t1_gap_analysis: %d 记录，baseline EV=%.2f%%，正 EV 组数=%d",
+        total_n, total_ev, sum(1 for b in buckets if b["ev"] > 0),
+    )
+    return {
+        "status": "ok",
+        "days": len(pairs),
+        "total_records": total_n,
+        "baseline": baseline,
+        "buckets": buckets,
+        "breakeven_rate": 0.085,  # 盈亏平衡命中率（winner +12.48% 盖 loser -1.16%）
+    }
