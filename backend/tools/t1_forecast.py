@@ -222,3 +222,111 @@ def render_watchlist_report(watchlist: dict[str, Any]) -> str:
     lines.append("")
     lines.append("⚠️ 历史统计特征，市场有风险，真钱仓位与止损你最终决策。")
     return "\n".join(lines)
+
+
+def backfill_t1_hit(t_date: str, t1_date: str) -> dict[str, Any]:
+    """T+1 收盘后回填 T 日 watchlist 的 t1_zt hit 字段（累积二次确认数据）。
+
+    流程：
+    1. 读 {t_date}_watchlist.json（T 日生成的 watchlist）
+    2. 查 zt_history[t1_date] 涨停 codes（T+1 日涨停池）
+    3. 对每个 stock 回填 t1_zt = code in zt_codes_t1
+    4. 写回 watchlist json（更新 t1_zt 字段）
+    5. 返回命中率统计（vs 信号预期 4.34% 验证预测力）
+
+    Args:
+        t_date: T 日（watchlist 生成日，YYYY-MM-DD）
+        t1_date: T+1 日（hit 判定日，YYYY-MM-DD）
+
+    Returns:
+        {status, t_date, t1_date, total, hit_count, hit_rate, expected_rate}
+    """
+    watchlist_path = _forecast_dir() / f"{t_date}_watchlist.json"
+    if not watchlist_path.exists():
+        _logger.warning("[S232] backfill: T 日 watchlist 不存在: %s", watchlist_path)
+        return {"status": "no_watchlist", "t_date": t_date, "t1_date": t1_date}
+
+    try:
+        with open(watchlist_path, "r", encoding="utf-8") as f:
+            watchlist = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        _logger.warning("[S232] backfill: 读 watchlist 失败: %s", e)
+        return {"status": "read_error", "t_date": t_date, "t1_date": t1_date, "error": str(e)}
+
+    # 查 T+1 涨停 codes
+    zt_codes_t1 = _load_zt_codes(t1_date)
+
+    # 回填 t1_zt
+    hit_count = 0
+    stocks = watchlist.get("stocks", [])
+    for stock in stocks:
+        was_zt = stock["code"] in zt_codes_t1
+        stock["t1_zt"] = was_zt
+        if was_zt:
+            hit_count += 1
+
+    # 写回
+    try:
+        with open(watchlist_path, "w", encoding="utf-8") as f:
+            json.dump(watchlist, f, ensure_ascii=False, indent=2, default=str)
+    except OSError as e:
+        _logger.warning("[S232] backfill: 写回 watchlist 失败: %s", e)
+        return {"status": "write_error", "t_date": t_date, "t1_date": t1_date, "error": str(e)}
+
+    total = len(stocks)
+    hit_rate = hit_count / total if total else 0.0
+    expected_rate = HIT_RATE  # 信号预期 4.34%
+
+    _logger.info(
+        "[S232] backfill T+1 hit: t_date=%s t1_date=%s total=%d hit=%d rate=%.2f%% (预期 %.2f%%)",
+        t_date, t1_date, total, hit_count, hit_rate * 100, expected_rate * 100,
+    )
+
+    return {
+        "status": "ok",
+        "t_date": t_date,
+        "t1_date": t1_date,
+        "total": total,
+        "hit_count": hit_count,
+        "hit_rate": round(hit_rate, 4),
+        "expected_rate": expected_rate,
+        "deviation_pct": round((hit_rate - expected_rate) / expected_rate * 100, 2) if expected_rate else None,
+    }
+
+
+def _forecast_dir() -> Path:
+    """.vibe-research/t1_forecast/ 目录。"""
+    return Path(resolve_data_dir()) / "t1_forecast"
+
+
+def render_hit_report(hit_result: dict[str, Any]) -> str:
+    """人话报告——T+1 hit 回填结果 + 命中率 vs 预期。"""
+    lines: list[str] = []
+    if hit_result.get("status") != "ok":
+        lines.append(f"⚠️ T+1 hit 回填失败：{hit_result.get('status')}")
+        lines.append(f"T 日 {hit_result.get('t_date')} → T+1 {hit_result.get('t1_date')}")
+        return "\n".join(lines)
+
+    t_date = hit_result["t_date"]
+    t1_date = hit_result["t1_date"]
+    total = hit_result["total"]
+    hit = hit_result["hit_count"]
+    rate = hit_result["hit_rate"]
+    expected = hit_result["expected_rate"]
+    dev = hit_result.get("deviation_pct")
+
+    lines.append(f"📊 T+1 hit 回填：{t_date} watchlist → {t1_date} 涨停判定")
+    lines.append(f"总数 {total} 只 · 命中 {hit} 只 · 命中率 {rate*100:.2f}%")
+    lines.append(f"信号预期 {expected*100:.2f}% · 偏差 {dev:+.1f}%")
+    lines.append("")
+    if total == 0:
+        lines.append("T 日无 watchlist（市场未满足信号条件）")
+    elif dev is not None and dev < -30:
+        lines.append(f"⚠️ 命中率显著低于预期（{dev:+.1f}%）——当前 regime 信号可能失效")
+    elif dev is not None and dev > 30:
+        lines.append(f"📈 命中率显著高于预期（{dev:+.1f}%）——当前 regime 信号增强（注意样本小波动大）")
+    else:
+        lines.append("命中率在预期区间内（±30%）——信号预测力稳定")
+    lines.append("")
+    lines.append("⚠️ 历史统计特征，市场有风险，累积 60 天后验证二次确认信号。")
+    return "\n".join(lines)

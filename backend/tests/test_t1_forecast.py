@@ -20,7 +20,9 @@ from tools.t1_forecast import (
     TURN_THRESHOLD,
     VR5_THRESHOLD,
     _vol_ratio_5,
+    backfill_t1_hit,
     generate_t1_watchlist,
+    render_hit_report,
     render_watchlist_report,
 )
 
@@ -241,4 +243,90 @@ class TestRenderWatchlistReport:
         }
         report = render_watchlist_report(wl)
         assert "无信号股" in report
+        assert "历史统计特征" in report
+
+
+class TestBackfillT1Hit:
+    """backfill_t1_hit T+1 hit 回填 + 命中率统计（累积二次确认数据）。"""
+
+    def test_updates_t1_zt_and_counts_hit(self, tmp_path, monkeypatch):
+        """回填 t1_zt + 统计命中率（hit/miss 正确标记）。"""
+        # Arrange: T 日 watchlist + zt_history[T+1]
+        forecast_dir = tmp_path / "t1_forecast"
+        forecast_dir.mkdir()
+        watchlist = {
+            "date": "2026-09-17",
+            "signal": "turn>20% & vr5>2",
+            "count": 2,
+            "edge_status": EDGE_STATUS,
+            "stocks": [
+                {"code": "sh600002", "turn": 25, "vr5": 3, "t1_zt": None},
+                {"code": "sh600003", "turn": 22, "vr5": 2.5, "t1_zt": None},
+            ],
+        }
+        wl_path = forecast_dir / "2026-09-17_watchlist.json"
+        wl_path.write_text(json.dumps(watchlist), encoding="utf-8")
+
+        zt_db = tmp_path / "zt_history.db"
+        conn = sqlite3.connect(str(zt_db))
+        conn.execute("CREATE TABLE zt_history (date TEXT, code TEXT)")
+        conn.execute("INSERT INTO zt_history VALUES ('2026-09-18', 'sh600002')")  # hit
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setattr("tools.t1_forecast._forecast_dir", lambda: forecast_dir)
+        monkeypatch.setattr("tools.t1_forecast._zt_db_path", lambda: zt_db)
+
+        # Act
+        result = backfill_t1_hit("2026-09-17", "2026-09-18")
+
+        # Assert
+        assert result["status"] == "ok"
+        assert result["t_date"] == "2026-09-17"
+        assert result["t1_date"] == "2026-09-18"
+        assert result["total"] == 2
+        assert result["hit_count"] == 1
+        assert result["hit_rate"] == 0.5
+        assert result["expected_rate"] == 0.0434
+
+        # 验证写回的 t1_zt 字段
+        with open(wl_path, "r", encoding="utf-8") as f:
+            updated = json.load(f)
+        assert updated["stocks"][0]["t1_zt"] is True
+        assert updated["stocks"][1]["t1_zt"] is False
+
+    def test_no_watchlist_returns_status(self, tmp_path, monkeypatch):
+        """T 日 watchlist 不存在 → status=no_watchlist。"""
+        forecast_dir = tmp_path / "t1_forecast"
+        forecast_dir.mkdir()
+        zt_db = tmp_path / "zt_history.db"
+        conn = sqlite3.connect(str(zt_db))
+        conn.execute("CREATE TABLE zt_history (date TEXT, code TEXT)")
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setattr("tools.t1_forecast._forecast_dir", lambda: forecast_dir)
+        monkeypatch.setattr("tools.t1_forecast._zt_db_path", lambda: zt_db)
+
+        result = backfill_t1_hit("2026-09-17", "2026-09-18")
+        assert result["status"] == "no_watchlist"
+
+    def test_render_hit_report_contains_rate(self):
+        """报告含命中率 + 预期偏差 + 诚实标注。"""
+        hit = {
+            "status": "ok",
+            "t_date": "2026-09-17",
+            "t1_date": "2026-09-18",
+            "total": 10,
+            "hit_count": 1,
+            "hit_rate": 0.10,
+            "expected_rate": 0.0434,
+            "deviation_pct": 130.4,
+        }
+        report = render_hit_report(hit)
+        assert "2026-09-17" in report
+        assert "10.00%" in report
+        assert "4.34%" in report
+        assert "130.4" in report  # 偏差
+        assert "高于预期" in report  # >30% 标警
         assert "历史统计特征" in report

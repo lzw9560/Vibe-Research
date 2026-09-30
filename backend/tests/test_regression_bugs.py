@@ -111,6 +111,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "kg_inject",  # S226 M7 图谱注入（公告→DeepSeek JSON→inbox）
             "discipline_gate_morning",  # S231 打板纪律门禁 09:15 工作日
             "t1_watchlist_generate",  # S232 T+1 涨停预测 watchlist 15:10 收盘后（观察池非买入信号）
+            "t1_hit_backfill",  # S232 T+1 hit 回填 18:00（累积二次确认数据）
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

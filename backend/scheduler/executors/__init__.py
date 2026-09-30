@@ -111,6 +111,7 @@ class TaskExecutor:
             "weekly_review": self._execute_weekly_review,  # S218 C5: 周度汇总复盘
             "discipline_gate_morning": self._execute_discipline_gate_morning,  # S231: 打板纪律门禁 09:15 工作日盘前
             "t1_watchlist_generate": self._execute_t1_watchlist_generate,  # S232: T+1 涨停预测 watchlist 15:10 收盘后（观察池非买入信号）
+            "t1_hit_backfill": self._execute_t1_hit_backfill,  # S232: T+1 hit 回填 18:00（zt_history 17:15 final 后，累积二次确认数据）
             "regime_flip_notify": self._execute_regime_flip_notify,  # S222: regime→bull tripwire（3 天 hysteresis）
             "fund_accumulation": self._execute_fund_accumulation,  # S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt，un-defer 数据准备）
             "hot_money_seats_update": self._execute_hot_money_seats_update,  # S066 §9 通电——游资席位周更聚合（#13 follow-up，数据 prep 非 spec S220）
@@ -591,6 +592,11 @@ class TaskExecutor:
         """S232 — T+1 涨停预测 watchlist（15:10 收盘后，观察池非买入信号，EV 负）。"""
         from scheduler.executors.t1_forecast import t1_watchlist_generate
         return t1_watchlist_generate(payload)
+
+    def _execute_t1_hit_backfill(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S232 — T+1 hit 回填（18:00，zt_history final 后，累积二次确认数据）。"""
+        from scheduler.executors.t1_forecast import t1_hit_backfill
+        return t1_hit_backfill(payload)
 
     def _execute_regime_flip_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S222 — regime→bull tripwire（3 天 hysteresis，consecutive_relay live 验证启动器）。"""

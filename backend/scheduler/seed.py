@@ -561,6 +561,19 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 t1_watchlist_generate 已创建（cron 10 15 * * 0-4，S232）")
 
+    # S232: T+1 hit 回填——18:00 收盘后（zt_history 17:15 final 后，累积二次确认数据）
+    # 命中率 vs 信号预期 4.34% 验证预测力
+    if "t1_hit_backfill" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="t1_hit_backfill",
+            description="S232 T+1 hit 回填（命中率 vs 预期 4.34%，累积二次确认数据）",
+            task_type="t1_hit_backfill",
+            cron_expr="0 18 * * 0-4",  # 18:00（zt_history 17:15 final 后）
+            payload={"notify": True},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 t1_hit_backfill 已创建（cron 0 18 * * 0-4，S232）")
+
     # S222: regime-flip tripwire——09:10 盘前检测（daily_report 14:50 次日、开盘前 9:30）。
     # 连续 3 天 bull 才 alert（hysteresis 防 raw regime 天天翻误报）。
     # consecutive_relay live 验证启动器：bull 回来时通知用户照做 4 周真 P&L。
