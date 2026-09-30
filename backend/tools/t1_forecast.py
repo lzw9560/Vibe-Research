@@ -430,6 +430,121 @@ def render_hit_report(hit_result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def t1_exit_optimization(end_date: str, days: int = 180, gap_lo: float = -5, gap_hi: float = -2) -> dict[str, Any]:
+    """退出规则优化——网格搜索 T+2 stop/take 找最优 exit（归因"纪律创正 EV"指引）。
+
+    归因 workflow 确认用户赚最可能靠"止盈止损纪律"（breakout +0.36% p=0.041）。
+    close_ev 戳破 T+2 open 卖全负——但 T+2 盘中 stop/take 可能改善（避开低开亏损/捕获 high）。
+
+    entry: T+1 open 买（gap 已知后，低开-5%~-2% 组）
+    exit: T+2 盘中 stop/take 触发或 T+2 close 卖
+    - stop: T+1 open × (1 - stop%)，T+2 low 触及则 stop 卖
+    - take: T+1 open × (1 + take%)，T+2 high 触及则 take 卖
+    - 都不触发：T+2 close 卖
+    - stop/take 都触发：保守假设 stop 先（T+2 低开先 stop）
+    """
+    all_bars = _load_kline_bars()
+    zt_by_date: dict[str, set[str]] = {}
+    zt_db = _zt_db_path()
+    if zt_db.exists():
+        conn = sqlite3.connect(str(zt_db))
+        try:
+            for d, c in conn.execute("SELECT date, code FROM zt_history"):
+                zt_by_date.setdefault(d, set()).add(c)
+        finally:
+            conn.close()
+
+    cal = sorted(zt_by_date.keys())
+    if end_date not in cal:
+        return {"status": "no_end_date"}
+    date_idx = {d: i for i, d in enumerate(cal)}
+    end_idx = cal.index(end_date)
+    pairs = [(cal[i], cal[i + 1]) for i in range(max(0, end_idx - days), end_idx) if i + 1 < len(cal)]
+
+    records: list[dict[str, Any]] = []
+    for t, t1 in pairs:
+        zt_t = zt_by_date.get(t, set())
+        t1_idx = date_idx.get(t1)
+        if t1_idx is None or t1_idx + 1 >= len(cal):
+            continue
+        t2 = cal[t1_idx + 1]
+        wl = _generate_from_preloaded(t, all_bars, zt_t)
+        for s in wl["stocks"]:
+            code = s["code"]
+            t_close = s["close"]
+            if t_close is None:
+                continue
+            bars = all_bars.get(code, [])
+            t1_bar = next((b for b in bars if b.get("date") == t1), None)
+            if not t1_bar:
+                continue
+            t1_open = t1_bar.get("open")
+            if t1_open is None or t1_open == 0:
+                continue
+            gap = (t1_open - t_close) / t_close * 100
+            if not (gap_lo <= gap < gap_hi):
+                continue
+            # 排除 T+1 一字买不进
+            zt_limit = 0.2 if code.startswith(("sz30", "sh68")) else 0.1
+            if t1_open >= t_close * (1 + zt_limit) * 0.999:
+                continue
+            t2_bar = next((b for b in bars if b.get("date") == t2), None)
+            if not t2_bar:
+                continue
+            t2_open = t2_bar.get("open")
+            t2_high = t2_bar.get("high")
+            t2_low = t2_bar.get("low")
+            t2_close = t2_bar.get("close")
+            if None in (t2_open, t2_high, t2_low, t2_close):
+                continue
+            records.append({
+                "code": code, "t1_open": t1_open,
+                "t2_open": t2_open, "t2_high": t2_high, "t2_low": t2_low, "t2_close": t2_close,
+            })
+
+    # 网格 stop/take
+    stops = [0.0, -0.03, -0.05, -0.08]  # 0=不止损
+    takes = [0.0, 0.03, 0.05, 0.08, 0.10]  # 0=不止盈
+    grid: list[dict[str, Any]] = []
+    for stop in stops:
+        for take in takes:
+            rets = []
+            for r in records:
+                entry = r["t1_open"]
+                stop_price = entry * (1 + stop) if stop < 0 else None
+                take_price = entry * (1 + take) if take > 0 else None
+                # T+2 触发判断（保守：stop 优先 if both trigger）
+                stop_triggered = stop_price is not None and r["t2_low"] <= stop_price
+                take_triggered = take_price is not None and r["t2_high"] >= take_price
+                if stop_triggered and stop_price is not None:
+                    exit_price = stop_price  # stop 卖
+                elif take_triggered and take_price is not None:
+                    exit_price = take_price  # take 卖
+                else:
+                    exit_price = r["t2_close"]  # hold 到 T+2 close
+                ret = (exit_price - entry) / entry * 100
+                rets.append(ret)
+            n = len(rets)
+            ev = sum(rets) / n if n else 0
+            grid.append({
+                "stop": f"{stop*100:+.0f}%", "take": f"{take*100:+.0f}%",
+                "n": n, "ev": round(ev, 2), "positive": ev > 0,
+            })
+
+    grid.sort(key=lambda x: x["ev"], reverse=True)
+    baseline = next((g for g in grid if g["stop"] == "+0%" and g["take"] == "+0%"), None)
+    best = grid[0] if grid else None
+    _logger.info("[S232] t1_exit_optimization: %d 记录, baseline EV=%s, best EV=%s",
+                len(records),
+                f"{baseline['ev']:.2f}%" if baseline else "N/A",
+                f"{best['ev']:.2f}%" if best else "N/A")
+    return {
+        "status": "ok", "total_records": len(records),
+        "baseline": baseline, "best": best,
+        "grid": grid[:10],  # top 10
+    }
+
+
 def t1_gap_analysis(end_date: str, days: int = 180) -> dict[str, Any]:
     """T+1 gap 二次确认分析——按 T+1 开盘 gap 分组验证命中率 + EV。
 
