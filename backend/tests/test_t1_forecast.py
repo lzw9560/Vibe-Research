@@ -312,13 +312,13 @@ class TestBackfillT1Hit:
         assert result["status"] == "no_watchlist"
 
     def test_render_hit_report_contains_rate(self):
-        """报告含命中率 + 预期偏差 + 诚实标注。"""
+        """报告含命中率 + 预期偏差 + 诚实标注（样本≥30 才标警）。"""
         hit = {
             "status": "ok",
             "t_date": "2026-09-17",
             "t1_date": "2026-09-18",
-            "total": 10,
-            "hit_count": 1,
+            "total": 50,
+            "hit_count": 5,
             "hit_rate": 0.10,
             "expected_rate": 0.0434,
             "deviation_pct": 130.4,
@@ -328,5 +328,22 @@ class TestBackfillT1Hit:
         assert "10.00%" in report
         assert "4.34%" in report
         assert "130.4" in report  # 偏差
-        assert "高于预期" in report  # >30% 标警
+        assert "高于预期" in report  # >30% + 样本≥30 → 标警增强
+        assert "历史统计特征" in report
+
+    def test_render_hit_report_small_sample_no_false_alarm(self):
+        """样本 <30 标'样本不足'非'失效'（Poisson 小样本 0 命中合理，防误报警）。"""
+        hit = {
+            "status": "ok",
+            "t_date": "2026-09-17",
+            "t1_date": "2026-09-18",
+            "total": 13,
+            "hit_count": 0,
+            "hit_rate": 0.0,
+            "expected_rate": 0.0434,
+            "deviation_pct": -100.0,
+        }
+        report = render_hit_report(hit)
+        assert "样本不足" in report
+        assert "失效" not in report  # 小样本不标失效（Poisson 0 命中概率 57% 合理）
         assert "历史统计特征" in report
