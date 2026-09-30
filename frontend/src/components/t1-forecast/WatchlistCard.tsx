@@ -1,12 +1,16 @@
 // components/t1-forecast/WatchlistCard.tsx — S232 T+1 涨停预测 watchlist 看板。
 // 观察池非买入信号。5.28x lift 真但 EV -0.87% 负，二次确认累积 60 天验证中。
+// T+1 hit 回填后展示命中/未命中标记 + 命中率汇总。
 import { useT1Watchlist, type T1WatchlistStock } from "@/lib/query/t1_forecast";
 import { GlassCard } from "@/components/ui/GlassCard";
 
 function StockRow({ s }: { s: T1WatchlistStock }) {
+  const ztMark = s.t1_zt === true ? "✅" : s.t1_zt === false ? "❌" : "⏳";
   return (
     <div className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-      <span className="font-mono text-sm">{s.code}</span>
+      <span className="font-mono text-sm">
+        {ztMark} {s.code}
+      </span>
       <span className="text-xs text-muted-foreground">
         turn={s.turn}% · vr5={s.vr5} · pct={s.pctChg != null ? s.pctChg : "-"}% · close={s.close}
       </span>
@@ -35,6 +39,13 @@ export function WatchlistCard() {
 
   const isWeakSignal = data.edge_status === "weak-signal-EV-negative";
 
+  // T+1 hit 回填统计
+  const hitCount = data.stocks.filter((s) => s.t1_zt === true).length;
+  const missCount = data.stocks.filter((s) => s.t1_zt === false).length;
+  const backfilled = hitCount + missCount;
+  const backfillRate = backfilled > 0 ? ((hitCount / backfilled) * 100).toFixed(2) : null;
+  const insufficientSample = backfilled > 0 && backfilled < 30;
+
   return (
     <GlassCard className="p-4">
       <div className="flex items-start justify-between mb-3">
@@ -61,10 +72,17 @@ export function WatchlistCard() {
         ⚠️ {data.honest_caveat}
       </div>
 
+      {backfilled > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-3 text-xs text-blue-700">
+          📊 T+1 hit 回填：✅ {hitCount} 命中 / ❌ {missCount} 未命中 · 命中率 {backfillRate}%
+          {insufficientSample && " · 样本不足（<30）累积 60 天验证"}
+        </div>
+      )}
+
       {data.stocks.length > 0 ? (
         <div className="space-y-0.5">
           <p className="text-xs font-medium text-muted-foreground mb-2">
-            观察池（非买入信号，二次确认累积验证中）：
+            观察池（非买入信号，二次确认累积验证中）· ✅命中 ❌未命中 ⏳待回填
           </p>
           {data.stocks.slice(0, 20).map((s) => (
             <StockRow key={s.code} s={s} />
