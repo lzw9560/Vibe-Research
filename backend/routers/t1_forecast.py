@@ -84,3 +84,56 @@ def get_report(
             "report_text": render_watchlist_report(watchlist),
         },
     }
+
+
+@router.get("/history")
+def get_history() -> dict[str, Any]:
+    """GET /api/t1-forecast/history——读所有持久化 watchlist 聚合 daily 命中率 + 累积趋势。
+
+    读 _FORECAST_DIR/{date}_watchlist.json，聚合每天 t1_zt 已回填的 stocks，
+    返 daily 命中率 + 累积命中率 vs 预期 4.34%（验证信号预测力稳定性）。
+    """
+    daily: list[dict[str, Any]] = []
+    if not _FORECAST_DIR.exists():
+        return {
+            "status": "ok",
+            "data": {"daily": [], "cumulative": {"total": 0, "hit": 0, "rate": 0, "expected_rate": 0.0434}},
+        }
+    for path in sorted(_FORECAST_DIR.glob("*_watchlist.json")):
+        date = path.stem.replace("_watchlist", "")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                wl = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        stocks = wl.get("stocks", [])
+        backfilled = [s for s in stocks if s.get("t1_zt") is not None]
+        if not backfilled:
+            continue  # 跳过未回填的
+        hit = sum(1 for s in backfilled if s.get("t1_zt"))
+        total = len(backfilled)
+        daily.append({
+            "date": date,
+            "total": total,
+            "hit": hit,
+            "rate": round(hit / total, 4) if total else 0.0,
+        })
+
+    cum_h = sum(d["hit"] for d in daily)
+    cum_s = sum(d["total"] for d in daily)
+    cum_rate = cum_h / cum_s if cum_s else 0.0
+    expected = 0.0434  # HIT_RATE 信号预期命中率
+    return {
+        "status": "ok",
+        "data": {
+            "daily": daily,
+            "cumulative": {
+                "total": cum_s,
+                "hit": cum_h,
+                "rate": round(cum_rate, 4),
+                "expected_rate": expected,
+                "deviation_pct": round((cum_rate - expected) / expected * 100, 2) if expected else None,
+                "days": len(daily),
+            },
+        },
+    }

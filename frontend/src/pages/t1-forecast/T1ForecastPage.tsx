@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { NextStepBar } from "@/components/ui/NextStepBar";
 import { WatchlistCard } from "@/components/t1-forecast/WatchlistCard";
+import { HistoryChart } from "@/components/t1-forecast/HistoryChart";
 
 export function T1ForecastPage() {
   return (
@@ -12,6 +13,9 @@ export function T1ForecastPage() {
         title="T+1 涨停预测 watchlist"
         subtitle="S232 观察池工具 · 非买入信号 · 5.28x lift 真但 EV 负 · 二次确认累积验证中"
       />
+      <div className="mb-4">
+        <HistoryChart />
+      </div>
       <div className="mb-4">
         <WatchlistCard />
       </div>

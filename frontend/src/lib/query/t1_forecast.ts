@@ -41,3 +41,32 @@ export function useT1Watchlist(date?: string) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface T1HistoryDay {
+  date: string;
+  total: number;
+  hit: number;
+  rate: number;
+}
+
+export interface T1Cumulative {
+  total: number;
+  hit: number;
+  rate: number;
+  expected_rate: number;
+  deviation_pct: number | null;
+  days: number;
+}
+
+export interface T1HistoryData {
+  daily: T1HistoryDay[];
+  cumulative: T1Cumulative;
+}
+
+export function useT1History() {
+  return useQuery({
+    queryKey: ["t1-forecast", "history"],
+    queryFn: () => api.t1ForecastHistory() as Promise<T1HistoryData>,
+    staleTime: 5 * 60 * 1000,
+  });
+}

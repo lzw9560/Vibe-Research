@@ -186,6 +186,8 @@ export const api = {
     get<{ date: string; status: string; cap: number; terminal: boolean; conditions: unknown[]; merged_light: string; reasons: string[] } & Record<string, unknown>>(`/discipline-gate/verdict${date ? `?date=${date}` : ""}`),
   t1ForecastWatchlist: (date?: string) =>
     get<{ date: string; signal: string; signal_lift: number; signal_lift_ci: string; base_rate: number; hit_rate: number; edge_status: string; honest_caveat: string; count: number; stocks: unknown[] } & Record<string, unknown>>(`/t1-forecast/watchlist${date ? `?date=${date}` : ""}`),
+  t1ForecastHistory: () =>
+    get<{ daily: unknown[]; cumulative: { total: number; hit: number; rate: number; expected_rate: number; deviation_pct: number | null; days: number } } & Record<string, unknown>>(`/t1-forecast/history`),
   // S216 B future: workflow strategies + match（/api/workflow/strategies + /{name}/match）
   workflowStrategies: () =>
     get<{ strategies: StrategyMatch[] }>("/workflow/strategies"),
