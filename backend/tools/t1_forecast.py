@@ -115,26 +115,16 @@ def _vol_ratio_5(sorted_bars: list[dict], idx: int) -> float | None:
     return vol / avg5
 
 
-def generate_t1_watchlist(target_date: str) -> dict[str, Any]:
-    """生成 T+1 涨停预测 watchlist（观察池非买入信号）。
+def _generate_from_preloaded(
+    target_date: str,
+    all_bars: dict[str, list[dict]],
+    zt_codes_t: set[str],
+) -> dict[str, Any]:
+    """核心筛选逻辑（用 preloaded data，不加载 DB）——backfill_history 复用避重复加载。
 
-    筛选：T 日有 kline bar + NOT 在 zt_history[T]（未涨停，避 entry 溢价 + survivorship）
-          + turn>TURN_THRESHOLD + vr5>VR5_THRESHOLD + 非 ST
-
-    Args:
-        target_date: T 日 YYYY-MM-DD
-
-    Returns:
-        watchlist dict{date, signal, signal_lift, signal_lift_ci, base_rate, hit_rate,
-                       edge_status, honest_caveat, count, stocks[]}
-        stocks[] 含 code/name/turn/vr5/pctChg/close/high/low/amount
-                 + 二次确认字段（t1_zt/t1_auction/t1_seal_time/confirmed 初始 None）
+    筛选：T 日有 kline bar + NOT 在 zt_history[T]（未涨停）+ turn>TURN_THRESHOLD
+          + vr5>VR5_THRESHOLD + 非 ST
     """
-    zt_codes_t = _load_zt_codes(target_date)
-    all_bars = _load_kline_bars()
-    _logger.info("[S232] 加载 %d codes kline，T 日涨停池 %d codes",
-                len(all_bars), len(zt_codes_t))
-
     stocks: list[dict[str, Any]] = []
     for code, sorted_bars in all_bars.items():
         # 找 T 日 bar
@@ -178,7 +168,7 @@ def generate_t1_watchlist(target_date: str) -> dict[str, Any]:
             "confirmed": None,  # 二次确认是否触发
         })
 
-    watchlist = {
+    return {
         "date": target_date,
         "signal": "turn>20% & vr5>2",
         "signal_lift": SIGNAL_LIFT,
@@ -190,9 +180,111 @@ def generate_t1_watchlist(target_date: str) -> dict[str, Any]:
         "count": len(stocks),
         "stocks": stocks,
     }
+
+
+def generate_t1_watchlist(target_date: str) -> dict[str, Any]:
+    """生成 T+1 涨停预测 watchlist（观察池非买入信号）。
+
+    筛选：T 日有 kline bar + NOT 在 zt_history[T]（未涨停，避 entry 溢价 + survivorship）
+          + turn>TURN_THRESHOLD + vr5>VR5_THRESHOLD + 非 ST
+
+    Args:
+        target_date: T 日 YYYY-MM-DD
+
+    Returns:
+        watchlist dict{date, signal, signal_lift, signal_lift_ci, base_rate, hit_rate,
+                       edge_status, honest_caveat, count, stocks[]}
+        stocks[] 含 code/name/turn/vr5/pctChg/close/high/low/amount
+                 + 二次确认字段（t1_zt/t1_auction/t1_seal_time/confirmed 初始 None）
+    """
+    zt_codes_t = _load_zt_codes(target_date)
+    all_bars = _load_kline_bars()
+    _logger.info("[S232] 加载 %d codes kline，T 日涨停池 %d codes",
+                len(all_bars), len(zt_codes_t))
+    watchlist = _generate_from_preloaded(target_date, all_bars, zt_codes_t)
     _logger.info("[S232] T+1 watchlist %s: %d 只（turn>20% & vr5>2，观察池非买入信号）",
-                 target_date, len(stocks))
+                 target_date, watchlist["count"])
     return watchlist
+
+
+def backfill_history(end_date: str, days: int = 60) -> dict[str, Any]:
+    """历史 backfill——一次性加载 kline+zt，loop N 天生成 watchlist+回填 hit（避重复加载）。
+
+    照 [[backfill-historical-data-before-waiting]] 教训：累积验证数据优先回补历史非等。
+    1 次加载 kline（~13s）+ N 天纯计算 loop（秒级），vs N 次 generate_t1_watchlist（N×13s）。
+
+    Args:
+        end_date: 回填最后 T 日（YYYY-MM-DD，需 zt_history 有此日数据）
+        days: 回填天数（T 日数量，默认 60）
+
+    Returns:
+        {days, total, hit, hit_rate, expected_rate, daily: [{t, t1, total, hit, rate}]}
+    """
+    # 一次性加载 kline（最慢，~13s）
+    all_bars = _load_kline_bars()
+    # 一次性加载 zt_history 全量（date -> set(code)）
+    zt_db = _zt_db_path()
+    zt_by_date: dict[str, set[str]] = {}
+    if zt_db.exists():
+        conn = sqlite3.connect(str(zt_db))
+        try:
+            for d, c in conn.execute("SELECT date, code FROM zt_history"):
+                zt_by_date.setdefault(d, set()).add(c)
+        finally:
+            conn.close()
+
+    # 交易日历（zt_history 有数据的日期，排序）
+    cal = sorted(zt_by_date.keys())
+    if end_date not in cal:
+        _logger.warning("[S232] backfill_history: end_date %s 不在 zt_history", end_date)
+        return {"status": "no_end_date", "end_date": end_date}
+    end_idx = cal.index(end_date)
+    start_idx = max(0, end_idx - days)
+    pairs = [(cal[i], cal[i + 1]) for i in range(start_idx, end_idx) if i + 1 < len(cal)]
+
+    _forecast_dir().mkdir(parents=True, exist_ok=True)
+
+    results: list[dict[str, Any]] = []
+    th = ts = 0
+    for t, t1 in pairs:
+        zt_t = zt_by_date.get(t, set())
+        zt_t1 = zt_by_date.get(t1, set())
+        wl = _generate_from_preloaded(t, all_bars, zt_t)
+        # 回填 t1_zt
+        hit = 0
+        for s in wl["stocks"]:
+            s["t1_zt"] = s["code"] in zt_t1
+            if s["t1_zt"]:
+                hit += 1
+        # 持久化（含 t1_zt）
+        path = _forecast_dir() / f"{t}_watchlist.json"
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(wl, f, ensure_ascii=False, indent=2, default=str)
+        except OSError as e:  # noqa: BLE001
+            _logger.warning("[S232] backfill_history 持久化失败 %s: %s", t, e)
+
+        total = len(wl["stocks"])
+        rate = hit / total if total else 0.0
+        results.append({"t": t, "t1": t1, "total": total, "hit": hit, "rate": round(rate, 4)})
+        th += hit
+        ts += total
+
+    overall_rate = th / ts if ts else 0.0
+    _logger.info(
+        "[S232] backfill_history: %d 天 %d 只信号股，命中 %d，命中率 %.2f%%（预期 %.2f%%）",
+        len(results), ts, th, overall_rate * 100, HIT_RATE * 100,
+    )
+    return {
+        "status": "ok",
+        "days": len(results),
+        "total": ts,
+        "hit": th,
+        "hit_rate": round(overall_rate, 4),
+        "expected_rate": HIT_RATE,
+        "deviation_pct": round((overall_rate - HIT_RATE) / HIT_RATE * 100, 2) if HIT_RATE else None,
+        "daily": results,
+    }
 
 
 def render_watchlist_report(watchlist: dict[str, Any]) -> str:
