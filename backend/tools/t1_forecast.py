@@ -496,13 +496,19 @@ def t1_gap_analysis(end_date: str, days: int = 180) -> dict[str, Any]:
             was_zt_t2 = code in zt_t2
             # 涨停价：主板 10%，创业板/科创板 20%（A 股涨停相对前日 close）
             zt_limit = 0.2 if code.startswith(("sz30", "sh68")) else 0.1
-            zt_price_t2 = t1_close * (1 + zt_limit)  # T+2 涨停价相对 T+1 close
-            # 真实收益（T+1 open 买，T+2 卖——A 股 T+1 制度合规）：
-            # T+2 涨停=（zt_price_t2 - t1_open）/ t1_open；不涨停=（t2_open - t1_open）/ t1_open
-            ret = ((zt_price_t2 - t1_open) / t1_open * 100) if was_zt_t2 else ((t2_open - t1_open) / t1_open * 100)
+            zt_price_t1 = t_close * (1 + zt_limit)  # T+1 涨停价相对 T close
+            # 排除 T+1 一字涨停（t1_open 接近涨停价=买不进，V1 假 edge 根因 R1）
+            if t1_open >= zt_price_t1 * 0.999:
+                continue  # 一字涨停买不进，排除（避 over-credit）
+            # 诚实 EV 口径（high-return workflow 戳破 open_ev 日内泄漏）：
+            # close_ev: T+1 close 买 T+2 open 卖（post-confirmation，隔离 T+1 日内泄漏）
+            # T+2 涨停保守按 t2_open 卖（不 over-credit 涨停价，V1 根因 R2 exit 一字 over-credit）
+            close_ev = ((t2_open - t1_close) / t1_close * 100) if t1_close else 0.0
             records.append({
                 "code": code, "t": t, "t1": t1, "t2": t2, "gap": round(gap, 2),
-                "was_zt_t1": was_zt_t1, "was_zt_t2": was_zt_t2, "ret": round(ret, 2),
+                "was_zt_t1": was_zt_t1, "was_zt_t2": was_zt_t2,
+                "ret": round(close_ev, 2),  # close_ev 诚实口径（替代旧 open_ev）
+                "close_ev": round(close_ev, 2),
             })
 
     # 分组（gap buckets）
