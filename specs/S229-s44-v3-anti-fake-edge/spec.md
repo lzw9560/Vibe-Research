@@ -14,9 +14,12 @@ consecutive_relay V1 +1.04% 假 edge 被 §44 v2 验证通过但 V2 offline 量�
 V1 假 edge 真根因**不是** realizability（一字涨停 sell 可成交——巨量买盘吞卖盘，持有人卖能立即成交）。真根因是：
 1. **R2 窗口语义**：entry=D close=**涨停价**（连板日收盘封板涨停价）——买到涨停价，次日开盘高开是"涨停封板溢价"非"连板接力 edge"
 2. **R4 survivorship**：只看涨停股（lbc≥2 连板 / price>=limit_up）——涨停股 next_open 连板高开，未涨停股无 edge（OFI 验证：涨停 +8.03% vs 未涨停 +1.05%）
+3. **R6 成交假设虚构**（2026-10-05 加入，第 3 次覆辙后补）：stop/take exit 假设按 stop_price 精确成交，但跳空穿仓（t2_open<stop）真实成交=t2_open 更差。S232 -3% stop +1.75% EV 100% 来自 fill 虚构（realistic fill 后 ≈ baseline +0.70% mean-reversion 非 alpha）。与 R2 entry 涨停价溢价 / R3 exit 一字 over-credit 并列的新根因。
 
 **不是根因**（grill agent 2 F1 修正）：
 - ~~R3 一字涨停 sell 卖不掉 over-credit~~——一字涨停 sell-side FILLABLE（巨量买盘吞卖盘），不是 over-credit
+
+> **2026-10-05 第 3 次覆辙教训**：consecutive_relay +1.04%（R2 封板溢价）/ gap open_ev +0.70%（T+1 日内泄漏）/ -3% stop +1.75%（R6 fill 虚构）。R6 是新根因，stop/take exit 必须用 realistic gap-through 成交（t2_open<=stop 按 t2_open 非 stop_price）。
 
 ## 3. 需求清单（grill synthesis 修订）
 
@@ -25,6 +28,7 @@ V1 假 edge 真根因**不是** realizability（一字涨停 sell 可成交—�
 - [x] R3：realizability-bias **单向**（删 is_onebuy_locked——一字涨停 sell 可成交）。保留现有 is_onesell_locked（一字跌停 sell 不可，已有）
 - [x] R4：momentum survivorship 审——**R1 必要补充**（R1 不够抓盘中封板，R4 filter 涨停股）。涨停定义预注册（收盘涨停/盘中触及/一字/炸板）+ 并入 v2 窗口 sanity（4 合 1 前置审）+ filter 后样本量 check（n<60 underpowered）+ 泛化所有 momentum filter（涨停/lbc/一字/ST）
 - [x] R5：§44 spec 模板加 v3 sanity 步骤
+- [x] R6（2026-10-05 加）：**成交假设虚构审**——stop/take exit 必须用 realistic gap-through 成交（t2_open<=stop 按 t2_open 非 stop_price），跳空穿仓按开盘价成交 + 滑点 0.2-0.5% + 跌停锁死卖不掉。S232 -3% stop +1.75% EV 100% 来自 fill 虚构（第 3 次覆辙戳破后补）
 
 ## 4. 受影响文件（grill synthesis 修订）
 

@@ -33,6 +33,21 @@ GAP_LO = -5.0  # 二次确认低开下界
 GAP_HI = -2.0  # 二次确认低开上界
 STOP_PCT = -0.03  # T+2 盘中止损 -3%（OOS 最优）
 
+# ⚠️ 诚实修正（2026-10-05，审视 workflow 戳破）：
+# -3% stop +1.75% EV 是 fill 假设虚构（56.4% T+2 跳空穿 stop，真实成交=t2_open 更差）。
+# realistic fill 后 EV ≈ baseline +0.70%（mechanical mean-reversion 非 alpha）。
+# 第 3 次 V1 假 edge 覆辙（consecutive_relay +1.04% / gap open_ev +0.70% / -3% stop +1.75%）。
+# Stage 4 exit 无 edge——baseline T+2 close 卖是 mean-reversion 非 alpha。
+# 工作流定位：观察工具（Stage 1-3 watchlist+二次确认+open 买）+ Stage 4 exit 无 edge + Stage 5 归因。
+# 不进 sizing 承重墙，不自动下单，用户手动操作 + 纪律止损（但纪律不创 EV）。
+EXIT_EDGE_STATUS = "fill-fiction-fake-edge"
+EXIT_HONEST_CAVEAT = (
+    "-3% stop +1.75% 是 fill 假设虚构（56.4% T+2 跳空穿 stop 真实成交=t2_open 更差），"
+    "realistic fill 后 EV ≈ baseline +0.70%（mechanical mean-reversion 非 alpha）。"
+    "Stage 4 exit 无 edge——工作流定位观察工具，exit 规则不赚钱。"
+    "第 3 次 V1 假 edge 覆辙，新根因'成交假设虚构'已加入 §44 v3。"
+)
+
 
 def limitup_workflow(target_date: str) -> dict[str, Any]:
     """打板工作流操作建议（T 日 watchlist + T+1 二次确认 + exit 规则）。
@@ -157,7 +172,9 @@ def limitup_workflow(target_date: str) -> dict[str, Any]:
             "stop": f"{STOP_PCT * 100:+.0f}%",
             "entry": "T+1 open（gap 已知后买）",
             "exit": f"T+2 盘中 {STOP_PCT * 100:+.0f}% stop / T+2 close",
-            "oos_ev": "+1.38% net/笔（180 天 636 只 OOS 4 段全正）",
+            "oos_ev": "+1.38% net/笔（in-sample 180 天 636 只 OOS 4 段全正，但审视 workflow 戳破 fill 虚构，realistic ≈ baseline +0.70% mean-reversion 非 alpha）",
+            "edge_status": EXIT_EDGE_STATUS,
+            "exit_honest_caveat": EXIT_HONEST_CAVEAT,
         },
         "operation_steps": [
             f"① T 日 {target_date} 15:10 看 watchlist（{watchlist_count} 只信号股）",
@@ -189,6 +206,8 @@ def render_workflow_report(workflow: dict[str, Any]) -> str:
     lines.append("")
     lines.append(f"exit 规则：{workflow['exit_rules']['entry']} / {workflow['exit_rules']['exit']}")
     lines.append(f"OOS EV：{workflow['exit_rules']['oos_ev']}")
+    lines.append(f"⚠️ exit edge_status: {EXIT_EDGE_STATUS}")
+    lines.append(f"⚠️ {EXIT_HONEST_CAVEAT}")
     lines.append("")
     if workflow.get("honest_caveat"):
         lines.append(f"⚠️ {workflow['honest_caveat']}")
