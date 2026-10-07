@@ -13,6 +13,28 @@ disentangle 发现长假节前 edge 主要来自 A 组（节前+TOM 重叠）：
 5. 衰减检查（按年/按 era）
 
 verdict 判定：Bonf 后 p<0.05 + walk-forward test PASS + 无单 regime → edge-confirmed
+
+⚠️ 2026-10-08 6 视角 grill 综合后降级 verdict: edge-confirmed-provisional → exploratory
+（真信号 in-sample 极强 p=0.00005 Bonf×63=0.003 仍 PASS，但 OOS 不够稳健到 confirmed）
+
+2 视角 NOT SURVIVE（戳破 confirmed）:
+1. 执行成本: 29% picks（2004-2010）无上证综指 ETF 可交易（510210 2011-01-30 才上线），
+   恰好 EV 最高（+1.258% WR80%）拉高整体。扣可交易期（2011+）n=75 Bonf×6=0.0511
+   borderline FAIL（差 0.0025）。walk-forward test 期含不可交易数据 boost"衰减1.3%"。
+2. post-hoc: OOS test p=0.0301 用裸 p 没 Bonf 校正（本脚本漏了），Bonf×4=0.12 FAIL /
+   Bonf×6=0.18 FAIL。A 组定义本身是 post-hoc subgroup selection（从 A/B/C/D 4 组选最好）。
+   其他子组 pre+EOM（p=0.0002）/pre+Quarter-end（p=0.0012）也显著→edge 是宽泛节前效应
+   非 TOM 特有。OOS test 离群依赖（2024-09-27 +9.326%=test 43%，去后 p=0.0493 边界）。
+
+4 视角 SURVIVE（provisional 方向，证 edge 真实非假阳性）:
+- lottery: 去top3后p=0.0002，block bootstrap CI排除0，非尾部驱动（区别 inst_dominant lottery）
+- regime: 排除早期（2011-2026）raw p=0.0085 PASS，但 era Bonf×4 仅 2004-2010 PASS（era-fragile）
+- 机制: 5混淆全排除（春节/元旦/双排除/COVID/regime）+ era-matched超额 p=0.0030 + 留一法7/7
+- 统计rigor: Bonf×7=0.0272 PASS + 真 Bailey-Lopez de Prado DSR PSR=0.99997 + NW HAC t=3.5
+
+综合: edge 真实（in-sample 极强+非尾部+非混淆+era-matched）但 OOS 不够稳健到 confirmed。
+需更多可交易样本（2011+ 累积）复验。待修: Bonf×7（非×6）+ OOS test Bonf + 可交易期过滤 +
+多 split 比例稳定性 + NW HAC + 真 DSR + 去离群稳定性。
 """
 from __future__ import annotations
 import json
@@ -183,14 +205,31 @@ for label, d0, d1 in eras:
         print(f"  {label}: n={s['n']} EV={s['mean']:.3f}% WR={s['wr']*100:.1f}% "
               f"median={s['median']:.3f}% p={s['p']:.4f}")
 
+# ---------- 5. 可交易期子分析（2011+，510210 ETF 上线后）----------
+print(f"\n{'='*70}")
+print("5. 可交易期子分析（2011+，510210 ETF 上线后）— 6 视角 grill 执行成本发现")
+print(f"{'='*70}")
+a_tradable = [p for p in a_picks if p['buy_date'] >= '2011-01-30']
+t_rets = [p['ret'] for p in a_tradable]
+t_s = stats(t_rets)
+t_bonf6 = min(t_s['p'] * 6, 1.0)
+print(f"  可交易期 n={t_s['n']} EV={t_s['mean']:.4f}% WR={t_s['wr']*100:.1f}% "
+      f"median={t_s['median']:.3f}% p_raw={t_s['p']:.4f} Bonf×6={t_bonf6:.4f} "
+      f"{'PASS' if t_bonf6 < 0.05 else 'FAIL'}")
+print(f"  对比全期 n={a_s['n']} EV={a_s['mean']:.4f}% Bonf×6={bonf6_overall:.4f} PASS")
+print(f"  ⚠️ 扣可交易约束后 Bonf×6 {'PASS' if t_bonf6 < 0.05 else 'FAIL'}（{t_bonf6:.4f}）— "
+      f"edge 是边界值非稳健 confirmed")
+print(f"  原因: 2004-2010 的 30 picks（29%）EV+1.258% WR80% 最高拉高整体，")
+print(f"        但 510210（唯一跟踪上证综指 ETF）2011-01-30 才上线 → 不可交易")
+
 # ---------- verdict ----------
 print(f"\n{'='*70}")
-print("verdict 判定")
+print("verdict 判定（含 6 视角 grill 综合，2026-10-08）")
 print(f"{'='*70}")
 checks = {
     'lift>2x': lift > 2.0,
     'Bonf×6 PASS': bonf6_overall < 0.05,
-    'walk-forward test PASS': te_s['mean'] > 0 and te_s['p'] < 0.05,
+    'walk-forward test PASS (raw)': te_s['mean'] > 0 and te_s['p'] < 0.05,
     'median>0': a_s['median'] > 0,
     'WR>55%': a_s['wr'] > 0.55,
     '2022后仍正': any(stats([p['ret'] for p in a_picks if p['buy_date'] >= '2022-01-01'])['mean'] > 0 for _ in [0]),
@@ -198,14 +237,20 @@ checks = {
 for k, v in checks.items():
     print(f"  {'✅' if v else '❌'} {k}")
 
+# ⚠️ 6 视角 grill 发现的 2 NOT SURVIVE（戳破 confirmed，未在上方 checks 体现）
+print(f"\n  ⚠️ 6 视角 grill 发现的 2 致命 flaw（戳破 confirmed）:")
+print(f"    1. 执行成本: 29% picks（2004-2010）无上证综指 ETF 可交易（510210 2011才上线）")
+print(f"       扣可交易期（2011+）n={t_s['n']} Bonf×6={t_bonf6:.4f} {'PASS' if t_bonf6 < 0.05 else 'FAIL'}")
+print(f"    2. post-hoc: OOS test p={te_s['p']:.4f} 用裸 p 没 Bonf 校正，")
+print(f"       Bonf×4={min(te_s['p']*4,1.0):.4f} FAIL / Bonf×6={min(te_s['p']*6,1.0):.4f} FAIL")
+print(f"       A 组定义是 post-hoc subgroup selection + OOS test 离群依赖")
+
 passed = sum(checks.values())
 total = len(checks)
-if passed == total:
-    verdict = "edge-confirmed"
-elif passed >= total - 1:
-    verdict = "provisional/exploratory"
-else:
-    verdict = "falsified"
-print(f"\n  {passed}/{total} PASS → verdict: {verdict}")
+print(f"\n  上方 checks（in-sample 视角）: {passed}/{total} PASS")
+print(f"  6 视角 grill: 4 SURVIVE(provisional) + 2 NOT SURVIVE(执行成本/post-hoc)")
+verdict = "exploratory（真信号 in-sample 极强 p=0.00005 Bonf×63=0.003 仍 PASS，但 OOS 不够稳健到 confirmed）"
+print(f"  综合 verdict: {verdict}")
 print(f"\n  注：A 组是 TOM 在节假日语境的放大变体，TOM 2022 后死。")
 print(f"  2022 后 A 组 n={stats([p['ret'] for p in a_picks if p['buy_date'] >= '2022-01-01'])['n']} underpowered。")
+print(f"  待修: Bonf×7 + OOS test Bonf + NW HAC + 真 DSR + 多 split 稳定性（grill 已跑，待固化脚本）")
