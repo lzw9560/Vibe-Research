@@ -68,9 +68,15 @@ def load_kline(code: str) -> list:
 
 
 def compute_stop_return(code: str, trade_date: str, kline_cache: dict) -> tuple:
-    """T+1 open 买入，-3% stop（T+1 close 跌破按 T+1 close），否则 T+2 close 卖。
+    """T+1 open 买入，-3% stop（T+1 close 跌破触发 → T+2 open 成交）。
 
-    返回 (return%, status)。status: stop_t1 / hold / None。
+    诚实口径修正（2026-10-07，工程底线 #1）：
+    原逻辑 T+1 close 跌破按 T+1 close stop——违反 A 股 T+1（买入当天不能卖）。
+    改为 T+1 close 跌破 -3% 触发信号 → T+2 open 成交（gap-through 自动：
+    跳空穿仓按 T+2 open 更差，反弹也按 T+2 open——信号次日开盘执行）。
+    未触发则 T+2 close 卖。
+
+    返回 (return%, status)。status: stop_t2_open / hold / hold_t1_only / None。
     """
     if code not in kline_cache:
         kline_cache[code] = load_kline(code)
@@ -82,15 +88,20 @@ def compute_stop_return(code: str, trade_date: str, kline_cache: dict) -> tuple:
     t2 = after[1]
     t1_open = t1.get("open")
     t1_close = t1.get("close")
+    t2_open = t2.get("open")
     t2_close = t2.get("close")
     if not t1_open or t1_open <= 0:
         return None, None
-    # T+1 收盘收益
+    # T+1 收盘收益（判断是否触发止损信号）
     t1_ret = (t1_close / t1_open - 1) * 100 if t1_close else None
-    # stop: T+1 close 跌破 -3% 按 T+1 close stop
+    # stop: T+1 close 跌破 -3% 触发 → T+2 open 成交（A 股 T+1 当天不能卖，次日开盘执行）
     if t1_ret is not None and t1_ret <= STOP_PCT:
-        return t1_ret, "stop_t1"
-    # 否则 T+2 close 卖
+        if not t2_open or t2_open <= 0:
+            return None, None  # 无 T+2 数据
+        # gap-through 自动：t2_open <= stop_price（跳空）则按 t2_open 更差；反弹也按 t2_open（信号次日开盘卖）
+        stop_ret = (t2_open / t1_open - 1) * 100
+        return stop_ret, "stop_t2_open"
+    # 未触发 → T+2 close 卖
     if not t2_close:
         return t1_ret, "hold_t1_only"
     t2_ret = (t2_close / t1_open - 1) * 100
@@ -106,7 +117,7 @@ def audit_stop(sample_n: int = 5000) -> None:
     random.seed(42)
     kline_cache: dict = {}
     print(f"=== LHB inst_dominant 8 年 + -3% stop EV ===")
-    print(f"stop 逻辑: T+1 open 买入, T+1 close 跌破-3% 按 close stop, 否则 T+2 close 卖\n")
+    print(f"stop 逻辑: T+1 open 买入, T+1 close 跌破-3% 触发→T+2 open 成交(A 股 T+1 当天不能卖), 否则 T+2 close 卖\n")
 
     for layer_name, picks in layers.items():
         n = min(sample_n, len(picks))
@@ -119,7 +130,7 @@ def audit_stop(sample_n: int = 5000) -> None:
             if r is not None:
                 returns_by_date[date].append(r)
                 all_returns.append(r)
-                if status == "stop_t1":
+                if status == "stop_t2_open":
                     stop_count += 1
         day_means = [statistics.mean(rs) for rs in returns_by_date.values() if rs]
         if len(day_means) < 2:
