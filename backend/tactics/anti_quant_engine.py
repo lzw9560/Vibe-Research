@@ -133,17 +133,29 @@ class AntiQuantEngine:
         """战法一反核：前日跌>5% + 09:25 高开 2-5% + 量比>4.5 + 额占比>10%。"""
         prev_close = float(prev_klines[-1].get("close_price", 0) or 0) if prev_klines else 0.0
         open_price = float(auction_final.get("open_price", 0) or 0)
-        gap_pct = ((open_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+        gap_pct_calc = ((open_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
         # 5 日开盘量从 prev_klines 取（open_volume 优先，fallback volume）
         prev_5d_open_vols = [
             float(k.get("open_volume", k.get("volume", 0)) or 0)
             for k in prev_klines[-5:]
         ]
+        # hithink auction-snapshot 直接值优先（真实数据口径正确），
+        # 回退 calc（inline 测试）。2026-10-08 实测发现：calc 口径错
+        # （竞价量/前5日开盘量单位不匹配返0），hithink 直接值才对。
+        gap_pct = float(auction_final.get("auction_pct") or gap_pct_calc or 0)
+        vol_ratio = float(
+            auction_final.get("auction_volume_ratio")
+            or calc_vol_ratio(auction_final, prev_5d_open_vols)
+            or 0
+        )
+        # auction_yesterday_ratio_pct 是百分点（2.66=2.66%），amount_ratio 需比率（0.0266）→ /100
+        amt_hithink = float(auction_final.get("auction_yesterday_ratio_pct", 0) or 0) / 100
+        amount_ratio = amt_hithink if amt_hithink > 0 else calc_amount_ratio(auction_final, prev_day_turnover)
         factors = {
             "prev_drop": calc_prev_drop(prev_klines),
             "gap_pct": gap_pct,
-            "vol_ratio": calc_vol_ratio(auction_final, prev_5d_open_vols),
-            "amount_ratio": calc_amount_ratio(auction_final, prev_day_turnover),
+            "vol_ratio": vol_ratio,
+            "amount_ratio": amount_ratio,
             "bid_increasing": bool(
                 float(auction_live_2.get("volume", 0) or 0)
                 >= float(auction_live_1.get("volume", 0) or 0)
