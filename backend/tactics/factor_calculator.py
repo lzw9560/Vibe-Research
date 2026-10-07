@@ -15,19 +15,19 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 def calc_vwap(snapshot: dict) -> float:
-    """VWAP 近似 = (open + high + low + 2*close) / 4。
+    """VWAP 近似 = (open + high + low + 2*close) / 5。
 
-    真实 VWAP 需分笔成交，盘中不可得；用典型价格近似（spec §plan）。
-    全高价/全低价边界：所有 OHLC 相同时退化为该价。
+    真实 VWAP 需分笔成交，盘中不可得；用加权典型价格近似（收盘权重 2x）。
+    全高价/全低价边界：所有 OHLC 相同时退化为该价（/5 权重和=5 一致）。
 
-    ⚠️ 公式备注：权重和=5 而除数=4，故 OHLC 全相等时结果=1.25×price（非 price 自身）。
-       此为 plan.md 草案公式，与标准加权均价 (O+H+L+2C)/5 不同；S235 完成时提请用户复核。
+    注：plan.md 草案原写 /4（权重和 5 ÷ 除数 4 不一致，全相等时=1.25×price），
+    2026-10-07 用户拍板改 /5（标准加权均价，全相等时=price 自身）。
     """
     o = float(snapshot.get("open_price", 0) or 0)
     h = float(snapshot.get("high_price", 0) or 0)
     lo = float(snapshot.get("low_price", 0) or 0)
     c = float(snapshot.get("close_price", 0) or 0)
-    return (o + h + lo + 2 * c) / 4
+    return (o + h + lo + 2 * c) / 5
 
 
 def calc_turnover_rate(snapshot: dict, float_mv: float | None = None) -> float:

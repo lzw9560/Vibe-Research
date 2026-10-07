@@ -29,26 +29,24 @@ def _approx(a: float, b: float, tol: float = 1e-4) -> bool:
 # ---------------------------------------------------------------------------
 
 def test_vwap_typical():
-    # Arrange: O=10 H=11 L=9 C=10.5 → (10+11+9+2*10.5)/4 = 51/4 = 12.75
-    # 注：plan 公式 (O+H+L+2C)/4 当 OHLC 全相等时=1.25×price（非 price 自身），
-    # 因权重和=5 而除数=4。此为 plan.md 草案公式，S235 完成时提请用户复核是否应改 /5。
+    # Arrange: O=10 H=11 L=9 C=10.5 → (10+11+9+2*10.5)/5 = 51/5 = 10.2
     snap = {"open_price": 10, "high_price": 11, "low_price": 9, "close_price": 10.5}
     # Act
     v = calc_vwap(snap)
     # Assert
-    assert _approx(v, 12.75)
+    assert _approx(v, 10.2)
 
 
 def test_vwap_all_high_edge():
-    # 全高价：O=H=L=C=20 → (20+20+20+40)/4 = 100/4 = 25（=1.25×20）
+    # 全高价：O=H=L=C=20 → (20+20+20+40)/5 = 100/5 = 20（=price 自身，/5 一致）
     snap = {"open_price": 20, "high_price": 20, "low_price": 20, "close_price": 20}
-    assert _approx(calc_vwap(snap), 25.0)
+    assert _approx(calc_vwap(snap), 20.0)
 
 
 def test_vwap_all_low_edge():
-    # 全低价：O=H=L=C=5 → (5+5+5+10)/4 = 25/4 = 6.25（=1.25×5，同上公式特性）
+    # 全低价：O=H=L=C=5 → (5+5+5+10)/5 = 25/5 = 5（=price 自身）
     snap = {"open_price": 5, "high_price": 5, "low_price": 5, "close_price": 5}
-    assert _approx(calc_vwap(snap), 6.25)
+    assert _approx(calc_vwap(snap), 5.0)
 
 
 def test_vwap_missing_fields():
