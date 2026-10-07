@@ -75,6 +75,32 @@ V1 假 edge 真根因**不是** realizability（一字涨停 sell 可成交—�
 - 涨停 vs 未涨停对比（R4 momentum 过滤审）
 - filter 后样本量 check（n>=60 / days>=60）
 
+### R6：成交假设虚构审（2026-10-05 加，checklist 补详述）
+
+stop/take exit 必须用 realistic gap-through 成交：
+- t2_open<=stop 按 t2_open 成交（非 stop_price），跳空穿仓按开盘价成交
+- 滑点 0.2-0.5%
+- 跌停锁死卖不掉
+- S232 -3% stop +1.75% EV 100% 来自 fill 虚构（第 3 次覆辙戳破后补）
+
+### R42：OOS Bonf 校正 gate（2026-10-08 grill 教训加，编号续 memory R41）
+
+⚠️ OOS test p **也要 Bonf 校正**，不只 in-sample。长假节前 A 组 OOS p=0.0301 看似 PASS，实际 Bonf×4=0.12 FAIL。任何 verdict 须 OOS p×N（N=测了多少口径/子组）后<0.05 才 confirmed。
+
+### R43：可交易期过滤 gate（2026-10-08 grill 教训加）
+
+⚠️ 用指数数据（如 sh.000001）验证但实际只能交易 ETF（如 510210 2011-01-30 上线）时，早期 picks 不可交易却可能 EV 最高拉高整体。verdict 须扣可交易约束后重算（只保留 ETF 上线后的 picks）Bonf 仍 PASS 才 confirmed。
+
+### R44：post-hoc subgroup Bonf 校正（2026-10-08 grill 教训加）
+
+⚠️ disentangle 后选的子组（如 A 组从 A/B/C/D 4 组选最好）是 post-hoc subgroup selection，须 Bonf×N（N=测了多少子组口径，含 2-attribute 组合）。系统枚举子组口径数，Bonf×N 后仍 PASS 才 confirmed。若其他子组也显著（pre+EOM 等），说明 edge 是宽泛效应非该子组特有。
+
+### R45：离群依赖 + 多 split 稳定性（2026-10-08 grill 教训加）
+
+⚠️ verdict 须检查：
+- OOS test 去最大离群后是否仍 PASS（离群依赖=picks 中 1 个贡献 test 收益 >40% 则不稳）
+- 多 split 比例稳定性（50/50/60/40/70/30/80/20 全报，不只报最优比例——80/20 FAIL 暴露衰减）
+
 ## 6. 验收标准
 
 - [x] A1：verifier.py R5 _EdgeType 扩 "limit_up_premium" + R4 compare_filtered_vs_unfiltered_edge
