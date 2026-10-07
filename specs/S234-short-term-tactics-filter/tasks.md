@@ -30,7 +30,7 @@
 - [x] T4.1 pytest 第一层过滤测试（ST/成交额/市值）—— TestFirstLayerFilter
 - [x] T4.2 pytest 第二层因子+JSON 输出测试 —— TestJsonOutput
 - [x] T4.3 端到端跑通（commander + filter + 飞书）—— TestEndToEnd
-- [~] T4.4 不臆造数据验收（所有因子从 cache 取）—— 无专门测试，filter 从 baostock/gene/zt_history cache 取（inherent，未显式断言）
+- [x] T4.4 不臆造数据验收（所有因子从 cache 取）—— TestNoFabricationT44：cache 空时三战法不臆造 pass/match + filter 无网络依赖（核于 2026-10-07）
 - [x] T4.5 不编主力意图验收（"主力意图"话术剔除或标"主观推断"）—— test_no_main_force_intent_fabrication
 
 ## 验收点（spec §4）

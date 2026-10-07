@@ -147,3 +147,45 @@ class TestEndToEnd:
         # reason 不含"主力意图/操盘手心理"等臆造话术
         assert "主力意图" not in r.reason
         assert "操盘手心理" not in r.reason
+
+
+class TestNoFabricationT44:
+    """T4.4 不臆造数据验收：cache 空时 filter 不编数字、不臆造 verdict、不 pass。
+    §1.2 工程底线——所有因子从 SQLite cache 取，cache miss 返空/False，不臆造。
+    """
+
+    def _patch_empty_cache(self, monkeypatch):
+        """把所有 cache 加载函数替换为空（模拟 cache miss）。"""
+        import short_term_tactics_filter as stf
+        monkeypatch.setattr(stf, "_load_kline", lambda code: [])
+        monkeypatch.setattr(stf, "_load_gene", lambda code: {})
+        monkeypatch.setattr(
+            stf, "_check_institutional_seat",
+            lambda code: {"has_lhb": False, "is_inst_dominant": False, "inst_net_pct": 0.0},
+        )
+
+    def test_war1_no_data_does_not_pass(self, monkeypatch):
+        """战法1 cache 空 → 第一层'数据不足'→ is_passed=False（不臆造 pass）。"""
+        self._patch_empty_cache(monkeypatch)
+        r = filter_stock("600001", "战法1_弱转强")
+        assert r.is_passed is False
+        assert any("数据不足" in h for h in r.hit_rules)
+
+    def test_war2_no_data_does_not_match(self, monkeypatch):
+        """战法2 cache 空 → bars<2 second_layer 返 False（不臆造 match）。"""
+        self._patch_empty_cache(monkeypatch)
+        r = filter_stock("600001", "战法2_尾盘锁定")
+        assert r.is_passed is False
+
+    def test_war3_no_data_does_not_match(self, monkeypatch):
+        """战法3 cache 空 → 无机构席位 → 不 match（不臆造 inst_dominant）。"""
+        self._patch_empty_cache(monkeypatch)
+        r = filter_stock("600001", "战法3_机构抱团")
+        assert r.is_passed is False
+
+    def test_no_network_module_imported(self):
+        """filter.py 不依赖网络模块（数据全从 SQLite cache 取，§1.2 不臆造）。"""
+        import short_term_tactics_filter as stf
+        assert not hasattr(stf, "requests"), "filter 不应 import requests"
+        assert not hasattr(stf, "httpx"), "filter 不应 import httpx"
+        assert not hasattr(stf, "socket"), "filter 不应 import socket"
