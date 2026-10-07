@@ -58,30 +58,42 @@ def load_kline(code: str) -> list:
 _KLINE_CACHE: dict = {}
 
 
-def compute_t10_with_stop(code: str, trade_date: str) -> float | None:
-    """T+2 open 买，T+2~T+10 任何日 low <= -3% stop_price 则 -3% stop，否则 hold T+10 close。"""
+def compute_t10_with_stop(code: str, trade_date: str) -> tuple:
+    """T+2 open 买，T+2~T+9 任何日 close 跌破-3% 触发→次日 open 成交（gap-through），否则 hold T+10 close。
+
+    诚实口径修正（2026-10-07，工程底线 #1，同 inst_dominant）：
+    原逻辑 T+2~T+10 任何日 low <= stop_price 按 stop_price(-3%) stop——
+    T+2 当天买入 low 触及不能卖（A 股 T+1）；且 low 触及按 stop_price 精确成交不现实（跳空穿仓应按 open）。
+    改为 close 触发（等收盘确认）+ 次日 open 成交（gap-through：跳空按 open 更差，反弹也按 open）。
+
+    返回 (return%, status)。status: stop_next_open / hold / None。
+    """
     if code not in _KLINE_CACHE:
         _KLINE_CACHE[code] = load_kline(code)
     bars = _KLINE_CACHE[code]
     after = [b for b in bars if b.get("date", "") > trade_date]
     if len(after) < 10:  # T+1~T+10 = after[0]~after[9]
-        return None
+        return None, None
     t2 = after[1]  # T+2 open 买
     t2_open = t2.get("open")
     if not t2_open or t2_open <= 0:
-        return None
+        return None, None
     stop_price = t2_open * (1 + STOP_PCT / 100)
-    # check T+2~T+10 daily low (after[1]~after[9])
-    for i in range(1, 10):
-        if i >= len(after):
-            return None
-        day_low = after[i].get("low")
-        if day_low is not None and day_low <= stop_price:
-            return (stop_price / t2_open - 1) * 100  # -3% stop
+    # check T+2~T+9 daily close 触发（after[1]~after[8]），触发→次日 open 成交
+    for i in range(1, 9):  # T+2~T+9
+        if i + 1 >= len(after):
+            return None, None
+        day_close = after[i].get("close")
+        if day_close is not None and day_close <= stop_price:
+            # 次日 open 成交（gap-through）
+            next_open = after[i + 1].get("open")
+            if not next_open or next_open <= 0:
+                return None, None
+            return (next_open / t2_open - 1) * 100, "stop_next_open"
     t10_close = after[9].get("close")  # T+10 close
     if not t10_close:
-        return None
-    return (t10_close / t2_open - 1) * 100
+        return None, None
+    return (t10_close / t2_open - 1) * 100, "hold"
 
 
 def normal_p(t: float) -> float:
@@ -112,11 +124,11 @@ def audit_r6() -> None:
     ar: list = []
     stopped = 0
     for date, code in picks:
-        r = compute_t10_with_stop(code, date)
+        r, status = compute_t10_with_stop(code, date)
         if r is not None:
             rbd[date].append(r)
             ar.append(r)
-            if abs(r - STOP_PCT) < 0.01:  # stopped out at -3%
+            if status == "stop_next_open":
                 stopped += 1
 
     s = stats(rbd, ar)
