@@ -548,6 +548,28 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 discipline_gate_morning 已创建（cron 15 9 * * 0-4，S231）")
 
+    # S234: 情绪指挥官——09:15 盘前 + 14:50 尾盘（情绪诊断+仓位+飞书，沸点期触发排雷）
+    if "sentiment_commander_morning" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="sentiment_commander_morning",
+            description="S234 情绪指挥官盘前（情绪诊断+仓位+飞书，沸点期触发排雷）",
+            task_type="sentiment_commander_morning",
+            cron_expr="15 9 * * 0-4",  # 09:15 盘前（与 discipline_gate 同点）
+            payload={"notify": True},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 sentiment_commander_morning 已创建（cron 15 9 * * 0-4，S234）")
+    if "sentiment_commander_close" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="sentiment_commander_close",
+            description="S234 情绪指挥官尾盘（排雷+飞书，沸点期才触发 filter）",
+            task_type="sentiment_commander_close",
+            cron_expr="50 14 * * 0-4",  # 14:50 尾盘（避 9:25 虚假封单+反向收割）
+            payload={"notify": True},
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 sentiment_commander_close 已创建（cron 50 14 * * 0-4，S234）")
+
     # S232: T+1 涨停预测 watchlist——15:10 收盘后（T 日全量数据确认）
     # 观察池非买入信号：turn>20%+vr5>2 信号 lift 5.28x 真但 EV -0.87% 负，二次确认累积 60 天验证
     if "t1_watchlist_generate" not in existing:

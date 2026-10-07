@@ -117,6 +117,8 @@ class TaskExecutor:
             "hot_money_seats_update": self._execute_hot_money_seats_update,  # S066 §9 通电——游资席位周更聚合（#13 follow-up，数据 prep 非 spec S220）
             "sector_heat_reverify": self._execute_sector_heat_reverify,  # S218 #12 — sector_heat 非-arm 重验 cron（每 30 天重跑 §44，days≥60 → write_override 升降级）
             "cron_audit": self._execute_cron_audit,  # S218 #10 — cron-fire audit（扫 cron_fire.log + last_run_at 数 missed delivery cron）
+            "sentiment_commander_morning": self._execute_sentiment_commander_morning,  # S234 — 情绪指挥官 09:15 盘前（情绪诊断+仓位+飞书）
+            "sentiment_commander_close": self._execute_sentiment_commander_close,  # S234 — 情绪指挥官 14:50 尾盘（排雷+飞书，沸点期才 filter）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -597,6 +599,16 @@ class TaskExecutor:
         """S232 — T+1 hit 回填（18:00，zt_history final 后，累积二次确认数据）。"""
         from scheduler.executors.t1_forecast import t1_hit_backfill
         return t1_hit_backfill(payload)
+
+    def _execute_sentiment_commander_morning(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S234 — 情绪指挥官 09:15 盘前（情绪诊断+仓位+飞书，沸点期触发排雷）。"""
+        from scheduler.executors.sentiment_commander import sentiment_commander_morning
+        return sentiment_commander_morning(payload)
+
+    def _execute_sentiment_commander_close(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S234 — 情绪指挥官 14:50 尾盘（排雷+飞书，沸点期 score>70 才触发 filter）。"""
+        from scheduler.executors.sentiment_commander import sentiment_commander_close
+        return sentiment_commander_close(payload)
 
     def _execute_regime_flip_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S222 — regime→bull tripwire（3 天 hysteresis，consecutive_relay live 验证启动器）。"""
