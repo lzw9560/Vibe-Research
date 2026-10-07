@@ -93,3 +93,6 @@ docs/real-data-sync-report.md
 docs/stock-business-fill-report.md
 
 backend/assets/
+
+# tools 研究 result JSON 可重生成（fork triage 2026-10-07，同 backend/gmm_result.txt 先例）
+backend/tools/_*_result.json
