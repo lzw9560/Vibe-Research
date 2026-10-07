@@ -233,3 +233,16 @@ for i in range(len(calendar) - 1):
 mon_s = stats(mon_rets)
 print(f"  Monday open->Tue close (non-holiday): n={mon_s['n']} EV={mon_s['mean']:.4f}% WR={mon_s['wr']*100:.1f}% lift={mon_s['mean']/base_s['mean']:.2f}x")
 print(f"  -> If Monday ~ base => no weekend-gap premium; holiday effect is distinct")
+
+# ---------- 7. 2022 后分层（验证 TOM 死延伸，2026-10-07 加）----------
+print(f"\n{'='*70}")
+print("7. 2022 后分层（TOM 2022 后死，验 A 组是否也死）")
+pre_2022 = [p for p in pre_picks if p['buy_date'] >= '2022-01-01']
+a22 = [p['ret'] for p in pre_2022 if p['tom']]
+c22 = [p['ret'] for p in pre_2022 if not p['tom']]
+print(f"  2022 后 A (pre+ToM): n={len(a22)} EV={sum(a22)/len(a22) if a22 else 0:.3f}%")
+print(f"  2022 后 C (pre非ToM): n={len(c22)} EV={sum(c22)/len(c22) if c22 else 0:.3f}%")
+if a22:
+    s22 = stats(a22)
+    print(f"  2022 后 A stats: mean={s22['mean']:.3f}% WR={s22['wr']*100:.1f}% n={s22['n']}")
+print(f"  -> 若 2022 后 A 仍正显著 → 节假日放大 TOM 独立于 TOM 死；若 FAIL → 长假节前真死")
