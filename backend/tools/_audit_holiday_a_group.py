@@ -152,43 +152,105 @@ min_p = 1.0
 for ht in types_present:
     sub = [p['ret'] for p in a_picks if p['type'] == ht]
     s = stats(sub)
-    bonf_p = min(s['p'] * 6, 1.0)  # Bonf×6
+    bonf_p = min(s['p'] * 7, 1.0)  # Bonf×7（7 类型：春节/国庆/清明/劳动/端午/元旦/其他）
     print(f"  {ht}: n={s['n']} EV={s['mean']:.3f}% WR={s['wr']*100:.1f}% "
-          f"p_raw={s['p']:.4f} Bonf×6={bonf_p:.4f} {'PASS' if bonf_p < 0.05 else 'FAIL'}")
+          f"p_raw={s['p']:.4f} Bonf×7={bonf_p:.4f} {'PASS' if bonf_p < 0.05 else 'FAIL'}")
     if s['p'] < min_p: min_p = s['p']
-bonf6_overall = min(a_s['p'] * 6, 1.0)
-print(f"  整体 A 组: p_raw={a_s['p']:.4f} Bonf×6={bonf6_overall:.4f} "
-      f"{'PASS' if bonf6_overall < 0.05 else 'FAIL'}")
+bonf7_overall = min(a_s['p'] * 7, 1.0)
+# 系统枚举 N（grill post-hoc agent 测 63 子组口径）→ Bonf×63 最严（R44 post-hoc subgroup 校正）
+bonf63_overall = min(a_s['p'] * 63, 1.0)
+print(f"  整体 A 组: p_raw={a_s['p']:.4f} Bonf×7={bonf7_overall:.4f} "
+      f"{'PASS' if bonf7_overall < 0.05 else 'FAIL'} / Bonf×63={bonf63_overall:.4f} "
+      f"{'PASS' if bonf63_overall < 0.05 else 'FAIL'}（grill post-hoc: 63 子组口径）")
 
-# ---------- 2. walk-forward（时间 split）----------
+# ---------- 2. walk-forward 多 split 稳定性（R45）+ OOS Bonf 校正（R42）----------
 print(f"\n{'='*70}")
-print("2. walk-forward（前 70% train / 后 30% test）")
+print("2. walk-forward 多 split 稳定性（R45）+ OOS Bonf 校正（R42）")
 print(f"{'='*70}")
 a_sorted = sorted(a_picks, key=lambda p: p['buy_date'])
 n = len(a_sorted)
-split = int(n * 0.7)
-train = a_sorted[:split]
-test = a_sorted[split:]
-tr_s = stats([p['ret'] for p in train])
-te_s = stats([p['ret'] for p in test])
-print(f"  train: n={tr_s['n']} EV={tr_s['mean']:.4f}% WR={tr_s['wr']*100:.1f}% "
-      f"p={tr_s['p']:.4f} ({train[0]['buy_date']}~{train[-1]['buy_date']})")
-print(f"  test:  n={te_s['n']} EV={te_s['mean']:.4f}% WR={te_s['wr']*100:.1f}% "
-      f"p={te_s['p']:.4f} ({test[0]['buy_date']}~{test[-1]['buy_date']})")
-decay = (tr_s['mean'] - te_s['mean']) / tr_s['mean'] * 100 if tr_s['mean'] != 0 else 0
-print(f"  衰减: {decay:.1f}%  {'PASS' if te_s['mean'] > 0 and te_s['p'] < 0.05 else 'FAIL'}")
+# 多 split 比例全报（不只报最优 70/30——暴露 80/20 FAIL 衰减，R45）
+splits = [(0.5, '50/50'), (0.6, '60/40'), (0.7, '70/30'), (0.8, '80/20')]
+wf_results = {}
+for ratio, label in splits:
+    sp = int(n * ratio)
+    tr = a_sorted[:sp]
+    te = a_sorted[sp:]
+    tr_s2 = stats([p['ret'] for p in tr])
+    te_s2 = stats([p['ret'] for p in te])
+    oos_bonf4 = min(te_s2['p'] * 4, 1.0)  # R42: OOS test 也要 Bonf 校正（不只 in-sample）
+    decay = (tr_s2['mean'] - te_s2['mean']) / tr_s2['mean'] * 100 if tr_s2['mean'] != 0 else 0
+    wf_raw_pass = te_s2['mean'] > 0 and te_s2['p'] < 0.05
+    oos_bonf_pass = te_s2['mean'] > 0 and oos_bonf4 < 0.05
+    wf_results[label] = (tr_s2, te_s2, decay, oos_bonf4, wf_raw_pass, oos_bonf_pass)
+    print(f"  {label}: train n={tr_s2['n']} EV={tr_s2['mean']:.4f}% / test n={te_s2['n']} "
+          f"EV={te_s2['mean']:.4f}% raw_p={te_s2['p']:.4f} 衰减={decay:.1f}% "
+          f"raw={'PASS' if wf_raw_pass else 'FAIL'} OOS_Bonf×4={oos_bonf4:.4f} {'PASS' if oos_bonf_pass else 'FAIL'}")
+# 默认用 70/30 作为主 walk-forward 结果（兼容后续 tr_s/te_s 引用）
+tr_s, te_s, decay, oos_bonf4, _, _ = wf_results['70/30']
+print(f"\n  主结果（70/30，最优比例 post-hoc 可疑）: test raw_p={te_s['p']:.4f} "
+      f"OOS_Bonf×4={oos_bonf4:.4f} 衰减={decay:.1f}%")
+print(f"  ⚠️ R42: OOS test raw p={te_s['p']:.4f} Bonf×4={oos_bonf4:.4f} — "
+      f"{'PASS' if oos_bonf4 < 0.05 else 'FAIL'}（原脚本漏了 OOS Bonf，grill 戳破）")
+print(f"  ⚠️ R45: 80/20 test_p={wf_results['80/20'][1]['p']:.4f} "
+      f"{'PASS' if wf_results['80/20'][4] else 'FAIL'}（2022后 n={wf_results['80/20'][1]['n']} 暴露衰减）")
 
-# ---------- 3. DSR（deflated sharpe）----------
+# ---------- 2b. 去离群稳定性（R45 离群依赖）----------
+print(f"\n  R45 离群依赖检查（test 去最大离群后是否仍 PASS）:")
+# 70/30 test picks（主 walk-forward 结果的 test 半）
+sp70 = int(n * 0.7)
+test_70 = a_sorted[sp70:]
+test_sorted_by_ret = sorted(test_70, key=lambda p: p['ret'], reverse=True)
+top_outlier = test_sorted_by_ret[0] if test_sorted_by_ret else None
+if top_outlier:
+    test_no_top = [p['ret'] for p in test_70 if p != top_outlier]
+    te_no_top = stats(test_no_top)
+    print(f"    最大离群: {top_outlier['buy_date']} ret={top_outlier['ret']:.3f}%")
+    print(f"    去后: n={te_no_top['n']} EV={te_no_top['mean']:.4f}% raw_p={te_no_top['p']:.4f} "
+          f"Bonf×4={min(te_no_top['p']*4,1.0):.4f}")
+    print(f"    离群贡献: test 总 EV {(te_s['mean']*te_s['n'] - te_no_top['mean']*te_no_top['n']):.3f}% "
+          f"中该 1 笔贡献 {top_outlier['ret']:.3f}%")
+
+# ---------- 3. 真 DSR（Bailey-Lopez de Prado PSR）+ NW HAC 聚簇校正 ----------
 print(f"\n{'='*70}")
-print("3. DSR（deflated sharpe，N=1 单策略，Bonf×6）")
+print("3. 真 DSR（Bailey-Lopez de Prado PSR）+ NW HAC 聚簇校正")
 print(f"{'='*70}")
-# DSR: SR_adjusted = SR * sqrt(1 - skew^2 - ... )，简化用 t 检验 + Bonf 校正
-# 单策略 N=1，但测了 6 类型 → 等效 N=6 多重校正
+from math import log as _ln
+# 真 DSR: PSR = Φ((SR - SR*)sqrt(N-1) / (1 - γ3*SR + (γ4-1)/4 * SR^2))
+# SR = mean/std (per pick Sharpe), SR* = E[max null SR] ≈ sqrt(2 ln N_trials) / sqrt(T)
 sr = a_s['mean'] / a_s['std'] if a_s['std'] > 0 else 0
-# DSR 简化：假设 null 下的 SR 期望 ≈ 0，用 Bonf×6 后 p 判
-print(f"  Sharpe (per pick): {sr:.4f}")
-print(f"  t={a_s['t']:.2f} Bonf×6 p={bonf6_overall:.4f}")
-print(f"  DSR PASS if Bonf×6 p<0.05: {'PASS' if bonf6_overall < 0.05 else 'FAIL'}")
+n_picks = a_s['n']
+# skew + excess kurtosis（从 raw moments）
+m2 = sum((x - a_s['mean'])**2 for x in a_rets) / n_picks if n_picks > 0 else 0
+m3 = sum((x - a_s['mean'])**3 for x in a_rets) / n_picks if n_picks > 0 else 0
+m4 = sum((x - a_s['mean'])**4 for x in a_rets) / n_picks if n_picks > 0 else 0
+skew = m3 / (m2**1.5) if m2 > 0 else 0
+excess_kurt = m4 / (m2**2) - 3 if m2 > 0 else 0
+print(f"  Sharpe (per pick): {sr:.4f}  skew: {skew:.2f}  excess_kurt: {excess_kurt:.2f}")
+# PSR for 多重 N_trials（grill: N=7/63/100）
+for n_trials in [7, 63, 100]:
+    sr_star = (2 * _ln(n_trials)) ** 0.5 / (n_picks ** 0.5) if n_trials > 1 else 0
+    denom = 1 - skew * sr + (excess_kurt / 4) * sr**2
+    if denom > 0:
+        psr = 0.5 * (1 + erf((sr - sr_star) * (n_picks - 1)**0.5 / (denom * 2**0.5)))
+    else:
+        psr = 0.5
+    print(f"  PSR (N_trials={n_trials}): SR*={sr_star:.4f} PSR={psr:.5f} "
+          f"{'PASS' if psr > 0.95 else 'FAIL'}（>0.95）")
+
+# NW HAC: 按年月聚簇 cluster-robust SE（grill: 28/105=26.7% 聚同月，SE 增 7-12%）
+cluster_map = defaultdict(list)
+for p in a_picks:
+    cluster_map[p['buy_date'][:7]].append(p['ret'])
+n_clusters = len(cluster_map)
+if n_clusters > 1:
+    cluster_means = [sum(v)/len(v) for v in cluster_map.values()]
+    cluster_var = sum((m - a_s['mean'])**2 for m in cluster_means) / n_clusters
+    se_cr = (cluster_var / n_clusters) ** 0.5
+    t_nw = a_s['mean'] / se_cr if se_cr > 0 else 0
+    p_nw = 0.5 * (1 - erf(t_nw / sqrt(2))) if t_nw > 0 else 1.0
+    print(f"  NW HAC ({n_clusters} 年月聚簇): t={t_nw:.2f} p={p_nw:.4f} "
+          f"{'PASS' if p_nw < 0.05 else 'FAIL'}（raw t={a_s['t']:.2f}）")
 
 # ---------- 4. 衰减检查（按 era）----------
 print(f"\n{'='*70}")
@@ -212,12 +274,12 @@ print(f"{'='*70}")
 a_tradable = [p for p in a_picks if p['buy_date'] >= '2011-01-30']
 t_rets = [p['ret'] for p in a_tradable]
 t_s = stats(t_rets)
-t_bonf6 = min(t_s['p'] * 6, 1.0)
+t_bonf7 = min(t_s['p'] * 7, 1.0)
 print(f"  可交易期 n={t_s['n']} EV={t_s['mean']:.4f}% WR={t_s['wr']*100:.1f}% "
-      f"median={t_s['median']:.3f}% p_raw={t_s['p']:.4f} Bonf×6={t_bonf6:.4f} "
-      f"{'PASS' if t_bonf6 < 0.05 else 'FAIL'}")
-print(f"  对比全期 n={a_s['n']} EV={a_s['mean']:.4f}% Bonf×6={bonf6_overall:.4f} PASS")
-print(f"  ⚠️ 扣可交易约束后 Bonf×6 {'PASS' if t_bonf6 < 0.05 else 'FAIL'}（{t_bonf6:.4f}）— "
+      f"median={t_s['median']:.3f}% p_raw={t_s['p']:.4f} Bonf×6={t_bonf7:.4f} "
+      f"{'PASS' if t_bonf7 < 0.05 else 'FAIL'}")
+print(f"  对比全期 n={a_s['n']} EV={a_s['mean']:.4f}% Bonf×6={bonf7_overall:.4f} PASS")
+print(f"  ⚠️ 扣可交易约束后 Bonf×6 {'PASS' if t_bonf7 < 0.05 else 'FAIL'}（{t_bonf7:.4f}）— "
       f"edge 是边界值非稳健 confirmed")
 print(f"  原因: 2004-2010 的 30 picks（29%）EV+1.258% WR80% 最高拉高整体，")
 print(f"        但 510210（唯一跟踪上证综指 ETF）2011-01-30 才上线 → 不可交易")
@@ -228,7 +290,7 @@ print("verdict 判定（含 6 视角 grill 综合，2026-10-08）")
 print(f"{'='*70}")
 checks = {
     'lift>2x': lift > 2.0,
-    'Bonf×6 PASS': bonf6_overall < 0.05,
+    'Bonf×7 PASS': bonf7_overall < 0.05,
     'walk-forward test PASS (raw)': te_s['mean'] > 0 and te_s['p'] < 0.05,
     'median>0': a_s['median'] > 0,
     'WR>55%': a_s['wr'] > 0.55,
@@ -240,7 +302,7 @@ for k, v in checks.items():
 # ⚠️ 6 视角 grill 发现的 2 NOT SURVIVE（戳破 confirmed，未在上方 checks 体现）
 print(f"\n  ⚠️ 6 视角 grill 发现的 2 致命 flaw（戳破 confirmed）:")
 print(f"    1. 执行成本: 29% picks（2004-2010）无上证综指 ETF 可交易（510210 2011才上线）")
-print(f"       扣可交易期（2011+）n={t_s['n']} Bonf×6={t_bonf6:.4f} {'PASS' if t_bonf6 < 0.05 else 'FAIL'}")
+print(f"       扣可交易期（2011+）n={t_s['n']} Bonf×6={t_bonf7:.4f} {'PASS' if t_bonf7 < 0.05 else 'FAIL'}")
 print(f"    2. post-hoc: OOS test p={te_s['p']:.4f} 用裸 p 没 Bonf 校正，")
 print(f"       Bonf×4={min(te_s['p']*4,1.0):.4f} FAIL / Bonf×6={min(te_s['p']*6,1.0):.4f} FAIL")
 print(f"       A 组定义是 post-hoc subgroup selection + OOS test 离群依赖")
