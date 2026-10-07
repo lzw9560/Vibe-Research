@@ -137,7 +137,7 @@ def run() -> dict:
             r["inst_dominant_signals"] = signals[:10]
     except Exception as e:
         r["inst_dominant_error"] = f"机构主导信号失败: {e}"
-    # A组 T+10 edge-confirmed watchlist（独立信号，T+2 买 T+10 卖，lottery stop_rate 72.5%）
+    # A组 T+10 edge-confirmed watchlist（独立信号，T+2 买 T+10 卖，-10%stop stop_rate 21.6%；R6 -3%stop FAIL p=0.1118 改 -10%；2025-2026 regime FAIL p=0.155 衰减待复验）
     try:
         a_signals = load_a_group_today()
         if a_signals:
@@ -175,15 +175,15 @@ def format_text(r: dict) -> str:
     # inst_dominant edge-confirmed signal（独立信号，观察池非买入——lottery median 负 WR<50%）
     if r.get("inst_dominant_signals"):
         lines.append("")
-        lines.append(f"🏆 机构主导 LHB（edge-confirmed walk-forward OOS，top {len(r['inst_dominant_signals'])}，观察池非买入）:")
+        lines.append(f"🏆 机构主导 LHB（edge-confirmed walk-forward OOS，top {len(r['inst_dominant_signals'])}，-8%stop mean+0.336% stop_rate 2.5%，2025-2026增强，观察池非买入）:")
         for s in r["inst_dominant_signals"]:
             lines.append(f"  • {s['code']}: 机构占比 {s['inst_net_pct']}%")
     elif r.get("inst_dominant_error"):
         lines.append(f"\n⚠️ {r['inst_dominant_error']}")
-    # A组 T+10 edge-confirmed watchlist（T+2 买 T+10 卖，lottery stop_rate 72.5%）
+    # A组 T+10 edge-confirmed watchlist（T+2 买 T+10 卖，-10%stop stop_rate 21.6%）
     if r.get("a_group_t10_signals"):
         lines.append("")
-        lines.append(f"📈 A组 T+10 watchlist（edge-confirmed walk-forward OOS，top {len(r['a_group_t10_signals'])}，T+2买T+10卖，lottery stop_rate 72.5%）:")
+        lines.append(f"📈 A组 T+10 watchlist（edge 2018-2024 都PASS，2025-2026 衰减待复验，top {len(r['a_group_t10_signals'])}，T+2买T+10卖，-10%stop stop_rate 21.6%）:")
         for s in r["a_group_t10_signals"]:
             lines.append(f"  • {s['code']}: 涨幅{s['chg']}% 净买{s['net_buy_wan']}万")
     elif r.get("a_group_error"):
