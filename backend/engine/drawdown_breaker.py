@@ -26,6 +26,15 @@
 
 **H6 熊市 regime**：CSI300 < 200 日线 或 市场 DD > 15% →
   floor 豁免 drawdown enforce（阈值 >25%），CB 只作用非 floor 臂。
+
+**H7 peak 渐进衰减**（v9.00 用户审批后实施）：
+  极端回撤+长期锁定 → peak 按系数衰减（降低恢复门槛），防止永久锁定。
+  - DD>30% 且 days>90  → decay=0.7（peak×0.7）
+  - DD>50% 且 days>180 → decay=0.5（peak×0.5）
+  - DD>70% 或 days>365 → decay=0.3（peak×0.3）
+  衰减后 peak 不低于当前 equity（避免负回撤假象）。
+  衰减后 size_mult 上限 0.5（保留风控记忆，半仓运行，非完全恢复）。
+  原始 peak 数据保留在 trade_journal，衰减仅在计算层应用。
 """
 from __future__ import annotations
 
@@ -50,6 +59,19 @@ BEAR_MARKET_FLOOR_DD_THRESHOLD: float = 25.0
 #: floor 臂 tag（C5 豁免 per-arm DD）。
 ARM_FLOOR: str = "floor"
 
+#: H7 peak 渐进衰减阈值（v9.00 用户审批后实施）。
+PEAK_DECAY_TIER1_DD: float = 30.0       # DD>30% 触发 tier1
+PEAK_DECAY_TIER1_DAYS: int = 90         # 且 days>90
+PEAK_DECAY_TIER1_FACTOR: float = 0.7    # peak×0.7
+PEAK_DECAY_TIER2_DD: float = 50.0       # DD>50% 触发 tier2
+PEAK_DECAY_TIER2_DAYS: int = 180        # 且 days>180
+PEAK_DECAY_TIER2_FACTOR: float = 0.5    # peak×0.5
+PEAK_DECAY_TIER3_DD: float = 70.0       # DD>70% 或 days>365 触发 tier3
+PEAK_DECAY_TIER3_DAYS: int = 365
+PEAK_DECAY_TIER3_FACTOR: float = 0.3    # peak×0.3
+#: 衰减后 size_mult 上限（保留风控记忆，半仓运行）。
+PEAK_DECAY_SIZE_CAP: float = 0.5
+
 
 @dataclass(frozen=True)
 class DrawdownResult:
@@ -59,9 +81,11 @@ class DrawdownResult:
     drawdown_cny: 绝对 CNY 回撤（peak - current，C4）。
     drawdown_pct: 回撤百分比（drawdown_cny / initial_capital，非 (peak-current)/peak）。
     size_multiplier: 输出的 sizing 乘数（0.5/0.0/1.0）。
-    status: 'enforced' | 'underpowered' | 'disabled'。
+    status: 'enforced' | 'underpowered' | 'disabled' | 'decay_recovered'。
     days_tracked: 已跟踪交易日数（<60 → underpowered）。
     is_bear_market: 熊市 regime 标志（H6）。
+    peak_original: 原始未衰减 peak（H7 记录）。
+    peak_decay_factor: 衰减系数（1.0=未衰减，0.7/0.5/0.3=已衰减）。
     """
 
     equity: float
@@ -72,6 +96,8 @@ class DrawdownResult:
     status: str
     days_tracked: int
     is_bear_market: bool
+    peak_original: float = 0.0       # H7：原始 peak（未衰减）
+    peak_decay_factor: float = 1.0    # H7：衰减系数（1.0=未衰减）
 
 
 class DrawdownBreaker:
@@ -94,6 +120,9 @@ class DrawdownBreaker:
         equity = initial_capital + cumulative_realized_pnl + sum(unrealized_pnl)
         drawdown_cny = peak_cny - current_cny
         drawdown_pct = drawdown_cny / initial_capital
+
+        H7 peak 渐进衰减（v9.00）：极端回撤+长期锁定 → peak 按系数衰减，
+        衰减后 size_mult 上限 0.5（保留风控记忆）。原始 peak 保留在 trade_journal。
         """
         snapshot = self._journal.get_drawdown_status(arm=arm)
         cum_pnl = snapshot.get("cum_pnl", 0.0)
@@ -101,7 +130,27 @@ class DrawdownBreaker:
         days_tracked = snapshot.get("days_tracked", 0)
 
         equity = self._initial_capital + cum_pnl
-        peak_equity = self._initial_capital + peak_pnl
+        peak_original = self._initial_capital + peak_pnl
+
+        # ── H7 peak 渐进衰减 ──────────────────────────────────────────────
+        raw_drawdown_pct = (
+            (peak_original - equity) / self._initial_capital * 100
+            if self._initial_capital > 0 else 0.0
+        )
+        decay_factor = 1.0
+        if days_tracked >= MIN_DAYS_FOR_ENFORCE and raw_drawdown_pct > DD_THRESHOLD_STOP:
+            # 选择衰减 tier（取满足条件的最严格 tier）
+            if raw_drawdown_pct > PEAK_DECAY_TIER3_DD or days_tracked > PEAK_DECAY_TIER3_DAYS:
+                decay_factor = PEAK_DECAY_TIER3_FACTOR
+            elif raw_drawdown_pct > PEAK_DECAY_TIER2_DD and days_tracked > PEAK_DECAY_TIER2_DAYS:
+                decay_factor = PEAK_DECAY_TIER2_FACTOR
+            elif raw_drawdown_pct > PEAK_DECAY_TIER1_DD and days_tracked > PEAK_DECAY_TIER1_DAYS:
+                decay_factor = PEAK_DECAY_TIER1_FACTOR
+
+        # 应用衰减：衰减后 peak 不低于当前 equity（避免负回撤假象）
+        peak_equity = max(peak_original * decay_factor, equity)
+        # ── H7 end ────────────────────────────────────────────────────────
+
         drawdown_cny = peak_equity - equity
         drawdown_pct = (
             drawdown_cny / self._initial_capital * 100
@@ -120,6 +169,10 @@ class DrawdownBreaker:
             multiplier = 0.5 if drawdown_pct > BEAR_MARKET_FLOOR_DD_THRESHOLD else 1.0
             if drawdown_pct > BEAR_MARKET_FLOOR_DD_THRESHOLD * 1.5:
                 multiplier = 0.0
+        elif decay_factor < 1.0 and drawdown_pct <= DD_THRESHOLD_STOP:
+            # H7 衰减后回撤已降到阈值以下 → 解锁但半仓
+            status = "decay_recovered"
+            multiplier = PEAK_DECAY_SIZE_CAP
         else:
             status = "enforced"
             if drawdown_pct > DD_THRESHOLD_STOP:
@@ -128,6 +181,10 @@ class DrawdownBreaker:
                 multiplier = 0.5
             else:
                 multiplier = 1.0
+
+        # H7：衰减后 size_mult 上限 PEAK_DECAY_SIZE_CAP
+        if decay_factor < 1.0:
+            multiplier = min(multiplier, PEAK_DECAY_SIZE_CAP)
 
         return DrawdownResult(
             equity=round(equity, 2),
@@ -138,6 +195,8 @@ class DrawdownBreaker:
             status=status,
             days_tracked=days_tracked,
             is_bear_market=is_bear,
+            peak_original=round(peak_original, 2),
+            peak_decay_factor=decay_factor,
         )
 
     def size_multiplier(self, arm: str | None = None) -> tuple[float, str]:
@@ -203,6 +262,8 @@ class DrawdownBreaker:
                 "size_multiplier": r.size_multiplier,
                 "status": r.status,
                 "days_tracked": r.days_tracked,
+                "peak_original": r.peak_original,
+                "peak_decay_factor": r.peak_decay_factor,
             }
         port = self.compute_drawdown(arm=None)
         return {
@@ -216,6 +277,8 @@ class DrawdownBreaker:
                 "status": port.status,
                 "days_tracked": port.days_tracked,
                 "is_bear_market": port.is_bear_market,
+                "peak_original": port.peak_original,
+                "peak_decay_factor": port.peak_decay_factor,
             },
             "initial_capital": self._initial_capital,
         }
@@ -228,4 +291,14 @@ __all__ = [
     "DD_THRESHOLD_STOP",
     "MIN_DAYS_FOR_ENFORCE",
     "ARM_FLOOR",
+    "PEAK_DECAY_TIER1_DD",
+    "PEAK_DECAY_TIER1_DAYS",
+    "PEAK_DECAY_TIER1_FACTOR",
+    "PEAK_DECAY_TIER2_DD",
+    "PEAK_DECAY_TIER2_DAYS",
+    "PEAK_DECAY_TIER2_FACTOR",
+    "PEAK_DECAY_TIER3_DD",
+    "PEAK_DECAY_TIER3_DAYS",
+    "PEAK_DECAY_TIER3_FACTOR",
+    "PEAK_DECAY_SIZE_CAP",
 ]

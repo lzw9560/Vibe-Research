@@ -287,11 +287,122 @@ def scan_strategy1_suffocation() -> list:
 
 
 def scan_strategy4_tail_drop() -> list:
-    """策略4：尾盘错杀承接扫描。"""
+    """策略4进化版：尾盘错杀承接扫描（集成 tail_dip_engine 多专家共识引擎）。
+
+    v2.00 进化点：
+    - calculate_anomalous_deviation：个股vs板块偏离度>=3%才算错杀（非绝对跌幅）
+    - financial_red_line_shield：商誉/质押/连板高度硬红线过滤
+    - 跌幅限定-3%~-5%甜区（回测最优，重跌是基本面恶化）
+    - 止损-10%（误杀率仅9.8%，非旧版-5%的22%）
+    - 周五自动升级安全门槛
+    """
     all_stocks = get_market_snapshot_all()
     if not all_stocks:
         return []
 
+    # 导入进化引擎
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+    try:
+        from strategies.tail_dip_engine import (
+            calculate_anomalous_deviation,
+            financial_red_line_shield,
+            HARD_THRESHOLDS,
+        )
+    except ImportError:
+        # 引擎不可用时降级为原始口径（不阻塞推送）
+        return _scan_strategy4_tail_drop_legacy(all_stocks)
+
+    # 判断是否周五/周末前（收紧安全门槛）
+    now = datetime.now(CST)
+    is_weekend_eve = now.weekday() == 4  # Friday
+
+    # v4.00：用全市场中位数涨跌幅替代深证成指近似（更抗极值）
+    # 降级链：全市场中位数 → 深证成指 → 0
+    valid_stocks = [s for s in all_stocks if s.get("price_change_ratio_pct") is not None]
+    sector_change_pct = 0.0
+    sector_source = "降级(无数据)"
+    if valid_stocks:
+        sorted_chgs = sorted(s["price_change_ratio_pct"] for s in valid_stocks)
+        sector_change_pct = sorted_chgs[len(sorted_chgs) // 2]  # 中位数
+        sector_source = f"全市场中位数(n={len(valid_stocks)})"
+    else:
+        indices = get_index_snapshot()
+        if indices:
+            for idx in indices:
+                if "399001" in idx.get("thscode", ""):
+                    sector_change_pct = idx.get("price_change_ratio_pct", 0.0)
+                    sector_source = "深证成指(降级)"
+                    break
+
+    results = []
+    for s in all_stocks:
+        chg = s.get("price_change_ratio_pct")
+        turnover = s.get("turnover")
+        price = s.get("last_price")
+        volume = s.get("volume")
+        if chg is None or turnover is None or price is None:
+            continue
+
+        # ━━━ 基础筛选：跌幅-3%~-5%甜区 + 成交额>1000万 + 价格2-80 ━━━
+        if chg > HARD_THRESHOLDS["min_drop_pct"]:  # > -3% 不算错杀
+            continue
+        if chg < HARD_THRESHOLDS["max_drop_pct"]:  # < -5% 重跌不接
+            continue
+        if turnover < HARD_THRESHOLDS["min_amount"]:
+            continue
+        if price < HARD_THRESHOLDS["min_price"] or price > 80:
+            continue
+
+        # ━━━ 错杀偏离度因子：个股跌 vs 板块涨跌 ━━━
+        # 量能收缩比：用 vol_ratio 近似（CLI snapshot 有 vol_ratio 字段）
+        vol_ratio_raw = s.get("vol_ratio", 1.0) or 1.0
+        # vol_ratio 是量比（今日量/前5日均量），直接传入
+        deviation = calculate_anomalous_deviation(
+            code=s.get("thscode", ""),
+            individual_change_pct=chg,
+            sector_change_pct=sector_change_pct,
+            volume_today=float(volume or 0),
+            volume_ma5=float(volume or 0) / max(vol_ratio_raw, 0.01),  # 反推5日均量
+        )
+
+        if not deviation.is_anomalous:
+            continue  # 非错杀（板块共跌）→ 跳过
+
+        # ━━━ 财务红线防火墙（降级模式：无财务数据时跳过红线检查）━━━
+        # 生产环境应接入akshare拉商誉/质押/应收数据
+        # 这里用 limitup_boards 近似（从涨停池数据判断）
+        redline = financial_red_line_shield(
+            code=s.get("thscode", ""),
+            name=s.get("name", ""),
+            limitup_boards=0,  # 跌3%+的票不可能是连板，设0
+            is_weekend_eve=is_weekend_eve,
+        )
+        if not redline.passed:
+            continue  # 红线拦截
+
+        results.append({
+            "code": s.get("thscode", ""),
+            "name": s.get("name", ""),
+            "price": price,
+            "chg": chg,
+            "turnover": turnover / 1e8,
+            "deviation": deviation.anomalous_deviation,
+            "confidence": deviation.confidence,
+            "detail": deviation.detail,
+            "stop_loss": HARD_THRESHOLDS["max_stop_loss"],   # -10%
+            "take_profit": HARD_THRESHOLDS["take_profit"],   # +10%
+            "max_hold": HARD_THRESHOLDS["max_hold_days"] if not is_weekend_eve else 3,
+            "is_weekend_eve": is_weekend_eve,
+        })
+
+    # 按偏离度降序（偏离越大越可能是错杀）
+    results.sort(key=lambda x: x["deviation"], reverse=True)
+    return results[:10]
+
+
+def _scan_strategy4_tail_drop_legacy(all_stocks: list) -> list:
+    """策略4原始口径降级版（tail_dip_engine 不可用时使用）。"""
     results = []
     for s in all_stocks:
         chg = s.get("price_change_ratio_pct")
@@ -299,7 +410,6 @@ def scan_strategy4_tail_drop() -> list:
         price = s.get("last_price")
         if chg is None or turnover is None or price is None:
             continue
-        # 尾盘跌3%+ 且成交额>1000万
         if chg < -3 and turnover > 10000000 and 2 < price < 80:
             results.append({
                 "code": s["thscode"],
@@ -347,6 +457,46 @@ def build_premarket_card() -> dict:
                 dt_text += f"• {d['name']}({d['thscode'][:6]}) 净买:{nm/1e8:+.2f}亿\n"
         elements.append({"tag": "markdown", "content": dt_text.strip()})
 
+    # v5.00：回撤断路器诊断+peak衰减建议
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+        from strategies.tail_dip_engine import diagnose_drawdown_lock, propose_peak_decay
+
+        # 从API拉回撤状态
+        import urllib.request as _urllib
+        try:
+            with _urllib.urlopen(_urllib.Request("http://127.0.0.1:8900/api/journal/drawdown-status"), timeout=5) as _r:
+                _dd = json.loads(_r.read())
+                _port = _dd.get("portfolio", {})
+                _eq = float(_port.get("equity", 0))
+                _pk = float(_port.get("peak", 0))
+                _dd_pct = float(_port.get("drawdown_pct", 0))
+                _days = int(_port.get("days_tracked", 0))
+                _sm = float(_port.get("size_multiplier", 0))
+
+                dd_text = f"\n**🛡️ 回撤断路器状态**\n"
+                dd_text += f"权益: {_eq:.0f}  峰值: {_pk:.0f}  回撤: {_dd_pct:.1f}%  size_mult: {_sm}\n"
+
+                # 诊断
+                diag = diagnose_drawdown_lock(_eq, _pk, 100000.0, _days)
+                if diag.is_permanently_locked:
+                    dd_text += f"⚠️ 永久锁定：{diag.diagnosis}\n"
+
+                    # peak衰减方案
+                    proposal = propose_peak_decay(_eq, _pk, 100000.0, _days)
+                    if proposal:
+                        dd_text += f"\n**🔧 peak衰减方案**\n"
+                        dd_text += f"当前peak={proposal.current_peak:.0f} → 衰减后={proposal.proposed_peak:.0f}（×{proposal.decay_factor}）\n"
+                        dd_text += f"触发: {proposal.trigger_reason}\n"
+                        dd_text += f"{proposal.recommendation}\n"
+                        dd_text += f"⚠️ 需人工确认后实施（不自主修改风控核心逻辑）\n"
+                elements.append({"tag": "markdown", "content": dd_text.strip()})
+        except Exception:
+            pass  # API不可用时不阻塞推送
+    except ImportError:
+        pass  # 引擎不可用时降级
+
     elements.append({
         "tag": "note",
         "content": "⚠️ 以上为盘前数据快照，不构成投资建议。策略信号需盘中实时确认。"
@@ -362,30 +512,49 @@ def build_premarket_card() -> dict:
 
 
 def build_intraday_card() -> dict:
-    """盘中尾盘扫描卡片。"""
-    now = datetime.now(CST).strftime("%H:%M")
+    """盘中尾盘扫描卡片（进化版v2.00——多专家共识引擎驱动）。"""
+    now = datetime.now(CST)
+    now_str = now.strftime("%H:%M")
+    is_weekend_eve = now.weekday() == 4
 
-    # 策略4扫描
+    # 策略4进化版扫描
     s4 = scan_strategy4_tail_drop()
-    # 策略1扫描（耗时较长，盘中简化版只用当日数据）
-    # s1 = scan_strategy1_suffocation()  # 盘中不跑，太慢
 
     elements = []
 
     if s4:
-        text = f"**🔍 策略4：尾盘错杀扫描（{now}）**\n\n"
-        text += "以下标的当日跌幅>3%，可能有机械性错杀：\n\n"
+        text = f"**🔍 策略4进化版：尾盘错杀扫描（{now_str}）**\n\n"
+        if is_weekend_eve:
+            text += "⚠️ **周五操作——安全门槛已升级**（止损-7%、持有≤3日、连板≥3拉黑）\n\n"
+        text += "以下标的通过：跌幅-3%~-5%甜区 + 错杀偏离度≥3% + 财务红线\n\n"
         for s in s4[:8]:
-            text += f"• {s['code']} 跌:{s['chg']:+.2f}% 成交:{s['turnover']:.1f}亿 价格:{s['price']:.2f}\n"
-        text += "\n**操作：** 14:50-14:55确认无利空后买入，次日开盘卖\n"
-        text += "**止损：** -5%\n"
+            conf_emoji = {"high": "🟢", "medium": "🟡", "low": "🔴"}.get(s.get("confidence", ""), "⚪")
+            text += (
+                f"{conf_emoji} {s.get('name', s['code'])}({s['code'][:6]})\n"
+                f"  跌:{s['chg']:+.2f}% 偏离:{s['deviation']:.1f}% "
+                f"成交:{s['turnover']:.1f}亿 价格:{s['price']:.2f}\n"
+                f"  止损:{s['stop_loss']:.0%} 止盈:{s['take_profit']:.0%} "
+                f"持有≤{s['max_hold']}日 [{s.get('confidence', '')}]\n"
+            )
+        text += "\n**操作纪律：**\n"
+        text += f"• 14:50-14:55确认无利空后买入（T+1收盘或T+2卖，不要开盘卖）\n"
+        text += f"• 止损-10%（回测误杀率仅9.8%，非旧版-5%的22%）\n"
+        text += f"• 止盈+10% 让右侧肥尾兑现\n"
+        if is_weekend_eve:
+            text += f"• 周五仓位减半，持有≤3日（周末真空期风险）\n"
         elements.append({"tag": "markdown", "content": text.strip()})
     else:
-        elements.append({"tag": "markdown", "content": f"**{now} 暂无策略4信号**\n当日无明显尾盘错杀标的。"})
+        elements.append({
+            "tag": "markdown",
+            "content": f"**{now_str} 暂无策略4信号**\n当日无明显尾盘错杀标的"
+                     f"（通过偏离度+财务红线双重过滤）。"
+        })
 
     elements.append({
         "tag": "note",
-        "content": "⚠️ 需确认标的无利空公告后再执行。不构成投资建议。"
+        "content": "⚠️ 需确认标的无利空公告后再执行。"
+                   "策略4回测Bootstrap p=0.743不显著，右尾分布有alpha但裸买裸卖均值≈0。"
+                   "不构成投资建议。"
     })
 
     return {

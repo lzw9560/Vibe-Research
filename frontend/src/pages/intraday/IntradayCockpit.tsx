@@ -9,6 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { RefreshCw, Lightbulb, Clock, Activity, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { SplitLayout } from "@/components/layout/SplitLayout";
 import { OfiDashboard } from "@/components/intraday/OfiDashboard";
+import TailDipDeviationPanel from "@/components/intraday/TailDipDeviationPanel";
 import { HonestEmptyState } from "@/components/intraday/HonestEmptyState";
 import { BombAlertBanner } from "@/components/risk/BombAlertBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -211,6 +212,16 @@ export function IntradayCockpit() {
         </h3>
         <OfiDashboard />
       </div>
+
+      {/* 策略4进化版：尾盘错杀偏离度看板（v6.00 tail_dip_engine） */}
+      {curCode && (
+        <div className="mb-6">
+          <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
+            尾盘错杀偏离度（策略4进化版 · 个股vs全市场中位数）
+          </h3>
+          <TailDipDeviationPanel code={curCode} />
+        </div>
+      )}
 
       <Disclaimer />
       <NextStepBar pageCtx="intraday" />

@@ -78,6 +78,7 @@ from routers import verifier as verifier_router  # S165：§44 验证卡 + 实�
 from routers import journal as journal_router  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger，fresh-impl）
 from routers import tracking as tracking_router  # S204 T9：多日跟踪查询 API（candidate_tracking_pool + indicator_snapshots 只读看板）
 from routers import signals as signals_router  # S218: 每日信号报告路由
+from routers import tail_dip as tail_dip_router  # v6.00：策略4进化版（tail_dip_engine）
 
 try:
     from routers import value_funnel as value_funnel_router
@@ -310,6 +311,7 @@ app.include_router(verifier_router.router)  # S165：§44 验证卡 + 实验记�
 app.include_router(journal_router.router)  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger）
 app.include_router(tracking_router.router)  # S204 T9：多日跟踪查询 API
 app.include_router(signals_router.router)  # S218: 每日信号报告
+app.include_router(tail_dip_router.router)  # v6.00：策略4进化版（tail_dip_engine）
 if value_funnel_router is not None:
     app.include_router(value_funnel_router.router)
 
