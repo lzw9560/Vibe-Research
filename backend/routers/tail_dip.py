@@ -191,7 +191,7 @@ def scan_tail_dip(
                     filtered.append(c)
 
             financial_summary = {
-                "total_candidates": len(candidates),
+                "total_candidates": len(top_candidates),
                 "blocked": blocked_count,
                 "passed": len(filtered),
             }
