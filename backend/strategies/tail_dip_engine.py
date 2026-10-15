@@ -188,20 +188,23 @@ def calculate_anomalous_deviation(
     volume_ma5: float,
     *,
     min_deviation: float = 3.0,      # 个股vs板块偏离>=3%才算错杀
+    high_confidence_deviation: float = 5.0,  # 偏离>=5%才算高信心（v10.2防边界噪声）
     max_volume_ratio: float = 0.8,   # 量能收缩比<0.8才算无量
+    low_cf_threshold: float = 10.0,  # 现金流/净利<10%时降信心（v10.2基本面黄灯）
 ) -> AnomalousDeviationResult:
     """个股日内无量错杀因子。
 
     核心逻辑（跌幅为负数：个股跌4% = -4.0）：
     - 错杀偏离度 = 个股涨跌幅 - 板块涨跌幅（负值=个股比板块跌更多）
     - abs(偏离度) >= min_deviation 才算错杀（个股相对板块多跌了>=3%）
+    - 偏离度>=5% + 无量 → 高信心（v10.2：从3%提到5%防边界噪声）
+    - 偏离度3~5% + 无量 → 中信心
     - 量能收缩 = 今日量/5日均量 < 0.8 → 无量下跌（不是机构出货）
-    - 偏离度>=3% + 无量 → 高信心错杀
-    - 偏离度>=3% + 放量 → 低信心（可能是机构出货而非错杀）
 
     防诱多设计：
     - 如果个股跌但板块也跌（abs(偏离度)<min_deviation），不算错杀——是系统性下跌
     - 如果放量跌（量比>1.2），降信心——机构可能在出货
+    - 偏离度刚好=3.0（边界噪声）只给medium不给high
     """
     # 错杀偏离度 = 个股涨跌幅 - 板块涨跌幅（负=个股比板块跌更多）
     raw_deviation = individual_change_pct - sector_change_pct
@@ -222,7 +225,8 @@ def calculate_anomalous_deviation(
         detail_parts.append(f"错杀偏离度{deviation:.1f}%>={min_deviation}%（个股{individual_change_pct:.1f}% vs 板块{sector_change_pct:.1f}%）")
 
         if vol_ratio < max_volume_ratio:
-            confidence = "high"
+            # v10.2：偏离>=5%才high，3~5%只给medium（防边界噪声）
+            confidence = "high" if deviation >= high_confidence_deviation else "medium"
             detail_parts.append(f"无量收缩{vol_ratio:.2f}<{max_volume_ratio}")
         elif vol_ratio > 1.2:
             confidence = "low"
