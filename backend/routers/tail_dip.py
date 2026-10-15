@@ -153,49 +153,108 @@ def scan_tail_dip(
 
         candidates.sort(key=lambda x: x["deviation"], reverse=True)
 
-        # v10：可选财务红线过滤（每只~16s，只跑top5避免超时）
+        # v10.3：异步财务过滤——后台线程跑top20，结果写缓存，scan立即返回
         financial_summary = None
         if with_financial_filter and candidates:
             from strategies.tail_dip_engine import fetch_financial_substitute_factors
-            # 只对偏离度最高的前5只跑财务过滤（5×16s=80s < HTTP超时）
-            top_candidates = candidates[:5]
-            filtered = []
-            blocked_count = 0
-            for c in top_candidates:
-                code_raw = c["code"][:6]
-                factors = fetch_financial_substitute_factors(code_raw)
-                gw = factors.get("goodwill_ratio")
-                gw_blk = factors.get("goodwill_blocked", False)
-                ar = factors.get("ar_to_revenue_pct")
-                cf_neg = factors.get("cf_negative", False)
-                reduction = factors.get("has_reduction_recent", False)
+            import threading
 
-                blocked_reasons = []
-                if gw_blk and gw is not None: blocked_reasons.append(f"商誉{gw*100:.0f}%>=15%")
-                if ar and ar >= 40: blocked_reasons.append(f"应收{ar:.0f}%>=40%")
-                if cf_neg: blocked_reasons.append("现金流为负")
-                if reduction: blocked_reasons.append("有减持")
-                # v10安全补丁：全None → 拦截
-                if not factors:
-                    blocked_reasons.append("财务数据缺失")
+            _FIN_CACHE_KEY = "_tail_dip_financial_cache"
 
-                if blocked_reasons:
-                    blocked_count += 1
-                else:
-                    c["financial_factors"] = {
-                        "goodwill_ratio": gw,
-                        "ar_to_revenue_pct": ar,
-                        "cf_to_ni_pct": factors.get("cf_to_ni_pct"),
-                        "debt_ratio": factors.get("debt_ratio"),
-                    }
-                    filtered.append(c)
+            # 检查是否有缓存的财务过滤结果（5分钟有效）
+            fin_cache = getattr(scan_tail_dip, _FIN_CACHE_KEY, None)
+            if fin_cache and (_time.time() - fin_cache[1]) < 300:
+                # 用缓存结果
+                filtered = fin_cache[0]["filtered"]
+                financial_summary = fin_cache[0]["summary"]
+                candidates = filtered
+            else:
+                # 立即返回未过滤的候选 + 启动后台财务过滤
+                # 前台只跑top3快速过滤（3×16s=48s < HTTP超时）
+                top_fast = candidates[:3]
+                filtered_fast = []
+                blocked_fast = 0
+                for c in top_fast:
+                    code_raw = c["code"][:6]
+                    factors = fetch_financial_substitute_factors(code_raw)
+                    gw = factors.get("goodwill_ratio")
+                    gw_blk = factors.get("goodwill_blocked", False)
+                    ar = factors.get("ar_to_revenue_pct")
+                    cf_neg = factors.get("cf_negative", False)
+                    reduction = factors.get("has_reduction_recent", False)
 
-            financial_summary = {
-                "total_candidates": len(top_candidates),
-                "blocked": blocked_count,
-                "passed": len(filtered),
-            }
-            candidates = filtered
+                    blocked_reasons = []
+                    if gw_blk and gw is not None: blocked_reasons.append(f"商誉{gw*100:.0f}%>=15%")
+                    if ar and ar >= 40: blocked_reasons.append(f"应收{ar:.0f}%>=40%")
+                    if cf_neg: blocked_reasons.append("现金流为负")
+                    if reduction: blocked_reasons.append("有减持")
+                    if not factors: blocked_reasons.append("财务数据缺失")
+
+                    if blocked_reasons:
+                        blocked_fast += 1
+                    else:
+                        c["financial_factors"] = {
+                            "goodwill_ratio": gw,
+                            "ar_to_revenue_pct": ar,
+                            "cf_to_ni_pct": factors.get("cf_to_ni_pct"),
+                            "debt_ratio": factors.get("debt_ratio"),
+                        }
+                        filtered_fast.append(c)
+
+                # 启动后台线程跑剩余top20（不阻塞响应）
+                def _bg_financial_filter():
+                    try:
+                        top20 = candidates[:20]
+                        bg_filtered = []
+                        bg_blocked = 0
+                        for c in top20:
+                            code_raw = c["code"][:6]
+                            factors = fetch_financial_substitute_factors(code_raw)
+                            gw = factors.get("goodwill_ratio")
+                            gw_blk = factors.get("goodwill_blocked", False)
+                            ar = factors.get("ar_to_revenue_pct")
+                            cf_neg = factors.get("cf_negative", False)
+                            reduction = factors.get("has_reduction_recent", False)
+
+                            blocked_reasons = []
+                            if gw_blk and gw is not None: blocked_reasons.append(f"商誉{gw*100:.0f}%>=15%")
+                            if ar and ar >= 40: blocked_reasons.append(f"应收{ar:.0f}%>=40%")
+                            if cf_neg: blocked_reasons.append("现金流为负")
+                            if reduction: blocked_reasons.append("有减持")
+                            if not factors: blocked_reasons.append("财务数据缺失")
+
+                            if blocked_reasons:
+                                bg_blocked += 1
+                            else:
+                                c["financial_factors"] = {
+                                    "goodwill_ratio": gw,
+                                    "ar_to_revenue_pct": ar,
+                                    "cf_to_ni_pct": factors.get("cf_to_ni_pct"),
+                                    "debt_ratio": factors.get("debt_ratio"),
+                                }
+                                bg_filtered.append(c)
+
+                        bg_summary = {
+                            "total_candidates": len(top20),
+                            "blocked": bg_blocked,
+                            "passed": len(bg_filtered),
+                        }
+                        setattr(scan_tail_dip, _FIN_CACHE_KEY,
+                                ({"filtered": bg_filtered, "summary": bg_summary}, _time.time()))
+                    except Exception:
+                        pass  # 后台失败不影响前台
+
+                t = threading.Thread(target=_bg_financial_filter, daemon=True)
+                t.start()
+
+                # 前台立即返回top3快速过滤结果
+                financial_summary = {
+                    "total_candidates": len(top_fast),
+                    "blocked": blocked_fast,
+                    "passed": len(filtered_fast),
+                    "note": "top3快速过滤，top20后台计算中（5分钟后查询可见完整结果）",
+                }
+                candidates = filtered_fast
 
         return TailDipScanResponse(
             candidates=candidates[:limit],
