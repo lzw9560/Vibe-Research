@@ -459,4 +459,61 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
         })
 
     written = save_snapshots(rows)
-    return {"written": written, "skipped": 0, "data_status": "ok" if written else "empty"}
+
+    # v10.4：追加尾盘错杀候选采集——用hithink-finance拉全市场快照
+    # 只采集跌幅-3%~-5%的票（tail_dip引擎的候选池），写入intraday_quote_snapshots
+    tail_dip_written = 0
+    try:
+        import subprocess as _sp
+        import json as _json
+        _sp.run(
+            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+             "market", "snapshot", "--limit", "5000",
+             "--output", "/tmp/seal_intraday_tail.json"],
+            capture_output=True, text=True, timeout=30,
+        )
+        with open("/tmp/seal_intraday_tail.json") as f:
+            snap = _json.load(f)
+        all_stocks = snap.get("data", {}).get("item", [])
+        tail_codes = [
+            str(s.get("thscode", ""))[:6] for s in all_stocks
+            if s.get("price_change_ratio_pct") is not None
+            and -5.0 < s.get("price_change_ratio_pct", 0) <= -3.0
+        ][:100]  # 最多100只，避免腾讯行情请求过大
+
+        if tail_codes:
+            tail_quotes = astock.tencent_quote(tail_codes) or {}
+            tail_rows = []
+            for s in all_stocks:
+                code = str(s.get("thscode", ""))[:6]
+                chg = s.get("price_change_ratio_pct")
+                if code in tail_codes and chg is not None and -5.0 < chg <= -3.0:
+                    q = tail_quotes.get(code) or {}
+                    tail_rows.append({
+                        "ts": ts,
+                        "date": date_str,
+                        "code": code,
+                        "name": s.get("name", ""),
+                        "pool": "tail_dip",
+                        "price": s.get("last_price"),
+                        "seal_amount": None,
+                        "open_count": None,
+                        "first_seal_time": None,
+                        "consec_boards": 0,
+                        "sector": None,
+                        "float_market_cap": None,
+                        "index_5min_change": index_5min_change,
+                        "low_price": q.get("low") if q else None,
+                        "limit_pct": None,
+                    })
+            if tail_rows:
+                tail_dip_written = save_snapshots(tail_rows)
+    except Exception as exc:
+        _logger.warning("[seal_intraday] tail_dip候选采集失败: %s", exc)
+
+    return {
+        "written": written,
+        "tail_dip_written": tail_dip_written,
+        "skipped": 0,
+        "data_status": "ok" if written else "empty",
+    }
