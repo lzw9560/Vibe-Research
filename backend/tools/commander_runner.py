@@ -143,7 +143,7 @@ def load_a_group_today(mode: str = "basic") -> list[dict]:
             continue
         if total_net > 5e7:  # 净买<0.5亿 = <5e7 元
             continue
-        if mode == "combo" and code.startswith("920"):  # 北交所 hithink/baostock 不识，跳
+        if mode in ("combo", "filtered") and code.startswith("920"):  # 北交所 hithink/baostock 不识，跳
             continue
         signals.append({"code": code, "chg": round(chg, 2), "net_buy_wan": round(total_net / 1e4, 1)})
     signals = sorted(signals, key=lambda x: x["net_buy_wan"], reverse=True)
