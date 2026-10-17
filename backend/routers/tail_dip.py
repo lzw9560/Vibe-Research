@@ -454,3 +454,72 @@ def tail_volatility_check(code: str = Query(..., description="股票代码")) ->
         "is_manipulated": r.is_manipulated,
         "detail": r.detail,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 7. 小成交额错杀扫描（2026年唯一统计显著alpha p=0.026）
+# ─────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/strategy/lvd/scan")
+def lvd_scan(
+    limit: int = Query(5, description="返回数量上限"),
+) -> dict:
+    """小成交额错杀低吸扫描（LVD策略）。
+
+    2026年1-9月前向验证：
+    - 日组合 n=158 mean=+0.99% WR=44% t=1.96 p=0.026（统计显著）
+    - 单只 n=5517 mean=+1.60% WR=48% 止损-5% 持有2周
+
+    筛选：成交额最低10% + 当日跌<-3% + 价格2~100元
+    操作：次日开盘买，持有10个交易日，-5%止损，不设止盈
+    """
+    import subprocess
+    import json as _json
+    import time as _time
+
+    # 60秒缓存
+    _LVD_CACHE_KEY = "_lvd_scan_cache"
+    cache = getattr(lvd_scan, _LVD_CACHE_KEY, None)
+    if cache and (_time.time() - cache[1]) < 60:
+        all_stocks = cache[0]
+    else:
+        result = subprocess.run(
+            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+             "market", "snapshot", "--limit", "5000",
+             "--output", "/tmp/lvd_scan.json"],
+            capture_output=True, text=True, timeout=30,
+        )
+        try:
+            with open("/tmp/lvd_scan.json") as f:
+                data = _json.load(f)
+        except (FileNotFoundError, _json.JSONDecodeError):
+            return {"candidates": [], "total_scanned": 0, "error": "数据拉取失败"}
+        all_stocks = data.get("data", {}).get("item", [])
+        setattr(lvd_scan, _LVD_CACHE_KEY, (all_stocks, _time.time()))
+
+    from strategies.low_volume_dip import screen_low_volume_dip
+
+    result = screen_low_volume_dip(all_stocks, max_stocks=limit)
+
+    return {
+        "candidates": [
+            {
+                "code": c.code,
+                "name": c.name,
+                "close": c.close,
+                "change_pct": c.change_pct,
+                "amount_yi": round(c.amount / 1e8, 2),
+                "amount_percentile": c.amount_percentile,
+                "stop_loss": c.stop_loss,
+                "hold_days": c.hold_days,
+                "score": c.score,
+                "detail": c.detail,
+            }
+            for c in result.candidates
+        ],
+        "total_scanned": result.total_scanned,
+        "sector_median_pct": result.sector_median_pct,
+        "sector_source": result.sector_source,
+        "edge_stats": result.edge_stats,
+        "params": result.params,
+    }
