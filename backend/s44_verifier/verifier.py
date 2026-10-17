@@ -86,6 +86,10 @@ class Verdict:
     updated_commit: Optional[str] = None
     updated_at: Optional[str] = None
     data_snapshot_id: Optional[str] = None
+    # R38/R39/R40 (2026-10-17 幽灵政策落地, memory engineering-baseline-audit)
+    false_negative_risk: Optional[str] = None  # R38: falsified → requires_audit/method_fixable/true_falsified
+    regime_stratified: Optional[dict] = None   # R39: regime 分层可复现 (post_hoc, 调用方传)
+    independent_source_replicated: Optional[bool] = None  # R40: 独立数据源复现 gate
     note: str = ""
 
 
@@ -462,9 +466,27 @@ def verify(
         # 1 <= lift < 2, or lift None with enough days
         status = "exploratory"
 
+    # ── R37: backfill<1年 enforcement gate (2026-10-17 幽灵政策落地) ──────
+    # 数据跨度<365天 → 强制 exploratory(不得 robust_edge/falsified 静默 confirm)
+    # memory engineering-baseline-audit R37: backfill<1年强制 exploratory+cap
+    r37_backfill_short = False
+    if dates is not None:
+        try:
+            _ud = sorted({str(d)[:10] for d in (dates.tolist() if hasattr(dates, "tolist") else dates)})
+            if len(_ud) >= 2:
+                _span = (pd.Timestamp(_ud[-1]) - pd.Timestamp(_ud[0])).days
+                if _span < 365:
+                    r37_backfill_short = True
+                    if status in ("robust_edge", "falsified"):
+                        status = "exploratory"
+        except Exception:
+            pass
+
     notes: list[str] = []
     if r5_note:
         notes.append(r5_note)
+    if r37_backfill_short:
+        notes.append("R37 backfill<1年(data span<365天)→ 强制 exploratory,不得 confirm/falsify")
     # R7: anti-extrapolation — selection/path-falsified must warn a population event
     # edge may still exist (spec R7 须; §44v1 wrong-window disaster guard).
     # M4: path is selection-like (full path lift), so anti-extrapolation applies.
@@ -479,6 +501,15 @@ def verify(
             f"PurgedKFold: {pk_status} ({pk_n_folds} folds; "
             f"walk-forward {'insufficient' if wf_status == 'insufficient_skipped' else 'ran'})"
         )
+    # R38: falsified 须假阴性审计 (2026-10-17 幽灵政策落地)
+    r38_fnr: Optional[str] = None
+    if status == "falsified":
+        r38_fnr = "requires_audit"
+        notes.append("R38 falsified 须假阴性审计(method/bug 可修 vs 真 falsified)")
+    # R40: robust_edge 须独立数据源复现才 confirmed
+    r40_isr: Optional[bool] = None
+    if status == "robust_edge":
+        notes.append("R40 robust_edge 须独立数据源复现才 confirmed")
 
     return Verdict(
         status=status,
@@ -507,6 +538,9 @@ def verify(
         n_comparisons=n_comparisons,
         frozen_commit=frozen_commit,
         data_snapshot_id=data_snapshot_id,
+        false_negative_risk=r38_fnr,
+        regime_stratified=None,  # R39 post_hoc, 调用方传
+        independent_source_replicated=r40_isr,
         note="; ".join(notes) if notes else "",
     )
 

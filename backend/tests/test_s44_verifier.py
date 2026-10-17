@@ -1219,3 +1219,34 @@ def test_window_for_edge_includes_path():
     """_WINDOW_FOR_EDGE maps path → path window."""
     from s44_verifier.verifier import _WINDOW_FOR_EDGE
     assert _WINDOW_FOR_EDGE.get("path") == "path"
+
+
+# ── R37 tests (2026-10-17 幽灵政策落地, memory engineering-baseline-audit) ───
+
+
+def test_r37_backfill_short_forces_exploratory():
+    """R37: 数据跨度<365天(backfill<1年)→ 强制 exploratory + note 标注(R37 gate)."""
+    # 84 unique days 满足 days_robust>=60,但跨度 2026-01~03 <365 天(backfill<1年)
+    dates = (
+        [f"2026-01-{d:02d}" for d in range(1, 29)]
+        + [f"2026-02-{d:02d}" for d in range(1, 29)]
+        + [f"2026-03-{d:02d}" for d in range(1, 29)]
+    )
+    returns = np.array([0.001] * len(dates))
+    v = verify(returns, n_trials=1, dates=dates)
+    # R37 gate: backfill<365天 → 不得 robust_edge/falsified(强制 exploratory)
+    assert v.status not in ("robust_edge", "falsified"), f"R37 应强制 exploratory, got {v.status}"
+    assert "R37" in v.note, f"note 应含 R37 标注, got: {v.note}"
+
+
+def test_r37_not_triggered_when_backfill_over_1_year():
+    """R37 不误伤: 数据跨度>=365天 → 不触发 R37 gate(note 不含 R37)."""
+    # 跨度 2024-01~2026-01 ~2年 >365 天
+    dates = (
+        [f"2024-01-{d:02d}" for d in range(1, 29)]
+        + [f"2025-01-{d:02d}" for d in range(1, 29)]
+        + [f"2026-01-{d:02d}" for d in range(1, 29)]
+    )
+    returns = np.array([0.001] * len(dates))
+    v = verify(returns, n_trials=1, dates=dates)
+    assert "R37" not in v.note, f"backfill>=1年不应触发 R37, note: {v.note}"

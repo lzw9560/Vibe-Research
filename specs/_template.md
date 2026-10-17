@@ -47,6 +47,13 @@ consecutive_relay V1 +1.04% 假 edge 教训——任何 edge 验证须过 v3 san
 - [ ] **R2 窗口语义标注**：edge 是什么效应？涨停封板溢价（entry close 涨停价 + exit 次日 open 高开）/ 连板接力 / 隔夜 gap（entry 市场价 close）。R5 `_EdgeType` 扩 "limit_up_premium"——不独立 classify_edge_semantic（避免三套分类打架），合并 R1+R4+R5 标注
 - [ ] **A5 回归测试**：v3 filter 重审历史 edge——若 filter 掉 >70% picks → 假 edge 证据（如 consecutive_relay V1 99.4% 涨停 entry）
 
+## 7.2 R35-R36 设计原则自查（2026-10-17 落地，幽灵政策纠正）
+
+> memory `engineering-baseline-audit-2026-10-07` 戳破：R35-R37 high-risk lens 只在 memory 声称未落地 spec/verifier（幽灵政策）。本节落地 R35/R36 设计原则到模板自查；R37/R38/R39/R40 落地 `s44_verifier/` 代码（待续）。
+
+- [ ] **R35 high-risk lens aware**：高波动战法（接力/弱转强/打板）不默认用正统金融学否定，但 **mean 须为正 + 可复现**（tail 可捕获，不要求 median>0/WR>55%）。克服偏见 ≠ 放弃统计——是"用对方法验证高波动"。
+- [ ] **R36 心理博弈须可观测**："主力意图/心理博弈"类信号须声明可观测量价/席位代理（封单量/龙虎榜席位/换手/资金流），否则标"主观推断"不硬测。不可臆造意图（§1.2）。
+
 ## 8. 测试计划
 <pytest -m "not live" / 联网 / 手动验收步骤。>
 
