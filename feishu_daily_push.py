@@ -226,7 +226,11 @@ def get_market_snapshot_all() -> list:
 
 
 def scan_strategy1_suffocation() -> list:
-    """策略1：窒息量反转扫描 — 连跌+缩量。"""
+    """策略1：窒息量反转扫描 — 连跌+缩量。
+
+    ⚠️ 2026-10-17 归档：窒息量低吸已证伪（t1_open -8.188% WR1.9%，接飞刀死亡信号非反转）。
+    见 memory suffocation-reversal-falsified-2026-10-08。函数保留供复现，不再接入盘后推送买入候选。
+    """
     all_stocks = get_market_snapshot_all()
     if not all_stocks:
         return []
@@ -288,6 +292,9 @@ def scan_strategy1_suffocation() -> list:
 
 def scan_strategy4_tail_drop() -> list:
     """策略4进化版：尾盘错杀承接扫描（集成 tail_dip_engine 多专家共识引擎）。
+
+    ⚠️ 2026-10-17 归档：本信号经 8 年 walk-forward 证伪（见 build_intraday_card
+    证伪通告）。函数保留供复现/参考，不再接入买入候选推送。
 
     v2.00 进化点：
     - calculate_anomalous_deviation：个股vs板块偏离度>=3%才算错杀（非绝对跌幅）
@@ -512,55 +519,33 @@ def build_premarket_card() -> dict:
 
 
 def build_intraday_card() -> dict:
-    """盘中尾盘扫描卡片（进化版v2.00——多专家共识引擎驱动）。"""
+    """盘中尾盘扫描卡片。
+
+    ⚠️ 2026-10-17 归档：策略4尾盘错杀低吸经 8 年 walk-forward 证伪
+    （原报告样本内 -10% 档 +0.72% → 8 年复测 -0.039% FAIL；walk-forward
+    train 负 / test 非显著 → NOT confirmed；R12 相对 alpha +0.36% 为 lottery
+    中位负、不可长仓兑现）。不再推送候选，改为证伪通告。
+    详见 strategy4_backtest_result.md §5 + memory tail-dip-falsified-2026-10-17。
+    """
     now = datetime.now(CST)
-    now_str = now.strftime("%H:%M")
-    is_weekend_eve = now.weekday() == 4
 
-    # 策略4进化版扫描
-    s4 = scan_strategy4_tail_drop()
-
-    elements = []
-
-    if s4:
-        text = f"**🔍 策略4进化版：尾盘错杀扫描（{now_str}）**\n\n"
-        if is_weekend_eve:
-            text += "⚠️ **周五操作——安全门槛已升级**（止损-7%、持有≤3日、连板≥3拉黑）\n\n"
-        text += "以下标的通过：跌幅-3%~-5%甜区 + 错杀偏离度≥3% + 财务红线\n\n"
-        for s in s4[:8]:
-            conf_emoji = {"high": "🟢", "medium": "🟡", "low": "🔴"}.get(s.get("confidence", ""), "⚪")
-            text += (
-                f"{conf_emoji} {s.get('name', s['code'])}({s['code'][:6]})\n"
-                f"  跌:{s['chg']:+.2f}% 偏离:{s['deviation']:.1f}% "
-                f"成交:{s['turnover']:.1f}亿 价格:{s['price']:.2f}\n"
-                f"  止损:{s['stop_loss']:.0%} 止盈:{s['take_profit']:.0%} "
-                f"持有≤{s['max_hold']}日 [{s.get('confidence', '')}]\n"
-            )
-        text += "\n**操作纪律：**\n"
-        text += f"• 14:50-14:55确认无利空后买入（T+1收盘或T+2卖，不要开盘卖）\n"
-        text += f"• 止损-10%（回测误杀率仅9.8%，非旧版-5%的22%）\n"
-        text += f"• 止盈+10% 让右侧肥尾兑现\n"
-        if is_weekend_eve:
-            text += f"• 周五仓位减半，持有≤3日（周末真空期风险）\n"
-        elements.append({"tag": "markdown", "content": text.strip()})
-    else:
-        elements.append({
-            "tag": "markdown",
-            "content": f"**{now_str} 暂无策略4信号**\n当日无明显尾盘错杀标的"
-                     f"（通过偏离度+财务红线双重过滤）。"
-        })
-
-    elements.append({
-        "tag": "note",
-        "content": "⚠️ 需确认标的无利空公告后再执行。"
-                   "策略4回测Bootstrap p=0.743不显著，右尾分布有alpha但裸买裸卖均值≈0。"
-                   "不构成投资建议。"
-    })
+    elements = [{
+        "tag": "markdown",
+        "content": (
+            "**⚠️ 策略4·尾盘错杀已归档（2026-10-17）**\n\n"
+            "该信号经 8 年 walk-forward 复测证伪：\n"
+            "• 原样本内 -10% 档 +0.72% → 8 年复测 -0.039%（FAIL）\n"
+            "• walk-forward OOS：train 负 / test 非显著 → NOT confirmed\n"
+            "• R12 相对 alpha +0.36% 为 lottery（中位负、胜率<50%），不可长仓兑现\n\n"
+            "不再推送候选。低吸类别结构性无 edge（与窒息量低吸证伪一致）。\n"
+            "证据：strategy4_backtest_result.md §5 / 脚本 _audit_tail_dip_full.py"
+        ),
+    }]
 
     return {
         "header": {
-            "title": {"tag": "plain_text", "content": f"🔔 尾盘信号 {now}"},
-            "template": "orange",
+            "title": {"tag": "plain_text", "content": f"🔔 尾盘信号（已归档）{now}"},
+            "template": "grey",
         },
         "elements": elements,
     }
@@ -575,7 +560,6 @@ def build_postmarket_card() -> dict:
     dragon = get_dragon_tiger()
     ladder = get_limit_up_ladder()
     skyrocket = get_skyrocket()
-    s1 = scan_strategy1_suffocation()
 
     elements = []
 
@@ -621,15 +605,15 @@ def build_postmarket_card() -> dict:
                 text += f"• {d['name']} +{nm/1e8:.2f}亿 [{concepts}]\n"
         elements.append({"tag": "markdown", "content": text.strip()})
 
-    # 策略1候选
-    if s1:
-        text = "\n**🎯 策略1候选（窒息量反转）**\n"
-        text += "连跌+缩量，明日14:50关注\n\n"
-        for s in s1:
-            text += f"• {s['code']} 5日跌:{s['total_chg_5d']:.1f}% 量比:{s['vol_ratio']:.2f} 价格:{s['price']:.2f}\n"
-        elements.append({"tag": "markdown", "content": text.strip()})
-    else:
-        elements.append({"tag": "markdown", "content": "\n**🎯 策略1候选：暂无符合条件的标的**"})
+    # 策略1（窒息量反转）已证伪归档——不再推候选
+    elements.append({
+        "tag": "markdown",
+        "content": (
+            "\n**🎯 策略1·窒息量反转 已归档（2026-10-17）**\n"
+            "该信号证伪：t1_open -8.188%（接飞刀死亡信号非反转），低吸类别结构性无edge。"
+            "不再推送候选。证据：memory suffocation-reversal-falsified-2026-10-08"
+        ),
+    })
 
     elements.append({
         "tag": "note",

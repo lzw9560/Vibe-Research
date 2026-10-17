@@ -206,3 +206,28 @@
 - **缺失数据**：无 T+1/T+2 的事件在对应指标中跳过（不影响其他指标）。
 - **基准率来源**：用户给定的 `/tmp/baseline_*.json` 80 只随机标的计算得 P(20 日涨 > 15%) = 6.2%。
 - **CLI 工具**：本次完全使用本地缓存，未触发 `hithink-finance` 远程拉取（缓存覆盖已足够，2198 事件满足样本量下限 50 的 44 倍）。
+
+---
+
+## 5. 2026-10-17 复测推翻：8 年 walk-forward 全 FAIL
+
+> 本节为 2026-10-17 用 8 年 baostock 日 K 缓存（5235 码 / 342,235 事件 / 2105 交易日）复测后追加。原 §4.5 "有效" 结论基于 3 个月（2026-07~09, 2198 事件）样本内 + 偏牛市 regime，**不成立**。复测脚本 `backend/tools/_audit_tail_dip_full.py`（与 inst_dominant 同套 walk-forward + R12 + Bonf 方法论）。
+
+| 配置 | n | mean | median | WR | p | Bonf×4 | 判定 |
+|---|---|---|---|---|---|---|---|
+| nostop (T+1open→T+2close) | 342092 | +0.097% | 0.000% | 49.4% | 0.1022 | 0.41 | FAIL |
+| -5% stop +10% TP +5d | 342235 | +0.062% | -2.612% | 42.4% | 0.3155 | 1.00 | FAIL |
+| -8% stop | 342235 | -0.032% | -0.118% | 49.2% | 0.6676 | 1.00 | FAIL |
+| **-10% stop（原报告"最优"档）** | 342235 | **-0.039%** | 0.269% | 51.1% | 0.6244 | 1.00 | **FAIL** |
+
+原报告 -10% 档样本内 +0.72% → 8 年复测 **-0.039%**。3 个月的 +0.72% 是 regime 偏牛市的样本内运气。
+
+**walk-forward OOS**（train 2018-2022 / test 2023-2026，-10% 档）：train mean **-0.092%**（负）FAIL / test mean +0.033% p=0.7776 FAIL → gate 4/5 FAIL → **NOT confirmed**。
+
+**跨 regime**（-10% 档）：2018-2024 mean -0.103% FAIL / 2025-2026 mean +0.222% p=0.1581 FAIL。
+
+**R12 size-matched**（nostop BHAR）：alpha mean +0.3611% p=0.0000 PASS，但 **median -0.0600% / WR 49.1%**（中位负、胜率<50%）= 右尾驱动 lottery alpha，非可交易长仓 edge；alpha 来自 peers 更负，绝对收益 nostop +0.097%≈0，A 股散户不可做空 peers 兑现相对 alpha。
+
+**最终判定（推翻原 §4.5）**：tail-dip（尾盘错杀低吸）作为**长仓可交易 edge 不成立**——8 年全量 FAIL、walk-forward NOT confirmed、跨 regime FAIL。R12 相对 alpha 是 lottery 结构且不可长仓兑现。与 [suffocation-reversal-falsified]（低吸类别结构性无 edge）一致。
+
+**population/信号披露**：测试在 791 只 8 年 LHB 偏差股 + 全缓存 2025+ 浅股上（非引擎全市场产口径）；信号测绝对跌幅>3% 代理（非引擎板块相对+量能收缩严信号）。两者偏差不改变长仓 FAIL 结论。

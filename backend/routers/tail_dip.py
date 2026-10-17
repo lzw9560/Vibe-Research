@@ -16,7 +16,8 @@ import os
 import sys
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 # 确保能 import strategies.tail_dip_engine
@@ -38,6 +39,29 @@ from strategies.tail_dip_engine import (
 )
 
 router = APIRouter(tags=["strategy-tail-dip"])
+
+
+# ⚠️ 2026-10-17 归档：tail-dip 经8年walk-forward证伪（见 strategy4_backtest_result.md §5
+# + memory tail-dip-falsified-2026-10-17）。所有 endpoint 返410证伪通告，不再返买入候选。
+TAIL_DIP_FALSIFIED_NOTE: dict[str, Any] = {
+    "falsified": True,
+    "date": "2026-10-17",
+    "reason": (
+        "tail-dip(尾盘错杀低吸)经8年walk-forward证伪：原样本内-10%档+0.72%→8年-0.039%FAIL；"
+        "walk-forward NOT confirmed(train负/test非显著)；R12相对alpha+0.36%为lottery中位负、"
+        "不可长仓兑现。低吸类别结构性无edge。"
+    ),
+    "evidence": "strategy4_backtest_result.md §5 / backend/tools/_audit_tail_dip_full.py",
+    "action": "本endpoint已下线，不再返回买入候选。引擎代码保留供复现(backend/strategies/tail_dip_engine.py)。",
+}
+
+
+def _falsified_gone() -> JSONResponse:
+    """tail-dip已证伪归档，所有endpoint返410证伪通告（不再返买入候选）。"""
+    return JSONResponse(status_code=410, content=TAIL_DIP_FALSIFIED_NOTE)
+
+
+router = APIRouter(tags=["strategy-tail-dip"], dependencies=[Depends(_falsified_gone)])
 
 
 # ─────────────────────────────────────────────────────────────────────────

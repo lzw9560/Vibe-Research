@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """策略4进化版：尾盘错杀低吸核心引擎。
 
+⚠️ 2026-10-17 归档：本引擎驱动的"尾盘错杀低吸"信号经 8 年 walk-forward
+证伪（原样本内 -10% 档 +0.72% → 8 年 -0.039% FAIL；walk-forward NOT confirmed；
+R12 lottery 中位负不可长仓兑现）。引擎代码保留供复现/参考，不再接入买入候选推送。
+详见 strategy4_backtest_result.md §5 + memory tail-dip-falsified-2026-10-17。
+
 多专家共识产出，包含：
 - calculate_anomalous_deviation()  个股日内无量错杀因子
 - check_tail_volatility()           尾盘防诱多庄股过滤因子
