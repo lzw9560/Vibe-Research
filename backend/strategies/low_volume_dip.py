@@ -128,6 +128,11 @@ def screen_low_volume_dip(
         if price < LVD_PARAMS["min_price"] or price > LVD_PARAMS["max_price"]:
             continue
 
+        # ST/退市过滤——名称含ST/*ST/退
+        name = s.get("name", "")
+        if "ST" in name or "退" in name:
+            continue
+
         # 计算成交额分位数
         amount_pct = int(i * 100 / len(sorted_by_amount))
 
