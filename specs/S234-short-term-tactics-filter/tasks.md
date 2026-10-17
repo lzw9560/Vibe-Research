@@ -1,7 +1,7 @@
 # S234 tasks.md - 可执行 checklist
 
 > 依赖序：filter.py → commander 接入 → cron → 测试
-> 状态：Phase 1-4 核心已实现于 2184f92（核于 2026-10-07），T1.6/T1.8/T1.9 待数据接入
+> 状态：降级完成版收口（2026-10-17）。Phase 1-4 核心已实现于 2184f92（核于 2026-10-07），T1.6 blocked（依赖 S235 Phase B 实时竞价）、T1.8/T1.9 deferred（数据源 plan stale：baostock bar 实际无 ltsz + falsified 战法过滤器边际低）
 > 分支：develop（2184f92 已合）
 
 ## Phase 1: 核心排雷脚本 short_term_tactics_filter.py
@@ -13,8 +13,8 @@
 - [x] T1.5 不编主力意图（§1.2，只基于可观测量价/席位）
 - [ ] T1.6 chasing 维度（gap>=3% 回避）—— 需 T+1 open 数据，待实时竞价接入（S235 Phase B 补）
 - [x] T1.7 资金流梯度（inst_dominant exploratory）—— 2184f92 接 inst_dominant 到 filter 战法3_机构抱团 + commander（核于 2026-10-07）
-- [ ] T1.8 市值从 hithink 取（流通市值 30-150 亿）
-- [ ] T1.9 资产负债率从 hithink 财报取（>85% 剔除）
+- [~] T1.8 流通市值 30-150 亿 —— **deferred 2026-10-17**：plan 写"baostock kline ltsz" stale（baostock bar 实际无 ltsz，核于 2026-10-17），真源需重定（astock/akshare/hithink market snapshot）+ falsified 战法过滤器边际低 + T1.6 blocked 不完整。降级版用 ST+5日均成交。
+- [~] T1.9 资产负债率 >85% 剔除 —— **deferred 2026-10-17**：同 T1.8，数据源需重定（akshare fetch_financial_substitute_factors 2s/票慢 + hithink financials）+ falsified 战法边际低。降级版不查负债率。
 
 ## Phase 2: commander 接入
 - [x] T2.1 commander_runner 沸点期（score>70）调用 filter（commander_runner.py:119 调 filter_stock）

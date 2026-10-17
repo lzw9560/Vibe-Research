@@ -1,6 +1,6 @@
 # S234 短线战法排雷过滤器（Short-Term Tactics Filter）
 
-> 状态：spec 草稿（2026-10-07）
+> 状态：降级完成版收口（2026-10-17）。Phase 1-4 核心已实现（2184f92），T1.6 blocked（依赖 S235 Phase B 实时竞价）、T1.8/T1.9 deferred（数据源 plan stale：baostock bar 无 ltsz + falsified 战法过滤器边际低）。降级版第一层用 ST+5日均成交。
 > 编号：S234
 > 关联 memory：[[short-term-tactics-knowledge-2026-10-07]] + [[quant-traps-four-pitfalls-2026-10-07]] + [[commander-automation-wired-2026-10-07]]
 
