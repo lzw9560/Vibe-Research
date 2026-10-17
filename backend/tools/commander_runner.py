@@ -27,45 +27,98 @@ INST_KEYWORDS = (
 )
 
 
-def load_inst_dominant_today() -> list[dict]:
-    """当日 LHB 机构主导上榜股（inst_dominant edge-confirmed signal）。
+def load_inst_dominant_today(mode: str = "basic") -> list[dict]:
+    """当日 LHB 机构资金延续组合候选（inst_dominant combo, S236）。
 
-    inst_dominant walk-forward OOS edge-confirmed（8年25327 mean+0.390% p=0.0000 跨regime稳健）。
-    查最新交易日 LHB，算机构+外资买占比>50%的上榜股。
-    返回 [{code, inst_net_pct}] 按机构占比降序。
+    mode:
+      - "basic": 机构占比>80% + top6 按机构金额（基础版，回测 mean+0.457% WR54.9% 8年1710日）
+      - "advanced": basic + 当日涨(change_rate>=0) + 外资>30% + 中价20-100（进阶版 mean+0.879% WR56.0%,
+        post-hoc 须60天§44 R3复验，复验前weight=0.5不重仓）
+    返回 top6 [{code, inst_net_pct, ibuy, change_rate, close_price, foreign_pct}] 按机构金额降序。
     """
     import sqlite3  # noqa: PLC0415
     from collections import defaultdict  # noqa: PLC0415
+    foreign_kw = ("高盛", "瑞银", "股通", "摩根", "国际金融", "总部")
     conn = sqlite3.connect(str(DT_DB))
     latest = conn.execute("SELECT MAX(trade_date) FROM dragon_tiger_rows").fetchone()[0]
     if not latest:
         conn.close()
         return []
     rows = conn.execute(
-        "SELECT security_code, dept_name, buy FROM dragon_tiger_rows "
-        "WHERE trade_date=? AND side='buy' AND buy>0", (latest,)
+        "SELECT security_code, dept_name, buy, change_rate, close_price "
+        "FROM dragon_tiger_rows WHERE trade_date=? AND side='buy' AND buy>0",
+        (latest,),
     ).fetchall()
     conn.close()
     by_code: dict = defaultdict(list)
-    for code, dept, buy in rows:
-        by_code[code].append((dept or "", buy))
-    signals: list[dict] = []
+    for code, dept, buy, chg, cp in rows:
+        by_code[code].append((dept or "", buy or 0, chg, cp))
+    candidates: list[dict] = []
     for code, seats in by_code.items():
         total = sum(s[1] for s in seats)
         if total <= 0:
             continue
         inst_buy = sum(s[1] for s in seats if any(k in s[0] for k in INST_KEYWORDS))
-        if inst_buy / total > 0.5:
-            signals.append({"code": code, "inst_net_pct": round(inst_buy / total * 100, 1)})
-    return sorted(signals, key=lambda x: x["inst_net_pct"], reverse=True)
+        inst_pct = inst_buy / total
+        if inst_pct <= 0.8:  # >80% 纯化
+            continue
+        chg = seats[0][2]
+        cp = seats[0][3]
+        if chg is None or not cp:
+            continue
+        foreign_buy = sum(s[1] for s in seats if any(k in s[0] for k in foreign_kw))
+        foreign_pct = foreign_buy / total
+        if mode == "advanced":
+            if chg < 0:  # 当日涨(追高/延续，证否抄底)
+                continue
+            if foreign_pct <= 0.3:  # 外资主导
+                continue
+            if not (20 <= cp <= 100):  # 中价20-100，避开高价买不满1手
+                continue
+        candidates.append({
+            "code": code,
+            "inst_net_pct": round(inst_pct * 100, 1),
+            "ibuy": inst_buy,
+            "change_rate": round(chg, 2),
+            "close_price": cp,
+            "foreign_pct": round(foreign_pct * 100, 1),
+        })
+    candidates.sort(key=lambda x: x["ibuy"], reverse=True)
+    if mode == "filtered":
+        # v10.5：用tail_dip_engine完整财务红线替换fundamental_filter单一应收过滤
+        # 覆盖：商誉>=15% + 应收>=40% + 现金流为负 + 减持 + 数据缺失安全补丁
+        from strategies.tail_dip_engine import fetch_financial_substitute_factors, HARD_THRESHOLDS  # noqa: PLC0415
+        top12 = candidates[:12]
+        passed = []
+        for c in top12:
+            factors = fetch_financial_substitute_factors(c["code"])
+            gw = factors.get("goodwill_ratio")
+            gw_blk = factors.get("goodwill_blocked", False)
+            ar = factors.get("ar_to_revenue_pct")
+            cf_neg = factors.get("cf_negative", False)
+            reduction = factors.get("has_reduction_recent", False)
+            blocked = (
+                (gw_blk and gw is not None)
+                or (ar and ar >= 40)
+                or cf_neg
+                or reduction
+                or (not factors)
+            )
+            if not blocked:
+                passed.append(c)
+        return passed[:6]
+    return candidates[:6]
 
 
-def load_a_group_today() -> list[dict]:
+def load_a_group_today(mode: str = "basic") -> list[dict]:
     """当日 A组 picks（涨幅-3%~+10% + 净买<0.5亿 + 净买>0，T+2 买 T+10 卖 watchlist）。
 
     A组 T+10 walk-forward OOS edge-confirmed（train+0.912%/test+1.094% 都 PASS）。
-    查最新交易日 LHB，过滤 A组条件。
-    返回 [{code, chg, net_buy_wan}] 按净买降序。
+    mode:
+      - "basic": top5 按净买（watchlist）
+      - "combo": top5 跳北交所(920)数据缺，等权组合 nostop（S237，mean+0.989% WR53.6%）
+        注：非920但hithink不识的（如部分301xxx）需实盘查K线发现跳过
+    返回 [{code, chg, net_buy_wan}] 按净买降序 top5。
     """
     import sqlite3  # noqa: PLC0415
     conn = sqlite3.connect(str(DT_DB))
@@ -90,8 +143,33 @@ def load_a_group_today() -> list[dict]:
             continue
         if total_net > 5e7:  # 净买<0.5亿 = <5e7 元
             continue
+        if mode == "combo" and code.startswith("920"):  # 北交所 hithink/baostock 不识，跳
+            continue
         signals.append({"code": code, "chg": round(chg, 2), "net_buy_wan": round(total_net / 1e4, 1)})
-    return sorted(signals, key=lambda x: x["net_buy_wan"], reverse=True)
+    signals = sorted(signals, key=lambda x: x["net_buy_wan"], reverse=True)
+    if mode == "filtered":
+        # v10.5：A组T+10也加完整财务红线过滤（同inst_dominant逻辑）
+        from strategies.tail_dip_engine import fetch_financial_substitute_factors  # noqa: PLC0415
+        top10 = signals[:10]
+        passed = []
+        for c in top10:
+            factors = fetch_financial_substitute_factors(c["code"])
+            gw = factors.get("goodwill_ratio")
+            gw_blk = factors.get("goodwill_blocked", False)
+            ar = factors.get("ar_to_revenue_pct")
+            cf_neg = factors.get("cf_negative", False)
+            reduction = factors.get("has_reduction_recent", False)
+            blocked = (
+                (gw_blk and gw is not None)
+                or (ar and ar >= 40)
+                or cf_neg
+                or reduction
+                or (not factors)
+            )
+            if not blocked:
+                passed.append(c)
+        return passed[:5]
+    return signals[:5]
 
 
 def run() -> dict:
