@@ -79,7 +79,24 @@ def ensure_login() -> None:
             return
         breaker = get_breaker("baostock")
         if not breaker.allow_request():
-            raise DependencyMissing("[CircuitBreaker:baostock] 熔断中，快速失败")
+            # 假熔断解除：直连验证服务端，成功→reset+复用login（S236-R6）
+            _rate_limit()
+            import baostock as _bs_probe  # noqa: PLC0415
+            try:
+                _rs = _bs_probe.login()
+            except Exception as e:  # noqa: BLE001
+                _mark_call()
+                breaker.record_failure()
+                raise DependencyMissing(f"[CircuitBreaker:baostock] 熔断+直连验证异常: {e}") from e
+            _mark_call()
+            if _rs.error_code != "0":
+                breaker.record_failure()
+                raise DependencyMissing(
+                    f"[CircuitBreaker:baostock] 熔断+直连login失败: {_rs.error_code} {_rs.error_msg}"
+                )
+            breaker.reset()
+            _BS_READY = True  # 复用直连 login 的 session
+            return
         _rate_limit()
         import baostock as bs  # noqa: PLC0415
         try:

@@ -210,6 +210,20 @@ class CircuitBreaker:
             self.last_failure_time = time.time()
         self._persist()
 
+    def reset(self) -> None:
+        """强制重置熔断器到 CLOSED（外部验证服务端恢复后解除假熔断）。
+
+        场景：HALF_OPEN 试探名额（half_open_calls）耗尽卡死，但直连验证服务端 OK
+        （如 baostock 服务端波动恢复）。外部探测成功后调 reset 解除假熔断。
+        S236-R6。
+        """
+        self.state = CircuitState.CLOSED
+        self.failure_count = 0
+        self.success_count = 0
+        self.half_open_calls = 0
+        self.last_failure_time = 0
+        self._persist()
+
     def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
         """装饰器用法。"""
         import functools
