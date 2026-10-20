@@ -583,3 +583,69 @@ def rsi_timing_signal() -> dict:
             "买入指数ETF，持有20天，-8%止损" if any_triggered else "等待RSI<30"
         ),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 9. RSI+MACD组合信号（最强：mean+9.53% WR100%）
+# ─────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/strategy/rsi-macd/signal")
+def rsi_macd_signal() -> dict:
+    """RSI+MACD组合信号——回测最强alpha。
+
+    RSI<30+MACD金叉(±5天): n=16 mean+9.53% WR100% p=0.0000
+    """
+    import subprocess
+    import json as _json
+    from strategies.rsi_timing import check_rsi_macd_combo, RSI_PARAMS
+
+    end_ms = int(__import__("time").time() * 1000)
+    start_ms = end_ms - 60 * 86400000
+
+    signals = []
+    for code, params in RSI_PARAMS["indices"].items():
+        if not params.get("p") or params["p"] > 0.01:
+            continue
+        r = subprocess.run(
+            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+             "index", "history", "--thscode", code,
+             "--start-ms", str(start_ms), "--end-ms", str(end_ms)],
+            capture_output=True, text=True, timeout=15,
+        )
+        try:
+            d = _json.loads(r.stdout)
+            items = d.get("data", {}).get("item", [])
+            closes = [i["close_price"] for i in items if i.get("close_price")]
+            if len(closes) < 30:
+                continue
+            sig = check_rsi_macd_combo(params["name"], closes)
+            signals.append({
+                "index_name": sig.index_name,
+                "rsi": sig.rsi,
+                "rsi_triggered": sig.rsi_triggered,
+                "macd_dif": sig.macd_dif,
+                "macd_dea": sig.macd_dea,
+                "macd_hist": sig.macd_hist,
+                "is_golden_cross": sig.is_golden_cross,
+                "has_recent_cross": sig.has_recent_cross,
+                "combo_signal": sig.combo_signal,
+                "expected_60d": sig.expected_60d,
+                "win_rate_60d": sig.win_rate_60d,
+                "detail": sig.detail,
+            })
+        except Exception:
+            continue
+
+    buy_signals = [s for s in signals if s["combo_signal"] == "买入"]
+    wait_signals = [s for s in signals if s["combo_signal"] == "等待"]
+
+    return {
+        "signals": signals,
+        "buy_count": len(buy_signals),
+        "wait_count": len(wait_signals),
+        "recommendation": (
+            "买入（RSI+MACD金叉确认）" if buy_signals
+            else "等待MACD金叉确认" if wait_signals
+            else "无信号"
+        ),
+    }
