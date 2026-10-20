@@ -468,6 +468,24 @@ def build_premarket_card() -> dict:
     try:
         import sys as _sys
         _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+
+        # v11：RSI择时信号——最强统计显著alpha
+        try:
+            import urllib.request as _urllib2
+            with _urllib2.urlopen(_urllib2.Request("http://127.0.0.1:8900/api/strategy/rsi-timing/signal"), timeout=10) as _r2:
+                _rsi_data = json.loads(_r2.read())
+                if _rsi_data.get("any_triggered"):
+                    rsi_text = "\n**🚨 RSI择时信号触发**\n"
+                    for _s in _rsi_data.get("signals", []):
+                        _emoji = "✅" if _s["is_triggered"] else "❌"
+                        rsi_text += f"{_emoji} {_s['index_name']} RSI={_s['current_rsi']} 阈值<{_s['threshold']}\n"
+                        if _s["is_triggered"]:
+                            rsi_text += f"  历史: n={_s['sample_size']} mean+{_s['expected_return']}% WR{_s['win_rate']}% p={_s['p_value']}\n"
+                            rsi_text += f"  操作: 买ETF持{_s['hold_days']}天 止损{_s['stop_loss_pct']:.0%}\n"
+                    elements.append({"tag": "markdown", "content": rsi_text.strip()})
+        except Exception:
+            pass
+
         from strategies.tail_dip_engine import diagnose_drawdown_lock, propose_peak_decay
 
         # 从API拉回撤状态
