@@ -264,6 +264,33 @@ def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: 
     ]
 
 
+def _record_combo_5d(picks: list[dict]) -> None:
+    """record combo_5d picks 到 trade_journal（idempotent，启动 60天跟踪）。
+
+    paper 跟踪信号表现，独立于用户是否真交易。INSERT OR REPLACE 幂等（重跑覆盖）。
+    entry_price=None（pending，settle 时填 T+1 open）。路径自给（不依赖外部 sys.path）。
+    """
+    import json  # noqa: PLC0415
+    import sqlite3  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    bp = str(Path(__file__).resolve().parents[1])  # backend/
+    if bp not in sys.path:
+        sys.path.insert(0, bp)
+    from engine.trade_journal import TradeJournal, JournalRecord  # noqa: E402
+    if not picks:
+        return
+    signal_date = picks[0]["date"]
+    tj = TradeJournal()
+    for p in picks:
+        rec = JournalRecord.create(
+            arm="combo_5d", stock_code=p["code"],
+            entry_price=None, entry_date=signal_date,
+            exit_model_version="nostop_t5",
+        )
+        tj.insert(rec)
+
+
 def run() -> dict:
     """主流程：诊断情绪 → 分配仓位 → 沸点期排雷 → 返回结构化结果。"""
     sentiment = diagnose()
@@ -319,6 +346,7 @@ def run() -> dict:
         c_signals = load_combo_5d_today()
         if c_signals:
             r["combo_5d_signals"] = c_signals[:20]
+            _record_combo_5d(c_signals)  # 入 trade_journal 启动 60天跟踪（idempotent，重跑覆盖）
     except Exception as e:
         r["combo_5d_error"] = f"combo-5d 信号失败: {e}"
     return r

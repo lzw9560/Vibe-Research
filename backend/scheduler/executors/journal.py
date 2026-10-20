@@ -52,13 +52,28 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     pp = PaperPortfolio()
     equity = pp.equity()
     drawdown_status = pp.drawdown_status()
+    # S238：combo_5d settle（T+5 到了的填 entry/exit/net_pnl）——独立逻辑，不复用 recorder arms
+    # 17:30 跑（晚 17:15 kline_refresh，settle 需刷新后 cache 找 T+5 bars）
+    combo_settled = None
+    try:
+        import sys  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+        tp = str(Path(__file__).resolve().parents[2] / "tools")  # backend/tools
+        if tp not in sys.path:
+            sys.path.insert(0, tp)
+        from combo_5d_settle import settle_combo_5d  # noqa: E402
+        combo_settled = settle_combo_5d()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[combo_5d_settle] failed: %s", repr(e)[:200])
+        combo_settled = f"error: {repr(e)[:200]}"
     logger.info(
-        "trade_journal_daily done: settled=%s arms=%s floor_mtm=%s equity=%s",
-        settled, results, mtm, equity,
+        "trade_journal_daily done: settled=%s arms=%s floor_mtm=%s equity=%s combo_5d_settled=%s",
+        settled, results, mtm, equity, combo_settled,
     )
     return {
         "settled_pending": settled, "arms": results, "floor_mtm": mtm,
         "equity": equity, "drawdown_status": drawdown_status,
+        "combo_5d_settled": combo_settled,
     }
 
 
