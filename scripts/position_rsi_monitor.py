@@ -148,6 +148,44 @@ def main():
     except:
         alerts.append("⚠️ 上证数据拉取失败")
 
+
+    # MACD收敛+金叉预估
+    try:
+        def calc_ema(data, period):
+            ema = [data[0]]
+            k = 2/(period+1)
+            for i in range(1, len(data)):
+                ema.append(data[i]*k + ema[-1]*(1-k))
+            return ema
+        
+        ema12 = calc_ema(closes, 12)
+        ema26 = calc_ema(closes, 26)
+        dif = [ema12[i]-ema26[i] for i in range(len(closes))]
+        dea = calc_ema(dif, 9)
+        
+        cur_dif = dif[-1]
+        cur_dea = dea[-1]
+        macd_converging = abs(dif[-1]-dea[-1]) < abs(dif[-2]-dea[-2]) if len(dif)>=2 else False
+        
+        # 预估金叉天数
+        days_to_cross = None
+        if cur_dif < cur_dea:
+            diffs = [abs(dif[i]-dea[i]) for i in range(max(0,len(dif)-10), len(dif))]
+            if len(diffs) >= 2:
+                shrinks = [diffs[i]-diffs[i+1] for i in range(len(diffs)-1) if diffs[i+1] < diffs[i]]
+                if shrinks and np.mean(shrinks) > 0:
+                    days_to_cross = int(abs(cur_dif-cur_dea) / np.mean(shrinks))
+        
+        macd_text = f"\n**MACD状态**\n"
+        macd_text += f"DIF={cur_dif:.1f} DEA={cur_dea:.1f} {'✅金叉' if cur_dif>cur_dea else '❌死叉'}\n"
+        macd_text += f"收敛: {'✅DIF向DEA靠拢' if macd_converging else '❌发散'}\n"
+        if days_to_cross is not None:
+            macd_text += f"预估金叉: ~{days_to_cross}个交易日后\n"
+            macd_text += f"→ 金叉后三因子全部触发(WR100% mean+13.65%)\n"
+        alerts.append(macd_text.strip())
+    except Exception as e:
+        pass
+
     # 3. 推送
     if alerts:
         text = "\n".join(alerts)
