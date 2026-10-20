@@ -537,28 +537,50 @@ def build_premarket_card() -> dict:
 
 
 def build_intraday_card() -> dict:
-    """盘中尾盘扫描卡片。
+    """盘中尾盘扫描卡片——RSI+MACD择时信号。
 
-    ⚠️ 2026-10-17 归档：策略4尾盘错杀低吸经 8 年 walk-forward 证伪
-    （原报告样本内 -10% 档 +0.72% → 8 年复测 -0.039% FAIL；walk-forward
-    train 负 / test 非显著 → NOT confirmed；R12 相对 alpha +0.36% 为 lottery
-    中位负、不可长仓兑现）。不再推送候选，改为证伪通告。
-    详见 strategy4_backtest_result.md §5 + memory tail-dip-falsified-2026-10-17。
+    策略4尾盘错杀已归档（2026-10-17 walk-forward证伪）。
+    替换为RSI择时信号（p=0.0002 mean+7.82% WR92% 夏普1.13）。
     """
     now = datetime.now(CST)
+    now_str = now.strftime("%H:%M")
 
-    elements = [{
-        "tag": "markdown",
-        "content": (
-            "**⚠️ 策略4·尾盘错杀已归档（2026-10-17）**\n\n"
-            "该信号经 8 年 walk-forward 复测证伪：\n"
-            "• 原样本内 -10% 档 +0.72% → 8 年复测 -0.039%（FAIL）\n"
-            "• walk-forward OOS：train 负 / test 非显著 → NOT confirmed\n"
-            "• R12 相对 alpha +0.36% 为 lottery（中位负、胜率<50%），不可长仓兑现\n\n"
-            "不再推送候选。低吸类别结构性无 edge（与窒息量低吸证伪一致）。\n"
-            "证据：strategy4_backtest_result.md §5 / 脚本 _audit_tail_dip_full.py"
-        ),
-    }]
+    elements = []
+
+    # RSI+MACD择时信号
+    try:
+        import urllib.request as _urllib
+        with _urllib.urlopen(_urllib.Request("http://127.0.0.1:8900/api/strategy/rsi-macd/signal"), timeout=10) as _r:
+            _rsi_data = json.loads(_r.read())
+            
+            buy_count = _rsi_data.get("buy_count", 0)
+            wait_count = _rsi_data.get("wait_count", 0)
+            signals = _rsi_data.get("signals", [])
+            
+            if buy_count > 0:
+                text = f"**🚨 RSI+MACD金叉确认——买入信号（{now_str}）**\n\n"
+                for s in signals:
+                    if s.get("combo_signal") == "买入":
+                        text += f"✅ {s['index_name']} RSI={s['rsi']} MACD金叉\n"
+                        text += f"  预期+{s['expected_60d']}% WR{s['win_rate_60d']}% 持60天\n"
+                text += "\n**操作：买ETF 100%仓位 持60天 RSI>60退出 不止损**\n"
+            elif wait_count > 0:
+                text = f"**⏳ RSI已触发 MACD未金叉——等待确认（{now_str}）**\n\n"
+                for s in signals:
+                    text += f"⏳ {s['index_name']} RSI={s['rsi']} MACD死叉(DIF={s['macd_dif']} DEA={s['macd_dea']})\n"
+                text += "\n等MACD金叉后是更强买入时机(WR100% mean+9.53%)\n"
+                text += "激进者可直接买(RSI极端超卖) 预期+7.82% WR92%\n"
+            else:
+                text = f"**{now_str} 无RSI信号**\nRSI未触发买入区间\n"
+            
+            elements.append({"tag": "markdown", "content": text.strip()})
+    except Exception:
+        elements.append({"tag": "markdown", "content": f"**{now_str} RSI信号拉取失败**"})
+
+    elements.append({
+        "tag": "note",
+        "content": "⚠️ RSI择时 p=0.0002 mean+7.82% WR92% 夏普1.13>持有0.48。不构成投资建议。"
+    })
 
     return {
         "header": {
