@@ -21,8 +21,9 @@ logger = logging.getLogger("rsi_timing")
 #: 策略参数
 RSI_PARAMS = {
     "rsi_threshold": 30,        # RSI<30触发买入
-    "rsi_period": 14,           # RSI计算周期
-    "hold_days": 20,            # 持有20个交易日
+    "rsi_exit": 60,              # RSI>60触发卖出（mean+3.58% WR76%）
+    "rsi_period": 14,            # RSI计算周期
+    "hold_days": 60,             # 最长持有60天
     "stop_loss_pct": -0.08,     # -8%止损（历史上0次触发）
     "indices": {
         "000001.SH": {"name": "上证", "threshold": 30, "mean": 3.62, "wr": 81, "p": 0.0002, "n": 27},
