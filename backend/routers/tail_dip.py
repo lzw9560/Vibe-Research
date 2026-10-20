@@ -523,3 +523,63 @@ def lvd_scan(
         "edge_stats": result.edge_stats,
         "params": result.params,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 8. RSI择时信号（最强统计显著alpha p=0.0001）
+# ─────────────────────────────────────────────────────────────────────────
+
+@router.get("/api/strategy/rsi-timing/signal")
+def rsi_timing_signal() -> dict:
+    """RSI择时信号——检查4个指数RSI是否触发买入。
+
+    回测：创业板RSI<25 mean+6.24% WR93% p=0.0001
+    操作：买入指数ETF，持有20天，-8%止损
+    """
+    import subprocess
+    import json as _json
+    from strategies.rsi_timing import calculate_rsi, check_rsi_signal, RSI_PARAMS
+
+    end_ms = int(__import__("time").time() * 1000)
+    start_ms = end_ms - 60 * 86400000  # 近60天
+
+    signals = []
+    for code, params in RSI_PARAMS["indices"].items():
+        r = subprocess.run(
+            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+             "index", "history", "--thscode", code,
+             "--start-ms", str(start_ms), "--end-ms", str(end_ms)],
+            capture_output=True, text=True, timeout=15,
+        )
+        try:
+            d = _json.loads(r.stdout)
+            items = d.get("data", {}).get("item", [])
+            closes = [i["close_price"] for i in items if i.get("close_price")]
+            if len(closes) < 20:
+                continue
+            sig = check_rsi_signal(code, closes)
+            signals.append({
+                "index_code": sig.index_code,
+                "index_name": sig.index_name,
+                "current_rsi": sig.current_rsi,
+                "threshold": sig.threshold,
+                "is_triggered": sig.is_triggered,
+                "hold_days": sig.hold_days,
+                "stop_loss_pct": sig.stop_loss_pct,
+                "expected_return": sig.expected_return,
+                "win_rate": sig.win_rate,
+                "p_value": sig.p_value,
+                "sample_size": sig.sample_size,
+                "detail": sig.detail,
+            })
+        except Exception:
+            continue
+
+    any_triggered = any(s["is_triggered"] for s in signals)
+    return {
+        "signals": signals,
+        "any_triggered": any_triggered,
+        "recommendation": (
+            "买入指数ETF，持有20天，-8%止损" if any_triggered else "等待RSI<30"
+        ),
+    }
