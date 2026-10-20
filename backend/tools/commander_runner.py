@@ -21,6 +21,7 @@ from calculate_position_allocation import allocate
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / ".vibe-research"
 DT_DB = DATA / "dragon_tiger_history.db"
+KLINE_DB = DATA / "baostock_kline_cache.db"  # combo-5d-edge 全市场日 K（S238，不走 em_get 无防封需求）
 INST_KEYWORDS = (
     "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
     "中信证券股份有限公司上海分公司", "国际金融",
@@ -172,6 +173,97 @@ def load_a_group_today(mode: str = "basic") -> list[dict]:
     return signals[:5]
 
 
+def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: int = 20) -> list[dict]:
+    """当日 combo-5d-edge 候选（S238）：rank(gap)+rank(today_ret)+rank(-amount) top-20，5日持有 nostop。
+
+    读 baostock_kline_cache 全市场日 K 横截面 rank 取 top-N。
+    edge（2023-2026 test 899日，top20）：raw+2.52% / net+2.06% / median+0.588% / t=13.64；
+    R12 真选股 alpha+1.61% t=11.94（64% 非size premium）；regime全过 2026 alpha+1.84% t=8.18 最强。
+    ⚠️ test-set-selection 偏差：spec 在 test 集迭代选出，t 乐观，真 OOS=60天前向 → weight 0.5 试探。
+
+    date: 信号日 YYYY-MM-DD，None=cache 最新日（live 用）。
+    mode: "filtered"=跳 ST+北交所920（实盘安全，universe 略异于回测）；"basic"=无过滤（复现回测）。
+    返回 top-N [{code, gap%, today_ret%, amount亿, score}]。
+    """
+    import json  # noqa: PLC0415
+    import sqlite3  # noqa: PLC0415
+    conn = sqlite3.connect(str(KLINE_DB))
+    rows = conn.execute("SELECT code, bars_json FROM kline").fetchall()
+    conn.close()
+    from collections import Counter  # noqa: PLC0415
+    parsed: list = []
+    last_dates: Counter = Counter()
+    for code, bj in rows:
+        try:
+            bars = json.loads(bj)
+        except Exception:
+            continue
+        if len(bars) < 2:
+            continue
+        d = bars[-1].get("date", "")
+        if d:
+            last_dates[d] += 1
+        parsed.append((code, bars))
+    if date is None:
+        # 模态 last-bar 日期 = 实际最新交易日（避部分刷新 outlier：少数票刷新到更新日期会把 max 拉偏）
+        date = last_dates.most_common(1)[0][0] if last_dates else ""
+    if not date:
+        return []
+    factors: list = []
+    for code, bars in parsed:
+        # bars 按 date 升序；从末尾反向找 date==D（live 即时命中，历史日早停于 bd<date）
+        idx = None
+        for i in range(len(bars) - 1, -1, -1):
+            bd = bars[i].get("date", "")
+            if bd == date:
+                idx = i
+                break
+            if bd < date:
+                break  # 升序，后面不会再有 D
+        if idx is None or idx < 1:
+            continue
+        last = bars[idx]
+        prev = bars[idx - 1]
+        prev_c = float(prev.get("close", 0) or 0)
+        o = float(last.get("open", 0) or 0)
+        c = float(last.get("close", 0) or 0)
+        amt = float(last.get("amount", 0) or 0)
+        if not prev_c or not c or not o or not amt:
+            continue
+        if mode == "filtered":
+            if str(last.get("isST", "0")) not in ("0", "", "0.0"):
+                continue
+            if code.startswith("920"):  # 北交所
+                continue
+        factors.append({
+            "code": code,
+            "gap": (o - prev_c) / prev_c,
+            "today_ret": (c - prev_c) / prev_c,
+            "amount": amt,
+        })
+    if len(factors) < top_n * 10:
+        return []
+    n = len(factors)
+    sg = sorted(range(n), key=lambda k: factors[k]["gap"])
+    st = sorted(range(n), key=lambda k: factors[k]["today_ret"])
+    sa = sorted(range(n), key=lambda k: factors[k]["amount"])
+    rg = {o: r / n for r, o in enumerate(sg)}
+    rt = {o: r / n for r, o in enumerate(st)}
+    ra = {o: 1 - r / n for r, o in enumerate(sa)}  # 小盘=高分
+    scored = sorted(range(n), key=lambda k: rg[k] + rt[k] + ra[k], reverse=True)
+    return [
+        {
+            "date": date,
+            "code": factors[k]["code"],
+            "gap": round(factors[k]["gap"] * 100, 2),
+            "today_ret": round(factors[k]["today_ret"] * 100, 2),
+            "amount": round(factors[k]["amount"] / 1e8, 3),
+            "score": round(rg[k] + rt[k] + ra[k], 3),
+        }
+        for k in scored[:top_n]
+    ]
+
+
 def run() -> dict:
     """主流程：诊断情绪 → 分配仓位 → 沸点期排雷 → 返回结构化结果。"""
     sentiment = diagnose()
@@ -222,6 +314,13 @@ def run() -> dict:
             r["a_group_t10_signals"] = a_signals[:10]
     except Exception as e:
         r["a_group_error"] = f"A组 T+10 信号失败: {e}"
+    # combo-5d-edge signal（S238，项目迄今最强 edge：top20 5日持有 R12 alpha t=11.94；weight 0.5 试探因 test-set-selection 须60天前向复验）
+    try:
+        c_signals = load_combo_5d_today()
+        if c_signals:
+            r["combo_5d_signals"] = c_signals[:20]
+    except Exception as e:
+        r["combo_5d_error"] = f"combo-5d 信号失败: {e}"
     return r
 
 
@@ -266,6 +365,14 @@ def format_text(r: dict) -> str:
             lines.append(f"  • {s['code']}: 涨幅{s['chg']}% 净买{s['net_buy_wan']}万")
     elif r.get("a_group_error"):
         lines.append(f"\n⚠️ {r['a_group_error']}")
+    # combo-5d-edge watchlist（S238，top20 5日持有 nostop，weight 0.5 试探——test-set-selection 偏差须60天前向复验定）
+    if r.get("combo_5d_signals"):
+        lines.append("")
+        lines.append(f"🎯 combo-5d-edge watchlist（top {len(r['combo_5d_signals'])}，5日持有 nostop，weight 0.5 试探非重仓，60天前向复验定）:")
+        for s in r["combo_5d_signals"]:
+            lines.append(f"  • {s['code']}: 涨{s['today_ret']}% gap{s['gap']}% 额{s['amount']}亿")
+    elif r.get("combo_5d_error"):
+        lines.append(f"\n⚠️ {r['combo_5d_error']}")
     return "\n".join(lines)
 
 
