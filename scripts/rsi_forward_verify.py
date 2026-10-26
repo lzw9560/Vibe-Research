@@ -96,15 +96,11 @@ def main():
                     new_triggers += 1
                     print(f"新触发: {params['name']} {date_str} RSI={rsi:.0f} 买入={buy_price:.0f}")
 
-    # 检查已记录的交易是否到期（60个交易日后）
-    settled_count = 0
-    for t in track["trades"]:
-        if t["status"] != "open":
-            continue
-
-        # 拉该指数最新K线
+    # 按指数分组批量拉取K线（避免N笔×4s的超时）
+    index_cache = {}  # thscode -> (items, closes)
+    for code in set(t["index"] for t in track["trades"] if t["status"] == "open"):
         r = subprocess.run(
-            [HITHINK, "index", "history", "--thscode", t["index"],
+            [HITHINK, "index", "history", "--thscode", code,
              "--start-ms", str(start_ms), "--end-ms", str(end_ms)],
             capture_output=True, text=True, timeout=15,
         )
@@ -112,7 +108,20 @@ def main():
             d = json.loads(r.stdout)
             items = d.get("data", {}).get("item", [])
             closes = [i["close_price"] for i in items if i.get("close_price")]
-        except:
+            index_cache[code] = (items, closes)
+        except Exception:
+            index_cache[code] = ([], [])
+
+    # 检查已记录的交易是否到期（60个交易日后）
+    settled_count = 0
+    for t in track["trades"]:
+        if t["status"] != "open":
+            continue
+
+        if t["index"] not in index_cache:
+            continue
+        items, closes = index_cache[t["index"]]
+        if not closes:
             continue
 
         # 找买入日
