@@ -1,7 +1,7 @@
 # Spec: S238 — combo-5d-edge 可交易落地（小盘+动量+gap rank top-20，5日持有）
 
-> 状态：已实现（2026-10-21）——接线 + 测试全绿，剩 60天前向实跑（真 OOS，非阻塞）
-> 作者：Claude（agent）  日期：2026-10-21
+> 状态：已实现 + R4/R12 方法学闭合（2026-10-26）——edge 从 +2.06% 修正为去涨停 +1.07%（含 +0.62% alpha t6.85 真）。剩 60天前向 live（真 OOS，infra durable fix 后 daily refresh 真持续）。
+> 作者：Claude（agent）  日期：2026-10-21（R4/R12 修正 2026-10-26）
 > 关联：[[combo-5d-edge-survivor-2026-10-20]] / spec S237（A组T+10 同模式，已证伪）/ S236（inst_dominant，已证伪）/ skill `combo-5d-edge`
 
 ## 1. 问题 / 目标
