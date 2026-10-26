@@ -22,6 +22,15 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / ".vibe-research"
 DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"  # combo-5d-edge 全市场日 K（S238，不走 em_get 无防封需求）
+
+
+def _board_limit(code: str) -> float:
+    """涨停板阈值（code 前缀定板）——主板 10% / 创业板科创板 20% / 北交 30%。"""
+    if code.startswith(("30", "68")):
+        return 0.198
+    if code.startswith(("8", "9")):
+        return 0.298
+    return 0.098
 INST_KEYWORDS = (
     "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
     "中信证券股份有限公司上海分公司", "国际金融",
@@ -234,6 +243,8 @@ def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: 
             if str(last.get("isST", "0")) not in ("0", "", "0.0"):
                 continue
             if code.startswith("920"):  # 北交所
+                continue
+            if (c - prev_c) / prev_c >= _board_limit(code):  # 涨停封板次日跌 live 不可交易（R4: 涨停贡献40%是假edge，去涨停后真edge +1.07% net t10.29）
                 continue
         factors.append({
             "code": code,

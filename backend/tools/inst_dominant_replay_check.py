@@ -19,7 +19,7 @@ DB = DATA / "trade_journal.db"
 BACKTEST_MEANS = {  # arm → 回测基准 net mean（S236/S237/S238）
     "inst_dominant": 0.457,  # basic top6 nostop
     "a_group_t10": 0.989,  # combo nostop
-    "combo_5d": 2.06,  # top20 5日 nostop net（S238，扣0.4%成本；R12 alpha +1.61% 是其中选股部分）
+    "combo_5d": 1.07,  # top20 去涨停 5日 nostop net（R4: 涨停贡献40%是假edge，mode=filtered 滤涨停后真edge +1.07% t10.29；含涨停版+2.06% live 不可兑现）
 }
 # 权重档（full=维持 / half=降权 / stop=停）。combo_5d 起步 0.5 试探（test-set-selection），降权 0.25 非 0.5。
 ARM_WEIGHTS = {
