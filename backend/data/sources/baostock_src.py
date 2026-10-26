@@ -38,6 +38,11 @@ _BS_MIN_INTERVAL = 0.3  # 最小请求间隔（秒）
 _bs_last_call = [0.0]           # 上次请求时间戳（可变单元素列表，模块级共享）
 _bs_last_call_lock = threading.Lock()  # 保护 _bs_last_call 读写
 
+# liveness probe 间隔（durable fix 2026-10-26）：long-running server session 过期检测
+# _BS_READY=True 不代表 session 活——server 跑几天后 baostock session 过期，flag 仍 True 但 fetch 返空
+_LIVENESS_INTERVAL = 1800  # 30 min probe 一次（baostock session 过期窗口）
+_last_liveness_ts = 0.0
+
 
 def _rate_limit() -> None:
     """限流：保证两次 baostock 请求最小间隔 + 随机抖动（复用 transport.py 模式）。
@@ -65,18 +70,50 @@ _FLOAT_FIELDS = frozenset({"open", "high", "low", "close", "volume", "amount",
                            "turn", "pctChg", "preclose"})
 
 
+def _probe_alive() -> bool:
+    """cheap liveness probe（1 baostock query）——session 死了返 False。
+
+    long-running server 里 _BS_READY=True 可能是几天前的 stale session（baostock
+    session 会过期），须定期探活。probe 用 1 个 query（sh.600000 近 2 日），
+    error_code=='0' = session 活；异常或非 0 = 死。
+    """
+    import baostock as bs  # noqa: PLC0415
+    try:
+        rs = bs.query_history_k_data_plus(
+            "sh.600000", "date,close",
+            start_date="2026-01-01", end_date="2026-01-02",
+            frequency="d", adjustflag="2",
+        )
+        _mark_call()
+        return rs.error_code == "0"
+    except Exception:  # noqa: BLE001
+        _mark_call()
+        return False
+
+
 def ensure_login() -> None:
-    """单次 baostock login（进程级，幂等，线程安全——Lock 串行避免线程池竞争 login 状态坏）。
+    """单次 baostock login（进程级，幂等，线程安全——Lock 串行避免线程池竞争 login 状态坏）+ 定期 liveness probe。
 
     限流 + 熔断：login 前检查 breaker（OPEN 时快速失败），login 后记录 success/failure。
     黑名单 error_code（如 10001011）触发 record_failure，累积 5 次后熔断 OPEN。
+
+    liveness probe（durable fix 2026-10-26）：_BS_READY=True 不代表 session 活——
+    server 跑几天后 baostock session 过期，flag 仍 True 但 fetch 返空（kline_refresh cron
+    因此 5 天 degraded "universe 空"）。每 _LIVENESS_INTERVAL（30 min）probe 1 次；
+    probe 失败→reset _BS_READY + 重连。
     """
-    global _BS_READY
-    if _BS_READY:
-        return
+    global _BS_READY, _last_liveness_ts
+    if _BS_READY and (time.time() - _last_liveness_ts) < _LIVENESS_INTERVAL:
+        return  # 近 probe 过，信任
     with _BS_LOCK:
-        if _BS_READY:  # double-checked
-            return
+        # _BS_READY=True 但超 30 min → probe（session 可能过期）
+        if _BS_READY:
+            if _probe_alive():
+                _last_liveness_ts = time.time()
+                return
+            _BS_READY = False
+            logger.warning("[baostock] liveness probe 失败，session 过期，重连")
+        # _BS_READY=False → breaker + login
         breaker = get_breaker("baostock")
         if not breaker.allow_request():
             # 假熔断解除：直连验证服务端，成功→reset+复用login（S236-R6）
@@ -96,6 +133,7 @@ def ensure_login() -> None:
                 )
             breaker.reset()
             _BS_READY = True  # 复用直连 login 的 session
+            _last_liveness_ts = time.time()
             return
         _rate_limit()
         import baostock as bs  # noqa: PLC0415
@@ -111,6 +149,7 @@ def ensure_login() -> None:
             raise DependencyMissing(f"baostock login 失败: {rs.error_code} {rs.error_msg}")
         breaker.record_success()
         _BS_READY = True
+        _last_liveness_ts = time.time()
 
 
 def _try_login() -> bool:
