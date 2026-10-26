@@ -361,7 +361,7 @@ class ScheduledTaskManager:
 _TASK_TIMEOUTS: Dict[str, int] = {
     "seal_intraday_collect": 120,
     "limitup_precompute": 700,
-    "kline_refresh": 2400,  # v3 审查 P0: 5219全A串行fetch+35次re-login实测~1700-1900s，1200s边界致09-17/18超时FAILED→cache停09-16。2400s有余量（baostock响应波动0.2-0.5s/股）
+    "kline_refresh": 10800,  # 2026-10-26 durable: baostock 慢时 ~1.65s/股×5224≈8620s(143min)，2400s(40min)不够致 timeout FAILED（触发 run 24447 timeout）。10800s(3h)覆盖慢况+余量。原实测 1700-1900s 是快时(0.36s/股)。若 baostock 更慢仍超时→改 subprocess 异步
     "intraday_microstructure_snapshot": 120,  # S167：hithink 3 端点 + tencent 1 批，<60s 稳态，120s 兜底
     "intraday_auction_dense": 90,  # S167：竞价密集采集，hithink limit_up_pool + auction_snapshot 2 调用，<30s 稳态，90s 兜底
     "baostock_5min_freeze": 600,  # S167：~100 股 baostock 5min fetch（无 IP 限制，单次 login）
@@ -369,7 +369,7 @@ _TASK_TIMEOUTS: Dict[str, int] = {
 _DEFAULT_TASK_TIMEOUT = 300
 
 # S150 R2：stale run reaper 阈值（秒）——超此的 running run 视为挂死，reap 为 failed
-_REAPER_STALE_SECONDS = 2500  # v3: > max(_TASK_TIMEOUTS)=2400(kline_refresh) + buffer，否则 reaper 误杀长跑 task
+_REAPER_STALE_SECONDS = 11000  # 2026-10-26: > kline_refresh 10800 + buffer，否则 reaper 误杀长跑 refresh
 
 # S150 T0.7 根治：seal_intraday_collect subprocess 超时（< R1 wait_for 120 避免竞态——
 # subprocess 先 SIGKILL+线程返回，R1 wait_for 不触发，无孤儿线程）。
