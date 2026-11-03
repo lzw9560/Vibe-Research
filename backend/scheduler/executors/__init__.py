@@ -119,6 +119,8 @@ class TaskExecutor:
             "cron_audit": self._execute_cron_audit,  # S218 #10 — cron-fire audit（扫 cron_fire.log + last_run_at 数 missed delivery cron）
             "sentiment_commander_morning": self._execute_sentiment_commander_morning,  # S234 — 情绪指挥官 09:15 盘前（情绪诊断+仓位+飞书）
             "sentiment_commander_close": self._execute_sentiment_commander_close,  # S234 — 情绪指挥官 14:50 尾盘（排雷+飞书，沸点期才 filter）
+            "regime_gate_combo_log": self._execute_regime_gate_combo_log,  # 命题A对抗后——combo regime gate 前瞻跟踪（只读诊断，不接仓位）
+            "combo_daily_notify": self._execute_combo_daily_notify,  # 2026-10-29 用户"每日提醒我 combo"——15:10 收盘后干净推送 combo top-20 + gate（不混投毒）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -614,6 +616,16 @@ class TaskExecutor:
         """S222 — regime→bull tripwire（3 天 hysteresis，consecutive_relay live 验证启动器）。"""
         from scheduler.executors.signals import regime_flip_notify
         return regime_flip_notify(payload)
+
+    def _execute_regime_gate_combo_log(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """命题A对抗后——跑 ashare_regime_monitor --log 记 gate 预测（只读诊断，前瞻跟踪 30-60 天验预测力）。"""
+        from scheduler.executors.signals import regime_gate_combo_log
+        return regime_gate_combo_log(payload)
+
+    def _execute_combo_daily_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """2026-10-29 用户"每日提醒我 combo"——15:10 跑 combo_notify 推 top-20 + gate 到飞书（干净不混投毒）。"""
+        from scheduler.executors.signals import combo_daily_notify
+        return combo_daily_notify(payload)
 
     def _execute_cron_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 #10 — cron-fire audit：扫 cron_fire.log receipt + last_run_at 数 missed delivery cron。"""

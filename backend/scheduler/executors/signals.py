@@ -575,6 +575,90 @@ def falsified_retest(payload: dict[str, Any]) -> dict[str, Any]:
     return {"status": "skipped", "reason": "TODO: S218 P2 falsified_retest stub"}
 
 
+# ── combo regime gate 前瞻跟踪（2026-10-27，命题A对抗后接线）───────────────
+
+
+def regime_gate_combo_log(payload: dict[str, Any]) -> dict[str, Any]:
+    """跑 tools/ashare_regime_monitor.py --log，记 regime gate 预测到 regime_gate_combo_log 表。
+
+    命题A对抗证伪了"regime gate 自动仓位开关"形态，但 surviving kernel = "regime 从未
+    被市场状态检验过"。本 executor 每日跑 monitor + --log 写表，30-60 天后对比 combo
+    纸面 settle 结果，回答 gate 有无前向预测力（命题B的前置）。
+
+    只读诊断——不接仓位开关，不碰 lift_to_multiplier/weight_override（§44 v2 cap 是
+    研究诚实性标注非资金保护）。
+
+    Args:
+        payload: {}（无参数，跑当前 cache modal 日）
+
+    Returns:
+        {"status": "ok"|"error", "last_line": str}
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[2] / "tools" / "ashare_regime_monitor.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), "--log"],
+            capture_output=True, text=True, timeout=900,  # 300→900：monitor build 全市场慢（10-27/10-28 超 300s 被 kill，表只 10-26 一行，gate 多日趋势看不到）
+        )
+        if result.returncode != 0:
+            logger.warning("[regime_gate_combo_log] 脚本失败 rc=%s: %s",
+                           result.returncode, result.stderr[:300])
+            return {"status": f"error: rc={result.returncode}", "stderr": result.stderr[:200]}
+        last_line = result.stdout.strip().split("\n")[-1] if result.stdout.strip() else ""
+        logger.info("[regime_gate_combo_log] 跑 ok: %s", last_line)
+        return {"status": "ok", "stdout_tail": result.stdout[-200:], "last_line": last_line}
+    except subprocess.TimeoutExpired:
+        logger.warning("[regime_gate_combo_log] 脚本超时 300s")
+        return {"status": "error: timeout"}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[regime_gate_combo_log] 异常: %s", e)
+        return {"status": f"error: {e}"}
+
+
+# ── combo 每日飞书提醒（2026-10-29，用户"每日提醒我 combo"）───────────────
+
+
+def combo_daily_notify(payload: dict[str, Any]) -> dict[str, Any]:
+    """跑 tools/combo_notify.py，15:10 收盘后推 combo top-20 + gate 状态到飞书。
+
+    干净专属推送（不混 inst/A组 已证伪投毒）。用户"每日提醒我 combo"接线。
+    复用 load_combo_5d_today（mode=filtered 去涨停）+ compute_gate（FROZEN 阈值）。
+
+    Args:
+        payload: {}（无参数，跑当前 cache modal 日）
+
+    Returns:
+        {"status": "ok"|"error", "last_line": str}
+    """
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    script = Path(__file__).resolve().parents[2] / "tools" / "combo_notify.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True, text=True, timeout=600,  # 300→600：combo_notify 调 load_combo_5d_today（90s+ 解析 1.3GB JSON）+ compute_gate（60s 读全市场），300s 可能不够
+        )
+        if result.returncode != 0:
+            logger.warning("[combo_daily_notify] 脚本失败 rc=%s: %s",
+                           result.returncode, result.stderr[:300])
+            return {"status": f"error: rc={result.returncode}", "stderr": result.stderr[:200]}
+        last_line = result.stdout.strip().split("\n")[-1] if result.stdout.strip() else ""
+        logger.info("[combo_daily_notify] 跑 ok: %s", last_line)
+        return {"status": "ok", "stdout_tail": result.stdout[-200:], "last_line": last_line}
+    except subprocess.TimeoutExpired:
+        logger.warning("[combo_daily_notify] 脚本超时 300s")
+        return {"status": "error: timeout"}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[combo_daily_notify] 异常: %s", e)
+        return {"status": f"error: {e}"}
+
+
 # ── S222: regime-flip tripwire + hysteresis ───────────────────────────────
 
 

@@ -109,6 +109,8 @@ _EXPECTED_TASK_TYPES = {
     "t1_hit_backfill",  # S232 T+1 hit 回填 18:00（累积二次确认数据）
     "sentiment_commander_morning",  # S234 情绪指挥官 09:15 盘前（情绪诊断+仓位+飞书）
     "sentiment_commander_close",  # S234 情绪指挥官 14:50 尾盘（排雷+飞书，沸点期才 filter）
+    "regime_gate_combo_log",  # 命题A对抗后——combo regime gate 前瞻跟踪（只读诊断，不接仓位）
+    "combo_daily_notify",  # 2026-10-29 用户"每日提醒我 combo"——15:10 收盘后干净推送
 }
 
 

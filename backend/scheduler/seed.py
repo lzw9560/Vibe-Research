@@ -609,6 +609,35 @@ def _ensure_seed_tasks() -> None:
         ))
         logger.info("[scheduler] seed 默认任务 regime_flip_notify 已创建（cron 10 9 * * 0-4，S222）")
 
+    # 命题A对抗后（2026-10-27）：combo regime gate 前瞻跟踪——每日跑 ashare_regime_monitor
+    # --log 写 regime_gate_combo_log 表。30-60 天后对比 combo 纸面 settle 验 gate 预测力。
+    # 只读诊断，不接仓位（命题A证伪自动开关形态，§44 v2 cap 是研究标注非资金保护）。
+    # 17:25 跑（kline_refresh 17:15 + regime_cache_fetch 17:20 后，monitor 读刷新后 cache）。
+    if "regime_gate_combo_log" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="regime_gate_combo_log",
+            description="combo regime gate 前瞻跟踪（每日记 gate 预测，30-60天验预测力，只读诊断不接仓位）",
+            task_type="regime_gate_combo_log",
+            cron_expr="25 17 * * 0-4",  # 17:25 盘后（kline_refresh + regime_cache_fetch 后）
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 regime_gate_combo_log 已创建（cron 25 17 * * 0-4）")
+
+    # 2026-10-29 用户"每日提醒我 combo"：17:22 干净推送 combo top-20 + gate 状态到飞书。
+    # 不混 inst/A组（已证伪投毒），只推 combo + gate，教用户执行。
+    # 17:22 跑（kline_refresh 17:15 刷当日 EOD 收盘后 +7min，早 regime_gate_combo_log 17:25 3min）。
+    # ⚠️ 原 15:10 是错的——baostock 是 EOD 历史 17:15 才刷当日收盘，15:10 cache 还是昨天的
+    #   （Agent 核实 2026-10-29 戳破 seed 注释"15:00 收盘+10min cache 有当日"错误假设）。
+    if "combo_daily_notify" not in existing:
+        _manager.create_task(ScheduledTask(
+            name="combo_daily_notify",
+            description="combo 每日飞书提醒（17:22 kline_refresh 后推 top-20 + gate，干净不混投毒，用户每日提醒）",
+            task_type="combo_daily_notify",
+            cron_expr="22 17 * * 0-4",  # 17:22（kline_refresh 17:15 刷 EOD 后 +7min，早 regime_gate 17:25）
+            enabled=True,
+        ))
+        logger.info("[scheduler] seed 默认任务 combo_daily_notify 已创建（cron 22 17 * * 0-4）")
+
     # S211 通电收尾（2026-09-17）：regime_cache_fetch——17:20（kline_refresh 17:15 后、
     # trade_journal_daily 17:30 前）。刷 index_ma20_regime.json 防 consecutive_relay
     # regime=None 误保守 ×0.5（升 bull ×1.0 前必须接 cron，否则 bull 被当未知误保守）。
