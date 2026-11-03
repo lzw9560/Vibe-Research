@@ -255,13 +255,15 @@ def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: 
     if len(factors) < top_n * 10:
         return []
     n = len(factors)
+    # 2026-11-04 轮11: 去 gap 版执行口径（real-exec net +0.336% > 含 gap +0.311%，t 9.03 更显著，
+    # 避免买 entry gap 右尾最高点）。rank 动量+小盘不用 gap，sg/rg 保留展示用（测试 + picks.gap 输出）
     sg = sorted(range(n), key=lambda k: factors[k]["gap"])
     st = sorted(range(n), key=lambda k: factors[k]["today_ret"])
     sa = sorted(range(n), key=lambda k: factors[k]["amount"])
     rg = {o: r / n for r, o in enumerate(sg)}
     rt = {o: r / n for r, o in enumerate(st)}
     ra = {o: 1 - r / n for r, o in enumerate(sa)}  # 小盘=高分
-    scored = sorted(range(n), key=lambda k: rg[k] + rt[k] + ra[k], reverse=True)
+    scored = sorted(range(n), key=lambda k: rt[k] + ra[k], reverse=True)  # rank 动量+小盘不用 gap（rg 保留展示）
     return [
         {
             "date": date,
@@ -269,7 +271,7 @@ def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: 
             "gap": round(factors[k]["gap"] * 100, 2),
             "today_ret": round(factors[k]["today_ret"] * 100, 2),
             "amount": round(factors[k]["amount"] / 1e8, 3),
-            "score": round(rg[k] + rt[k] + ra[k], 3),
+            "score": round(rt[k] + ra[k], 3),  # 去 gap 版 score（轮11 rank 动量+小盘不用 gap）
         }
         for k in scored[:top_n]
     ]
