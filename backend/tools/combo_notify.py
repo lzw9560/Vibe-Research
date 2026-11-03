@@ -105,7 +105,8 @@ def main() -> None:
         f"【今日 top-20 候选】（去涨停，5日持有 nostop，次日 09:25 集合竞价买）",
     ]
     for i, p in enumerate(picks, 1):
-        lines.append(f"  {i:>2}. {p['code']}: 涨{p['today_ret']}% gap{p['gap']}% 额{p['amount']}亿")
+        pos_1pct = p['amount'] * 100  # 1%ADV 万元（amount亿×1e8×0.01=amount×1e6元=amount×100万，低冲击<10bps）
+        lines.append(f"  {i:>2}. {p['code']}: 涨{p['today_ret']}% gap{p['gap']}% 额{p['amount']}亿 仓≈{pos_1pct:.0f}万(1%ADV)")
     lines += [
         "",
         "【怎么执行】",
