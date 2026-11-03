@@ -365,6 +365,9 @@ _TASK_TIMEOUTS: Dict[str, int] = {
     "intraday_microstructure_snapshot": 120,  # S167：hithink 3 端点 + tencent 1 批，<60s 稳态，120s 兜底
     "intraday_auction_dense": 90,  # S167：竞价密集采集，hithink limit_up_pool + auction_snapshot 2 调用，<30s 稳态，90s 兜底
     "baostock_5min_freeze": 600,  # S167：~100 股 baostock 5min fetch（无 IP 限制，单次 login）
+    "combo_daily_notify": 600,  # P0 修管道(2026-11-04): combo_notify 调 load_combo_5d_today(90s+ 解析1.3GB)+compute_gate(60s)，原默认 300s 可能不够
+    "regime_gate_combo_log": 900,  # P0 修管道: monitor build 全市场慢（10-27/28 超 300s 被 kill，表只 10-26 一行）
+    "trade_journal_daily": 1200,  # P0 修管道: combo record/settle + breakout 3460 条，原默认 300s 超时（11-02/03 被 skip）
 }
 _DEFAULT_TASK_TIMEOUT = 300
 

@@ -97,6 +97,8 @@ def main() -> None:
     lines = [
         f"🎯 combo-5d 每日提醒 {sig_date}",
         "",
+        "⚠️ baostock EOD 滞后：信号可能 D-1（昨日收盘），今日 09:25 已过则明日买（1 天滞后，combo 选 D 信号 D+1 买）",
+        "",
         f"【gate 状态】{'✅ ON 可交易' if viable else '⛔ OFF 不交易（纸面跟踪）'}",
         f"  市场宽度 {gate.get('breadth', '?')}%（>40% 才 ON）| 小盘5d {gate.get('small_5d', '?')}%（>0 才 ON）",
         "",

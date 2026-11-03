@@ -236,11 +236,11 @@ def _ensure_seed_tasks() -> None:
             name="trade_journal_daily",
             description="S175 R2：盘后闭环（settle_pending + run_daily floor+breakout + floor MTM）",
             task_type="trade_journal_daily",
-            cron_expr="30 17 * * 0-4",  # S184: 17:30（晚 kline_refresh 17:15 +15min）
+            cron_expr="0 19 * * 0-4",  # P0 修管道: 19:00（kline_refresh 17:15 跑~60min 18:15 完成 + combo_notify 18:50 后；原 17:30 在 kline_refresh 跑时 fire 被 skip）
             payload={},
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 trade_journal_daily 已创建（cron 30 17 * * 0-4，晚 kline_refresh 17:15）")
+        logger.info("[scheduler] seed 默认任务 trade_journal_daily 已创建（cron 0 19 * * 0-4，晚 kline_refresh 完成）")
 
     # S176 R5：盘中 OFI 五档收集（conditioning 数据收集器，不喂 trade_journal）。
     # 每 3 分钟盘中跑（9:00-14:59，A股盘中 9:30-11:30+13:00-15:00 近似覆盖）。
@@ -618,10 +618,11 @@ def _ensure_seed_tasks() -> None:
             name="regime_gate_combo_log",
             description="combo regime gate 前瞻跟踪（每日记 gate 预测，30-60天验预测力，只读诊断不接仓位）",
             task_type="regime_gate_combo_log",
-            cron_expr="25 17 * * 0-4",  # 17:25 盘后（kline_refresh + regime_cache_fetch 后）
+            cron_expr="55 18 * * 0-4",  # P0 修管道: 18:55（kline_refresh 完成后；原 17:25 在 kline_refresh 跑时 fire 进 stale cache）
+            depends_on="kline_refresh",  # P0 修管道: 等 kline_refresh 完成再记 gate
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 regime_gate_combo_log 已创建（cron 25 17 * * 0-4）")
+        logger.info("[scheduler] seed 默认任务 regime_gate_combo_log 已创建（cron 55 18 * * 0-4, depends_on kline_refresh）")
 
     # 2026-10-29 用户"每日提醒我 combo"：17:22 干净推送 combo top-20 + gate 状态到飞书。
     # 不混 inst/A组（已证伪投毒），只推 combo + gate，教用户执行。
@@ -631,12 +632,13 @@ def _ensure_seed_tasks() -> None:
     if "combo_daily_notify" not in existing:
         _manager.create_task(ScheduledTask(
             name="combo_daily_notify",
-            description="combo 每日飞书提醒（17:22 kline_refresh 后推 top-20 + gate，干净不混投毒，用户每日提醒）",
+            description="combo 每日飞书提醒（18:50 kline_refresh 完成后推 top-20 + gate，干净不混投毒，用户每日提醒）",
             task_type="combo_daily_notify",
-            cron_expr="22 17 * * 0-4",  # 17:22（kline_refresh 17:15 刷 EOD 后 +7min，早 regime_gate 17:25）
+            cron_expr="50 18 * * 0-4",  # P0 修管道: 18:50（kline_refresh 17:15 跑~60min 18:15 完成 +35min 缓冲；原 17:22 在 kline_refresh 跑时 fire 进 stale cache）
+            depends_on="kline_refresh",  # P0 修管道: 等 kline_refresh 完成再推 combo（避免 stale cache + 10-27/28 没产出）
             enabled=True,
         ))
-        logger.info("[scheduler] seed 默认任务 combo_daily_notify 已创建（cron 22 17 * * 0-4）")
+        logger.info("[scheduler] seed 默认任务 combo_daily_notify 已创建（cron 50 18 * * 0-4, depends_on kline_refresh）")
 
     # S211 通电收尾（2026-09-17）：regime_cache_fetch——17:20（kline_refresh 17:15 后、
     # trade_journal_daily 17:30 前）。刷 index_ma20_regime.json 防 consecutive_relay
