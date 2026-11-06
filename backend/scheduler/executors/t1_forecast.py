@@ -52,8 +52,8 @@ def t1_watchlist_generate(payload: dict[str, Any]) -> dict[str, Any]:
         _logger.warning("[S232] watchlist 持久化失败: %s", e)
         record_path = None
 
-    # 飞书通知（观察池非交易信号）
-    if payload.get("notify", True):
+    # 飞书通知（观察池非交易信号，P1砍2026-11-05：EV负默认关推送）
+    if payload.get("notify", False):
         try:
             _send_text_notification(report_text)
             _logger.info("[S232] watchlist 飞书通知已发送: count=%d edge_status=%s",
@@ -90,8 +90,8 @@ def t1_hit_backfill(payload: dict[str, Any]) -> dict[str, Any]:
     result = backfill_t1_hit(t_date, t1_date)
     report_text = render_hit_report(result)
 
-    # 飞书通知（命中率 vs 预期）
-    if payload.get("notify", True):
+    # 飞书通知（命中率 vs 预期，P1砍2026-11-05：验证EV负观察池默认关推送）
+    if payload.get("notify", False):
         try:
             _send_text_notification(report_text)
             _logger.info("[S232] hit_backfill 飞书通知已发送: hit_rate=%s",

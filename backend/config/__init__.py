@@ -225,7 +225,7 @@ class AssistantDefaultConfig(NotificationConfig):
     SEAL_INTRADAY_RETENTION_DAYS: int = 30     # 快照保留天数
     SEAL_INTRADAY_ENABLE: bool = True           # 采集开关（盘中盯盘开启，交易时段采集封单/微结构）
     BOMB_ALERT_COOLDOWN_MINUTES: int = 10       # 同股同规则冷却去重
-    BOMB_ALERT_NOTIFY_ENABLE: bool = True        # 通知开关（盘中盯盘开启，炸板/封单异动通知）
+    BOMB_ALERT_NOTIFY_ENABLE: bool = False       # P0止血2026-11-05通知轰炸审查：每分钟×每涨停股×多规则=几何级飞书卡+三层抑制全失效(_cooldown_cache内存跨subprocess重置/NotificationConfig缺降噪属性/裸send不传dedup_key)。数据仍落DB(SEAL_INTRADAY_ENABLE=True不变),按需查/api/risk/bomb-alerts。P1聚合RED级汇总卡重开后改回True
     # S056 R2 撤单熔断：封单额阈值（元）；盘中封单 < 此值 → 触发提醒
     SEAL_CANCEL_FUSE_AMOUNT: float = 30_000_000.0  # 3000 万
 

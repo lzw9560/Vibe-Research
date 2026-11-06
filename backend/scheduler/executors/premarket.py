@@ -15,14 +15,13 @@ logger = logging.getLogger("vibe-research")
 
 
 def premarket_auction_notify(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """S101：9:25 竞价确认后推送前瞻标的开盘竞价表现。
+    """S101：9:25 竞价确认——P1 降噪(2026-11-05)：常态日竞价表现合并到 09:35 open_notify（同标的 10 分钟 2 推→1）。
 
-    读 F 日（上一交易日）funnel_cache final_candidates → tencent_quote 取竞价/开盘价
-    → 算 gap_pct（open vs last_close）→ 推飞书。无缓存/无 quote/NotificationService 不可用
-    → 不崩不推（增强，catch 不抛）。
+    常态日：不推竞价表现（open_notify 09:35 推开盘表现更全，gap 用户可查）。
+    kill_switch triggered：仍推含竞价+警告（保护钱信号不降噪）。
 
-    S136：开盘后实时核 kill_switch（market_note 承诺落地）——triggered 时通知前置
-    「不开新仓」熔断警告。
+    读 F 日 funnel_cache final_candidates → tencent_quote → gap_pct。
+    S136：开盘后实时核 kill_switch——triggered 时「不开新仓」熔断警告。
     """
     try:
         from vr_paths import prev_trading_date_str
@@ -33,14 +32,22 @@ def premarket_auction_notify(payload: Dict[str, Any]) -> Dict[str, Any]:
             logger.info("[premarket_auction_notify] %s 无 final_candidates，跳过", f_date)
             return {"date": f_date, "status": "ok", "notified": False, "reason": "no_candidates"}
 
+        ks = _notif._check_premarket_kill_switch()  # S136：开盘后实时核
+        if not ks["triggered"]:
+            # P1 降噪：常态日竞价表现合并到 09:35 open_notify，不推
+            logger.info("[premarket_auction_notify] %s 候选%d 常态不推（合并到 open_notify 09:35）kill_switch=%s",
+                        f_date, len(final_cards), ks["triggered"])
+            return {"date": f_date, "status": "ok", "candidates": len(final_cards),
+                    "notified": False, "kill_switch": ks,
+                    "note": "P1降噪: 竞价表现合并到09:35 open_notify，仅 kill_switch 触发时推"}
+
+        # kill_switch triggered：推含竞价表现 + 警告（保护钱信号不降噪）
         codes = [c.get("code") for c in final_cards if c.get("code")]
         quotes = _notif._fetch_quotes(codes)
         content = _notif._build_auction_notify_content(f_date, final_cards, quotes)
-        ks = _notif._check_premarket_kill_switch()  # S136：开盘后实时核
-        if ks["triggered"]:
-            content = _notif._prepend_kill_switch_warning(content, ks)
+        content = _notif._prepend_kill_switch_warning(content, ks)
         notified = _notif._send_notify(content)
-        logger.info("[premarket_auction_notify] %s 候选%d notified=%s kill_switch=%s",
+        logger.info("[premarket_auction_notify] %s 候选%d notified=%s kill_switch=%s (触发推警告)",
                     f_date, len(final_cards), notified, ks["triggered"])
         return {"date": f_date, "status": "ok", "candidates": len(final_cards),
                 "notified": notified, "kill_switch": ks}

@@ -352,7 +352,7 @@ def _ensure_seed_tasks() -> None:
             cron_expr="0 6 * * 0-4",  # 盘前 06:00（周一-周五，开盘前 enforce）
             payload={"enforce": True, "threshold_days": 60},
             enabled=True,
-            notify_on_success=True,
+            notify_on_success=False,  # P1砍噪音2026-11-05：当前forward_test<60全skip却每周5条generic"成功"，真enforce时override表+log已记录
         ))
         logger.info("[scheduler] seed 默认任务 r3_enforce 已创建（cron 0 6 * * 0-4，S204 T8 §44v2 enforce）")
 
@@ -447,7 +447,7 @@ def _ensure_seed_tasks() -> None:
             task_type="daily_ai_summary",
             cron_expr="30 15 * * 0-4",  # 15:30（与 limitup_precompute 同刻，stub 无 DB 写不抢锁）
             payload={},
-            enabled=True,
+            enabled=False,  # P1砍2026-11-05：stub返空串占cron槽，S094完整实现前禁用
         ))
         logger.info("[scheduler] seed 默认任务 daily_ai_summary 已创建（cron 30 15 * * 0-4）")
 
@@ -531,7 +531,7 @@ def _ensure_seed_tasks() -> None:
             description="S218 每日信号报告（consecutive_relay 验证信号 → 结构化 dict + 人话报告）",
             task_type="daily_report",
             cron_expr="50 14 * * 0-4",  # 14:50 盘前（regime 已知 + zt_history T-1 已知）
-            payload={"notify": True},  # S218 #5（deep-review 2026-09-18）：notify:False→True 让 daily_report 推 Feishu（信号到用户手机）
+            payload={"notify": False},  # P1合并2026-11-05：daily_report 合并到 keypoint_entry(15:00)——daily_report 不推（cap 标注 keypoint 已含 signals.py:140/198/236，衰减监控查 weekly_review 周度+数据），regime bull cap=1 时 keypoint 推含入场指引+cap
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 daily_report 已创建（cron 50 14 * * 0-4，S218）")
@@ -578,7 +578,7 @@ def _ensure_seed_tasks() -> None:
             description="S232 T+1 涨停预测 watchlist（观察池非买入信号，turn>20%+vr5>2 lift 5.28x EV 负）",
             task_type="t1_watchlist_generate",
             cron_expr="10 15 * * 0-4",  # 15:10 收盘后（避收盘高峰，T 日全量数据确认）
-            payload={"notify": True},
+            payload={"notify": False},  # P1砍2026-11-05：EV-0.87%负观察池关推送（保留数据积累）
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 t1_watchlist_generate 已创建（cron 10 15 * * 0-4，S232）")
@@ -591,7 +591,7 @@ def _ensure_seed_tasks() -> None:
             description="S232 T+1 hit 回填（命中率 vs 预期 4.34%，累积二次确认数据）",
             task_type="t1_hit_backfill",
             cron_expr="0 18 * * 0-4",  # 18:00（zt_history 17:15 final 后）
-            payload={"notify": True},
+            payload={"notify": False},  # P1砍2026-11-05：验证EV负观察池关推送
             enabled=True,
         ))
         logger.info("[scheduler] seed 默认任务 t1_hit_backfill 已创建（cron 0 18 * * 0-4，S232）")

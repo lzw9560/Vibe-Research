@@ -61,10 +61,33 @@ def sentiment_commander_morning(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def sentiment_commander_close(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """14:50 尾盘排雷（沸点期 score>70 才触发 filter，常态/冰点只推送情绪复盘）。
+    """14:50 尾盘——仅沸点期(score>70)推飞书，常态日 close 与 morning 内容重复不推（P1 降噪 2026-11-05）。
 
     尾盘 14:50 比 9:25 sound（避 9:15-9:20 虚假封单 + 9:25-9:30 量化反向收割）。
-    commander_runner 内部已判断 score>70 才调 filter。
+    commander_runner 内部已判断 score>70 才调 filter（排雷）。
+    通知层 P1 降噪：常态日 close 情绪复盘与 morning 几乎一样→不推；沸点期(score>70)排雷+情绪更新才推。
     """
-    logger.info("[sentiment_commander] close 14:50 触发（尾盘排雷，沸点期才 filter）")
-    return _run_commander(payload)
+    logger.info("[sentiment_commander] close 14:50 触发（仅沸点期推，常态降噪）")
+    try:
+        from commander_runner import run as commander_run, format_text, push_feishu
+        r = commander_run()
+        score = r.get("score", 0)
+        n_tactics = len(r.get("tactics_filter_results", []))
+        result: Dict[str, Any] = {
+            "status": "ok", "score": score, "state": r.get("state"),
+            "trade_date": r.get("trade_date"), "tactics_filter_count": n_tactics, "pushed": False,
+        }
+        if r.get("tactics_filter_error"):
+            result["tactics_filter_error"] = r["tactics_filter_error"]
+            result["status"] = "degraded"
+        if score and score > 70:
+            text = format_text(r)
+            push_feishu(text)
+            result["pushed"] = True
+            logger.info("[sentiment_commander] close 推送（沸点期 score=%s）", score)
+        else:
+            logger.info("[sentiment_commander] close 跳过推送（常态 score=%s≤70，与 morning 重复）", score)
+        return result
+    except Exception as e:
+        logger.exception("[sentiment_commander] close 执行失败")
+        return {"status": "error", "error": str(e)}

@@ -68,11 +68,12 @@ def first_board_t1_review(payload: Dict[str, Any]) -> Dict[str, Any]:
         review = run_t1_premium_review(signal_date)
         report = build_review_report(review)
 
-        # 飞书推送
-        ns = NotificationService()
+        # 飞书推送（P1 降噪2026-11-05：首板打板已证伪 19 信号 falsified，T+1 复盘是证伪数据积累非交易信号，默认不推；payload.notify=True 才推）
         notified = False
-        if ns.is_available():
-            notified = ns.send(report, route_type="alert", severity="info")
+        if payload.get("notify", False):
+            ns = NotificationService()
+            if ns.is_available():
+                notified = ns.send(report, route_type="alert", severity="info")
 
         stats = review.get("stats", {}) if not review.get("error") else {}
         logger.info(

@@ -391,14 +391,7 @@ def format_text(r: dict) -> str:
     elif r.get("tactics_filter_error"):
         lines.append(f"\n⚠️ {r['tactics_filter_error']}")
     # inst_dominant + A组 T+10 段已去掉（2026-10-30 用户整理飞书：已证伪投毒——inst 10-09 实盘割 -13.86% + cache 污染证伪；A组 T+10 干净 -0.961% p=1.0 证伪。不再推飞书避免误导）
-    # combo-5d-edge watchlist（S238，top20 5日持有 nostop，weight 0.5 试探——test-set-selection 偏差须60天前向复验定）
-    if r.get("combo_5d_signals"):
-        lines.append("")
-        lines.append(f"🎯 combo-5d-edge watchlist（top {len(r['combo_5d_signals'])}，5日持有 nostop，weight 0.5 试探非重仓，60天前向复验定）:")
-        for s in r["combo_5d_signals"]:
-            lines.append(f"  • {s['code']}: 涨{s['today_ret']}% gap{s['gap']}% 额{s['amount']}亿")
-    elif r.get("combo_5d_error"):
-        lines.append(f"\n⚠️ {r['combo_5d_error']}")
+    # combo-5d watchlist 段已去掉（2026-11-05 通知轰炸审查：combo_daily_notify 18:50 已有干净专属推送含 gate+执行指引，commander 不重复推 top-20。_record_combo_5d 仍入 trade_journal 启动 60天跟踪，不受影响）
     return "\n".join(lines)
 
 
