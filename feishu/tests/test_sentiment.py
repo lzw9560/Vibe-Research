@@ -244,3 +244,19 @@ class TestCalculateSentimentScore:
         """allocation dict 包含长线/中线/短线三键。"""
         result = calculate_sentiment_score(data={})
         assert set(result["allocation"].keys()) == {"长线", "中线", "短线"}
+
+# ─── calculate_sentiment_score data=None 生产路径 ───
+
+def test_sentiment_score_none_data_production_path(monkeypatch):
+    """data=None 时走生产路径调 CLI 数据函数。"""
+    from feishu import sentiment as sent_mod
+    # mock data 模块函数
+    monkeypatch.setattr("feishu.data.get_index_snapshot", lambda: [{"thscode": "000001.SH", "last_price": 3300, "price_change_ratio_pct": 0.5, "turnover": 8e10}])
+    monkeypatch.setattr("feishu.data.get_market_snapshot_all", lambda: [{"price_change_ratio_pct": 1.0} for _ in range(60)] + [{"price_change_ratio_pct": -1.0} for _ in range(40)])
+    monkeypatch.setattr("feishu.data.get_limit_up_ladder", lambda: [{"boards": {"two_board": [{"name": "A"}], "three_board": []}}])
+    monkeypatch.setattr("feishu.data.get_dragon_tiger", lambda: [{"thscode": "600001.SH", "net_value": 3e8}])
+    
+    result = sent_mod.calculate_sentiment_score(data=None)
+    assert isinstance(result, dict)
+    assert "score" in result
+    assert "state" in result
