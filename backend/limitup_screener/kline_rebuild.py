@@ -206,7 +206,7 @@ async def rebuild_date(
     if codes is None:
         codes = await _get_db_codes()
 
-    target_date = date.replace("-", "")
+    date.replace("-", "")
     results: list[GeneScore] = []
 
     # 分批并发获取 K 线 + 判定涨停（mootdx 同步阻塞，用 to_thread 包装）

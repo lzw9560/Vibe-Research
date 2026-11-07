@@ -132,7 +132,7 @@ def build_features(bars: list[dict], macro: dict[str, dict[str, float]]):
         f3 = _realized_vol(sub_closes, VOL_WINDOW)  # 5d std of rets
         f4 = _day_of_week(d)  # 0..4
         f5 = _is_month_end(d, bars, t)  # 0/1
-        m = macro.get(d, {})
+        macro.get(d, {})
         f6 = _macro_change(macro, bars, t, "dgs10")  # 5d chg
         f7 = _macro_change(macro, bars, t, "dxy")  # 5d chg
 

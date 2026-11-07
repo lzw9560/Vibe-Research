@@ -100,12 +100,12 @@ def compute_volume_rhythm(bars: list[dict] | None = None, **kwargs: Any) -> floa
         return 0.0
     if v[0] <= 0 or v[1] <= 0 or v[2] <= 0:
         return 0.0
-    surge_ratio = v[0] / v[1] if v[1] > 0 else 0  # 首板 vs 次日（注：bars[-3] 是最早）
+    v[0] / v[1] if v[1] > 0 else 0  # 首板 vs 次日（注：bars[-3] 是最早）
     # 重新对齐：bars[-3]=首板, bars[-2]=缩量日, bars[-1]=再放量日
     first_vol = v[0]  # 首板
     shrink_vol = v[1]  # 次日缩量
     retry_vol = v[2]  # 第三日再放量
-    surge = first_vol / shrink_vol if shrink_vol > 0 else 0  # 首板倍量 vs 前日（需 4 段，简化用 3 段代理）
+    first_vol / shrink_vol if shrink_vol > 0 else 0  # 首板倍量 vs 前日（需 4 段，简化用 3 段代理）
     # 简化 3 段：首板高 → 缩量 → 再放量
     shrink_ok = shrink_vol < first_vol * 0.7  # 缩量
     retry_ok = retry_vol > shrink_vol * 1.2  # 再放量

@@ -401,7 +401,7 @@ async def _get_seat_info(code: str) -> dict:
 
     details = signal.get("details", {})
     buy_seats = details.get("buy_seats", [])
-    sell_seats = details.get("sell_seats", [])
+    details.get("sell_seats", [])
 
     # 一日游特征席位：当日买入且近期未持续出现的席位
     one_day_seats = []

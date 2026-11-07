@@ -1160,7 +1160,7 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
             # S109：修误键——tencent raw 键是 change_pct（tencent.py:68），非 pct。
             # 旧 q.get("pct") 恒 None 致 no_gap/竞价未高开 强制离场分支恒死（与缓存正交）。
             change_pct = q.get("change_pct") if isinstance(q, dict) else None
-            open_price = q.get("open") if isinstance(q, dict) else None
+            q.get("open") if isinstance(q, dict) else None
             price = q.get("price") if isinstance(q, dict) else None
 
             # 均线口径：前 N 日均价（用 K 线近似）

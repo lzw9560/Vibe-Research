@@ -75,7 +75,7 @@ def _get_reference_price_from_signal(signal_id: str) -> tuple[float | None, str,
     from strategies.journal_recorder import JournalRecorder
 
     try:
-        recorder = JournalRecorder()
+        JournalRecorder()
         # 从 trade_journal 读 fills_json 找参考信号对应记录
         tj = TradeJournal()
         # signal_id 格式如 "consecutive_relay_2026-09-18_000001"

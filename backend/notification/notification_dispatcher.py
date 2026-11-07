@@ -390,7 +390,7 @@ class NotificationDispatcherMixin:
             from notification.senders.feishu_sender import _get_lark_client_builder, _get_create_message_request
 
             lark_client_builder = _get_lark_client_builder()
-            create_message_request = _get_create_message_request()
+            _get_create_message_request()
 
             from lark_oapi.api.im.v1 import CreateMessageRequest
 

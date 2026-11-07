@@ -137,7 +137,7 @@ def filter_by_auction(
     dropped: list[dict] = []
 
     high_max = CONFIRM_THRESHOLDS["auction_high_max"]
-    high_min = CONFIRM_THRESHOLDS["auction_high_min"]
+    CONFIRM_THRESHOLDS["auction_high_min"]
     good_max = CONFIRM_THRESHOLDS["auction_high_good_max"]
     observe_max = CONFIRM_THRESHOLDS["auction_high_observe_max"]
     low_max = CONFIRM_THRESHOLDS["auction_low_max"]
