@@ -54,6 +54,8 @@ FIELD_MAP = {
     "资产负债率(%)": "debt_ratio",    # leverage
     "主营业务收入增长率(%)": "rev_growth",  # revenue growth
     "净利润增长率(%)": "ni_growth",   # NI growth
+    "每股净资产_调整后(元)": "bvps",   # book value per share (B/P 用，value 因子)
+    "加权每股收益(元)": "eps",         # 累计 EPS（Q1=3月/H1=6月/Q3=9月/年报=全年，TTM 须后算）
 }
 
 
@@ -62,7 +64,14 @@ def ensure_fund_table() -> None:
     conn.execute("""CREATE TABLE IF NOT EXISTS fundamentals (
         code TEXT, stat_date TEXT, gp_margin REAL, np_margin REAL,
         roe REAL, roe_w REAL, debt_ratio REAL, rev_growth REAL, ni_growth REAL,
+        bvps REAL, eps REAL,
         PRIMARY KEY (code, stat_date))""")
+    # ALTER TABLE 加列（已有表无 bvps/eps，SQLite 无 IF NOT EXISTS，try-except 容错）
+    for col in ("bvps", "eps"):
+        try:
+            conn.execute(f"ALTER TABLE fundamentals ADD COLUMN {col} REAL")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
     conn.commit()
     conn.close()
 
@@ -96,7 +105,8 @@ def backfill_one(code_bare: str) -> int:
         # 初始化所有字段 None（防 akshare 某股缺列 → executemany binding 缺失）
         row = {"code": code_bare, "stat_date": stat_date,
                "gp_margin": None, "np_margin": None, "roe": None, "roe_w": None,
-               "debt_ratio": None, "rev_growth": None, "ni_growth": None}
+               "debt_ratio": None, "rev_growth": None, "ni_growth": None,
+               "bvps": None, "eps": None}
         for cn, en in FIELD_MAP.items():
             if en == "stat_date":
                 continue  # 日期已单独处理，不 float 转换（否则 ValueError 覆盖为 None）
@@ -111,8 +121,8 @@ def backfill_one(code_bare: str) -> int:
         return 0
     conn = sqlite3.connect(str(FUND_DB))
     conn.executemany("""INSERT OR REPLACE INTO fundamentals
-        (code, stat_date, gp_margin, np_margin, roe, roe_w, debt_ratio, rev_growth, ni_growth)
-        VALUES (:code, :stat_date, :gp_margin, :np_margin, :roe, :roe_w, :debt_ratio, :rev_growth, :ni_growth)""", rows)
+        (code, stat_date, gp_margin, np_margin, roe, roe_w, debt_ratio, rev_growth, ni_growth, bvps, eps)
+        VALUES (:code, :stat_date, :gp_margin, :np_margin, :roe, :roe_w, :debt_ratio, :rev_growth, :ni_growth, :bvps, :eps)""", rows)
     conn.commit()
     conn.close()
     return len(rows)
@@ -192,14 +202,15 @@ def load_fundamentals_pit() -> dict[str, list[dict]]:
     if not FUND_DB.exists():
         return {}
     conn = sqlite3.connect(str(FUND_DB))
-    rows = conn.execute("""SELECT code, stat_date, gp_margin, np_margin, roe, debt_ratio, rev_growth, ni_growth
+    rows = conn.execute("""SELECT code, stat_date, gp_margin, np_margin, roe, debt_ratio, rev_growth, ni_growth, bvps, eps
         FROM fundamentals WHERE stat_date >= '2017-01-01' ORDER BY code, stat_date""").fetchall()
     conn.close()
     by_code: dict[str, list[dict]] = defaultdict(list)
-    for code, sd, gp, np_, roe, debt, rg, nig in rows:
+    for code, sd, gp, np_, roe, debt, rg, nig, bvps, eps in rows:
         by_code[code].append({
             "pit": pit_pubdate(sd), "stat": sd,
             "gp": gp, "np": np_, "roe": roe, "debt": debt, "rg": rg, "nig": nig,
+            "bvps": bvps, "eps": eps,
         })
     return dict(by_code)
 
@@ -475,6 +486,8 @@ def main() -> None:
         ("gp_margin（毛利率, Hou-Xue-Zhang quality）", "gp"),
         ("roe（净资产收益率）", "roe"),
         ("np_margin（净利率）", "np"),
+        ("rev_growth（主营收入增长率）", "rg"),
+        ("ni_growth（净利润增长率）", "nig"),
     ]
     results: dict[str, dict] = {}
     print(f"\n{'='*70}\n=== 月频 long-only top-decile backtest（2018-2026, PIT 对齐）===\n{'='*70}")
