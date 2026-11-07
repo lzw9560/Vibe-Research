@@ -177,7 +177,6 @@ def regime_cache_fetch(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     import subprocess
     import sys
-    from pathlib import Path
     script = Path(__file__).resolve().parents[2] / "tools" / "index_ma20_regime_fetch.py"
     try:
         result = subprocess.run(
@@ -228,7 +227,7 @@ def derived_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
     S084 follow-up：原 derived_results 表合并入 seal_derived_features（字段子集），
     复用 persist_derived_features 持久化（DRY，与盘中 collect 同写路径）。
     """
-    from datetime import date as _date, timedelta as _td
+    from datetime import timedelta as _td
     from vr_paths import last_trading_date as _last_td
 
     try:

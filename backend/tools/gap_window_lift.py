@@ -8,10 +8,13 @@
 # §44 overreach=把"无selection edge"外推成"无edge"(外推禁令违反)
 """decisive: gap-window lift（因子是否预测隔夜 gap）——6 专家审计 recommended_next_test。
 premium_baseline 899 samples（D 收盘→D+1 开盘 gap）+ gene_scores total_score + 过滤 D 日一字板 + 0.70% cost。"""
-import datetime, json, sqlite3, sys, statistics
+import datetime
+import json
+import sqlite3
+import sys
+import statistics
 from pathlib import Path
 from collections import defaultdict
-import sys
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir

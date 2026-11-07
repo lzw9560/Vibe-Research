@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """Follow-up: V2 gap window (D+1close->D+2open) by lbc tier + kechuang date concentration + regime."""
 from __future__ import annotations
-import sys, sqlite3, statistics, json
+import sys
+import sqlite3
+import statistics
+import json
 from collections import defaultdict, Counter
 from pathlib import Path
 from math import erf, sqrt

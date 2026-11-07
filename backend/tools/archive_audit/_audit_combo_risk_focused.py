@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """Optimized focused: regime drawdown only. Rolling MA60, pre-extracted floats."""
 from __future__ import annotations
-import json, sqlite3, statistics, sys
+import json
+import sqlite3
+import statistics
+import sys
 from collections import defaultdict
 from pathlib import Path
 
-import sys
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 

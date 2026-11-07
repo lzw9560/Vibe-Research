@@ -7,9 +7,10 @@
 """秒板 superset（首 bar 涨停, first_lock_idx==0）31 天 net 验证——补 S156 的 13 天。
 复用 H2 cache (h2_features_cache_full.json, 31 天) + baostock kline + simulate_holding net。
 S156 秒板 13 天 1.312x hint → 31 天首 bar 涨停 superset 验证是否 robust。"""
-import datetime, json, sys
-from pathlib import Path
+import datetime
+import json
 import sys
+from pathlib import Path
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir

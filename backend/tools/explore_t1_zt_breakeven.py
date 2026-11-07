@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 """Stage 3: 验证盈亏平衡 + 扫描更多组合找正 EV 甜点。"""
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
-import sqlite3, json, math, statistics, sys
+import sqlite3
+import json
+import math
+import statistics
+import sys
 from pathlib import Path
 from collections import defaultdict
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

@@ -5,7 +5,10 @@ Computes the TRADABLE edge (T+1 open -> T+5 close) with proper overlap-corrected
 NW-t, slippage sensitivity, non-overlapping 5-bucket equity curve, and Kelly sizing.
 """
 from __future__ import annotations
-import json, sqlite3, statistics, math
+import json
+import sqlite3
+import statistics
+import math
 from collections import defaultdict
 from pathlib import Path
 import sys

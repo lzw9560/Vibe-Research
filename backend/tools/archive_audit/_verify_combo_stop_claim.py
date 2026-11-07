@@ -7,7 +7,9 @@ when the stock would have recovered to -5% is ALSO harmed by the stop. The
 broader 误杀 should be nostop > stop (ended better than the stop price).
 """
 from __future__ import annotations
-import json, sqlite3, statistics
+import json
+import sqlite3
+import statistics
 from collections import defaultdict
 from pathlib import Path
 

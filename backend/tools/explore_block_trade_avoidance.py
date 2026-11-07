@@ -24,7 +24,11 @@ R13 survivorship: kline cache 5248 codes, 多数 ~179 bars (2025-12~2026-09).
   block trade 2026-02~2026-09. cache 建 ~2026-09. 信号期股存在→survivorship
   最小. 但退市股 (如有) 缺 exit bar → skip → 负收益缺失 → BHAR 偏高 (保守).
 """
-import json, sqlite3, sys, statistics, time
+import json
+import sqlite3
+import sys
+import statistics
+import time
 from pathlib import Path
 from collections import defaultdict
 from math import erf, sqrt

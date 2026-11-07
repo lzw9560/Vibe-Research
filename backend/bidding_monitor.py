@@ -91,7 +91,7 @@ async def fetch_auction_snapshot_batch(codes: list[str]) -> list[dict]:
     """批量获取竞价快照（接入腾讯实时行情）。"""
     try:
         quotes = astock.tencent_quote(codes)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         # 行情接口失败时降级为空快照，避免监控链路整体中断
         return [
             {

@@ -11,11 +11,16 @@ Methodology (§44 v2 strict):
   4. Cost: 逐笔 _cost_pct（5元门 size-dependent，S201b）; one-word D-day boards excluded (sealed, unbuyable)
   5. No extrapolation (regime-edge on selection != full-pipeline edge)
 """
-import datetime, json, sqlite3, sys, statistics, random, math
+import datetime
+import json
+import sqlite3
+import sys
+import statistics
+import random
+import math
 from pathlib import Path
 from collections import defaultdict
 
-import sys
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 

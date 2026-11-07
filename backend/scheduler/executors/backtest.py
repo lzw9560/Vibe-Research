@@ -334,7 +334,6 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
     **stuck-date 处理**：0-settle 的日期（如调休补班 baostock 无 bar）标 no_bar（JSON，7 日后重试），
     避免每日卡死循环在同一 stuck date。
     """
-    import sqlite3
     from config import GENE_SCORES_DB_PATH
     from datetime import datetime, timedelta
     from db_health import get_healthy_conn

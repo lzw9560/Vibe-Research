@@ -8,10 +8,13 @@
 """S156: zt_pool 历史 re-test 封单量+封板时间+秒板 net-profit-verify。
 复用 S155 net 逻辑（simulate_holding+unbuyable+逐笔_cost_pct+top-vs-all）+ zt_pool 精确首封/封板资金。
 signal_date=D（涨停日，feature D close 已知），entry=D+1 open（续涨/缺口验证）。"""
-import datetime, json, sqlite3, sys, time
+import datetime
+import json
+import sqlite3
+import sys
+import time
 from pathlib import Path
 from collections import defaultdict
-import sys
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir

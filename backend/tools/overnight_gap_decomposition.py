@@ -7,9 +7,12 @@
 """验证窗口假设：涨停股隔夜 gap（D 收盘→D+1 开盘）vs D+1 intraday（开→收）vs path（D+1 开→D+4）。
 若隔夜 gap 正 + path 负 = 我框架测错窗口（miss 隔夜正 edge，只测反转负段）。"""
 import bisect
-import datetime, json, sqlite3, sys, statistics
-from pathlib import Path
+import datetime
+import json
+import sqlite3
 import sys
+import statistics
+from pathlib import Path
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir

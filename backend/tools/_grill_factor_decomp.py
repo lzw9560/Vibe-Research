@@ -14,7 +14,10 @@
 输出: lbc 单维 (2/3/4/5/6+) + board×lbc + turnover×lbc + seal×lbc 交互.
 """
 from __future__ import annotations
-import sys, sqlite3, statistics, json
+import sys
+import sqlite3
+import statistics
+import json
 from collections import defaultdict, Counter
 from pathlib import Path
 from math import erf, sqrt

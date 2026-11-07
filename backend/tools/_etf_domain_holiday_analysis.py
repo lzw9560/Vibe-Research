@@ -6,7 +6,8 @@
 4. 动量参考 (节前信号是否=前期涨幅的延续)
 """
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
-import json, sys
+import json
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from statistics import mean, median, stdev

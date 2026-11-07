@@ -6,9 +6,13 @@
 """S158: 连板（high_days）§44 维度——ths_limit_up_pool(date) 42 天覆盖。
 文献 Hua'an 2026: 连板 tail 2.4% 赚 14.5% 利润 +14.6% 92.3% win（强但稀）。
 复用 day_paired per-T top-vs-all + net-profit-verify（S155/S156 教训）。"""
-import datetime, json, re, sqlite3, sys, time
-from pathlib import Path
+import datetime
+import json
+import re
+import sqlite3
 import sys
+import time
+from pathlib import Path
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir

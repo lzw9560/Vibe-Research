@@ -9,7 +9,11 @@ Corrects previous PEAD false-negative (categorical ftype + D+1~D+5 short window)
   - §44 v3: multi-window sanity + permutation null + Bonferroni + walk-forward
 """
 from __future__ import annotations
-import json, statistics, random, sys, time
+import json
+import statistics
+import random
+import sys
+import time
 from pathlib import Path
 from collections import defaultdict
 

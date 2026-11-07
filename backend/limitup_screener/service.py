@@ -184,7 +184,7 @@ async def _fetch_zt_pool(date: str):
             [zt_pool_item_from_dict(it) for it in yzt],
             [zt_pool_item_from_dict(it) for it in zb],
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("获取涨停池失败: date=%s", date)
         return [], [], []
 

@@ -25,7 +25,8 @@ verdict 基于 (B) honest 口径. (A) 仅作诊断 (量化 look-ahead bias 通�
 诚实定位: 散户口径下大宗折价信号 = 均值回归变体 (大跌后反弹). 同家族此前 9/9 falsified.
 禁止外推: 大宗折价信号 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge.
 """
-import json, sys
+import json
+import sys
 from pathlib import Path
 from collections import defaultdict
 

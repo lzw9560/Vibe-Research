@@ -9,12 +9,16 @@ target：D open→exit net（扣 逐笔 _cost_pct round-trip cost），day_paire
   - block_trade_raw.json（eastmoney RPT_DATA_BLOCKTRADE 市场全量, 20000 records, 136 dates）
   - baostock_kline_cache.json（5226 stocks, daily K-line）
 """
-import datetime, json, sys, time, statistics, math
+import datetime
+import json
+import sys
+import time
+import statistics
+import math
 from pathlib import Path
 from collections import defaultdict
 import random
 
-import sys
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 

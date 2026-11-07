@@ -6,9 +6,11 @@
 # caveat: 800/~2000股缓存(baostock profit_data per-code 慢 fetch 超时),1126 obs modest
 # 但结论(无edge)与全维度一致. 低高PE相同35.89%或小样本巧合(quintile per-T 少股日退化)
 """用已缓存的 profit_data（800 股）跑 PE_TTM §44 测试，不重新 fetch。"""
-import datetime, json, sqlite3, sys
-from pathlib import Path
+import datetime
+import json
+import sqlite3
 import sys
+from pathlib import Path
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir

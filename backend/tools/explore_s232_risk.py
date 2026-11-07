@@ -142,7 +142,8 @@ def main():
     # ---- trades per day concentration (用 records 顺序无法恢复日期，改用 build 时记录) ----
     print("=== 同日 trades 集中度（市场共因子风险）===")
     # 重建 date→trades
-    import sqlite3, json
+    import sqlite3
+    import json
     from pathlib import Path
     from explore_s232_stop_verify import load_kline_db, load_zt_by_date, vol_ratio_5, TURN_THRESHOLD, VR5_THRESHOLD, KLINE_DB
     # 简化：用 build_records 改造——直接重新跑一次带日期

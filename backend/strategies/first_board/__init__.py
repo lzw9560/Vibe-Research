@@ -69,14 +69,6 @@ from strategies.first_board.pipeline import (
     run_first_board_filter,
     attach_first_board_analysis,
 )
-from strategies.first_board.persistence import (
-    save_scores,
-    load_scores,
-    list_score_dates,
-    _SCORES_DIR,
-    _SCORES_DIR_LEGACY,
-    ROOT,
-)
 
 __all__ = [
     # universe

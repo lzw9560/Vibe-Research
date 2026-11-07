@@ -10,11 +10,14 @@
 判定门：SOX top-quartile日 A股均gap >+0.5% 且 p<0.05(未校正) → exploratory(R37)；不过归档。
 """
 from __future__ import annotations
-import json, sqlite3, sys, statistics, bisect
+import json
+import sqlite3
+import sys
+import statistics
+import bisect
 from pathlib import Path
 import numpy as np
 
-import sys
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 

@@ -5,7 +5,10 @@ Verifies task claims + computes Kelly / drawdown / position-sizing inputs.
 mode=filtered (exclude limit-up), top-20 equal weight, 5-day hold, COST=0.004.
 """
 from __future__ import annotations
-import json, sqlite3, statistics, math
+import json
+import sqlite3
+import statistics
+import math
 from collections import defaultdict
 from pathlib import Path
 

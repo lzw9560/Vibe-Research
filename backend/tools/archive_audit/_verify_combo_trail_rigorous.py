@@ -5,7 +5,9 @@ Also tests ATR-scaled stop and variable holding period (convergence levers
 the original claim did NOT test).
 """
 from __future__ import annotations
-import json, sqlite3, statistics
+import json
+import sqlite3
+import statistics
 from collections import defaultdict
 from pathlib import Path
 from math import sqrt

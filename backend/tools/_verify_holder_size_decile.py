@@ -5,7 +5,9 @@
 若各 decile edge 均匀 → 真 accumulation alpha。
 """
 from __future__ import annotations
-import json, sqlite3, statistics
+import json
+import sqlite3
+import statistics
 from collections import defaultdict
 from pathlib import Path
 from math import sqrt

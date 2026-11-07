@@ -1231,7 +1231,6 @@ def macro_snapshot() -> Dict[str, Any]:
     后端已通但前端无展示，此 endpoint 暴露给前端 MacroPanel。
     宏观展示是参考层（非 sizing 杠杆，不碰 §44v2/lift_for_arm）。
     """
-    import json  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
     from predict.features.macro import (  # noqa: PLC0415
         MACRO_SPECS, FRED_SERIES, get_fred_api_key, fetch_fred_series, parse_fred_observations,

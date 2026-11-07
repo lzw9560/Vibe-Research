@@ -9,7 +9,11 @@ T 日全样本（未涨停）→ T+1 涨停 预判信号宽口径回溯。
 - 候选信号：放量上涨未涨停 / 缩量回调企稳 / 尾盘抢筹(日线 close 近 high 代理) / 换手+量比组合
 诚实：报 sample n / hit count / hit rate / base rate / lift / 95% CI(Wilson)，不臆造。
 """
-import sqlite3, json, statistics, math, sys
+import sqlite3
+import json
+import statistics
+import math
+import sys
 from pathlib import Path
 from collections import defaultdict
 
