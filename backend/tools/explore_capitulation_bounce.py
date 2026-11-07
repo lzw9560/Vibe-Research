@@ -13,6 +13,7 @@ capitulation-bounce 反弹检测器（10-29 combo live +3.67% WR90% 正种子，
 本步：算 market breadth + 跌停 + 涨停 + 小盘等权时序（基础数据）。
 从 kline cache 全市场一次 pass（5255 股 × ~2000 天）。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -20,6 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir  # noqa: E402
 
@@ -64,7 +66,9 @@ def compute_breadth_series() -> dict:
     print(f"universe: {len(code_bars)} stocks, smallcap(bottom-500 amount): {len(smallcap_codes)}")
 
     # 每日聚合
-    daily: dict[str, dict] = defaultdict(lambda: {"adv": 0, "dec": 0, "flat": 0, "limit_up": 0, "limit_down": 0, "total": 0, "sc_rets": []})
+    daily: dict[str, dict] = defaultdict(
+        lambda: {"adv": 0, "dec": 0, "flat": 0, "limit_up": 0, "limit_down": 0, "total": 0, "sc_rets": []}
+    )
     for code, bars in code_bars.items():
         bl = board_limit(code)
         prev_close = None
@@ -107,8 +111,11 @@ def compute_breadth_series() -> dict:
         sc_ret = sum(dd["sc_rets"]) / len(dd["sc_rets"]) if dd["sc_rets"] else 0
         series[d] = {
             "breadth": round(breadth, 4),
-            "adv": dd["adv"], "dec": dd["dec"], "total": total,
-            "limit_up": dd["limit_up"], "limit_down": dd["limit_down"],
+            "adv": dd["adv"],
+            "dec": dd["dec"],
+            "total": total,
+            "limit_up": dd["limit_up"],
+            "limit_down": dd["limit_down"],
             "smallcap_ret": round(sc_ret, 6),
         }
     return series
@@ -119,11 +126,16 @@ def save_breadth(series: dict) -> None:
     conn.execute("""CREATE TABLE IF NOT EXISTS daily_breadth (
         date TEXT PRIMARY KEY, breadth REAL, adv INTEGER, dec INTEGER, total INTEGER,
         limit_up INTEGER, limit_down INTEGER, smallcap_ret REAL)""")
-    rows = [(d, v["breadth"], v["adv"], v["dec"], v["total"], v["limit_up"], v["limit_down"], v["smallcap_ret"])
-            for d, v in series.items()]
-    conn.executemany("""INSERT OR REPLACE INTO daily_breadth
+    rows = [
+        (d, v["breadth"], v["adv"], v["dec"], v["total"], v["limit_up"], v["limit_down"], v["smallcap_ret"])
+        for d, v in series.items()
+    ]
+    conn.executemany(
+        """INSERT OR REPLACE INTO daily_breadth
         (date, breadth, adv, dec, total, limit_up, limit_down, smallcap_ret)
-        VALUES (?,?,?,?,?,?,?,?)""", rows)
+        VALUES (?,?,?,?,?,?,?,?)""",
+        rows,
+    )
     conn.commit()
     conn.close()
 
@@ -136,9 +148,10 @@ def load_breadth() -> dict[str, dict]:
     rows = conn.execute("""SELECT date, breadth, adv, dec, total, limit_up, limit_down, smallcap_ret
         FROM daily_breadth ORDER BY date""").fetchall()
     conn.close()
-    return {d: {"breadth": b, "adv": a, "dec": de, "total": t, "limit_up": lu,
-                "limit_down": ld, "smallcap_ret": sr}
-            for d, b, a, de, t, lu, ld, sr in rows}
+    return {
+        d: {"breadth": b, "adv": a, "dec": de, "total": t, "limit_up": lu, "limit_down": ld, "smallcap_ret": sr}
+        for d, b, a, de, t, lu, ld, sr in rows
+    }
 
 
 def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode: str = "direct") -> None:
@@ -150,6 +163,7 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
     """
     import statistics
     from math import erf, sqrt
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from _factor_helpers import bonferroni_p, norm_sf_positive  # noqa: E402
 
@@ -189,11 +203,18 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
             continue
         fwd = 1.0
         for i in range(buy_idx, exit_idx):
-            fwd *= (1 + sc_rets[i])
+            fwd *= 1 + sc_rets[i]
         fwd_ret = (fwd - 1) * 100
-        events.append({"cap_date": d, "buy_date": dates[buy_idx], "exit_date": dates[exit_idx],
-                       "fwd_ret": fwd_ret, "breadth_at_cap": series[d]["breadth"],
-                       "ld_at_cap": series[d]["limit_down"]})
+        events.append(
+            {
+                "cap_date": d,
+                "buy_date": dates[buy_idx],
+                "exit_date": dates[exit_idx],
+                "fwd_ret": fwd_ret,
+                "breadth_at_cap": series[d]["breadth"],
+                "ld_at_cap": series[d]["limit_down"],
+            }
+        )
         last_exit_idx = exit_idx
 
     if len(events) < 10:
@@ -206,7 +227,7 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
     for i in range(0, len(dates) - hold, step):
         fwd = 1.0
         for j in range(i, i + hold):
-            fwd *= (1 + sc_rets[j])
+            fwd *= 1 + sc_rets[j]
         bench_rets.append((fwd - 1) * 100)
     bench_mean = statistics.mean(bench_rets) if bench_rets else 0
 
@@ -221,21 +242,31 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
     mid = n // 2
     train, test = rets[:mid], rets[mid:]
 
-    print(f"\n{'='*70}\n=== capitulation-bounce 回测（mode={mode}, hold={hold}天，非重叠）===\n{'='*70}")
+    print(f"\n{'=' * 70}\n=== capitulation-bounce 回测（mode={mode}, hold={hold}天，非重叠）===\n{'=' * 70}")
     print(f"事件数: {n}")
     print(f"  全期: mean={mean:.3f}% std={std:.3f}% WR={wr:.1f}% t={t:.2f} p_one_sided={p:.4f}")
     print(f"  benchmark(random-day hold={hold}): {bench_mean:.3f}% → excess={excess:.3f}%")
     if train and test:
         tr_m, te_m = statistics.mean(train), statistics.mean(test)
-        tr_t = tr_m / (statistics.pstdev(train) / sqrt(len(train))) if len(train) > 1 and statistics.pstdev(train) > 0 else 0
-        te_t = te_m / (statistics.pstdev(test) / sqrt(len(test))) if len(test) > 1 and statistics.pstdev(test) > 0 else 0
+        tr_t = (
+            tr_m / (statistics.pstdev(train) / sqrt(len(train)))
+            if len(train) > 1 and statistics.pstdev(train) > 0
+            else 0
+        )
+        te_t = (
+            te_m / (statistics.pstdev(test) / sqrt(len(test))) if len(test) > 1 and statistics.pstdev(test) > 0 else 0
+        )
         te_p = norm_sf_positive(te_t)
         decay = (tr_m - te_m) / abs(tr_m) * 100 if tr_m != 0 else 0
-        print(f"  walk-forward: train n={len(train)} mean={tr_m:.3f}% t={tr_t:.2f} | test n={len(test)} mean={te_m:.3f}% t={te_t:.2f} p={te_p:.4f}")
+        print(
+            f"  walk-forward: train n={len(train)} mean={tr_m:.3f}% t={tr_t:.2f} | test n={len(test)} mean={te_m:.3f}% t={te_t:.2f} p={te_p:.4f}"
+        )
         print(f"  衰减: {decay:.0f}%")
     print(f"\n抽样事件（最近5）:")
     for e in events[-5:]:
-        print(f"  {e['cap_date']}: breadth={e['breadth_at_cap']:.2%} 跌停={e['ld_at_cap']} → 买{e['buy_date']} 卖{e['exit_date']} ret={e['fwd_ret']:.2f}%")
+        print(
+            f"  {e['cap_date']}: breadth={e['breadth_at_cap']:.2%} 跌停={e['ld_at_cap']} → 买{e['buy_date']} 卖{e['exit_date']} ret={e['fwd_ret']:.2f}%"
+        )
 
     N_BONF = 4
     p_bonf = bonferroni_p(p, N_BONF)
@@ -250,8 +281,17 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
     else:
         print(f"  → ✅ edge-confirmed-provisional（须幸存者+realizable 审查）")
 
-    out = {"mode": mode, "n_events": n, "hold": hold, "mean": round(mean, 3),
-           "excess": round(excess, 3), "t": round(t, 2), "p": p, "wr": round(wr, 1), "bonf_n": N_BONF}
+    out = {
+        "mode": mode,
+        "n_events": n,
+        "hold": hold,
+        "mean": round(mean, 3),
+        "excess": round(excess, 3),
+        "t": round(t, 2),
+        "p": p,
+        "wr": round(wr, 1),
+        "bonf_n": N_BONF,
+    }
     pth = Path(__file__).parent / f"_capitulation_bounce_{mode}_h{hold}_result.json"
     pth.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"result JSON -> {pth}")
@@ -259,13 +299,19 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
 
 def main() -> None:
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--compute", action="store_true", help="算 breadth 时序")
     ap.add_argument("--backtest", action="store_true", help="跑 capitulation-bounce 回测")
     ap.add_argument("--breadth-thresh", type=float, default=0.05, help="breadth 阈值")
     ap.add_argument("--ld-thresh", type=int, default=50, help="跌停数阈值")
     ap.add_argument("--hold", type=int, default=5, help="持有天数")
-    ap.add_argument("--mode", choices=["direct", "trigger"], default="direct", help="direct=D+1买无lookahead(诚实), trigger=反弹确认才买(有选择偏差,对照)")
+    ap.add_argument(
+        "--mode",
+        choices=["direct", "trigger"],
+        default="direct",
+        help="direct=D+1买无lookahead(诚实), trigger=反弹确认才买(有选择偏差,对照)",
+    )
     args = ap.parse_args()
     if args.compute:
         print("computing market breadth series (full market pass)...")
@@ -275,7 +321,9 @@ def main() -> None:
         cap_days = [(d, v) for d, v in series.items() if v["breadth"] < 0.05 or v["limit_down"] > 50]
         print(f"\ncapitulation 候选日（breadth<5% 或 跌停>50）: {len(cap_days)}")
         for d, v in sorted(cap_days)[-15:]:
-            print(f"  {d}: breadth={v['breadth']:.2%} 跌停={v['limit_down']} 涨停={v['limit_up']} 小盘ret={v['smallcap_ret']:.4%}")
+            print(
+                f"  {d}: breadth={v['breadth']:.2%} 跌停={v['limit_down']} 涨停={v['limit_up']} 小盘ret={v['smallcap_ret']:.4%}"
+            )
     elif args.backtest:
         backtest_capitulation(args.breadth_thresh, args.ld_thresh, args.hold, args.mode)
     else:

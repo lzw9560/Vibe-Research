@@ -1,6 +1,6 @@
-
 # -*- coding: utf-8 -*-
 """通知分发 Mixin"""
+
 from __future__ import annotations
 import json
 

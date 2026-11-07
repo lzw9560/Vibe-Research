@@ -5,6 +5,28 @@
 
 ---
 
+## 工具链基础设施（2026-11-08 工具链进化期）
+
+> ARCHITECTURE.md 声明"工具链进化期"——trading arms falsified 结论不变，但工具链基础设施活跃进化。
+
+### 关键变更（2026-11-06~08 会话产出）
+
+- **feishu 推送重构**：1202行 god script → 8模块+7测试+176passed+94%覆盖率+tenacity重试+日志轮转+健康告警
+- **数据层路径收口**：245文件走 vr_paths.resolve_data_dir()，0绝对路径，0僵尸DB
+- **DuckDB MCP 激活**：Python wrapper 直查 21 个 SQLite DB（baostock5255/dragon_tiger150万行）
+- **launchctl 自动化**：8任务0失败+KeepAlive+retention cron+calendar cron
+- **ruff 代码质量**：10179→0 真实bug + pre-commit hook 零容忍
+- **backend 测试**：4218passed+0failed+62.5%覆盖率
+
+### 技术栈
+
+- backend: FastAPI + SQLite + 245文件走vr_paths + ruff lint
+- feishu: 8模块包 + tenacity重试 + RotatingFileHandler日志 + ping_healthchecks
+- MCP: 8个（codex-security/firecrawl/codegraph/evolver/context7/playwright/duckdb/agentmemory停用）
+- skill: 79个（~/.config/opencode/skills/）+ AGENTS.md护栏
+- 测试: feishu 176p(94%) + backend 4218p(62.5%) + frontend 435p(ESLint 0errors)
+
+
 ## 会话开始协议（最高优先级）
 
 **每次会话开始，在做任何工作之前，先读知识图谱投研子区**：
