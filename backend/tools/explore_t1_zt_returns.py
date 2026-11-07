@@ -41,7 +41,7 @@ kcur.execute("SELECT code, bars_json FROM kline")
 code_bars = {}
 for code, bj in kcur.fetchall():
     try: bars = json.loads(bj)
-    except: continue
+    except Exception: continue
     if isinstance(bars, list) and bars:
         code_bars[code] = bars
 kdb.close()

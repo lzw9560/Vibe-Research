@@ -92,7 +92,7 @@ def is_limit_up(bar) -> bool:
         # 一字: open==high==low==close and pct>=limit
         if abs(h-l)<0.001 and (c-pc)/pc >= lim-0.001: return True
         return (c-pc)/pc >= lim-0.001 and o>=pc*(1+lim-0.003)  # gap up to limit
-    except: return False
+    except Exception: return False
 
 def is_limit_down(bar) -> bool:
     try:
@@ -102,7 +102,7 @@ def is_limit_down(bar) -> bool:
         lim = 0.05 if isst else (0.20 if str(bar.get('code','')).startswith(('68','30')) else 0.10)
         if abs(h-l)<0.001 and (pc-c)/pc >= lim-0.001: return True
         return False
-    except: return False
+    except Exception: return False
 
 def trading_day_offset(bars_by_date: list, event_date: str, offset: int) -> dict | None:
     """Get bar at trading-day offset from event_date. offset=0=event day, +1=next trading day."""
@@ -140,14 +140,14 @@ def compute_drift(event: dict) -> dict | None:
     if t_m20 and t_m1:
         try:
             pre_lag_20 = (float(t_m1['close']) - float(t_m20['open'])) / float(t_m20['open']) * 100
-        except: pass
+        except Exception: pass
     # pre-lag 60-day
     t_m60 = trading_day_offset(by_date, ed, -60)
     pre_lag_60 = None
     if t_m60 and t_m1:
         try:
             pre_lag_60 = (float(t_m1['close']) - float(t_m60['open'])) / float(t_m60['open']) * 100
-        except: pass
+        except Exception: pass
 
     results = {'code': m['code'], 'event_date': ed, 'ftype': m['ftype'],
                'sue': m['sue'], 'np_yoy': m['np_yoy'], 'chg_up': m['chg_up'],

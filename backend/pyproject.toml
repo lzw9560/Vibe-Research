@@ -23,3 +23,16 @@ addopts = [
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E402", "E702", "E741", "F821", "F841"]  # 暂忽略大量历史遗留，逐步清理
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E", "F", "W"]
+"tools/*" = ["E", "F", "W"]
+"archive_audit/*" = ["E", "F", "W"]

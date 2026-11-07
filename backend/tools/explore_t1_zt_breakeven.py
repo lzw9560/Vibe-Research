@@ -25,7 +25,7 @@ kdb = sqlite3.connect(KLINE_DB); kcur = kdb.cursor(); kcur.execute("SELECT code,
 code_bars={}
 for code, bj in kcur.fetchall():
     try: bars=json.loads(bj)
-    except: continue
+    except Exception: continue
     if isinstance(bars,list) and bars: code_bars[code]=bars
 kdb.close()
 code_map={}; code_dates={}
