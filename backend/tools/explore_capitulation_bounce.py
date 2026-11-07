@@ -141,11 +141,10 @@ def load_breadth() -> dict[str, dict]:
             for d, b, a, de, t, lu, ld, sr in rows}
 
 
-def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int) -> None:
+def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode: str = "direct") -> None:
     """capitulation-bounce 回测：
-    - 信号日 D: breadth<thresh 或 跌停>ld_thresh（极端恐慌）
-    - 反弹触发: D+1..D+5 内 breadth>50% 或 smallcap_ret 转正
-    - 买入: 触发日 smallcap 等权，持有 hold 天
+    mode='direct'（诚实，无lookahead）: D 日 capitulation 确认 → D+1 买 → 持有 hold 天。
+    mode='trigger'（有lookahead选择偏差，仅对照）: D+1..D+5 内 breadth>50%或sc_ret>0 才买（选择反弹成功的case=tautology）。
     - benchmark: 全期 random-day smallcap 买入持有 hold 天的平均
     - 非重叠 holding block（event edge 口径）
     """
@@ -161,33 +160,33 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int) -> N
     dates = sorted(series.keys())
     date_idx = {d: i for i, d in enumerate(dates)}
     sc_rets = [series[d]["smallcap_ret"] for d in dates]
-    print(f"breadth series: {len(dates)} days ({dates[0]}~{dates[-1]})")
+    print(f"breadth series: {len(dates)} days ({dates[0]}~{dates[-1]}), mode={mode}")
 
     # 找 capitulation 日
     cap_days = [d for d in dates if series[d]["breadth"] < breadth_thresh or series[d]["limit_down"] > ld_thresh]
     print(f"capitulation 日（breadth<{breadth_thresh} 或 跌停>{ld_thresh}）: {len(cap_days)}")
 
-    # 反弹触发 + 买入持有（非重叠 holding block）
     events: list[dict] = []
     last_exit_idx = -1
     for d in cap_days:
         di = date_idx[d]
-        # 找 D+1..D+5 内反弹触发（breadth>50% 或 sc_ret>0）
-        trigger_offset = None
-        for k in range(1, min(6, len(dates) - di)):
-            td = dates[di + k]
-            if series[td]["breadth"] > 0.50 or series[td]["smallcap_ret"] > 0:
-                trigger_offset = k
-                break
-        if trigger_offset is None:
-            continue
-        buy_idx = di + trigger_offset
+        if mode == "direct":
+            buy_idx = di + 1  # D+1 直接买，无 lookahead
+        else:  # trigger (lookahead, 仅对照)
+            trigger_offset = None
+            for k in range(1, min(6, len(dates) - di)):
+                td = dates[di + k]
+                if series[td]["breadth"] > 0.50 or series[td]["smallcap_ret"] > 0:
+                    trigger_offset = k
+                    break
+            if trigger_offset is None:
+                continue
+            buy_idx = di + trigger_offset
         exit_idx = buy_idx + hold
         if exit_idx >= len(dates):
             continue
         if buy_idx <= last_exit_idx:  # 非重叠
             continue
-        # forward hold return = ∏(1+sc_ret) - 1
         fwd = 1.0
         for i in range(buy_idx, exit_idx):
             fwd *= (1 + sc_rets[i])
@@ -202,7 +201,6 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int) -> N
         return
 
     rets = [e["fwd_ret"] for e in events]
-    # benchmark: 全期 random-day 持有 hold 天（按月采样避免重叠）
     bench_rets: list[float] = []
     step = hold
     for i in range(0, len(dates) - hold, step):
@@ -212,7 +210,6 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int) -> N
         bench_rets.append((fwd - 1) * 100)
     bench_mean = statistics.mean(bench_rets) if bench_rets else 0
 
-    # stats
     n = len(rets)
     mean = statistics.mean(rets)
     std = statistics.pstdev(rets) if n > 1 else 0
@@ -221,13 +218,11 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int) -> N
     p = norm_sf_positive(t)
     wr = sum(1 for r in rets if r > 0) / n * 100
     excess = mean - bench_mean
-
-    # walk-forward (event edge: 前50% train, 后50% test by date)
     mid = n // 2
     train, test = rets[:mid], rets[mid:]
 
-    print(f"\n{'='*70}\n=== capitulation-bounce 回测（hold={hold}天，非重叠）===\n{'='*70}")
-    print(f"事件数: {n}（capitulation→反弹触发→持有{hold}天）")
+    print(f"\n{'='*70}\n=== capitulation-bounce 回测（mode={mode}, hold={hold}天，非重叠）===\n{'='*70}")
+    print(f"事件数: {n}")
     print(f"  全期: mean={mean:.3f}% std={std:.3f}% WR={wr:.1f}% t={t:.2f} p_one_sided={p:.4f}")
     print(f"  benchmark(random-day hold={hold}): {bench_mean:.3f}% → excess={excess:.3f}%")
     if train and test:
@@ -238,32 +233,28 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int) -> N
         decay = (tr_m - te_m) / abs(tr_m) * 100 if tr_m != 0 else 0
         print(f"  walk-forward: train n={len(train)} mean={tr_m:.3f}% t={tr_t:.2f} | test n={len(test)} mean={te_m:.3f}% t={te_t:.2f} p={te_p:.4f}")
         print(f"  衰减: {decay:.0f}%")
-    # 抽样事件
     print(f"\n抽样事件（最近5）:")
     for e in events[-5:]:
         print(f"  {e['cap_date']}: breadth={e['breadth_at_cap']:.2%} 跌停={e['ld_at_cap']} → 买{e['buy_date']} 卖{e['exit_date']} ret={e['fwd_ret']:.2f}%")
 
-    # verdict (Bonf×4: 4 holding periods 待测)
     N_BONF = 4
     p_bonf = bonferroni_p(p, N_BONF)
     print(f"\n--- VERDICT（Bonf×{N_BONF}, event edge 口径）---")
     print(f"  excess={excess:.3f}% t={t:.2f} p={p} Bonf×{N_BONF}={p_bonf:.4f}")
     if excess < 0:
-        print(f"  → FALSIFIED: excess {excess:.3f}% < 0（capitulation 买入不如 random-day）")
+        print(f"  → FALSIFIED: excess {excess:.3f}% < 0")
     elif t < 2.9:
-        print(f"  → KILL: excess>0 BUT t={t:.2f}<2.9 不显著")
+        print(f"  → KILL: excess>0 BUT t={t:.2f}<2.9")
     elif p_bonf >= 0.05:
         print(f"  → exploratory: Bonf {p_bonf:.4f}>=0.05")
     else:
-        print(f"  → ✅ edge-confirmed-provisional: excess>0 t>2.9 Bonf PASS（须幸存者+realizable 审查）")
+        print(f"  → ✅ edge-confirmed-provisional（须幸存者+realizable 审查）")
 
-    # 存 result
-    out = {"n_events": n, "hold": hold, "breadth_thresh": breadth_thresh, "ld_thresh": ld_thresh,
-           "mean": round(mean, 3), "excess": round(excess, 3), "t": round(t, 2), "p": p,
-           "wr": round(wr, 1), "bonf_n": N_BONF}
-    p = Path(__file__).parent / "_capitulation_bounce_result.json"
-    p.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"result JSON -> {p}")
+    out = {"mode": mode, "n_events": n, "hold": hold, "mean": round(mean, 3),
+           "excess": round(excess, 3), "t": round(t, 2), "p": p, "wr": round(wr, 1), "bonf_n": N_BONF}
+    pth = Path(__file__).parent / f"_capitulation_bounce_{mode}_h{hold}_result.json"
+    pth.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"result JSON -> {pth}")
 
 
 def main() -> None:
@@ -274,19 +265,19 @@ def main() -> None:
     ap.add_argument("--breadth-thresh", type=float, default=0.05, help="breadth 阈值")
     ap.add_argument("--ld-thresh", type=int, default=50, help="跌停数阈值")
     ap.add_argument("--hold", type=int, default=5, help="持有天数")
+    ap.add_argument("--mode", choices=["direct", "trigger"], default="direct", help="direct=D+1买无lookahead(诚实), trigger=反弹确认才买(有选择偏差,对照)")
     args = ap.parse_args()
     if args.compute:
         print("computing market breadth series (full market pass)...")
         series = compute_breadth_series()
         save_breadth(series)
         print(f"saved {len(series)} days to {BREADTH_DB}")
-        # 抽样 + capitulation 候选日（breadth<5% 或 跌停>50）
         cap_days = [(d, v) for d, v in series.items() if v["breadth"] < 0.05 or v["limit_down"] > 50]
         print(f"\ncapitulation 候选日（breadth<5% 或 跌停>50）: {len(cap_days)}")
         for d, v in sorted(cap_days)[-15:]:
             print(f"  {d}: breadth={v['breadth']:.2%} 跌停={v['limit_down']} 涨停={v['limit_up']} 小盘ret={v['smallcap_ret']:.4%}")
     elif args.backtest:
-        backtest_capitulation(args.breadth_thresh, args.ld_thresh, args.hold)
+        backtest_capitulation(args.breadth_thresh, args.ld_thresh, args.hold, args.mode)
     else:
         print("用 --compute 算 breadth 时序，或 --backtest 跑回测")
 
