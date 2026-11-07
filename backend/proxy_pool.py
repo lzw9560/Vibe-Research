@@ -25,7 +25,7 @@ from typing import Optional
 
 import requests
 
-from config import GENE_SCORES_DB_PATH  # noqa: F401（仅确保 backend 在 path）
+from config import GENE_SCORES_DB_PATH  # noqa: F401
 from vr_paths import resolve_data_dir
 
 logger = logging.getLogger(__name__)

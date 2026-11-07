@@ -516,3 +516,5 @@ def get_screener() -> AuctionScreener:
     if _screener_instance is None:
         _screener_instance = AuctionScreener()
     return _screener_instance
+
+_logger = logging.getLogger(__name__)

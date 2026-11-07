@@ -1,3 +1,4 @@
+import sqlite3
 # -*- coding: utf-8 -*-
 """limitup_sti 服务层 —— STI 引擎核心逻辑。"""
 
