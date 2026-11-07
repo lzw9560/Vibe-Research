@@ -39,7 +39,16 @@ class TestCodeNormalize:
 
 
 class TestFirstLayerFilter:
-    """第一层财务硬过滤（ST + 5 日均成交，一票否决）。"""
+    """第一层财务硬过滤（ST + 5 日均成交，一票否决）。
+
+    test_low_liquidity_blocked 是集成测试（需真实 baostock K线）。
+    """
+    @pytest.fixture(autouse=True)
+    def _check_kline_db(self):
+        from vr_paths import resolve_data_dir
+        kline_db = resolve_data_dir() / "baostock_kline_cache.db"
+        if not kline_db.exists():
+            pytest.skip("无 baostock_kline_cache.db（集成测试需真实 K线数据）")
 
     def test_st_name_blocked(self):
         # Arrange: ST 股（名称含 ST）
@@ -61,7 +70,16 @@ class TestFirstLayerFilter:
 
 
 class TestR34InstitutionalSeat:
-    """R34 龙虎榜机构+外资席位识别（dragon_tiger_history 已有 1 年数据）。"""
+    """R34 龙虎榜机构+外资席位识别（dragon_tiger_history 已有 1 年数据）。
+
+    集成测试——需真实 dragon_tiger_history.db。无 DB 时 skip。
+    """
+    @pytest.fixture(autouse=True)
+    def _check_db(self):
+        from vr_paths import resolve_data_dir
+        db = resolve_data_dir() / "dragon_tiger_history.db"
+        if not db.exists():
+            pytest.skip("无 dragon_tiger_history.db（集成测试需真实数据）")
 
     def test_603778_inst_dominant(self):
         # Arrange: 603778 国晟科技 龙虎榜机构席位主导（沪股通+国泰海通总部+瑞银）
@@ -86,7 +104,17 @@ class TestR34InstitutionalSeat:
 
 
 class TestJsonOutput:
-    """JSON 输出（借鉴安全审查模板 is_passed/risk_level/hit_rules/reason/safe_action）。"""
+    """JSON 输出（借鉴安全审查模板 is_passed/risk_level/hit_rules/reason/safe_action）。
+
+    集成测试——需真实 baostock + dragon_tiger DB。无 DB 时 skip。
+    """
+    @pytest.fixture(autouse=True)
+    def _check_db(self):
+        from vr_paths import resolve_data_dir
+        dt_db = resolve_data_dir() / "dragon_tiger_history.db"
+        kline_db = resolve_data_dir() / "baostock_kline_cache.db"
+        if not dt_db.exists() or not kline_db.exists():
+            pytest.skip("无真实 DB（集成测试需 dragon_tiger + baostock）")
 
     def test_json_has_required_fields(self):
         # Arrange
@@ -123,7 +151,17 @@ class TestJsonOutput:
 
 
 class TestEndToEnd:
-    """端到端：filter_stock 完整流程。"""
+    """端到端：filter_stock 完整流程。
+
+    集成测试——需真实 baostock + dragon_tiger DB。无 DB 时 skip。
+    """
+    @pytest.fixture(autouse=True)
+    def _check_db(self):
+        from vr_paths import resolve_data_dir
+        dt_db = resolve_data_dir() / "dragon_tiger_history.db"
+        kline_db = resolve_data_dir() / "baostock_kline_cache.db"
+        if not dt_db.exists() or not kline_db.exists():
+            pytest.skip("无真实 DB（集成测试需 dragon_tiger + baostock）")
 
     def test_603778_war1_structure(self):
         # Act
