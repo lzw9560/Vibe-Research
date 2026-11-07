@@ -29,12 +29,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _safe_float(v) -> float | None:
-    """安全转 float，None/异常返 None。"""
-    try:
-        return float(v) if v is not None else None
-    except (TypeError, ValueError):
-        return None
 class NotificationFormatterMixin:
     """报告格式化辅助方法集合。"""
 

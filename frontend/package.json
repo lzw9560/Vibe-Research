@@ -39,7 +39,6 @@
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.0",
     "eslint": "^10.14.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^29.1.1",
     "madge": "^8.0.0",
     "openapi-typescript": "^7.13.0",

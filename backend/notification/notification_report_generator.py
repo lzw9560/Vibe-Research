@@ -7,15 +7,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from notification.types import ReportType
 
 if TYPE_CHECKING:
-    from notification.types import ReportType
-    from report_language import (
-        AnalysisResult,
-        get_config,
-        get_report_labels,
-        localize_operation_advice,
-        localize_trend_prediction,
-        normalize_model_used,
-    )
+    pass  # AnalysisResult not needed for report generator
 
 logger = logging.getLogger(__name__)
 
