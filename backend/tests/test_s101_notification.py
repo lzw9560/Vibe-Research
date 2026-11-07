@@ -53,7 +53,11 @@ class TestAuctionNotify:
         assert len(mock_ns.sent) == 0
 
     def test_sends_content_with_gap_pct(self, monkeypatch):
-        """有候选 + quote → 发通知，内容含日期/逐只高开低开/§44 标签。"""
+        """有候选 + quote + kill_switch triggered → 发通知，内容含日期/逐只高开低开/§44 标签。
+
+        P1 降噪（2026-11-05）：常态日竞价表现合并到 09:35 open_notify，
+        只有 kill_switch triggered 时才推竞价通知。测试 mock kill_switch triggered。
+        """
         monkeypatch.setattr("scheduler.notifications._load_final_cards",
             lambda f: [_mock_card("600519", "贵州茅台"), _mock_card("000001", "平安银行")],
         )
@@ -61,6 +65,8 @@ class TestAuctionNotify:
             "600519": {"open": 1800.0, "last_close": 1780.0},
             "000001": {"open": 12.0, "last_close": 12.2},
         })
+        monkeypatch.setattr("scheduler.notifications._check_premarket_kill_switch",
+            lambda: {"triggered": True, "reason": "test_kill_switch", "market_note": "test"})
         mock_ns = _MockNS()
         monkeypatch.setattr("scheduler.notifications._send_notify", lambda c: mock_ns.send(c) or True)
 
