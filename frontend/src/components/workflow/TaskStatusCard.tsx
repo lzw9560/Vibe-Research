@@ -106,7 +106,7 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
       try {
         const detail = await api.scheduledTask(id);
         setDetailCache((prev) => ({ ...prev, [id]: detail }));
-      } catch (e) {
+      } catch (_e) {
         // 加载失败不阻塞展开，详情区显示失败提示
         setDetailCache((prev) => ({ ...prev, [id]: { __error: true } }));
       }
@@ -116,7 +116,7 @@ export function TaskStatusCard({ stage, isTradingDay }: TaskStatusCardProps) {
   // done 项的"载入"按钮：全量 invalidate 触发所有视图 refetch（P2 修复：原 ["workflow"] key 打不中视图数据）
   function handleLoad(e: React.MouseEvent, taskName: string) {
     e.stopPropagation();
-    console.log("[TaskStatusCard] 载入任务产出:", taskName);
+    console.warn("[TaskStatusCard] 载入任务产出:", taskName);
     void queryClient.invalidateQueries();  // 全量 invalidate——过渡窗场景成本可忽略
   }
 

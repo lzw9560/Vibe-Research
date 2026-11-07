@@ -180,7 +180,6 @@ export function JournalLedger() {
   }
   if (drawdown.error) {
     // drawdown 可降级——不影响主 ledger
-    // eslint-disable-next-line no-console
     console.warn("[JournalLedger] drawdown-status error, degrading");
   }
 

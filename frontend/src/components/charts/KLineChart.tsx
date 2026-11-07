@@ -116,7 +116,7 @@ export function KLineChart({ bars, height = 460, showMA = true, category = 4 }: 
     if (!chart) return;
     chartRef.current = chart;
     // eslint-disable-next-line no-console
-    console.log("[KLineChart] init ok", { w: containerRef.current?.clientWidth, h: containerRef.current?.clientHeight });
+    console.warn("[KLineChart] init ok", { w: containerRef.current?.clientWidth, h: containerRef.current?.clientHeight });
 
     // v10: setSymbol 在 init（setPeriod 移数据 useEffect 按 category 动态——日/周/月/60min）
     chart.setSymbol({ ticker: "KLINE", pricePrecision: 2, volumePrecision: 0 });
@@ -149,10 +149,10 @@ export function KLineChart({ bars, height = 460, showMA = true, category = 4 }: 
     chart.setDataLoader({
       getBars: ({ callback, type }) => {
         // eslint-disable-next-line no-console
-        console.log("[KLineChart] getBars", { type, kdataLen: kdata.length, first: kdata[0] });
+        console.warn("[KLineChart] getBars", { type, kdataLen: kdata.length, first: kdata[0] });
         callback(kdata, false);
       },
-      subscribeBar: () => { console.log("[KLineChart] subscribeBar called"); },
+      subscribeBar: () => { console.warn("[KLineChart] subscribeBar called"); },
       unsubscribeBar: () => {},
     });
     // 默认显示最新交易日（滚到最右=最新 bar，用户要"最后一个交易日的 K 线"）
