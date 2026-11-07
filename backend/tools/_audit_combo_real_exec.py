@@ -62,11 +62,24 @@ def build_by_date() -> dict:
                 continue  # 剔北交
             if today_ret >= bl:
                 continue  # 剔涨停（ratio 口径 (c-prev_c)/prev_c >= board_limit）
-            t1_open = float(bars[i + 1].get("open", 0) or 0)
+            t1_bar = bars[i + 1]
+            t1_open = float(t1_bar.get("open", 0) or 0)
+            t1_high = float(t1_bar.get("high", 0) or 0)
+            t1_low = float(t1_bar.get("low", 0) or 0)
+            t1_vol = float(t1_bar.get("volume", 0) or 0)
             t5_close = float(bars[i + 5].get("close", 0) or 0)
             t_close = c
             if not t1_open or not t5_close:
                 continue
+            # P0 修高危④(2026-11-06 backtest-guard)：T+1 入场日涨停/停牌检查
+            # 信号日(T)已滤涨停，但入场日(T+1)未滤——T+1 一字涨停/停牌不可买但回测成交，系统性高估可交易 picks
+            if t1_vol <= 0:
+                continue  # T+1 停牌(volume=0)不可买
+            t1_gap = (t1_open - t_close) / t_close if t_close else 0  # T+1 open vs T 日 close（A 股涨停基准是前日收盘）
+            if t1_gap >= bl:
+                continue  # T+1 open 涨停(高开>=board_limit)不可买
+            if t1_open == t1_high == t1_low and t1_gap >= bl * 0.98:
+                continue  # T+1 一字板(open=high=low 近涨停)不可买
             real_exec = (t5_close - t1_open) / t1_open  # T+1 open → T+5 close
             close_close = (t5_close - t_close) / t_close  # T close → T+5 close
             by_date[bars[i].get("date", "")].append({
