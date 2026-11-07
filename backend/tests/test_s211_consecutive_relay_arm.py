@@ -46,6 +46,17 @@ def _x1dot0_unlock_env(monkeypatch):
     monkeypatch.setenv("VR_ALLOW_X1DOT0", "1")
 
 
+@pytest.fixture(autouse=True)
+def _mock_earnings_season_safe(monkeypatch):
+    """mock is_earnings_season_unsafe 返回 False——测试测的是 unbuyable/gap 逻辑，
+    不是 earnings blacklist 逻辑。测试用 2026-01-15 在 1 月（DANGER_MONTH）会被
+    earnings blacklist 拦截到不了 unbuyable 检查。"""
+    monkeypatch.setattr(
+        "routers.earnings_calendar.is_earnings_season_unsafe",
+        lambda code, date: False,
+    )
+
+
 def _make_gap_bars(signal_date: str = "2026-01-15") -> list[dict]:
     """2 天 bars: D=signal_date close=10.0, D+1 open=10.2（gap +2%, 非一字板）。"""
     return [
