@@ -688,3 +688,75 @@ def test_intraday_no_signal(monkeypatch):
     card = cards.build_intraday_card()
     no_signal = [e for e in card["elements"] if e.get("tag") == "markdown" and "无RSI信号" in e.get("content", "")]
     assert len(no_signal) > 0
+
+
+# ─── premarket 回撤诊断永久锁定 + peak衰减 ───
+
+def test_premarket_drawdown_permanently_locked(monkeypatch):
+    """premarket 回撤永久锁定时卡片含peak衰减方案。"""
+    monkeypatch.setattr(cards, "get_index_snapshot", lambda: [_index()])
+    monkeypatch.setattr(cards, "get_hot_stocks", lambda: [])
+    monkeypatch.setattr(cards, "get_dragon_tiger", lambda: [])
+    monkeypatch.setattr(cards, "get_limit_up_ladder", lambda: [_ladder_item()])
+    monkeypatch.setattr(cards, "get_skyrocket", lambda: [])
+    monkeypatch.setattr(cards, "scan_group_a_stocks", lambda: [])
+    monkeypatch.setattr(cards, "check_buy_signals", lambda: [])
+    monkeypatch.setattr(cards, "calculate_sentiment_score", lambda: _sentiment_data())
+
+    # mock RSI API 失败
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("no rsi")))
+
+    # mock backend.strategies.tail_dip_engine 在 sys.modules
+    import sys
+    from unittest.mock import MagicMock as _MM
+    mock_engine = _MM()
+    mock_diag = _MM()
+    mock_diag.is_permanently_locked = True
+    mock_diag.diagnosis = "peak decay needed"
+    mock_engine.diagnose_drawdown_lock.return_value = mock_diag
+    mock_proposal = _MM()
+    mock_proposal.current_peak = 100000
+    mock_proposal.proposed_peak = 90000
+    mock_proposal.decay_factor = 0.9
+    mock_proposal.trigger_reason = "drawdown > 20%"
+    mock_proposal.recommendation = "reduce peak"
+    mock_engine.propose_peak_decay.return_value = mock_proposal
+
+    # 注入 mock 模块
+    sys.modules["backend.strategies.tail_dip_engine"] = mock_engine
+
+    # mock drawdown-status API
+    import io
+    class _MockResp:
+        def __init__(self, data):
+            self._data = data
+        def read(self):
+            return self._data
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    dd_data = json.dumps({
+        "portfolio": {"equity": 75000, "peak": 100000, "drawdown_pct": -25.0,
+                       "days_tracked": 60, "size_multiplier": 0.3}
+    }).encode()
+
+    def _fake_urlopen(req, timeout=None):
+        url = req.full_url if hasattr(req, "full_url") else str(req)
+        if "drawdown-status" in url:
+            return _MockResp(dd_data)
+        raise OSError("no api")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    card = cards.build_premarket_card()
+    # 应含回撤诊断 + peak衰减
+    dd_elements = [e for e in card["elements"] if e.get("tag") == "markdown" and "永久锁定" in e.get("content", "")]
+    assert len(dd_elements) > 0
+    peak_elements = [e for e in card["elements"] if e.get("tag") == "markdown" and "peak衰减" in e.get("content", "")]
+    assert len(peak_elements) > 0
+
+    # 清理 mock 模块
+    del sys.modules["backend.strategies.tail_dip_engine"]
