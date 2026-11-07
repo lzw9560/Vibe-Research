@@ -326,6 +326,40 @@ def test_scan_sector_fallback_to_index(monkeypatch, _mock_engine):
     assert isinstance(result, list)
 
 
+def test_scan_sector_all_none_falls_to_index(monkeypatch, _mock_engine):
+    """所有股票 chg=None → valid_stocks 空 → 走 else 深证成指降级路径。"""
+    stocks = [
+        {"thscode": "600001.SH", "price_change_ratio_pct": None, "turnover": 3e8, "last_price": 10.0},
+        {"thscode": "600002.SH", "price_change_ratio_pct": None, "turnover": 2e8, "last_price": 8.0},
+    ]
+    monkeypatch.setattr(scanners, "get_market_snapshot_all", lambda: stocks)
+    monkeypatch.setattr(scanners, "get_index_snapshot", lambda: [
+        {"thscode": "399001.SZ", "price_change_ratio_pct": 0.5}
+    ])
+    _mock_engine.calculate_anomalous_deviation.return_value = _anomalous_result(
+        "600001.SH", is_anomalous=True
+    )
+    _mock_engine.financial_red_line_shield.return_value = _redline_result(passed=True)
+    result = scanners.scan_strategy4_tail_drop()
+    # 所有 chg=None → 走深证成指降级 → 不崩溃
+    assert isinstance(result, list)
+
+
+def test_scan_sector_all_none_no_index(monkeypatch, _mock_engine):
+    """所有 chg=None + 无指数 → sector_change_pct=0（降级无数据）。"""
+    stocks = [
+        {"thscode": "600001.SH", "price_change_ratio_pct": None, "turnover": 3e8, "last_price": 10.0},
+    ]
+    monkeypatch.setattr(scanners, "get_market_snapshot_all", lambda: stocks)
+    monkeypatch.setattr(scanners, "get_index_snapshot", lambda: [])
+    _mock_engine.calculate_anomalous_deviation.return_value = _anomalous_result(
+        "600001.SH", is_anomalous=True
+    )
+    _mock_engine.financial_red_line_shield.return_value = _redline_result(passed=True)
+    result = scanners.scan_strategy4_tail_drop()
+    assert isinstance(result, list)
+
+
 # ─── 成交额转亿 ───
 
 def test_scan_turnover_in_yi(monkeypatch, _mock_engine):
