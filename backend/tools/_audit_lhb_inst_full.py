@@ -71,7 +71,7 @@ def compute_stop_intraday(code: str, trade_date: str, kline_cache: dict) -> tupl
     if code not in kline_cache:
         kline_cache[code] = load_kline(code)
     bars = kline_cache[code]
-    after = [b for b in bars if b.get("date", "") > trade_date]
+    after = [b for b in bars if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
     if len(after) < 2:
         return None, None
     t1 = after[0]
@@ -172,5 +172,78 @@ def audit_full() -> None:
         print()
 
 
+def compute_nostop_return(code: str, trade_date: str, kline_cache: dict) -> float | None:
+    """T+1 open 买 → T+2 close 卖 nostop（S236 基础版口径）。"""
+    if code not in kline_cache:
+        kline_cache[code] = load_kline(code)
+    bars = kline_cache[code]
+    after = [b for b in bars if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
+    if len(after) < 2:
+        return None
+    t1, t2 = after[0], after[1]
+    o = t1.get("open")
+    tc = t2.get("close")
+    if not o or o <= 0 or not tc:
+        return None
+    return (tc / o - 1) * 100
+
+
+def audit_top6_combo(mode: str = "basic") -> dict:
+    """inst_dominant >80% top6 nostop 回测（S236 基础版/进阶版，可重复跑复现）。
+
+    mode: "basic"（>80%+top6按机构金额+nostop，回测 mean+0.457% WR54.9%）/
+          "advanced"（+追高change_rate>=0+外资>30%+中价20-100，回测 mean+0.879% WR56.0% post-hoc）。
+    返回日组合 stats。
+    """
+    import sqlite3  # noqa: PLC0415
+    from collections import defaultdict  # noqa: PLC0415
+    foreign_kw = ("高盛", "瑞银", "股通", "摩根", "国际金融", "总部")
+    conn = sqlite3.connect(str(DT_DB))
+    rows = conn.execute(
+        "SELECT trade_date, security_code, dept_name, buy, change_rate, close_price "
+        "FROM dragon_tiger_rows WHERE side='buy' AND buy>0"
+    ).fetchall()
+    conn.close()
+    picks: dict = defaultdict(list)
+    for d, c, dept, buy, chg, cp in rows:
+        picks[(d, c)].append((dept or "", buy or 0, chg, cp))
+    day_picks: dict = defaultdict(list)
+    for (d, c), seats in picks.items():
+        total = sum(s[1] for s in seats)
+        if total <= 0:
+            continue
+        ibuy = sum(s[1] for s in seats if any(k in s[0] for k in INST_KEYWORDS))
+        chg = seats[0][2]
+        cp = seats[0][3]
+        if ibuy / total <= 0.8 or chg is None or not cp:
+            continue
+        fbuy = sum(s[1] for s in seats if any(k in s[0] for k in foreign_kw))
+        if mode == "advanced":
+            if chg < 0 or fbuy / total <= 0.3 or not (20 <= cp <= 100):
+                continue
+        day_picks[d].append((c, ibuy))
+    kc: dict = {}
+    day_means: list = []
+    for d, cands in day_picks.items():
+        top6 = sorted(cands, key=lambda x: -x[1])[:6]
+        rs = [compute_nostop_return(c, d, kc) for c, _ in top6]
+        rs = [r for r in rs if r is not None]
+        if rs:
+            day_means.append(sum(rs) / len(rs))
+    if not day_means:
+        return {"mode": mode, "n_days": 0}
+    day_means.sort()
+    return {
+        "mode": mode,
+        "n_days": len(day_means),
+        "mean": round(sum(day_means) / len(day_means), 3),
+        "wr": round(sum(1 for m in day_means if m > 0) / len(day_means) * 100, 1),
+        "median": round(day_means[len(day_means) // 2], 3),
+    }
+
+
 if __name__ == "__main__":
     audit_full()
+    print("\n=== S236 top6 combo ===")
+    for m in ("basic", "advanced"):
+        print(f"  {m}: {audit_top6_combo(m)}")
