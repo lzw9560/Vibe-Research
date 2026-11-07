@@ -152,8 +152,23 @@ def run_cli(cmd: str) -> dict | None:
         return None
 
 
-def send_feishu(card: dict) -> bool:
-    """发送飞书卡片消息。"""
+HEALTHCHECKS_URL = os.getenv("VR_HEALTHCHECKS_URL", "")
+
+
+def ping_healthchecks(success: bool, mode: str) -> None:
+    """推送结果 ping healthchecks.io（成功 ping /endpoint，失败 ping /endpoint/fail）。"""
+    if not HEALTHCHECKS_URL:
+        return
+    import urllib.request
+    url = HEALTHCHECKS_URL.rstrip("/") + ("/" if success else "/fail")
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=5)
+    except Exception:
+        pass  # healthchecks 失败不影响主流程
+
+
+def send_feishu(card: dict, mode: str = "") -> bool:
+    """发送飞书卡片消息。失败时记详细日志 + ping healthchecks。"""
     import urllib.request
 
     payload = json.dumps({"msg_type": "interactive", "card": card}).encode("utf-8")
@@ -161,9 +176,16 @@ def send_feishu(card: dict) -> bool:
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read())
-            return result.get("code") == 0 or result.get("StatusCode") == 0
+            ok = result.get("code") == 0 or result.get("StatusCode") == 0
+            if ok:
+                ping_healthchecks(True, mode)
+            else:
+                print(f"飞书返回非零: {result}", flush=True)
+                ping_healthchecks(False, mode)
+            return ok
     except Exception as e:
-        print(f"发送失败: {e}")
+        print(f"发送失败: {e}", flush=True)
+        ping_healthchecks(False, mode)
         return False
 
 
@@ -1157,11 +1179,11 @@ def main():
     }
 
     card = builders[args.mode]()
-    ok = send_feishu(card)
+    ok = send_feishu(card, mode=args.mode)
     if ok:
-        print(f"✅ 推送成功 ({args.mode})")
+        print(f"✅ 推送成功 ({args.mode})", flush=True)
     else:
-        print(f"❌ 推送失败 ({args.mode})")
+        print(f"❌ 推送失败 ({args.mode})", flush=True)
         sys.exit(1)
 
 
