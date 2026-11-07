@@ -51,41 +51,217 @@ def resolve_reports_dir() -> Path:
 # ---------- 交易日判断（S023 C1）----------
 
 from datetime import date, datetime as _dt, time as _time, timedelta as _td, timezone as _tz
+import json
+import logging
 
 #: 北京时区 UTC+8——所有"当前时刻"判断统一用此，杜绝 naive datetime 时区 bug
 BEIJING_TZ = _tz(_td(hours=8))
 
-# A 股法定节假日（YYYY-MM-DD）。仅列固定日期节假日，调休补班日单独标。
-# 此列表保守列举已知节假日，后续可接交易日历库扩展（留扩展位）。
-_A_SHARE_HOLIDAYS: set[str] = {
-    # 元旦
+#: 交易日历缓存文件路径（与 calendar_factor.py 共用，由 scripts/refresh_trade_calendar.py 刷新）
+_HOLIDAYS_JSON_PATH: Path = Path(__file__).resolve().parent / "data" / "holidays.json"
+
+#: 缓存过期阈值（天）——超过此天数视为过期，触发 akshare 刷新
+_HOLIDAYS_CACHE_MAX_AGE_DAYS = 30
+
+#: A 股法定节假日硬编码 fallback（YYYY-MM-DD）。仅列工作日休市日（周末由 weekday 判断覆盖）。
+#: 用途：holidays.json 不存在/损坏/akshare 拉取失败时的最后兜底。
+#: 注意：akshare tool_trade_date_hist_sina 数据通常只到当年末，次年节假日须次年放假安排公布后补充。
+#: 2027-01-01 元旦已预先加入（akshare 当前无 2027 数据，元旦是固定节假日，可预先标）。
+_A_SHARE_HOLIDAYS_FALLBACK: set[str] = {
+    # 2026 元旦
     "2026-01-01",
-    # 春节
+    # 2026 春节
     "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20",
-    # 清明
+    # 2026 清明
     "2026-04-06",
-    # 劳动节
+    # 2026 劳动节
     "2026-05-04", "2026-05-05", "2026-05-06",
-    # 端午
+    # 2026 端午
     "2026-06-19",
-    # 中秋
+    # 2026 中秋
     "2026-09-25",
-    # 国庆
+    # 2026 国庆
     "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08",
+    # 2027 元旦（固定节假日，akshare 当前无 2027 数据，预先标以防次年误判）
+    "2027-01-01",
 }
+
+#: 加载后的节假日集合（模块级缓存，首次调用 is_trading_day 时懒加载）
+_A_SHARE_HOLIDAYS: set[str] | None = None
+
+_logger = logging.getLogger("vibe-research")
+
+
+def _is_holidays_cache_fresh(meta: dict) -> bool:
+    """判断 holidays.json 的 _meta.updated 是否在 30 天内。
+
+    缓存新鲜度判据：``_meta.updated`` 字段距今天 <= _HOLIDAYS_CACHE_MAX_AGE_DAYS 天。
+    缺字段视为过期（触发刷新）。
+    """
+    updated_str = meta.get("updated")
+    if not updated_str:
+        return False
+    try:
+        updated_date = date.fromisoformat(str(updated_str)[:10])
+    except ValueError:
+        return False
+    age_days = (date.today() - updated_date).days
+    return age_days <= _HOLIDAYS_CACHE_MAX_AGE_DAYS
+
+
+def _load_holidays_from_json() -> set[str] | None:
+    """从 holidays.json 加载 non_trading_days 字段。
+
+    返回 None 表示文件不存在/损坏/缺字段/已过期（调用方应尝试 akshare 刷新或 fallback）。
+    缓存过期不在此刷新——此函数只做"读缓存"，刷新逻辑在 _ensure_holidays_loaded。
+    """
+    if not _HOLIDAYS_JSON_PATH.exists():
+        return None
+    try:
+        data = json.loads(_HOLIDAYS_JSON_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        _logger.warning("[vr_paths] holidays.json 解析失败: %s，将 fallback 硬编码", e)
+        return None
+    meta = data.get("_meta", {}) or {}
+    if not _is_holidays_cache_fresh(meta):
+        _logger.info(
+            "[vr_paths] holidays.json 缓存已过期（updated=%s），将尝试 akshare 刷新",
+            meta.get("updated"),
+        )
+        return None
+    days = data.get("non_trading_days")
+    if not isinstance(days, list) or not days:
+        return None
+    return {str(d) for d in days}
+
+
+def _refresh_holidays_via_akshare() -> bool:
+    """用 akshare 拉取最新交易日历并写入 holidays.json。
+
+    成功返回 True，失败返回 False（调用方 fallback 到硬编码）。
+    与 scripts/refresh_trade_calendar.py 共用同一逻辑。
+    """
+    try:
+        import akshare as ak  # 延迟导入，避免模块加载时触发网络
+    except ImportError:
+        _logger.warning("[vr_paths] akshare 未安装，无法自动刷新交易日历")
+        return False
+    try:
+        df = ak.tool_trade_date_hist_sina()
+        trade_days = set(str(d) for d in df["trade_date"])
+    except Exception as e:
+        _logger.warning("[vr_paths] akshare 拉取交易日历失败: %s，将 fallback 硬编码", e)
+        return False
+
+    # 反推工作日休市日（近 2 年）
+    years_with_data = sorted({d[:4] for d in trade_days})
+    target_years = years_with_data[-2:]
+    non_trading: list[str] = []
+    from datetime import timedelta as _td_inner
+    for y in target_years:
+        cur = date(int(y), 1, 1)
+        end = date(int(y), 12, 31)
+        while cur <= end:
+            if cur.weekday() < 5 and cur.isoformat() not in trade_days:
+                non_trading.append(cur.isoformat())
+            cur += _td_inner(days=1)
+
+    # 读现有 JSON 保留 calendar_factor 依赖的字段，只更新 non_trading_days + _meta
+    try:
+        if _HOLIDAYS_JSON_PATH.exists():
+            data = json.loads(_HOLIDAYS_JSON_PATH.read_text(encoding="utf-8"))
+        else:
+            data = {}
+    except (json.JSONDecodeError, OSError):
+        data = {}
+    data.setdefault("_meta", {})
+    data["_meta"]["updated"] = date.today().isoformat()
+    data["_meta"]["source"] = "akshare tool_trade_date_hist_sina + 国务院放假安排"
+    if non_trading:
+        years = sorted({d[:4] for d in non_trading})
+        data["_meta"]["trade_calendar_range"] = f"{years[0]}-{years[-1]}"
+    data["non_trading_days"] = non_trading
+    try:
+        _HOLIDAYS_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _HOLIDAYS_JSON_PATH.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        _logger.info(
+            "[vr_paths] 已用 akshare 刷新 holidays.json（%d 个工作日休市日）", len(non_trading)
+        )
+        return True
+    except OSError as e:
+        _logger.warning("[vr_paths] holidays.json 写入失败: %s，将 fallback 硬编码", e)
+        return False
+
+
+def _ensure_holidays_loaded() -> set[str]:
+    """懒加载节假日集合，优先级：holidays.json 缓存 > akshare 刷新 > 硬编码 fallback。
+
+    返回最终生效的节假日 set（已缓存到模块级 _A_SHARE_HOLIDAYS）。
+    三级降级保证：
+    1. holidays.json 存在且未过期 → 直接加载 non_trading_days
+    2. 过期/缺失 → akshare 拉取并写回 holidays.json，再加载
+    3. akshare 失败 → 仅用硬编码 _A_SHARE_HOLIDAYS_FALLBACK
+
+    关键设计：JSON 缓存与硬编码 fallback **取并集**，而非二选一。原因——
+    akshare 交易日历通常只到当年末，次年节假日（如 2027 元旦）须靠硬编码覆盖。
+    JSON 的 non_trading_days 是"近期已确认休市日"，硬编码是"长期固定节假日兜底"，
+    两者覆盖不同时间范围，并集才能既准确（近期）又不漏（远期固定节假日）。
+    """
+    global _A_SHARE_HOLIDAYS
+    if _A_SHARE_HOLIDAYS is not None:
+        return _A_SHARE_HOLIDAYS
+
+    # 始终以硬编码 fallback 为基底（覆盖 JSON 数据范围外的固定节假日，如 2027 元旦）
+    merged: set[str] = set(_A_SHARE_HOLIDAYS_FALLBACK)
+
+    # 1. 尝试从缓存加载并合并
+    cached = _load_holidays_from_json()
+    if cached is not None:
+        merged |= cached
+        _A_SHARE_HOLIDAYS = merged
+        return _A_SHARE_HOLIDAYS
+
+    # 2. 缓存过期/缺失 → akshare 刷新
+    if _refresh_holidays_via_akshare():
+        refreshed = _load_holidays_from_json()
+        if refreshed is not None:
+            merged |= refreshed
+            _A_SHARE_HOLIDAYS = merged
+            return _A_SHARE_HOLIDAYS
+
+    # 3. akshare 也失败 → 仅用硬编码兜底（merged 已是 fallback）
+    _logger.warning(
+        "[vr_paths] 交易日历缓存与 akshare 刷新均失败，使用硬编码 fallback（%d 个节假日）",
+        len(merged),
+    )
+    _A_SHARE_HOLIDAYS = merged
+    return _A_SHARE_HOLIDAYS
 
 
 def is_trading_day(d: date | None = None) -> bool:
     """判断是否 A 股交易日（周一至周五且非法定节假日）。
 
-    保守实现：仅排除周末 + 已知节假日。调休补班日（周末补班）未纳入，
-    量级极小且偶发，非交易日时因子会用上一交易日，影响可忽略。
-    扩展位：后续接交易日历库时替换此实现。
+    实现细节（2026-11-07 修复硬编码过期问题）：
+    - 节假日来源三级降级：holidays.json 缓存 → akshare 刷新 → 硬编码 fallback。
+    - holidays.json 由 scripts/refresh_trade_calendar.py 维护，含 non_trading_days 字段
+      （工作日休市日，周末由 weekday 判断覆盖不重复列）。
+    - 调休补班日（周末补班）未纳入，量级极小且偶发，非交易日时因子会用上一交易日，影响可忽略。
+    - d 可传 ``date`` 对象或 ``YYYY-MM-DD`` 字符串（字符串内部转 date，向后兼容调用方）。
     """
-    d = d or date.today()
+    if d is None:
+        d = date.today()
+    elif isinstance(d, str):
+        # 容忍字符串输入（YYYY-MM-DD），转 date 后判断
+        try:
+            d = date.fromisoformat(d)
+        except ValueError:
+            return False  # 非法日期字符串保守判非交易日
     if d.weekday() >= 5:  # 周六 5 / 周日 6
         return False
-    return d.isoformat() not in _A_SHARE_HOLIDAYS
+    holidays = _ensure_holidays_loaded()
+    return d.isoformat() not in holidays
 
 
 #: A 股盘中交易时段（S103 下沉自 seal_intraday_collector，供 data/sources 复用避免循环 import）
