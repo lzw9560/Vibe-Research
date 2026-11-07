@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -112,3 +113,103 @@ def test_load_trade_calendar_caches(monkeypatch):
     first = calendar.load_trade_calendar()
     second = calendar.load_trade_calendar()
     assert first is second  # 内存缓存生效
+
+
+# ─── refresh_trade_calendar 异常路径 ───
+
+def test_refresh_calendar_timeout(monkeypatch):
+    """refresh_trade_calendar 超时不崩，记日志。"""
+    import subprocess
+    def _timeout(*a, **kw):
+        raise subprocess.TimeoutExpired(cmd="test", timeout=30)
+    monkeypatch.setattr(subprocess, "run", _timeout)
+    # 不应抛异常
+    calendar.refresh_trade_calendar()
+
+
+def test_refresh_calendar_generic_exception(monkeypatch):
+    """refresh_trade_calendar 其他异常不崩，记日志。"""
+    import subprocess
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(OSError("test")))
+    calendar.refresh_trade_calendar()
+
+
+def test_refresh_calendar_success(monkeypatch):
+    """refresh_trade_calendar 正常执行。"""
+    import subprocess
+    mock_result = subprocess.CompletedProcess(args=[], returncode=0, stdout='{"data":{"item":[]}}', stderr="")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: mock_result)
+    calendar.refresh_trade_calendar()
+
+
+# ─── load_trade_calendar 文件系统路径 ───
+
+def test_load_calendar_cache_expired(monkeypatch, tmp_path):
+    """缓存过期（>30天）触发刷新。"""
+    cache_file = tmp_path / "trade_calendar.json"
+    cache_file.write_text(json.dumps({"data": {"item": [{"date": "20261109"}]}}))
+    # Set mtime to 31 days ago
+    import time as _time
+    old_time = _time.time() - 31 * 86400
+    import os
+    os.utime(cache_file, (old_time, old_time))
+
+    monkeypatch.setattr(calendar, "CALENDAR_CACHE", cache_file)
+    monkeypatch.setattr(calendar, "CALENDAR_DATES", None)
+    refresh_called = []
+    monkeypatch.setattr(calendar, "refresh_trade_calendar", lambda: refresh_called.append(True))
+
+    result = calendar.load_trade_calendar()
+    assert len(refresh_called) == 1  # 触发了刷新
+    assert "20261109" in result
+
+
+def test_load_calendar_file_corrupt(monkeypatch, tmp_path):
+    """缓存文件损坏返回空 set。"""
+    cache_file = tmp_path / "trade_calendar.json"
+    cache_file.write_text("not valid json")
+
+    monkeypatch.setattr(calendar, "CALENDAR_CACHE", cache_file)
+    monkeypatch.setattr(calendar, "CALENDAR_DATES", None)
+    monkeypatch.setattr(calendar, "refresh_trade_calendar", lambda: None)
+
+    result = calendar.load_trade_calendar()
+    assert result == set()
+
+
+def test_load_calendar_file_not_found(monkeypatch):
+    """缓存文件不存在 + 刷新后仍不存在 → 空 set。"""
+    monkeypatch.setattr(calendar, "CALENDAR_CACHE", Path("/tmp/__nonexistent_12345__.json"))
+    monkeypatch.setattr(calendar, "CALENDAR_DATES", None)
+    monkeypatch.setattr(calendar, "refresh_trade_calendar", lambda: None)
+
+    result = calendar.load_trade_calendar()
+    assert result == set()
+
+
+def test_load_calendar_alt_structure(monkeypatch, tmp_path):
+    """兼容 item 在顶层的 JSON 结构。"""
+    cache_file = tmp_path / "trade_calendar.json"
+    cache_file.write_text(json.dumps({"item": [{"date": "20261109"}, {"date": "20261110"}]}))
+
+    monkeypatch.setattr(calendar, "CALENDAR_CACHE", cache_file)
+    monkeypatch.setattr(calendar, "CALENDAR_DATES", None)
+    monkeypatch.setattr(calendar, "refresh_trade_calendar", lambda: None)
+
+    result = calendar.load_trade_calendar()
+    assert "20261109" in result
+    assert "20261110" in result
+
+
+def test_load_calendar_missing_date_field(monkeypatch, tmp_path):
+    """item 缺 date 字段时跳过不崩。"""
+    cache_file = tmp_path / "trade_calendar.json"
+    cache_file.write_text(json.dumps({"data": {"item": [{"date": "20261109"}, {"no_date": True}]}}))
+
+    monkeypatch.setattr(calendar, "CALENDAR_CACHE", cache_file)
+    monkeypatch.setattr(calendar, "CALENDAR_DATES", None)
+    monkeypatch.setattr(calendar, "refresh_trade_calendar", lambda: None)
+
+    result = calendar.load_trade_calendar()
+    assert "20261109" in result
+    assert len(result) == 1  # 只有 1 个有效日期
