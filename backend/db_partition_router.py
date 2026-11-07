@@ -24,7 +24,7 @@ import datetime as _dt
 import logging
 import os
 
-from config import seal_intraday_db_path
+from config import seal_intraday_db_path, PRIVATE_DATA_DIR, SEAL_INTRADAY_DIR  # noqa: F401 (used by test monkeypatch)
 from db_health import get_healthy_conn
 
 _logger = logging.getLogger(__name__)
