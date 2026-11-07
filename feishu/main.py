@@ -76,8 +76,8 @@ def main() -> None:
         now = datetime.now(CST)
         if not is_trading_day(now):
             date_str = now.strftime("%Y-%m-%d")
-            weekday_name = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][now.weekday()]
-            print(f"⏭️ {date_str} {weekday_name}，非交易日，跳过推送（--force 可强制）")
+            weekday_name = ["周一","周二","周三","周四","周五","周六","周日"][now.weekday()]
+            logger.info("⏭️ %s %s，非交易日，跳过推送（--force 可强制）", date_str, weekday_name)
             return
 
     builder = BUILDERS.get(args.mode)
@@ -88,9 +88,9 @@ def main() -> None:
     card = builder()
     ok = send_feishu(card, mode=args.mode)
     if ok:
-        print(f"✅ 推送成功 ({args.mode})", flush=True)
+        logger.info("✅ 推送成功 (%s)", args.mode)
     else:
-        print(f"❌ 推送失败 ({args.mode})", flush=True)
+        logger.error("❌ 推送失败 (%s)", args.mode)
         sys.exit(1)
 
 

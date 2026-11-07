@@ -90,37 +90,37 @@ def test_main_test_mode_on_non_trading_day(monkeypatch, capsys):
 
 # ─── main() 非交易日跳过 ───
 
-def test_main_non_trading_day_skips(monkeypatch, capsys):
+def test_main_non_trading_day_skips(monkeypatch, caplog):
     """非交易日 + 非 test 模式 + 无 --force → 跳过推送。"""
     monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: False)
     send_mock = MagicMock(return_value=True)
     monkeypatch.setattr(main_mod, "send_feishu", send_mock)
 
     monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "premarket"])
-    main()
+    with caplog.at_level("INFO"):
+        main()
 
     # send_feishu 不应被调用
     send_mock.assert_not_called()
-    out = capsys.readouterr().out
-    assert "非交易日" in out or "跳过" in out
+    assert "非交易日" in caplog.text or "跳过" in caplog.text
 
 
-def test_main_non_trading_day_prints_weekday(monkeypatch, capsys):
+def test_main_non_trading_day_prints_weekday(monkeypatch, caplog):
     """跳过消息含日期和星期。"""
     monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: False)
     monkeypatch.setattr(main_mod, "send_feishu", MagicMock())
 
     monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "premarket"])
-    main()
+    with caplog.at_level("INFO"):
+        main()
 
-    out = capsys.readouterr().out
     # 应含日期格式 YYYY-MM-DD 和周X
-    assert "周" in out
+    assert "周" in caplog.text
 
 
 # ─── main() --force 强制推送 ───
 
-def test_main_force_overrides_non_trading_day(monkeypatch, capsys):
+def test_main_force_overrides_non_trading_day(monkeypatch, caplog):
     """--force 在非交易日仍推送。"""
     monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: False)
     send_mock = MagicMock(return_value=True)
@@ -128,16 +128,16 @@ def test_main_force_overrides_non_trading_day(monkeypatch, capsys):
     monkeypatch.setattr(main_mod, "BUILDERS", {"premarket": lambda: {}})
 
     monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "premarket", "--force"])
-    main()
+    with caplog.at_level("INFO"):
+        main()
 
     send_mock.assert_called_once()
-    out = capsys.readouterr().out
-    assert "推送成功" in out
+    assert "推送成功" in caplog.text
 
 
 # ─── main() 交易日正常推送 ───
 
-def test_main_trading_day_normal_push(monkeypatch, capsys):
+def test_main_trading_day_normal_push(monkeypatch, caplog):
     """交易日 + 正常 mode → 推送。"""
     monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: True)
     send_mock = MagicMock(return_value=True)
@@ -145,40 +145,40 @@ def test_main_trading_day_normal_push(monkeypatch, capsys):
     monkeypatch.setattr(main_mod, "BUILDERS", {"premarket": lambda: {"header": {}, "elements": []}})
 
     monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "premarket"])
-    main()
+    with caplog.at_level("INFO"):
+        main()
 
     send_mock.assert_called_once()
-    out = capsys.readouterr().out
-    assert "推送成功" in out
-    assert "premarket" in out
+    assert "推送成功" in caplog.text
+    assert "premarket" in caplog.text
 
 
 # ─── main() send_feishu 失败 ───
 
-def test_main_send_fail_exits_nonzero(monkeypatch, capsys):
-    """send_feishu 返回 False → print 失败 + sys.exit(1)。"""
+def test_main_send_fail_exits_nonzero(monkeypatch, caplog):
+    """send_feishu 返回 False → log 失败 + sys.exit(1)。"""
     monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: True)
     monkeypatch.setattr(main_mod, "send_feishu", MagicMock(return_value=False))
     monkeypatch.setattr(main_mod, "BUILDERS", {"premarket": lambda: {}})
 
     monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "premarket"])
-    with pytest.raises(SystemExit) as exc_info:
-        main()
-    assert exc_info.value.code == 1
-    out = capsys.readouterr().out
-    assert "推送失败" in out
+    with caplog.at_level("ERROR"):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 1
+    assert "推送失败" in caplog.text
 
 
-def test_main_send_success_no_exit(monkeypatch, capsys):
+def test_main_send_success_no_exit(monkeypatch, caplog):
     """send_feishu 返回 True → 不 exit。"""
     monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: True)
     monkeypatch.setattr(main_mod, "send_feishu", MagicMock(return_value=True))
     monkeypatch.setattr(main_mod, "BUILDERS", {"premarket": lambda: {}})
 
     monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "premarket"])
-    main()  # 不抛 SystemExit
-    out = capsys.readouterr().out
-    assert "推送成功" in out
+    with caplog.at_level("INFO"):
+        main()  # 不抛 SystemExit
+    assert "推送成功" in caplog.text
 
 
 # ─── main() 传 mode 给 send_feishu ───
