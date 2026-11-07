@@ -389,3 +389,175 @@ def test_get_watch_list_returns_cached(monkeypatch):
     monkeypatch.setattr(data, "WATCH_LIST", cached)
     monkeypatch.setattr(data, "scan_group_a_stocks", lambda: [])
     assert data.get_watch_list() == cached
+
+
+# ─── get_market_snapshot_all ───
+
+def test_get_market_snapshot_all_ok(monkeypatch, tmp_path):
+    """正常返回全市场快照。"""
+    snap_file = tmp_path / "snap_push.json"
+    snap_file.write_text(json.dumps({"data": {"item": [{"code": "000001"}, {"code": "000002"}]}}))
+    monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
+    monkeypatch.setattr("feishu.data.open", lambda f: open(snap_file))
+    result = data.get_market_snapshot_all()
+    assert len(result) == 2
+
+
+def test_get_market_snapshot_all_cli_fail(monkeypatch):
+    """CLI 失败返回空列表。"""
+    monkeypatch.setattr(data, "run_cli", lambda cmd: None)
+    assert data.get_market_snapshot_all() == []
+
+
+def test_get_market_snapshot_all_file_missing(monkeypatch):
+    """CLI ok 但文件不存在返回空。"""
+    monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
+    monkeypatch.setattr("builtins.open", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError()))
+    assert data.get_market_snapshot_all() == []
+
+
+# ─── get_recent_klines ───
+
+def test_get_recent_klines_ok(monkeypatch, tmp_path):
+    """正常返回 K 线列表。"""
+    hist_file = tmp_path / "alert_hist_000001.json"
+    hist_file.write_text(json.dumps({"data": {"item": [{"close_price": 10.0}, {"close_price": 11.0}]}}))
+    monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
+    monkeypatch.setattr("feishu.data.open", lambda f: open(hist_file))
+    result = data.get_recent_klines("000001", 30)
+    assert len(result) == 2
+
+
+def test_get_recent_klines_cli_fail(monkeypatch):
+    """CLI 失败返回空。"""
+    monkeypatch.setattr(data, "run_cli", lambda cmd: None)
+    assert data.get_recent_klines("000001", 30) == []
+
+
+def test_get_recent_klines_file_corrupt(monkeypatch, tmp_path):
+    """文件损坏返回空。"""
+    hist_file = tmp_path / "alert_hist_000001.json"
+    hist_file.write_text("not json")
+    monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
+    monkeypatch.setattr("feishu.data.open", lambda f: open(hist_file))
+    assert data.get_recent_klines("000001", 30) == []
+
+
+def test_get_recent_klines_alt_structure(monkeypatch, tmp_path):
+    """兼容 item 在顶层的数据结构。"""
+    hist_file = tmp_path / "alert_hist_000001.json"
+    hist_file.write_text(json.dumps({"item": [{"close_price": 9.0}]}))
+    monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
+    monkeypatch.setattr("feishu.data.open", lambda f: open(hist_file))
+    result = data.get_recent_klines("000001", 30)
+    assert len(result) == 1
+
+
+# ─── check_buy_signals ───
+
+def test_check_buy_signals_empty_watch(monkeypatch):
+    """空 watch list 返回空。"""
+    monkeypatch.setattr(data, "get_watch_list", lambda: [])
+    assert data.check_buy_signals() == []
+
+
+def test_check_buy_signals_low_open_buy(monkeypatch):
+    """低开信号 → 买入。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "low_open",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 9.5, "price_change_ratio_pct": -2, "turnover": 1000,
+                      "open_price": 9.5, "prev_price": 10.0}})
+    klines = [{"close_price": 10.0}] * 5
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: klines)
+    signals = data.check_buy_signals()
+    assert len(signals) == 1
+    assert signals[0]["signal"] == "买入"
+    assert "低开" in signals[0]["trigger_detail"]
+
+
+def test_check_buy_signals_pullback_to_ma5(monkeypatch):
+    """回踩 5 日线信号 → 买入。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "pullback",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 10.1, "price_change_ratio_pct": 1, "turnover": 1000,
+                      "open_price": 10.0, "prev_price": 10.0}})
+    klines = [{"close_price": 10.0}] * 5  # ma5 = 10.0, price 10.1 within ±2%
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: klines)
+    signals = data.check_buy_signals()
+    assert signals[0]["signal"] == "买入"
+    assert "回踩" in signals[0]["trigger_detail"]
+
+
+def test_check_buy_signals_high_open_skip(monkeypatch):
+    """高开 3%+ → 观望不追。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "high_open",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 11.0, "price_change_ratio_pct": 10, "turnover": 1000,
+                      "open_price": 10.5, "prev_price": 10.0}})
+    klines = [{"close_price": 10.0}] * 5
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: klines)
+    signals = data.check_buy_signals()
+    assert signals[0]["signal"] == "观望"
+    assert "高开" in signals[0]["trigger_detail"]
+
+
+def test_check_buy_signals_stand_above_ma5(monkeypatch):
+    """站稳 5 日线温和上涨 → 买入。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "stand",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 11.0, "price_change_ratio_pct": 2, "turnover": 1000,
+                      "open_price": 10.8, "prev_price": 10.0}})
+    klines = [{"close_price": 10.0}] * 5  # ma5=10.0, price=11 > ma5, chg=2% < 3%
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: klines)
+    signals = data.check_buy_signals()
+    assert signals[0]["signal"] == "买入"
+    assert "站稳" in signals[0]["trigger_detail"]
+
+
+def test_check_buy_signals_no_data(monkeypatch):
+    """无实时数据 → 观望。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "none",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {})
+    signals = data.check_buy_signals()
+    assert signals[0]["signal"] == "观望"
+
+
+def test_check_buy_signals_insufficient_klines(monkeypatch):
+    """K线不足 → 观望（数据不足）。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "none",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 10.0, "price_change_ratio_pct": 0, "turnover": 1000,
+                      "open_price": 10.0, "prev_price": 10.0}})
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: [])
+    signals = data.check_buy_signals()
+    assert signals[0]["signal"] == "观望"
+    assert "数据不足" in signals[0]["trigger_detail"]
+
+
+def test_check_buy_signals_signal_fields(monkeypatch):
+    """信号包含所有必要字段。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "none",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 10.0, "price_change_ratio_pct": 0, "turnover": 1000,
+                      "open_price": 10.0, "prev_price": 10.0}})
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: [{"close_price": 10.0}] * 5)
+    signals = data.check_buy_signals()
+    s = signals[0]
+    for field in ["code", "name", "price", "ma5", "chg_pct", "turnover", "signal",
+                  "trigger_detail", "reason", "buy_condition", "stop_loss_pct",
+                  "target_pct", "weight"]:
+        assert field in s
