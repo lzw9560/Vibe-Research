@@ -99,3 +99,10 @@ backend/tools/_*_result.json
 
 # frontend/assets 生成产物 stub（gep/ 测试输出，不进 git）
 frontend/assets/
+
+# Test isolation trap files (runtime temp data, not tracked)
+/tmp/seal_intraday_tail.json
+/tmp/snap_push.json
+/tmp/alert_hist_*.json
+/tmp/trade_calendar.json
+/tmp/test_xlsx_smoke.*
