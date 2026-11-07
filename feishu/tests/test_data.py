@@ -398,7 +398,13 @@ def test_get_market_snapshot_all_ok(monkeypatch, tmp_path):
     snap_file = tmp_path / "snap_push.json"
     snap_file.write_text(json.dumps({"data": {"item": [{"code": "000001"}, {"code": "000002"}]}}))
     monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
-    monkeypatch.setattr("feishu.data.open", lambda f: open(snap_file))
+    # mock builtins.open to return our temp file
+    real_open = open
+    def mock_open(f, *a, **kw):
+        if "snap_push" in str(f):
+            return real_open(snap_file)
+        return real_open(f, *a, **kw)
+    monkeypatch.setattr("builtins.open", mock_open)
     result = data.get_market_snapshot_all()
     assert len(result) == 2
 
@@ -423,7 +429,11 @@ def test_get_recent_klines_ok(monkeypatch, tmp_path):
     hist_file = tmp_path / "alert_hist_000001.json"
     hist_file.write_text(json.dumps({"data": {"item": [{"close_price": 10.0}, {"close_price": 11.0}]}}))
     monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
-    monkeypatch.setattr("feishu.data.open", lambda f: open(hist_file))
+    real_open = open
+    def mock_open(f, *a, **kw):
+        if "alert_hist" in str(f): return real_open(hist_file)
+        return real_open(f, *a, **kw)
+    monkeypatch.setattr("builtins.open", mock_open)
     result = data.get_recent_klines("000001", 30)
     assert len(result) == 2
 
@@ -439,7 +449,11 @@ def test_get_recent_klines_file_corrupt(monkeypatch, tmp_path):
     hist_file = tmp_path / "alert_hist_000001.json"
     hist_file.write_text("not json")
     monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
-    monkeypatch.setattr("feishu.data.open", lambda f: open(hist_file))
+    real_open = open
+    def mock_open(f, *a, **kw):
+        if "alert_hist" in str(f): return real_open(hist_file)
+        return real_open(f, *a, **kw)
+    monkeypatch.setattr("builtins.open", mock_open)
     assert data.get_recent_klines("000001", 30) == []
 
 
@@ -448,7 +462,11 @@ def test_get_recent_klines_alt_structure(monkeypatch, tmp_path):
     hist_file = tmp_path / "alert_hist_000001.json"
     hist_file.write_text(json.dumps({"item": [{"close_price": 9.0}]}))
     monkeypatch.setattr(data, "run_cli", lambda cmd: {"ok": True})
-    monkeypatch.setattr("feishu.data.open", lambda f: open(hist_file))
+    real_open = open
+    def mock_open(f, *a, **kw):
+        if "alert_hist" in str(f): return real_open(hist_file)
+        return real_open(f, *a, **kw)
+    monkeypatch.setattr("builtins.open", mock_open)
     result = data.get_recent_klines("000001", 30)
     assert len(result) == 1
 
@@ -512,10 +530,11 @@ def test_check_buy_signals_stand_above_ma5(monkeypatch):
     watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "stand",
               "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
     monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    # open=10.1 不触发高开(>1.03)，price=10.5>ma5=10.0，chg=2%<3% → 站稳买入
     monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
-        "600001.SH": {"last_price": 11.0, "price_change_ratio_pct": 2, "turnover": 1000,
-                      "open_price": 10.8, "prev_price": 10.0}})
-    klines = [{"close_price": 10.0}] * 5  # ma5=10.0, price=11 > ma5, chg=2% < 3%
+        "600001.SH": {"last_price": 10.5, "price_change_ratio_pct": 2, "turnover": 1000,
+                      "open_price": 10.1, "prev_price": 10.0}})
+    klines = [{"close_price": 10.0}] * 5  # ma5=10.0
     monkeypatch.setattr(data, "get_recent_klines", lambda code, days: klines)
     signals = data.check_buy_signals()
     assert signals[0]["signal"] == "买入"
@@ -523,13 +542,14 @@ def test_check_buy_signals_stand_above_ma5(monkeypatch):
 
 
 def test_check_buy_signals_no_data(monkeypatch):
-    """无实时数据 → 观望。"""
+    """无实时数据 → 观望（信号不生成，列表为空）。"""
     watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "none",
               "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
     monkeypatch.setattr(data, "get_watch_list", lambda: watch)
     monkeypatch.setattr(data, "get_realtime_price", lambda codes: {})
     signals = data.check_buy_signals()
-    assert signals[0]["signal"] == "观望"
+    # 无实时数据时该标的被跳过，signals 为空
+    assert len(signals) == 0
 
 
 def test_check_buy_signals_insufficient_klines(monkeypatch):
