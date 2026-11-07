@@ -100,7 +100,7 @@ def scan_tail_dip(
         if cache and (_time.time() - cache[1]) < 60:
             all_stocks = cache[0]
         else:
-            result = subprocess.run(
+            subprocess.run(
                 ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
                  "market", "snapshot", "--limit", "5000",
                  "--output", "/tmp/tail_dip_scan.json"],

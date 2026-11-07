@@ -1,7 +1,7 @@
-import json
 # -*- coding: utf-8 -*-
 """通知分发 Mixin"""
 from __future__ import annotations
+import json
 
 import logging
 import time
@@ -374,7 +374,7 @@ class NotificationDispatcherMixin:
             # 创建回复客户端
             from notification.senders.feishu_sender import _get_lark_client_builder, _get_create_message_request
             lark_client_builder = _get_lark_client_builder()
-            create_message_request = _get_create_message_request()
+            _get_create_message_request()
             
             from lark_oapi.api.im.v1 import CreateMessageRequest
             client = lark_client_builder(app_id, app_secret).build()
@@ -424,7 +424,6 @@ class NotificationDispatcherMixin:
             是否全部发送成功
         """
         import time
-        import json
         from lark_oapi.api.im.v1 import CreateMessageRequest
         
         def get_bytes(s: str) -> int:

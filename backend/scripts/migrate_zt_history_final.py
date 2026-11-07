@@ -155,7 +155,7 @@ def main() -> None:
     print("\n=== 逐日明细 (date, 保留行, 删行, is_final) ===")
     for d, kept, deleted, is_final in stats["detail"]:
         flag = "FINAL" if is_final else "non-final"
-        marker = "" if deleted == 0 and kept > 0 and len(stats["detail"]) > 0 else ""
+        "" if deleted == 0 and kept > 0 and len(stats["detail"]) > 0 else ""
         print(f"  {d}: 保留 {kept} 行, 删 {deleted} 行, {flag}")
 
     # 验证：每日唯一

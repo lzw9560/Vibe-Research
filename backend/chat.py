@@ -215,7 +215,7 @@ def _check_base_url(url: str) -> None:
         raise RuntimeError("Base URL 指向了不允许的地址（云元数据 / 内网）")
     # 域名解析核对（M6：非公网模式也核对 169.254 元数据网段；公网模式核对全部内网）
     try:
-        ip = ipaddress.ip_address(host)
+        ipaddress.ip_address(host)
     except ValueError:
         # host 是域名 → DNS 解析核对
         try:

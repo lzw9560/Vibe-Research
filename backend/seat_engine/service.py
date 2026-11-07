@@ -385,7 +385,6 @@ class SeatEngine:
         """根据席位类型分布判定共识/分歧信号。"""
         youzi_types = {"活跃游资", "跟风席位", "量化席位"}
         has_institution_buy = "机构专用" in buy_seat_types
-        has_institution_sell = "机构专用" in sell_seat_types
         has_youzi_buy = bool(buy_seat_types & youzi_types)
         has_quant_or_inst_sell = bool(sell_seat_types & {"量化席位", "机构专用"})
 

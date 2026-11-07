@@ -648,7 +648,7 @@ class JournalRecorder:
 
             position_notional = float(filled.entry_price) * size
             net_pnl = pr.return_pct / 100.0 * position_notional
-            gross_pnl = pr.gross_return_pct / 100.0 * position_notional
+            pr.gross_return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
                 arm="breakout", stock_code=cand.code,
@@ -867,7 +867,7 @@ class JournalRecorder:
 
             position_notional = float(filled.entry_price) * size
             net_pnl = pr.return_pct / 100.0 * position_notional
-            gross_pnl = pr.gross_return_pct / 100.0 * position_notional
+            pr.gross_return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
                 arm="trend", stock_code=code,

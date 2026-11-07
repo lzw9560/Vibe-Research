@@ -9,7 +9,7 @@ from config import default_config
 
 from notification.notification_channel import ChannelDetector
 
-from .notification_formatters import NotificationFormatterMixin
+from .notification_formatters import NotificationFormatterMixin, _safe_float
 from .notification_report_generator import NotificationReportMixin
 from .notification_dispatcher import NotificationDispatcherMixin
 
