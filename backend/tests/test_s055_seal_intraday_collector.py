@@ -60,6 +60,20 @@ def isolated_seal_db(tmp_path, monkeypatch):
     # mock subprocess.run 返回空，tail_dip 采集无数据
     import subprocess as _sp
     monkeypatch.setattr(_sp, "run", lambda *a, **k: _sp.CompletedProcess(args=[], returncode=0, stdout="{}", stderr=""))
+    # tail_dip 采集读 /tmp/seal_intraday_tail.json——即使 subprocess 被 mock，
+    # 如果文件已存在（上次运行的残留），collect_once 仍会读它。直接删文件 + mock open。
+    import os
+    tail_file = "/tmp/seal_intraday_tail.json"
+    if os.path.exists(tail_file):
+        os.remove(tail_file)
+    # mock open 防止 collect_once 读到残留文件
+    real_open = open
+    def _mock_open(f, *a, **kw):
+        if "seal_intraday_tail" in str(f):
+            import io
+            return io.StringIO('{"data": {"item": []}}')
+        return real_open(f, *a, **kw)
+    monkeypatch.setattr("builtins.open", _mock_open)
 
     return str(db_path)
 
